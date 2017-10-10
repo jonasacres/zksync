@@ -74,7 +74,7 @@ public class Inode {
 	}
 	
 	public byte[] serialize() {
-		int size = stat.getStorageSize() + 2*4 + 2*1 + fs.getCiphersuite().hashLength();
+		int size = stat.getStorageSize() + 2*4 + 2*1 + fs.getCrypto().hashLength();
 		ByteBuffer buf = ByteBuffer.allocate(size);
 		buf.putInt(size-4);
 		buf.put(stat.serialize());
@@ -99,7 +99,7 @@ public class Inode {
 		this.nlink = buf.getInt();
 		this.flags = buf.get();
 		this.refType = buf.get();
-		buf.get(this.refId, 0, fs.getCiphersuite().hashLength());
+		buf.get(this.refId, 0, fs.getCrypto().hashLength());
 	}
 	
 	public void addLink() {

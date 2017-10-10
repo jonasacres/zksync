@@ -11,16 +11,6 @@ import com.acrescrypto.zksync.fs.*;
 
 public class LocalFS extends FS {
 
-	@Override
-	public Stat stat(String path) throws IOException {
-		return statWithLinkOption(path, null);
-	}
-
-	@Override
-	public Stat lstat(String path) throws IOException {
-		return statWithLinkOption(path, LinkOption.NOFOLLOW_LINKS);
-	}
-	
 	private Stat statWithLinkOption(String pathStr, LinkOption linkOpt) throws IOException {
 		Stat stat = new Stat();
 		Path path = Paths.get(pathStr);
@@ -106,6 +96,36 @@ public class LocalFS extends FS {
 		return mode;
 	}
 
+	private boolean isWindows() {
+		return System.getProperty("os.name").toLowerCase().indexOf("win") >= 0;
+	}
+	
+	private String runCommand(String[] args) throws IOException {
+		Process process = null;
+		byte[] buf = new byte[1024];
+		
+	    process = new ProcessBuilder(args)
+	      .start();
+	    
+	    try {
+			process.waitFor();
+			process.getInputStream().read(buf);
+			return new String(buf);
+		} catch (InterruptedException e) {
+			throw new IOException();
+		}
+	}
+
+	@Override
+	public Stat stat(String path) throws IOException {
+		return statWithLinkOption(path, null);
+	}
+
+	@Override
+	public Stat lstat(String path) throws IOException {
+		return statWithLinkOption(path, LinkOption.NOFOLLOW_LINKS);
+	}
+	
 	@Override
 	public LocalDirectory opendir(String path) throws IOException {
 		return new LocalDirectory(path);
@@ -230,25 +250,5 @@ public class LocalFS extends FS {
 	@Override
 	public LocalFile open(String path, int mode) throws IOException {
 		return new LocalFile(this, path, mode);
-	}
-	
-	private String runCommand(String[] args) throws IOException {
-		Process process = null;
-		byte[] buf = new byte[1024];
-		
-	    process = new ProcessBuilder(args)
-	      .start();
-	    
-	    try {
-			process.waitFor();
-			process.getInputStream().read(buf);
-			return new String(buf);
-		} catch (InterruptedException e) {
-			throw new IOException();
-		}
-	}
-	
-	private boolean isWindows() {
-		return System.getProperty("os.name").toLowerCase().indexOf("win") >= 0;
 	}
 }

@@ -1,19 +1,6 @@
-package com.acrescrypto.zksync_skeletal;
+package com.acrescrypto.zksync;
 
-import java.security.Security;
-
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-
-import com.acrescrypto.zksync.crypto.Ciphersuite;
-import com.acrescrypto.zksync.crypto.Key;
-
-public class App 
-{
-    public static void main( String[] args )
-    {
-		Security.addProvider(new BouncyCastleProvider());
-    }
-    
+public class Util {
     public static void hexdump(String caption, byte[] data) {
     	System.out.printf("%s (%d bytes)\n", caption, data.length);
 		for(int i = 0; i <= 16 * (int) Math.ceil((double) data.length/16); i++) {
@@ -40,5 +27,21 @@ public class App
 		
 		System.out.println();
 		System.out.println();
+    }
+    
+    public static byte[] hexToBytes(String s) {
+    	int len = s.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
+                                 + Character.digit(s.charAt(i+1), 16));
+        }
+        return data;
+    }
+    
+    public static String bytesToHex(byte[] b) {
+    	StringBuilder sb = new StringBuilder();
+    	for(int i = 0; i < b.length; i++) sb.append(String.format("%02x", b[i]));
+    	return sb.toString();
     }
 }

@@ -46,8 +46,9 @@ public class Revision {
 		byte[] ciphertext = textKey().wrappedEncrypt(serialize(), REVISION_FILE_SIZE);
 		this.revTag = authKey().authenticate(ciphertext);
 		
-		String path = ".zksync/revisions/" + fs.pathForHash(this.revTag);
+		String path = ZKFS.REVISION_DIR + fs.pathForHash(this.revTag);
 		fs.getStorage().write(path, ciphertext);
+		fs.getStorage().squash(path);
 	}
 	
 	// create plaintext serialized revision data (to be encrypted and written to storage)
@@ -60,7 +61,7 @@ public class Revision {
 		 *   supernodeText        (Inode, variable length)
 		 */
 		byte[] supernodeText = supernode.serialize();
-		int parentTableLen = parents.size()*fs.getCiphersuite().hashLength();
+		int parentTableLen = parents.size()*fs.getCrypto().hashLength();
 		ByteBuffer buf = ByteBuffer.allocate(supernodeText.length + parentTableLen + 4);
 		
 		buf.putInt(parentTableLen);
@@ -78,8 +79,8 @@ public class Revision {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		
 		int parentTableLen = buf.getInt();
-		for(int i = 0; i < parentTableLen/fs.getCiphersuite().hashLength(); i++) {
-			byte[] parent = new byte[fs.getCiphersuite().hashLength()];
+		for(int i = 0; i < parentTableLen/fs.getCrypto().hashLength(); i++) {
+			byte[] parent = new byte[fs.getCrypto().hashLength()];
 			buf.get(parent);
 			parents.add(parent);
 		}
@@ -107,7 +108,7 @@ public class Revision {
 		
 		// take out the slashes
 		String hashStr = comps[comps.length-3] + comps[comps.length-2] + comps[comps.length-1];
-		if(hashStr.length() != 2*fs.getCiphersuite().hashLength()) throw new IllegalArgumentException(path + ": revision path does not contain a hash of the appropriate length");
+		if(hashStr.length() != 2*fs.getCrypto().hashLength()) throw new IllegalArgumentException(path + ": revision path does not contain a hash of the appropriate length");
 		
 		ByteBuffer revTagBuf = ByteBuffer.allocate(hashStr.length()/2);
 		

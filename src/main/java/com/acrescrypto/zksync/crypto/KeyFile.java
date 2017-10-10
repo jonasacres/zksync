@@ -1,85 +1,80 @@
 package com.acrescrypto.zksync.crypto;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
 public class KeyFile {
-	Ciphersuite suite;
-	String path;
-	Key textRoot, hashRoot, ppKey;
+	private ZKFS fs;
+	private Key textRoot, hashRoot;
 	
-	KeyFile(String path, Ciphersuite suite, char[] passphrase) {
-		this.suite = suite;
-		this.path = path;
-		this.ppKey = new Key(suite, passphrase);
-		read();
+	public KeyFile(ZKFS fs, char[] passphrase) {
+		this.fs = fs;
+		read(passphrase);
 	}
 	
-	void read() {
-		File file = null;
-		FileInputStream fis = null;
+	private Key makePassphraseKey(char[] passphrase) {
+		byte[] ppBytes = new byte[passphrase.length];
+		for(int i = 0; i < passphrase.length; i++) ppBytes[i] = (byte) passphrase[i];
+		return new Key(fs.getCrypto(), fs.getCrypto().deriveKeyFromPassword(ppBytes, new byte[] {}));
+	}
+	
+	public void read(char[] passphrase) {
+		Key ppKey = makePassphraseKey(passphrase);
 		
 		try {
-			file = new File(this.path);
-			byte[] ciphertext = new byte[(int) file.length()];
-			fis = new FileInputStream(file);
-			fis.read(ciphertext);
-
-			byte[] plaintext = this.ppKey.wrappedDecrypt(ciphertext);
-			byte[][] rawKeys = new byte[2][suite.symKeyLength()];
-			for(int i = 0; i < 2*suite.symKeyLength(); i++) {
-				rawKeys[i/suite.symKeyLength()][i % suite.symKeyLength()] = plaintext[i];
-			}
+			int len = fs.getCrypto().symKeyLength();
+			byte[] ciphertext = fs.getStorage().read(getPath());
+			byte[] plaintext = ppKey.wrappedDecrypt(ciphertext);
+			byte[][] rawKeys = new byte[2][len];
+			for(int i = 0; i < 2*len; i++) rawKeys[i/len][i % len] = plaintext[i];
 			
-			this.textRoot = new Key(suite, rawKeys[0]);
-			this.hashRoot = new Key(suite, rawKeys[1]);
+			this.setTextRoot(new Key(fs.getCrypto(), rawKeys[0]));
+			this.setHashRoot(new Key(fs.getCrypto(), rawKeys[1]));
 		} catch(IOException ex) {
 			generate();
-		} finally {
-			try {
-				if(fis != null) {
-					fis.close();
-				}
-			} catch(IOException ex) {
-				ex.printStackTrace();
-			}
 		}
 	}
 	
-	void generate() {
-		this.textRoot = new Key(suite);
-		this.hashRoot = new Key(suite);
+	public void generate() {
+		this.setTextRoot(new Key(fs.getCrypto()));
+		this.setHashRoot(new Key(fs.getCrypto()));
 	}
 	
-	void write() {
-		byte[] plaintext = new byte[2*suite.symKeyLength()];
+	public void write(char[] passphrase) {
+		Key ppKey = makePassphraseKey(passphrase);
+		int len = fs.getCrypto().symKeyLength();
 		
-		for(int i = 0; i < suite.symKeyLength(); i++) {
-			plaintext[i] = this.textRoot.getRaw()[i];
-		}
-		
-		for(int i = 0; i < suite.symKeyLength(); i++) {
-			plaintext[suite.symKeyLength() + i] = this.textRoot.getRaw()[i];
-		}
-		
-		byte[] ciphertext = ppKey.wrappedEncrypt(plaintext, 0);
-		FileOutputStream fos = null;
+		ByteBuffer plaintext = ByteBuffer.allocate(2*len);
+		plaintext.put(this.getCipherRoot().getRaw());
+		plaintext.put(this.getAuthRoot().getRaw());
+		byte[] ciphertext = ppKey.wrappedEncrypt(plaintext.array(), 0);
 		
 		try {
-			fos = new FileOutputStream("pathname");
-			fos.write(ciphertext);
+			fs.getStorage().write(getPath(), ciphertext);
 		} catch(IOException ex) {
 			ex.printStackTrace();
-		} finally {
-			try {
-				if(fos != null) {
-					fos.close();
-				}
-			} catch(IOException ex) {
-				ex.printStackTrace();
-			}
 		}
+	}
+	
+	public String getPath() {
+		return ".zksync/keyfile";
+	}
+
+	public Key getCipherRoot() {
+		return textRoot;
+	}
+
+	public void setTextRoot(Key textRoot) {
+		this.textRoot = textRoot;
+	}
+
+	public Key getAuthRoot() {
+		return hashRoot;
+	}
+
+	public void setHashRoot(Key hashRoot) {
+		this.hashRoot = hashRoot;
 	}
 }

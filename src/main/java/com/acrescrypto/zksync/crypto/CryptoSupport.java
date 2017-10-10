@@ -1,7 +1,9 @@
 package com.acrescrypto.zksync.crypto;
 
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
+import java.util.Base64;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
@@ -12,26 +14,26 @@ import org.bouncycastle.crypto.digests.Blake2bDigest;
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
 import org.bouncycastle.crypto.params.HKDFParameters;
 
+import com.acrescrypto.zksync.Util;
+import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
+
 import de.mkammerer.argon2.Argon2Factory;
 import de.mkammerer.argon2.jna.Argon2Library;
 import de.mkammerer.argon2.jna.Size_t;
 import de.mkammerer.argon2.jna.Uint32_t;
 
-public class Ciphersuite {
+public class CryptoSupport {
 	private SecureRandom secureRandom = new SecureRandom();
+	private PubConfig pubConfig;
 	
-	// TODO: configure these from pubconfig
-	private int argon2_tcost = 1 << 10;
-	private int argon2_mcost = 16;
-	private int argon2_parallelism = 2;
-	
-	public Ciphersuite() {
+	public CryptoSupport(PubConfig pubConfig) {
+		this.pubConfig = pubConfig;
 	}
 	
-	public byte[] deriveKeyFromPassword(char[] passphrase, byte[] salt) {
-        final Uint32_t iterations = new Uint32_t(argon2_tcost);
-        final Uint32_t memory = new Uint32_t(argon2_mcost);
-        final Uint32_t parallelism = new Uint32_t(argon2_parallelism);
+	public byte[] deriveKeyFromPassword(byte[] passphrase, byte[] salt) {
+        final Uint32_t iterations = new Uint32_t(pubConfig.getArgon2TimeCost());
+        final Uint32_t memory = new Uint32_t(pubConfig.getArgon2MemoryCost());
+        final Uint32_t parallelism = new Uint32_t(pubConfig.getArgon2Parallelism());
         final Uint32_t hashLen = new Uint32_t(symKeyLength());
 
         int len = Argon2Library.INSTANCE.argon2_encodedlen(iterations, memory, parallelism,
@@ -39,7 +41,7 @@ public class Ciphersuite {
         byte[] encoded = new byte[len];
         
         int result = Argon2Library.INSTANCE.argon2i_hash_encoded(
-                iterations, memory, parallelism, passphrase.toString().getBytes(), new Size_t(passphrase.length),
+                iterations, memory, parallelism, passphrase, new Size_t(passphrase.length),
                 salt, new Size_t(salt.length), new Size_t(hashLen.intValue()), encoded, new Size_t(encoded.length)
         );
 
@@ -48,9 +50,13 @@ public class Ciphersuite {
             throw new IllegalStateException(String.format("%s (%d)", errMsg, result));
         }
         
-        ByteBuffer buf = ByteBuffer.allocate(symKeyLength());
-        buf.put(encoded, encoded.length-symKeyLength(), symKeyLength());
-        return buf.array();
+        String[] comps = (new String(encoded)).split("\\$");
+        String base64 = comps[5];
+        if(base64.charAt(base64.length()-1) == 0x00) base64 = base64.substring(0, base64.length()-1);
+        byte[] key = {};
+		key = Base64.getDecoder().decode(base64);
+        
+        return key;
 	}
 	
 	public HashContext startHash() {
@@ -62,6 +68,7 @@ public class Ciphersuite {
 	}
 	
 	public byte[] authenticate(byte[] key, byte[] data) {
+		// Key must be no greater than 64 bytes, per requirements of blake2
 		Digest digest = new Blake2bDigest(key, hashLength(), null, null);
 		byte[] result = new byte[hashLength()];
 		digest.update(data, 0, data.length);
@@ -69,19 +76,49 @@ public class Ciphersuite {
 		return result;
 	}
 	
-	public byte[] hkdf(byte[] ikm, int length, byte[] salt, byte[] info) {
-		byte[] output = new byte[length];
-		HKDFBytesGenerator hkdf = new HKDFBytesGenerator(new Blake2bDigest());
-		hkdf.init(new HKDFParameters(ikm, salt, info));
-		hkdf.generateBytes(output, 0, length);
-		return output;
+	public byte[] expand(byte[] ikm, int length, byte[] salt, byte[] info) {
+		/* 
+		 * This is HKDF as described in RFC 5869, with the critical difference that we use BLAKE2's built-in support
+		 * for keyed hashes in place of HMAC. Because that feature of BLAKE2 requires keys to be no greater than 64
+		 * bytes, we first compute the BLAKE2b hash of the supplied salt to get a key that is guaranteed to be
+		 * 64 bytes long.
+		 * 
+		 * The decision not to use HKDF was based purely on implementation concerns. I was unable to find test
+		 * vectors for HKDF based on BLAKE2b, and I was having difficulty replicating results in separate
+		 * implementations.
+		 *  
+		 */
+		ByteBuffer output = ByteBuffer.allocate(length);
+		byte[] resizedSalt = hash(salt); // critical HKDF difference #1 (hashes salt before use)
+		byte[] prk = authenticate(resizedSalt, ikm);
+		
+		int n = (int) Math.ceil(((double) length)/prk.length);
+		byte[] tp = {};
+		for(int i = 1; i <= n; i++) {
+			ByteBuffer concatted = ByteBuffer.allocate(tp.length + info.length + 1);
+			concatted.put(tp);
+			concatted.put(info);
+			concatted.put((byte) i);
+			tp = authenticate(prk, concatted.array()); // critical HKDF difference #2 (uses keyed blake2 instead of hmac)
+			output.put(tp, 0, Math.min(tp.length, output.remaining()));
+		}
+		
+		return output.array();
 	}
 	
-	public byte[] encrypt(byte[] key, byte[] iv, byte[] plaintext, int padSize)
+	/* Encrypt a message.
+	 * @param key Message key to be used. Should be of length symKeyLength().
+	 * @param iv Message initialization vector/nonce.
+	 * @param plaintext Plaintext to be encrypted
+	 * @param associatedData Optional associated data to include in message tag.
+	 * @param padSize Fixed-length to pad plaintext to prior to encryption. Set 0 for no padding, or -1 to directly encrypt without adding length field.
+	 */
+	public byte[] encrypt(byte[] key, byte[] iv, byte[] plaintext, byte[] associatedData, int padSize)
 	{
 		try {
 			Cipher cipher = Cipher.getInstance("AES/OCB/NoPadding", "BC");
 			cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES/OCB/NoPadding") , new IvParameterSpec(iv));
+			if(associatedData != null) cipher.updateAAD(associatedData, 0, associatedData.length);
 			byte[] paddedPlaintext = padToSize(plaintext, padSize),
 				   ciphertextWithExcess = new byte[paddedPlaintext.length+32];
 			int length = cipher.doFinal(paddedPlaintext, 0, paddedPlaintext.length, ciphertextWithExcess);
@@ -96,15 +133,19 @@ public class Ciphersuite {
 		}
 	}
 	
-	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext)
+	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, byte[] associatedData, boolean padded)
 	{
 		try {
 			Cipher cipher = Cipher.getInstance("AES/OCB/NoPadding", "BC");
 			cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES/OCB/NoPadding") , new IvParameterSpec(iv));
+			if(associatedData != null) cipher.updateAAD(associatedData);
 			byte[] paddedPlaintext = new byte[ciphertext.length];
-			cipher.doFinal(ciphertext, 0, ciphertext.length, paddedPlaintext);
-			byte[] plaintext = unpad(paddedPlaintext);
-			return plaintext;
+			int actualLength = cipher.doFinal(ciphertext, 0, ciphertext.length, paddedPlaintext);
+			
+			if(padded) return unpad(paddedPlaintext);
+			ByteBuffer buf = ByteBuffer.allocate(actualLength);
+			buf.put(paddedPlaintext, 0, actualLength);
+			return buf.array();
 		} catch(javax.crypto.AEADBadTagException e) {
 			throw new SecurityException();
 		} catch(Exception e) {
@@ -115,6 +156,7 @@ public class Ciphersuite {
 	}
 	
 	private byte[] padToSize(byte[] raw, int padSize) {
+		if(padSize < 0) return raw.clone();
 		if(padSize == 0) padSize = raw.length + 4;
 		if(raw.length + 4 > padSize) throw new IllegalArgumentException("attempted to pad data beyond maximum size");
 		ByteBuffer padded = ByteBuffer.allocate(padSize);

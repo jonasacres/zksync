@@ -22,7 +22,7 @@ public class PageMerkel {
 		// merkel tags are only used if we have 2 or more pages, so the tag of an empty merkel tree can be undefined
 		// this implementation just uses a hash-sized array of zeroes
 		
-		if(nodes == null || nodes.length == 0) return new byte[fs.getCiphersuite().hashLength()];
+		if(nodes == null || nodes.length == 0) return new byte[fs.getCrypto().hashLength()];
 		nodes[0].recalculate();
 		return nodes[0].tag.clone();
 	}
@@ -37,13 +37,13 @@ public class PageMerkel {
 	}
 	
 	public long plaintextSize() {
-		return fs.getCiphersuite().hashLength()*(2*numPages-1);
+		return fs.getCrypto().hashLength()*(2*numPages-1);
 	}
 	
 	public byte[] commit() throws InaccessibleStorageException {
 		int chunkCount = (int) Math.ceil( (double) plaintextSize() / fs.getPrivConfig().getPageSize() );
 		
-		ByteBuffer plaintext = ByteBuffer.allocate(nodes.length*fs.getCiphersuite().hashLength());
+		ByteBuffer plaintext = ByteBuffer.allocate(nodes.length*fs.getCrypto().hashLength());
 		nodes[0].recalculate();
 		byte[] refTag = nodes[0].tag.clone();
 		ByteBuffer chunkTagSource = ByteBuffer.allocate(refTag.length+4);
@@ -54,15 +54,16 @@ public class PageMerkel {
 			ByteBuffer chunkText = ByteBuffer.wrap(plaintext.array(),
 					(int) (i*fs.getPrivConfig().getPageSize()),
 					(int) fs.getPrivConfig().getPageSize());
-			byte[] chunkCiphertext = merkelTextKey().wrappedEncrypt(chunkText.array(),
+			byte[] chunkCiphertext = cipherKey().wrappedEncrypt(chunkText.array(),
 					(int) fs.getPrivConfig().getPageSize());
 			
 			chunkTagSource.position(refTag.length);
 			chunkTagSource.putInt(i);
-			byte[] chunkTag = merkelAuthKey().authenticate(chunkTagSource.array());
-			String path = fs.getStorage().pathForHash(chunkTag);
+			byte[] chunkTag = authKey().authenticate(chunkTagSource.array());
+			String path = ZKFS.DATA_DIR + fs.getStorage().pathForHash(chunkTag);
 			try {
 				fs.getStorage().write(path, chunkCiphertext);
+				fs.getStorage().squash(path);
 			} catch (IOException e) {
 				throw new InaccessibleStorageException();
 			}
@@ -74,7 +75,7 @@ public class PageMerkel {
 	private void read() throws InaccessibleStorageException {
 		int expectedPages = (int) Math.ceil((double) inode.getStat().getSize()/fs.getPrivConfig().getPageSize());
 		int expectedNodes = 2*expectedPages - 1;
-		int expectedChunks = (int) Math.ceil((double) expectedNodes*fs.getCiphersuite().hashLength()/fs.getPrivConfig().getPageSize());
+		int expectedChunks = (int) Math.ceil((double) expectedNodes*fs.getCrypto().hashLength()/fs.getPrivConfig().getPageSize());
 		
 		ByteBuffer readBuf = ByteBuffer.allocate((int) (expectedChunks*fs.getPrivConfig().getPageSize()));
 		ByteBuffer chunkTagSource = ByteBuffer.allocate(inode.getRefTag().length+4);
@@ -88,20 +89,20 @@ public class PageMerkel {
 			for(int i = 0; i < expectedChunks; i++) {
 				chunkTagSource.position(inode.getRefTag().length);
 				chunkTagSource.putInt(i);
-				byte[] chunkTag = merkelAuthKey().authenticate(chunkTagSource.array());
-				String path = fs.pathForHash(chunkTag);
+				byte[] chunkTag = authKey().authenticate(chunkTagSource.array());
+				String path = ZKFS.DATA_DIR + fs.pathForHash(chunkTag);
 				byte[] chunkCiphertext;
 				try {
 					chunkCiphertext = fs.getStorage().read(path);
 				} catch (IOException e) {
 					throw new InaccessibleStorageException();
 				}
-				byte[] chunkPlaintext = merkelTextKey().wrappedDecrypt(chunkCiphertext);
+				byte[] chunkPlaintext = cipherKey().wrappedDecrypt(chunkCiphertext);
 				readBuf.put(chunkPlaintext);
 			}
 		
 			for(int i = 0; i < expectedNodes; i++) {
-				byte[] tag = new byte[fs.getCiphersuite().hashLength()];
+				byte[] tag = new byte[fs.getCrypto().hashLength()];
 				readBuf.get(tag);
 				nodes[i].tag = tag;
 			}
@@ -115,7 +116,7 @@ public class PageMerkel {
 		PageMerkelNode[] newNodes = new PageMerkelNode[2*newSize-1];
 		for(int i = 0; i < newNodes.length; i++) {
 			// allocate the new nodes
-			newNodes[i] = new PageMerkelNode(fs.getCiphersuite());
+			newNodes[i] = new PageMerkelNode(fs.getCrypto());
 		}
 		
 		for(int i = 0; i < newNodes.length; i++) {
@@ -139,11 +140,11 @@ public class PageMerkel {
 		nodes[0].recalculate();
 	}
 	
-	private Key merkelTextKey() {
+	private Key cipherKey() {
 		return fs.deriveKey(ZKFS.KEY_TYPE_CIPHER, ZKFS.KEY_INDEX_PAGE_MERKEL, getMerkelTag());
 	}
 	
-	private Key merkelAuthKey() {
+	private Key authKey() {
 		return fs.deriveKey(ZKFS.KEY_TYPE_AUTH, ZKFS.KEY_INDEX_PAGE_MERKEL, getMerkelTag());
 	}
 }

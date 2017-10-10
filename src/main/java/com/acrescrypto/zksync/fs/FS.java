@@ -30,7 +30,6 @@ public abstract class FS {
 	public abstract void write(String path, byte[] contents) throws IOException;
 	public abstract byte[] read(String path) throws IOException;
 	public abstract File open(String path, int mode) throws IOException;
-	
 
 	public final static int NODE_TYPE_CHARACTER_DEVICE = 0;
 	public final static int NODE_TYPE_BLOCK_DEVICE = 1;
@@ -57,5 +56,11 @@ public abstract class FS {
 	    }
 	    
 		return sb.toString();
+	}
+	
+	public void squash(String path) {
+		try { setCtime(path, 0); } catch(Exception e) {}
+		try { setMtime(path, 0); } catch(Exception e) {}
+		try { setAtime(path, 0); } catch(Exception e) {}
 	}
 }

@@ -3,17 +3,17 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import com.acrescrypto.zksync.crypto.Ciphersuite;
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 
 public class PageMerkelNode {
 	byte[] tag;
 	boolean dirty;
 	PageMerkelNode parent, left, right;
-	Ciphersuite ciphersuite;
+	CryptoSupport crypto;
 	
-	PageMerkelNode(Ciphersuite suite) {
-		this.ciphersuite = suite;
-		this.tag = new byte[suite.hashLength()];
+	PageMerkelNode(CryptoSupport crypto) {
+		this.crypto = crypto;
+		this.tag = new byte[crypto.hashLength()];
 	}
 	
 	void setTag(byte[] pageTag) {
@@ -27,14 +27,14 @@ public class PageMerkelNode {
 		if(!dirty) return;
 		PageMerkelNode[] nodes = { left, right }; 
 		
-		ByteBuffer merged = ByteBuffer.allocate(2*ciphersuite.hashLength());
+		ByteBuffer merged = ByteBuffer.allocate(2*crypto.hashLength());
 		for(PageMerkelNode child : nodes) {
 			if(child == null) continue;
 			if(child.dirty) child.recalculate();
 			merged.put(child.tag);
 		}
 		
-		this.tag = ciphersuite.hash(merged.array());
+		this.tag = crypto.hash(merged.array());
 		dirty = false;
 	}
 	

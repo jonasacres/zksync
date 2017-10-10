@@ -6,15 +6,20 @@ import java.nio.ByteBuffer;
 import com.acrescrypto.zksync.crypto.*;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
+import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
+import com.acrescrypto.zksync.fs.zkfs.config.PrivConfig;
+import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 
+// A ZKSync archive.
 public class ZKFS extends FS {
-	private Ciphersuite ciphersuite;
+	private CryptoSupport crypto;
 	private InodeTable inodeTable;
 	private PubConfig pubConfig;
 	private PrivConfig privConfig;
+	private LocalConfig localConfig;
 	private String root;
 	private FS storage;
-	private Key cipherKey, authKey;
+	private KeyFile keyfile;
 	
 	public final static int KEY_TYPE_CIPHER = 0;
 	public final static int KEY_TYPE_AUTH = 1;
@@ -22,35 +27,27 @@ public class ZKFS extends FS {
 	public final static int KEY_INDEX_PAGE = 0;
 	public final static int KEY_INDEX_PAGE_MERKEL = 1;
 	public final static int KEY_INDEX_PAGE_REVISION = 2;
+	public final static int KEY_INDEX_CONFIG_PRIVATE = 3;
+	public final static int KEY_INDEX_CONFIG_LOCAL = 4;
 	
 	public final static int MAX_PATH_LEN = 65535;
 	
-	public InodeTable getInodeTable() {
-		return inodeTable;
-	}
+	public final static String DATA_DIR = ".zksync/archive/data/";
+	public final static String CONFIG_DIR = ".zksync/archive/config/";
+	public final static String REVISION_DIR = ".zksync/archive/revisions/";
+	public final static String LOCAL_DIR = ".zksync/local/";
 	
-	public PubConfig getPubConfig() {
-		return pubConfig;
-	}
-	
-	public PrivConfig getPrivConfig() {
-		return privConfig;
-	}
-	
-	public String getRoot() {
-		return root;
-	}
-	
-	public FS getStorage() {
-		return storage;
-	}
-	
-	public Ciphersuite getCiphersuite() {
-		return ciphersuite;
+	public ZKFS(FS storage, String id, char[] passphrase) {
+		this.storage = storage;
+		this.pubConfig = new PubConfig(storage);
+		keyfile = new KeyFile(this, passphrase);
+		crypto = new CryptoSupport(pubConfig);
+		this.privConfig = new PrivConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_PRIVATE));
+		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
 	}
 	
 	public Key deriveKey(int type, int index, byte[] tweak) {
-		Key[] keys = { cipherKey, authKey };
+		Key[] keys = { keyfile.getCipherRoot(), keyfile.getAuthRoot() };
 		if(type >= keys.length) throw new IllegalArgumentException();
 		return keys[type].derive(index, tweak);
 	}
@@ -91,6 +88,87 @@ public class ZKFS extends FS {
 		return inodeTable.inodeWithId(inodeId);
 	}
 	
+	private Inode create(String path) throws IOException {
+		ZKDirectory parent = opendir(dirname(path));
+		Inode inode = inodeTable.issueInode();
+		parent.link(basename(path), inode);
+		return inode;
+	}
+	
+	public void assertPathExists(String path) throws IOException {
+		inodeForPath(path);
+	}
+	
+	public void assertPathDoesntExist(String path) throws IOException {
+		try {
+			inodeForPath(path);
+			throw new EEXISTSException(path);
+		} catch(ENOENTException exc) {}
+	}
+	
+	public void assertPathIsDirectory(String path) throws IOException {
+		Inode inode = inodeForPath(path);
+		if(!inode.getStat().isDirectory()) throw new EISNOTDIRException(path);
+	}
+	
+	public void assertPathIsNotDirectory(String path) throws IOException {
+		Inode inode = inodeForPath(path);
+		if(inode.getStat().isDirectory()) throw new EISDIRException(path);
+	}
+	
+	public void assertDirectoryIsEmpty(String path) throws IOException {
+		ZKDirectory dir = opendir(path);
+		if(dir.list().length > 2) throw new ENOTEMPTYException(path);
+	}
+
+	public InodeTable getInodeTable() {
+		return inodeTable;
+	}
+	
+	public PubConfig getPubConfig() {
+		return pubConfig;
+	}
+	
+	public PrivConfig getPrivConfig() {
+		return privConfig;
+	}
+	
+	public String getRoot() {
+		return root;
+	}
+	
+	public FS getStorage() {
+		return storage;
+	}
+	
+	public CryptoSupport getCrypto() {
+		return crypto;
+	}
+	
+	public LocalConfig getLocalConfig() {
+		return localConfig;
+	}
+
+	public void setLocalConfig(LocalConfig localConfig) {
+		this.localConfig = localConfig;
+	}
+
+	@Override
+	public void write(String path, byte[] contents) throws IOException {
+		ZKFile file = open(path, ZKFile.O_WRONLY);
+		file.write(contents);
+		file.close();
+	}
+
+	@Override
+	public byte[] read(String path) throws IOException {
+		ZKFile file = open(path, ZKFile.O_RDONLY);
+		byte[] buf = file.read();
+		file.close();
+		
+		return buf;
+	}
+
 	@Override
 	public ZKFile open(String path, int mode) throws IOException {
 		assertPathIsNotDirectory(path);
@@ -229,54 +307,5 @@ public class ZKFS extends FS {
 	public void setAtime(String path, long atime) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setAtime(atime);
-	}
-	
-	private Inode create(String path) throws IOException {
-		ZKDirectory parent = opendir(dirname(path));
-		Inode inode = inodeTable.issueInode();
-		parent.link(basename(path), inode);
-		return inode;
-	}
-	
-	public void assertPathExists(String path) throws IOException {
-		inodeForPath(path);
-	}
-	
-	public void assertPathDoesntExist(String path) throws IOException {
-		try {
-			inodeForPath(path);
-			throw new EEXISTSException(path);
-		} catch(ENOENTException exc) {}
-	}
-	
-	public void assertPathIsDirectory(String path) throws IOException {
-		Inode inode = inodeForPath(path);
-		if(!inode.getStat().isDirectory()) throw new EISNOTDIRException(path);
-	}
-	
-	public void assertPathIsNotDirectory(String path) throws IOException {
-		Inode inode = inodeForPath(path);
-		if(inode.getStat().isDirectory()) throw new EISDIRException(path);
-	}
-	
-	public void assertDirectoryIsEmpty(String path) throws IOException {
-		ZKDirectory dir = opendir(path);
-		if(dir.list().length > 2) throw new ENOTEMPTYException(path);
-	}
-
-	@Override
-	public void write(String path, byte[] contents) throws IOException {
-		ZKFile file = open(path, ZKFile.O_WRONLY);
-		file.write(contents);
-		file.close();
-	}
-
-	@Override
-	public byte[] read(String path) throws IOException {
-		ZKFile file = open(path, ZKFile.O_RDONLY);
-		byte[] buf = file.read();
-		file.close();
-		
-		return buf;
 	}
 }

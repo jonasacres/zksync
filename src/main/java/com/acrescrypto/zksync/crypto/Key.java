@@ -3,23 +3,17 @@ package com.acrescrypto.zksync.crypto;
 import java.nio.ByteBuffer;
 
 public class Key {
-	byte[] raw;
-	Ciphersuite suite;
+	private byte[] raw;
+	private CryptoSupport crypto;
 	
-	public Key(Ciphersuite suite) {
-		this.suite = suite;
-		this.raw = suite.rng(suite.symKeyLength());
+	public Key(CryptoSupport crypto) {
+		this.crypto = crypto;
+		this.raw = crypto.rng(crypto.symKeyLength());
 	}
 	
-	public Key(Ciphersuite suite, byte[] raw) {
-		this.suite = suite;
+	public Key(CryptoSupport crypto, byte[] raw) {
+		this.crypto = crypto;
 		this.raw = raw;
-	}
-	
-	public Key(Ciphersuite suite, char[] passphrase) {
-		// TODO: allow configuration of password costs
-		this.suite = suite;
-		this.raw = suite.deriveKeyFromPassword(passphrase, "zksync-salt".getBytes());
 	}
 	
 	public Key derive(int index) {
@@ -31,12 +25,13 @@ public class Key {
 		ByteBuffer saltBuf = ByteBuffer.allocate(data.length+1);
 		saltBuf.put(data);
 		saltBuf.put((byte) index);
-		return new Key(suite, suite.hkdf(raw, suite.symKeyLength(), saltBuf.array(), "zksync".getBytes()));
+		return new Key(crypto, crypto.expand(raw, crypto.symKeyLength(), saltBuf.array(), "zksync".getBytes()));
 	}
 	
 	public byte[] wrappedEncrypt(byte[] plaintext, int padSize) {
-		Key subkey = new Key(suite);
-		byte[] outerIv = suite.rng(suite.symIvLength()), innerIv = suite.rng(suite.symIvLength());
+		if(padSize < 0) throw new IllegalArgumentException("pad size cannot be negative for wrappedEncrypt");
+		Key subkey = new Key(crypto);
+		byte[] outerIv = crypto.rng(crypto.symIvLength()), innerIv = crypto.rng(crypto.symIvLength());
 		byte[] ciphertext = subkey.encrypt(innerIv, plaintext, padSize);
 		byte[] keywrap = encrypt(outerIv, subkey.raw, 0);
 		ByteBuffer buffer = ByteBuffer.allocate(outerIv.length + innerIv.length + ciphertext.length + keywrap.length + 2*2);
@@ -60,7 +55,7 @@ public class Key {
 		byte[] subkeyCiphertext = new byte[keywrapLen];
 		buffer.get(subkeyCiphertext, 0, keywrapLen);
 		
-		Key subkey = new Key(suite, decrypt(outerIv, subkeyCiphertext));
+		Key subkey = new Key(crypto, decrypt(outerIv, subkeyCiphertext));
 		
 		byte[] messageCiphertext = new byte[buffer.remaining()];
 		buffer.get(messageCiphertext, 0, messageCiphertext.length);
@@ -68,19 +63,19 @@ public class Key {
 	}
 	
 	public byte[] encrypt(byte[] iv, byte[] plaintext) {
-		return suite.encrypt(raw, iv, plaintext, 0);
+		return crypto.encrypt(raw, iv, plaintext, null, 0);
 	}
 	
 	public byte[] encrypt(byte[] iv, byte[] plaintext, int padSize) {
-		return suite.encrypt(raw, iv, plaintext, padSize);
+		return crypto.encrypt(raw, iv, plaintext, null, padSize);
 	}
 	
 	public byte[] decrypt(byte[] iv, byte[] ciphertext) {
-		return suite.decrypt(raw, iv, ciphertext);
+		return crypto.decrypt(raw, iv, ciphertext, null, true);
 	}
 	
 	public byte[] authenticate(byte[] data) {
-		return suite.authenticate(raw, data);
+		return crypto.authenticate(raw, data);
 	}
 	
 	public byte[] getRaw() {

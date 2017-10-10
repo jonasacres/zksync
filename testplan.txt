@@ -1,0 +1,51 @@
+Crypto tests:
+  - BLAKE2 test vectors (with and without key)
+  - AES-256-OCB test vectors (encrypt and decrypt)
+  - Argon2i test vectors (don't actually exist, so compare to Ruby)
+  - BLAKE2-HKDF test vectors (also probably don't officially exist, so compare to Ruby again)
+
+Key tests:
+  - derive (make sure it matches Ruby)
+  - wrappedEncrypt (with and without padding)
+  - wrappedDecrypt
+  - encrypt (with and without padding)
+  - decrypt
+  - authenticate
+
+LocalFS tests:
+  - stat (atime, mtime, ctime, mode, user, group, size, type, inode ID, dev major, dev minor)
+  - lstat
+  - opendir
+  - mkdir
+  - rmdir
+  - unlink
+  - link
+  - symlink
+  - mknod
+  - mkfifo
+  - chmod
+  - chown
+  - chgrp
+  - setMtime
+  - setAtime
+  - setCtime
+  - write
+  - read
+  - open
+
+LocalFile tests:
+  - getStat
+  - getPath
+  - truncate (=0, < file size, = file size, > file size)
+  - setMtime
+  - setAtime
+  - setCtime
+  - read
+  - write (insert, extend)
+  - seek
+  - close
+  - copy
+  - rewind
+  - hasData
+
+

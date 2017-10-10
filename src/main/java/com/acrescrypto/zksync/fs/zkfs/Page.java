@@ -52,7 +52,9 @@ public class Page {
 		this.file.setPageTag(pageNum, pageTag);
 		
 		try {
-			file.getFS().getStorage().write(file.getFS().pathForHash(pageTag), ciphertext);
+			String path = ZKFS.DATA_DIR + file.getFS().pathForHash(pageTag);
+			file.getFS().getStorage().write(path, ciphertext);
+			file.getFS().getStorage().squash(path); 
 		} catch (IOException e) {
 			throw new InaccessibleStorageException();
 		}
@@ -97,7 +99,7 @@ public class Page {
 	public byte[] read() throws IOException {
 		byte[] pageTag = file.getPageTag(pageNum);
 		byte[] plaintext, ciphertext;
-		String path = file.getFS().pathForHash(pageTag);
+		String path = ZKFS.DATA_DIR + file.getFS().pathForHash(pageTag);
 		
 		try {
 			ciphertext = file.getFS().getStorage().read(path);
