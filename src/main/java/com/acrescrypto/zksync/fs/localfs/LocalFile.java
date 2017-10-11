@@ -6,13 +6,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Paths;
-import java.nio.file.attribute.FileTime;
-import java.nio.file.attribute.PosixFileAttributes;
-import java.nio.file.attribute.PosixFilePermission;
-import java.util.concurrent.TimeUnit;
 
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
@@ -30,13 +24,14 @@ public class LocalFile extends File {
 		if((mode & O_RDONLY) != 0) modeStr = "r";
 		if((mode & O_WRONLY) != 0) modeStr = "rw"; // "w" is not supported apparently
 		
-		if(!Files.exists(Paths.get(path), (mode & O_NOFOLLOW) != 0 ? LinkOption.NOFOLLOW_LINKS : null)) {
+		if(!fs.exists(path, (mode & O_NOFOLLOW) == 0)) {
 			if((mode & O_CREAT) == 0 || (mode & O_WRONLY) == 0) throw new FileNotFoundException(path);
 		}
 		
-		this.fileHandle = new RandomAccessFile(path, modeStr);
+		this.fileHandle = new RandomAccessFile(Paths.get(fs.getRoot(), path).toString(), modeStr);
 		this.channel = this.fileHandle.getChannel();
 		this.fs = fs;
+		this.path = path;
 		
 		if((mode & O_APPEND) != 0) this.channel.position(this.fileHandle.length());
 	}
@@ -48,23 +43,7 @@ public class LocalFile extends File {
 
 	@Override
 	public Stat getStat() throws IOException {
-		Stat stat = new Stat();
-		PosixFileAttributes attrs = Files.readAttributes(Paths.get(path), PosixFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-		stat.setGroup(attrs.group().getName());
-		stat.setUser(attrs.owner().getName());
-		stat.setAtime(attrs.lastAccessTime().to(TimeUnit.NANOSECONDS));
-		stat.setMtime(attrs.lastModifiedTime().to(TimeUnit.NANOSECONDS));
-		stat.setCtime(attrs.creationTime().to(TimeUnit.NANOSECONDS));
-		stat.setSize(attrs.size());
-
-		int perms = 0;
-		for(PosixFilePermission p : attrs.permissions()) {
-			perms |= p.ordinal();
-		}
-		
-		stat.setMode(perms);
-		
-		return stat;
+		return fs.stat(path);
 	}
 
 	@Override
@@ -80,23 +59,6 @@ public class LocalFile extends File {
 			if(chan != null) chan.close();
 			if(stream != null) stream.close();
 		}
-	}
-
-	@Override
-	public void setMtime(long mtime) throws IOException {
-		FileTime fileTime = FileTime.from(mtime, TimeUnit.NANOSECONDS);
-		Files.setAttribute(Paths.get(path), "lastModifiedTime", fileTime);
-	}
-
-	@Override
-	public void setAtime(long atime) throws IOException {
-		FileTime fileTime = FileTime.from(atime, TimeUnit.NANOSECONDS);
-		Files.setAttribute(Paths.get(path), "lastAccessTime", fileTime);
-	}
-
-	@Override
-	public void setCtime(long ctime) {
-		throw new UnsupportedOperationException();
 	}
 
 	@Override

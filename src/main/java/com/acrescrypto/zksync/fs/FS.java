@@ -14,6 +14,7 @@ public abstract class FS {
 	public abstract void unlink(String path) throws IOException;
 	public abstract void link(String source, String dest) throws IOException;
 	public abstract void symlink(String source, String dest) throws IOException;
+	public abstract String readlink(String link) throws IOException;
 	public abstract void mknod(String path, int type, int major, int minor) throws IOException;
 	public abstract void mkfifo(String path) throws IOException;
 	
@@ -31,10 +32,6 @@ public abstract class FS {
 	public abstract byte[] read(String path) throws IOException;
 	public abstract File open(String path, int mode) throws IOException;
 
-	public final static int NODE_TYPE_CHARACTER_DEVICE = 0;
-	public final static int NODE_TYPE_BLOCK_DEVICE = 1;
-	public final static int NODE_TYPE_FIFO = 2;
-	
 	public String dirname(String path) {
 		String[] comps = path.split("/");
 		String parent = String.join("/", Arrays.copyOfRange(comps, 0, comps.length-1));
@@ -56,6 +53,20 @@ public abstract class FS {
 	    }
 	    
 		return sb.toString();
+	}
+	
+	public boolean exists(String path, boolean followLinks) {
+		try {
+			if(followLinks) stat(path);
+			else lstat(path);
+			return true;
+		} catch(IOException e) {
+			return false;
+		}
+	}
+	
+	public boolean exists(String path) {
+		return exists(path, true);
 	}
 	
 	public void squash(String path) {

@@ -240,14 +240,22 @@ public class ZKFS extends FS {
 		symlink.write(source.getBytes());
 		symlink.close();
 	}
+	
+	@Override
+	public String readlink(String link) throws IOException {
+		if(stat(link).isSymlink()) throw new EINVALException(link);
+		ZKFile symlink = open(link, File.O_RDONLY|File.O_NOFOLLOW);
+		String target = new String(symlink.read());
+		return target;
+	}
 
 	@Override
 	public void mknod(String path, int type, int major, int minor) throws IOException {
 		switch(type) {
-		case NODE_TYPE_CHARACTER_DEVICE:
+		case Stat.TYPE_CHARACTER_DEVICE:
 			create(path).getStat().makeCharacterDevice(major, minor);
 			break;
-		case NODE_TYPE_BLOCK_DEVICE:
+		case Stat.TYPE_BLOCK_DEVICE:
 			create(path).getStat().makeBlockDevice(major, minor);
 			break;
 		default:

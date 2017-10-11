@@ -74,24 +74,6 @@ public class ZKFile extends File {
 	}
 
 	@Override
-	public void setMtime(long mtime) {
-		assertWritable();
-		inode.getStat().setMtime(mtime);
-	}
-
-	@Override
-	public void setAtime(long atime) {
-		assertWritable();
-		inode.getStat().setAtime(atime);
-	}
-
-	@Override
-	public void setCtime(long ctime) {
-		assertWritable();
-		inode.getStat().setCtime(ctime);
-	}
-
-	@Override
 	public int read(byte[] buf, int offset, int maxLength) throws IOException {
 		assertReadable();
 		ByteBuffer readBuf = ByteBuffer.wrap(buf);

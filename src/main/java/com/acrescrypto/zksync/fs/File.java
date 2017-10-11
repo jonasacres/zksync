@@ -18,10 +18,6 @@ public abstract class File {
 	public abstract Stat getStat() throws IOException;
 	
 	public abstract void truncate(long size) throws IOException;
-	public abstract void setMtime(long mtime) throws IOException;
-	public abstract void setAtime(long atime) throws IOException;
-	public abstract void setCtime(long ctime) throws IOException;
-	
 	public abstract int read(byte[] buf, int offset, int maxLength) throws IOException;
 
 	public byte[] read(int maxLength) throws IOException {

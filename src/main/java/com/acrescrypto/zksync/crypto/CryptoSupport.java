@@ -1,6 +1,5 @@
 package com.acrescrypto.zksync.crypto;
 
-import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -11,10 +10,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
-import org.bouncycastle.crypto.generators.HKDFBytesGenerator;
-import org.bouncycastle.crypto.params.HKDFParameters;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 
 import de.mkammerer.argon2.Argon2Factory;

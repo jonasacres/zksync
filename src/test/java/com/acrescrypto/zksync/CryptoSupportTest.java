@@ -42,7 +42,6 @@ public class CryptoSupportTest  {
 	
 	@Test
 	public void testExpandWithSalt() {
-		// TODO: prove that the python implementation still matches existing sha512 test vectors
 		// TODO: more blake2-based test vectors, including some without salt
 		byte[][][] vectors = blake2ExpansionTestVectors();
 		
@@ -84,17 +83,31 @@ public class CryptoSupportTest  {
 	
 	@Test
 	public void testEncryptPadding() {
-		// TODO: ensure encrypted messages get padded appropriately
+		byte[] key = crypto.rng(crypto.symKeyLength()),
+				iv = crypto.rng(crypto.symIvLength()),
+				plaintext = "nice day out".getBytes();
+		byte[] unpadded = crypto.encrypt(key, iv, plaintext, null, 0);
+		byte[] padded = crypto.encrypt(key, iv, plaintext, null, 65536);
+		assertTrue((unpadded.length <= 32));
+		assertTrue((padded.length >= 65536));
 	}
 	
 	@Test
 	public void testDecryptPadding() {
-		// TODO: ensure decrypted messages get padding stripped
+		byte[] key = crypto.rng(crypto.symKeyLength()),
+				iv = crypto.rng(crypto.symIvLength()),
+				plaintext = "nice day out".getBytes(),
+				recovered =crypto.decrypt(key, iv, crypto.encrypt(key, iv, plaintext, null, 65536), null, true);
+		assertTrue(Arrays.equals(recovered, plaintext));
 	}
 	
 	@Test
 	public void testDecryptWithoutPadding() {
-		// TODO: ensure messages with padding=0 can be decrypted
+		byte[] key = crypto.rng(crypto.symKeyLength()),
+				iv = crypto.rng(crypto.symIvLength()),
+				plaintext = "nice day out".getBytes(),
+				recovered =crypto.decrypt(key, iv, crypto.encrypt(key, iv, plaintext, null, 0), null, true);
+		assertTrue(Arrays.equals(recovered, plaintext));
 	}
 	
 	@Test
@@ -139,11 +152,6 @@ public class CryptoSupportTest  {
 		 */
 		byte[] expected = Util.hexToBytes("8c8130ee310833bd6f695df12d1deb4b380e84d21fb0bb5ff2c3f88918d2af6e"); 
 		assertTrue(Arrays.equals(derived, expected));
-	}
-	
-	@Test
-	public void testRNG() {
-		// TODO: test random number generator
 	}
 	
 	private byte[][][] aes256OCBTestVectors() {
