@@ -16,14 +16,15 @@ public class LocalDirectory implements Directory {
 	protected LocalFS fs;
 	
 	LocalDirectory(LocalFS fs, String path) throws IOException {
+		this.fs = fs;
 		this.path = path;
 		if(!fs.stat(path).isDirectory()) throw new EISNOTDIRException(path + ": not a directory");
 	}
 
 	public String[] list() throws IOException {
 		ArrayList<String> paths = new ArrayList<String>();
-		for(Path entry: Files.newDirectoryStream(Paths.get(this.path))) {
-			paths.add(entry.toString());
+		for(Path entry: Files.newDirectoryStream(Paths.get(fs.root, path))) {
+			paths.add(entry.getFileName().toString());
 		}
 		
 		String[] retval = new String[paths.size()];
@@ -37,12 +38,12 @@ public class LocalDirectory implements Directory {
 		return fs.opendir(fullPath);
 	}
 
-	public void link(String path, File file) throws IOException {
-		link(path, file.getPath());
+	public void link(File target, String link) throws IOException {
+		link(target.getPath(), link);
 	}
 	
-	public void link(String src, String target) throws IOException {
-		fs.link(src, Paths.get(this.path, target).toString());
+	public void link(String target, String link) throws IOException {
+		fs.link(target, Paths.get(this.path, link).toString());
 	}
 
 	public void unlink(String target) throws IOException {

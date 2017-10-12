@@ -31,6 +31,7 @@ public abstract class FS {
 	public abstract void write(String path, byte[] contents) throws IOException;
 	public abstract byte[] read(String path) throws IOException;
 	public abstract File open(String path, int mode) throws IOException;
+	public abstract void truncate(String path, long size) throws IOException;
 
 	public String dirname(String path) {
 		String[] comps = path.split("/");

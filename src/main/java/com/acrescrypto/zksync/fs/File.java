@@ -9,6 +9,7 @@ public abstract class File {
 	public final static int O_CREAT = 1 << 2;
 	public final static int O_NOFOLLOW = 1 << 3;
 	public final static int O_APPEND = 1 << 4;
+	public final static int O_TRUNC = 1 << 5;
 	
 	public final static int SEEK_SET = 0;
 	public final static int SEEK_CUR = 1;
@@ -32,13 +33,17 @@ public abstract class File {
 	}
 	
 	public byte[] read() throws IOException {
-		if(getStat().getSize() > Integer.MAX_VALUE) throw new IndexOutOfBoundsException();
-		return read((int) getStat().getSize());
+		long sizeNeeded = getStat().getSize() - pos();
+		if(sizeNeeded > Integer.MAX_VALUE) throw new IndexOutOfBoundsException();
+		return read((int) sizeNeeded);
 	}
 	
+	public long pos() throws IOException {
+		return seek(0, SEEK_CUR);
+	}
 	
 	public abstract void write(byte[] data) throws IOException;
-	public abstract void seek(long pos, int mode) throws IOException;
+	public abstract long seek(long pos, int mode) throws IOException;
 	public abstract void close() throws IOException;
 	
 	public abstract void copy(File file) throws IOException;

@@ -91,7 +91,7 @@ public class ZKFS extends FS {
 	private Inode create(String path) throws IOException {
 		ZKDirectory parent = opendir(dirname(path));
 		Inode inode = inodeTable.issueInode();
-		parent.link(basename(path), inode);
+		parent.link(inode, basename(path));
 		return inode;
 	}
 	
@@ -186,6 +186,11 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, false);
 		return inode.getStat().clone();
 	}
+	
+	@Override
+	public void truncate(String path, long size) throws IOException {
+		// TODO
+	}
 
 	@Override
 	public ZKDirectory opendir(String path) throws IOException {
@@ -200,8 +205,8 @@ public class ZKFS extends FS {
 		
 		create(path).getStat().makeDirectory();
 		ZKDirectory dir = opendir(path);
-		dir.link(".", dir);
-		dir.link("..", inodeForPath(dirname(path)));
+		dir.link(dir, ".");
+		dir.link(inodeForPath(dirname(path)), "..");
 		dir.close();
 	}
 
@@ -228,7 +233,7 @@ public class ZKFS extends FS {
 	public void link(String source, String dest) throws IOException {
 		Inode target = inodeForPath(source);
 		ZKDirectory destDir = opendir(dirname(dest));
-		destDir.link(basename(dest), target);
+		destDir.link(target, basename(dest));
 	}
 	
 	@Override

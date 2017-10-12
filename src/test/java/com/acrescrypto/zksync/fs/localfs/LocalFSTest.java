@@ -4,6 +4,8 @@ import static org.junit.Assert.*;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.file.NoSuchFileException;
 import java.util.Arrays;
 
 import org.junit.BeforeClass;
@@ -13,6 +15,7 @@ import org.apache.commons.io.FileUtils;
 
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.exceptions.*;
 
 
 public class LocalFSTest {
@@ -131,6 +134,16 @@ public class LocalFSTest {
 		LocalDirectory dir = fs.opendir("directory");
 		assertEquals(dir.getPath(), "directory");
 	}
+	
+	@Test(expected=NoSuchFileException.class)
+	public void testOpendirThrowsFileNotFound() throws IOException {
+		fs.opendir("doesntexist");
+	}
+	
+	@Test(expected=EISNOTDIRException.class)
+	public void testOpendirThrowsEISNOTDIR() throws IOException {
+		fs.opendir("regularfile");
+	}
 
 	@Test
 	public void testMkdir() throws IOException {
@@ -233,6 +246,41 @@ public class LocalFSTest {
 		byte[] text = "Hi! I have data in me!".getBytes();
 		scratch.write("writetest", text);
 		assertTrue(Arrays.equals(text, scratch.read("writetest")));
+	}
+	
+	@Test
+	public void testTruncateToZero() throws IOException {
+		byte[] text = "Die, monster! You don't belong in this world!".getBytes();
+		scratch.write("truncatetest", text);
+		assertEquals(text.length, scratch.stat("truncatetest").getSize());
+		scratch.truncate("truncatetest", 0);
+		assertEquals(0, scratch.stat("truncatetest").getSize());
+	}
+	
+	@Test
+	public void testTruncateShorter() throws IOException {
+		byte[] text = "It was not by my hand that I am once more given flesh".getBytes();
+		scratch.write("truncate-short-test", text);
+		assertEquals(text.length, scratch.stat("truncate-short-test").getSize());
+		scratch.truncate("truncate-short-test", 21);
+		assertEquals(21, scratch.stat("truncate-short-test").getSize());
+		
+		ByteBuffer buf = ByteBuffer.allocate(21);
+		buf.put(text, 0, 21);
+		assertTrue(Arrays.equals(buf.array(), scratch.read("truncate-short-test")));
+	}
+	
+	@Test
+	public void testTruncateLonger() throws IOException {
+		byte[] text = "What is a man? A miserable little pile of secrets!".getBytes();
+		scratch.write("truncate-longer-test", text);
+		assertEquals(text.length, scratch.stat("truncate-longer-test").getSize());
+		scratch.truncate("truncate-longer-test", 2*text.length);
+		assertEquals(2*text.length, scratch.stat("truncate-longer-test").getSize());
+		
+		ByteBuffer buf = ByteBuffer.allocate(2*text.length);
+		buf.put(text);
+		assertTrue(Arrays.equals(buf.array(), scratch.read("truncate-longer-test")));
 	}
 
 	@Test

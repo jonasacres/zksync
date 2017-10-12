@@ -1,13 +1,16 @@
 package com.acrescrypto.zksync.fs.localfs;
 
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
 
+import com.acrescrypto.zksync.exceptions.EACCESException;
+import com.acrescrypto.zksync.exceptions.EISDIRException;
+import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -17,6 +20,7 @@ public class LocalFile extends File {
 	protected FileChannel channel;
 	protected long offset, size;
 	protected LocalFS fs;
+	protected int mode;
 	
 	LocalFile(LocalFS fs, String path, int mode) throws IOException {
 		String modeStr = null;
@@ -28,12 +32,22 @@ public class LocalFile extends File {
 			if((mode & O_CREAT) == 0 || (mode & O_WRONLY) == 0) throw new FileNotFoundException(path);
 		}
 		
+		try {
+			if((mode & O_NOFOLLOW) != 0 && fs.lstat(path).isSymlink()) throw new EMLINKException(path);
+			if(fs.stat(path).isDirectory()) {
+				throw new EISDIRException(path);
+			}
+		} catch(NoSuchFileException|FileNotFoundException e) {
+		}
+		
 		this.fileHandle = new RandomAccessFile(Paths.get(fs.getRoot(), path).toString(), modeStr);
 		this.channel = this.fileHandle.getChannel();
 		this.fs = fs;
 		this.path = path;
+		this.mode = mode;
 		
 		if((mode & O_APPEND) != 0) this.channel.position(this.fileHandle.length());
+		else if((mode & (O_TRUNC|O_WRONLY)) == (O_TRUNC|O_WRONLY)) truncate(0);
 	}
 
 	@Override
@@ -48,31 +62,24 @@ public class LocalFile extends File {
 
 	@Override
 	public void truncate(long size) throws IOException {
-		FileOutputStream stream = null;
-		FileChannel chan = null;
-		
-		try {
-			stream = new FileOutputStream(this.path, true);
-			chan = stream.getChannel();
-			chan.truncate(size);
-		} finally {
-			if(chan != null) chan.close();
-			if(stream != null) stream.close();
-		}
+		assertWritable();
+		fs.truncate(path, size);
 	}
 
 	@Override
 	public int read(byte[] buf, int offset, int maxLength) throws IOException {
+		assertReadable();
 		return channel.read(ByteBuffer.wrap(buf, offset, maxLength));
 	}
 
 	@Override
 	public void write(byte[] data) throws IOException {
+		assertWritable();
 		channel.write(ByteBuffer.wrap(data));
 	}
 
 	@Override
-	public void seek(long pos, int mode) throws IOException {
+	public long seek(long pos, int mode) throws IOException {
 		long newOffset = -1;
 		
 		switch(mode) {
@@ -89,6 +96,7 @@ public class LocalFile extends File {
 		
 		if(newOffset < 0) throw new IllegalArgumentException();
 		channel.position(newOffset);
+		return channel.position();
 	}
 
 	@Override
@@ -99,6 +107,7 @@ public class LocalFile extends File {
 
 	@Override
 	public void copy(File file) throws IOException {
+		assertWritable();
 		while(file.hasData()) write(file.read(1024*64));
 		
 		// zksync records both numeric and string IDs, but local FS may not map the same numeric ID to the same string
@@ -121,5 +130,12 @@ public class LocalFile extends File {
 	public boolean hasData() {
 		return offset < size;
 	}
-
+	
+	protected void assertWritable() throws EACCESException {
+		if((mode & File.O_WRONLY) == 0) throw new EACCESException(path);
+	}
+	
+	protected void assertReadable() throws EACCESException {
+		if((mode & File.O_RDONLY) == 0) throw new EACCESException(path);
+	}
 }

@@ -156,7 +156,7 @@ public class ZKFile extends File {
 	}
 
 	@Override
-	public void seek(long pos, int mode) {
+	public long seek(long pos, int mode) {
 		long newOffset = -1;
 		
 		switch(mode) {
@@ -172,7 +172,7 @@ public class ZKFile extends File {
 		}
 		
 		if(newOffset < 0) throw new IllegalArgumentException();
-		offset = newOffset;
+		return offset = newOffset;
 	}
 
 	@Override

@@ -1,6 +1,9 @@
 package com.acrescrypto.zksync.fs.localfs;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.util.*;
@@ -264,6 +267,27 @@ public class LocalFS extends FS {
 	@Override
 	public LocalFile open(String path, int mode) throws IOException {
 		return new LocalFile(this, path, mode);
+	}
+	
+	@Override
+	public void truncate(String path, long size) throws IOException {
+		FileOutputStream stream = null;
+		FileChannel chan = null;
+		
+		try {
+			stream = new FileOutputStream(Paths.get(root, path).toString(), true);
+			chan = stream.getChannel();
+			long oldSize = chan.size();
+			if(size > oldSize) {
+				chan.position(oldSize);
+				chan.write(ByteBuffer.allocate((int) (size-oldSize)));
+			} else {
+				chan.truncate(size);
+			}
+		} finally {
+			if(chan != null) chan.close();
+			if(stream != null) stream.close();
+		}
 	}
 	
 	@Override

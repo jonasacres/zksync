@@ -23,7 +23,8 @@ public class ZKDirectory extends ZKFile implements Directory {
 		entries = new HashMap<String,Long>();
 		deserialize(read((int) inode.getStat().getSize()));
 	}
-
+	
+	@Override
 	public String[] list() {
 		return (String[]) entries.keySet().toArray();
 	}
@@ -46,22 +47,29 @@ public class ZKDirectory extends ZKFile implements Directory {
 		return inodeForName(comps[0]);
 	}
 
-	public void link(String name, Inode inode) throws IOException {
-		if(name.length() > MAX_NAME_LEN) throw new EINVALException("name too long");
-		if(entries.containsKey(name)) {
-			if(entries.get(name) == inode.getStat().getInodeId()) return; // nothing to do
-			throw new EEXISTSException(path + "/" + name);
+	public void link(Inode inode, String link) throws IOException {
+		if(link.length() > MAX_NAME_LEN) throw new EINVALException("name too long");
+		if(entries.containsKey(link)) {
+			if(entries.get(link) == inode.getStat().getInodeId()) return; // nothing to do
+			throw new EEXISTSException(path + "/" + link);
 		}
-		entries.put(name, inode.getStat().getInodeId());
+		entries.put(link, inode.getStat().getInodeId());
 		inode.addLink();
 		dirty = true;
 	}
-
-	public void link(String name, File file) throws IOException {
-		ZKFile zkfile = (ZKFile) file;
-		link(name, zkfile.getInode());
+	
+	@Override
+	public void link(String target, String link) throws IOException {
+		link(fs.inodeForPath(link), target);		
 	}
 
+	@Override
+	public void link(File target, String link) throws IOException {
+		ZKFile zkfile = (ZKFile) target;
+		link(zkfile.getInode(), link);
+	}
+	
+	@Override
 	public void unlink(String name) throws IOException {
 		if(name.equals(".") || name.equals("..")) throw new EINVALException("cannot unlink " + name);
 		
@@ -128,9 +136,5 @@ public class ZKDirectory extends ZKFile implements Directory {
 		}
 		
 		return buf.array();
-	}
-
-	public void link(String path, String dest) throws IOException {
-		link(path, fs.inodeForPath(dest));		
 	}
 }
