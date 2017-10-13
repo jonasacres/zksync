@@ -12,8 +12,8 @@ public abstract class FS {
 	public abstract void rmdir(String path) throws IOException;
 	
 	public abstract void unlink(String path) throws IOException;
-	public abstract void link(String source, String dest) throws IOException;
-	public abstract void symlink(String source, String dest) throws IOException;
+	public abstract void link(String target, String link) throws IOException;
+	public abstract void symlink(String target, String link) throws IOException;
 	public abstract String readlink(String link) throws IOException;
 	public abstract void mknod(String path, int type, int major, int minor) throws IOException;
 	public abstract void mkfifo(String path) throws IOException;

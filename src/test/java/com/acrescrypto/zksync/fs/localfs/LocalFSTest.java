@@ -4,10 +4,7 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.*;
 
 import org.apache.commons.io.FileUtils;
 
@@ -17,23 +14,28 @@ import com.acrescrypto.zksync.fs.Stat;
 
 public class LocalFSTest extends FSTestBase {
 	
-	 // TODO: need a much better solution than hard-coded paths in my home directory!
-	public final static String TEST_DIR = "/home/jonas/localfstest";
-	public final static String SCRATCH_DIR = "/home/jonas/localfstest/scratch";
+	 // TODO: this is going to break on Windows
+	public final static String TEST_DIR = "/tmp/localfstest";
+	public final static String SCRATCH_DIR = "/tmp/localfstest/scratch";
 	
 	@Before
-	public void beforeEach() {
-		fs = new LocalFS(TEST_DIR);
+	public void beforeEach() throws IOException {
+		deleteFiles();
+		(new java.io.File(SCRATCH_DIR)).mkdirs();
 		scratch = new LocalFS(SCRATCH_DIR);
+		prepareExamples();
 	}
 	
-	@BeforeClass
-	public static void beforeClass() {		
+	@AfterClass
+	public static void afterClass() {
+		deleteFiles();
+	}
+	
+	protected static void deleteFiles() {
 		java.io.File scratchDir = new java.io.File(SCRATCH_DIR);
 		try {
 			FileUtils.deleteDirectory(scratchDir);
 		} catch (IOException e) {}
-		scratchDir.mkdirs();
 	}
 	
 	@Test

@@ -1,8 +1,6 @@
 package com.acrescrypto.zksync.fs;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -15,18 +13,28 @@ import org.junit.Test;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 
 public class FSTestBase extends Object {
-	protected FS fs, scratch;
+	protected FS scratch;
+	protected boolean examplesPrepared = false;
+	
+	public void prepareExamples() throws IOException {
+		if(examplesPrepared) return;
+		
+		scratch.write("regularfile", "just a regular ol file".getBytes());
+		scratch.mkdir("directory");
+		scratch.link("regularfile", "hardlink");
+		scratch.mkfifo("fifo");
+		scratch.symlink("regularfile", "symlink");
+		
+		examplesPrepared = true;
+	}
 	
 	@Test
 	public void testStatRegularFile() throws IOException {
-		Stat stat = fs.stat("regularfile");
+		Stat stat = scratch.stat("regularfile");
 		assertTrue(stat.isRegularFile());
 		assertEquals(stat.getMode(), 0664);
-		assertEquals(stat.getSize(), 12);
-		assertEquals(stat.getUid(), 0);
-		assertEquals(stat.getGid(), 0);
-		assertEquals(stat.getUser(), "root");
-		assertTrue(stat.getGroup().equals("root") || stat.getGroup().equals("wheel"));
+		assertEquals(22, stat.getSize());
+		// TODO: need a good way to test UID/GID stuff
 		assertTrue(stat.getCtime() > 0);
 		assertTrue(stat.getAtime() > 0);
 		assertTrue(stat.getMtime() > 0);
@@ -34,13 +42,10 @@ public class FSTestBase extends Object {
 	
 	@Test
 	public void testStatDirectory() throws IOException {
-		Stat stat = fs.stat("directory");
+		Stat stat = scratch.stat("directory");
 		assertTrue(stat.isDirectory());
 		assertEquals(stat.getMode(), 0775);
-		assertEquals(stat.getUid(), 0);
-		assertEquals(stat.getGid(), 0);
-		assertEquals(stat.getUser(), "root");
-		assertTrue(stat.getGroup().equals("root") || stat.getGroup().equals("wheel"));
+		// TODO: need a good way to test UID/GID stuff
 		assertTrue(stat.getCtime() > 0);
 		assertTrue(stat.getAtime() > 0);
 		assertTrue(stat.getMtime() > 0);
@@ -49,13 +54,13 @@ public class FSTestBase extends Object {
 	@Test
 	public void testStatGetsInodeId() throws IOException {
 		// probably need to skip this on windows
-		assertEquals(fs.stat("regularfile").getInodeId(), fs.stat("hardlink").getInodeId());
-		assertFalse(fs.stat("regularfile").getInodeId() == fs.stat("directory").getInodeId());
+		assertEquals(scratch.stat("regularfile").getInodeId(), scratch.stat("hardlink").getInodeId());
+		assertFalse(scratch.stat("regularfile").getInodeId() == scratch.stat("directory").getInodeId());
 	}
 	
 	@Test
 	public void testStatFollowsSymlinks() throws IOException {
-		Stat symStat = fs.stat("symlink"), fileStat = fs.stat("regularfile");
+		Stat symStat = scratch.stat("symlink"), fileStat = scratch.stat("regularfile");
 		assertEquals(symStat.getInodeId(), fileStat.getInodeId());
 		assertFalse(symStat.isSymlink());
 		assertTrue(symStat.isRegularFile());
@@ -64,7 +69,7 @@ public class FSTestBase extends Object {
 	@Test
 	public void testStatIdentifiesFifos() throws IOException {
 		// TODO: skip on windows for LocalFS.
-		Stat fifo = fs.stat("fifo");
+		Stat fifo = scratch.stat("fifo");
 		assertTrue(fifo.isFifo());
 	}
 	
@@ -87,31 +92,31 @@ public class FSTestBase extends Object {
 
 	@Test
 	public void testLstatDoesntFollowSymlinks() throws IOException {
-		Stat symlink = fs.lstat("symlink");
+		Stat symlink = scratch.lstat("symlink");
 		assertTrue(symlink.isSymlink());
 	}
 	
 	@Test
 	public void testLstatWorksOnRegularFiles() throws IOException {
-		Stat symlink = fs.lstat("regularfile");
+		Stat symlink = scratch.lstat("regularfile");
 		assertTrue(symlink.isRegularFile());
 	}
 
 
 	@Test
 	public void testOpendir() throws IOException {
-		Directory dir = fs.opendir("directory");
+		Directory dir = scratch.opendir("directory");
 		assertEquals(dir.getPath(), "directory");
 	}
 	
 	@Test(expected=NoSuchFileException.class)
 	public void testOpendirThrowsFileNotFound() throws IOException {
-		fs.opendir("doesntexist");
+		scratch.opendir("doesntexist");
 	}
 	
 	@Test(expected=EISNOTDIRException.class)
 	public void testOpendirThrowsEISNOTDIR() throws IOException {
-		fs.opendir("regularfile");
+		scratch.opendir("regularfile");
 	}
 
 	@Test
@@ -152,8 +157,8 @@ public class FSTestBase extends Object {
 	@Test
 	public void testSymlink() throws IOException {
 		scratch.write("symlink-target", "over here".getBytes());
-		scratch.symlink("symlink-target", "symlink");
-		byte[] a = scratch.read("symlink-target"), b = scratch.read("symlink");
+		scratch.symlink("symlink-target", "symlink-link");
+		byte[] a = scratch.read("symlink-target"), b = scratch.read("symlink-link");
 		assertTrue(Arrays.equals(a, b));
 	}
 	
@@ -285,7 +290,7 @@ public class FSTestBase extends Object {
 	
 	@Test
 	public void testOpenWithoutCreateWorksOnExistingFiles() throws IOException {
-		fs.open("regularfile", File.O_RDONLY).close();
+		scratch.open("regularfile", File.O_RDONLY).close();
 	}
 	
 	@Test
