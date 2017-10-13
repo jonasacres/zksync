@@ -95,6 +95,11 @@ public class ZKDirectory extends ZKFile implements Directory {
 		entries.clear();
 	}
 	
+	public Directory mkdir(String name) throws IOException {
+		// TODO
+		return null;
+	}
+	
 	public boolean isEmpty() {
 		return entries.size() == 2;
 	}

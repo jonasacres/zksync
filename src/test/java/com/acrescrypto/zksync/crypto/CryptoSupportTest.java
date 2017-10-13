@@ -1,4 +1,4 @@
-package com.acrescrypto.zksync;
+package com.acrescrypto.zksync.crypto;
 
 import static org.junit.Assert.*;
 
@@ -10,6 +10,7 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 

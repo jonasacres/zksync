@@ -1,10 +1,11 @@
-package com.acrescrypto.zksync;
+package com.acrescrypto.zksync.crypto;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import org.junit.Test;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.HashContext;
 
 import junit.framework.TestCase;

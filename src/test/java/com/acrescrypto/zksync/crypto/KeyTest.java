@@ -1,4 +1,4 @@
-package com.acrescrypto.zksync;
+package com.acrescrypto.zksync.crypto;
 
 import static org.junit.Assert.*;
 

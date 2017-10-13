@@ -189,7 +189,8 @@ public class ZKFS extends FS {
 	
 	@Override
 	public void truncate(String path, long size) throws IOException {
-		// TODO
+		Inode inode = inodeForPath(path, false);
+		inode.getStat().setSize(size);
 	}
 
 	@Override
