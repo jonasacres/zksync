@@ -8,6 +8,7 @@ import java.util.Arrays;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
@@ -23,6 +24,7 @@ public class KeyTest {
 	}
 
 	@Test
+	@Ignore
 	public void testDerive() {
 		// TODO: need test vectors validated in another language
 	}
@@ -41,11 +43,13 @@ public class KeyTest {
 	}
 	
 	@Test
+	@Ignore
 	public void testEncrypt() {
 		// TODO: test encrypt. wait for some 256-bit test vectors tho...
 	}
 	
 	@Test
+	@Ignore
 	public void testDecrypt() {
 		// TODO: test decrypt. also needs those test vectors...
 	}

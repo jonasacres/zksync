@@ -62,14 +62,8 @@ public class FSTestBase extends Object {
 	}
 	
 	@Test
-	public void testStatIdentifiesDevices() throws IOException {
-		// TODO: need superuser to make, stat and then unlink device
-	}
-	
-	@Test
 	public void testStatIdentifiesFifos() throws IOException {
-		// TODO: skip on windows
-		// TODO: how the hell will i make this portable
+		// TODO: skip on windows for LocalFS.
 		Stat fifo = fs.stat("fifo");
 		assertTrue(fifo.isFifo());
 	}
@@ -171,8 +165,21 @@ public class FSTestBase extends Object {
 	}
 
 	@Test
-	public void testMknod() {
-	  // TODO: Implement... but what to do about superuser privileges?
+	public void testMknodCharacterDevice() throws IOException {
+		scratch.mknod("devnull", Stat.TYPE_CHARACTER_DEVICE, 1, 3);
+		Stat stat = scratch.stat("devnull");
+		assertTrue(stat.isCharacterDevice());
+		assertEquals(1, stat.getDevMajor());
+		assertEquals(3, stat.getDevMinor());
+	}
+
+	@Test
+	public void testMknodBlockDevice() throws IOException {
+		scratch.mknod("blockdev", Stat.TYPE_BLOCK_DEVICE, 1, 3);
+		Stat stat = scratch.stat("blockdev");
+		assertTrue(stat.isBlockDevice());
+		assertEquals(1, stat.getDevMajor());
+		assertEquals(3, stat.getDevMinor());
 	}
 
 	@Test
@@ -191,13 +198,21 @@ public class FSTestBase extends Object {
 	}
 
 	@Test
-	public void testChown() {
-	  // TODO: Implement... still needs superuser though
+	public void testChown() throws IOException {
+		scratch.write("chown", "contents".getBytes());
+		scratch.chown("chown", "root");
+		assertEquals("root", scratch.stat("chown").getUser());
+		scratch.chown("chown", "jonas"); // TODO: needs another user
+		assertEquals("jonas", scratch.stat("chown").getUser());
 	}
 
 	@Test
-	public void testChgrp() {
-	  // TODO: Implement
+	public void testChgrp() throws IOException {
+		scratch.write("chgrp", "contents".getBytes());
+		scratch.chgrp("chgrp", "root");
+		assertEquals("root", scratch.stat("chgrp").getUser());
+		scratch.chgrp("chgrp", "jonas"); // TODO: needs another user
+		assertEquals("jonas", scratch.stat("chgrp").getUser());
 	}
 
 	@Test

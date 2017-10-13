@@ -6,6 +6,7 @@ import java.io.IOException;
 
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import org.apache.commons.io.FileUtils;
@@ -46,18 +47,23 @@ public class LocalFSTest extends FSTestBase {
 		assertEquals(devNull.getDevMinor(), 3);
 	}
 	
-	@Test
-	public void testMknod() {
+	@Test @Ignore @Override
+	public void testMknodCharacterDevice() throws IOException {
 	  // TODO: Implement... but what to do about superuser privileges?
 	}
 
-	@Test
+	@Test @Ignore @Override
+	public void testMknodBlockDevice() throws IOException {
+	  // TODO: Implement... but what to do about superuser privileges?
+	}
+
+	@Test @Ignore @Override
 	public void testChown() {
 	  // TODO: Implement... still needs superuser though
 	}
 
-	@Test
+	@Test @Ignore @Override
 	public void testChgrp() {
-	  // TODO: Implement
+	  // TODO: Implement, needs super
 	}
 }
