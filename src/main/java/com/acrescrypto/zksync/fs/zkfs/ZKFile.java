@@ -134,6 +134,14 @@ public class ZKFile extends File {
 	}
 	
 	protected void calculateRefType() throws IOException {
+		// TODO
+		/* I don't like that we're paging out to disk, then reading back in to become a literal.
+		 * First of all because it just plain doesn't work right now: to read the file, we need a refTag, which is
+		 * exactly what we're trying to set in the first place, so how can we read the file? This also necessitating
+		 * breaking POSIX file access semantics (O_WRONLY => O_RDRW)
+		 * 
+		 * Second, it's ugly. When do we delete the pages? What was the point of encrypting, writing then deleting?
+		 */
 		assertWritable();
 		long fileSize = inode.getStat().getSize();
 		if(fileSize <= fs.getPrivConfig().getImmediateThreshold()) {
