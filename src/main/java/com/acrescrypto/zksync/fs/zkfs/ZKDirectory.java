@@ -134,7 +134,8 @@ public class ZKDirectory extends ZKFile implements Directory {
 		}
 		
 		ByteBuffer buf = ByteBuffer.allocate(size);
-		String[] sortedPaths = (String[]) entries.keySet().toArray();
+		String[] sortedPaths = new String[entries.size()];
+		entries.keySet().toArray(sortedPaths);
 		Arrays.sort(sortedPaths);
 		
 		for(String path : sortedPaths) {

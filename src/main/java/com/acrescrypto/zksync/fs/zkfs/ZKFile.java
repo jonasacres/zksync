@@ -21,6 +21,7 @@ public class ZKFile extends File {
 	protected ZKFile() {}
 		
 	public ZKFile(ZKFS fs, String path, int mode) throws IOException {
+		if((mode & O_WRONLY) == O_WRONLY) mode |= O_RDONLY;
 		this.fs = fs;
 		this.path = path;
 		this.mode = mode;
@@ -129,9 +130,10 @@ public class ZKFile extends File {
 		}
 		
 		if(offset > inode.getStat().getSize()) inode.getStat().setSize(offset);
+		calculateRefType(); // This feels dirty, but options appear limited. Journaling?
 	}
 	
-	private void calculateRefType() throws IOException {
+	protected void calculateRefType() throws IOException {
 		assertWritable();
 		long fileSize = inode.getStat().getSize();
 		if(fileSize <= fs.getPrivConfig().getImmediateThreshold()) {

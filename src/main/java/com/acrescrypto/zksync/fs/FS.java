@@ -38,6 +38,7 @@ public abstract class FS {
 		String[] comps = path.split("/");
 		String parent = String.join("/", Arrays.copyOfRange(comps, 0, comps.length-1));
 		if(comps[0] == "") parent = "/" + parent;
+		if(parent.equals("")) parent = "/";
 		return parent;
 	}
 	

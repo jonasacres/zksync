@@ -98,6 +98,7 @@ public class ZKFS extends FS {
 		ZKDirectory parent = opendir(dirname(path));
 		Inode inode = inodeTable.issueInode();
 		parent.link(inode, basename(path));
+		parent.commit();
 		return inode;
 	}
 	
