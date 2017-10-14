@@ -144,6 +144,11 @@ public class LocalFS extends FS {
 	public void mkdir(String path) throws IOException {
 		Files.createDirectory(Paths.get(root, path));
 	}
+	
+	@Override
+	public void mkdirp(String path) throws IOException {
+		Files.createDirectories(Paths.get(root, path));
+	}
 
 	@Override
 	public void rmdir(String path) throws IOException {
@@ -251,6 +256,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void write(String path, byte[] contents) throws IOException {
+		if(!exists(dirname(path))) mkdirp(dirname(path));
 		LocalFile file = open(path, File.O_WRONLY|File.O_CREAT);
 		file.write(contents);
 		file.close();

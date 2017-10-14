@@ -125,6 +125,13 @@ public class FSTestBase extends Object {
 		Stat stat = scratch.stat("mkdirtest");
 		assertTrue(stat.isDirectory());
 	}
+	
+	@Test
+	public void testMkdirp() throws IOException {
+		scratch.mkdirp("mkdirptest/1/2/3");
+		Stat stat = scratch.stat("mkdirptest/1/2/3");
+		assertTrue(stat.isDirectory());
+	}
 
 	@Test
 	public void testRmdir() throws IOException {
@@ -241,6 +248,13 @@ public class FSTestBase extends Object {
 		byte[] text = "Hi! I have data in me!".getBytes();
 		scratch.write("writetest", text);
 		assertTrue(Arrays.equals(text, scratch.read("writetest")));
+	}
+	
+	@Test
+	public void testWriteCreatesDirectories() throws IOException {
+		byte[] text = "Hi! I have data in me!".getBytes();
+		scratch.write("write-creates-directories/1/2/3/afile", text);
+		assertTrue(Arrays.equals(text, scratch.read("write-creates-directories/1/2/3/afile")));
 	}
 	
 	@Test

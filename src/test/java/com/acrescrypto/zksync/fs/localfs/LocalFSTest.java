@@ -15,8 +15,7 @@ import com.acrescrypto.zksync.fs.Stat;
 public class LocalFSTest extends FSTestBase {
 	
 	 // TODO: this is going to break on Windows
-	public final static String TEST_DIR = "/tmp/localfstest";
-	public final static String SCRATCH_DIR = "/tmp/localfstest/scratch";
+	public final static String SCRATCH_DIR = "/tmp/zksync-test/localfs";
 	
 	@Before
 	public void beforeEach() throws IOException {

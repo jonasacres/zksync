@@ -89,7 +89,7 @@ public class CryptoSupportTest  {
 				plaintext = "nice day out".getBytes();
 		byte[] unpadded = crypto.encrypt(key, iv, plaintext, null, 0);
 		byte[] padded = crypto.encrypt(key, iv, plaintext, null, 65536);
-		assertTrue((unpadded.length <= 32));
+		assertTrue((unpadded.length <= 64));
 		assertTrue((padded.length >= 65536));
 	}
 	

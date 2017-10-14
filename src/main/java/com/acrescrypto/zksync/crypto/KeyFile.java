@@ -17,7 +17,7 @@ public class KeyFile {
 	private Key makePassphraseKey(char[] passphrase) {
 		byte[] ppBytes = new byte[passphrase.length];
 		for(int i = 0; i < passphrase.length; i++) ppBytes[i] = (byte) passphrase[i];
-		return new Key(fs.getCrypto(), fs.getCrypto().deriveKeyFromPassword(ppBytes, new byte[] {}));
+		return new Key(fs.getCrypto(), fs.getCrypto().deriveKeyFromPassword(ppBytes, "zksync-salt".getBytes()));
 	}
 	
 	public void read(char[] passphrase) {

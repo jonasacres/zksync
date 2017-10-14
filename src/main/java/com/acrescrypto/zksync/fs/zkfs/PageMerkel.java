@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.NoSuchFileException;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
@@ -15,7 +16,7 @@ public class PageMerkel {
 	PageMerkel(ZKFS fs, Inode inode) throws InaccessibleStorageException {
 		this.fs = fs;
 		this.inode = inode;
-		read();
+		if(inode.getRefTag() != null) read();
 	}
 	
 	public byte[] getMerkelTag() {
@@ -28,7 +29,7 @@ public class PageMerkel {
 	}
 	
 	public void setPageTag(int pageNum, byte[] pageTag) {
-		if(pageNum >= numPages) setupTree(pageNum);
+		if(pageNum >= numPages) setupTree(pageNum+1);
 		nodes[numPages - 1 + pageNum].setTag(pageTag);
 	}
 	

@@ -2,9 +2,12 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.fs.Directory;
 
 /* Stores a revision of the archive. This is needed to bootstrap reading the archive.
  */
@@ -15,6 +18,37 @@ public class Revision {
 	protected byte[] revTag; // unique, non-confidential identifier for this revision
 	
 	public final static int REVISION_FILE_SIZE = 512;
+	
+	public static Revision activeRevision(ZKFS fs) throws IOException {
+		try {
+			return new Revision(fs, ZKFS.ACTIVE_REVISION);
+		} catch(IOException|SecurityException e) {}
+		
+		Directory revdir;
+		long bestMtime = 0;
+		Revision bestRev = null;
+
+		try {
+			revdir = fs.getStorage().opendir(ZKFS.REVISION_DIR);
+		} catch(NoSuchFileException e) {
+			return null;
+		}
+		
+		for(String revName : revdir.list()) {
+			try {
+				Revision rev = new Revision(fs, Paths.get(ZKFS.REVISION_DIR, revName).toString());
+				long mtime = rev.supernode.getStat().getMtime();
+				if(mtime > bestMtime || bestRev == null) {
+					bestMtime = mtime;
+					bestRev = rev;
+				}
+			} catch(SecurityException e) {
+				// just ignore invalid rev files
+			}
+		}
+		
+		return bestRev;
+	}
 	
 	// make a new revision based on the contents of an inode table
 	public Revision(InodeTable table) {
@@ -49,6 +83,12 @@ public class Revision {
 		String path = ZKFS.REVISION_DIR + fs.pathForHash(this.revTag);
 		fs.getStorage().write(path, ciphertext);
 		fs.getStorage().squash(path);
+	}
+	
+	public void makeActive() throws IOException {
+		String revFile = ZKFS.REVISION_DIR + fs.pathForHash(this.revTag);
+		// TODO: probably need to make parent directories...
+		fs.getStorage().symlink(revFile, ZKFS.ACTIVE_REVISION);
 	}
 	
 	// create plaintext serialized revision data (to be encrypted and written to storage)

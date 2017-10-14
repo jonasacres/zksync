@@ -36,14 +36,16 @@ public class ZKFS extends FS {
 	public final static String CONFIG_DIR = ".zksync/archive/config/";
 	public final static String REVISION_DIR = ".zksync/archive/revisions/";
 	public final static String LOCAL_DIR = ".zksync/local/";
+	public final static String ACTIVE_REVISION = ".zskync/local/active-revision";
 	
-	public ZKFS(FS storage, String id, char[] passphrase) {
+	public ZKFS(FS storage, char[] passphrase) throws IOException {
 		this.storage = storage;
 		this.pubConfig = new PubConfig(storage);
-		keyfile = new KeyFile(this, passphrase);
 		crypto = new CryptoSupport(pubConfig);
+		keyfile = new KeyFile(this, passphrase);
 		this.privConfig = new PrivConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_PRIVATE));
 		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
+		this.inodeTable = new InodeTable(this, Revision.activeRevision(this));
 	}
 	
 	public Key deriveKey(int type, int index, byte[] tweak) {
@@ -68,6 +70,10 @@ public class ZKFS extends FS {
 	}
 	
 	public Inode inodeForPath(String path, boolean followSymlinks) throws IOException {
+		if(path.equals("/")) {
+			return inodeTable.inodeWithId(InodeTable.INODE_ID_ROOT_DIRECTORY);
+		}
+		
 		ZKDirectory root;
 		try {
 			root = opendir("/");
@@ -112,8 +118,11 @@ public class ZKFS extends FS {
 	}
 	
 	public void assertPathIsNotDirectory(String path) throws IOException {
-		Inode inode = inodeForPath(path);
-		if(inode.getStat().isDirectory()) throw new EISDIRException(path);
+		try {
+			Inode inode = inodeForPath(path);
+			if(inode.getStat().isDirectory()) throw new EISDIRException(path);
+		} catch(ENOENTException e) {
+		}
 	}
 	
 	public void assertDirectoryIsEmpty(String path) throws IOException {
@@ -209,6 +218,11 @@ public class ZKFS extends FS {
 		dir.link(dir, ".");
 		dir.link(inodeForPath(dirname(path)), "..");
 		dir.close();
+	}
+	
+	@Override
+	public void mkdirp(String path) throws IOException {
+		// TODO: implement
 	}
 
 	@Override

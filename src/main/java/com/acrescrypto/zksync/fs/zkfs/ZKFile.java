@@ -17,19 +17,23 @@ public class ZKFile extends File {
 	protected int mode;
 	
 	HashMap<Integer, Page> pageCache;
+	
+	protected ZKFile() {}
 		
 	public ZKFile(ZKFS fs, String path, int mode) throws IOException {
-		fs.assertPathIsDirectory(fs.dirname(path));
 		this.fs = fs;
 		this.path = path;
 		this.mode = mode;
+		this.pageCache = new HashMap<Integer,Page>();
 		
 		try {
 			this.inode = fs.inodeForPath(path);
 		} catch(ENOENTException e) {
 			this.inode = new Inode(fs);
 		}
-	}
+
+		this.merkel = new PageMerkel(fs, this.inode);
+}
 	
 	public ZKFS getFS() {
 		return fs;
@@ -108,11 +112,11 @@ public class ZKFile extends File {
 			int pageNum = (int) (offset/fs.getPrivConfig().getPageSize());
 			Page page = getPage(pageNum);
 			
-			writeBuf.reset();
+			writeBuf.clear();
 			writeBuf.put(data, dOffset, bytesToWrite);
 			
 			if(offsetInPage > 0) {
-				page.append(writeBuf.array(), offsetInPage);
+				page.append(data, offsetInPage);
 				page.finalize();
 			} else {
 				page.setPlaintext(writeBuf.array());

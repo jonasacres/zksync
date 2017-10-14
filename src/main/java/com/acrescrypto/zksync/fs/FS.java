@@ -9,6 +9,7 @@ public abstract class FS {
 	
 	public abstract Directory opendir(String path) throws IOException;
 	public abstract void mkdir(String path) throws IOException;
+	public abstract void mkdirp(String path) throws IOException;
 	public abstract void rmdir(String path) throws IOException;
 	
 	public abstract void unlink(String path) throws IOException;

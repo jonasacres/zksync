@@ -154,8 +154,11 @@ public class CryptoSupport {
 	private byte[] padToSize(byte[] raw, int padSize) {
 		if(padSize < 0) return raw.clone();
 		if(padSize == 0) padSize = raw.length + 4;
-		if(raw.length + 4 > padSize) throw new IllegalArgumentException("attempted to pad data beyond maximum size");
-		ByteBuffer padded = ByteBuffer.allocate(padSize);
+		if(raw.length > padSize) {
+			throw new IllegalArgumentException("attempted to pad data beyond maximum size");
+		}
+		
+		ByteBuffer padded = ByteBuffer.allocate(padSize+4);
 		padded.putInt(raw.length);
 		padded.put(raw);
 		while(padded.position() < padSize) padded.put((byte) 0);

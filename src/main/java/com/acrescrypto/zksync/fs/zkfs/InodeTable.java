@@ -2,31 +2,42 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Hashtable;
 
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 
 // represents inode table for ZKFS instance. 
 public class InodeTable extends ZKFile {
-	public final long INODE_ID_INODE_TABLE = 0;
-	public final long INODE_ID_ROOT_DIRECTORY = 0;
-	public final long USER_INODE_ID_START = 10000;
+	public final static long INODE_ID_INODE_TABLE = 0;
+	public final static long INODE_ID_ROOT_DIRECTORY = 1;
+	public final static long USER_INODE_ID_START = 10000;
+	
+	public final static String INODE_TABLE_PATH = "(inode table)";
 	
 	Hashtable<Long,Inode> inodes;
 	Revision revision;
 	long nextInodeId;
 	
 	public InodeTable(ZKFS fs, Revision revision) throws IOException {
-		super(fs, "(inode table)", O_RDWR);
+		this.fs = fs;
+		this.path = INODE_TABLE_PATH;
+		this.mode = O_RDWR;
+		this.pageCache = new HashMap<Integer,Page>();
 		
-		if(revision != null) this.inode = revision.getSupernode().clone();
+		if(revision != null) {
+			this.inode = revision.getSupernode().clone();
+			this.merkel = new PageMerkel(fs, this.inode);
+
+		}
+		
 		this.revision = revision;
 		this.inodes = new Hashtable<Long,Inode>();
 		
 		if(revision == null) {
-			// brand new; nothing to read...
 			initialize();
 			return;
 		}
@@ -70,16 +81,18 @@ public class InodeTable extends ZKFile {
 	}
 	
 	public void unlink(long inodeId) throws ENOENTException, EMLINKException {
-		if(!inodes.contains(inodeId)) throw new ENOENTException(String.format("inode %l", inodeId));
+		if(!inodes.contains(inodeId)) throw new ENOENTException(String.format("inode %d", inodeId));
 		
 		if(inodeId <= 1) throw new IllegalArgumentException();		
-		if(inodes.get(inodeId).getNlink() > 0) throw new EMLINKException(String.format("inode %l", inodeId));
+		if(inodes.get(inodeId).getNlink() > 0) throw new EMLINKException(String.format("inode %d", inodeId));
 		
 		inodes.remove(inodeId);
 	}
 	
 	public Inode inodeWithId(long inodeId) throws ENOENTException {
-		if(!inodes.contains(inodeId)) throw new ENOENTException(String.format("inode %l", inodeId));
+		if(!inodes.containsKey(inodeId)) {
+			throw new ENOENTException(String.format("inode %d", inodeId));
+		}
 		return inodes.get(inodeId);
 	}
 	
@@ -109,9 +122,11 @@ public class InodeTable extends ZKFile {
 		inodes.put(rootDir.getStat().getInodeId(), rootDir);
 	}
 	
-	private void initialize() {
-		this.inode.setFlags(Inode.FLAG_RETAIN);
+	private void initialize() throws InaccessibleStorageException {
+		this.inode = Inode.blankRootInode(fs);
 		this.inodes.put(INODE_ID_INODE_TABLE, this.inode);
+		this.merkel = new PageMerkel(fs, this.inode);
+
 		makeRootDir();
 		nextInodeId = USER_INODE_ID_START;
 	}	

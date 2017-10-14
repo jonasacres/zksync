@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 
@@ -30,7 +31,9 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	public long inodeForName(String name) throws IOException {
-		if(!entries.containsKey(name)) throw new ENOENTException(path + "/" + name);
+		if(!entries.containsKey(name)) {
+			throw new ENOENTException(Paths.get(path, name).toString());
+		}
 		return entries.get(name);
 	}
 	
@@ -38,7 +41,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		String[] comps = path.split("/");
 		if(comps.length > 1) {
 			try {
-				return fs.opendir(path + "/" + comps[0]).inodeForPath(this.path + "/" + String.join("/", Arrays.copyOfRange(comps, 1, comps.length)));
+				return fs.opendir(Paths.get(path, comps[0]).toString()).inodeForPath(Paths.get(this.path, String.join("/", Arrays.copyOfRange(comps, 1, comps.length))).toString());
 			} catch (EISNOTDIRException e) {
 				throw new ENOENTException(path);
 			}
@@ -48,10 +51,10 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 
 	public void link(Inode inode, String link) throws IOException {
-		if(link.length() > MAX_NAME_LEN) throw new EINVALException("name too long");
+		if(link.length() > MAX_NAME_LEN) throw new EINVALException(link + ": name too long");
 		if(entries.containsKey(link)) {
 			if(entries.get(link) == inode.getStat().getInodeId()) return; // nothing to do
-			throw new EEXISTSException(path + "/" + link);
+			throw new EEXISTSException(Paths.get(path, link).toString());
 		}
 		entries.put(link, inode.getStat().getInodeId());
 		inode.addLink();
@@ -73,7 +76,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public void unlink(String name) throws IOException {
 		if(name.equals(".") || name.equals("..")) throw new EINVALException("cannot unlink " + name);
 		
-		Inode inode = fs.inodeForPath(path + "/" + name);
+		Inode inode = fs.inodeForPath(Paths.get(path, name).toString());
 		inode.removeLink();
 		entries.remove(name);
 		dirty = true;

@@ -18,6 +18,21 @@ public class Inode {
 	public static final byte REF_TYPE_INDIRECT = 1;
 	public static final byte REF_TYPE_2INDIRECT = 2;
 	
+	public static Inode blankRootInode(ZKFS fs) {
+		Inode blank = new Inode(fs);
+		Stat stat = new Stat();
+		long now = System.currentTimeMillis()*1000l*1000l;
+		stat.setAtime(now);
+		stat.setMtime(now);
+		stat.setCtime(now);
+		stat.setUser("zksync");
+		stat.setGroup("zksync");
+		
+		blank.setStat(stat);
+		blank.setFlags(FLAG_RETAIN);
+		return blank;
+	}
+	
 	public Inode(ZKFS fs) {
 		this.fs = fs;
 		this.stat = new Stat();

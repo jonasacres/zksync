@@ -11,6 +11,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
 // Contains information needed to decrypt archive. Stored in plaintext.
 public class PubConfig extends ConfigFile {
+	public static int defaultArgon2TimeCost = 4, defaultArgon2MemoryCost = 65536, defaultArgon2Parallelism = 1;
 	
 	public PubConfig(FS storage) {
 		super(storage);
@@ -23,9 +24,9 @@ public class PubConfig extends ConfigFile {
 	private int argon2MemoryCost, argon2TimeCost, argon2Parallelism;
 	
 	public void setDefaults() {
-		setArgon2MemoryCost(65536);
-		setArgon2TimeCost(4);
-		setArgon2Parallelism(1);
+		setArgon2TimeCost(defaultArgon2TimeCost);
+		setArgon2MemoryCost(defaultArgon2MemoryCost);
+		setArgon2Parallelism(defaultArgon2Parallelism);
 	}
 
 	public String path() {
