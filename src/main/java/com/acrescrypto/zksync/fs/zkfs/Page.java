@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.NoSuchFileException;
@@ -7,6 +8,7 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 
@@ -132,8 +134,11 @@ public class Page {
 		
 		try {
 			ciphertext = file.getFS().getStorage().read(path);
-		} catch(NoSuchFileException exc) {
-			if(size > 0) throw exc;
+		} catch(NoSuchFileException|FileNotFoundException|ENOENTException exc) {
+			/* TODO: Having 3 different exceptions to indicate ENOENT is ridiculous.
+			 * Make ALL instances of NoSuchFileException, FileNotFoundException into ENOENT (including in LocalFS)
+			 */
+			if(size > 0) throw new ENOENTException(path);
 			contents = ByteBuffer.allocate(size);
 			return;
 		} catch(IOException exc) {
@@ -142,8 +147,6 @@ public class Page {
 		
 		byte[] plaintext = textKey(pageTag).wrappedDecrypt(ciphertext);
 		
-		// i have two minds about this. paranoia is good, and checking consistency of state is smart.
-		// downside: hashing every page we read is added cost, and this check seems redundant with AEAD cipher
 		if(!Arrays.equals(this.authKey().authenticate(plaintext), pageTag)) {
 			throw new SecurityException();
 		}

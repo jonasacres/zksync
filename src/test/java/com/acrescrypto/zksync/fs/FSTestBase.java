@@ -11,6 +11,7 @@ import java.util.Arrays;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 
 public class FSTestBase extends Object {
 	protected FS scratch;
@@ -110,7 +111,7 @@ public class FSTestBase extends Object {
 		assertEquals(dir.getPath(), "directory");
 	}
 	
-	@Test(expected=NoSuchFileException.class)
+	@Test(expected=ENOENTException.class)
 	public void testOpendirThrowsFileNotFound() throws IOException {
 		scratch.opendir("doesntexist");
 	}

@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.*;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
@@ -254,6 +253,7 @@ public class ZKFS extends FS {
 		Inode target = inodeForPath(source);
 		ZKDirectory destDir = opendir(dirname(dest));
 		destDir.link(target, basename(dest));
+		destDir.close();
 	}
 	
 	@Override
