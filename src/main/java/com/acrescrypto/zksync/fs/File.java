@@ -1,8 +1,9 @@
 package com.acrescrypto.zksync.fs;
 
+import java.io.Closeable;
 import java.io.IOException;
 
-public abstract class File {
+public abstract class File implements Closeable {
 	public final static int O_RDONLY = 1 << 0;
 	public final static int O_WRONLY = 1 << 1;
 	public final static int O_RDWR = O_RDONLY | O_WRONLY; // no this is not how POSIX works, but it is nicer
@@ -44,6 +45,7 @@ public abstract class File {
 	
 	public abstract void write(byte[] data) throws IOException;
 	public abstract long seek(long pos, int mode) throws IOException;
+	public abstract void flush() throws IOException;
 	public abstract void close() throws IOException;
 	
 	public abstract void copy(File file) throws IOException;

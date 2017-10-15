@@ -109,6 +109,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	public void commit() throws IOException {
 		write(serialize());
+		flush();
 	}
 	
 	private void deserialize(byte[] serialized) {

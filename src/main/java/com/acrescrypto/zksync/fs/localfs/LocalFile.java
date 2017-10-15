@@ -77,6 +77,11 @@ public class LocalFile extends File {
 		assertWritable();
 		channel.write(ByteBuffer.wrap(data));
 	}
+	
+	@Override
+	public void flush() throws IOException {
+		channel.force(true);
+	}
 
 	@Override
 	public long seek(long pos, int mode) throws IOException {

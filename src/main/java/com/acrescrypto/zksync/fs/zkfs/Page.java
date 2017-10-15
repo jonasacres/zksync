@@ -2,7 +2,10 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.NoSuchFileException;
+import java.util.Arrays;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
@@ -10,45 +13,54 @@ import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 // represents a fixed-size page of data from a file. handles encryption/decryption/storage of said page.
 public class Page {
 	private ZKFile file;
-	private int pageNum;
-	private ByteBuffer writeBuffer;
+	protected int pageNum, size;
+	private ByteBuffer contents;
+	boolean dirty;
 	
-	public Page(ZKFile file, int index) {
+	public Page(ZKFile file, int index) throws IOException {
 		this.file = file;
 		this.pageNum = index;
+		load();
+	}
+	
+	public void truncate(int length) {
+		if(size == length) return;
+		size = length;
+		dirty = true;
 	}
 	
 	/* append plaintext to page. must call finalize() to encrypt and write to storage. 
 	 * @throws IndexOutOfBoundsException content would exceed max page length
 	 */
-	public void append(byte[] contents, int offset) throws IOException {
-		if(writeBuffer == null) {
-			writeBuffer = ByteBuffer.allocate((int) file.getFS().getPrivConfig().getPageSize());
-			writeBuffer.put(read()); // add in current page contents, if any
-			if(offset >= 0) writeBuffer.position(offset);
-		}
-		
-		if(writeBuffer.position() + contents.length > file.getFS().getPrivConfig().getPageSize()) {
-			throw new IndexOutOfBoundsException();
-		}
-		
-		writeBuffer.put(contents);
+	public int write(byte[] plaintext, int offset, int length) throws IOException {
+		contents.put(plaintext, offset, length);
+		if(contents.position() > size) size = contents.position();
+		dirty = true;
+		return length;
 	}
 	
-	// set plaintext contents of page (replacing existing content), encrypt and write to storage.
-	public void setPlaintext(byte[] plaintext) throws InaccessibleStorageException {
-		long pageSize = file.getFS().getPrivConfig().getPageSize();
-		if(plaintext.length < pageSize) {
-			byte[] padded = new byte[(int) pageSize];
-			for(int i = 0; i < pageSize; i++) {
-				padded[i] = i >= plaintext.length ? 0 : plaintext[i];
+	// write all buffered data to storage
+	public void flush() throws InaccessibleStorageException {
+		if(!dirty) return;
+		dirty = false;
+		
+		ByteBuffer plaintext;
+		
+		if(size < contents.capacity()) {
+			plaintext = ByteBuffer.allocate(size);
+			plaintext.put(contents.array(), 0, size);
+			
+			// don't write immediates to disk; the pageTag = refTag = file contents
+			if(pageNum == 0 && size <= file.getFS().getPrivConfig().getImmediateThreshold()) {
+				file.setPageTag(pageNum, plaintext.array());
+				return;
 			}
-		} else if(plaintext.length > pageSize) {
-			throw new IndexOutOfBoundsException();
+		} else {
+			plaintext = contents;
 		}
-		 
-		byte[] pageTag = this.authKey().authenticate(plaintext);
-		byte[] ciphertext = this.textKey(pageTag).wrappedEncrypt(plaintext, (int) file.getFS().getPrivConfig().getPageSize());
+		
+		byte[] pageTag = this.authKey().authenticate(plaintext.array());
+		byte[] ciphertext = this.textKey(pageTag).wrappedEncrypt(plaintext.array(), (int) file.getFS().getPrivConfig().getPageSize());
 		this.file.setPageTag(pageNum, pageTag);
 		
 		try {
@@ -58,13 +70,20 @@ public class Page {
 		} catch (IOException e) {
 			throw new InaccessibleStorageException();
 		}
-		writeBuffer = null;
 	}
 	
-	// write all buffered data to storage
-	public void finalize() throws InaccessibleStorageException {
-		if(writeBuffer == null) return;
-		setPlaintext(writeBuffer.array());
+	public int read(byte[] buf, int offset, int maxLength) {
+		int readLen = (int) Math.min(maxLength, size-contents.position());
+		contents.get(buf, offset, readLen);
+		return readLen;
+	}
+	
+	public void seek(int offset) {
+		contents.position(offset);
+	}
+	
+	public int remaining() {
+		return size - contents.position();
 	}
 	
 	protected Key textKey(byte[] pageTag) {
@@ -93,25 +112,43 @@ public class Page {
 		return file.getFS().deriveKey(ZKFS.KEY_TYPE_AUTH, ZKFS.KEY_INDEX_PAGE, buf.array());
 	}
 	
-	/* reads and decrypts the page
-	 * @return full plaintext of page
-	 */
-	public byte[] read() throws IOException {
+	protected void load() throws IOException {
+		int pageSize = file.getFS().getPrivConfig().getPageSize();
+		long totalSize = file.getStat().getSize();
+		boolean isLastPage = pageNum == totalSize/pageSize; 
+		size = (int) (isLastPage ? totalSize % pageSize : pageSize);
+		
+		if(size <= file.getFS().getPrivConfig().getImmediateThreshold()) {
+			contents = ByteBuffer.allocate(file.getFS().getPrivConfig().getPageSize());
+			if(size > 0) {
+				contents.put(file.getInode().getRefTag(), 0, size);
+			}
+			return;
+		}
+		
 		byte[] pageTag = file.getPageTag(pageNum);
-		byte[] plaintext, ciphertext;
+		byte[] ciphertext;
 		String path = ZKFS.DATA_DIR + file.getFS().pathForHash(pageTag);
 		
 		try {
 			ciphertext = file.getFS().getStorage().read(path);
+		} catch(NoSuchFileException exc) {
+			if(size > 0) throw exc;
+			contents = ByteBuffer.allocate(size);
+			return;
 		} catch(IOException exc) {
 			throw new InvalidArchiveException(exc.toString());
 		}
-		plaintext = textKey(pageTag).wrappedDecrypt(ciphertext);
+		
+		byte[] plaintext = textKey(pageTag).wrappedDecrypt(ciphertext);
 		
 		// i have two minds about this. paranoia is good, and checking consistency of state is smart.
 		// downside: hashing every page we read is added cost, and this check seems redundant with AEAD cipher
-		if(!this.authKey().authenticate(plaintext).equals(pageTag)) throw new SecurityException();
+		if(!Arrays.equals(this.authKey().authenticate(plaintext), pageTag)) {
+			throw new SecurityException();
+		}
 		
-		return plaintext;
+		contents = ByteBuffer.allocate(pageSize);
+		contents.put(plaintext);
 	}
 }

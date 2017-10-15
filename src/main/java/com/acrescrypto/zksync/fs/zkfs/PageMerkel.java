@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.NoSuchFileException;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
@@ -16,14 +15,22 @@ public class PageMerkel {
 	PageMerkel(ZKFS fs, Inode inode) throws InaccessibleStorageException {
 		this.fs = fs;
 		this.inode = inode;
-		if(inode.getRefTag() != null) read();
+		if(inode.getRefTag() != null) {
+			switch(inode.getRefType()) {
+			case Inode.REF_TYPE_IMMEDIATE:
+			case Inode.REF_TYPE_INDIRECT:
+				setPageTag(0, inode.getRefTag());
+				break;
+			case Inode.REF_TYPE_2INDIRECT:
+				read();
+				break;
+			}
+		}
 	}
 	
 	public byte[] getMerkelTag() {
-		// merkel tags are only used if we have 2 or more pages, so the tag of an empty merkel tree can be undefined
-		// this implementation just uses a hash-sized array of zeroes
-		
-		if(nodes == null || nodes.length == 0) return new byte[fs.getCrypto().hashLength()];
+		// empty tree => 0 pages => contents = "", guaranteed to be an immediate
+		if(nodes == null || nodes.length == 0) return new byte[] {};
 		nodes[0].recalculate();
 		return nodes[0].tag.clone();
 	}
@@ -112,33 +119,34 @@ public class PageMerkel {
 		}
 	}
 
-	private void setupTree(int newSize) {
-		newSize = (int) Math.pow(2, Math.ceil(Math.log(newSize)/Math.log(2)));
+	private void setupTree(int newMinNodes) {
+		// round number of requested nodes up to the nearest power of 2
+		int newSize = (int) Math.pow(2, Math.ceil(Math.log(newMinNodes)/Math.log(2)));
+		
 		PageMerkelNode[] newNodes = new PageMerkelNode[2*newSize-1];
 		for(int i = 0; i < newNodes.length; i++) {
-			// allocate the new nodes
-			newNodes[i] = new PageMerkelNode(fs.getCrypto());
-		}
-		
-		for(int i = 0; i < newNodes.length; i++) {
-			PageMerkelNode node = newNodes[i];
-			// set up parent/child structure
-			if(i > 0) node.parent = newNodes[(int) (Math.ceil(i/2)-1)];
 			if(i < newSize-1) {
-				node.left = newNodes[2*i+1];
-				node.right = newNodes[2*i+2];
-			} else if(this.nodes != null) {
-				// copy existing hash values in case we are resizing
-				int existingIndex = i - newSize - 1 + (nodes.length+1)/2;
-				if(existingIndex < nodes.length) {
-					newNodes[i].setTag(nodes[i].tag);
+				newNodes[i] = new PageMerkelNode(fs.getCrypto());
+				newNodes[i].markDirty();
+			} else {
+				if(i - newSize + 1 < numPages) {
+					newNodes[i] = nodes[numPages+i-1];
+				} else {
+					newNodes[i] = new PageMerkelNode(fs.getCrypto());
 				}
 			}
+			
+			if(i > 0) newNodes[i].parent = newNodes[(int) (Math.ceil(i/2)-1)];
 		}
 		
+		for(int i = 0; i < newSize-1; i++) {
+			newNodes[i].left = newNodes[2*i+1];
+			newNodes[i].right = newNodes[2*i+1];
+		}
+		
+		newNodes[0].recalculate();
 		this.numPages = newSize;
 		this.nodes = newNodes;
-		nodes[0].recalculate();
 	}
 	
 	private Key cipherKey() {

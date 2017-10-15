@@ -1,8 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.HashMap;
 
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.File;
@@ -15,22 +13,20 @@ public class ZKFile extends File {
 	protected String path;
 	protected PageMerkel merkel;
 	protected int mode;
-	
-	HashMap<Integer, Page> pageCache;
+	protected Page bufferedPage;
+	protected boolean dirty;
 	
 	protected ZKFile() {}
 		
 	public ZKFile(ZKFS fs, String path, int mode) throws IOException {
-		if((mode & O_WRONLY) == O_WRONLY) mode |= O_RDONLY;
 		this.fs = fs;
 		this.path = path;
 		this.mode = mode;
-		this.pageCache = new HashMap<Integer,Page>();
 		
 		try {
-			this.inode = fs.inodeForPath(path);
+			this.inode = fs.inodeForPath(path, (mode & O_NOFOLLOW) == 0);
 		} catch(ENOENTException e) {
-			this.inode = new Inode(fs);
+			this.inode = fs.create(path);
 		}
 
 		this.merkel = new PageMerkel(fs, this.inode);
@@ -42,14 +38,6 @@ public class ZKFile extends File {
 	
 	public Inode getInode() {
 		return inode;
-	}
-	
-	public Page getPage(int pageNum) {
-		if(!pageCache.containsKey(pageNum)) {
-			pageCache.put(pageNum, new Page(this, pageNum));
-		}
-		
-		return pageCache.get(pageNum);
 	}
 	
 	public void setPageTag(int pageNum, byte[] hash) {
@@ -79,83 +67,59 @@ public class ZKFile extends File {
 	}
 
 	@Override
-	public int read(byte[] buf, int offset, int maxLength) throws IOException {
-		assertReadable();
-		ByteBuffer readBuf = ByteBuffer.wrap(buf);
-		readBuf.position(offset);
-		
-		int len = (int) Math.min(buf.length - offset, inode.getStat().getSize() - this.offset), readBytes = len;
-		len = (int) Math.min(len, maxLength);
-		
-		while(len > 0) {
-			int offsetInPage = (int) (this.offset % fs.getPrivConfig().getPageSize());
-			int bytesToRead = Math.min(len, (int) (fs.getPrivConfig().getPageSize() - offsetInPage));
-			int pageNum = (int) (this.offset/fs.getPrivConfig().getPageSize());
-			Page page = getPage(pageNum);
-			
-			readBuf.put(page.read(), offsetInPage, bytesToRead);
-			len -= bytesToRead;
-			this.offset += bytesToRead;
+	public int read(byte[] buf, int bufOffset, int maxLength) throws IOException {
+		int numToRead = (int) Math.min(maxLength, getStat().getSize()-offset), readLen = numToRead;
+		while(numToRead > 0) {
+			int neededPageNum = (int) (offset/fs.getPrivConfig().getPageSize());
+			bufferPage(neededPageNum);
+			bufferedPage.seek((int) (offset % fs.getPrivConfig().getPageSize()));
+			int numRead = bufferedPage.read(buf, bufOffset + readLen - numToRead, numToRead);
+			numToRead -= numRead;
+			offset += numRead;
 		}
 		
-		return readBytes;
+		return readLen;
+	}
+	
+	protected void bufferPage(int pageNum) throws IOException {
+		if(bufferedPage != null) {
+			if(bufferedPage.pageNum == pageNum) return;
+			bufferedPage.flush();
+		}
+		bufferedPage = new Page(this, pageNum);
 	}
 	
 	@Override
 	public void write(byte[] data) throws IOException {
-		assertWritable();
-		int dOffset = 0;
+		write(data, 0, data.length);
+	}
+	
+	public void write(byte[] data, int bufOffset, int length) throws IOException {
+		dirty = true;
+		int leftToWrite = length;
 		
-		ByteBuffer writeBuf = ByteBuffer.allocate((int) fs.getPrivConfig().getPageSize());
-		while(dOffset < data.length) {
-			int offsetInPage = (int) (offset % fs.getPrivConfig().getPageSize());
-			int bytesToWrite = Math.min(data.length - dOffset, (int) (fs.getPrivConfig().getPageSize() - offsetInPage));
-			int pageNum = (int) (offset/fs.getPrivConfig().getPageSize());
-			Page page = getPage(pageNum);
+		while(leftToWrite > 0) {
+			int neededPageNum = (int) (this.offset/fs.getPrivConfig().getPageSize());
+			bufferPage(neededPageNum);
+			int numWritten = bufferedPage.write(data, bufOffset + length - leftToWrite, leftToWrite);
 			
-			writeBuf.clear();
-			writeBuf.put(data, dOffset, bytesToWrite);
-			
-			if(offsetInPage > 0) {
-				page.append(data, offsetInPage);
-				page.finalize();
-			} else {
-				page.setPlaintext(writeBuf.array());
-			}
-			
-			pageCache.remove(pageNum); // cache is in sync with storage, so evict cache from memory
-			
-			offset += bytesToWrite;
-			dOffset += bytesToWrite;
+			leftToWrite -= numWritten;
+			bufOffset += numWritten;
+			this.offset += numWritten;
+			if(this.offset > getStat().getSize()) getStat().setSize(this.offset);
 		}
-		
-		if(offset > inode.getStat().getSize()) inode.getStat().setSize(offset);
-		calculateRefType(); // This feels dirty, but options appear limited. Journaling?
 	}
 	
 	protected void calculateRefType() throws IOException {
-		// TODO
-		/* I don't like that we're paging out to disk, then reading back in to become a literal.
-		 * First of all because it just plain doesn't work right now: to read the file, we need a refTag, which is
-		 * exactly what we're trying to set in the first place, so how can we read the file? This also necessitating
-		 * breaking POSIX file access semantics (O_WRONLY => O_RDRW)
-		 * 
-		 * Second, it's ugly. When do we delete the pages? What was the point of encrypting, writing then deleting?
-		 */
-		assertWritable();
-		long fileSize = inode.getStat().getSize();
-		if(fileSize <= fs.getPrivConfig().getImmediateThreshold()) {
+		if(inode.getStat().getSize() <= fs.getPrivConfig().getImmediateThreshold()) {
 			inode.setRefType(Inode.REF_TYPE_IMMEDIATE);
-			inode.setRefTag(read());
-		} else if(fileSize <= fs.getPrivConfig().getPageSize()) {
+		} else if(inode.getStat().getSize() <= fs.getPrivConfig().getPageSize()) {
 			inode.setRefType(Inode.REF_TYPE_INDIRECT);
-			inode.setRefTag(merkel.getPageTag(0));
 		} else {
-			if(inode.getRefTag().equals(merkel.getMerkelTag())) return;
-			merkel.commit();
 			inode.setRefType(Inode.REF_TYPE_2INDIRECT);
-			inode.setRefTag(merkel.getMerkelTag());
 		}
+		
+		inode.setRefTag(merkel.getMerkelTag());
 	}
 	
 	@Override
@@ -188,11 +152,18 @@ public class ZKFile extends File {
 		if(newOffset < 0) throw new IllegalArgumentException();
 		return offset = newOffset;
 	}
+	
+	@Override
+	public void flush() throws IOException {
+		if(!dirty) return;
+		inode.getStat().setMtime(System.currentTimeMillis() * 1000l * 1000l);
+		bufferedPage.flush();
+		calculateRefType();
+	}
 
 	@Override
 	public void close() throws IOException {
-		calculateRefType();
-		pageCache.clear();
+		flush();
 	}
 
 	@Override

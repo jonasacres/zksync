@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Hashtable;
 
 import com.acrescrypto.zksync.exceptions.EMLINKException;
@@ -26,7 +25,6 @@ public class InodeTable extends ZKFile {
 		this.fs = fs;
 		this.path = INODE_TABLE_PATH;
 		this.mode = O_RDWR;
-		this.pageCache = new HashMap<Integer,Page>();
 		
 		if(revision != null) {
 			this.inode = revision.getSupernode().clone();

@@ -88,13 +88,14 @@ public class ZKFS extends FS {
 		if(followSymlinks && inode.getStat().isSymlink()) {
 			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW);
 			String linkPath = new String(symlink.read(MAX_PATH_LEN));
+			symlink.close();
 			return inodeForPath(linkPath, true);
 		}
 		
 		return inodeTable.inodeWithId(inodeId);
 	}
 	
-	private Inode create(String path) throws IOException {
+	protected Inode create(String path) throws IOException {
 		ZKDirectory parent = opendir(dirname(path));
 		Inode inode = inodeTable.issueInode();
 		parent.link(inode, basename(path));
@@ -165,7 +166,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void write(String path, byte[] contents) throws IOException {
-		ZKFile file = open(path, ZKFile.O_WRONLY);
+		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT);
 		file.write(contents);
 		file.close();
 	}
