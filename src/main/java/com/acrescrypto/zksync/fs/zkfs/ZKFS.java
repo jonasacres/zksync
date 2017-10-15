@@ -2,7 +2,9 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Paths;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.*;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
@@ -70,6 +72,7 @@ public class ZKFS extends FS {
 	}
 	
 	public Inode inodeForPath(String path, boolean followSymlinks) throws IOException {
+		if(path.equals("")) throw new ENOENTException(Paths.get(root, path).toString());
 		if(path.equals("/")) {
 			return inodeTable.inodeWithId(InodeTable.INODE_ID_ROOT_DIRECTORY);
 		}
@@ -88,6 +91,7 @@ public class ZKFS extends FS {
 		if(followSymlinks && inode.getStat().isSymlink()) {
 			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW);
 			String linkPath = new String(symlink.read(MAX_PATH_LEN));
+			Util.hexdump("link path", linkPath.getBytes());
 			symlink.close();
 			return inodeForPath(linkPath, true);
 		}
@@ -258,7 +262,7 @@ public class ZKFS extends FS {
 		Inode instance = create(dest);
 		instance.getStat().makeSymlink();
 		
-		ZKFile symlink = open(dest, File.O_WRONLY|File.O_NOFOLLOW);
+		ZKFile symlink = open(dest, File.O_WRONLY|File.O_NOFOLLOW|File.O_CREAT);
 		symlink.write(source.getBytes());
 		symlink.close();
 	}

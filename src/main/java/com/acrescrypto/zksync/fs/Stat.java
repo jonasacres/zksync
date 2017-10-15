@@ -199,8 +199,8 @@ public class Stat {
 		clone.setType(type);
 		clone.setDevMajor(devMajor);
 		clone.setDevMinor(devMinor);
-		clone.group = new String(group);
-		clone.user = new String(user);
+		clone.group = group == null ? null : new String(group);
+		clone.user = user == null ? null : new String(user);
 		clone.atime = atime;
 		clone.mtime = mtime;
 		clone.ctime = ctime;

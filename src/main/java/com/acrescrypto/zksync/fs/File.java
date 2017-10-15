@@ -24,6 +24,7 @@ public abstract class File implements Closeable {
 
 	public byte[] read(int maxLength) throws IOException {
 		if(maxLength <= 0) maxLength = (int) getStat().getSize();
+		maxLength = (int) Math.min(maxLength, getStat().getSize());
 		byte[] buf = new byte[(int) maxLength];
 		read(buf, 0, (int) maxLength);
 		return buf;
