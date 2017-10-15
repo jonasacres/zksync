@@ -91,7 +91,6 @@ public class ZKFS extends FS {
 		if(followSymlinks && inode.getStat().isSymlink()) {
 			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW);
 			String linkPath = new String(symlink.read(MAX_PATH_LEN));
-			Util.hexdump("link path", linkPath.getBytes());
 			symlink.close();
 			return inodeForPath(linkPath, true);
 		}

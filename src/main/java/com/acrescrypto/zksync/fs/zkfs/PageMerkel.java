@@ -2,9 +2,11 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
+import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 
 public class PageMerkel {
 	ZKFS fs;
@@ -114,9 +116,22 @@ public class PageMerkel {
 				readBuf.get(tag);
 				nodes[i].tag = tag;
 			}
+			
+			checkTreeIntegrity();
 		} else {
 			nodes[0].tag = inode.getRefTag().clone();
 		}
+	}
+	
+	private void checkTreeIntegrity() {
+		if(nodes.length == 0) return;
+		byte[] treeRoot = nodes[0].tag.clone();
+		for(int i = 0; i < numPages-1; i++) {
+			nodes[i].markDirty();
+		}
+		
+		nodes[0].recalculate();
+		if(!Arrays.equals(nodes[0].tag, treeRoot)) throw new InvalidArchiveException("Inconsistent merkel tree");
 	}
 
 	private void setupTree(int newMinNodes) {

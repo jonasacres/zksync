@@ -20,6 +20,7 @@ public class FSTestBase extends Object {
 		if(examplesPrepared) return;
 		
 		scratch.write("regularfile", "just a regular ol file".getBytes());
+		scratch.chmod("regularfile", 0664);
 		scratch.mkdir("directory");
 		scratch.link("regularfile", "hardlink");
 		scratch.mkfifo("fifo");
@@ -222,9 +223,9 @@ public class FSTestBase extends Object {
 	public void testChgrp() throws IOException {
 		scratch.write("chgrp", "contents".getBytes());
 		scratch.chgrp("chgrp", "root");
-		assertEquals("root", scratch.stat("chgrp").getUser());
+		assertEquals("root", scratch.stat("chgrp").getGroup());
 		scratch.chgrp("chgrp", "jonas"); // TODO: needs another user
-		assertEquals("jonas", scratch.stat("chgrp").getUser());
+		assertEquals("jonas", scratch.stat("chgrp").getGroup());
 	}
 
 	@Test

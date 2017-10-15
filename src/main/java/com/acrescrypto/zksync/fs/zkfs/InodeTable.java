@@ -94,6 +94,10 @@ public class InodeTable extends ZKFile {
 		return inodes.get(inodeId);
 	}
 	
+	public boolean hasInodeWithId(long inodeId) {
+		return inodes.containsKey(inodeId);
+	}
+	
 	public Inode issueInode() {
 		Inode inode = new Inode(fs);
 		long now = 1000l*1000l*System.currentTimeMillis();

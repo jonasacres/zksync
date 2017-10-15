@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -63,7 +64,7 @@ public class ZKFile extends File {
 	public void truncate(long size) {
 		assertWritable();
 		inode.getStat().setSize(size);
-		if(offset >= size) offset = size-1;
+		if(offset >= size) offset = size;
 	}
 
 	@Override
@@ -101,6 +102,7 @@ public class ZKFile extends File {
 		while(leftToWrite > 0) {
 			int neededPageNum = (int) (this.offset/fs.getPrivConfig().getPageSize());
 			bufferPage(neededPageNum);
+			bufferedPage.seek((int) (offset % fs.getPrivConfig().getPageSize()));
 			int numWritten = bufferedPage.write(data, bufOffset + length - leftToWrite, leftToWrite);
 			
 			leftToWrite -= numWritten;
@@ -159,6 +161,7 @@ public class ZKFile extends File {
 		inode.getStat().setMtime(System.currentTimeMillis() * 1000l * 1000l);
 		bufferedPage.flush();
 		calculateRefType();
+		dirty = false;
 	}
 
 	@Override
@@ -182,11 +185,15 @@ public class ZKFile extends File {
 		inode.getStat().setMode(file.getStat().getMode());
 	}
 	
-	private void assertReadable() {
+	protected void assertReadable() {
 		if((mode & File.O_RDONLY) == 0) throw new RuntimeException("File is not opened for reading");
 	}
 	
-	private void assertWritable() {
+	protected void assertWritable() {
 		if((mode & File.O_WRONLY) == 0) throw new RuntimeException("File is not opened for writing");
+	}
+	
+	protected void assertIntegrity(boolean condition, String explanation) {
+		if(!condition) throw new InvalidArchiveException(String.format("%s (inode %d): %s", path, inode.getStat().getInodeId(), explanation));
 	}
 }

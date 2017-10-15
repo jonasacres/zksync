@@ -6,6 +6,7 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
@@ -27,7 +28,10 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	@Override
 	public String[] list() {
-		return (String[]) entries.keySet().toArray();
+		String[] sortedPaths = new String[entries.size()];
+		entries.keySet().toArray(sortedPaths);
+		Arrays.sort(sortedPaths);
+		return sortedPaths;
 	}
 	
 	public long inodeForName(String name) throws IOException {
@@ -41,7 +45,10 @@ public class ZKDirectory extends ZKFile implements Directory {
 		String[] comps = path.split("/");
 		if(comps.length > 1) {
 			try {
-				return fs.opendir(Paths.get(path, comps[0]).toString()).inodeForPath(Paths.get(this.path, String.join("/", Arrays.copyOfRange(comps, 1, comps.length))).toString());
+				String nextDir = Paths.get(this.path, comps[0]).toString();
+				String subpath = String.join("/", Arrays.copyOfRange(comps, 1, comps.length));
+				
+				return fs.opendir(nextDir).inodeForPath(subpath);
 			} catch (EISNOTDIRException e) {
 				throw new ENOENTException(path);
 			}
@@ -93,6 +100,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 			ZKDirectory parent = fs.opendir(fs.dirname(this.path));
 			parent.getInode().removeLink();
 			parent.unlink(fs.basename(this.path));
+			parent.close();
 		}
 		
 		entries.clear();
@@ -108,16 +116,33 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	public void commit() throws IOException {
+		if(!dirty) return;
+		rewind();
+		truncate(0);
+		
 		write(serialize());
 		flush();
+	}
+	
+	@Override
+	public void close() throws IOException {
+		commit();
 	}
 	
 	private void deserialize(byte[] serialized) {
 		entries.clear();
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
+		
 		while(buf.hasRemaining()) {
 			long inodeId = buf.getLong();
 			short pathLen = buf.getShort();
+			
+			assertIntegrity(inodeId >= 0, String.format("Directory references invalid inode %d", inodeId));
+			assertIntegrity(fs.getInodeTable().hasInodeWithId(inodeId), String.format("Directory references non-existent inode %d", inodeId));
+			assertIntegrity(pathLen >= 0, "Directory references negative path length");
+			assertIntegrity(pathLen <= buf.remaining(), "Directory appears truncated");
+			assertIntegrity(pathLen <= MAX_NAME_LEN, "Directory references name of illegal length");
+			
 			byte[] pathBuf = new byte[pathLen];
 			buf.get(pathBuf);
 			
@@ -135,11 +160,8 @@ public class ZKDirectory extends ZKFile implements Directory {
 		}
 		
 		ByteBuffer buf = ByteBuffer.allocate(size);
-		String[] sortedPaths = new String[entries.size()];
-		entries.keySet().toArray(sortedPaths);
-		Arrays.sort(sortedPaths);
 		
-		for(String path : sortedPaths) {
+		for(String path : list()) {
 			buf.putLong(entries.get(path));
 			buf.putShort((short) path.length());
 			buf.put(path.getBytes());
