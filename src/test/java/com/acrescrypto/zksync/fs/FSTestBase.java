@@ -2,10 +2,8 @@ package com.acrescrypto.zksync.fs;
 
 import static org.junit.Assert.*;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.NoSuchFileException;
 import java.util.Arrays;
 
 import org.junit.Test;

@@ -79,7 +79,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	public void unlink(long inodeId) throws ENOENTException, EMLINKException {
-		if(!inodes.contains(inodeId)) throw new ENOENTException(String.format("inode %d", inodeId));
+		if(!inodes.containsKey(inodeId)) throw new ENOENTException(String.format("inode %d", inodeId));
 		
 		if(inodeId <= 1) throw new IllegalArgumentException();		
 		if(inodes.get(inodeId).getNlink() > 0) throw new EMLINKException(String.format("inode %d", inodeId));

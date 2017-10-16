@@ -67,24 +67,27 @@ public class ZKFile extends File {
 		if(size == inode.getStat().getSize()) return;
 		
 		if(size > inode.getStat().getSize()) {
-			while(size < inode.getStat().getSize()) {
+			long oldOffset = offset;
+			seek(0, SEEK_END);
+			while(size > inode.getStat().getSize()) {
 				byte[] zeros = new byte[(int) Math.min(fs.getPrivConfig().getPageSize(), size - inode.getStat().getSize())];
 				write(zeros);
 			}
+			seek(oldOffset, SEEK_SET);
 		} else {
 			int newPageCount = (int) Math.ceil((double) size/fs.getPrivConfig().getPageSize());
 			merkel.resize(newPageCount);
 			for(int i = newPageCount; i < merkel.numPages; i++) {
 				merkel.setPageTag(i, new byte[fs.getCrypto().hashLength()]);
 			}
+
+			inode.getStat().setSize(size);
+			if(offset >= size) offset = size;
+			
+			int lastPage = (int) (size/fs.getPrivConfig().getPageSize());
+			bufferPage(lastPage);
+			bufferedPage.truncate((int) (size % fs.getPrivConfig().getPageSize()));
 		}
-		
-		int lastPage = (int) (size/fs.getPrivConfig().getPageSize());
-		bufferPage(lastPage);
-		bufferedPage.truncate((int) (size % fs.getPrivConfig().getPageSize()));
-		
-		inode.getStat().setSize(size);
-		if(offset >= size) offset = size;
 	}
 
 	@Override
