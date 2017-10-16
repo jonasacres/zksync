@@ -42,6 +42,11 @@ public class ZKFSTest extends FSTestBase {
 		deleteFiles();
 	}
 	
+	// TODO: multipage write test
+	// TODO: mutlipage modification test
+	// TODO: multipage truncate test
+	// TODO: nlink consistency checks 
+	
 	protected void cheapenArgon2Costs() {
 		// cut down test runtime by making argon2 really cheap
 		oldDefaultTimeCost = PubConfig.defaultArgon2TimeCost;

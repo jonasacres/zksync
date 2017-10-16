@@ -17,6 +17,8 @@ public class InodeTable extends ZKFile {
 	
 	public final static String INODE_TABLE_PATH = "(inode table)";
 	
+	// TODO: fixed-length inode serialization to support partial inode table reads
+	
 	Hashtable<Long,Inode> inodes;
 	Revision revision;
 	long nextInodeId;

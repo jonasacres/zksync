@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
+import java.util.Hashtable;
 
 import com.acrescrypto.zksync.crypto.*;
 import com.acrescrypto.zksync.exceptions.*;
@@ -13,14 +14,15 @@ import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 
 // A ZKSync archive.
 public class ZKFS extends FS {
-	private CryptoSupport crypto;
-	private InodeTable inodeTable;
-	private PubConfig pubConfig;
-	private PrivConfig privConfig;
-	private LocalConfig localConfig;
-	private String root;
-	private FS storage;
-	private KeyFile keyfile;
+	protected CryptoSupport crypto;
+	protected InodeTable inodeTable;
+	protected PubConfig pubConfig;
+	protected PrivConfig privConfig;
+	protected LocalConfig localConfig;
+	protected String root;
+	protected FS storage;
+	protected KeyFile keyfile;
+	protected Hashtable<String,Inode> inodesByPath; // TODO: not entirely happy with this, since there's no real eviction policy
 	
 	public final static int KEY_TYPE_CIPHER = 0;
 	public final static int KEY_TYPE_AUTH = 1;
@@ -47,6 +49,7 @@ public class ZKFS extends FS {
 		this.privConfig = new PrivConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_PRIVATE));
 		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
 		this.inodeTable = new InodeTable(this, Revision.activeRevision(this));
+		this.inodesByPath = new Hashtable<String,Inode>();
 	}
 	
 	public Key deriveKey(int type, int index, byte[] tweak) {
@@ -83,10 +86,14 @@ public class ZKFS extends FS {
 			throw new ENOENTException(path);
 		}
 		
-		long inodeId = root.inodeForPath(path);
-		root.close();
+		Inode inode = inodesByPath.get(path);
+		if(inode == null) {
+			long inodeId = root.inodeForPath(path);
+			root.close();
+			inode = inodeTable.inodeWithId(inodeId);
+			inodesByPath.put(path, inode);
+		}
 		
-		Inode inode = inodeTable.inodeWithId(inodeId);
 		if(followSymlinks && inode.getStat().isSymlink()) {
 			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW);
 			String linkPath = new String(symlink.read(MAX_PATH_LEN));
@@ -94,7 +101,7 @@ public class ZKFS extends FS {
 			return inodeForPath(linkPath, true);
 		}
 		
-		return inodeTable.inodeWithId(inodeId);
+		return inode;
 	}
 	
 	protected Inode create(String path) throws IOException {
@@ -245,6 +252,8 @@ public class ZKFS extends FS {
 		ZKDirectory dir = opendir(path);
 		dir.rmdir();
 		dir.close();
+		
+		inodesByPath.remove(path);
 	}
 
 	@Override
@@ -254,6 +263,7 @@ public class ZKFS extends FS {
 		ZKDirectory dir = opendir(dirname(path));
 		dir.unlink(basename(path));
 		dir.close();
+		inodesByPath.remove(path);
 	}
 
 	@Override
