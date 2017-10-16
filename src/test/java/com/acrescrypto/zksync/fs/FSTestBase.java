@@ -23,6 +23,7 @@ public class FSTestBase extends Object {
 		scratch.write("regularfile", "just a regular ol file".getBytes());
 		scratch.chmod("regularfile", 0664);
 		scratch.mkdir("directory");
+		scratch.chmod("directory", 0755);
 		scratch.link("regularfile", "hardlink");
 		scratch.mkfifo("fifo");
 		scratch.symlink("regularfile", "symlink");
@@ -46,7 +47,7 @@ public class FSTestBase extends Object {
 	public void testStatDirectory() throws IOException {
 		Stat stat = scratch.stat("directory");
 		assertTrue(stat.isDirectory());
-		assertEquals(stat.getMode(), 0775);
+		assertEquals(0755, stat.getMode());
 		// TODO: need a good way to test UID/GID stuff
 		assertTrue(stat.getCtime() > 0);
 		assertTrue(stat.getAtime() > 0);
@@ -198,8 +199,8 @@ public class FSTestBase extends Object {
 
 	@Test
 	public void testMkfifo() throws IOException {
-		scratch.mkfifo("fifo");
-		assertTrue(scratch.stat("fifo").isFifo());
+		scratch.mkfifo("mkfifo");
+		assertTrue(scratch.stat("mkfifo").isFifo());
 	}
 
 	@Test
@@ -299,7 +300,7 @@ public class FSTestBase extends Object {
 		try {
 			scratch.open("shouldntexist", File.O_RDONLY);
 			throw new RuntimeException("expected exception");
-		} catch(FileNotFoundException e) {
+		} catch(ENOENTException e) {
 			assertFalse(scratch.exists("shouldntexist"));
 		}
 	}

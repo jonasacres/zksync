@@ -6,7 +6,6 @@ import java.nio.ByteBuffer;
 import java.nio.file.NoSuchFileException;
 import java.util.Arrays;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
@@ -25,9 +24,13 @@ public class Page {
 		load();
 	}
 	
-	public void truncate(int length) {
-		if(size == length) return;
-		size = length;
+	public void truncate(int newSize) {
+		if(size == newSize) return;
+		size = newSize;
+		contents.position(size);
+		if(size < contents.capacity()) {
+			contents.put(new byte[contents.capacity()-size]);
+		}
 		dirty = true;
 	}
 	

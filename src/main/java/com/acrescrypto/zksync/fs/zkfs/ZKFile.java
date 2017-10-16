@@ -27,6 +27,7 @@ public class ZKFile extends File {
 		try {
 			this.inode = fs.inodeForPath(path, (mode & O_NOFOLLOW) == 0);
 		} catch(ENOENTException e) {
+			if((mode & O_CREAT) == 0) throw e;
 			this.inode = fs.create(path);
 		}
 
@@ -61,8 +62,27 @@ public class ZKFile extends File {
 	}
 
 	@Override
-	public void truncate(long size) {
+	public void truncate(long size) throws IOException {
 		assertWritable();
+		if(size == inode.getStat().getSize()) return;
+		
+		if(size > inode.getStat().getSize()) {
+			while(size < inode.getStat().getSize()) {
+				byte[] zeros = new byte[(int) Math.min(fs.getPrivConfig().getPageSize(), size - inode.getStat().getSize())];
+				write(zeros);
+			}
+		} else {
+			int newPageCount = (int) Math.ceil((double) size/fs.getPrivConfig().getPageSize());
+			merkel.resize(newPageCount);
+			for(int i = newPageCount; i < merkel.numPages; i++) {
+				merkel.setPageTag(i, new byte[fs.getCrypto().hashLength()]);
+			}
+		}
+		
+		int lastPage = (int) (size/fs.getPrivConfig().getPageSize());
+		bufferPage(lastPage);
+		bufferedPage.truncate((int) (size % fs.getPrivConfig().getPageSize()));
+		
 		inode.getStat().setSize(size);
 		if(offset >= size) offset = size;
 	}

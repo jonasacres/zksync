@@ -168,6 +168,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void write(String path, byte[] contents) throws IOException {
+		mkdirp(dirname(path));
 		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT);
 		file.write(contents);
 		file.close();
@@ -202,8 +203,9 @@ public class ZKFS extends FS {
 	
 	@Override
 	public void truncate(String path, long size) throws IOException {
-		Inode inode = inodeForPath(path, false);
-		inode.getStat().setSize(size);
+		ZKFile file = open(path, File.O_RDWR);
+		file.truncate(size);
+		file.close();
 	}
 
 	@Override
@@ -222,11 +224,17 @@ public class ZKFS extends FS {
 		dir.link(dir, ".");
 		dir.link(inodeForPath(dirname(path)), "..");
 		dir.close();
+		chmod(path, 0750); // TODO: default mode
 	}
 	
 	@Override
 	public void mkdirp(String path) throws IOException {
-		// TODO: implement
+		try {
+			assertPathIsDirectory(path);
+		} catch(ENOENTException e) {
+			mkdirp(dirname(path));
+			mkdir(path);
+		}
 	}
 
 	@Override
@@ -268,7 +276,7 @@ public class ZKFS extends FS {
 	
 	@Override
 	public String readlink(String link) throws IOException {
-		if(stat(link).isSymlink()) throw new EINVALException(link);
+		if(!lstat(link).isSymlink()) throw new EINVALException(link);
 		ZKFile symlink = open(link, File.O_RDONLY|File.O_NOFOLLOW);
 		String target = new String(symlink.read());
 		return target;

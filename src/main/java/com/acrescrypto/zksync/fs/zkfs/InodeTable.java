@@ -105,6 +105,7 @@ public class InodeTable extends ZKFile {
 		inode.getStat().setCtime(now);
 		inode.getStat().setAtime(now);
 		inode.getStat().setMtime(now);
+		inode.getStat().setMode(0640); // TODO: default mode, uid, gid
 		inodes.put(inode.getStat().getInodeId(), inode);
 		return inode;
 	}

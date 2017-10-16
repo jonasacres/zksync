@@ -38,7 +38,7 @@ public class PageMerkel {
 	}
 	
 	public void setPageTag(int pageNum, byte[] pageTag) {
-		if(pageNum >= numPages) setupTree(pageNum+1);
+		if(pageNum >= numPages) resize(pageNum+1);
 		nodes[numPages - 1 + pageNum].setTag(pageTag);
 	}
 	
@@ -91,7 +91,7 @@ public class PageMerkel {
 		ByteBuffer chunkTagSource = ByteBuffer.allocate(inode.getRefTag().length+4);
 		chunkTagSource.put(inode.getRefTag());
 		
-		setupTree(expectedPages);
+		resize(expectedPages);
 		
 		// TODO: consider not requiring a full readBuf; can we rely on guarantee hashes won't cross chunk boundaries?
 		
@@ -134,11 +134,11 @@ public class PageMerkel {
 		if(!Arrays.equals(nodes[0].tag, treeRoot)) throw new InvalidArchiveException("Inconsistent merkel tree");
 	}
 
-	private void setupTree(int newMinNodes) {
+	public void resize(int newMinNodes) {
 		// round number of requested nodes up to the nearest power of 2
 		int newSize = (int) Math.pow(2, Math.ceil(Math.log(newMinNodes)/Math.log(2)));
 		
-		PageMerkelNode[] newNodes = new PageMerkelNode[2*newSize-1];
+		PageMerkelNode[] newNodes = new PageMerkelNode[Math.max(2*newSize-1, 1)];
 		for(int i = 0; i < newNodes.length; i++) {
 			if(i < newSize-1) {
 				newNodes[i] = new PageMerkelNode(fs.getCrypto());
