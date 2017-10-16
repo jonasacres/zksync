@@ -9,6 +9,7 @@ import java.nio.file.attribute.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.FileTypeNotSupportedException;
 import com.acrescrypto.zksync.fs.*;
 
@@ -27,27 +28,31 @@ public class LocalFS extends FS {
 		Stat stat = new Stat();
 		Path path = Paths.get(root, pathStr);
 		
-		stat.setAtime(decodeTime(Files.getAttribute(path, "lastAccessTime", linkOpt)));
-		stat.setMtime(decodeTime(Files.getAttribute(path, "lastModifiedTime", linkOpt)));
-		stat.setCtime(decodeTime(Files.getAttribute(path, "creationTime", linkOpt)));
-		stat.setMode(getFilePermissions(path, linkOpt));
-		stat.setUser(Files.getOwner(path, linkOpt).getName());
-		if(!isWindows()) {
-			stat.setUid((Integer) Files.getAttribute(path, "unix:uid", linkOpt));
-			stat.setGid((Integer) Files.getAttribute(path, "unix:gid", linkOpt));
-			GroupPrincipal group = Files.readAttributes(path, PosixFileAttributes.class, LinkOption.NOFOLLOW_LINKS).group();
-			stat.setGroup(group.getName());
+		try {
+			stat.setAtime(decodeTime(Files.getAttribute(path, "lastAccessTime", linkOpt)));
+			stat.setMtime(decodeTime(Files.getAttribute(path, "lastModifiedTime", linkOpt)));
+			stat.setCtime(decodeTime(Files.getAttribute(path, "creationTime", linkOpt)));
+			stat.setMode(getFilePermissions(path, linkOpt));
+			stat.setUser(Files.getOwner(path, linkOpt).getName());
+			if(!isWindows()) {
+				stat.setUid((Integer) Files.getAttribute(path, "unix:uid", linkOpt));
+				stat.setGid((Integer) Files.getAttribute(path, "unix:gid", linkOpt));
+				GroupPrincipal group = Files.readAttributes(path, PosixFileAttributes.class, LinkOption.NOFOLLOW_LINKS).group();
+				stat.setGroup(group.getName());
+			}
+			stat.setSize(Files.size(path));
+			
+			int type = getStatType(path, linkOpt);
+			if(type >= 0) {
+				stat.setType(type);
+			} else {
+				scrapeLSForUnixSpecific(stat, path.toString());
+			}
+			
+			if(!isWindows()) stat.setInodeId((Long) Files.getAttribute(path, "unix:ino", linkOpt));
+		} catch(NoSuchFileException e) {
+			throw new ENOENTException(path.toString());
 		}
-		stat.setSize(Files.size(path));
-		
-		int type = getStatType(path, linkOpt);
-		if(type >= 0) {
-			stat.setType(type);
-		} else {
-			scrapeLSForUnixSpecific(stat, path.toString());
-		}
-		
-		if(!isWindows()) stat.setInodeId((Long) Files.getAttribute(path, "unix:ino", linkOpt));
 		
 		return stat;
 	}

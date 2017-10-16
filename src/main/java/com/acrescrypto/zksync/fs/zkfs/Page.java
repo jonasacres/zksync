@@ -1,15 +1,11 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.NoSuchFileException;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.exceptions.ENOENTException;
-import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
-import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.exceptions.*;
 
 // represents a fixed-size page of data from a file. handles encryption/decryption/storage of said page.
 public class Page {
@@ -137,10 +133,7 @@ public class Page {
 		
 		try {
 			ciphertext = file.getFS().getStorage().read(path);
-		} catch(NoSuchFileException|FileNotFoundException|ENOENTException exc) {
-			/* TODO: Having 3 different exceptions to indicate ENOENT is ridiculous.
-			 * Make ALL instances of NoSuchFileException, FileNotFoundException into ENOENT (including in LocalFS)
-			 */
+		} catch(ENOENTException exc) {
 			if(size > 0) throw new ENOENTException(path);
 			contents = ByteBuffer.allocate(size);
 			return;

@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs;
 
 import static org.junit.Assert.*;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -93,7 +92,7 @@ public class FileTestBase {
 		file.close();
 	}
 
-	@Test(expected=FileNotFoundException.class)
+	@Test(expected=ENOENTException.class)
 	public void testOCREATNeededToCreateFile() throws IOException {
 		assertFalse(scratch.exists("shouldnt-exist"));
 		scratch.open("shouldnt-exist", File.O_WRONLY);

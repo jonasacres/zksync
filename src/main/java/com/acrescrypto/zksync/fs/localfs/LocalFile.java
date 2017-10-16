@@ -1,16 +1,12 @@
 package com.acrescrypto.zksync.fs.localfs;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
 
-import com.acrescrypto.zksync.exceptions.EACCESException;
-import com.acrescrypto.zksync.exceptions.EISDIRException;
-import com.acrescrypto.zksync.exceptions.EMLINKException;
+import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -29,7 +25,7 @@ public class LocalFile extends File {
 		if((mode & O_WRONLY) != 0) modeStr = "rw"; // "w" is not supported apparently
 		
 		if(!fs.exists(path, (mode & O_NOFOLLOW) == 0)) {
-			if((mode & O_CREAT) == 0 || (mode & O_WRONLY) == 0) throw new FileNotFoundException(path);
+			if((mode & O_CREAT) == 0 || (mode & O_WRONLY) == 0) throw new ENOENTException(path);
 		}
 		
 		try {
@@ -37,7 +33,7 @@ public class LocalFile extends File {
 			if(fs.stat(path).isDirectory()) {
 				throw new EISDIRException(path);
 			}
-		} catch(NoSuchFileException|FileNotFoundException e) {
+		} catch(ENOENTException e) {
 		}
 		
 		this.fileHandle = new RandomAccessFile(Paths.get(fs.getRoot(), path).toString(), modeStr);

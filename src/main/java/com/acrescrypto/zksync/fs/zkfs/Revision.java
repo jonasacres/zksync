@@ -2,11 +2,11 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 
 /* Stores a revision of the archive. This is needed to bootstrap reading the archive.
@@ -30,7 +30,7 @@ public class Revision {
 
 		try {
 			revdir = fs.getStorage().opendir(ZKFS.REVISION_DIR);
-		} catch(NoSuchFileException e) {
+		} catch(ENOENTException e) {
 			return null;
 		}
 		
