@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.security.Security;
 import java.util.Arrays;
 
@@ -11,6 +12,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
 import com.acrescrypto.zksync.fs.FSTestBase;
+import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 
@@ -54,8 +56,39 @@ public class ZKFSTest extends FSTestBase {
 		assertTrue(Arrays.equals(text, scratch.read("multipage-write")));
 	}
 	
-	// TODO: multipage write test
-	// TODO: mutlipage modification test
+	@Test
+	public void testMultipageModify() throws IOException {
+		byte[] text = new byte[10*zkscratch.getPrivConfig().getPageSize()];
+		ByteBuffer buf = ByteBuffer.wrap(text);
+		for(int i = 0; i < text.length; i++) text[i] = (byte) (i % 256);
+		scratch.write("multipage-modify", text);
+		ZKFile file = zkscratch.open("multipage-modify", ZKFile.O_RDWR);
+		assertTrue(Arrays.equals(text, scratch.read("multipage-modify")));
+		
+		int modOffset = 1000;
+		byte[] mod = "The doubts gnaw us,\nI am not happy about these doubts,\nThis vile load in the chest breaks love.\nAnd while we're sitting and suffering,\nwhining at the closed gates,\nwe are already getting the hit in the eye or brow.".getBytes();
+		buf.position(modOffset);
+		buf.put(mod);
+		assertFalse(Arrays.equals(text, scratch.read("multipage-modify")));
+		
+		file.seek(modOffset, File.SEEK_SET);
+		file.write(text, modOffset, mod.length);
+		file.close();
+		assertTrue(Arrays.equals(text, scratch.read("multipage-modify")));
+	}
+	
+	@Test
+	public void testMultipageTruncateSmaller() throws IOException {
+		byte[] text = new byte[10*zkscratch.getPrivConfig().getPageSize()];
+		for(int i = 0; i < text.length; i++) text[i] = (byte) (i % 256);
+		scratch.write("multipage-truncate", text);
+		
+		byte[] truncated = new byte[150000];
+		for(int i = 0; i < truncated.length; i++) truncated[i] = (byte) (i % 256);
+		scratch.truncate("multipage-truncate", truncated.length);
+		assertTrue(Arrays.equals(truncated, scratch.read("multipage-truncate")));
+	}
+	
 	// TODO: multipage truncate test
 	// TODO: nlink consistency checks 
 	

@@ -14,6 +14,7 @@ public class PageMerkelNode {
 	PageMerkelNode(CryptoSupport crypto) {
 		this.crypto = crypto;
 		this.tag = new byte[crypto.hashLength()];
+		this.dirty = true;
 	}
 	
 	void setTag(byte[] pageTag) {
@@ -26,11 +27,14 @@ public class PageMerkelNode {
 	void recalculate() {
 		if(!dirty) return;
 		PageMerkelNode[] nodes = { left, right }; 
+		if(left == null || right == null) {
+			if(left != null || right != null) throw new IllegalStateException();
+			return; // don't mess with tags of leaf nodes
+		}
 		
 		ByteBuffer merged = ByteBuffer.allocate(2*crypto.hashLength());
 		for(PageMerkelNode child : nodes) {
-			if(child == null) continue;
-			if(child.dirty) child.recalculate();
+			child.recalculate();
 			merged.put(child.tag);
 		}
 		

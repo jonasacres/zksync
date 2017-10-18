@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
@@ -64,14 +65,13 @@ public class PageMerkel {
 			ByteBuffer chunkText = ByteBuffer.wrap(plaintext.array(),
 					(int) (i*fs.getPrivConfig().getPageSize()),
 					Math.min(fs.getPrivConfig().getPageSize(), plaintext.capacity()));
-			byte[] chunkCiphertext = cipherKey().wrappedEncrypt(chunkText.array(),
+			byte[] chunkCiphertext = cipherKey(getMerkelTag()).wrappedEncrypt(chunkText.array(),
 					(int) fs.getPrivConfig().getPageSize());
 			
 			chunkTagSource.position(refTag.length);
 			chunkTagSource.putInt(i);
-			byte[] chunkTag = authKey().authenticate(chunkTagSource.array());
+			byte[] chunkTag = authKey(getMerkelTag()).authenticate(chunkTagSource.array());
 			String path = ZKFS.DATA_DIR + fs.getStorage().pathForHash(chunkTag);
-			System.out.printf("Writing path for merkel chunk index %d (%d total): %s\n", i, chunkCount, path);
 			try {
 				fs.getStorage().write(path, chunkCiphertext);
 				fs.getStorage().squash(path);
@@ -85,6 +85,8 @@ public class PageMerkel {
 	
 	private void read() throws InaccessibleStorageException {
 		int expectedPages = (int) Math.ceil((double) inode.getStat().getSize()/fs.getPrivConfig().getPageSize());
+		expectedPages = (int) Math.pow(2, Math.ceil(Math.log(expectedPages)/Math.log(2)));
+		
 		int expectedNodes = 2*expectedPages - 1;
 		int expectedChunks = (int) Math.ceil((double) expectedNodes*fs.getCrypto().hashLength()/fs.getPrivConfig().getPageSize());
 		
@@ -100,19 +102,19 @@ public class PageMerkel {
 			for(int i = 0; i < expectedChunks; i++) {
 				chunkTagSource.position(inode.getRefTag().length);
 				chunkTagSource.putInt(i);
-				byte[] chunkTag = authKey().authenticate(chunkTagSource.array());
+				byte[] chunkTag = authKey(inode.getRefTag()).authenticate(chunkTagSource.array());
 				String path = ZKFS.DATA_DIR + fs.pathForHash(chunkTag);
-				System.out.printf("Reading merkel chunk %d (%d total): %s\n", i, expectedChunks, path);
 				byte[] chunkCiphertext;
 				try {
 					chunkCiphertext = fs.getStorage().read(path);
 				} catch (IOException e) {
 					throw new InaccessibleStorageException();
 				}
-				byte[] chunkPlaintext = cipherKey().wrappedDecrypt(chunkCiphertext);
+				byte[] chunkPlaintext = cipherKey(inode.getRefTag()).wrappedDecrypt(chunkCiphertext);
 				readBuf.put(chunkPlaintext);
 			}
-		
+			
+			readBuf.rewind();
 			for(int i = 0; i < expectedNodes; i++) {
 				byte[] tag = new byte[fs.getCrypto().hashLength()];
 				readBuf.get(tag);
@@ -128,26 +130,28 @@ public class PageMerkel {
 	private void checkTreeIntegrity() {
 		if(nodes.length == 0) return;
 		byte[] treeRoot = nodes[0].tag.clone();
-		for(int i = 0; i < numPages-1; i++) {
+		for(int i = 0; i < nodes.length-1; i++) {
 			nodes[i].markDirty();
 		}
 		
 		nodes[0].recalculate();
-		if(!Arrays.equals(nodes[0].tag, treeRoot)) throw new InvalidArchiveException("Inconsistent merkel tree");
+		if(!Arrays.equals(nodes[0].tag, treeRoot)) {
+			throw new InvalidArchiveException("Inconsistent merkel tree");
+		}
 	}
 
 	public void resize(int newMinNodes) {
-		double to_log2 = 1.0/Math.log(2);
-		int newSize =  (int) Math.pow(2, Math.ceil(Math.log(newMinNodes)*to_log2));
+		double log2 = Math.log(2);
+		int newSize =  (int) Math.pow(2, Math.ceil(Math.log(newMinNodes)/log2));
 		PageMerkelNode[] newNodes = new PageMerkelNode[Math.max(2*newSize-1, 1)];
 		
 		int numExistingNodes = nodes == null ? 0 : nodes.length;
-		int d = (int) Math.round((Math.log(newNodes.length+1) - Math.log(numExistingNodes+1))*to_log2);
+		int d = (int) Math.round((Math.log(newNodes.length+1) - Math.log(numExistingNodes+1))/log2);
 		int minN = (1 << d) - 1;
 		double dMult = 1.0/(1 << d) - 1.0;
 		
 		for(int n = newNodes.length-1; n >= 0; n--) {
-			int tier = (int) (Math.log(n+1)*to_log2);
+			int tier = (int) (Math.log(n+1)/log2);
 			int tierThreshold = 3*(1 << (tier - 1)) - 1;
 			
 			if(minN <= n && n < tierThreshold) {
@@ -170,11 +174,23 @@ public class PageMerkel {
 		this.nodes = newNodes;
 	}
 	
-	private Key cipherKey() {
-		return fs.deriveKey(ZKFS.KEY_TYPE_CIPHER, ZKFS.KEY_INDEX_PAGE_MERKEL, getMerkelTag());
+	private Key cipherKey(byte[] refTag) {
+		return fs.deriveKey(ZKFS.KEY_TYPE_CIPHER, ZKFS.KEY_INDEX_PAGE_MERKEL, refTag);
 	}
 	
-	private Key authKey() {
-		return fs.deriveKey(ZKFS.KEY_TYPE_AUTH, ZKFS.KEY_INDEX_PAGE_MERKEL, getMerkelTag());
+	private Key authKey(byte[] refTag) {
+		return fs.deriveKey(ZKFS.KEY_TYPE_AUTH, ZKFS.KEY_INDEX_PAGE_MERKEL, refTag);
+	}
+	
+	public void dumpToConsole(String caption) {
+		int nodeCount = nodes == null ? 0 : nodes.length;
+		System.out.println("Tree dump: " + caption);
+		System.out.println("Inode: " + inode.getStat().getInodeId());
+		System.out.println("Size (total nodes): " + nodeCount);
+		System.out.println("Size (pages): " + numPages);
+		for(int i = 0; i < nodeCount; i++) {
+			System.out.printf("  Node %2d (%s): %s\n", i, nodes[i].dirty ? "dirty" : "clean", Util.bytesToHex(nodes[i].tag));
+		}
+		System.out.println("");
 	}
 }
