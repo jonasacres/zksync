@@ -1,7 +1,10 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import static org.junit.Assert.*;
+
 import java.io.IOException;
 import java.security.Security;
+import java.util.Arrays;
 
 import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -16,6 +19,7 @@ public class ZKFSTest extends FSTestBase {
 	public final static String SCRATCH_DIR = "/tmp/zksync-test/zkfs";
 	
 	int oldDefaultTimeCost, oldDefaultParallelism, oldDefaultMemoryCost;
+	ZKFS zkscratch;
 	
 	@Before
 	public void beforeEach() throws IOException {
@@ -23,7 +27,7 @@ public class ZKFSTest extends FSTestBase {
 		deleteFiles();
 		(new java.io.File(SCRATCH_DIR)).mkdirs();
 		LocalFS storage = new LocalFS(SCRATCH_DIR);
-		scratch = new ZKFS(storage, "zksync".toCharArray());
+		scratch = zkscratch = new ZKFS(storage, "zksync".toCharArray());
 		prepareExamples();
 	}
 	
@@ -40,6 +44,14 @@ public class ZKFSTest extends FSTestBase {
 	@AfterClass
 	public static void afterClass() {
 		deleteFiles();
+	}
+	
+	@Test
+	public void testMultipageWrite() throws IOException {
+		byte[] text = new byte[10*zkscratch.getPrivConfig().getPageSize()];
+		for(int i = 0; i < text.length; i++) text[i] = (byte) (i % 256);
+		scratch.write("multipage-write", text);
+		assertTrue(Arrays.equals(text, scratch.read("multipage-write")));
 	}
 	
 	// TODO: multipage write test

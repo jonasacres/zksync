@@ -121,15 +121,15 @@ public class ZKFile extends File {
 	public void write(byte[] data, int bufOffset, int length) throws IOException {
 		dirty = true;
 		int leftToWrite = length;
+		int pageSize = fs.getPrivConfig().getPageSize();
 		
 		while(leftToWrite > 0) {
-			int neededPageNum = (int) (this.offset/fs.getPrivConfig().getPageSize());
+			int neededPageNum = (int) (this.offset/pageSize);
 			bufferPage(neededPageNum);
 			bufferedPage.seek((int) (offset % fs.getPrivConfig().getPageSize()));
-			int numWritten = bufferedPage.write(data, bufOffset + length - leftToWrite, leftToWrite);
+			int numWritten = bufferedPage.write(data, bufOffset + length - leftToWrite, Math.min(leftToWrite, pageSize));
 			
 			leftToWrite -= numWritten;
-			bufOffset += numWritten;
 			this.offset += numWritten;
 			if(this.offset > getStat().getSize()) getStat().setSize(this.offset);
 		}
@@ -184,6 +184,7 @@ public class ZKFile extends File {
 		inode.getStat().setMtime(System.currentTimeMillis() * 1000l * 1000l);
 		bufferedPage.flush();
 		calculateRefType();
+		if(inode.getRefType() == Inode.REF_TYPE_2INDIRECT) merkel.commit();
 		dirty = false;
 	}
 

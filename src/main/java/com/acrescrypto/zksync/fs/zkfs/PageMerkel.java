@@ -63,7 +63,7 @@ public class PageMerkel {
 		for(int i = 0; i < chunkCount; i++) {
 			ByteBuffer chunkText = ByteBuffer.wrap(plaintext.array(),
 					(int) (i*fs.getPrivConfig().getPageSize()),
-					(int) fs.getPrivConfig().getPageSize());
+					Math.min(fs.getPrivConfig().getPageSize(), plaintext.capacity()));
 			byte[] chunkCiphertext = cipherKey().wrappedEncrypt(chunkText.array(),
 					(int) fs.getPrivConfig().getPageSize());
 			
@@ -71,6 +71,7 @@ public class PageMerkel {
 			chunkTagSource.putInt(i);
 			byte[] chunkTag = authKey().authenticate(chunkTagSource.array());
 			String path = ZKFS.DATA_DIR + fs.getStorage().pathForHash(chunkTag);
+			System.out.printf("Writing path for merkel chunk index %d (%d total): %s\n", i, chunkCount, path);
 			try {
 				fs.getStorage().write(path, chunkCiphertext);
 				fs.getStorage().squash(path);
@@ -101,6 +102,7 @@ public class PageMerkel {
 				chunkTagSource.putInt(i);
 				byte[] chunkTag = authKey().authenticate(chunkTagSource.array());
 				String path = ZKFS.DATA_DIR + fs.pathForHash(chunkTag);
+				System.out.printf("Reading merkel chunk %d (%d total): %s\n", i, expectedChunks, path);
 				byte[] chunkCiphertext;
 				try {
 					chunkCiphertext = fs.getStorage().read(path);
@@ -135,30 +137,34 @@ public class PageMerkel {
 	}
 
 	public void resize(int newMinNodes) {
-		// round number of requested nodes up to the nearest power of 2
-		int newSize = (int) Math.pow(2, Math.ceil(Math.log(newMinNodes)/Math.log(2)));
-		
+		double to_log2 = 1.0/Math.log(2);
+		int newSize =  (int) Math.pow(2, Math.ceil(Math.log(newMinNodes)*to_log2));
 		PageMerkelNode[] newNodes = new PageMerkelNode[Math.max(2*newSize-1, 1)];
-		for(int i = 0; i < newNodes.length; i++) {
-			if(i < newSize-1) {
-				newNodes[i] = new PageMerkelNode(fs.getCrypto());
-				newNodes[i].markDirty();
+		
+		int numExistingNodes = nodes == null ? 0 : nodes.length;
+		int d = (int) Math.round((Math.log(newNodes.length+1) - Math.log(numExistingNodes+1))*to_log2);
+		int minN = (1 << d) - 1;
+		double dMult = 1.0/(1 << d) - 1.0;
+		
+		for(int n = newNodes.length-1; n >= 0; n--) {
+			int tier = (int) (Math.log(n+1)*to_log2);
+			int tierThreshold = 3*(1 << (tier - 1)) - 1;
+			
+			if(minN <= n && n < tierThreshold) {
+				int m = (int) ((1 << tier) * dMult + n);
+				newNodes[n] = nodes[m];
 			} else {
-				if(i - newSize + 1 < numPages) {
-					newNodes[i] = nodes[numPages+i-1];
-				} else {
-					newNodes[i] = new PageMerkelNode(fs.getCrypto());
+				newNodes[n] = new PageMerkelNode(fs.crypto);
+				if(2*n+2 < newNodes.length) {
+					newNodes[n].left = newNodes[2*n+1];
+					newNodes[n].right = newNodes[2*n+2];
+					newNodes[n].left.parent = newNodes[n];
+					newNodes[n].right.parent = newNodes[n];
 				}
 			}
-			
-			if(i > 0) newNodes[i].parent = newNodes[(int) (Math.ceil(i/2)-1)];
 		}
 		
-		for(int i = 0; i < newSize-1; i++) {
-			newNodes[i].left = newNodes[2*i+1];
-			newNodes[i].right = newNodes[2*i+1];
-		}
-		
+		newNodes[0].markDirty();
 		newNodes[0].recalculate();
 		this.numPages = newSize;
 		this.nodes = newNodes;
