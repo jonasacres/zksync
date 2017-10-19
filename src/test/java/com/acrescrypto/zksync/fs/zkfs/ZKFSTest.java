@@ -89,8 +89,47 @@ public class ZKFSTest extends FSTestBase {
 		assertTrue(Arrays.equals(truncated, scratch.read("multipage-truncate")));
 	}
 	
-	// TODO: multipage truncate test
-	// TODO: nlink consistency checks 
+	@Test
+	public void filesCreateWithNlink1() throws IOException {
+		scratch.write("files-create-with-nlink-1", "yadda yadda".getBytes());
+		ZKFile file = zkscratch.open("files-create-with-nlink-1", File.O_RDONLY);
+		int nlink = file.inode.getNlink();
+		file.close();
+		assertEquals(1, nlink);
+	}
+
+	@Test
+	public void hardlinksIncreaseNlinkBy1() throws IOException {
+		scratch.write("hardlinks-increase-nlink-by-1", "yadda yadda".getBytes());
+		scratch.link("hardlinks-increase-nlink-by-1", "hardlinks-increase-nlink-by-1-link");
+		ZKFile file = zkscratch.open("hardlinks-increase-nlink-by-1", File.O_RDONLY);
+		int nlink = file.inode.getNlink();
+		file.close();
+		assertEquals(2, nlink);
+	}
+
+	@Test
+	public void unlinkReducesNlinkBy1() throws IOException {
+		scratch.write("hardlinks-increase-nlink-by-1", "yadda yadda".getBytes());
+		scratch.link("hardlinks-increase-nlink-by-1", "hardlinks-increase-nlink-by-1-link");
+		scratch.unlink("hardlinks-increase-nlink-by-1");
+		ZKFile file = zkscratch.open("hardlinks-increase-nlink-by-1-link", File.O_RDONLY);
+		int nlink = file.inode.getNlink();
+		file.close();
+		assertEquals(1, nlink);
+	}
+
+	@Test
+	public void symlinksDontAffectNlink() throws IOException {
+		scratch.write("hardlinks-increase-nlink-by-1", "yadda yadda".getBytes());
+		scratch.symlink("hardlinks-increase-nlink-by-1", "hardlinks-increase-nlink-by-1-link");
+		ZKFile file = zkscratch.open("hardlinks-increase-nlink-by-1", File.O_RDONLY);
+		int nlink = file.inode.getNlink();
+		file.close();
+		assertEquals(1, nlink);
+	}
+	
+	// TODO: close and write the archive
 	
 	protected void cheapenArgon2Costs() {
 		// cut down test runtime by making argon2 really cheap
