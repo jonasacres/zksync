@@ -147,29 +147,39 @@ public class PageMerkel {
 		
 		int numExistingNodes = nodes == null ? 0 : nodes.length;
 		int d = (int) Math.round((Math.log(newNodes.length+1) - Math.log(numExistingNodes+1))/log2);
-		int minN = (1 << d) - 1;
-		double dMult = 1.0/(1 << d) - 1.0;
-		
-		for(int n = newNodes.length-1; n >= 0; n--) {
-			int tier = (int) (Math.log(n+1)/log2);
-			int tierThreshold = 3*(1 << (tier - 1)) - 1;
+		if(d == 0) {
+			return;
+		} else if(d < 0) { // tree gets smaller
+			for(int n = 0; n < newNodes.length; n++) {
+				int tier = (int) Math.floor(Math.log(n+1)/log2);
+				int diff = (1 << tier)*(1-(1 << (-d)));
+				newNodes[n] = nodes[n-diff];
+			}
+		} else if(d > 0) { // tree gets bigger
+			int minN = (1 << d) - 1;
+			double dMult = 1.0/(1 << d) - 1.0;
 			
-			if(minN <= n && n < tierThreshold) {
-				int m = (int) ((1 << tier) * dMult + n);
-				newNodes[n] = nodes[m];
-			} else {
-				newNodes[n] = new PageMerkelNode(fs.crypto);
-				if(2*n+2 < newNodes.length) {
-					newNodes[n].left = newNodes[2*n+1];
-					newNodes[n].right = newNodes[2*n+2];
-					newNodes[n].left.parent = newNodes[n];
-					newNodes[n].right.parent = newNodes[n];
+			for(int n = newNodes.length-1; n >= 0; n--) {
+				int tier = (int) (Math.log(n+1)/log2);
+				int tierThreshold = 3*(1 << (tier - 1)) - 1;
+				
+				if(minN <= n && n < tierThreshold) {
+					int m = (int) ((1 << tier) * dMult + n);
+					newNodes[n] = nodes[m];
+				} else {
+					newNodes[n] = new PageMerkelNode(fs.crypto);
+					if(2*n+2 < newNodes.length) {
+						newNodes[n].left = newNodes[2*n+1];
+						newNodes[n].right = newNodes[2*n+2];
+						newNodes[n].left.parent = newNodes[n];
+						newNodes[n].right.parent = newNodes[n];
+					}
 				}
 			}
+			
+			newNodes[0].markDirty();
+			newNodes[0].recalculate();
 		}
-		
-		newNodes[0].markDirty();
-		newNodes[0].recalculate();
 		this.numPages = newSize;
 		this.nodes = newNodes;
 	}

@@ -88,6 +88,8 @@ public class ZKFile extends File {
 			bufferPage(lastPage);
 			bufferedPage.truncate((int) (size % fs.getPrivConfig().getPageSize()));
 		}
+		
+		dirty = true;
 	}
 
 	@Override
