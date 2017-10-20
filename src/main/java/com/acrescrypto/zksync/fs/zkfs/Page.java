@@ -17,7 +17,6 @@ public class Page {
 	public Page(ZKFile file, int index) throws IOException {
 		this.file = file;
 		this.pageNum = index;
-		load();
 	}
 	
 	public void truncate(int newSize) {
@@ -113,13 +112,13 @@ public class Page {
 		return file.getFS().deriveKey(ZKFS.KEY_TYPE_AUTH, ZKFS.KEY_INDEX_PAGE, buf.array());
 	}
 	
-	protected void load() throws IOException {
+	public void load() throws IOException {
 		int pageSize = file.getFS().getPrivConfig().getPageSize();
 		long totalSize = file.getStat().getSize();
 		boolean isLastPage = pageNum == totalSize/pageSize; 
 		size = (int) (isLastPage ? totalSize % pageSize : pageSize);
 		
-		if(size <= file.getFS().getPrivConfig().getImmediateThreshold()) {
+		if(pageNum == 0 && size <= file.getFS().getPrivConfig().getImmediateThreshold()) {
 			contents = ByteBuffer.allocate(file.getFS().getPrivConfig().getPageSize());
 			if(size > 0) {
 				contents.put(file.getInode().getRefTag(), 0, size);
@@ -150,5 +149,11 @@ public class Page {
 		
 		contents = ByteBuffer.allocate(pageSize);
 		contents.put(plaintext);
+	}
+	
+	public void blank() {
+		contents = ByteBuffer.allocate(file.getFS().getPrivConfig().getPageSize());
+		size = 0;
+		dirty = false;
 	}
 }

@@ -8,6 +8,7 @@ import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 
 public class PageMerkel {
 	ZKFS fs;
@@ -43,7 +44,10 @@ public class PageMerkel {
 		nodes[numPages - 1 + pageNum].setTag(pageTag);
 	}
 	
-	public byte[] getPageTag(int pageNum) {
+	public byte[] getPageTag(int pageNum) throws NonexistentPageException {
+		if(pageNum < 0 || pageNum >= numPages) {
+			throw new NonexistentPageException(inode.getStat().getInodeId(), pageNum);
+		}
 		return nodes[numPages - 1 + pageNum].tag.clone();
 	}
 	

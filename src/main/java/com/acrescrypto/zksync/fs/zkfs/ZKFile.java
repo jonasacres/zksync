@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -47,7 +48,7 @@ public class ZKFile extends File {
 		merkel.setPageTag(pageNum, hash);
 	}
 	
-	public byte[] getPageTag(int pageNum) {
+	public byte[] getPageTag(int pageNum) throws NonexistentPageException {
 		return merkel.getPageTag(pageNum);
 	}
 
@@ -112,7 +113,13 @@ public class ZKFile extends File {
 			if(bufferedPage.pageNum == pageNum) return;
 			bufferedPage.flush();
 		}
+		
 		bufferedPage = new Page(this, pageNum);
+		if(pageNum < Math.ceil(((double) inode.getStat().getSize())/fs.getPrivConfig().getPageSize())) {
+			bufferedPage.load();
+		} else {
+			bufferedPage.blank();
+		}
 	}
 	
 	@Override

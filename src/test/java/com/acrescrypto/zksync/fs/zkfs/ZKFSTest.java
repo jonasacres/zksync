@@ -90,7 +90,7 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	@Test
-	public void filesCreateWithNlink1() throws IOException {
+	public void testFilesCreateWithNlink1() throws IOException {
 		scratch.write("files-create-with-nlink-1", "yadda yadda".getBytes());
 		ZKFile file = zkscratch.open("files-create-with-nlink-1", File.O_RDONLY);
 		int nlink = file.inode.getNlink();
@@ -99,7 +99,7 @@ public class ZKFSTest extends FSTestBase {
 	}
 
 	@Test
-	public void hardlinksIncreaseNlinkBy1() throws IOException {
+	public void testHardlinksIncreaseNlinkBy1() throws IOException {
 		scratch.write("hardlinks-increase-nlink-by-1", "yadda yadda".getBytes());
 		scratch.link("hardlinks-increase-nlink-by-1", "hardlinks-increase-nlink-by-1-link");
 		ZKFile file = zkscratch.open("hardlinks-increase-nlink-by-1", File.O_RDONLY);
@@ -109,7 +109,7 @@ public class ZKFSTest extends FSTestBase {
 	}
 
 	@Test
-	public void unlinkReducesNlinkBy1() throws IOException {
+	public void testUnlinkReducesNlinkBy1() throws IOException {
 		scratch.write("hardlinks-increase-nlink-by-1", "yadda yadda".getBytes());
 		scratch.link("hardlinks-increase-nlink-by-1", "hardlinks-increase-nlink-by-1-link");
 		scratch.unlink("hardlinks-increase-nlink-by-1");
@@ -120,7 +120,7 @@ public class ZKFSTest extends FSTestBase {
 	}
 
 	@Test
-	public void symlinksDontAffectNlink() throws IOException {
+	public void testSymlinksDontAffectNlink() throws IOException {
 		scratch.write("hardlinks-increase-nlink-by-1", "yadda yadda".getBytes());
 		scratch.symlink("hardlinks-increase-nlink-by-1", "hardlinks-increase-nlink-by-1-link");
 		ZKFile file = zkscratch.open("hardlinks-increase-nlink-by-1", File.O_RDONLY);
@@ -129,7 +129,26 @@ public class ZKFSTest extends FSTestBase {
 		assertEquals(1, nlink);
 	}
 	
+	@Test
+	public void testPageBoundaryWrites() throws IOException {
+		for(int pageCount = 1; pageCount <= 3; pageCount++) {
+			for(int mod = 1; mod <= 1; mod++) {
+				byte[] buf = new byte[pageCount*zkscratch.getPrivConfig().getPageSize() + mod];
+				for(int i = 0; i < buf.length; i++) buf[i] = (byte) (i & 0xff);
+				zkscratch.write("page-boundary-test", buf);
+				if(!Arrays.equals(buf, zkscratch.read("page-boundary-test"))) {
+					System.out.println("page " + pageCount + ", mod " + mod);
+				}
+				
+				byte[] contents = zkscratch.read("page-boundary-test");
+				assertTrue(Arrays.equals(buf, contents));
+			}
+		}
+	}
+	
 	// TODO: close and write the archive
+	// TODO: test alternative page size
+	// TODO: test configurable argon2 parameters
 	
 	protected void cheapenArgon2Costs() {
 		// cut down test runtime by making argon2 really cheap
