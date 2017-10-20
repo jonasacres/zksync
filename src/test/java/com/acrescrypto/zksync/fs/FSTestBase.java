@@ -80,15 +80,15 @@ public class FSTestBase extends Object {
 		scratch.write(filename, "some data".getBytes());
 		Stat stat = scratch.stat(filename);
 		Long now = System.currentTimeMillis();
-		assertEquals(0, Math.abs(stat.getCtime()/(1000l*1000l) - now), 10);
+		assertEquals(0, Math.abs(stat.getCtime()/(1000l*1000l) - now), 50);
 		
 		Long atime = 31337000000l, mtime = 80085000000l;
 		scratch.setAtime(filename, atime);
 		scratch.setMtime(filename, mtime);
 		
 		stat = scratch.stat(filename);
-		assertTrue(stat.getAtime() == atime);
-		assertTrue(stat.getMtime() == mtime);
+		assertEquals(0, Math.abs(stat.getAtime() - atime), 50);
+		assertEquals(0, Math.abs(stat.getMtime() - mtime), 50);
 	}
 
 	@Test

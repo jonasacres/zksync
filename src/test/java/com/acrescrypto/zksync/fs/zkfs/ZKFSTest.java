@@ -132,8 +132,8 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testPageBoundaryWrites() throws IOException {
 		for(int pageCount = 1; pageCount <= 3; pageCount++) {
-			for(int mod = 1; mod <= 1; mod++) {
-				byte[] buf = new byte[pageCount*zkscratch.getPrivConfig().getPageSize() + mod];
+			for(int mod = -1; mod <= 1; mod++) {
+				byte[] buf = generateFileData("page-boundary-test", pageCount*zkscratch.getPrivConfig().getPageSize() + mod);
 				for(int i = 0; i < buf.length; i++) buf[i] = (byte) (i & 0xff);
 				zkscratch.write("page-boundary-test", buf);
 				if(!Arrays.equals(buf, zkscratch.read("page-boundary-test"))) {
@@ -146,9 +146,48 @@ public class ZKFSTest extends FSTestBase {
 		}
 	}
 	
+	@Test
+	public void testPageBoundaryExtensions() throws IOException {
+		int pageCount = 5;
+		byte[] testData = generateFileData("page-boundary", pageCount*zkscratch.getPrivConfig().getPageSize());
+		ByteBuffer testBuf = ByteBuffer.wrap(testData);
+		
+		ZKFile testFile = zkscratch.open("page-boundary-extension-test", File.O_RDWR|File.O_CREAT);
+		for(int page = 0; page < pageCount; page++) {
+			int[] writeLengths = { 1, zkscratch.getPrivConfig().getPageSize()-2, 1 };
+			for(int writeLength: writeLengths) {
+				byte[] writeData = new byte[writeLength];
+				testBuf.get(writeData);
+				testFile.write(writeData);
+				testFile.flush();
+				
+				assertEquals(testFile.pos(), testFile.getInode().getStat().getSize());
+				assertEquals(testFile.pos(), testBuf.position());
+				testFile.seek(0, File.SEEK_SET);
+				byte[] readData = testFile.read(testBuf.position());
+				for(int i = 0; i < testBuf.position(); i++) {
+					if(readData[i] != testData[i]) throw new IllegalStateException("read data doesn't match written data at index " + i);
+				}
+				assertEquals(testFile.pos(), testBuf.position());
+			}
+		}
+	}
+	
 	// TODO: close and write the archive
 	// TODO: test alternative page size
 	// TODO: test configurable argon2 parameters
+	
+	protected byte[] generatePageData(String key, int pageNum) {
+		ByteBuffer buf = ByteBuffer.allocate(4);
+		buf.putInt(pageNum);
+		return zkscratch.crypto.expand(key.getBytes(), zkscratch.getPrivConfig().getPageSize(), buf.array(), "zksync".getBytes());
+	}
+	
+	protected byte[] generateFileData(String key, int length) {
+		ByteBuffer buf = ByteBuffer.allocate(4);
+		buf.putInt(length);
+		return zkscratch.crypto.expand(key.getBytes(), length, buf.array(), "zksync".getBytes());
+	}
 	
 	protected void cheapenArgon2Costs() {
 		// cut down test runtime by making argon2 really cheap
