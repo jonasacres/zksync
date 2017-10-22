@@ -11,6 +11,7 @@ import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
@@ -191,6 +192,26 @@ public class ZKFSTest extends FSTestBase {
 		assertTrue(Arrays.equals(content, readFs.read("basic-archive-test")));
 	}
 	
+	@Test
+	public void testSuccessiveRevisions() throws IOException {
+		int numRevisions = 8;
+		Revision[] revisions = new Revision[numRevisions+1];
+		
+		for(int i = 0; i < numRevisions; i++) {
+			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), revisions[i]);
+			revFs.write("successive-revisions", ("Version " + i).getBytes());
+			revisions[i+1] = revFs.commit();
+		}
+		
+		for(int i = 1; i <= numRevisions; i++) {
+			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), revisions[i]);
+			byte[] text = ("Version " + (i-1)).getBytes();
+			assertTrue(Arrays.equals(text, revFs.read("successive-revisions")));
+		}
+	}
+	
+	// TODO: test creating multiple revisions
+	// TODO: test revision listing
 	// TODO: inode table tests: literal inode table, single-page inode table, multipage inode table
 	//       modes, directories, hardlinks, symlinks, fifos, sockets, chardevs, blockdevs  
 	// TODO: open default revision
