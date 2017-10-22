@@ -30,15 +30,16 @@ public class KeyFile {
 			byte[][] rawKeys = new byte[2][len];
 			for(int i = 0; i < 2*len; i++) rawKeys[i/len][i % len] = plaintext[i];
 			
-			this.setTextRoot(new Key(fs.getCrypto(), rawKeys[0]));
+			this.setCipherRoot(new Key(fs.getCrypto(), rawKeys[0]));
 			this.setHashRoot(new Key(fs.getCrypto(), rawKeys[1]));
 		} catch(IOException ex) {
 			generate();
+			write(passphrase); // TODO: this is kind of awkward, since there's no way to open-and-fail.
 		}
 	}
 	
 	public void generate() {
-		this.setTextRoot(new Key(fs.getCrypto()));
+		this.setCipherRoot(new Key(fs.getCrypto()));
 		this.setHashRoot(new Key(fs.getCrypto()));
 	}
 	
@@ -66,7 +67,7 @@ public class KeyFile {
 		return textRoot;
 	}
 
-	public void setTextRoot(Key textRoot) {
+	public void setCipherRoot(Key textRoot) {
 		this.textRoot = textRoot;
 	}
 

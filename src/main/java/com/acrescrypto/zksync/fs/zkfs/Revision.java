@@ -12,7 +12,7 @@ import com.acrescrypto.zksync.fs.Directory;
 /* Stores a revision of the archive. This is needed to bootstrap reading the archive.
  */
 public class Revision {
-	protected ArrayList<byte[]> parents; // revtags of parent revisions
+	protected ArrayList<byte[]> parents = new ArrayList<byte[]>(); // revtags of parent revisions
 	protected Inode supernode; // inode for inode table
 	protected ZKFS fs; // ZKFS archive to which this revision belongs 
 	protected byte[] revTag; // unique, non-confidential identifier for this revision
@@ -54,6 +54,7 @@ public class Revision {
 	public Revision(InodeTable table) {
 		this.fs = table.getFS();
 		this.supernode = table.getInode();
+		this.revTag = table.getInode().getRefTag();
 	}
 	
 	// read an existing revision

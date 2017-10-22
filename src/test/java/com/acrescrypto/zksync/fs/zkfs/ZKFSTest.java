@@ -27,8 +27,13 @@ public class ZKFSTest extends FSTestBase {
 	public void beforeEach() throws IOException {
 		cheapenArgon2Costs();
 		deleteFiles();
-		(new java.io.File(SCRATCH_DIR)).mkdirs();
 		LocalFS storage = new LocalFS(SCRATCH_DIR);
+		java.io.File scratchDir = new java.io.File(SCRATCH_DIR);
+		try {
+			FileUtils.deleteDirectory(scratchDir);
+		} catch (IOException e) {}
+		(new java.io.File(SCRATCH_DIR)).mkdirs();
+
 		scratch = zkscratch = new ZKFS(storage, "zksync".toCharArray());
 		prepareExamples();
 	}
@@ -173,7 +178,25 @@ public class ZKFSTest extends FSTestBase {
 		}
 	}
 	
-	// TODO: close and write the archive
+	// TODO: boundary truncations
+	
+	@Test
+	public void testBasicArchiveWrite() throws IOException {
+		byte[] content = "there is a house down in new orleans they call the rising sun".getBytes();
+		zkscratch.write("basic-archive-test", content);
+		assertTrue(Arrays.equals(content, zkscratch.read("basic-archive-test")));
+		ZKDirectory rootDir = zkscratch.opendir("/");
+		Revision rev = zkscratch.commit();
+		
+		ZKFS readFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), rev);
+		ZKDirectory readRootDir = readFs.opendir("/");
+		assertTrue(Arrays.equals(content, readFs.read("basic-archive-test")));
+	}
+	
+	// TODO: inode table tests: literal inode table, single-page inode table, multipage inode table
+	//       modes, directories, hardlinks, symlinks, fifos, sockets, chardevs, blockdevs  
+	// TODO: open default revision
+	// TODO: open non-default revision
 	// TODO: test alternative page size
 	// TODO: test configurable argon2 parameters
 	

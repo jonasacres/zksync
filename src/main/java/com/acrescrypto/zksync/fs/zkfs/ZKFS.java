@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Paths;
 import java.util.Hashtable;
 
 import com.acrescrypto.zksync.crypto.*;
@@ -19,7 +18,6 @@ public class ZKFS extends FS {
 	protected PubConfig pubConfig;
 	protected PrivConfig privConfig;
 	protected LocalConfig localConfig;
-	protected String root;
 	protected FS storage;
 	protected KeyFile keyfile;
 	protected Hashtable<String,Inode> inodesByPath; // TODO: not entirely happy with this, since there's no real eviction policy
@@ -42,14 +40,23 @@ public class ZKFS extends FS {
 	public final static String ACTIVE_REVISION = ".zskync/local/active-revision";
 	
 	public ZKFS(FS storage, char[] passphrase) throws IOException {
+		this(storage, passphrase, null);
+	}
+	
+	public ZKFS(FS storage, char[] passphrase, Revision revision) throws IOException {
 		this.storage = storage;
 		this.pubConfig = new PubConfig(storage);
 		crypto = new CryptoSupport(pubConfig);
 		keyfile = new KeyFile(this, passphrase);
 		this.privConfig = new PrivConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_PRIVATE));
 		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
-		this.inodeTable = new InodeTable(this, Revision.activeRevision(this));
+		if(revision == null) revision = Revision.activeRevision(this);
+		this.inodeTable = new InodeTable(this, revision);
 		this.inodesByPath = new Hashtable<String,Inode>();
+	}
+	
+	public Revision commit() throws IOException {
+		return inodeTable.commit();
 	}
 	
 	public Key deriveKey(int type, int index, byte[] tweak) {
@@ -74,7 +81,7 @@ public class ZKFS extends FS {
 	}
 	
 	public Inode inodeForPath(String path, boolean followSymlinks) throws IOException {
-		if(path.equals("")) throw new ENOENTException(Paths.get(root, path).toString());
+		if(path.equals("")) throw new ENOENTException(path);
 		if(path.equals("/")) {
 			return inodeTable.inodeWithId(InodeTable.INODE_ID_ROOT_DIRECTORY);
 		}
@@ -151,10 +158,6 @@ public class ZKFS extends FS {
 	
 	public PrivConfig getPrivConfig() {
 		return privConfig;
-	}
-	
-	public String getRoot() {
-		return root;
 	}
 	
 	public FS getStorage() {

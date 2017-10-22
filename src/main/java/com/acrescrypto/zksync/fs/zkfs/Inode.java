@@ -114,6 +114,7 @@ public class Inode {
 		this.nlink = buf.getInt();
 		this.flags = buf.get();
 		this.refType = buf.get();
+		this.refId = new byte[fs.getCrypto().hashLength()];
 		buf.get(this.refId, 0, fs.getCrypto().hashLength());
 	}
 	

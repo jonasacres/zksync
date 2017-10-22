@@ -16,7 +16,10 @@ public class Stat {
 	public final static int TYPE_CHARACTER_DEVICE = 4;
 	public final static int TYPE_FIFO = 5;
 	
-	public Stat() { }
+	public Stat() {
+		group = "";
+		user = "";
+	}
 	
 	public Stat(byte[] serialized) {
 		deserialize(serialized);
@@ -135,28 +138,30 @@ public class Stat {
 	}
 	
 	public int getStorageSize() {
-		// int size
-		// int gid, uid, mode, typeFlags, devMajor, devMinor: 5*5 = 25
-		// String group, user: 4 + variable + 4 + variable = 8 + 2*variable
-		// long atime, mtime, ctime, size, inodeId; 5*8 = 40
-		// total: 74 + 2*variable
+		// int size                                                     =  4
+		// int gid, uid, mode, typeFlags, devMajor, devMinor:      6*4  = 24
+		// String group, user:                           2*4+2*variable =  8 + 2*variable
+		// long atime, mtime, ctime, size, inodeId;                5*8  = 40
+		// total:                                                         76 + 2*variable
 		
-		return 78 + group.length() + user.length();
+		return 86 + group.length() + user.length();
 	}
 	
 	public byte[] serialize() {
 		ByteBuffer buf = ByteBuffer.allocate(getStorageSize());
 		buf.putInt(getStorageSize());
+		buf.putLong(inodeId);
+		buf.putLong(size);
+		buf.putLong(ctime);
+		buf.putLong(mtime);
+		buf.putLong(atime);
+		
 		buf.putInt(gid);
 		buf.putInt(uid);
 		buf.putInt(mode);
 		buf.putInt(getType());
 		buf.putInt(getDevMajor());
 		buf.putInt(getDevMinor());
-		
-		buf.putLong(ctime);
-		buf.putLong(mtime);
-		buf.putLong(atime);
 		
 		buf.putInt(user.length());
 		buf.put(user.getBytes());
@@ -169,16 +174,18 @@ public class Stat {
 	public void deserialize(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		buf.getInt(); // skip storage size
+		this.inodeId = buf.getLong();
+		this.size = buf.getLong();
+		this.ctime = buf.getLong();
+		this.mtime = buf.getLong();
+		this.atime = buf.getLong();
+		
 		this.gid = buf.getInt();
 		this.uid = buf.getInt();
 		this.mode = buf.getInt();
 		this.setType(buf.getInt());
 		this.setDevMajor(buf.getInt());
 		this.setDevMinor(buf.getInt());
-		
-		this.ctime = buf.getLong();
-		this.mtime = buf.getLong();
-		this.atime = buf.getLong();
 		
 		int userLen = buf.getInt();
 		byte[] userBuf = new byte[userLen];

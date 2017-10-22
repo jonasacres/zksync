@@ -151,28 +151,44 @@ public class PageMerkel {
 		
 		int numExistingNodes = nodes == null ? 0 : nodes.length;
 		int d = (int) Math.round((Math.log(newNodes.length+1) - Math.log(numExistingNodes+1))/log2);
+		
+		/* Resizing the merkel tree is a matter of considering the subtree whose root node is:
+		 *   1) left-most in its tier (i.e. how many levels down it is in the tree, starting from tier=0)
+		 *   2) at tier |d| (the number of tiers we are adding or removing)
+		 * If d == 0, then we're making no changes at all and we can just go home. We're done.
+		 *    d  < 0, we're shrinking the tree, so we can just make the subtree be the new root. None of the tags
+		 *            change for leaf or ancestor nodes, so all we have to do is relocate the nodes.
+		 *    d  > 0, we're growing the tree, so we have to take our current root, and make it be the leftmost
+		 *            subtree at tier d of the newer, bigger tree. All the new leaf nodes should have a default
+		 *            value to reflect that they haven't been assigned tags yet, and all the new non-leaf nodes
+		 *            need to be recalculated.
+		 */
+		
 		if(d == 0) {
 			return;
 		} else if(d < 0) { // tree gets smaller
 			for(int n = 0; n < newNodes.length; n++) {
-				int tier = (int) Math.floor(Math.log(n+1)/log2);
-				int diff = (1 << tier)*(1-(1 << (-d)));
+				// every tier has a fixed offset in array indexes between old tree and new tree
+				int tier = (int)(Math.log(n+1)/log2); // floor(log2(n+1))
+				int diff = (1 << tier)*(1-(1 << (-d))); // 2^tier * (1-(2^(-d)))
 				newNodes[n] = nodes[n-diff];
 			}
 		} else if(d > 0) { // tree gets bigger
-			int minN = (1 << d) - 1;
-			double dMult = 1.0/(1 << d) - 1.0;
+			int minN = (1 << d) - 1; // 2^d - 1
+			double dMult = 1.0/(1 << d) - 1.0; // 2^-d - 1
 			
 			for(int n = newNodes.length-1; n >= 0; n--) {
-				int tier = (int) (Math.log(n+1)/log2);
-				int tierThreshold = 3*(1 << (tier - 1)) - 1;
+				int tier = (int) (Math.log(n+1)/log2); // floor(log2(n+1))
+				int tierThreshold = 3*(1 << (tier - 1)) - 1; // 3*2^(tier-1). Anything above this is a new node.
 				
 				if(minN <= n && n < tierThreshold) {
-					int m = (int) ((1 << tier) * dMult + n);
+					// are we an existing node? must be deep enough (minN <= n), and left enough (n < tierThreshold) to be in our subtree.
+					int m = (int) ((1 << tier) * dMult + n); // 2^(tier) * (2^-d - 1) + n
 					newNodes[n] = nodes[m];
 				} else {
+					// new node: allocate a blank node
 					newNodes[n] = new PageMerkelNode(fs.crypto);
-					if(2*n+2 < newNodes.length) {
+					if(2*n+2 < newNodes.length) { // non-leaf node; setup parent/child references
 						newNodes[n].left = newNodes[2*n+1];
 						newNodes[n].right = newNodes[2*n+2];
 						newNodes[n].left.parent = newNodes[n];
@@ -180,9 +196,6 @@ public class PageMerkel {
 					}
 				}
 			}
-			
-			newNodes[0].markDirty();
-			newNodes[0].recalculate();
 		}
 		this.numPages = newSize;
 		this.nodes = newNodes;

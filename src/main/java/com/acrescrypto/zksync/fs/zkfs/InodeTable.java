@@ -45,24 +45,30 @@ public class InodeTable extends ZKFile {
 		readTable();
 	}
 
-	public void commit() throws IOException {
+	public Revision commit() throws IOException {
 		rewind();
 		truncate(0);
 		
 		for(Inode inode : inodes.values()) {
+			if(inode.getStat().getInodeId() == InodeTable.INODE_ID_INODE_TABLE) continue;
 			write(inode.serialize());
 		}
+		
+		flush();
 		
 		Revision newRevision = new Revision(this);
 		if(revision != null && revision.getRevTag() != null) newRevision.addParent(revision.getRevTag());
 		newRevision.write();
 		this.revision = newRevision;
+		return newRevision;
 	}
 	
 	public void readTable() throws IOException {
 		rewind();
 		ByteBuffer buf = ByteBuffer.allocate(1024);
 		while(hasData()) {
+			buf.clear();
+			
 			read(buf.array(), 0, 4);
 			int size = buf.getInt();
 			if(4+size > buf.capacity()) {
@@ -108,6 +114,8 @@ public class InodeTable extends ZKFile {
 		inode.getStat().setAtime(now);
 		inode.getStat().setMtime(now);
 		inode.getStat().setMode(0640); // TODO: default mode, uid, gid
+		inode.setRefTag(new byte[] {});
+		inode.setRefType(Inode.REF_TYPE_IMMEDIATE);
 		inodes.put(inode.getStat().getInodeId(), inode);
 		return inode;
 	}
