@@ -185,11 +185,9 @@ public class ZKFSTest extends FSTestBase {
 		byte[] content = "there is a house down in new orleans they call the rising sun".getBytes();
 		zkscratch.write("basic-archive-test", content);
 		assertTrue(Arrays.equals(content, zkscratch.read("basic-archive-test")));
-		ZKDirectory rootDir = zkscratch.opendir("/");
 		Revision rev = zkscratch.commit();
 		
 		ZKFS readFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), rev);
-		ZKDirectory readRootDir = readFs.opendir("/");
 		assertTrue(Arrays.equals(content, readFs.read("basic-archive-test")));
 	}
 	
