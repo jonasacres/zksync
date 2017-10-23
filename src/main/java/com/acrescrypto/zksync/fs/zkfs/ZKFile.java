@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 
+import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.exceptions.NonexistentPageException;
@@ -33,7 +34,9 @@ public class ZKFile extends File {
 		}
 
 		this.merkel = new PageMerkel(fs, this.inode);
-}
+		if((mode & O_TRUNC) != 0) truncate(0);
+		if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();
+	}
 	
 	public ZKFS getFS() {
 		return fs;
@@ -43,7 +46,7 @@ public class ZKFile extends File {
 		return inode;
 	}
 	
-	public void setPageTag(int pageNum, byte[] hash) {
+	public void setPageTag(int pageNum, byte[] hash) throws IOException {
 		assertWritable();
 		merkel.setPageTag(pageNum, hash);
 	}
@@ -95,6 +98,7 @@ public class ZKFile extends File {
 
 	@Override
 	public int read(byte[] buf, int bufOffset, int maxLength) throws IOException {
+		assertReadable();
 		int numToRead = (int) Math.min(maxLength, getStat().getSize()-offset), readLen = numToRead;
 		while(numToRead > 0) {
 			int neededPageNum = (int) (offset/fs.getPrivConfig().getPageSize());
@@ -128,6 +132,7 @@ public class ZKFile extends File {
 	}
 	
 	public void write(byte[] data, int bufOffset, int length) throws IOException {
+		assertWritable();
 		dirty = true;
 		int leftToWrite = length;
 		int pageSize = fs.getPrivConfig().getPageSize();
@@ -157,7 +162,7 @@ public class ZKFile extends File {
 	}
 	
 	@Override
-	public boolean hasData() {
+	public boolean hasData() throws IOException {
 		assertReadable();
 		return offset < inode.getStat().getSize();
 	}
@@ -218,12 +223,12 @@ public class ZKFile extends File {
 		inode.getStat().setMode(file.getStat().getMode());
 	}
 	
-	protected void assertReadable() {
-		if((mode & File.O_RDONLY) == 0) throw new RuntimeException("File is not opened for reading");
+	protected void assertReadable() throws IOException {
+		if((mode & File.O_RDONLY) == 0) throw new EACCESException("File is not opened for reading");
 	}
 	
-	protected void assertWritable() {
-		if((mode & File.O_WRONLY) == 0) throw new RuntimeException("File is not opened for writing");
+	protected void assertWritable() throws IOException {
+		if((mode & File.O_WRONLY) == 0) throw new EACCESException("File is not opened for writing");
 	}
 	
 	protected void assertIntegrity(boolean condition, String explanation) {

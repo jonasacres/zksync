@@ -25,9 +25,8 @@ public class FileTestBase {
 	@Test(expected=EACCESException.class)
 	public void testOpenForReadingDoesntAllowWriting() throws IOException {
 		scratch.write("read-doesnt-allow-write", "text".getBytes());
-		File file = scratch.open("read-allows-read", File.O_WRONLY);
+		File file = scratch.open("read-doesnt-allow-write", File.O_RDONLY); // TODO: LocalFile passed this with File.O_WRONLY... check that out.
 		file.write("and more".getBytes());
-		assertTrue(Arrays.equals("text".getBytes(), file.read()));
 	}
 
 	@Test
@@ -117,10 +116,12 @@ public class FileTestBase {
 
 	@Test(expected=EMLINKException.class)
 	public void testONOFOLLOWDoesNotFollowSymlinks() throws IOException {
+		// TODO: it is not good that ZKFS has different semantics here. LocalFile throws EMLINK, which is kinda Linux-like
 		byte[] text = "some content".getBytes();
 		scratch.write("open-NOFOLLOW-doesnt-follows-symlinks-target", text);
 		scratch.symlink("open-NOFOLLOW-doesnt-follows-symlinks-target", "open-NOFOLLOW-doesnt-follows-symlinks-link");
 		File file = scratch.open("open-NOFOLLOW-doesnt-follows-symlinks-link", File.O_RDONLY|File.O_NOFOLLOW);
+		assertTrue(file.getStat().isSymlink());
 		file.close();
 	}
 
@@ -187,6 +188,7 @@ public class FileTestBase {
 		byte[] text = "do you wanna have a bad time?".getBytes();
 		File file = scratch.open("write", File.O_CREAT|File.O_WRONLY);
 		file.write(text);
+		file.close();
 		assertTrue(Arrays.equals(scratch.read("write"), text));
 	}
 
@@ -197,6 +199,7 @@ public class FileTestBase {
 		file.truncate(256);
 		file.seek(16, File.SEEK_SET);
 		file.write(text);
+		file.close();
 		
 		ByteBuffer ref = ByteBuffer.allocate(256);
 		ref.position(16);

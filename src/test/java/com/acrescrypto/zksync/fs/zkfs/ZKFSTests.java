@@ -7,6 +7,7 @@ import org.junit.runners.Suite;
 @Suite.SuiteClasses({
 	ZKFSTest.class,
 	ZKDirectoryTest.class,
+	ZKFileTest.class
 })
 
 public class ZKFSTests {

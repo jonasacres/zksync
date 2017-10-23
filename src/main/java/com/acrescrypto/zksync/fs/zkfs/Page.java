@@ -40,7 +40,7 @@ public class Page {
 	}
 	
 	// write all buffered data to storage
-	public void flush() throws InaccessibleStorageException {
+	public void flush() throws IOException {
 		if(!dirty) return;
 		dirty = false;
 		

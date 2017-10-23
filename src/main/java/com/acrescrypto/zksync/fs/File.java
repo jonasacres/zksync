@@ -51,5 +51,5 @@ public abstract class File implements Closeable {
 	
 	public abstract void copy(File file) throws IOException;
 	public abstract void rewind();
-	public abstract boolean hasData();
+	public abstract boolean hasData() throws IOException;
 }
