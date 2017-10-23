@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Hashtable;
 
 import com.acrescrypto.zksync.crypto.*;
@@ -67,12 +66,6 @@ public class ZKFS extends FS {
 		Key[] keys = { keyfile.getCipherRoot(), keyfile.getAuthRoot() };
 		if(type >= keys.length) throw new IllegalArgumentException();
 		return keys[type].derive(index, tweak);
-	}
-	
-	public Key deriveKey(int type, int index, long tweak) {
-		ByteBuffer buf = ByteBuffer.allocate(8);
-		buf.putLong(tweak);
-		return deriveKey(type, index, buf.array());
 	}
 	
 	public Key deriveKey(int type, int index) {

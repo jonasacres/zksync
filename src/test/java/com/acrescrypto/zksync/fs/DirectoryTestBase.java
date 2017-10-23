@@ -11,6 +11,8 @@ import java.util.Set;
 
 import org.junit.Test;
 
+import com.acrescrypto.zksync.exceptions.EEXISTSException;
+
 public class DirectoryTestBase {
 	protected FS scratch;
 	
@@ -137,6 +139,16 @@ public class DirectoryTestBase {
 		dir.close();
 		assertTrue(scratch.stat("linkbypath/a").getInodeId() == scratch.stat("linkbypath/b").getInodeId());
 	}
+	
+	@Test(expected=EEXISTSException.class)
+	public void testLinkThrowsEEXISTS() throws IOException {
+		scratch.write("linkeexists/a", "a".getBytes());
+		Directory dir = scratch.opendir("linkeexists");
+		dir.link("linkeexists/a", "b");
+		dir.link("linkeexists/a", "b");
+	}
+	
+	// TODO: Test EEXISTS on collisions
 	
 	@Test
 	public void testUnlink() throws IOException {

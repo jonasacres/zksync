@@ -42,7 +42,6 @@ public class FileTestBase {
 		scratch.write("write-doesnt-allow-read", "text".getBytes());
 		File file = scratch.open("write-doesnt-allow-read", File.O_WRONLY);
 		file.read();
-		file.close();
 	}
 
 	@Test

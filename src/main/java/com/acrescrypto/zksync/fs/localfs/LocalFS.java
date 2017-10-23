@@ -9,6 +9,7 @@ import java.nio.file.attribute.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.FileTypeNotSupportedException;
 import com.acrescrypto.zksync.fs.*;
@@ -169,7 +170,11 @@ public class LocalFS extends FS {
 
 	@Override
 	public void link(String source, String dest) throws IOException {
-		Files.createLink(Paths.get(root, dest), Paths.get(root, source));
+		try {
+			Files.createLink(Paths.get(root, dest), Paths.get(root, source));
+		} catch(FileAlreadyExistsException exc) {
+			throw new EEXISTSException(Paths.get(root, source).toString());
+		}
 	}
 
 	@Override

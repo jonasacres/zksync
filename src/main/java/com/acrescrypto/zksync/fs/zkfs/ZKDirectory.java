@@ -38,7 +38,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 			entrySet.remove("..");
 		}
 		
-		if((opts & LIST_OPT_OMIT_DIRECTORIES) == 1) {
+		if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0) {
 			for(String entry : entries.keySet()) {
 				if(fs.stat(Paths.get(path, entry).toString()).isDirectory()) {
 					entrySet.remove(entry);
@@ -108,7 +108,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public void link(Inode inode, String link) throws IOException {
 		if(link.length() > MAX_NAME_LEN) throw new EINVALException(link + ": name too long");
 		if(entries.containsKey(link)) {
-			if(entries.get(link) == inode.getStat().getInodeId()) return; // nothing to do
 			throw new EEXISTSException(Paths.get(path, link).toString());
 		}
 		entries.put(link, inode.getStat().getInodeId());
