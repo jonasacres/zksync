@@ -19,9 +19,9 @@ public class InodeTable extends ZKFile {
 	
 	// TODO: fixed-length inode serialization to support partial inode table reads
 	
-	Hashtable<Long,Inode> inodes;
-	Revision revision;
-	long nextInodeId;
+	protected Hashtable<Long,Inode> inodes;
+	protected Revision revision;
+	protected long nextInodeId;
 	
 	public InodeTable(ZKFS fs, Revision revision) throws IOException {
 		this.fs = fs;
@@ -57,9 +57,9 @@ public class InodeTable extends ZKFile {
 		flush();
 		
 		Revision newRevision = new Revision(this);
-		if(revision != null && revision.getRevTag() != null) newRevision.addParent(revision.getRevTag());
+		if(getRevision() != null && getRevision().getRevTag() != null) newRevision.addParent(getRevision().getRevTag());
 		newRevision.write();
-		this.revision = newRevision;
+		revision = newRevision;
 		return newRevision;
 	}
 	
@@ -142,5 +142,9 @@ public class InodeTable extends ZKFile {
 
 		makeRootDir();
 		nextInodeId = USER_INODE_ID_START;
-	}	
+	}
+
+	public Revision getRevision() {
+		return revision;
+	}
 }

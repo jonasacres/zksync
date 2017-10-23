@@ -184,4 +184,12 @@ public class Revision {
 	public Inode getSupernode() {
 		return supernode;
 	}
+	
+	public int getNumParents() {
+		return parents.size();
+	}
+	
+	public byte[] getParentTag(int index) {
+		return parents.get(index);
+	}
 }

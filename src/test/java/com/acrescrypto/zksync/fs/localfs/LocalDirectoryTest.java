@@ -22,5 +22,5 @@ public class LocalDirectoryTest extends DirectoryTestBase {
 			FileUtils.deleteDirectory(scratchDir);
 		} catch (IOException e) {}
 		scratchDir.mkdirs();
-	}	
+	}
 }

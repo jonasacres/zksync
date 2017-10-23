@@ -53,6 +53,10 @@ public class ZKFS extends FS {
 		if(revision == null) revision = Revision.activeRevision(this);
 		this.inodeTable = new InodeTable(this, revision);
 		this.inodesByPath = new Hashtable<String,Inode>();
+		
+		if(revision == null) {
+			initialize();
+		}
 	}
 	
 	public Revision commit() throws IOException {
@@ -112,7 +116,10 @@ public class ZKFS extends FS {
 	}
 	
 	protected Inode create(String path) throws IOException {
-		ZKDirectory parent = opendir(dirname(path));
+		return create(path, opendir(dirname(path)));
+	}
+	
+	protected Inode create(String path, ZKDirectory parent) throws IOException {
 		Inode inode = inodeTable.issueInode();
 		parent.link(inode, basename(path));
 		parent.commit();
@@ -266,6 +273,10 @@ public class ZKFS extends FS {
 		ZKDirectory dir = opendir(dirname(path));
 		dir.unlink(basename(path));
 		dir.close();
+		uncache(path);
+	}
+	
+	protected void uncache(String path) {
 		inodesByPath.remove(path);
 	}
 
@@ -361,5 +372,12 @@ public class ZKFS extends FS {
 	public void setAtime(String path, long atime) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setAtime(atime);
+	}
+	
+	protected void initialize() throws IOException {
+		ZKDirectory root = opendir("/");
+		root.link(root.inode, ".");
+		root.link(root.inode, "..");
+		root.close();
 	}
 }

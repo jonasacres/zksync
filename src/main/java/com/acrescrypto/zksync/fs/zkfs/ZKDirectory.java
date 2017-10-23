@@ -3,8 +3,11 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.Directory;
@@ -23,11 +26,60 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	@Override
-	public String[] list() {
-		String[] sortedPaths = new String[entries.size()];
-		entries.keySet().toArray(sortedPaths);
+	public String[] list() throws IOException {
+		return list(0);
+	}
+	
+	@Override
+	public String[] list(int opts) throws IOException {
+		Set<String> entrySet = new HashSet<String>(entries.keySet());
+		if((opts & LIST_OPT_INCLUDE_DOT_DOTDOT) == 0) {
+			entrySet.remove(".");
+			entrySet.remove("..");
+		}
+		
+		if((opts & LIST_OPT_OMIT_DIRECTORIES) == 1) {
+			for(String entry : entries.keySet()) {
+				if(fs.stat(Paths.get(path, entry).toString()).isDirectory()) {
+					entrySet.remove(entry);
+				}
+			}
+		}
+		
+		String[] sortedPaths = new String[entrySet.size()];
+		entrySet.toArray(sortedPaths);
 		Arrays.sort(sortedPaths);
 		return sortedPaths;
+	}
+	
+	@Override
+	public String[] listRecursive() throws IOException {
+		return listRecursive(0);
+	}
+	
+	@Override
+	public String[] listRecursive(int opts) throws IOException {
+		ArrayList<String> results = new ArrayList<String>();
+		listRecursiveIterate(opts, results, "");
+		String[] buf = new String[results.size()];
+		return results.toArray(buf);
+	}
+	
+	public void listRecursiveIterate(int opts, ArrayList<String> results, String prefix) throws IOException {
+		for(String entry : list(opts & ~Directory.LIST_OPT_OMIT_DIRECTORIES)) {
+			String subpath = Paths.get(prefix, entry).toString(); // what we return in our results
+			String realSubpath = Paths.get(path, entry).toString(); // what we can look up directly in fs
+			if(fs.stat(Paths.get(path, entry).toString()).isDirectory()) {
+				boolean isDotDir = entry.equals(".") || entry.equals("..");
+				if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
+					results.add(subpath);
+				}
+				
+				if(!isDotDir) fs.opendir(realSubpath).listRecursiveIterate(opts, results, subpath);
+			} else {
+				results.add(subpath);
+			}
+		}
 	}
 	
 	public long inodeForName(String name) throws IOException {
@@ -66,7 +118,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	@Override
 	public void link(String target, String link) throws IOException {
-		link(fs.inodeForPath(link), target);		
+		link(fs.inodeForPath(target), link);		
 	}
 
 	@Override
@@ -79,9 +131,12 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public void unlink(String name) throws IOException {
 		if(name.equals(".") || name.equals("..")) throw new EINVALException("cannot unlink " + name);
 		
-		Inode inode = fs.inodeForPath(Paths.get(path, name).toString());
+		String fullPath = Paths.get(path, name).toString();
+		
+		Inode inode = fs.inodeForPath(fullPath);
 		inode.removeLink();
 		entries.remove(name);
+		fs.uncache(fullPath);
 		dirty = true;
 	}
 	
@@ -103,8 +158,18 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	public Directory mkdir(String name) throws IOException {
-		// TODO
-		return null;
+		String fullPath = Paths.get(path, name).toString();
+		if(entries.containsKey(name)) throw new EEXISTSException(fullPath);
+		fs.create(fullPath, this).getStat().makeDirectory();
+
+		// TODO: duplicated from ZKFS... can we consolidate?
+		ZKDirectory dir = fs.opendir(fullPath);
+		dir.link(dir, ".");
+		dir.link(inode, "..");
+		dir.flush();
+		fs.chmod(path, 0750); // TODO: default mode
+
+		return dir;
 	}
 	
 	public boolean isEmpty() {
@@ -149,7 +214,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		dirty = false;
 	}
 	
-	private byte[] serialize() {
+	private byte[] serialize() throws IOException {
 		int size = 0;
 		for(String path : entries.keySet()) {
 			size += 8 + 2 + path.length(); // inode number + path_len + path 
@@ -157,7 +222,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		
 		ByteBuffer buf = ByteBuffer.allocate(size);
 		
-		for(String path : list()) {
+		for(String path : list(LIST_OPT_INCLUDE_DOT_DOTDOT)) {
 			buf.putLong(entries.get(path));
 			buf.putShort((short) path.length());
 			buf.put(path.getBytes());

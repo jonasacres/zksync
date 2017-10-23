@@ -11,7 +11,6 @@ import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
@@ -207,10 +206,42 @@ public class ZKFSTest extends FSTestBase {
 			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), revisions[i]);
 			byte[] text = ("Version " + (i-1)).getBytes();
 			assertTrue(Arrays.equals(text, revFs.read("successive-revisions")));
+			if(i == 1) {
+				assertEquals(0, revFs.getInodeTable().getRevision().getNumParents());
+			} else {
+				assertEquals(1, revFs.getInodeTable().getRevision().getNumParents());
+				assertTrue(Arrays.equals(revFs.getInodeTable().getRevision().getParentTag(0), revisions[i-1].getRevTag()));
+			}
 		}
 	}
 	
-	// TODO: test creating multiple revisions
+	public void testIntensiveRevisions() throws IOException {
+		int numRevisions = 31;
+		Revision[] revisions = new Revision[numRevisions];
+		
+		for(int i = 0; i < numRevisions; i++) {
+			Revision parent = null;
+			if(i > 0) parent = revisions[(i-1)/2]; 
+			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), parent);
+			revFs.write("intensive-iterations", ("Version " + i).getBytes());
+			revisions[i] = revFs.commit();
+		}
+
+		for(int i = 0; i < numRevisions; i++) {
+			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), revisions[i]);
+			byte[] text = ("Version " + i).getBytes();
+			assertTrue(Arrays.equals(text, revFs.read("intensive-revisions")));
+			if(i == 0) {
+				assertEquals(0, revFs.getInodeTable().getRevision().getNumParents());
+			} else {
+				assertEquals(1, revFs.getInodeTable().getRevision().getNumParents());
+				assertTrue(Arrays.equals(revFs.getInodeTable().getRevision().getParentTag(0), revisions[(i-1)/2].getRevTag()));
+			}
+			
+			// TODO: test autodescent (descendant(n) = 2*n+1 for n < numRevisions/2, else null, iterate and return first n so d(n) is null.)
+		}
+	}
+	
 	// TODO: test revision listing
 	// TODO: inode table tests: literal inode table, single-page inode table, multipage inode table
 	//       modes, directories, hardlinks, symlinks, fifos, sockets, chardevs, blockdevs  
@@ -231,24 +262,26 @@ public class ZKFSTest extends FSTestBase {
 		return zkscratch.crypto.expand(key.getBytes(), length, buf.array(), "zksync".getBytes());
 	}
 	
-	protected void cheapenArgon2Costs() {
-		// cut down test runtime by making argon2 really cheap
-		oldDefaultTimeCost = PubConfig.defaultArgon2TimeCost;
-		oldDefaultMemoryCost = PubConfig.defaultArgon2MemoryCost;
-		oldDefaultParallelism = PubConfig.defaultArgon2Parallelism;
-		
+	public static void cheapenArgon2Costs() {
+		// TODO: this broke when we made it static, but right now we really don't care because we never actually want expensive argon2 in tests
+//		// cut down test runtime by making argon2 really cheap
+//		oldDefaultTimeCost = PubConfig.defaultArgon2TimeCost;
+//		oldDefaultMemoryCost = PubConfig.defaultArgon2MemoryCost;
+//		oldDefaultParallelism = PubConfig.defaultArgon2Parallelism;
+//		
 		PubConfig.defaultArgon2TimeCost = 1;
 		PubConfig.defaultArgon2MemoryCost = 32;
 		PubConfig.defaultArgon2Parallelism = 4;
 	}
 	
-	protected void restoreArgon2Costs() {
-		PubConfig.defaultArgon2TimeCost = oldDefaultTimeCost;
-		PubConfig.defaultArgon2MemoryCost = oldDefaultMemoryCost;
-		PubConfig.defaultArgon2Parallelism = oldDefaultParallelism;
+	protected static void restoreArgon2Costs() {
+		// TODO: see note for cheapenArgon2Costs
+//		PubConfig.defaultArgon2TimeCost = oldDefaultTimeCost;
+//		PubConfig.defaultArgon2MemoryCost = oldDefaultMemoryCost;
+//		PubConfig.defaultArgon2Parallelism = oldDefaultParallelism;
 	}
 	
-	protected static void deleteFiles() {
+	public static void deleteFiles() {
 		java.io.File scratchDir = new java.io.File(SCRATCH_DIR);
 		try {
 			FileUtils.deleteDirectory(scratchDir);
