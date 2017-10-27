@@ -57,7 +57,7 @@ public class InodeTable extends ZKFile {
 		flush();
 		
 		Revision newRevision = new Revision(this);
-		if(getRevision() != null && getRevision().getRevTag() != null) newRevision.addParent(getRevision().getRevTag());
+		if(getRevision() != null) newRevision.addParent(getRevision().getTag());
 		newRevision.write();
 		revision = newRevision;
 		return newRevision;

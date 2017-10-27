@@ -151,6 +151,14 @@ public class CryptoSupport {
 		}
 	}
 	
+	public byte[] xor(byte[] a, byte[] b) {
+		int len = Math.min(a.length, b.length);
+		byte[] r = new byte[len];
+		
+		for(int i = 0; i < len; i++) r[i] = (byte) (a[i] ^ b[i]);
+		return r;
+	}
+	
 	private byte[] padToSize(byte[] raw, int padSize) {
 		if(padSize < 0) return raw.clone();
 		if(padSize == 0) padSize = raw.length + 4;

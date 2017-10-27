@@ -3,6 +3,9 @@ package com.acrescrypto.zksync.fs;
 import java.io.IOException;
 import java.util.Arrays;
 
+import com.acrescrypto.zksync.Util;
+import com.acrescrypto.zksync.exceptions.EINVALException;
+
 public abstract class FS {
 	public abstract Stat stat(String path) throws IOException;
 	public abstract Stat lstat(String path) throws IOException;
@@ -56,6 +59,13 @@ public abstract class FS {
 	    }
 	    
 		return sb.toString();
+	}
+	
+	public byte[] hashFromPath(String path) throws EINVALException {
+		String[] comps = path.split("/");
+		if(comps.length < 3) throw new EINVALException(path);
+		String[] hexComps = { comps[comps.length-3], comps[comps.length-2], comps[comps.length-1] };
+		return Util.hexToBytes(String.join("", hexComps));
 	}
 	
 	public boolean exists(String path, boolean followLinks) {

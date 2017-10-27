@@ -3,6 +3,8 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 
 import com.acrescrypto.zksync.exceptions.EACCESException;
+import com.acrescrypto.zksync.exceptions.EINVALException;
+import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.exceptions.NonexistentPageException;
@@ -20,14 +22,23 @@ public class ZKFile extends File {
 	protected boolean dirty;
 	
 	protected ZKFile() {}
+	
+	public final static int O_LINK_LITERAL = 1 << 16; // treat symlinks as literal files
 		
 	public ZKFile(ZKFS fs, String path, int mode) throws IOException {
 		this.fs = fs;
 		this.path = path;
 		this.mode = mode;
 		
+		if((mode & (O_NOFOLLOW | O_LINK_LITERAL)) == O_LINK_LITERAL) {
+			throw new EINVALException("O_LINK_LITERAL not valid without O_NOFOLLOW");
+		}
+		
 		try {
 			this.inode = fs.inodeForPath(path, (mode & O_NOFOLLOW) == 0);
+			if(this.inode.getStat().isSymlink() && (mode & O_LINK_LITERAL) == 0) {
+				throw new EMLINKException(path);
+			}
 		} catch(ENOENTException e) {
 			if((mode & O_CREAT) == 0) throw e;
 			this.inode = fs.create(path);

@@ -173,7 +173,7 @@ public class PageMerkel {
 				int diff = (1 << tier)*(1-(1 << (-d))); // 2^tier * (1-(2^(-d)))
 				newNodes[n] = nodes[n-diff];
 			}
-		} else if(d > 0) { // tree gets bigger
+		} else { // tree gets bigger
 			int minN = (1 << d) - 1; // 2^d - 1
 			double dMult = 1.0/(1 << d) - 1.0; // 2^-d - 1
 			

@@ -191,6 +191,8 @@ public class ZKFSTest extends FSTestBase {
 		assertTrue(Arrays.equals(content, readFs.read("basic-archive-test")));
 	}
 	
+	// TODO: The revision tests are flawed in that they allow recovery of in-memory revision instead of reading from disk
+	// have fun fixing revision tomorrow...
 	@Test
 	public void testSuccessiveRevisions() throws IOException {
 		int numRevisions = 8;
@@ -210,11 +212,12 @@ public class ZKFSTest extends FSTestBase {
 				assertEquals(0, revFs.getInodeTable().getRevision().getNumParents());
 			} else {
 				assertEquals(1, revFs.getInodeTable().getRevision().getNumParents());
-				assertTrue(Arrays.equals(revFs.getInodeTable().getRevision().getParentTag(0), revisions[i-1].getRevTag()));
+				assertEquals(revisions[i-1].getTag(), revFs.getInodeTable().getRevision().getParentTag(0));
 			}
 		}
 	}
 	
+	@Test
 	public void testIntensiveRevisions() throws IOException {
 		int numRevisions = 31;
 		Revision[] revisions = new Revision[numRevisions];
@@ -223,7 +226,7 @@ public class ZKFSTest extends FSTestBase {
 			Revision parent = null;
 			if(i > 0) parent = revisions[(i-1)/2]; 
 			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), parent);
-			revFs.write("intensive-iterations", ("Version " + i).getBytes());
+			revFs.write("intensive-revisions", ("Version " + i).getBytes());
 			revisions[i] = revFs.commit();
 		}
 
@@ -235,7 +238,7 @@ public class ZKFSTest extends FSTestBase {
 				assertEquals(0, revFs.getInodeTable().getRevision().getNumParents());
 			} else {
 				assertEquals(1, revFs.getInodeTable().getRevision().getNumParents());
-				assertTrue(Arrays.equals(revFs.getInodeTable().getRevision().getParentTag(0), revisions[(i-1)/2].getRevTag()));
+				assertEquals(revisions[(i-1)/2].getTag(), revFs.getInodeTable().getRevision().getParentTag(0));
 			}
 			
 			// TODO: test autodescent (descendant(n) = 2*n+1 for n < numRevisions/2, else null, iterate and return first n so d(n) is null.)

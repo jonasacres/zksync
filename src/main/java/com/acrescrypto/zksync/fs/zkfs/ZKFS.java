@@ -26,9 +26,10 @@ public class ZKFS extends FS {
 	
 	public final static int KEY_INDEX_PAGE = 0;
 	public final static int KEY_INDEX_PAGE_MERKEL = 1;
-	public final static int KEY_INDEX_PAGE_REVISION = 2;
+	public final static int KEY_INDEX_REVISION = 2;
 	public final static int KEY_INDEX_CONFIG_PRIVATE = 3;
 	public final static int KEY_INDEX_CONFIG_LOCAL = 4;
+	public final static int KEY_INDEX_REVISION_TREE = 5;
 	
 	public final static int MAX_PATH_LEN = 65535;
 	
@@ -99,7 +100,7 @@ public class ZKFS extends FS {
 		}
 		
 		if(followSymlinks && inode.getStat().isSymlink()) {
-			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW);
+			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL);
 			String linkPath = new String(symlink.read(MAX_PATH_LEN));
 			symlink.close();
 			return inodeForPath(linkPath, true);
@@ -286,7 +287,7 @@ public class ZKFS extends FS {
 		Inode instance = create(dest);
 		instance.getStat().makeSymlink();
 		
-		ZKFile symlink = open(dest, File.O_WRONLY|File.O_NOFOLLOW|File.O_CREAT);
+		ZKFile symlink = open(dest, File.O_WRONLY|File.O_NOFOLLOW|File.O_CREAT|ZKFile.O_LINK_LITERAL);
 		symlink.write(source.getBytes());
 		symlink.close();
 	}
@@ -294,7 +295,7 @@ public class ZKFS extends FS {
 	@Override
 	public String readlink(String link) throws IOException {
 		if(!lstat(link).isSymlink()) throw new EINVALException(link);
-		ZKFile symlink = open(link, File.O_RDONLY|File.O_NOFOLLOW);
+		ZKFile symlink = open(link, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL);
 		String target = new String(symlink.read());
 		return target;
 	}

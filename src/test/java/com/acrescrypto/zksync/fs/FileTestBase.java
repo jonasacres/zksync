@@ -115,7 +115,6 @@ public class FileTestBase {
 
 	@Test(expected=EMLINKException.class)
 	public void testONOFOLLOWDoesNotFollowSymlinks() throws IOException {
-		// TODO: it is not good that ZKFS has different semantics here. LocalFile throws EMLINK, which is kinda Linux-like
 		byte[] text = "some content".getBytes();
 		scratch.write("open-NOFOLLOW-doesnt-follows-symlinks-target", text);
 		scratch.symlink("open-NOFOLLOW-doesnt-follows-symlinks-target", "open-NOFOLLOW-doesnt-follows-symlinks-link");
