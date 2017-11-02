@@ -6,6 +6,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 
 /* Stores a revision of the archive. This is needed to bootstrap reading the archive.
@@ -19,11 +20,8 @@ public class Revision {
 	public final static int REVISION_FILE_SIZE = 512;
 	
 	public static Revision activeRevision(ZKFS fs) throws IOException {
-		try {
-			return new Revision(new RevisionTag(fs, ZKFS.ACTIVE_REVISION));
-		} catch(IOException|SecurityException e) {}
-		
-		// TODO: identify default revision
+		// TODO: attempt to load selected revision
+		// TODO: identify default revision if no selection is made
 		
 		return null;
 	}
@@ -63,6 +61,7 @@ public class Revision {
 		
 		fs.getStorage().write(tag.getPath(), ciphertext);
 		fs.getStorage().squash(tag.getPath());
+		this.tag = tag;
 	}
 	
 	public void makeActive() throws IOException {
@@ -114,7 +113,7 @@ public class Revision {
 	}
 	
 	public byte[] getRevKeySalt(byte[] ciphertext) {
-		return authKey().authenticate(ciphertext);
+		return Util.truncateArray(ciphertext, RevisionTag.KEY_SALT_SIZE);
 	}
 	
 	// key used to encrypt revision data
@@ -122,11 +121,6 @@ public class Revision {
 		return fs.deriveKey(ZKFS.KEY_TYPE_CIPHER, ZKFS.KEY_INDEX_REVISION);
 	}
 	
-	// key used to create revtag
-	private Key authKey() {
-		return fs.deriveKey(ZKFS.KEY_TYPE_AUTH, ZKFS.KEY_INDEX_REVISION);
-	}
-
 	// Inode containing info about InodeTable
 	public Inode getSupernode() {
 		return supernode;

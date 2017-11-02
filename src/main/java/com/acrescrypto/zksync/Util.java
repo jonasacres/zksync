@@ -44,4 +44,10 @@ public class Util {
     	for(int i = 0; i < b.length; i++) sb.append(String.format("%02x", b[i]));
     	return sb.toString();
     }
+    
+    public static byte[] truncateArray(byte[] array, int length) {
+    	byte[] newArray = new byte[length];
+    	for(int i = 0; i < length; i++) newArray[i] = array[i];
+    	return newArray;
+    }
 }

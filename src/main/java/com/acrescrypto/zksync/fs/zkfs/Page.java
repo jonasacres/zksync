@@ -133,7 +133,6 @@ public class Page {
 		try {
 			ciphertext = file.getFS().getStorage().read(path);
 		} catch(ENOENTException exc) {
-			file.merkel.dumpToConsole("damn exception on " + pageNum);
 			if(size > 0) throw new ENOENTException(path);
 			contents = ByteBuffer.allocate(size);
 			return;

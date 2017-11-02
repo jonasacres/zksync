@@ -33,8 +33,8 @@ public class RevisionTag {
 	public final static int TIMESTAMP_SIZE = 8;
 	public final static int AUTHOR_HASH_SIZE = 8;
 	public final static int FLAG_SIZE = 2;
-	public final static int KEY_SIZE = 16;
-	public final static int REV_TAG_SIZE = SHORT_TAG_SIZE + TIMESTAMP_SIZE + AUTHOR_HASH_SIZE + FLAG_SIZE + KEY_SIZE;
+	public final static int KEY_SALT_SIZE = 16;
+	public final static int REV_TAG_SIZE = SHORT_TAG_SIZE + TIMESTAMP_SIZE + AUTHOR_HASH_SIZE + FLAG_SIZE + KEY_SALT_SIZE;
 	
 	public final static int REV_FLAG_MULTIPLE_PARENTS = 0x01;   // has >1 parent 
 	
@@ -44,11 +44,13 @@ public class RevisionTag {
 	
 	public RevisionTag(ZKFS fs) {
 		this.fs = fs;
+		tag = new byte[REV_TAG_SIZE];
+		keySalt = new byte[KEY_SALT_SIZE];
 	}
 	
 	public RevisionTag(Revision rev, byte[] ciphertext) {
 		this.fs = rev.fs;
-		makeTag(rev, ciphertext);
+		tag = makeTag(rev, ciphertext);
 	}
 	
 	public RevisionTag(ZKFS fs, String path) throws EINVALException {
@@ -104,7 +106,7 @@ public class RevisionTag {
 			flags |= RevisionTag.REV_FLAG_MULTIPLE_PARENTS;
 		}
 		
-		ByteBuffer plaintextBuf = ByteBuffer.allocate(REV_TAG_SIZE-KEY_SIZE);
+		ByteBuffer plaintextBuf = ByteBuffer.allocate(REV_TAG_SIZE-KEY_SALT_SIZE);
 		plaintextBuf.putLong(parentTag);
 		plaintextBuf.putLong(ByteBuffer.wrap(authorHash).getLong());
 		plaintextBuf.putLong((long) (rev.getSupernode().getStat().getMtime()/(1000l)));
@@ -123,8 +125,8 @@ public class RevisionTag {
 	
 	protected void decode(byte[] tag) {
 		this.tag = tag;		
-		byte[] ciphertext = ByteBuffer.wrap(tag, 0, REV_TAG_SIZE-KEY_SIZE).array();
-		this.keySalt = ByteBuffer.wrap(tag, REV_TAG_SIZE-KEY_SIZE, KEY_SIZE).array();
+		byte[] ciphertext = ByteBuffer.wrap(tag, 0, REV_TAG_SIZE-KEY_SALT_SIZE).array();
+		this.keySalt = ByteBuffer.wrap(tag, REV_TAG_SIZE-KEY_SALT_SIZE, KEY_SALT_SIZE).array();
 
 		ByteBuffer plaintextBuf = ByteBuffer.wrap(fs.crypto.xor(ciphertext, refKey().authenticate(keySalt)));
 		this.parentShortTag = plaintextBuf.getLong();
