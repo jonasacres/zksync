@@ -20,8 +20,7 @@ public class ZKFS extends FS {
 	protected LocalConfig localConfig;
 	protected FS storage;
 	protected KeyFile keyfile;
-	protected Hashtable<String,Inode> inodesByPath; // TODO: not entirely happy with this, since there's no real eviction policy
-	protected Hashtable<String,ZKDirectory> directoriesByPath; // TODO: definitely not happy with this either
+	protected Hashtable<String,ZKDirectory> directoriesByPath; // TODO: definitely not happy with this; needs eviction policy
 	
 	public final static int KEY_TYPE_CIPHER = 0;
 	public final static int KEY_TYPE_AUTH = 1;
@@ -54,7 +53,6 @@ public class ZKFS extends FS {
 		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
 		if(revision == null) revision = Revision.activeRevision(this);
 		this.inodeTable = new InodeTable(this, revision);
-		this.inodesByPath = new Hashtable<String,Inode>();
 		this.directoriesByPath = new Hashtable<String,ZKDirectory>();
 		
 		if(revision == null) {
@@ -97,13 +95,9 @@ public class ZKFS extends FS {
 			throw new ENOENTException(path);
 		}
 		
-		Inode inode = inodesByPath.get(absPath); // TODO: this cache might be obsolete now
-		if(inode == null) {
-			long inodeId = root.inodeForPath(absPath);
-			root.close();
-			inode = inodeTable.inodeWithId(inodeId);
-			inodesByPath.put(path, inode);
-		}
+		long inodeId = root.inodeForPath(absPath);
+		root.close();
+		Inode inode = inodeTable.inodeWithId(inodeId);
 		
 		if(followSymlinks && inode.getStat().isSymlink()) {
 			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL);
@@ -268,8 +262,7 @@ public class ZKFS extends FS {
 		ZKDirectory dir = opendir(path);
 		dir.rmdir();
 		dir.close();
-		
-		inodesByPath.remove(path);
+		uncache(path);
 	}
 
 	@Override
@@ -287,7 +280,6 @@ public class ZKFS extends FS {
 	}
 	
 	protected void uncache(String path) {
-		inodesByPath.remove(absolutePath(path));
 		directoriesByPath.remove(absolutePath(path));
 	}
 
