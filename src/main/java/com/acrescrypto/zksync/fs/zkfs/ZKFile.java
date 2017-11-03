@@ -151,8 +151,9 @@ public class ZKFile extends File {
 		while(leftToWrite > 0) {
 			int neededPageNum = (int) (this.offset/pageSize);
 			bufferPage(neededPageNum);
-			bufferedPage.seek((int) (offset % fs.getPrivConfig().getPageSize()));
-			int numWritten = bufferedPage.write(data, bufOffset + length - leftToWrite, Math.min(leftToWrite, pageSize));
+			int offsetInPage = (int) (offset % fs.getPrivConfig().getPageSize()), pageCapacity = (int) (pageSize-offsetInPage);
+			bufferedPage.seek(offsetInPage);
+			int numWritten = bufferedPage.write(data, bufOffset + length - leftToWrite, Math.min(leftToWrite, pageCapacity));
 			
 			leftToWrite -= numWritten;
 			this.offset += numWritten;

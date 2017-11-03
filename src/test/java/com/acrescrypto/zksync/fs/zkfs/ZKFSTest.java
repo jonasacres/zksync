@@ -246,11 +246,46 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	// TODO: test revision listing
-	// TODO: inode table tests: literal inode table, single-page inode table, multipage inode table
-	//       modes, directories, hardlinks, symlinks, fifos, sockets, chardevs, blockdevs  
+	
+	@Ignore // ignored for now because the immediate threshold is smaller than the minimum table size, and it's not easy to vary (yet)
+	public void testImmediateInodeTable() throws IOException {
+		ZKFS fs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray());
+		Revision rev = fs.commit();
+		assertTrue(fs.inodeTable.getStat().getSize() < fs.getPrivConfig().getImmediateThreshold());
+		assertEquals(fs.inodeTable.getStat().getSize(), rev.supernode.getStat().getSize());
+		ZKFS revFs = new ZKFS(fs.getStorage(), "zksync".toCharArray(), rev);
+		assertTrue(Arrays.equals(revFs.inodeTable.merkel.getMerkelTag(), fs.inodeTable.merkel.getMerkelTag()));
+	}
+	
+	@Test
+	public void testSinglePageInodeTable() throws IOException {
+		Revision rev = zkscratch.commit();
+		assertTrue(zkscratch.inodeTable.getStat().getSize() > zkscratch.getPrivConfig().getImmediateThreshold());
+		assertTrue(zkscratch.inodeTable.getStat().getSize() < zkscratch.getPrivConfig().getPageSize());
+		assertEquals(zkscratch.inodeTable.getStat().getSize(), rev.supernode.getStat().getSize());
+		ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), rev);
+		assertTrue(Arrays.equals(revFs.inodeTable.merkel.getMerkelTag(), zkscratch.inodeTable.merkel.getMerkelTag()));
+	}
+	
+	@Test
+	public void testMultiPageInodeTable() throws IOException {
+		for(int i = 0; i < 1000; i++) {
+			String path = String.format("multipage-inode-table-padding-%04d", i);
+			zkscratch.write(path, "foo".getBytes());
+		}
+		
+		Revision rev = zkscratch.commit();
+		assertTrue(zkscratch.inodeTable.getStat().getSize() > zkscratch.getPrivConfig().getPageSize());
+		assertEquals(zkscratch.inodeTable.getStat().getSize(), rev.supernode.getStat().getSize());
+		ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), rev);
+		assertTrue(Arrays.equals(revFs.inodeTable.merkel.getMerkelTag(), zkscratch.inodeTable.merkel.getMerkelTag()));
+	}
+	
+	// TODO:  modes, directories, hardlinks, symlinks, fifos, sockets, chardevs, blockdevs  
 	// TODO: open default revision
 	// TODO: open non-default revision
 	// TODO: test alternative page size
+	// TODO: test alternative literal size
 	// TODO: test configurable argon2 parameters
 	
 	protected byte[] generatePageData(String key, int pageNum) {
