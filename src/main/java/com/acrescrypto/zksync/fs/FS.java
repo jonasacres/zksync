@@ -1,6 +1,8 @@
 package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.Util;
@@ -51,6 +53,26 @@ public abstract class FS {
 		return comps[comps.length-1];
 	}
 
+	public String absolutePath(String path) {
+		return absolutePath(path, "/");
+	}
+	
+	public String absolutePath(String path, String root) {
+		String fullPath = Paths.get(root, path).toString();
+		ArrayList<String> comps = new ArrayList<String>();
+		for(String comp : fullPath.split("/")) {
+			if(comp.equals(".")) continue;
+			else if(comp.equals("..")) {
+				if(comps.size() > 0) comps.remove(comps.size()-1);
+			} else {
+				comps.add(comp);
+			}
+		}
+		
+		if(comps.size() == 0 || comps.size() == 1 && comps.get(0).equals("")) return "/";
+		return String.join("/", comps);
+	}
+	
 	public String pathForHash(byte[] hash) {
 	    StringBuilder sb = new StringBuilder();
 	    for(int i = 0; i < hash.length; i++) {

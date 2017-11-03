@@ -22,7 +22,8 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public ZKDirectory(ZKFS fs, String path) throws IOException {
 		super(fs, path, O_RDWR);
 		entries = new HashMap<String,Long>();
-		deserialize(read((int) inode.getStat().getSize()));
+		byte[] contents = read((int) inode.getStat().getSize());
+		deserialize(contents);
 	}
 	
 	@Override
@@ -102,7 +103,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 			}
 		}
 		
-		return inodeForName(comps[0]);
+		return inodeForName(comps.length == 0 ? "/" : comps[0]);
 	}
 
 	public void link(Inode inode, String link) throws IOException {
@@ -117,7 +118,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	@Override
 	public void link(String target, String link) throws IOException {
-		link(fs.inodeForPath(target), link);		
+		link(fs.inodeForPath(target), link);
 	}
 
 	@Override
@@ -182,11 +183,16 @@ public class ZKDirectory extends ZKFile implements Directory {
 		
 		write(serialize());
 		flush();
+		fs.cache(this);
+	}
+	
+	public void softcommit() {
+		fs.cache(this);
 	}
 	
 	@Override
 	public void close() throws IOException {
-		commit();
+		softcommit(); // this only works because of the in-memory cache; beware that cache changes could break this
 	}
 	
 	private void deserialize(byte[] serialized) {

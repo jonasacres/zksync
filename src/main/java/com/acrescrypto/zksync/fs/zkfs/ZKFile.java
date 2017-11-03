@@ -43,7 +43,7 @@ public class ZKFile extends File {
 			if((mode & O_CREAT) == 0) throw e;
 			this.inode = fs.create(path);
 		}
-
+		
 		this.merkel = new PageMerkel(fs, this.inode);
 		if((mode & O_TRUNC) != 0) truncate(0);
 		if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();

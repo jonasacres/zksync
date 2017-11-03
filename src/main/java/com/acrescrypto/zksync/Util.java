@@ -1,6 +1,11 @@
 package com.acrescrypto.zksync;
 
+import java.util.HashMap;
+
 public class Util {
+	static HashMap<String,Long> clocks = new HashMap<String,Long>();
+	static HashMap<String,Long> openClocks = new HashMap<String,Long>();
+	
     public static void hexdump(String caption, byte[] data) {
     	System.out.printf("%s (%d bytes)\n", caption, data.length);
 		for(int i = 0; i <= 16 * (int) Math.ceil((double) data.length/16); i++) {
@@ -49,5 +54,21 @@ public class Util {
     	byte[] newArray = new byte[length];
     	for(int i = 0; i < length; i++) newArray[i] = array[i];
     	return newArray;
+    }
+    
+    public static void startClock(String name) {
+    	openClocks.putIfAbsent(name, System.nanoTime());
+    }
+    
+    public static void endClock(String name) {
+    	long elapsed = System.nanoTime() - openClocks.get(name);
+    	openClocks.remove(name);
+    	clocks.put(name, elapsed + clocks.getOrDefault(name, 0l));
+    }
+    
+    public static void dumpClocks() {
+    	for(String name : clocks.keySet()) {
+    		System.out.printf("%30s: %4.03fms\n", name, 0.001*0.001*clocks.get(name));
+    	}
     }
 }

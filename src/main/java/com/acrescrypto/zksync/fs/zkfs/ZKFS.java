@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.util.Hashtable;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.*;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
@@ -20,6 +21,7 @@ public class ZKFS extends FS {
 	protected FS storage;
 	protected KeyFile keyfile;
 	protected Hashtable<String,Inode> inodesByPath; // TODO: not entirely happy with this, since there's no real eviction policy
+	protected Hashtable<String,ZKDirectory> directoriesByPath; // TODO: definitely not happy with this either
 	
 	public final static int KEY_TYPE_CIPHER = 0;
 	public final static int KEY_TYPE_AUTH = 1;
@@ -53,6 +55,7 @@ public class ZKFS extends FS {
 		if(revision == null) revision = Revision.activeRevision(this);
 		this.inodeTable = new InodeTable(this, revision);
 		this.inodesByPath = new Hashtable<String,Inode>();
+		this.directoriesByPath = new Hashtable<String,ZKDirectory>();
 		
 		if(revision == null) {
 			initialize();
@@ -60,6 +63,7 @@ public class ZKFS extends FS {
 	}
 	
 	public Revision commit() throws IOException {
+		for(ZKDirectory dir : directoriesByPath.values()) dir.commit();
 		return inodeTable.commit();
 	}
 	
@@ -79,10 +83,12 @@ public class ZKFS extends FS {
 	}
 	
 	public Inode inodeForPath(String path, boolean followSymlinks) throws IOException {
+		String absPath = absolutePath(path);
 		if(path.equals("")) throw new ENOENTException(path);
-		if(path.equals("/")) {
+		if(absPath.equals("/")) {
 			return inodeTable.inodeWithId(InodeTable.INODE_ID_ROOT_DIRECTORY);
 		}
+		
 		
 		ZKDirectory root;
 		try {
@@ -91,9 +97,9 @@ public class ZKFS extends FS {
 			throw new ENOENTException(path);
 		}
 		
-		Inode inode = inodesByPath.get(path);
+		Inode inode = inodesByPath.get(absPath); // TODO: this cache might be obsolete now
 		if(inode == null) {
-			long inodeId = root.inodeForPath(path);
+			long inodeId = root.inodeForPath(absPath);
 			root.close();
 			inode = inodeTable.inodeWithId(inodeId);
 			inodesByPath.put(path, inode);
@@ -114,9 +120,9 @@ public class ZKFS extends FS {
 	}
 	
 	protected Inode create(String path, ZKDirectory parent) throws IOException {
-		Inode inode = inodeTable.issueInode();
-		parent.link(inode, basename(path));
-		parent.commit();
+		Inode inode = inodeTable.issueInode();		
+		parent.link(inode, basename(path));		
+		parent.softcommit();
 		return inode;
 	}
 	
@@ -180,7 +186,11 @@ public class ZKFS extends FS {
 	@Override
 	public void write(String path, byte[] contents) throws IOException {
 		mkdirp(dirname(path));
+		
+		Util.startClock("open");
 		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT);
+		Util.endClock("open");
+		
 		file.write(contents);
 		file.close();
 	}
@@ -221,6 +231,8 @@ public class ZKFS extends FS {
 
 	@Override
 	public ZKDirectory opendir(String path) throws IOException {
+		path = absolutePath(path);
+		if(directoriesByPath.containsKey(path)) return directoriesByPath.get(path);
 		assertPathIsDirectory(path);
 		return new ZKDirectory(this, path);
 	}
@@ -270,8 +282,13 @@ public class ZKFS extends FS {
 		uncache(path);
 	}
 	
+	protected void cache(ZKDirectory directory) {
+		directoriesByPath.put(absolutePath(directory.path), directory);
+	}
+	
 	protected void uncache(String path) {
-		inodesByPath.remove(path);
+		inodesByPath.remove(absolutePath(path));
+		directoriesByPath.remove(absolutePath(path));
 	}
 
 	@Override

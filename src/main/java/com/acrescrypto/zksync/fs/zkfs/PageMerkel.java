@@ -165,6 +165,7 @@ public class PageMerkel {
 		 */
 		
 		if(d == 0) {
+			this.numPages = newSize;
 			return;
 		} else if(d < 0) { // tree gets smaller
 			for(int n = 0; n < newNodes.length; n++) {

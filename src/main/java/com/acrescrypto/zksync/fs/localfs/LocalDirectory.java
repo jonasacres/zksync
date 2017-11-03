@@ -17,7 +17,7 @@ public class LocalDirectory implements Directory {
 	
 	LocalDirectory(LocalFS fs, String path) throws IOException {
 		this.fs = fs;
-		this.path = path;
+		this.path = fs.absolutePath(path);
 		if(!fs.stat(path).isDirectory()) throw new EISNOTDIRException(path + ": not a directory");
 	}
 	

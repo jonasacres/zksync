@@ -141,9 +141,6 @@ public class ZKFSTest extends FSTestBase {
 				byte[] buf = generateFileData("page-boundary-test", pageCount*zkscratch.getPrivConfig().getPageSize() + mod);
 				for(int i = 0; i < buf.length; i++) buf[i] = (byte) (i & 0xff);
 				zkscratch.write("page-boundary-test", buf);
-				if(!Arrays.equals(buf, zkscratch.read("page-boundary-test"))) {
-					System.out.println("page " + pageCount + ", mod " + mod);
-				}
 				
 				byte[] contents = zkscratch.read("page-boundary-test");
 				assertTrue(Arrays.equals(buf, contents));
