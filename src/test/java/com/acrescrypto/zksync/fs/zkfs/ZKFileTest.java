@@ -82,4 +82,6 @@ public class ZKFileTest extends FileTestBase {
 		assertTrue(Arrays.equals(file.read(), contents));
 		assertEquals(Inode.REF_TYPE_2INDIRECT, file.inode.getRefType());
 	}
+	
+	// TODO: test squashing of page timestamps
 }

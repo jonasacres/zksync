@@ -46,9 +46,9 @@ public class Revision {
 	// read and decrypt the contents of the revision file at path
 	public void read(RevisionTag tag) throws IOException {
 		byte[] ciphertext = fs.getStorage().read(tag.getPath());
-		byte[] revKey = getRevKeySalt(ciphertext);
+		byte[] revKeySalt = getRevKeySalt(ciphertext);
 		
-		if(!Arrays.equals(revKey, tag.keySalt)) throw new SecurityException();
+		if(!Arrays.equals(revKeySalt, tag.keySalt)) throw new SecurityException();
 		deserialize(textKey().wrappedDecrypt(ciphertext));
 		RevisionTag recreated = new RevisionTag(this, ciphertext);
 		if(!Arrays.equals(recreated.getTag(), tag.getTag())) throw new SecurityException();
@@ -106,10 +106,10 @@ public class Revision {
 		
 		int supernodeLen = buf.getInt();
 		buf.position(buf.position()-4);
-		byte[] supernodeText = new byte[supernodeLen];
+		byte[] supernodeText = new byte[supernodeLen+4];
 		buf.get(supernodeText);
 		
-		this.supernode = new Inode(fs);
+		this.supernode = new Inode(fs, supernodeText);
 	}
 	
 	public byte[] getRevKeySalt(byte[] ciphertext) {

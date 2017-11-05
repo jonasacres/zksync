@@ -190,8 +190,53 @@ public class ZKFSTest extends FSTestBase {
 		assertTrue(Arrays.equals(content, readFs.read("basic-archive-test")));
 	}
 	
-	// TODO: The revision tests are flawed in that they allow recovery of in-memory revision instead of reading from disk
-	// have fun fixing revision tomorrow...
+	// ---- cut here ----
+	// TODO: everything after this should probably go into its own test class (revision, inode table) 
+	
+	@Test
+	public void testStoredRevision() throws IOException {
+		zkscratch.write("storedrevision", "pak chooie unf".getBytes());
+		Revision rev = zkscratch.commit();
+		String path = rev.getTag().getPath();
+		
+		RevisionTag readTag = new RevisionTag(zkscratch, path);
+		Revision readRev = new Revision(readTag);
+		ZKFS readFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), readRev);
+		
+		assertTrue(Arrays.equals("pak chooie unf".getBytes(), readFs.read("storedrevision")));
+	}
+	
+	@Test(expected = SecurityException.class)
+	public void testTamperedRevision() throws IOException {
+		zkscratch.write("storedrevision", "pak chooie unf".getBytes());
+		Revision rev = zkscratch.commit();
+		String path = rev.getTag().getPath();
+		
+		byte[] ciphertext = zkscratch.storage.read(path);
+		ciphertext[200] ^= 0x40; // no significance to the choice of byte or bit; just twiddling an arbitrary bit
+		zkscratch.storage.write(path, ciphertext);
+		
+		RevisionTag readTag = new RevisionTag(zkscratch, path);
+		new Revision(readTag);
+	}
+
+	@Test(expected = SecurityException.class)
+	public void testTamperedRevisionTag() throws IOException {
+		zkscratch.write("storedrevision", "pak chooie unf".getBytes());
+		Revision rev = zkscratch.commit();
+		String oldPath = rev.getTag().getPath();
+		rev.getTag().tag[4] ^= 0x20; // arbitrary bitflip
+		String path = rev.getTag().getPath();
+		
+		zkscratch.storage.link(oldPath, path);
+		zkscratch.storage.unlink(oldPath);
+		
+		RevisionTag readTag = new RevisionTag(zkscratch, path);
+		new Revision(readTag);
+	}
+
+	// TODO: test squashing of revision file timestamps
+	
 	@Test
 	public void testSuccessiveRevisions() throws IOException {
 		int numRevisions = 8;
@@ -239,8 +284,6 @@ public class ZKFSTest extends FSTestBase {
 				assertEquals(1, revFs.getInodeTable().getRevision().getNumParents());
 				assertEquals(revisions[(i-1)/2].getTag(), revFs.getInodeTable().getRevision().getParentTag(0));
 			}
-			
-			// TODO: test autodescent (descendant(n) = 2*n+1 for n < numRevisions/2, else null, iterate and return first n so d(n) is null.)
 		}
 	}
 	

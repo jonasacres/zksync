@@ -5,9 +5,10 @@ import org.junit.runners.Suite;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
+	RevisionTagTest.class,
 	ZKFSTest.class,
 	ZKDirectoryTest.class,
-	ZKFileTest.class
+	ZKFileTest.class,
 })
 
 public class ZKFSTests {
