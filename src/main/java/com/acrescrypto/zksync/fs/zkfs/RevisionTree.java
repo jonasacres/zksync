@@ -39,13 +39,41 @@ public class RevisionTree {
 		return allRevisions;
 	}
 	
-	public ArrayList<RevisionTag> descendentsOf(RevisionTag tag) {
-		return tree.getOrDefault(tag, new ArrayList<RevisionTag>());
+	public ArrayList<RevisionTag> rootRevisions() {
+		return tree.getOrDefault(0l, new ArrayList<RevisionTag>());
 	}
 	
-	public RevisionTag firstDescendentOf(RevisionTag tag) {
+	public RevisionTag earliestRoot() {
+		RevisionTag earliest = null;
+		for(RevisionTag root : rootRevisions()) {
+			if(earliest == null || root.getTimestamp() < earliest.getTimestamp()) earliest = root;
+		}
+		
+		return earliest;
+	}
+	
+	public RevisionTag defaultRevision() {
+		return heirOf(earliestRoot());
+	}
+	
+	public ArrayList<RevisionTag> descendantsOf(RevisionTag tag) {
+		return tree.getOrDefault(tag.getShortTag(), new ArrayList<RevisionTag>());
+	}
+	
+	public ArrayList<RevisionTag> leaves() {
+		ArrayList<RevisionTag> leaves = new ArrayList<RevisionTag>();
+		for(RevisionTag tag : revisionTags()) {
+			if(tree.containsKey(tag.getShortTag())) continue;
+			leaves.add(tag);
+		}
+		
+		return leaves;
+	}
+	
+	public RevisionTag firstDescendantOf(RevisionTag tag) {
+		// TODO: what if we preferentially follow the parent author in some way?
 		RevisionTag best = null;
-		for(RevisionTag descendent : descendentsOf(tag)) {
+		for(RevisionTag descendent : descendantsOf(tag)) {
 			if(best == null || best.getTimestamp() > descendent.getTimestamp()) best = descendent;
 			else if(best.getTimestamp() == descendent.getTimestamp()) {
 				if(Arrays.compareUnsigned(best.getTag(), descendent.getTag()) < 0) best = descendent;
@@ -53,6 +81,18 @@ public class RevisionTree {
 		}
 		
 		return best;
+	}
+	
+	public RevisionTag heirOf(RevisionTag tag) {
+		// if a tag has children, the heir of the tag is the heir of the earliest child.
+		// if a tag has no children, the tag is its own heir.
+		RevisionTag heir = firstDescendantOf(tag);
+		while(heir != null) {
+			tag = heir;
+			heir = firstDescendantOf(tag);
+		}
+		
+		return tag;
 	}
 	
 	protected void recordEntry(String revPath) throws IOException {
