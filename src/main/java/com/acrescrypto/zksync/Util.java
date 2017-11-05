@@ -2,12 +2,14 @@ package com.acrescrypto.zksync;
 
 import java.util.HashMap;
 
+import com.acrescrypto.zksync.crypto.HashContext;
+
 public class Util {
 	static HashMap<String,Long> clocks = new HashMap<String,Long>();
 	static HashMap<String,Long> openClocks = new HashMap<String,Long>();
 	
     public static void hexdump(String caption, byte[] data) {
-    	System.out.printf("%s (%d bytes)\n", caption, data.length);
+    	System.out.printf("%s (%d bytes, fingerprint %s)\n", caption, data.length, fingerprint(data));
 		for(int i = 0; i <= 16 * (int) Math.ceil((double) data.length/16); i++) {
 			if((i % 16) == 0) {
 				if(i != 0) {
@@ -32,6 +34,10 @@ public class Util {
 		
 		System.out.println();
 		System.out.println();
+    }
+    
+    public static String fingerprint(byte[] data) {
+    	return bytesToHex((new HashContext(data)).finish()).substring(0, 8);
     }
     
     public static byte[] hexToBytes(String s) {

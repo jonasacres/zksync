@@ -91,29 +91,36 @@ public class RevisionTag {
 		return Paths.get(ZKFS.REVISION_DIR, fs.pathForHash(tag)).toString();
 	}
 	
-	public boolean equals(RevisionTag other) {
-		return Arrays.equals(tag, other.tag);
+	public boolean equals(Object other) {
+		return Arrays.equals(tag, ((RevisionTag) other).tag);
+	}
+	
+	public int hashCode() {
+		return ByteBuffer.wrap(tag, tag.length-4, 4).getInt();
 	}
 	
 	protected byte[] makeTag(Revision rev, byte[] ciphertext) {
 		RevisionTag firstParent = rev.getNumParents() > 0 ? rev.getParentTag(0) : RevisionTag.nullRevision(fs);
-		long parentTag = ByteBuffer.wrap(firstParent.tag).getLong();
-		byte[] authorHash = refKey().authenticate(rev.getSupernode().getStat().getUser().getBytes());
-		byte[] keySalt = rev.getRevKeySalt(ciphertext);
-		short flags = 0;
+		parentShortTag = ByteBuffer.wrap(firstParent.tag).getLong();
+		authorHash = ByteBuffer.wrap(refKey().authenticate(rev.getSupernode().getStat().getUser().getBytes())).getLong();
+		keySalt = rev.getRevKeySalt(ciphertext);
+		timestamp = rev.getSupernode().getStat().getMtime()/1000l;
+		flags = 0;
 		
 		if(rev.getNumParents() > 1) {
 			flags |= RevisionTag.REV_FLAG_MULTIPLE_PARENTS;
 		}
 		
 		ByteBuffer plaintextBuf = ByteBuffer.allocate(REV_TAG_SIZE-KEY_SALT_SIZE);
-		plaintextBuf.putLong(parentTag);
-		plaintextBuf.putLong(ByteBuffer.wrap(authorHash).getLong());
-		plaintextBuf.putLong((long) (rev.getSupernode().getStat().getMtime()/(1000l)));
+		plaintextBuf.putLong(parentShortTag);
+		plaintextBuf.putLong(authorHash);
+		plaintextBuf.putLong(timestamp);
 		plaintextBuf.putShort(flags);
 		
 		ByteBuffer tagBuf = ByteBuffer.allocate(REV_TAG_SIZE);
-		tagBuf.put(fs.crypto.xor(plaintextBuf.array(), refKey().authenticate(keySalt)));
+		byte[] key = refKey().authenticate(keySalt);
+		
+		tagBuf.put(fs.crypto.xor(plaintextBuf.array(), key));
 		tagBuf.put(keySalt);
 		
 		return tagBuf.array();
@@ -124,11 +131,17 @@ public class RevisionTag {
 	}
 	
 	protected void decode(byte[] tag) {
-		this.tag = tag;		
-		byte[] ciphertext = ByteBuffer.wrap(tag, 0, REV_TAG_SIZE-KEY_SALT_SIZE).array();
-		this.keySalt = ByteBuffer.wrap(tag, REV_TAG_SIZE-KEY_SALT_SIZE, KEY_SALT_SIZE).array();
-
-		ByteBuffer plaintextBuf = ByteBuffer.wrap(fs.crypto.xor(ciphertext, refKey().authenticate(keySalt)));
+		this.tag = tag;
+		byte[] ciphertext = new byte[REV_TAG_SIZE-KEY_SALT_SIZE];
+		this.keySalt = new byte[KEY_SALT_SIZE];
+		
+		ByteBuffer buf = ByteBuffer.wrap(tag);
+		buf.get(ciphertext, 0, REV_TAG_SIZE-KEY_SALT_SIZE);
+		buf.get(keySalt, 0, KEY_SALT_SIZE);
+		
+		byte[] key = refKey().authenticate(keySalt);
+		
+		ByteBuffer plaintextBuf = ByteBuffer.wrap(fs.crypto.xor(ciphertext, key));
 		this.parentShortTag = plaintextBuf.getLong();
 		this.authorHash = plaintextBuf.getLong();
 		this.timestamp = plaintextBuf.getLong();

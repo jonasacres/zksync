@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -44,6 +45,32 @@ public class ZKFileTest extends FileTestBase {
 	}
 	
 	@Test
+	public void testImmedateWrite() throws IOException {
+		byte[] contents = new byte[zkscratch.getPrivConfig().getImmediateThreshold()];
+		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
+		ZKFile file = zkscratch.open("immediate-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
+		file.write(contents);
+		file.close();
+		
+		file = zkscratch.open("immediate-write-test", ZKFile.O_RDONLY);
+		assertTrue(Arrays.equals(file.read(), contents));
+		assertEquals(Inode.REF_TYPE_IMMEDIATE, file.inode.getRefType());
+	}
+	
+	@Test
+	public void testSinglePageWrite() throws IOException {
+		byte[] contents = new byte[zkscratch.getPrivConfig().getPageSize()];
+		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
+		ZKFile file = zkscratch.open("singlepage-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
+		file.write(contents);
+		file.close();
+		
+		file = zkscratch.open("singlepage-write-test", ZKFile.O_RDONLY);
+		assertTrue(Arrays.equals(file.read(), contents));
+		assertEquals(Inode.REF_TYPE_INDIRECT, file.inode.getRefType());
+	}
+	
+	@Test
 	public void testMultipageWrite() throws IOException {
 		byte[] contents = new byte[5*zkscratch.getPrivConfig().getPageSize()];
 		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
@@ -53,5 +80,6 @@ public class ZKFileTest extends FileTestBase {
 		
 		file = zkscratch.open("multipage-write-test", ZKFile.O_RDONLY);
 		assertTrue(Arrays.equals(file.read(), contents));
+		assertEquals(Inode.REF_TYPE_2INDIRECT, file.inode.getRefType());
 	}
 }

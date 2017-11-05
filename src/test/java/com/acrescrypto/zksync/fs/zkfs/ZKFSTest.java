@@ -5,7 +5,9 @@ import static org.junit.Assert.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.Security;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 
 import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -242,7 +244,29 @@ public class ZKFSTest extends FSTestBase {
 		}
 	}
 	
-	// TODO: test revision listing
+	@Test
+	public void testRevisionListing() throws IOException {
+		int numRevisions = 2;
+		HashSet<RevisionTag> set = new HashSet<RevisionTag>();
+		Revision lastRev = null;
+
+		for(int i = 0; i < numRevisions; i++) {
+			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), lastRev);
+			revFs.write("revision-listing", ("Version " + i).getBytes());
+			lastRev = revFs.commit();
+			set.add(lastRev.getTag());
+		}
+		
+		RevisionTree tree = zkscratch.getRevisionTree();
+		tree.scan();
+		ArrayList<RevisionTag> tags = tree.revisionTags();
+		
+		assertEquals(numRevisions, set.size());
+		assertEquals(numRevisions, tags.size());
+		for(RevisionTag tag : tags) {
+			assertTrue(set.contains(tag));
+		}
+	}
 	
 	@Ignore // ignored for now because the immediate threshold is smaller than the minimum table size, and it's not easy to vary (yet)
 	public void testImmediateInodeTable() throws IOException {
@@ -278,7 +302,7 @@ public class ZKFSTest extends FSTestBase {
 		assertTrue(Arrays.equals(revFs.inodeTable.merkel.getMerkelTag(), zkscratch.inodeTable.merkel.getMerkelTag()));
 	}
 	
-	// TODO:  modes, directories, hardlinks, symlinks, fifos, sockets, chardevs, blockdevs  
+	// TODO: modes, directories, hardlinks, symlinks, fifos, sockets, chardevs, blockdevs
 	// TODO: open default revision
 	// TODO: open non-default revision
 	// TODO: test alternative page size

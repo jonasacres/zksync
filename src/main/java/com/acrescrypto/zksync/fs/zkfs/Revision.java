@@ -113,6 +113,7 @@ public class Revision {
 	}
 	
 	public byte[] getRevKeySalt(byte[] ciphertext) {
+		// TODO: unsuitable, use authenticated hash instead
 		return Util.truncateArray(ciphertext, RevisionTag.KEY_SALT_SIZE);
 	}
 	

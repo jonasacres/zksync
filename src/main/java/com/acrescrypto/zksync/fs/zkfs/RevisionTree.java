@@ -10,7 +10,7 @@ import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.fs.Directory;
 
 public class RevisionTree {
-	protected HashMap<Long,ArrayList<RevisionTag>> tree;
+	protected HashMap<Long,ArrayList<RevisionTag>> tree = new HashMap<Long,ArrayList<RevisionTag>>();
 	protected ZKFS fs;
 	
 	public RevisionTree(ZKFS fs) {
@@ -23,6 +23,15 @@ public class RevisionTree {
 		for(String revPath : revisionDir.listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES)) {
 			recordEntry(revPath);
 		}
+	}
+	
+	public ArrayList<RevisionTag> revisionTags() {
+		ArrayList<RevisionTag> allRevisions = new ArrayList<RevisionTag>();
+		for(ArrayList<RevisionTag> childList : tree.values()) {
+			allRevisions.addAll(childList);
+		}
+		
+		return allRevisions;
 	}
 	
 	public ArrayList<RevisionTag> descendentsOf(RevisionTag tag) {
@@ -56,7 +65,10 @@ public class RevisionTree {
 	
 	protected void addParentRef(long parentShortRef, RevisionTag tag) throws EINVALException {
 		ArrayList<RevisionTag> list = tree.getOrDefault(parentShortRef, null);
-		if(list == null) list = new ArrayList<RevisionTag>();
+		if(list == null) {
+			list = new ArrayList<RevisionTag>();
+			tree.put(parentShortRef, list);
+		}
 		list.add(tag);
 	}
 }

@@ -60,6 +60,10 @@ public class ZKFS extends FS {
 		}
 	}
 	
+	public RevisionTree getRevisionTree() {
+		return new RevisionTree(this);
+	}
+	
 	public Revision commit() throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) dir.commit();
 		return inodeTable.commit();
