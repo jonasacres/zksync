@@ -15,6 +15,7 @@ import org.junit.*;
 
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 
@@ -234,8 +235,14 @@ public class ZKFSTest extends FSTestBase {
 		RevisionTag readTag = new RevisionTag(zkscratch, path);
 		new Revision(readTag);
 	}
-
-	// TODO: test squashing of revision file timestamps
+	
+	@Test
+	public void testRevisionTimeSquashing() throws IOException {
+		Revision rev = zkscratch.commit();
+		Stat stat = zkscratch.storage.stat(rev.tag.getPath());
+		assertTrue(stat.getMtime() == 0);
+		assertTrue(stat.getAtime() == 0);
+	}
 	
 	@Test
 	public void testSuccessiveRevisions() throws IOException {

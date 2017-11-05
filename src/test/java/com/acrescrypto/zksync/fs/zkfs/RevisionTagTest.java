@@ -70,5 +70,30 @@ public class RevisionTagTest {
 		assertTrue(Arrays.equals(fs.deriveKey(ZKFS.KEY_TYPE_AUTH, ZKFS.KEY_INDEX_REVISION_TREE).getRaw(), tag.refKey().getRaw()));
 	}
 	
-	// TODO: ensure serialized tag complies with spec
+	@Test
+	public void testTagFormat() {
+		assertEquals(16, RevisionTag.KEY_SALT_SIZE);
+		assertEquals(42, RevisionTag.REV_TAG_SIZE);
+		byte[] salt = new byte[RevisionTag.KEY_SALT_SIZE],
+			   ciphertext = new byte[RevisionTag.REV_TAG_SIZE - RevisionTag.KEY_SALT_SIZE];
+		
+		ByteBuffer buf = ByteBuffer.wrap(tag.tag);
+		buf.get(ciphertext);
+		buf.get(salt);
+		
+		assertTrue(Arrays.equals(tag.keySalt, salt));
+
+		byte[] key = tag.refKey().authenticate(salt);
+		ByteBuffer ptBuf = ByteBuffer.wrap(tag.fs.crypto.xor(key, ciphertext));
+		
+		long parentShortTag = ptBuf.getLong();
+		long authorHash = ptBuf.getLong();
+		long timestamp = ptBuf.getLong();
+		short flags = ptBuf.getShort();
+		
+		assertEquals(tag.parentShortTag, parentShortTag);
+		assertEquals(tag.authorHash, authorHash);
+		assertEquals(tag.timestamp, timestamp);
+		assertEquals(tag.flags, flags);
+	}
 }

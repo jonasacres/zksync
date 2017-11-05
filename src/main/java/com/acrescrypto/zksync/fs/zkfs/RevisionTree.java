@@ -12,6 +12,7 @@ import com.acrescrypto.zksync.fs.Directory;
 public class RevisionTree {
 	protected HashMap<Long,ArrayList<RevisionTag>> tree = new HashMap<Long,ArrayList<RevisionTag>>();
 	protected ZKFS fs;
+	protected int size;
 	
 	public RevisionTree(ZKFS fs) {
 		this.fs = fs;
@@ -23,6 +24,10 @@ public class RevisionTree {
 		for(String revPath : revisionDir.listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES)) {
 			recordEntry(revPath);
 		}
+	}
+	
+	public int size() {
+		return size;
 	}
 	
 	public ArrayList<RevisionTag> revisionTags() {
@@ -61,6 +66,8 @@ public class RevisionTree {
 		} else {
 			addParentRef(revTag.getParentShortTag(), revTag);
 		}
+		
+		size += 1;
 	}
 	
 	protected void addParentRef(long parentShortRef, RevisionTag tag) throws EINVALException {

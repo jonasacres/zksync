@@ -15,6 +15,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.fs.FileTestBase;
+import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
 public class ZKFileTest extends FileTestBase {
@@ -83,5 +84,23 @@ public class ZKFileTest extends FileTestBase {
 		assertEquals(Inode.REF_TYPE_2INDIRECT, file.inode.getRefType());
 	}
 	
-	// TODO: test squashing of page timestamps
+	@Test
+	public void testPageTimestampSquashing() throws IOException {
+		byte[] contents = new byte[5*zkscratch.getPrivConfig().getPageSize()];
+		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
+		
+		ZKFile file = zkscratch.open("multipage-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
+		file.write(contents);
+		file.close();
+
+		for(int i = 0; i < Math.ceil(((double) file.getStat().getSize())/file.fs.privConfig.getPageSize()); i++) {
+			byte[] pageTag = file.getPageTag(i);
+			String path = ZKFS.DATA_DIR + file.fs.pathForHash(pageTag);
+			Stat stat = file.fs.storage.stat(path);
+			assertEquals(0, stat.getAtime());
+			assertEquals(0, stat.getMtime());
+		}
+	}
+
+	// TODO: test squashing of page merkel chunk timestamps
 }

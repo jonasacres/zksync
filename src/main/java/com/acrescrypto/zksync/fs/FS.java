@@ -38,6 +38,21 @@ public abstract class FS {
 	public abstract byte[] read(String path) throws IOException;
 	public abstract File open(String path, int mode) throws IOException;
 	public abstract void truncate(String path, long size) throws IOException;
+	
+	public void rmrf(String path) throws IOException {
+		Directory dir = opendir(path);
+		try {
+			for(String entry : dir.list()) {
+				String subpath = Paths.get(path, entry).toString();
+				Stat lstat = stat(subpath);
+				if(lstat.isDirectory()) rmrf(subpath);
+				else unlink(subpath);
+			}
+		} finally {
+			dir.close();
+			rmdir(path);
+		}
+	}
 
 	public String dirname(String path) {
 		String[] comps = path.split("/");
