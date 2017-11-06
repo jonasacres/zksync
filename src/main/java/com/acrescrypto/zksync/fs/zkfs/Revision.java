@@ -16,6 +16,7 @@ public class Revision {
 	protected Inode supernode; // inode for inode table
 	protected ZKFS fs; // ZKFS archive to which this revision belongs 
 	protected RevisionTag tag; // unique, non-confidential identifier for this revision
+	long generation;
 	
 	public final static int REVISION_FILE_SIZE = 512;
 	
@@ -41,6 +42,7 @@ public class Revision {
 	// declare the previous revision to this one so we can navigate history
 	public void addParent(RevisionTag parentTag) {
 		this.parents.add(parentTag);
+		generation = Math.max(parentTag.generation+1, generation);
 	}
 	
 	// read and decrypt the contents of the revision file at path
@@ -73,6 +75,7 @@ public class Revision {
 	// create plaintext serialized revision data (to be encrypted and written to storage)
 	private byte[] serialize() {
 		/*
+		 *   generation           (int64, 8 bytes, number of generations removed we are from root)
 		 *   parentTableLen       (int32, 4 bytes, total size of parent table in bytes)
 		 *   parent table (parentTableLen/64 entries):
 		 *     parentRevTag       (hash, 64 bytes)
@@ -83,6 +86,7 @@ public class Revision {
 		int parentTableLen = parents.size()*fs.getCrypto().hashLength();
 		ByteBuffer buf = ByteBuffer.allocate(supernodeText.length + parentTableLen + 4);
 		
+		buf.putLong(generation);
 		buf.putInt(parentTableLen);
 		for(RevisionTag parent : parents) buf.put(parent.getTag());
 		
@@ -97,6 +101,7 @@ public class Revision {
 		
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		
+		this.generation = buf.getLong();
 		int parentTableLen = buf.getInt();
 		for(int i = 0; i < parentTableLen/fs.getCrypto().hashLength(); i++) {
 			byte[] parent = new byte[fs.getCrypto().hashLength()];
@@ -137,5 +142,9 @@ public class Revision {
 	
 	public RevisionTag getTag() {
 		return tag;
+	}
+	
+	public long getGeneration() {
+		return generation;
 	}
 }

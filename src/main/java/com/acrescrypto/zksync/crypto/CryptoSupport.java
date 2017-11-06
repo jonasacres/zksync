@@ -183,8 +183,12 @@ public class CryptoSupport {
 		return unpadded;
 	}
 	
+	public PRNG prng(Key basis, byte[] seed) {
+		byte[] iv = expand(seed, 16, new byte[0], "zksync".getBytes());
+		return new PRNG(basis.getRaw(), iv);
+	}
+	
 	public byte[] rng(int numBytes) {
-		
 		byte[] buf = new byte[numBytes];
 		secureRandom.nextBytes(buf);
 		return buf;

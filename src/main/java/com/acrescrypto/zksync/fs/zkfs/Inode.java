@@ -6,11 +6,11 @@ import java.nio.ByteBuffer;
 import com.acrescrypto.zksync.fs.Stat;
 
 public class Inode {
-	private Stat stat;
-	private int nlink;
-	private byte flags, refType;
-	private byte[] refId;
-	private ZKFS fs;
+	protected Stat stat;
+	protected int nlink;
+	protected byte flags, refType;
+	protected byte[] refId;
+	protected ZKFS fs;
 	
 	public static final byte FLAG_RETAIN = 1 << 0;
 	
@@ -142,4 +142,6 @@ public class Inode {
 		clone.stat = stat.clone();
 		return clone;
 	}
+	
+	// TODO: equals, hashCode
 }

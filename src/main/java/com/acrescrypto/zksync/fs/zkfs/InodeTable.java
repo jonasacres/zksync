@@ -45,7 +45,7 @@ public class InodeTable extends ZKFile {
 		readTable();
 	}
 
-	public Revision commit() throws IOException {
+	public Revision commit(RevisionTag[] additionalParents) throws IOException {
 		rewind();
 		truncate(0);
 		
@@ -58,6 +58,7 @@ public class InodeTable extends ZKFile {
 		
 		Revision newRevision = new Revision(this);
 		if(getRevision() != null) newRevision.addParent(getRevision().getTag());
+		for(RevisionTag parentTag : additionalParents) newRevision.addParent(parentTag);
 		newRevision.write();
 		revision = newRevision;
 		return newRevision;
@@ -100,6 +101,10 @@ public class InodeTable extends ZKFile {
 			throw new ENOENTException(String.format("inode %d", inodeId));
 		}
 		return inodes.get(inodeId);
+	}
+	
+	public void replaceInode(long inodeId, Inode inode) {
+		inodes.put(inodeId, inode);
 	}
 	
 	public boolean hasInodeWithId(long inodeId) {

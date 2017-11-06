@@ -24,6 +24,7 @@ public class ZKFS extends FS {
 	
 	public final static int KEY_TYPE_CIPHER = 0;
 	public final static int KEY_TYPE_AUTH = 1;
+	public final static int KEY_TYPE_PRNG = 2;
 	
 	public final static int KEY_INDEX_PAGE = 0;
 	public final static int KEY_INDEX_PAGE_MERKEL = 1;
@@ -45,6 +46,7 @@ public class ZKFS extends FS {
 	}
 	
 	public ZKFS(FS storage, char[] passphrase, Revision revision) throws IOException {
+		// TODO: remove revision support from here
 		this.storage = storage;
 		this.pubConfig = new PubConfig(storage);
 		crypto = new CryptoSupport(pubConfig);
@@ -60,14 +62,36 @@ public class ZKFS extends FS {
 		}
 	}
 	
+	public ZKFS(Revision rev) throws IOException {
+		this.storage = rev.fs.storage;
+		this.pubConfig = rev.fs.pubConfig;
+		this.privConfig = rev.fs.privConfig;
+		this.crypto = rev.fs.crypto;
+		this.keyfile = rev.fs.keyfile;
+		this.inodeTable = new InodeTable(this, rev);
+		this.directoriesByPath = new Hashtable<String,ZKDirectory>();
+	}
+	
 	public RevisionTree getRevisionTree() {
 		return new RevisionTree(this);
 	}
 	
-	public Revision commit() throws IOException {
+	public Revision commit(RevisionTag[] additionalParents) throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) dir.commit();
-		return inodeTable.commit();
+		return inodeTable.commit(additionalParents);
 	}
+	
+	public Revision commit(Revision[] additionalParents) throws IOException {
+		RevisionTag[] tags = new RevisionTag[additionalParents.length];
+		for(int i = 0; i < tags.length; i++) tags[i] = additionalParents[i].tag;
+		return commit(tags);
+	}
+	
+	public Revision commit() throws IOException {
+		return commit(new RevisionTag[0]);
+	}
+	
+	// TODO: a way to merge all leaf revisions into a single consolidated revision
 	
 	public Key deriveKey(int type, int index, byte[] tweak) {
 		Key[] keys = { keyfile.getCipherRoot(), keyfile.getAuthRoot() };
