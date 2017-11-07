@@ -36,6 +36,16 @@ public class KeyTest {
 	}
 	
 	@Test
+	public void testPseudoRandomKey() {
+		Key[] keys = { new Key(crypto, crypto.prng(new byte[] { 0x01 })), new Key(crypto, crypto.prng(new byte[] { 0x01 })) };
+		assertTrue(Arrays.equals(keys[0].getRaw(), keys[1].getRaw()));
+
+		PRNG rng = crypto.prng(new byte[] { 0x01 });
+		keys = new Key[] { new Key(crypto, rng), new Key(crypto, rng) };
+		assertFalse(Arrays.equals(keys[0].getRaw(), keys[1].getRaw()));
+	}
+	
+	@Test
 	public void testManualKey() {
 		byte[] raw = new byte[crypto.symKeyLength()];
 		for(int i = 0; i < raw.length; i++) raw[i] = (byte) i;
@@ -117,5 +127,21 @@ public class KeyTest {
 		byte[] ciphertext = key.wrappedEncrypt("some text".getBytes(), 65536);
 		ciphertext[1000] ^= 0x04; // diddle one bit of ciphertext
 		key.wrappedDecrypt(ciphertext);
+	}
+	
+	@Test
+	public void testWrappedEncryptAcceptsRNG() {
+		Key key = new Key(crypto);
+		byte[] ct1 = key.wrappedEncrypt("some text".getBytes(), 0, new PRNG(new byte[] {0x01}));
+		byte[] ct2 = key.wrappedEncrypt("some text".getBytes(), 0, new PRNG(new byte[] {0x01}));
+		assertTrue(Arrays.equals(ct1, ct2));
+	}
+	
+	@Test
+	public void testWrappedEncryptIsRandomByDefault() {
+		Key key = new Key(crypto);
+		byte[] ct1 = key.wrappedEncrypt("some text".getBytes(), 0);
+		byte[] ct2 = key.wrappedEncrypt("some text".getBytes(), 0);
+		assertFalse(Arrays.equals(ct1, ct2));
 	}
 }

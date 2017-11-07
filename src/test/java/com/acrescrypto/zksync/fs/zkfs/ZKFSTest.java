@@ -259,10 +259,8 @@ public class ZKFSTest extends FSTestBase {
 			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), revisions[i]);
 			byte[] text = ("Version " + (i-1)).getBytes();
 			assertTrue(Arrays.equals(text, revFs.read("successive-revisions")));
-			if(i == 1) {
-				assertEquals(0, revFs.getInodeTable().getRevision().getNumParents());
-			} else {
-				assertEquals(1, revFs.getInodeTable().getRevision().getNumParents());
+			assertEquals(1, revFs.getInodeTable().getRevision().getNumParents());
+			if(i > 1) {
 				assertEquals(revisions[i-1].getTag(), revFs.getInodeTable().getRevision().getParentTag(0));
 			}
 		}
@@ -285,10 +283,8 @@ public class ZKFSTest extends FSTestBase {
 			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), revisions[i]);
 			byte[] text = ("Version " + i).getBytes();
 			assertTrue(Arrays.equals(text, revFs.read("intensive-revisions")));
-			if(i == 0) {
-				assertEquals(0, revFs.getInodeTable().getRevision().getNumParents());
-			} else {
-				assertEquals(1, revFs.getInodeTable().getRevision().getNumParents());
+			assertEquals(1, revFs.getInodeTable().getRevision().getNumParents());
+			if(i > 0) {
 				assertEquals(revisions[(i-1)/2].getTag(), revFs.getInodeTable().getRevision().getParentTag(0));
 			}
 		}
@@ -308,7 +304,6 @@ public class ZKFSTest extends FSTestBase {
 		}
 		
 		RevisionTree tree = zkscratch.getRevisionTree();
-		tree.scan();
 		ArrayList<RevisionTag> tags = tree.revisionTags();
 		
 		assertEquals(numRevisions, set.size());

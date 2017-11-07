@@ -7,8 +7,12 @@ public class Key {
 	private CryptoSupport crypto;
 	
 	public Key(CryptoSupport crypto) {
+		this(crypto, crypto.defaultPrng());
+	}
+	
+	public Key(CryptoSupport crypto, PRNG rng) {
 		this.crypto = crypto;
-		this.raw = crypto.rng(crypto.symKeyLength());
+		this.raw = rng.getBytes(crypto.symKeyLength());
 	}
 	
 	public Key(CryptoSupport crypto, byte[] raw) {
@@ -29,9 +33,13 @@ public class Key {
 	}
 	
 	public byte[] wrappedEncrypt(byte[] plaintext, int padSize) {
+		return wrappedEncrypt(plaintext, padSize, crypto.defaultPrng());
+	}
+	
+	public byte[] wrappedEncrypt(byte[] plaintext, int padSize, PRNG rng) {
 		if(padSize < 0) throw new IllegalArgumentException("pad size cannot be negative for wrappedEncrypt");
-		Key subkey = new Key(crypto);
-		byte[] outerIv = crypto.rng(crypto.symIvLength()), innerIv = crypto.rng(crypto.symIvLength());
+		Key subkey = new Key(crypto, rng);
+		byte[] outerIv = rng.getBytes(crypto.symIvLength()), innerIv = rng.getBytes(crypto.symIvLength());
 		byte[] ciphertext = subkey.encrypt(innerIv, plaintext, padSize);
 		byte[] keywrap = encrypt(outerIv, subkey.raw, 0);
 		ByteBuffer buffer = ByteBuffer.allocate(outerIv.length + innerIv.length + ciphertext.length + keywrap.length + 2*2);

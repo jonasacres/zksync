@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.crypto;
 
 import java.nio.ByteBuffer;
-import java.security.SecureRandom;
 import java.util.Base64;
 
 import javax.crypto.Cipher;
@@ -19,10 +18,11 @@ import de.mkammerer.argon2.jna.Size_t;
 import de.mkammerer.argon2.jna.Uint32_t;
 
 public class CryptoSupport {
-	private SecureRandom secureRandom = new SecureRandom();
 	private PubConfig pubConfig;
+	private PRNG defaultPrng;
 	
 	public CryptoSupport(PubConfig pubConfig) {
+		defaultPrng = new PRNG();
 		this.pubConfig = pubConfig;
 	}
 	
@@ -151,7 +151,7 @@ public class CryptoSupport {
 		}
 	}
 	
-	public byte[] xor(byte[] a, byte[] b) {
+	public static byte[] xor(byte[] a, byte[] b) {
 		int len = Math.min(a.length, b.length);
 		byte[] r = new byte[len];
 		
@@ -183,15 +183,16 @@ public class CryptoSupport {
 		return unpadded;
 	}
 	
-	public PRNG prng(Key basis, byte[] seed) {
-		byte[] iv = expand(seed, 16, new byte[0], "zksync".getBytes());
-		return new PRNG(basis.getRaw(), iv);
+	public PRNG prng(byte[] seed) {
+		return new PRNG(seed);
+	}
+	
+	public PRNG defaultPrng() {
+		return defaultPrng;
 	}
 	
 	public byte[] rng(int numBytes) {
-		byte[] buf = new byte[numBytes];
-		secureRandom.nextBytes(buf);
-		return buf;
+		return defaultPrng.getBytes(numBytes);
 	}
 	
 	public int symKeyLength() {

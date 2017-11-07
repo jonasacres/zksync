@@ -7,7 +7,8 @@ import org.junit.runners.Suite;
 @Suite.SuiteClasses({
 	CryptoSupportTest.class,
 	HashContextTest.class,
-	KeyTest.class
+	KeyTest.class,
+	PRNGTest.class
 })
 
 public class CryptoTests {

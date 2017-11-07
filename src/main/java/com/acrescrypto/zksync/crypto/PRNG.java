@@ -1,30 +1,29 @@
 package com.acrescrypto.zksync.crypto;
 
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-
-import javax.crypto.Cipher;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
+import java.security.SecureRandom;
 
 public class PRNG {
-	Cipher cipher;
+	SecureRandom rng;
 	
-	public PRNG(byte[] key, byte[] iv) {
+	public PRNG() {
+		rng = new SecureRandom();
+	}
+	
+	public PRNG(byte[] seed) {
 		try {
-			Cipher cipher = Cipher.getInstance("AES/CTR/NoPadding", "BC");
-			cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES/OCB/NoPadding") , new IvParameterSpec(iv));
-		} catch (InvalidKeyException | InvalidAlgorithmParameterException | NoSuchAlgorithmException | NoSuchProviderException | NoSuchPaddingException e) {
+			rng = SecureRandom.getInstance("SHA1PRNG"); // TODO: replace this with something nice
+		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
 			System.exit(1);
 		}
+		
+		rng.setSeed(seed);
 	}
 	
 	public byte[] getBytes(int length) {
-		byte[] zeros = new byte[length];
-		return cipher.update(zeros);
+		byte[] output = new byte[length];
+		rng.nextBytes(output);
+		return output;
 	}
 }

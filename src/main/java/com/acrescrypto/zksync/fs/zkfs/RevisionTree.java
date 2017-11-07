@@ -12,8 +12,8 @@ import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.fs.Directory;
 
 public class RevisionTree {
-	protected HashMap<Long,ArrayList<RevisionTag>> tree = new HashMap<Long,ArrayList<RevisionTag>>();
-	protected HashMap<Long,ArrayList<RevisionTag>> byPrefix = new HashMap<Long,ArrayList<RevisionTag>>();
+	protected HashMap<Long,ArrayList<RevisionTag>> byParentTag = new HashMap<Long,ArrayList<RevisionTag>>();
+	protected HashMap<Long,ArrayList<RevisionTag>> byTag = new HashMap<Long,ArrayList<RevisionTag>>();
 	protected ZKFS fs;
 	protected int size;
 	
@@ -23,7 +23,8 @@ public class RevisionTree {
 	
 	public void scan() throws IOException {
 		Directory revisionDir = fs.storage.opendir(ZKFS.REVISION_DIR);
-		tree.clear();
+		byParentTag.clear();
+		byTag.clear();
 		for(String revPath : revisionDir.listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES)) {
 			recordEntry(revPath);
 		}
@@ -35,7 +36,7 @@ public class RevisionTree {
 	
 	public ArrayList<RevisionTag> revisionTags() {
 		ArrayList<RevisionTag> allRevisions = new ArrayList<RevisionTag>();
-		for(ArrayList<RevisionTag> childList : tree.values()) {
+		for(ArrayList<RevisionTag> childList : byParentTag.values()) {
 			allRevisions.addAll(childList);
 		}
 		
@@ -43,7 +44,7 @@ public class RevisionTree {
 	}
 	
 	public ArrayList<RevisionTag> rootRevisions() {
-		return tree.getOrDefault(0l, new ArrayList<RevisionTag>());
+		return byParentTag.getOrDefault(0l, new ArrayList<RevisionTag>());
 	}
 	
 	public RevisionTag earliestRoot() {
@@ -60,13 +61,13 @@ public class RevisionTree {
 	}
 	
 	public ArrayList<RevisionTag> descendantsOf(RevisionTag tag) {
-		return tree.getOrDefault(tag.getShortTag(), new ArrayList<RevisionTag>());
+		return byParentTag.getOrDefault(tag.getShortTag(), new ArrayList<RevisionTag>());
 	}
 	
 	public ArrayList<RevisionTag> leaves() {
 		ArrayList<RevisionTag> leaves = new ArrayList<RevisionTag>();
 		for(RevisionTag tag : revisionTags()) {
-			if(tree.containsKey(tag.getShortTag())) continue;
+			if(byParentTag.containsKey(tag.getShortTag())) continue;
 			leaves.add(tag);
 		}
 		
@@ -97,25 +98,31 @@ public class RevisionTree {
 		return tag;
 	}
 	
-	public ArrayList<RevisionTag> ancestorsOf(RevisionTag tag) throws IOException {
-		ArrayList<RevisionTag> list = new ArrayList<RevisionTag>();
-		list.add(tag);
+	public HashSet<RevisionTag> ancestorsOf(RevisionTag tag) throws IOException {
+		return ancestorsOf(tag, new HashSet<RevisionTag>());
+	}
+	
+	protected HashSet<RevisionTag> ancestorsOf(RevisionTag tag, HashSet<RevisionTag> set) throws IOException {
+		if(tag == null) return set;
+		set.add(tag);
+		if(tag.getShortTag() == 0) return set;
 		
-		if(!tag.hasMultipleParents()) {
-			list.addAll(ancestorsOf(parentOf(tag)));
-		} else {
+		if(tag.hasMultipleParents()) {
 			Revision rev = new Revision(tag);
 			for(RevisionTag parent : rev.parents) {
-				list.addAll(ancestorsOf(parent));
+				ancestorsOf(parent, set);
 			}
+		} else {
+			ancestorsOf(parentOf(tag), set);
 		}
 		
-		return list;
+		return set;
 	}
 	
 	public RevisionTag parentOf(RevisionTag tag) {
-		ArrayList<RevisionTag> candidates = byPrefix.getOrDefault(tag.parentShortTag, null);
-		if(candidates.size() == 0) return null;
+		if(tag.getParentShortTag() == 0) return RevisionTag.nullTag(tag.fs);
+		ArrayList<RevisionTag> candidates = byTag.getOrDefault(tag.parentShortTag, null);
+		if(candidates == null || candidates.size() == 0) return null;
 		if(candidates.size() == 1) return candidates.get(0);
 		
 		ArrayList<RevisionTag> winnowed = new ArrayList<RevisionTag>();
@@ -154,22 +161,22 @@ public class RevisionTree {
 		if(revTag.hasMultipleParents()) {
 			Revision rev = new Revision(revTag);
 			for(RevisionTag parent : rev.parents) {
-				addParentRef(parent.getShortTag(), revTag, tree);
-				addParentRef(parent.getShortTag(), revTag, byPrefix);
+				addRef(parent.getShortTag(), revTag, byParentTag);
 			}
 		} else {
-			addParentRef(revTag.getParentShortTag(), revTag, tree);
-			addParentRef(revTag.getParentShortTag(), revTag, byPrefix);
+			addRef(revTag.getParentShortTag(), revTag, byParentTag);
 		}
+		
+		addRef(revTag.getShortTag(), revTag, byTag);
 		
 		size += 1;
 	}
 	
-	protected void addParentRef(long parentShortRef, RevisionTag tag, HashMap<Long, ArrayList<RevisionTag>> map) throws EINVALException {
-		ArrayList<RevisionTag> list = map.getOrDefault(parentShortRef, null);
+	protected void addRef(long shortRef, RevisionTag tag, HashMap<Long, ArrayList<RevisionTag>> map) throws EINVALException {
+		ArrayList<RevisionTag> list = map.getOrDefault(shortRef, null);
 		if(list == null) {
 			list = new ArrayList<RevisionTag>();
-			map.put(parentShortRef, list);
+			map.put(shortRef, list);
 		}
 		list.add(tag);
 	}

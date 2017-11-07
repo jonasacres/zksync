@@ -72,23 +72,25 @@ public class ZKFS extends FS {
 		this.directoriesByPath = new Hashtable<String,ZKDirectory>();
 	}
 	
-	public RevisionTree getRevisionTree() {
-		return new RevisionTree(this);
+	public RevisionTree getRevisionTree() throws IOException {
+		RevisionTree tree = new RevisionTree(this);
+		tree.scan();
+		return tree;
 	}
 	
-	public Revision commit(RevisionTag[] additionalParents) throws IOException {
+	public Revision commit(RevisionTag[] additionalParents, byte[] seed) throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) dir.commit();
-		return inodeTable.commit(additionalParents);
+		return inodeTable.commit(additionalParents, seed);
 	}
 	
-	public Revision commit(Revision[] additionalParents) throws IOException {
+	public Revision commit(Revision[] additionalParents, byte[] seed) throws IOException {
 		RevisionTag[] tags = new RevisionTag[additionalParents.length];
 		for(int i = 0; i < tags.length; i++) tags[i] = additionalParents[i].tag;
-		return commit(tags);
+		return commit(tags, seed);
 	}
 	
 	public Revision commit() throws IOException {
-		return commit(new RevisionTag[0]);
+		return commit(new RevisionTag[0], null);
 	}
 	
 	// TODO: a way to merge all leaf revisions into a single consolidated revision

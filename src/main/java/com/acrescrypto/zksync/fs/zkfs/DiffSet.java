@@ -10,14 +10,18 @@ import com.acrescrypto.zksync.fs.Directory;
 
 public class DiffSet {
 	Revision[] revisions;
-	Revision commonAncestor;
+	RevisionTag commonAncestor;
 	
-	private HashMap<Revision,ZKFS> filesystems;
+	private HashMap<RevisionTag,ZKFS> filesystems;
 	ArrayList<FileDiff> diffs;
 	
 	public DiffSet(Revision[] revisions) throws IOException {
 		this.revisions = revisions;
 		openFilesystems();
+		
+		RevisionTag[] tags = new RevisionTag[revisions.length];
+		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i].tag;
+		commonAncestor = revisions[0].fs.getRevisionTree().commonAncestorOf(tags);
 		
 		for(String path : allPaths()) {
 			FileDiff diff = versionsOfFile(path);
@@ -44,9 +48,9 @@ public class DiffSet {
 	}
 	
 	public void openFilesystems() throws IOException {
-		filesystems = new HashMap<Revision,ZKFS>();
+		filesystems = new HashMap<RevisionTag,ZKFS>();
 		for(Revision rev : revisions) {
-			filesystems.put(rev, new ZKFS(rev));
+			filesystems.put(rev.tag, new ZKFS(rev));
 		}
 	}
 	
@@ -64,7 +68,7 @@ public class DiffSet {
 		FileDiff diff = new FileDiff(path);
 		for(Revision rev : revisions) {
 			Inode original = filesystems.get(commonAncestor).inodeForPath(path),
-				  modified = filesystems.get(rev).inodeForPath(path);
+				  modified = filesystems.get(rev.tag).inodeForPath(path);
 			if(original == null && modified == null) continue;
 			else if(original == null || modified == null || original.equals(modified)) diff.addVersion(rev, modified);
 		}
@@ -76,7 +80,7 @@ public class DiffSet {
 	}
 	
 	public Revision applyResolution() throws IOException {
-		ZKFS fs = filesystems.get(revisions[0]);
+		ZKFS fs = filesystems.get(revisions[0].tag);
 		
 		for(FileDiff diff : diffs) {
 			if(!diff.isResolved()) throw new EINVALException("Unresolved conflicts");
@@ -91,6 +95,6 @@ public class DiffSet {
 			}
 		}
 		
-		return fs.commit(revisions);
+		return fs.commit(revisions, fs.deriveKey(ZKFS.KEY_TYPE_PRNG, ZKFS.KEY_INDEX_REVISION).authenticate(fs.inodeTable.inode.refId));
 	}
 }

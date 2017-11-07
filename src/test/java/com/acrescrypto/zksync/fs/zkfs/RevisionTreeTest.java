@@ -5,6 +5,7 @@ import static org.junit.Assert.*;
 import java.io.IOException;
 import java.security.Security;
 import java.util.ArrayList;
+import java.util.HashSet;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
@@ -14,44 +15,77 @@ import com.acrescrypto.zksync.fs.localfs.LocalFS;
 public class RevisionTreeTest {
 	public final static int NUM_REVISIONS = 60;
 	public final static int NUM_ROOTS = 4;
-	ZKFS fs;
-	RevisionTree tree;
+	static ZKFS fs, mfs;
 	
-	static boolean initialized;
-	static Revision[] revisions;
+	static RevisionTree tree, mtree;
+	static Revision[] revisions, mrevisions;
+	static LocalFS storage, mstorage;
 	
-	@Before
-	public void beforeEach() throws IOException {
-		LocalFS storage = new LocalFS("/tmp/revision-tree-test");
-		if(!initialized) {
-			initialized = true;
-			ZKFSTest.cheapenArgon2Costs();
-			Security.addProvider(new BouncyCastleProvider());
+	@BeforeClass
+	public static void beforeClass() throws IOException {
+		ZKFSTest.cheapenArgon2Costs();
+		Security.addProvider(new BouncyCastleProvider());
+		setupSingleParentTest();
+		setupMultipleParentTest();
+	}
+	
+	public static void setupSingleParentTest() throws IOException {
+		storage = new LocalFS("/tmp/revision-tree-test");
+		storage.rmrf("/");
+		fs = new ZKFS(storage, "zksync".toCharArray());
 
-			storage.rmrf("/");
-			fs = new ZKFS(storage, "zksync".toCharArray());
-
-			revisions = new Revision[NUM_REVISIONS];
-			
-			for(int i = 0; i < NUM_REVISIONS; i++) {
-				Revision parent = null;
-				if(i >= NUM_ROOTS) {
-					int tier = (int) (Math.floor(Math.log(i+NUM_ROOTS)/Math.log(2)) - Math.log(NUM_ROOTS)/Math.log(2));
-					int offset = (int) (i - Math.pow(2, tier+2) + NUM_ROOTS);
-					int pIndex = (int) (Math.pow(2, tier+1) - NUM_ROOTS) + offset/2;
-					parent = revisions[pIndex]; 
-				}
-				ZKFS revFs = new ZKFS(fs.getStorage(), "zksync".toCharArray(), parent);
-				revFs.write("intensive-revisions", ("Version " + i).getBytes());
-				revFs.inodeTable.inode.getStat().setMtime(i*1000l*1000l*1000l*60l); // each rev is 1 minute later
-				revisions[i] = revFs.commit();
+		revisions = new Revision[NUM_REVISIONS];
+		
+		for(int i = 0; i < NUM_REVISIONS; i++) {
+			Revision parent = null;
+			if(i >= NUM_ROOTS) {
+				parent = revisions[parentIndex(i)];
 			}
-		} else {
-			fs = new ZKFS(storage, "zksync".toCharArray());
+			
+			ZKFS revFs = new ZKFS(fs.getStorage(), "zksync".toCharArray(), parent);
+			revFs.write("intensive-revisions", ("Version " + i).getBytes());
+			revFs.inodeTable.inode.getStat().setMtime(i*1000l*1000l*1000l*60l); // each rev is 1 minute later
+			revisions[i] = revFs.commit();
 		}
 		
 		tree = fs.getRevisionTree();
-		tree.scan();
+	}
+	
+	public static void setupMultipleParentTest() throws IOException {
+		mstorage = new LocalFS("/tmp/revision-tree-test-multipleparents");
+		if(mstorage.exists("/")) mstorage.rmrf("/");
+		mfs = new ZKFS(mstorage, "zksync".toCharArray());
+		
+		// 0 -> 1 -> 2 -> 3 -> ... -> n-3
+		//  \-> n-2 ->  --\-> n-1 (n-1 is child of 2 and n-2, but not 3 ... n-3
+		
+		mrevisions = new Revision[8];
+		
+		for(int i = 0; i < mrevisions.length; i++) {
+			Revision parent = null;
+			if(i == 0) parent = null;
+			else if(i == mrevisions.length-2) parent = mrevisions[0];
+			else parent = mrevisions[i-1];
+			
+			ZKFS revFs = new ZKFS(mstorage, "zksync".toCharArray(), parent);
+			revFs.write("multiple-ancestors", ("version " + i).getBytes());
+			revFs.inodeTable.inode.getStat().setMtime(i*1000l*1000l*1000l*60l); // each rev is 1 minute later
+			if(i == mrevisions.length-1) {
+				mrevisions[i] = revFs.commit(new RevisionTag[] { mrevisions[2].tag }, null);
+			} else {
+				mrevisions[i] = revFs.commit();
+			}
+		}
+		
+		mtree = mfs.getRevisionTree();
+	}
+	
+	public static int parentIndex(int childIndex) {
+		if(childIndex < NUM_ROOTS) return -1;
+		int tier = (int) (Math.floor(Math.log(childIndex+NUM_ROOTS)/Math.log(2)) - Math.log(NUM_ROOTS)/Math.log(2));
+		int offset = (int) (childIndex - Math.pow(2, tier+2) + NUM_ROOTS);
+		int pIndex = (int) (Math.pow(2, tier+1) - NUM_ROOTS) + offset/2;
+		return pIndex; 
 	}
 	
 	@AfterClass
@@ -154,6 +188,85 @@ public class RevisionTreeTest {
 		int tier = (int) (Math.log(NUM_REVISIONS+NUM_ROOTS-1)/Math.log(2) - Math.log(NUM_ROOTS)/Math.log(2));
 		int tierBase = (int) (Math.pow(2, tier+2) - NUM_ROOTS);
 		assertEquals(NUM_REVISIONS - tierBase, count);
+	}
+	
+	@Test
+	public void testAncestorsOf() throws IOException {
+		for(int i = 0; i < revisions.length; i++) {
+			HashSet<RevisionTag> seenTags = new HashSet<RevisionTag>();
+			seenTags.add(RevisionTag.nullTag(fs));
+			for(int j = i; j >= 0; j = parentIndex(j)) seenTags.add(revisions[j].tag);
+			HashSet<RevisionTag> ancestors = tree.ancestorsOf(revisions[i].tag);
+			assertEquals(seenTags.size(), ancestors.size());
+			for(RevisionTag tag : ancestors) assertTrue(seenTags.contains(tag));
+			for(RevisionTag tag : seenTags) assertTrue(ancestors.contains(tag));
+		}
+	}
+	
+	@Test
+	public void testAncestorsOfWithMultipleParents() throws IOException {
+		HashSet<RevisionTag> ancestors = mtree.ancestorsOf(mrevisions[mrevisions.length-1].tag);
+		
+		HashSet<RevisionTag> expected = new HashSet<RevisionTag>();
+		expected.add(RevisionTag.nullTag(mfs));
+		for(int i = 0; i < mrevisions.length; i++) {
+			if(i <= 2 || i >= mrevisions.length-2) expected.add(mrevisions[i].tag);
+		}
+		
+		assertEquals(expected.size(), ancestors.size());
+		for(RevisionTag tag : ancestors) assertTrue(expected.contains(tag));
+		for(RevisionTag tag : expected) assertTrue(ancestors.contains(tag));
+	}
+	
+	@Test
+	public void testCommonAncestorSiblings() throws IOException {
+		RevisionTag ancestor = tree.commonAncestorOf(new RevisionTag[] { revisions[8-NUM_ROOTS].tag, revisions[8-NUM_ROOTS+1].tag });
+		assertTrue(revisions[4-NUM_ROOTS].tag.equals(ancestor));
+	}
+	
+	@Test
+	public void testCommonAncestorParentChild() throws IOException {
+		RevisionTag ancestor = tree.commonAncestorOf(new RevisionTag[] { revisions[NUM_ROOTS].tag, revisions[0].tag });
+		assertTrue(revisions[0].tag.equals(ancestor));
+	}
+	
+	@Test
+	public void testCommonAncestorCousins() throws IOException {
+		RevisionTag ancestor = tree.commonAncestorOf(new RevisionTag[] { revisions[NUM_ROOTS+8].tag, revisions[NUM_ROOTS+10].tag });
+		assertTrue(revisions[0].tag.equals(ancestor));
+	}
+	
+	@Test
+	public void testCommonAncestorCousinsOnceRemoved() throws IOException {
+		RevisionTag ancestor = tree.commonAncestorOf(new RevisionTag[] { revisions[NUM_ROOTS+8].tag, revisions[NUM_ROOTS+1].tag });
+		assertTrue(revisions[0].tag.equals(ancestor));
+	}
+	
+	@Test
+	public void testCommonAncestorRoots() throws IOException {
+		RevisionTag ancestor = tree.commonAncestorOf(new RevisionTag[] { revisions[0].tag, revisions[1].tag });
+		assertTrue(ancestor.equals(RevisionTag.nullTag(ancestor.fs)));
+	}
+	
+	@Test
+	public void testParentOf() throws IOException {
+		for(int i = 0; i < revisions.length; i++) {
+			RevisionTag tag = tree.parentOf(revisions[i].tag);
+			RevisionTag expected;
+			if(i < NUM_ROOTS) {
+				expected = RevisionTag.nullTag(fs);
+			} else {
+				expected = revisions[parentIndex(i)].tag;
+			}
+			
+			assertEquals(expected, tag);
+		}
+	}
+
+	@Test
+	public void testParentOfWithMultipleParents() throws IOException {
+		RevisionTag parent = mtree.parentOf(mrevisions[mrevisions.length-1].tag);
+		assertEquals(mrevisions[mrevisions.length-2].tag, parent);
 	}
 	
 	private void testHeirOfRevision(RevisionTag tag) {

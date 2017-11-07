@@ -4,6 +4,8 @@ import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.Arrays;
 
+import com.acrescrypto.zksync.Util;
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 
@@ -40,7 +42,7 @@ public class RevisionTag {
 	
 	public final static int REV_FLAG_MULTIPLE_PARENTS = 0x01;   // has >1 parent 
 	
-	public static RevisionTag nullRevision(ZKFS fs) {
+	public static RevisionTag nullTag(ZKFS fs) {
 		return new RevisionTag(fs);
 	}
 	
@@ -102,8 +104,8 @@ public class RevisionTag {
 	}
 	
 	protected byte[] makeTag(Revision rev, byte[] ciphertext) {
-		RevisionTag firstParent = rev.getNumParents() > 0 ? rev.getParentTag(0) : RevisionTag.nullRevision(fs);
-		parentShortTag = ByteBuffer.wrap(firstParent.tag).getLong();
+		RevisionTag firstParent = rev.getNumParents() > 0 ? rev.getParentTag(0) : RevisionTag.nullTag(fs);
+		parentShortTag = firstParent.getShortTag();
 		generation = rev.getGeneration();
 		authorHash = ByteBuffer.wrap(refKey().authenticate(rev.getSupernode().getStat().getUser().getBytes())).getLong();
 		keySalt = rev.getRevKeySalt(ciphertext);
@@ -124,7 +126,7 @@ public class RevisionTag {
 		ByteBuffer tagBuf = ByteBuffer.allocate(REV_TAG_SIZE);
 		byte[] key = refKey().authenticate(keySalt);
 		
-		tagBuf.put(fs.crypto.xor(plaintextBuf.array(), key));
+		tagBuf.put(CryptoSupport.xor(plaintextBuf.array(), key));
 		tagBuf.put(keySalt);
 		
 		return tagBuf.array();
@@ -145,11 +147,15 @@ public class RevisionTag {
 		
 		byte[] key = refKey().authenticate(keySalt);
 		
-		ByteBuffer plaintextBuf = ByteBuffer.wrap(fs.crypto.xor(ciphertext, key));
+		ByteBuffer plaintextBuf = ByteBuffer.wrap(CryptoSupport.xor(ciphertext, key));
 		this.generation = plaintextBuf.getLong();
 		this.parentShortTag = plaintextBuf.getLong();
 		this.authorHash = plaintextBuf.getLong();
 		this.timestamp = plaintextBuf.getLong();
 		this.flags = plaintextBuf.getShort();
+	}
+	
+	public String toString() {
+		return "revtag " + Util.bytesToHex(tag);
 	}
 }

@@ -10,6 +10,7 @@ import java.util.Arrays;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
 public class RevisionTagTest {
@@ -73,7 +74,7 @@ public class RevisionTagTest {
 	@Test
 	public void testTagFormat() {
 		assertEquals(16, RevisionTag.KEY_SALT_SIZE);
-		assertEquals(42, RevisionTag.REV_TAG_SIZE);
+		assertEquals(50, RevisionTag.REV_TAG_SIZE);
 		byte[] salt = new byte[RevisionTag.KEY_SALT_SIZE],
 			   ciphertext = new byte[RevisionTag.REV_TAG_SIZE - RevisionTag.KEY_SALT_SIZE];
 		
@@ -84,13 +85,15 @@ public class RevisionTagTest {
 		assertTrue(Arrays.equals(tag.keySalt, salt));
 
 		byte[] key = tag.refKey().authenticate(salt);
-		ByteBuffer ptBuf = ByteBuffer.wrap(tag.fs.crypto.xor(key, ciphertext));
+		ByteBuffer ptBuf = ByteBuffer.wrap(CryptoSupport.xor(key, ciphertext));
 		
+		long generation = ptBuf.getLong();
 		long parentShortTag = ptBuf.getLong();
 		long authorHash = ptBuf.getLong();
 		long timestamp = ptBuf.getLong();
 		short flags = ptBuf.getShort();
 		
+		assertEquals(tag.generation, generation);
 		assertEquals(tag.parentShortTag, parentShortTag);
 		assertEquals(tag.authorHash, authorHash);
 		assertEquals(tag.timestamp, timestamp);
