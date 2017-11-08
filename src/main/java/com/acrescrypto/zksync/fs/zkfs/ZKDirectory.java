@@ -183,6 +183,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		
 		write(serialize());
 		flush();
+		dirty = false;
 		fs.cache(this);
 	}
 	

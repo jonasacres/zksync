@@ -154,5 +154,7 @@ public class Inode {
 		return Arrays.equals(serialize(), __other.serialize());
 	}
 	
-	// TODO: equals, hashCode
+	public String toString() {
+		return String.format("%d (%08x) - %d %d bytes, %d %d", stat.getInodeId(), hashCode(), nlink, stat.getSize(), stat.getMtime(), stat.getAtime());
+	}
 }

@@ -10,6 +10,7 @@ import org.junit.runners.Suite;
 	ZKFSTest.class,
 	ZKDirectoryTest.class,
 	ZKFileTest.class,
+	DiffSetTest.class
 })
 
 public class ZKFSTests {

@@ -53,7 +53,7 @@ public class DiffSet {
 	
 	public HashSet<String> allPaths() throws IOException {
 		HashSet<String> allPaths = new HashSet<String>();
-		// allPaths.add("/");
+		allPaths.add("/");
 		
 		for(Revision rev : revisions) {
 			ZKFS fs = openFS(rev.tag);
@@ -68,7 +68,6 @@ public class DiffSet {
 		FileDiff diff = new FileDiff(path);
 		for(Revision rev : revisions) {
 			diff.addVersion(rev, versionOfFileForTag(rev.tag, path));
-			// TODO: this would be a great place to dump / and figure out how we're getting all these diffs
 		}
 		return diff;
 	}

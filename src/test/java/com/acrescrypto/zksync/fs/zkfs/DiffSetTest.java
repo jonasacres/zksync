@@ -3,7 +3,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.security.Security;
 import java.util.ArrayList;
 
@@ -19,7 +18,7 @@ import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
 public class DiffSetTest {
 	private interface DiffExampleLambda {
-		public void diff(ZKFS fs, Revision[] revs, String filename) throws IOException;
+		public int diff(ZKFS fs, Revision[] revs, String filename) throws IOException;
 	}
 	
 	LocalFS storage;
@@ -47,15 +46,15 @@ public class DiffSetTest {
 		ZKFS fs = new ZKFS(storage, password);
 		fs.write("unmodified", "parent".getBytes());
 		fs.write("modified", "replaceme".getBytes());
+		fs.squash("modified");
 		parent = fs.commit();
 		children = new Revision[NUM_CHILDREN];
 		
 		for(int i = 0; i < NUM_CHILDREN; i++) {
 			fs = new ZKFS(storage, password, parent);
 			fs.write("modified", "replaced!".getBytes());
-			fs.setMtime("modified", 12345l);
-			fs.setAtime("modified", 12345l);
-			fs.write("child", ("text " + i).getBytes());
+			fs.write("child", ("text " + i).getBytes()); // don't forget -- making this means / is also changed, so factor that in
+			fs.squash("modified");
 			children[i] = fs.commit();
 		}
 	}
@@ -66,7 +65,7 @@ public class DiffSetTest {
 		DiffSet diffset = new DiffSet(list);
 		ArrayList<FileDiff> diffs = diffset.getDiffs();
 		
-		assertEquals(1, diffs.size());
+		assertEquals(2, diffs.size());
 		
 		/* TODO:
 		 * This really makes me think deterministic storage should come back. /modified has the same content for
@@ -113,7 +112,7 @@ public class DiffSetTest {
 		DiffSet diffset = new DiffSet(list);
 		ArrayList<FileDiff> diffs = diffset.getDiffs();
 		
-		assertEquals(2, diffs.size());
+		assertEquals(3, diffs.size()); // modified, child and /
 	}
 	
 	@Test
@@ -121,10 +120,12 @@ public class DiffSetTest {
 		/* if we look at the diffs between two of the children, we should see only one diff, because they both
 		 * modify one of the files in the same way.
 		 */
-		assertEquals(1, (new DiffSet(new Revision[] { children[0], children[1] })).getDiffs().size());
+		assertEquals(1+1, (new DiffSet(new Revision[] { children[0], children[1] })).getDiffs().size());
 		
 		/* but if we include the parent, we should see two diffs, because it has the original unmodified file. */
-		assertEquals(2, (new DiffSet(new Revision[] { parent, children[0], children[1] })).getDiffs().size());
+		assertEquals(2+1, (new DiffSet(new Revision[] { parent, children[0], children[1] })).getDiffs().size());
+		
+		// (the +1s are because of implicit change to directory)
 	}
 	
 	@Test
@@ -133,6 +134,7 @@ public class DiffSetTest {
 			fs.write(filename, "blah".getBytes());
 			revs[0] = fs.commit();
 			fs.unlink(filename);
+			return 2;
 		});
 	}
 	
@@ -141,6 +143,7 @@ public class DiffSetTest {
 		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
 			revs[0] = fs.commit();
 			fs.write(filename, "blah".getBytes());
+			return 2;
 		});
 	}
 	
@@ -151,6 +154,7 @@ public class DiffSetTest {
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
 			fs.setMtime(filename, 31337l);
+			return 1;
 		});
 	}
 	
@@ -162,6 +166,7 @@ public class DiffSetTest {
 			revs[0] = fs.commit();
 			fs.setAtime(filename, 31337l);
 			fs.setMtime(filename, 0l);
+			return 1;
 		});
 	}
 	
@@ -174,6 +179,7 @@ public class DiffSetTest {
 			Inode inode = fs.inodeForPath(filename);
 			inode.getStat().setCtime(31337l);
 			fs.setMtime(filename, 0l);
+			return 1;
 		});
 	}
 	
@@ -185,6 +191,7 @@ public class DiffSetTest {
 			revs[0] = fs.commit();
 			fs.chmod(filename, 0004);
 			fs.setMtime(filename, 0l);
+			return 1;
 		});
 	}
 	
@@ -196,6 +203,7 @@ public class DiffSetTest {
 			revs[0] = fs.commit();
 			fs.chown(filename, 007);
 			fs.setMtime(filename, 0l);
+			return 1;
 		});
 	}
 	
@@ -207,6 +215,7 @@ public class DiffSetTest {
 			revs[0] = fs.commit();
 			fs.chown(filename, "bond");
 			fs.setMtime(filename, 0l);
+			return 1;
 		});
 	}
 	
@@ -218,6 +227,7 @@ public class DiffSetTest {
 			revs[0] = fs.commit();
 			fs.chown(filename, 6);
 			fs.setMtime(filename, 0l);
+			return 1;
 		});
 	}
 	
@@ -229,6 +239,7 @@ public class DiffSetTest {
 			revs[0] = fs.commit();
 			fs.chown(filename, "MI6");
 			fs.setMtime(filename, 0l);
+			return 1;
 		});
 	}
 	
@@ -242,6 +253,7 @@ public class DiffSetTest {
 			file.write("a".getBytes());
 			file.close();
 			fs.setMtime(filename, 0l);
+			return 1;
 		});
 	}
 	
@@ -255,6 +267,7 @@ public class DiffSetTest {
 			file.truncate(file.getStat().getSize()-1);
 			file.close();
 			fs.setMtime(filename, 0l);
+			return 1;
 		});
 	}
 	
@@ -265,6 +278,7 @@ public class DiffSetTest {
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
 			fs.inodeForPath(filename).getStat().setDevMajor(1);
+			return 1;
 		});
 	}
 	
@@ -275,6 +289,7 @@ public class DiffSetTest {
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
 			fs.inodeForPath(filename).getStat().setDevMinor(1);
+			return 1;
 		});
 	}
 	
@@ -284,6 +299,7 @@ public class DiffSetTest {
 			fs.write(filename, "blah".getBytes());
 			revs[0] = fs.commit();
 			fs.inodeForPath(filename).nlink++; // painful to look at, isn't it?
+			return 1;
 		});
 	}
 	
@@ -293,6 +309,7 @@ public class DiffSetTest {
 			fs.write(filename, "blah".getBytes());
 			revs[0] = fs.commit();
 			fs.inodeForPath(filename).getStat().setType(Stat.TYPE_BLOCK_DEVICE);
+			return 1;
 		});
 	}
 	
@@ -330,11 +347,11 @@ public class DiffSetTest {
 		ZKFS fs = new ZKFS(storage, password);
 		
 		Revision[] revs = new Revision[2];
-		meat.diff(fs, revs, filename);
+		int numDiffs = meat.diff(fs, revs, filename);
 		revs[1] = fs.commit();
 
 		DiffSet diffset = new DiffSet(revs);
-		assertEquals(1, diffset.diffs.size());
+		assertEquals(numDiffs, diffset.diffs.size());
 		assertEquals(filename, diffset.diffs.get(0).path);
 	}
 	

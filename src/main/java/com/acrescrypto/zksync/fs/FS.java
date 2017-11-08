@@ -119,9 +119,9 @@ public abstract class FS {
 		return exists(path, true);
 	}
 	
-	public void squash(String path) {
-		try { setCtime(path, 0); } catch(Exception e) {}
-		try { setMtime(path, 0); } catch(Exception e) {}
-		try { setAtime(path, 0); } catch(Exception e) {}
+	public void squash(String path) throws IOException {
+		try { setCtime(path, 0); } catch(UnsupportedOperationException e) {}
+		try { setMtime(path, 0); } catch(UnsupportedOperationException e) {}
+		try { setAtime(path, 0); } catch(UnsupportedOperationException e) {}
 	}
 }
