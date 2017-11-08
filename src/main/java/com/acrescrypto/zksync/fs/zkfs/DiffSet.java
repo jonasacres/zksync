@@ -1,19 +1,18 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 
-import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 
 public class DiffSet {
-	Revision[] revisions;
+	private Revision[] revisions;
 	RevisionTag commonAncestor;
 	
 	private HashMap<RevisionTag,ZKFS> filesystems = new HashMap<RevisionTag,ZKFS>();
-	ArrayList<FileDiff> diffs = new ArrayList<FileDiff>();
+	HashMap<String,FileDiff> diffs = new HashMap<String,FileDiff>();
 	
 	public DiffSet(Revision[] revisions) throws IOException {
 		this.revisions = revisions;
@@ -26,25 +25,15 @@ public class DiffSet {
 		for(String path : allPaths()) {
 			FileDiff diff = versionsOfFile(path);
 			if(diff.hasMultipleVersions()) {
-				diffs.add(diff);
+				diffs.put(diff.path, diff);
 			}
 		}
 		
 		filesystems = null;
 	}
 	
-	public ArrayList<FileDiff> getDiffs() {
-		return diffs;
-	}
-	
-	public ArrayList<FileDiff> getUnresolvedDiffs() {
-		ArrayList<FileDiff> unresolved = new ArrayList<FileDiff>();
-		for(FileDiff diff : diffs) {
-			if(diff.getResolution() == null) continue;
-			unresolved.add(diff);
-		}
-		
-		return unresolved;
+	public Collection<FileDiff> getDiffs() {
+		return diffs.values();
 	}
 	
 	public ZKFS openFS(RevisionTag tag) throws IOException {
@@ -56,7 +45,7 @@ public class DiffSet {
 		HashSet<String> allPaths = new HashSet<String>();
 		allPaths.add("/");
 		
-		for(Revision rev : revisions) {
+		for(Revision rev : getRevisions()) {
 			ZKFS fs = openFS(rev.tag);
 			for(String path : fs.opendir("/").listRecursive()) {
 				allPaths.add(path);
@@ -67,14 +56,10 @@ public class DiffSet {
 	
 	public FileDiff versionsOfFile(String path) throws IOException {
 		FileDiff diff = new FileDiff(path);
-		for(Revision rev : revisions) {
+		for(Revision rev : getRevisions()) {
 			diff.addVersion(rev, versionOfFileForTag(rev.tag, path));
 		}
 		return diff;
-	}
-	
-	public boolean isResolved() {
-		return getUnresolvedDiffs().isEmpty();
 	}
 	
 	protected Inode versionOfFileForTag(RevisionTag tag, String path) throws IOException {
@@ -84,23 +69,22 @@ public class DiffSet {
 			return null;
 		}
 	}
+
+	public Revision[] getRevisions() {
+		return revisions;
+	}
 	
-	public Revision applyResolution() throws IOException {
-		ZKFS fs = openFS(revisions[0].tag);
-		
-		for(FileDiff diff : diffs) {
-			if(!diff.isResolved()) throw new EINVALException("Unresolved conflicts");
-			Inode resolution = diff.resolution;
-			if(resolution == null) {
-				fs.unlink(diff.path);
-			} else {
-				fs.inodeTable.replaceInode(resolution.getStat().getInodeId(), resolution);
-				ZKDirectory dir = fs.opendir(fs.dirname(diff.path));
-				dir.link(resolution, fs.basename(diff.path));
-				dir.close();
-			}
+	public Revision latestRevision() {
+		Revision latest = null;
+		for(Revision rev : revisions) {
+			if(latest == null || rev.generation > latest.generation) latest = rev;
+			else if(latest.generation == rev.generation && rev.supernode.stat.getMtime() > latest.supernode.stat.getMtime()) latest = rev;
+			// TODO: further tie-breaking on tag
 		}
-		
-		return fs.commit(revisions, fs.deriveKey(ZKFS.KEY_TYPE_PRNG, ZKFS.KEY_INDEX_REVISION).authenticate(fs.inodeTable.inode.refId));
+		return latest;
+	}
+	
+	public FileDiff diffForPath(String path) {
+		return diffs.getOrDefault(path, null);
 	}
 }

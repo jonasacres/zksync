@@ -54,6 +54,11 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	@Override
+	public boolean contains(String filename) {
+		return entries.containsKey(filename);
+	}
+	
+	@Override
 	public String[] listRecursive() throws IOException {
 		return listRecursive(0);
 	}

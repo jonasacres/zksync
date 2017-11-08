@@ -77,6 +77,12 @@ public class LocalDirectory implements Directory {
 	}
 	
 	@Override
+	public boolean contains(String entry) {
+		java.io.File file = new java.io.File(Paths.get(path, entry).toString());
+		return file.exists();
+	}
+	
+	@Override
 	public Directory mkdir(String name) throws IOException {
 		String fullPath = Paths.get(path, name).toString();
 		fs.mkdir(fullPath);

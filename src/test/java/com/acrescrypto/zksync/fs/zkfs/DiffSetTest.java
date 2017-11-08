@@ -4,7 +4,7 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.security.Security;
-import java.util.ArrayList;
+import java.util.Collection;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.After;
@@ -13,7 +13,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.acrescrypto.zksync.Timer;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
@@ -28,7 +27,7 @@ public class DiffSetTest {
 	Revision[] children;
 	char[] password = "zksync".toCharArray();
 	
-	public final static int NUM_CHILDREN = 8;
+	public final static int NUM_CHILDREN = 4;
 	
 	@BeforeClass
 	public static void beforeClass() {
@@ -70,7 +69,7 @@ public class DiffSetTest {
 	public void testDetectsDifferencesBetweenSiblings() throws IOException {
 		Revision[] list = new Revision[] { children[0], children[1] };
 		DiffSet diffset = new DiffSet(list);
-		ArrayList<FileDiff> diffs = diffset.getDiffs();
+		Collection<FileDiff> diffs = diffset.getDiffs();
 		
 		assertEquals(2, diffs.size());
 		
@@ -108,7 +107,7 @@ public class DiffSetTest {
 		}
 
 		DiffSet diffset = new DiffSet(children);
-		ArrayList<FileDiff> diffs = diffset.getDiffs();
+		Collection<FileDiff> diffs = diffset.getDiffs();
 		storage.rmrf("/");
 		
 		assertEquals(1, diffs.size());
@@ -118,7 +117,7 @@ public class DiffSetTest {
 	public void testDetectsParentChildDifferences() throws IOException {
 		Revision[] list = new Revision[] { parent, children[0] };
 		DiffSet diffset = new DiffSet(list);
-		ArrayList<FileDiff> diffs = diffset.getDiffs();
+		Collection<FileDiff> diffs = diffset.getDiffs();
 		
 		assertEquals(3, diffs.size()); // modified, child and /
 	}
@@ -361,12 +360,6 @@ public class DiffSetTest {
 		DiffSet diffset = new DiffSet(revs);
 		storage.rmrf("/");
 		assertEquals(numDiffs, diffset.diffs.size());
-		assertEquals(filename, diffset.diffs.get(0).path);
+		assertTrue(diffset.diffs.containsKey(filename));
 	}
-	
-	// TODO: applyResolution should create a new revision that is descended from all its parents
-	// TODO: applyResolution should be deterministic
-	// TODO: directory structure checks
-	// TODO: nlink correctness checks
-	// TODO: isResolved reflects if all diffs are resolved
 }
