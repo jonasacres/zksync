@@ -3,7 +3,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.util.Hashtable;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.*;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
@@ -211,10 +210,7 @@ public class ZKFS extends FS {
 	public void write(String path, byte[] contents) throws IOException {
 		mkdirp(dirname(path));
 		
-		Util.startClock("open");
-		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT);
-		Util.endClock("open");
-		
+		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT);		
 		file.write(contents);
 		file.close();
 	}

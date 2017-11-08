@@ -25,7 +25,8 @@ public class RevisionTree {
 		Directory revisionDir = fs.storage.opendir(ZKFS.REVISION_DIR);
 		byParentTag.clear();
 		byTag.clear();
-		for(String revPath : revisionDir.listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES)) {
+		String[] list = revisionDir.listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES);
+		for(String revPath : list) {
 			recordEntry(revPath);
 		}
 	}
@@ -144,6 +145,7 @@ public class RevisionTree {
 		HashSet<RevisionTag> allAncestors = null;
 		for(RevisionTag tag : tags) {
 			Collection<RevisionTag> ancestors = ancestorsOf(tag);
+			
 			if(allAncestors == null) allAncestors = new HashSet<RevisionTag>(ancestors);
 			else allAncestors.retainAll(ancestors);
 		}

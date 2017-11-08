@@ -7,11 +7,13 @@ import java.security.Security;
 import java.util.ArrayList;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.Timer;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
@@ -42,7 +44,7 @@ public class DiffSetTest {
 	@Before
 	public void beforeEach() throws IOException {
 		storage = new LocalFS("/tmp/zksync-diffset");
-		if(storage.equals("/")) storage.rmrf("/");
+		if(storage.exists("/")) storage.rmrf("/");
 		ZKFS fs = new ZKFS(storage, password);
 		fs.write("unmodified", "parent".getBytes());
 		fs.write("modified", "replaceme".getBytes());
@@ -57,6 +59,11 @@ public class DiffSetTest {
 			fs.squash("modified");
 			children[i] = fs.commit();
 		}
+	}
+	
+	@After
+	public void afterEach() throws IOException {
+		storage.rmrf("/");
 	}
 	
 	@Test
@@ -83,7 +90,7 @@ public class DiffSetTest {
 	@Test
 	public void testDetectsFakeDifferencesBetweenSiblingsForNonImmediates() throws IOException {
 		LocalFS storage = new LocalFS("/tmp/zksync-diffset-nonimmediate");
-		if(storage.equals("/")) storage.rmrf("/");
+		if(storage.exists("/")) storage.rmrf("/");
 		ZKFS fs = new ZKFS(storage, password);
 		byte[] buf = new byte[fs.privConfig.getPageSize()+1];
 		fs.write("unmodified", buf);
@@ -102,6 +109,7 @@ public class DiffSetTest {
 
 		DiffSet diffset = new DiffSet(children);
 		ArrayList<FileDiff> diffs = diffset.getDiffs();
+		storage.rmrf("/");
 		
 		assertEquals(1, diffs.size());
 	}
@@ -317,7 +325,7 @@ public class DiffSetTest {
 	public void testDirectoryEntriesAreADifference() throws IOException {
 		String filename = "scratch";
 		LocalFS storage = new LocalFS("/tmp/zksync-diffset-" + filename);
-		if(storage.equals("/")) storage.rmrf("/");
+		if(storage.exists("/")) storage.rmrf("/");
 		ZKFS fs = new ZKFS(storage, password);
 		
 		Revision[] revs = new Revision[2];
@@ -335,6 +343,7 @@ public class DiffSetTest {
 		revs[1] = fs.commit();
 
 		DiffSet diffset = new DiffSet(revs);
+		storage.rmrf("/");
 		assertEquals(3, diffset.diffs.size());
 	}
 	
@@ -344,11 +353,13 @@ public class DiffSetTest {
 		if(storage.equals("/")) storage.rmrf("/");
 		ZKFS fs = new ZKFS(storage, password);
 		
-		Revision[] revs = new Revision[2];
+		Revision[] revs = new Revision[2];		
 		int numDiffs = meat.diff(fs, revs, filename);
+		
 		revs[1] = fs.commit();
-
+		
 		DiffSet diffset = new DiffSet(revs);
+		storage.rmrf("/");
 		assertEquals(numDiffs, diffset.diffs.size());
 		assertEquals(filename, diffset.diffs.get(0).path);
 	}

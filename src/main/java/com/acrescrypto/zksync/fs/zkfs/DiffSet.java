@@ -20,6 +20,7 @@ public class DiffSet {
 		
 		RevisionTag[] tags = new RevisionTag[revisions.length];
 		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i].tag;
+		
 		commonAncestor = revisions[0].fs.getRevisionTree().commonAncestorOf(tags);
 		
 		for(String path : allPaths()) {
