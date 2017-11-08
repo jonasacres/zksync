@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -141,6 +142,16 @@ public class Inode {
 		clone.refId = refId.clone();
 		clone.stat = stat.clone();
 		return clone;
+	}
+	
+	public int hashCode() {
+		return ByteBuffer.wrap(fs.crypto.hash(serialize())).getInt(); // TODO: super slow, reconsider
+	}
+	
+	public boolean equals(Object other) {
+		if(!other.getClass().equals(this.getClass())) return false;
+		Inode __other = (Inode) other;
+		return Arrays.equals(serialize(), __other.serialize());
 	}
 	
 	// TODO: equals, hashCode

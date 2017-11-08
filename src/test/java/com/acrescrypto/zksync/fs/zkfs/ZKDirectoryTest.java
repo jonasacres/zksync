@@ -38,4 +38,6 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 	public static void beforeClass() {
 		Security.addProvider(new BouncyCastleProvider());
 	}
+	
+	// TODO: test that invalid directories cause an appropriate exception
 }

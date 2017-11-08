@@ -347,6 +347,40 @@ public class ZKFSTest extends FSTestBase {
 		assertTrue(Arrays.equals(revFs.inodeTable.merkel.getMerkelTag(), zkscratch.inodeTable.merkel.getMerkelTag()));
 	}
 	
+	@Test
+	public void testDistinctFileWrites() throws IOException {
+		byte[][] texts = new byte[10][];
+		for(int i = 0; i < texts.length; i++) {
+			texts[i] = ("data" + i).getBytes();
+			zkscratch.write("file" + i, texts[i]);
+		}
+		
+		for(int i = 0; i < texts.length; i++) {
+			assertTrue(Arrays.equals(texts[i], zkscratch.read("file" + i)));
+		}
+	}
+	
+	@Test
+	public void testDistinctDirectoryWrites() throws IOException {
+		byte[][] texts = new byte[10][];
+		for(int i = 0; i < texts.length; i++) {
+			texts[i] = ("data" + i).getBytes();
+			zkscratch.write("directory" + i + "/file", texts[i]);
+		}
+		
+		for(int i = 0; i < texts.length; i++) {
+			assertTrue(Arrays.equals(texts[i], zkscratch.read("directory" + i + "/file")));
+		}
+	}
+	
+	@Test
+	public void testNextInodeIdAfterFSLoad() throws IOException {
+		for(int i = 0; i < 10; i++) zkscratch.write("burner-inode-"+i, ("content"+i).getBytes());
+		Revision rev = zkscratch.commit();
+		ZKFS recoveredFs = new ZKFS(rev);
+		assertEquals(zkscratch.inodeTable.nextInodeId, recoveredFs.inodeTable.nextInodeId);
+	}
+	
 	// TODO: modes, directories, hardlinks, symlinks, fifos, sockets, chardevs, blockdevs
 	// TODO: open default revision
 	// TODO: open non-default revision

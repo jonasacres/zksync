@@ -6,18 +6,17 @@ import java.util.HashMap;
 import java.util.HashSet;
 
 import com.acrescrypto.zksync.exceptions.EINVALException;
-import com.acrescrypto.zksync.fs.Directory;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 
 public class DiffSet {
 	Revision[] revisions;
 	RevisionTag commonAncestor;
 	
-	private HashMap<RevisionTag,ZKFS> filesystems;
-	ArrayList<FileDiff> diffs;
+	private HashMap<RevisionTag,ZKFS> filesystems = new HashMap<RevisionTag,ZKFS>();
+	ArrayList<FileDiff> diffs = new ArrayList<FileDiff>();
 	
 	public DiffSet(Revision[] revisions) throws IOException {
 		this.revisions = revisions;
-		openFilesystems();
 		
 		RevisionTag[] tags = new RevisionTag[revisions.length];
 		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i].tag;
@@ -47,17 +46,18 @@ public class DiffSet {
 		return unresolved;
 	}
 	
-	public void openFilesystems() throws IOException {
-		filesystems = new HashMap<RevisionTag,ZKFS>();
-		for(Revision rev : revisions) {
-			filesystems.put(rev.tag, new ZKFS(rev));
-		}
+	public ZKFS openFS(RevisionTag tag) throws IOException {
+		filesystems.putIfAbsent(tag, new ZKFS(new Revision(tag)));
+		return filesystems.get(tag);
 	}
 	
 	public HashSet<String> allPaths() throws IOException {
 		HashSet<String> allPaths = new HashSet<String>();
-		for(ZKFS fs : filesystems.values()) {
-			for(String path : fs.opendir("/").listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES)) {
+		// allPaths.add("/");
+		
+		for(Revision rev : revisions) {
+			ZKFS fs = openFS(rev.tag);
+			for(String path : fs.opendir("/").listRecursive()) {
 				allPaths.add(path);
 			}
 		}
@@ -67,10 +67,8 @@ public class DiffSet {
 	public FileDiff versionsOfFile(String path) throws IOException {
 		FileDiff diff = new FileDiff(path);
 		for(Revision rev : revisions) {
-			Inode original = filesystems.get(commonAncestor).inodeForPath(path),
-				  modified = filesystems.get(rev.tag).inodeForPath(path);
-			if(original == null && modified == null) continue;
-			else if(original == null || modified == null || original.equals(modified)) diff.addVersion(rev, modified);
+			diff.addVersion(rev, versionOfFileForTag(rev.tag, path));
+			// TODO: this would be a great place to dump / and figure out how we're getting all these diffs
 		}
 		return diff;
 	}
@@ -79,8 +77,16 @@ public class DiffSet {
 		return getUnresolvedDiffs().isEmpty();
 	}
 	
+	protected Inode versionOfFileForTag(RevisionTag tag, String path) throws IOException {
+		try {
+			return openFS(tag).inodeForPath(path);
+		} catch (ENOENTException e) {
+			return null;
+		}
+	}
+	
 	public Revision applyResolution() throws IOException {
-		ZKFS fs = filesystems.get(revisions[0].tag);
+		ZKFS fs = openFS(revisions[0].tag);
 		
 		for(FileDiff diff : diffs) {
 			if(!diff.isResolved()) throw new EINVALException("Unresolved conflicts");

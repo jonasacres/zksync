@@ -83,7 +83,7 @@ public class InodeTable extends ZKFile {
 			
 			Inode inode = new Inode(fs, buf.array());
 			long inodeId = inode.getStat().getInodeId();
-			if(inodeId >= nextInodeId) nextInodeId = inodeId; 
+			if(inodeId >= nextInodeId) nextInodeId = inodeId+1;
 			inodes.put(inodeId, inode);
 		}
 	}
