@@ -338,8 +338,6 @@ public class DiffSetTest {
 		assertEquals(3, diffset.diffs.size());
 	}
 	
-	// TODO: untested: inode id
-	
 	protected void trivialDiffTest(DiffExampleLambda meat) throws IOException {
 		String filename = "scratch";
 		LocalFS storage = new LocalFS("/tmp/zksync-diffset-" + filename);
@@ -357,5 +355,7 @@ public class DiffSetTest {
 	
 	// TODO: applyResolution should create a new revision that is descended from all its parents
 	// TODO: applyResolution should be deterministic
+	// TODO: directory structure checks
+	// TODO: nlink correctness checks
 	// TODO: isResolved reflects if all diffs are resolved
 }

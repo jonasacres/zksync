@@ -38,6 +38,9 @@ public class Key {
 	
 	public byte[] wrappedEncrypt(byte[] plaintext, int padSize, PRNG rng) {
 		if(padSize < 0) throw new IllegalArgumentException("pad size cannot be negative for wrappedEncrypt");
+		/* TODO: this means we're trusting not only our RNG, but everyone else's RNG. what if RNG output is combined
+		 * with existing key material?
+		 */
 		Key subkey = new Key(crypto, rng);
 		byte[] outerIv = rng.getBytes(crypto.symIvLength()), innerIv = rng.getBytes(crypto.symIvLength());
 		byte[] ciphertext = subkey.encrypt(innerIv, plaintext, padSize);
