@@ -19,6 +19,32 @@ public class Revision {
 	protected RevisionTag tag; // unique, non-confidential identifier for this revision
 	long generation;
 
+	/* TODO We have a pretty serious problem here. The revision file size is fixed, to protect privacy.
+	 * However, we allow certain variable-sized data, such as the username, group name and (most importantly) the
+	 * parent list. Each parent is 64 bytes long. 8 parents is 512 bytes -- enough to fill the current allocation.
+	 * 
+	 * One approach would be to cap the number of merges. This seems inelegant to me. Although, larger-sized merges
+	 * could be done in smaller steps.
+	 * 
+	 * Another is to write revision history as a file in the zkfs. But then, we can't get the history out without
+	 * decrypting and loading the inode table.
+	 * 
+	 * A compromise might be to store what is possible inside the revision file, and then have the full data in the
+	 * inode table. That makes it really hard to calculate leaves, though. Most archives would never experience the
+	 * problem, but those that did would have to keep burning time on however many revisions they had that exceeded
+	 * the limit, forever (or at least until the revisions were purged from the archive).
+	 * 
+	 * I do like the idea of a parent record in the archive. It can be encoded as an immediate in most instances,
+	 * and it will allow linked-list-like traversal of the revision history even without the revision files. This
+	 * would also mean that revision files could be pruned entirely, except for leaves, and then recalculated as
+	 * needed.
+	 * 
+	 * This makes me question whether I have designed revisions poorly. Oh shit. What if the tag IS the revision file,
+	 * and given a tag you could begin requesting the inode table? Then the history is un-loseable, even if going
+	 * back is O(n). But really -- how often do you want to go that far back?
+	 * 
+	 * Jesus. Ditching revision files is gonna make me rewrite most of what I've done for the past two weeks.
+	 */
 	public final static int REVISION_FILE_SIZE = 512;
 
 	public static Revision activeRevision(ZKFS fs) throws IOException {
@@ -57,6 +83,7 @@ public class Revision {
 		RevisionTag recreated = new RevisionTag(this, ciphertext);
 		if (!Arrays.equals(recreated.getTag(), tag.getTag()))
 			throw new SecurityException();
+		this.tag = tag;
 	}
 
 	// write encrypted revision file to storage (path is dictated by revision

@@ -412,7 +412,7 @@ public class ZKFSTest extends FSTestBase {
 		PubConfig.defaultArgon2Parallelism = 4;
 	}
 	
-	protected static void restoreArgon2Costs() {
+	public static void restoreArgon2Costs() {
 		// TODO: see note for cheapenArgon2Costs
 //		PubConfig.defaultArgon2TimeCost = oldDefaultTimeCost;
 //		PubConfig.defaultArgon2MemoryCost = oldDefaultMemoryCost;

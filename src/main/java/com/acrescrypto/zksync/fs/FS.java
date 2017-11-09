@@ -55,6 +55,7 @@ public abstract class FS {
 	}
 
 	public String dirname(String path) {
+		if(path.equals("/")) return path;
 		String[] comps = path.split("/");
 		String parent = String.join("/", Arrays.copyOfRange(comps, 0, comps.length-1));
 		if(comps[0] == "") parent = "/" + parent;

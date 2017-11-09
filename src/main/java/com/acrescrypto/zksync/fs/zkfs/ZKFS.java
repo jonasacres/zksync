@@ -6,6 +6,7 @@ import java.util.Hashtable;
 import com.acrescrypto.zksync.crypto.*;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
+import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
 import com.acrescrypto.zksync.fs.zkfs.config.PrivConfig;
 import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
@@ -39,6 +40,12 @@ public class ZKFS extends FS {
 	public final static String REVISION_DIR = ".zksync/archive/revisions/";
 	public final static String LOCAL_DIR = ".zksync/local/";
 	public final static String ACTIVE_REVISION = ".zskync/local/active-revision";
+	
+	public static ZKFS blankArchive(String path, char[] passphrase) throws IOException {
+		LocalFS storage = new LocalFS(path);
+		if(storage.exists("/")) storage.rmrf("/");
+		return new ZKFS(storage, passphrase);
+	}
 	
 	public ZKFS(FS storage, char[] passphrase) throws IOException {
 		this(storage, passphrase, null);

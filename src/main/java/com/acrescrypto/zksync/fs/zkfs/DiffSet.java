@@ -8,7 +8,7 @@ import java.util.HashSet;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 
 public class DiffSet {
-	private Revision[] revisions;
+	protected Revision[] revisions;
 	RevisionTag commonAncestor;
 	
 	private HashMap<RevisionTag,ZKFS> filesystems = new HashMap<RevisionTag,ZKFS>();
