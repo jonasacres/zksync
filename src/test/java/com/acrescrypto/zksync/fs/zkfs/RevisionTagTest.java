@@ -15,8 +15,8 @@ import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
 public class RevisionTagTest {
 	ZKFS fs;
-	Revision rev, parent;
-	RevisionTag tag;
+	RevisionInfo rev, parent;
+	RefTag tag;
 	
 	@Before
 	public void beforeEach() throws IOException {
@@ -40,7 +40,7 @@ public class RevisionTagTest {
 	
 	@Test
 	public void testSerialization() throws IOException {
-		RevisionTag deserialized = new RevisionTag(fs, tag.getPath());
+		RefTag deserialized = new RefTag(fs, tag.getPath());
 		assertTrue(Arrays.equals(tag.getTag(), deserialized.getTag()));
 		assertEquals(tag.authorHash, deserialized.authorHash);
 		assertEquals(tag.flags, deserialized.flags);
@@ -73,10 +73,10 @@ public class RevisionTagTest {
 	
 	@Test
 	public void testTagFormat() {
-		assertEquals(16, RevisionTag.KEY_SALT_SIZE);
-		assertEquals(50, RevisionTag.REV_TAG_SIZE);
-		byte[] salt = new byte[RevisionTag.KEY_SALT_SIZE],
-			   ciphertext = new byte[RevisionTag.REV_TAG_SIZE - RevisionTag.KEY_SALT_SIZE];
+		assertEquals(16, RefTag.KEY_SALT_SIZE);
+		assertEquals(50, RefTag.REV_TAG_SIZE);
+		byte[] salt = new byte[RefTag.KEY_SALT_SIZE],
+			   ciphertext = new byte[RefTag.REV_TAG_SIZE - RefTag.KEY_SALT_SIZE];
 		
 		ByteBuffer buf = ByteBuffer.wrap(tag.tag);
 		buf.get(ciphertext);

@@ -27,8 +27,8 @@ public class DiffSetResolverTest {
 	@Ignore // TODO: Disabled for now while we revisit revision files
 	public void testMergesInheritFromAllParents() throws IOException, DiffResolutionException {
 		ZKFS fs = ZKFS.blankArchive("/tmp/diffset-resolver-merges-inherit-all-parents", "zksync".toCharArray());
-		Revision parent = fs.commit();
-		Revision[] children = new Revision[8];
+		RevisionInfo parent = fs.commit();
+		RevisionInfo[] children = new RevisionInfo[8];
 		
 		for(int i = 0; i < 8; i++) {
 			fs = new ZKFS(fs.getStorage(), "zksync".toCharArray(), parent);
@@ -36,9 +36,9 @@ public class DiffSetResolverTest {
 			children[i] = fs.commit();
 		}
 		
-		ArrayList<RevisionTag> leaves = fs.getRevisionTree().leaves();
-		Revision[] leavesArray = new Revision[leaves.size()];
-		for(int i = 0; i < leaves.size(); i++) leavesArray[i] = new Revision(leaves.get(i));
+		ArrayList<RefTag> leaves = fs.getRevisionTree().leaves();
+		RevisionInfo[] leavesArray = new RevisionInfo[leaves.size()];
+		for(int i = 0; i < leaves.size(); i++) leavesArray[i] = new RevisionInfo(leaves.get(i));
 		
 		assertEquals(children.length, leaves.size());
 		DiffSet diffset = new DiffSet(leavesArray);
@@ -49,10 +49,10 @@ public class DiffSetResolverTest {
 			return diff.latestVersion();
 		});
 		
-		Revision merge = resolver.resolve();
+		RevisionInfo merge = resolver.resolve();
 		assertEquals(children.length, merge.getNumParents());
 		// TODO: individually check each parent to ensure there's a one-to-one correspondence
-		ArrayList<RevisionTag> newLeaves = fs.getRevisionTree().leaves();
+		ArrayList<RefTag> newLeaves = fs.getRevisionTree().leaves();
 		assertEquals(1, newLeaves.size());
 		assertEquals(merge.getTag(), newLeaves.get(0));
 	}

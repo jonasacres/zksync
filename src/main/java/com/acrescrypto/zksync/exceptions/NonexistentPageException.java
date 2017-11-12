@@ -2,10 +2,13 @@ package com.acrescrypto.zksync.exceptions;
 
 import java.io.IOException;
 
+import com.acrescrypto.zksync.Util;
+import com.acrescrypto.zksync.fs.zkfs.RefTag;
+
 public class NonexistentPageException extends IOException {
 
-	public NonexistentPageException(long inodeId, int pageNum) {
-		super("page not found: inode " + inodeId + ", page: " + pageNum);
+	public NonexistentPageException(RefTag tag, int pageNum) {
+		super("page not found: revtag " + Util.bytesToHex(tag.getBytes()) + ", page: " + pageNum);
 	}
 
 	/**

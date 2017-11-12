@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
@@ -12,31 +11,45 @@ import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 
 public class PageMerkel {
 	ZKFS fs;
-	Inode inode;
+	RefTag tag;
 	PageMerkelNode[] nodes;
 	int numPages;
 	
-	PageMerkel(ZKFS fs, Inode inode) throws InaccessibleStorageException {
-		this.fs = fs;
-		this.inode = inode;
-		if(inode.getRefTag() != null) {
-			switch(inode.getRefType()) {
-			case Inode.REF_TYPE_IMMEDIATE:
-			case Inode.REF_TYPE_INDIRECT:
-				setPageTag(0, inode.getRefTag());
-				break;
-			case Inode.REF_TYPE_2INDIRECT:
-				read();
-				break;
-			}
+	public static String pathForChunk(RefTag refTag, int chunk) {
+		ByteBuffer chunkTagSource = ByteBuffer.allocate(refTag.hash.length+4);
+		chunkTagSource.put(refTag.hash);
+		chunkTagSource.putInt(chunk);
+		
+		Key authKey = refTag.fs.deriveKey(ZKFS.KEY_TYPE_AUTH, ZKFS.KEY_INDEX_PAGE_MERKEL, refTag.getHash());
+		byte[] chunkTag = authKey.authenticate(chunkTagSource.array());
+		return ZKFS.pathForHash(chunkTag);
+	}
+	
+	PageMerkel(RefTag tag) throws InaccessibleStorageException {
+		this.fs = tag.fs;
+		this.tag = tag;
+		
+		switch(tag.getRefType()) {
+		case Inode.REF_TYPE_IMMEDIATE:
+		case Inode.REF_TYPE_INDIRECT:
+			setPageTag(0, tag.getHash());
+			break;
+		case Inode.REF_TYPE_2INDIRECT:
+			read();
+			break;
 		}
 	}
 	
-	public byte[] getMerkelTag() {
+	public RefTag getRefTag() {
 		// empty tree => 0 pages => contents = "", guaranteed to be an immediate
-		if(nodes == null || nodes.length == 0) return new byte[] {};
+		if(nodes == null || nodes.length == 0) return RefTag.blank(fs);
 		nodes[0].recalculate();
-		return nodes[0].tag.clone();
+		
+		int type;
+		if(numPages == 0) type = Inode.REF_TYPE_IMMEDIATE; // TODO: not sure about this...
+		else if(numPages == 1) type = Inode.REF_TYPE_INDIRECT;
+		else type = Inode.REF_TYPE_2INDIRECT;
+		return new RefTag(fs, nodes[0].tag, type, numPages);
 	}
 	
 	public void setPageTag(int pageNum, byte[] pageTag) {
@@ -46,7 +59,7 @@ public class PageMerkel {
 	
 	public byte[] getPageTag(int pageNum) throws NonexistentPageException {
 		if(pageNum < 0 || pageNum >= numPages) {
-			throw new NonexistentPageException(inode.getStat().getInodeId(), pageNum);
+			throw new NonexistentPageException(tag, pageNum);
 		}
 		return nodes[numPages - 1 + pageNum].tag.clone();
 	}
@@ -55,27 +68,22 @@ public class PageMerkel {
 		return fs.getCrypto().hashLength()*(2*numPages-1);
 	}
 	
-	public byte[] commit() throws InaccessibleStorageException {
+	public RefTag commit() throws InaccessibleStorageException {
 		int chunkCount = (int) Math.ceil( (double) plaintextSize() / fs.getPrivConfig().getPageSize() );
+		RefTag newTag = getRefTag();
 		
 		ByteBuffer plaintext = ByteBuffer.allocate(nodes.length*fs.getCrypto().hashLength());
-		nodes[0].recalculate();
-		byte[] refTag = nodes[0].tag.clone();
-		ByteBuffer chunkTagSource = ByteBuffer.allocate(refTag.length+4);
-		chunkTagSource.put(refTag);
 				
 		for(PageMerkelNode node : nodes) plaintext.put(node.tag);
 		for(int i = 0; i < chunkCount; i++) {
 			ByteBuffer chunkText = ByteBuffer.wrap(plaintext.array(),
 					(int) (i*fs.getPrivConfig().getPageSize()),
 					Math.min(fs.getPrivConfig().getPageSize(), plaintext.capacity()));
-			byte[] chunkCiphertext = cipherKey(getMerkelTag()).wrappedEncrypt(chunkText.array(),
+			byte[] chunkCiphertext = cipherKey(getRefTag()).wrappedEncrypt(chunkText.array(),
 					(int) fs.getPrivConfig().getPageSize());
 			
-			chunkTagSource.position(refTag.length);
-			chunkTagSource.putInt(i);
-			byte[] chunkTag = authKey(getMerkelTag()).authenticate(chunkTagSource.array());
-			String path = ZKFS.DATA_DIR + fs.getStorage().pathForHash(chunkTag);
+			String path = pathForChunk(newTag, i);
+			
 			try {
 				fs.getStorage().write(path, chunkCiphertext);
 				fs.getStorage().squash(path);
@@ -84,37 +92,32 @@ public class PageMerkel {
 			}
 		}
 		
-		return refTag;
+		return tag = newTag;
 	}
 	
 	private void read() throws InaccessibleStorageException {
-		int expectedPages = (int) Math.ceil((double) inode.getStat().getSize()/fs.getPrivConfig().getPageSize());
+		long expectedPages = tag.getNumChunks(); // TODO: make sure 'tag' gets to take advantage of inode size info when we know it! (this is yet another problem taht goes away with unambiguous tags...)
 		expectedPages = (int) Math.pow(2, Math.ceil(Math.log(expectedPages)/Math.log(2)));
 		
-		int expectedNodes = 2*expectedPages - 1;
+		long expectedNodes = 2*expectedPages - 1;
 		int expectedChunks = (int) Math.ceil((double) expectedNodes*fs.getCrypto().hashLength()/fs.getPrivConfig().getPageSize());
 		
 		ByteBuffer readBuf = ByteBuffer.allocate((int) (expectedChunks*fs.getPrivConfig().getPageSize()));
-		ByteBuffer chunkTagSource = ByteBuffer.allocate(inode.getRefTag().length+4);
-		chunkTagSource.put(inode.getRefTag());
 		
 		resize(expectedPages);
 		
 		// TODO: consider not requiring a full readBuf; can we rely on guarantee hashes won't cross chunk boundaries?
 		
-		if(inode.getRefType() == Inode.REF_TYPE_2INDIRECT) {
+		if(tag.getRefType() == Inode.REF_TYPE_2INDIRECT) {
 			for(int i = 0; i < expectedChunks; i++) {
-				chunkTagSource.position(inode.getRefTag().length);
-				chunkTagSource.putInt(i);
-				byte[] chunkTag = authKey(inode.getRefTag()).authenticate(chunkTagSource.array());
-				String path = ZKFS.DATA_DIR + fs.pathForHash(chunkTag);
+				String path = pathForChunk(tag, i);
 				byte[] chunkCiphertext;
 				try {
 					chunkCiphertext = fs.getStorage().read(path);
 				} catch (IOException e) {
 					throw new InaccessibleStorageException();
 				}
-				byte[] chunkPlaintext = cipherKey(inode.getRefTag()).wrappedDecrypt(chunkCiphertext);
+				byte[] chunkPlaintext = cipherKey(tag).wrappedDecrypt(chunkCiphertext);
 				readBuf.put(chunkPlaintext);
 			}
 			
@@ -127,7 +130,7 @@ public class PageMerkel {
 			
 			checkTreeIntegrity();
 		} else {
-			nodes[0].tag = inode.getRefTag().clone();
+			nodes[0].tag = tag.getBytes();
 		}
 	}
 	
@@ -144,7 +147,7 @@ public class PageMerkel {
 		}
 	}
 
-	public void resize(int newMinNodes) {
+	public void resize(long newMinNodes) {
 		double log2 = Math.log(2);
 		int newSize =  (int) Math.pow(2, Math.ceil(Math.log(newMinNodes)/log2));
 		PageMerkelNode[] newNodes = new PageMerkelNode[Math.max(2*newSize-1, 1)];
@@ -202,23 +205,7 @@ public class PageMerkel {
 		this.nodes = newNodes;
 	}
 	
-	private Key cipherKey(byte[] refTag) {
-		return fs.deriveKey(ZKFS.KEY_TYPE_CIPHER, ZKFS.KEY_INDEX_PAGE_MERKEL, refTag);
-	}
-	
-	private Key authKey(byte[] refTag) {
-		return fs.deriveKey(ZKFS.KEY_TYPE_AUTH, ZKFS.KEY_INDEX_PAGE_MERKEL, refTag);
-	}
-	
-	public void dumpToConsole(String caption) {
-		int nodeCount = nodes == null ? 0 : nodes.length;
-		System.out.println("Tree dump: " + caption);
-		System.out.println("Inode: " + inode.getStat().getInodeId());
-		System.out.println("Size (total nodes): " + nodeCount);
-		System.out.println("Size (pages): " + numPages);
-		for(int i = 0; i < nodeCount; i++) {
-			System.out.printf("  Node %2d (%s): %s\n", i, nodes[i].dirty ? "dirty" : "clean", Util.bytesToHex(nodes[i].tag));
-		}
-		System.out.println("");
+	private Key cipherKey(RefTag refTag) {
+		return fs.deriveKey(ZKFS.KEY_TYPE_CIPHER, ZKFS.KEY_INDEX_PAGE_MERKEL, refTag.getBytes());
 	}
 }

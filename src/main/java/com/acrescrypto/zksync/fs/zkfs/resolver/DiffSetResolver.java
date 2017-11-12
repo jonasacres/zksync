@@ -11,7 +11,7 @@ import com.acrescrypto.zksync.fs.zkfs.DiffSet;
 import com.acrescrypto.zksync.fs.zkfs.FileDiff;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
-import com.acrescrypto.zksync.fs.zkfs.Revision;
+import com.acrescrypto.zksync.fs.zkfs.RevisionInfo;
 import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
@@ -32,7 +32,7 @@ public class DiffSetResolver {
 		this.fs = new ZKFS(diffSet.latestRevision());
 	}
 	
-	public Revision resolve() throws IOException, DiffResolutionException {
+	public RevisionInfo resolve() throws IOException, DiffResolutionException {
 		resolveNonDirectories();
 		resolveDirectories();
 		return fs.commit(diffSet.getRevisions(), null); // TODO: need to derive some secure seed here

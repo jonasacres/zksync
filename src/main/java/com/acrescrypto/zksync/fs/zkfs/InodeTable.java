@@ -20,32 +20,26 @@ public class InodeTable extends ZKFile {
 	// TODO: fixed-length inode serialization to support partial inode table reads
 	
 	protected Hashtable<Long,Inode> inodes;
-	protected Revision revision;
+	protected RevisionInfo revision;
 	protected long nextInodeId;
 	
-	public InodeTable(ZKFS fs, Revision revision) throws IOException {
-		this.fs = fs;
+	public InodeTable(RefTag tag) throws IOException {
+		this.fs = tag.fs;
 		this.path = INODE_TABLE_PATH;
 		this.mode = O_RDWR;
-		
-		if(revision != null) {
-			this.inode = revision.getSupernode().clone();
-			this.merkel = new PageMerkel(fs, this.inode);
-
-		}
-		
-		this.revision = revision;
 		this.inodes = new Hashtable<Long,Inode>();
 		
-		if(revision == null) {
+		if(tag.isBlank()) {
 			initialize();
-			return;
-		}
-		
-		readTable();
+		} else {
+			this.merkel = new PageMerkel(tag);
+			this.inode = new Inode(fs);
+			inferSize(tag);
+			readTable();
+		}		
 	}
 
-	public Revision commit(RevisionTag[] additionalParents, byte[] seed) throws IOException {
+	public RevisionInfo commit(RefTag[] additionalParents, byte[] seed) throws IOException {
 		rewind();
 		truncate(0);
 		
@@ -54,15 +48,12 @@ public class InodeTable extends ZKFile {
 			write(inode.serialize());
 		}
 		
+		// TODO: write parents to file
+		RevisionInfo newRevision = new RevisionInfo(fs);
+		newRevision.commit();
+
 		flush();
-		
-		Revision newRevision = new Revision(this);
-		if(getRevision() != null) newRevision.addParent(getRevision().getTag());
-		else newRevision.addParent(RevisionTag.nullTag(fs));
-		for(RevisionTag parentTag : additionalParents) newRevision.addParent(parentTag);
-		newRevision.write(seed);
-		revision = newRevision;
-		return newRevision;
+		return revision = newRevision;
 	}
 	
 	public void readTable() throws IOException {
@@ -120,7 +111,7 @@ public class InodeTable extends ZKFile {
 		inode.getStat().setAtime(now);
 		inode.getStat().setMtime(now);
 		inode.getStat().setMode(0640); // TODO: default mode, uid, gid
-		inode.setRefTag(new byte[] {});
+		inode.setRefTag(RefTag.blank(fs));
 		inode.setRefType(Inode.REF_TYPE_IMMEDIATE);
 		inodes.put(inode.getStat().getInodeId(), inode);
 		return inode;
@@ -142,15 +133,11 @@ public class InodeTable extends ZKFile {
 	}
 	
 	private void initialize() throws InaccessibleStorageException {
-		this.inode = Inode.blankRootInode(fs);
+		this.inode = Inode.defaultRootInode(fs);
 		this.inodes.put(INODE_ID_INODE_TABLE, this.inode);
-		this.merkel = new PageMerkel(fs, this.inode);
+		this.merkel = new PageMerkel(RefTag.blank(fs));
 
 		makeRootDir();
 		nextInodeId = USER_INODE_ID_START;
-	}
-
-	public Revision getRevision() {
-		return revision;
 	}
 }

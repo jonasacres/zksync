@@ -19,7 +19,13 @@ public class Inode {
 	public static final byte REF_TYPE_INDIRECT = 1;
 	public static final byte REF_TYPE_2INDIRECT = 2;
 	
-	public static Inode blankRootInode(ZKFS fs) {
+	public static Inode blankInode(ZKFS fs) {
+		Inode blank = new Inode(fs);
+		blank.setStat(new Stat());
+		return blank;
+	}
+
+	public static Inode defaultRootInode(ZKFS fs) {
 		Inode blank = new Inode(fs);
 		Stat stat = new Stat();
 		long now = System.currentTimeMillis()*1000l*1000l;
@@ -81,12 +87,12 @@ public class Inode {
 		this.refType = refType;
 	}
 
-	public byte[] getRefTag() {
-		return refId;
+	public RefTag getRefTag() {
+		return new RefTag(fs, refId);
 	}
 
-	public void setRefTag(byte[] refId) {
-		this.refId = refId;
+	public void setRefTag(RefTag refTag) {
+		this.refId = refTag.getBytes();
 	}
 	
 	public byte[] serialize() {

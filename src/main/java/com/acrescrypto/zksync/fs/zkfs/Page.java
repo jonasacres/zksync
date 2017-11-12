@@ -14,6 +14,10 @@ public class Page {
 	private ByteBuffer contents;
 	boolean dirty;
 	
+	public static String pathForTag(byte[] tag) {
+		return ZKFS.DATA_DIR + ZKFS.pathForHash(tag);
+	}
+	
 	public Page(ZKFile file, int index) throws IOException {
 		this.file = file;
 		this.pageNum = index;
@@ -64,7 +68,7 @@ public class Page {
 		this.file.setPageTag(pageNum, pageTag);
 		
 		try {
-			String path = ZKFS.DATA_DIR + file.getFS().pathForHash(pageTag);
+			String path = pathForTag(pageTag);
 			file.getFS().getStorage().write(path, ciphertext);
 			file.getFS().getStorage().squash(path); 
 		} catch (IOException e) {
@@ -121,14 +125,14 @@ public class Page {
 		if(pageNum == 0 && size <= file.getFS().getPrivConfig().getImmediateThreshold()) {
 			contents = ByteBuffer.allocate(file.getFS().getPrivConfig().getPageSize());
 			if(size > 0) {
-				contents.put(file.getInode().getRefTag(), 0, size);
+				file.getInode().getRefTag().setLiteral(contents.array(), 0, size);
 			}
 			return;
 		}
 		
 		byte[] pageTag = file.getPageTag(pageNum);
 		byte[] ciphertext;
-		String path = ZKFS.DATA_DIR + file.getFS().pathForHash(pageTag);
+		String path = pathForTag(pageTag);
 		
 		try {
 			ciphertext = file.getFS().getStorage().read(path);

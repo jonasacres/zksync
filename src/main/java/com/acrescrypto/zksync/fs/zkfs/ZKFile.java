@@ -24,6 +24,23 @@ public class ZKFile extends File {
 	protected ZKFile() {}
 	
 	public final static int O_LINK_LITERAL = 1 << 16; // treat symlinks as literal files
+	
+	public ZKFile(RefTag tag, int inodeId, int mode) throws IOException {
+		this.fs = tag.fs;
+		this.path = tag.toString();
+		this.mode = mode;
+		this.merkel = new PageMerkel(tag);
+		this.inode = new Inode(fs);
+		
+		inferSize(tag);
+		
+		if((mode & (O_NOFOLLOW | O_LINK_LITERAL)) != 0) {
+			throw new EINVALException("O_LINK_LITERAL, O_NOFOLLOW not valid in direct tag access");
+		}
+		
+		if((mode & O_TRUNC) != 0) truncate(0);
+		if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();
+	}
 		
 	public ZKFile(ZKFS fs, String path, int mode) throws IOException {
 		this.fs = fs;
@@ -44,7 +61,7 @@ public class ZKFile extends File {
 			this.inode = fs.create(path);
 		}
 		
-		this.merkel = new PageMerkel(fs, this.inode);
+		this.merkel = new PageMerkel(this.inode.getRefTag());
 		if((mode & O_TRUNC) != 0) truncate(0);
 		if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();
 	}
@@ -170,7 +187,7 @@ public class ZKFile extends File {
 			inode.setRefType(Inode.REF_TYPE_2INDIRECT);
 		}
 		
-		inode.setRefTag(merkel.getMerkelTag());
+		inode.setRefTag(merkel.getRefTag());
 	}
 	
 	@Override
@@ -233,6 +250,11 @@ public class ZKFile extends File {
 		inode.getStat().setUser(file.getStat().getUser());
 		inode.getStat().setUid(file.getStat().getUid());
 		inode.getStat().setMode(file.getStat().getMode());
+	}
+	
+	protected void inferSize(RefTag tag) throws IOException {
+		bufferPage((int) (tag.numPages-1));
+		inode.getStat().setSize((tag.numPages-1)*fs.privConfig.getPageSize() + bufferedPage.size);
 	}
 	
 	protected void assertReadable() throws IOException {

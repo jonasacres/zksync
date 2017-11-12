@@ -41,65 +41,40 @@ public class ZKFS extends FS {
 	public final static String LOCAL_DIR = ".zksync/local/";
 	public final static String ACTIVE_REVISION = ".zskync/local/active-revision";
 	
-	public static ZKFS blankArchive(String path, char[] passphrase) throws IOException {
-		LocalFS storage = new LocalFS(path);
-		if(storage.exists("/")) storage.rmrf("/");
-		return new ZKFS(storage, passphrase);
-	}
-	
-	public ZKFS(FS storage, char[] passphrase) throws IOException {
-		this(storage, passphrase, null);
-	}
-	
-	public ZKFS(FS storage, char[] passphrase, Revision revision) throws IOException {
-		// TODO: remove revision support from here
-		this.storage = storage;
-		this.pubConfig = new PubConfig(storage);
-		crypto = new CryptoSupport(pubConfig);
-		keyfile = new KeyFile(this, passphrase);
-		this.privConfig = new PrivConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_PRIVATE));
-		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
-		if(revision == null) revision = Revision.activeRevision(this);
-		this.inodeTable = new InodeTable(this, revision);
-		this.directoriesByPath = new Hashtable<String,ZKDirectory>();
-		
-		if(revision == null) {
-			initialize();
-		}
-	}
-	
-	public ZKFS(Revision rev) throws IOException {
+	public ZKFS(RefTag rev) throws IOException {
 		this.storage = rev.fs.storage;
 		this.pubConfig = rev.fs.pubConfig;
 		this.privConfig = rev.fs.privConfig;
 		this.crypto = rev.fs.crypto;
 		this.keyfile = rev.fs.keyfile;
-		this.inodeTable = new InodeTable(this, rev);
+		
+		/* TODO: sure feels like we have too many responsibilities... is archive access as a whole different from
+		 * a FS view of a specific revision? probably! in fact, we now have a chicken-or-egg problem: we have to
+		 * know what reftag we're opening to get a ZKFS, but we need ZKFS to initialize reftags!
+		 * 
+		 * but really, everything above could go in a separate class called "ZKArchive" and everything below
+		 * can stay in here. this would resolve the conundrum, but will require a ton of refactoring. but since i'm
+		 * knee-deep in a big refactor anyway...
+		 */
+		this.inodeTable = new InodeTable(rev);
 		this.directoriesByPath = new Hashtable<String,ZKDirectory>();
 	}
 	
 	public RevisionTree getRevisionTree() throws IOException {
 		RevisionTree tree = new RevisionTree(this);
-		tree.scan();
 		return tree;
 	}
 	
-	public Revision commit(RevisionTag[] additionalParents, byte[] seed) throws IOException {
+	public RevisionInfo commit(RefTag[] additionalParents, byte[] seed) throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) dir.commit();
+		
+		// TODO: We won't get consistent merges, because the timestamps still differ! Need a way to fix that...
 		return inodeTable.commit(additionalParents, seed);
 	}
 	
-	public Revision commit(Revision[] additionalParents, byte[] seed) throws IOException {
-		RevisionTag[] tags = new RevisionTag[additionalParents.length];
-		for(int i = 0; i < tags.length; i++) tags[i] = additionalParents[i].tag;
-		return commit(tags, seed);
+	public RevisionInfo commit() throws IOException {
+		return commit(new RefTag[0], null);
 	}
-	
-	public Revision commit() throws IOException {
-		return commit(new RevisionTag[0], null);
-	}
-	
-	// TODO: a way to merge all leaf revisions into a single consolidated revision
 	
 	public Key deriveKey(int type, int index, byte[] tweak) {
 		Key[] keys = { keyfile.getCipherRoot(), keyfile.getAuthRoot() };

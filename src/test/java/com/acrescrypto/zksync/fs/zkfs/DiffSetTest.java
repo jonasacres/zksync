@@ -19,12 +19,12 @@ import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
 public class DiffSetTest {
 	private interface DiffExampleLambda {
-		public int diff(ZKFS fs, Revision[] revs, String filename) throws IOException;
+		public int diff(ZKFS fs, RevisionInfo[] revs, String filename) throws IOException;
 	}
 	
 	LocalFS storage;
-	Revision parent;
-	Revision[] children;
+	RevisionInfo parent;
+	RevisionInfo[] children;
 	char[] password = "zksync".toCharArray();
 	
 	public final static int NUM_CHILDREN = 4;
@@ -49,7 +49,7 @@ public class DiffSetTest {
 		fs.write("modified", "replaceme".getBytes());
 		fs.squash("modified");
 		parent = fs.commit();
-		children = new Revision[NUM_CHILDREN];
+		children = new RevisionInfo[NUM_CHILDREN];
 		
 		for(int i = 0; i < NUM_CHILDREN; i++) {
 			fs = new ZKFS(storage, password, parent);
@@ -67,7 +67,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testDetectsDifferencesBetweenSiblings() throws IOException {
-		Revision[] list = new Revision[] { children[0], children[1] };
+		RevisionInfo[] list = new RevisionInfo[] { children[0], children[1] };
 		DiffSet diffset = new DiffSet(list);
 		Collection<FileDiff> diffs = diffset.getDiffs();
 		
@@ -94,8 +94,8 @@ public class DiffSetTest {
 		byte[] buf = new byte[fs.privConfig.getPageSize()+1];
 		fs.write("unmodified", buf);
 		fs.write("modified", buf);
-		Revision parent = fs.commit();
-		Revision[] children = new Revision[2];
+		RevisionInfo parent = fs.commit();
+		RevisionInfo[] children = new RevisionInfo[2];
 		
 		for(int i = 0; i < children.length; i++) {
 			buf[0] = (byte) i;
@@ -115,7 +115,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testDetectsParentChildDifferences() throws IOException {
-		Revision[] list = new Revision[] { parent, children[0] };
+		RevisionInfo[] list = new RevisionInfo[] { parent, children[0] };
 		DiffSet diffset = new DiffSet(list);
 		Collection<FileDiff> diffs = diffset.getDiffs();
 		
@@ -127,17 +127,17 @@ public class DiffSetTest {
 		/* if we look at the diffs between two of the children, we should see only one diff, because they both
 		 * modify one of the files in the same way.
 		 */
-		assertEquals(1+1, (new DiffSet(new Revision[] { children[0], children[1] })).getDiffs().size());
+		assertEquals(1+1, (new DiffSet(new RevisionInfo[] { children[0], children[1] })).getDiffs().size());
 		
 		/* but if we include the parent, we should see two diffs, because it has the original unmodified file. */
-		assertEquals(2+1, (new DiffSet(new Revision[] { parent, children[0], children[1] })).getDiffs().size());
+		assertEquals(2+1, (new DiffSet(new RevisionInfo[] { parent, children[0], children[1] })).getDiffs().size());
 		
 		// (the +1s are because of implicit change to directory)
 	}
 	
 	@Test
 	public void testUnlinksAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			revs[0] = fs.commit();
 			fs.unlink(filename);
@@ -147,7 +147,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testCreationsAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			revs[0] = fs.commit();
 			fs.write(filename, "blah".getBytes());
 			return 2;
@@ -156,7 +156,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testMtimesAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -167,7 +167,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testAtimesAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -179,7 +179,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testCtimesAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -192,7 +192,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testModesAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -204,7 +204,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testUidsAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -216,7 +216,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testUsernamesAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -228,7 +228,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testGidsAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -240,7 +240,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testGroupNamesAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -252,7 +252,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testAppendsAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -266,7 +266,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testTruncatesAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -280,7 +280,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testMajorDevsAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.mknod(filename, Stat.TYPE_BLOCK_DEVICE, 0, 0);
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -291,7 +291,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testMinorDevsAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.mknod(filename, Stat.TYPE_BLOCK_DEVICE, 0, 0);
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -302,7 +302,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testNlinksAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			revs[0] = fs.commit();
 			fs.inodeForPath(filename).nlink++; // painful to look at, isn't it?
@@ -312,7 +312,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testFileTypesAreADifference() throws IOException {
-		trivialDiffTest( (ZKFS fs, Revision[] revs, String filename) -> {
+		trivialDiffTest( (ZKFS fs, RevisionInfo[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			revs[0] = fs.commit();
 			fs.inodeForPath(filename).getStat().setType(Stat.TYPE_BLOCK_DEVICE);
@@ -327,7 +327,7 @@ public class DiffSetTest {
 		if(storage.exists("/")) storage.rmrf("/");
 		ZKFS fs = new ZKFS(storage, password);
 		
-		Revision[] revs = new Revision[2];
+		RevisionInfo[] revs = new RevisionInfo[2];
 		
 		fs.write("file0", "blah".getBytes());
 		fs.write("file1", "blah".getBytes());
@@ -352,7 +352,7 @@ public class DiffSetTest {
 		if(storage.equals("/")) storage.rmrf("/");
 		ZKFS fs = new ZKFS(storage, password);
 		
-		Revision[] revs = new Revision[2];		
+		RevisionInfo[] revs = new RevisionInfo[2];		
 		int numDiffs = meat.diff(fs, revs, filename);
 		
 		revs[1] = fs.commit();

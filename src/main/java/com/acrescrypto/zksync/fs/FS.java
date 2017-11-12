@@ -89,7 +89,7 @@ public abstract class FS {
 		return String.join("/", comps);
 	}
 	
-	public String pathForHash(byte[] hash) {
+	public static String pathForHash(byte[] hash) {
 	    StringBuilder sb = new StringBuilder();
 	    for(int i = 0; i < hash.length; i++) {
 	        sb.append(String.format("%02x", hash[i]));
