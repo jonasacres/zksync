@@ -172,7 +172,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		dir.link(dir, ".");
 		dir.link(inode, "..");
 		dir.flush();
-		fs.chmod(path, 0750); // TODO: default mode
+		fs.chmod(path, fs.archive.localConfig.getDirectoryMode());
 
 		return dir;
 	}

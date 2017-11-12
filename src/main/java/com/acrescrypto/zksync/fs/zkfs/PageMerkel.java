@@ -30,11 +30,11 @@ public class PageMerkel {
 		this.tag = tag;
 		
 		switch(tag.getRefType()) {
-		case Inode.REF_TYPE_IMMEDIATE:
-		case Inode.REF_TYPE_INDIRECT:
+		case RefTag.REF_TYPE_IMMEDIATE:
+		case RefTag.REF_TYPE_INDIRECT:
 			setPageTag(0, tag.getHash());
 			break;
-		case Inode.REF_TYPE_2INDIRECT:
+		case RefTag.REF_TYPE_2INDIRECT:
 			read();
 			break;
 		}
@@ -46,9 +46,15 @@ public class PageMerkel {
 		nodes[0].recalculate();
 		
 		int type;
-		if(numPages == 0) type = Inode.REF_TYPE_IMMEDIATE; // TODO: not sure about this...
-		else if(numPages == 1) type = Inode.REF_TYPE_INDIRECT;
-		else type = Inode.REF_TYPE_2INDIRECT;
+		if(numPages == 1) {
+			if(nodes[0].tag.length < archive.crypto.hashLength()) {
+				type = RefTag.REF_TYPE_IMMEDIATE;
+			} else {
+				type = RefTag.REF_TYPE_INDIRECT;
+			}
+		} else {
+			type = RefTag.REF_TYPE_2INDIRECT;
+		}
 		return new RefTag(archive, nodes[0].tag, type, numPages);
 	}
 	
@@ -69,8 +75,10 @@ public class PageMerkel {
 	}
 	
 	public RefTag commit() throws InaccessibleStorageException {
+		tag = getRefTag();
+		if(tag.getRefType() != RefTag.REF_TYPE_2INDIRECT) return tag;
+		
 		int chunkCount = (int) Math.ceil( (double) plaintextSize() / archive.privConfig.getPageSize() );
-		RefTag newTag = getRefTag();
 		
 		ByteBuffer plaintext = ByteBuffer.allocate(nodes.length*archive.crypto.hashLength());
 				
@@ -82,7 +90,7 @@ public class PageMerkel {
 			byte[] chunkCiphertext = cipherKey(getRefTag()).wrappedEncrypt(chunkText.array(),
 					(int) archive.privConfig.getPageSize());
 			
-			String path = pathForChunk(newTag, i);
+			String path = pathForChunk(tag, i);
 			
 			try {
 				archive.storage.write(path, chunkCiphertext);
@@ -92,11 +100,11 @@ public class PageMerkel {
 			}
 		}
 		
-		return tag = newTag;
+		return tag;
 	}
 	
 	private void read() throws InaccessibleStorageException {
-		long expectedPages = tag.getNumChunks(); // TODO: make sure 'tag' gets to take advantage of inode size info when we know it! (this is yet another problem taht goes away with unambiguous tags...)
+		long expectedPages = tag.getNumChunks();
 		expectedPages = (int) Math.pow(2, Math.ceil(Math.log(expectedPages)/Math.log(2)));
 		
 		long expectedNodes = 2*expectedPages - 1;
@@ -108,7 +116,7 @@ public class PageMerkel {
 		
 		// TODO: consider not requiring a full readBuf; can we rely on guarantee hashes won't cross chunk boundaries?
 		
-		if(tag.getRefType() == Inode.REF_TYPE_2INDIRECT) {
+		if(tag.getRefType() == RefTag.REF_TYPE_2INDIRECT) {
 			for(int i = 0; i < expectedChunks; i++) {
 				String path = pathForChunk(tag, i);
 				byte[] chunkCiphertext;

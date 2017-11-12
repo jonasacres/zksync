@@ -11,13 +11,15 @@ public class ZKFS extends FS {
 	protected InodeTable inodeTable;
 	protected Hashtable<String,ZKDirectory> directoriesByPath; // TODO: definitely not happy with this; needs eviction policy
 	ZKArchive archive;
+	protected RefTag baseRevision;
 		
 	public final static int MAX_PATH_LEN = 65535;
 	
 	
-	public ZKFS(RefTag rev) throws IOException {
-		this.inodeTable = new InodeTable(this, rev);
+	public ZKFS(RefTag revision) throws IOException {
+		this.inodeTable = new InodeTable(this, revision);
 		this.directoriesByPath = new Hashtable<String,ZKDirectory>();
+		this.baseRevision = revision;
 	}
 	
 	public RevisionInfo commit(RefTag[] additionalParents, byte[] seed) throws IOException {
@@ -173,7 +175,7 @@ public class ZKFS extends FS {
 		dir.link(dir, ".");
 		dir.link(inodeForPath(dirname(path)), "..");
 		dir.close();
-		chmod(path, 0750); // TODO: default mode
+		chmod(path, archive.localConfig.getDirectoryMode());
 	}
 	
 	@Override
@@ -311,6 +313,10 @@ public class ZKFS extends FS {
 	
 	public ZKArchive getArchive() {
 		return archive;
+	}
+	
+	public RevisionInfo getRevisionInfo() throws IOException {
+		return new RevisionInfo(this);
 	}
 	
 	protected void initialize() throws IOException {

@@ -73,9 +73,8 @@ public class DiffSetTest {
 		
 		assertEquals(2, diffs.size());
 		
-		/* TODO:
-		 * This really makes me think deterministic storage should come back. /modified has the same content for
-		 * each sibling. It doesn't show up as a difference, and it probably shouldn't, because they're the same.
+		/* TODO: This really makes me think deterministic storage should come back. /modified has the same content
+		 * for each sibling. It doesn't show up as a difference, and it probably shouldn't, because they're the same.
 		 * But if /modified were bigger than the immediate threshold, it would get paged out, and wrappedEncrypt's
 		 * nondeterministic behavior will mean that the inodes will get different reftags. This causes a difference
 		 * even when none exists.

@@ -34,6 +34,13 @@ public class ZKArchive {
 	protected LocalConfig localConfig;
 	protected KeyFile keyfile;
 	protected FS storage;
+	
+	public ZKArchive(FS storage, PassphraseProvider provider) {
+		this.storage = storage;
+		this.pubConfig = new PubConfig(storage);
+		this.keyfile = new KeyFile(this, provider.passphraseForArchive(pubConfig.getArchiveId()));
+		this.crypto = new CryptoSupport(pubConfig);
+	}
 
 	public Key deriveKey(int type, int index, byte[] tweak) {
 		Key[] keys = { keyfile.getCipherRoot(), keyfile.getAuthRoot() };

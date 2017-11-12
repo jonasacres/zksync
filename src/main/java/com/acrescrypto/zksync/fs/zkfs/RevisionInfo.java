@@ -2,24 +2,26 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
+import java.util.HashSet;
 
 /* Stores a revision of the archive. This is needed to bootstrap reading the archive.
  */
 public class RevisionInfo extends ZKFile {
-	ArrayList<RefTag> parents;
-	long generation; // shortest path to this revision from root
-
-	// make a new revision based on the contents of an inode table
-	public RevisionInfo(ZKFS fs) {
-		this.generation = 1+fs.inodeTable.revision.generation;
+	HashSet<RefTag> parents = new HashSet<RefTag>();
+	long generation; // longest path to this revision from root
+	
+	public RevisionInfo(ZKFS fs) throws IOException {
 		this.fs = fs;
-		
-		addParent(fs.currentRefTag());
+		load();
+	}
+
+	public void load() throws IOException {
+		rewind();
+		deserialize(read());
 	}
 	
-	public void addParent(RefTag parent) {
-		generation = Math.min(generation, 1+parent.getInfo().generation);
+	public void addParent(RefTag parent) throws IOException {
+		generation = Math.max(generation, 1+parent.getInfo().generation);
 		parents.add(parent);
 	}
 	
@@ -36,9 +38,9 @@ public class RevisionInfo extends ZKFile {
 
 	// create plaintext serialized revision data (to be encrypted and written to
 	// storage)
-	protected byte[] serialize() {
-		// TODO: not a fan of how brittle our size calculation looks... but it can't be a constant, either.
-		int len = 4 + parents.size()*parentTagLength();
+	protected byte[] serialize() throws IOException {
+		addParent(fs.baseRevision);
+		int len = 8 + 4 + parents.size()*parentTagLength();
 		ByteBuffer buf = ByteBuffer.allocate(len);
 		buf.putLong(generation);
 		buf.putInt(parents.size());

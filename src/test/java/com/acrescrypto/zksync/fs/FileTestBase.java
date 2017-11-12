@@ -232,6 +232,6 @@ public class FileTestBase {
 
 	@Test
 	public void testCopy() {
-		// TODO
+		// TODO: write copy test
 	}
 }

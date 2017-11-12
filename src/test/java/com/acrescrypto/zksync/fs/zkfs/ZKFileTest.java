@@ -55,7 +55,7 @@ public class ZKFileTest extends FileTestBase {
 		
 		file = zkscratch.open("immediate-write-test", ZKFile.O_RDONLY);
 		assertTrue(Arrays.equals(file.read(), contents));
-		assertEquals(Inode.REF_TYPE_IMMEDIATE, file.inode.getRefType());
+		assertEquals(RefTag.REF_TYPE_IMMEDIATE, file.inode.getRefType());
 	}
 	
 	@Test
@@ -68,7 +68,7 @@ public class ZKFileTest extends FileTestBase {
 		
 		file = zkscratch.open("singlepage-write-test", ZKFile.O_RDONLY);
 		assertTrue(Arrays.equals(file.read(), contents));
-		assertEquals(Inode.REF_TYPE_INDIRECT, file.inode.getRefType());
+		assertEquals(RefTag.REF_TYPE_INDIRECT, file.inode.getRefType());
 	}
 	
 	@Test
@@ -81,7 +81,7 @@ public class ZKFileTest extends FileTestBase {
 		
 		file = zkscratch.open("multipage-write-test", ZKFile.O_RDONLY);
 		assertTrue(Arrays.equals(file.read(), contents));
-		assertEquals(Inode.REF_TYPE_2INDIRECT, file.inode.getRefType());
+		assertEquals(RefTag.REF_TYPE_2INDIRECT, file.inode.getRefType());
 	}
 	
 	@Test

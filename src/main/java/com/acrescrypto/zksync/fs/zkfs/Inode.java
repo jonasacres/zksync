@@ -9,15 +9,12 @@ import com.acrescrypto.zksync.fs.Stat;
 public class Inode {
 	protected Stat stat;
 	protected int nlink;
-	protected byte flags, refType;
-	protected byte[] refId;
+	protected byte flags;
+	protected RefTag refTag;
+	protected RefTag changedFrom; // last revision reftag with previous version
 	protected ZKFS fs;
 	
 	public static final byte FLAG_RETAIN = 1 << 0;
-	
-	public static final byte REF_TYPE_IMMEDIATE = 0;
-	public static final byte REF_TYPE_INDIRECT = 1;
-	public static final byte REF_TYPE_2INDIRECT = 2;
 	
 	public static Inode blankInode(ZKFS fs) {
 		Inode blank = new Inode(fs);
@@ -43,6 +40,7 @@ public class Inode {
 	public Inode(ZKFS fs) {
 		this.fs = fs;
 		this.stat = new Stat();
+		this.changedFrom = fs.baseRevision;
 	}
 	
 	public Inode(ZKFS fs, Stat stat) {
@@ -79,31 +77,31 @@ public class Inode {
 		this.flags = flags;
 	}
 
-	public int getRefType() {
-		return refType;
-	}
-
-	public void setRefType(byte refType) {
-		this.refType = refType;
-	}
-
 	public RefTag getRefTag() {
-		return new RefTag(fs.archive, refId);
+		return refTag;
 	}
 
 	public void setRefTag(RefTag refTag) {
-		this.refId = refTag.getBytes();
+		this.refTag = refTag;
+	}
+	
+	public RefTag getChangedFrom() {
+		return changedFrom;
+	}
+
+	public void setChangedFrom(RefTag changedFrom) {
+		this.changedFrom = changedFrom;
 	}
 	
 	public byte[] serialize() {
-		int size = stat.getStorageSize() + 2*4 + 2*1 + fs.archive.crypto.hashLength();
+		int size = stat.getStorageSize() + 2*4 + 1 + 2*fs.archive.crypto.hashLength();
 		ByteBuffer buf = ByteBuffer.allocate(size);
 		buf.putInt(size-4);
 		buf.put(stat.serialize());
 		buf.putInt(nlink);
 		buf.put(flags);
-		buf.put(refType);
-		buf.put(refId);
+		buf.put(refTag.getBytes());
+		buf.put(changedFrom.getBytes());
 		
 		return buf.array();
 	}
@@ -120,9 +118,13 @@ public class Inode {
 		
 		this.nlink = buf.getInt();
 		this.flags = buf.get();
-		this.refType = buf.get();
-		this.refId = new byte[fs.archive.crypto.hashLength()];
-		buf.get(this.refId, 0, fs.archive.crypto.hashLength());
+		
+		byte[] refTagBytes = new byte[fs.archive.crypto.hashLength()];
+		buf.get(refTagBytes, 0, fs.archive.crypto.hashLength());
+		this.refTag = new RefTag(fs.archive, refTagBytes);
+		
+		buf.get(refTagBytes, 0, fs.archive.crypto.hashLength());
+		this.changedFrom = new RefTag(fs.archive, refTagBytes);
 	}
 	
 	public void addLink() {
@@ -144,8 +146,8 @@ public class Inode {
 		Inode clone = new Inode(fs);
 		clone.flags = flags;
 		clone.nlink = nlink;
-		clone.refType = refType;
-		clone.refId = refId.clone();
+		clone.refTag = refTag;
+		clone.changedFrom = changedFrom;
 		clone.stat = stat.clone();
 		return clone;
 	}

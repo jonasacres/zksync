@@ -7,8 +7,11 @@ public class RefTag {
 	protected ZKArchive archive;
 	protected ZKFS fs;
 	protected byte[] tag, hash;
-	protected int refType;
+	protected int refType;	
 	protected long numPages; // TODO: really think this through. 64 bits is safe, but big. 32-bit would be 2^32 pages, or 2^48 bytes by default.
+	public static final byte REF_TYPE_2INDIRECT = 2;
+	public static final byte REF_TYPE_INDIRECT = 1;
+	public static final byte REF_TYPE_IMMEDIATE = 0;
 	
 	public static int REFTAG_EXTRA_DATA_SIZE = 16;
 	// reserve 16 bytes because you know we'll use it, and it probably won't be enough
@@ -16,15 +19,12 @@ public class RefTag {
 	// 8 bytes num chunks
 	
 	public static RefTag blank(ZKArchive archive) {
-		return new RefTag(archive, new byte[0], Inode.REF_TYPE_IMMEDIATE, 0);
+		return new RefTag(archive, new byte[0], RefTag.REF_TYPE_IMMEDIATE, 0);
 	}
 	
 	public RefTag(ZKArchive archive, byte[] tag) {
 		if(tag.length != archive.crypto.hashLength() + REFTAG_EXTRA_DATA_SIZE) throw new RuntimeException("received invalid reftag");
 		ByteBuffer buf = ByteBuffer.wrap(tag);
-		
-		// TODO: I'm not sure refType is even needed anymore, if numChunks is always known.
-		// 0 => immediate, 1 => indirect, 2 => 2indirect
 		
 		this.archive = archive;
 		this.tag = tag;
@@ -36,7 +36,7 @@ public class RefTag {
 	
 	public RefTag(ZKArchive archive, byte[] hash, int refType, long numPages) {
 		this.archive = archive;
-		this.hash = hash; // TODO: BEWARE! Immediates must be padded.
+		this.hash = padHash(hash);
 		this.refType = refType;
 		this.numPages = numPages;
 		this.tag = serialize();
@@ -53,7 +53,7 @@ public class RefTag {
 	}
 	
 	public byte[] unpadHash(byte[] hash) {
-		if(refType != Inode.REF_TYPE_IMMEDIATE) return hash; // TODO: consider numPages == 1
+		if(refType != RefTag.REF_TYPE_IMMEDIATE) return hash;
 		int len = archive.crypto.hashLength() - hash[hash.length-1];
 		ByteBuffer buf = ByteBuffer.allocate(len);
 		buf.put(hash, 0, len);
@@ -78,7 +78,7 @@ public class RefTag {
 	
 	public boolean isBlank() {
 		if(numPages != 0) return false;
-		if(refType != Inode.REF_TYPE_IMMEDIATE) return false;
+		if(refType != RefTag.REF_TYPE_IMMEDIATE) return false;
 		for(int i = 0; i < hash.length; i++) if(hash[i] != archive.crypto.hashLength()) return false;
 		return true;
 	}
@@ -89,8 +89,8 @@ public class RefTag {
 		this.hash = padHash(buf.array());
 	}
 	
-	public RevisionInfo getInfo() {
-		return null; // TODO: this is gonna hurt...
+	public RevisionInfo getInfo() throws IOException {
+		return getFS().getRevisionInfo();
 	}
 	
 	protected byte[] serialize() {
@@ -101,7 +101,10 @@ public class RefTag {
 		return buf.array();
 	}
 
+	// TODO: shared object in mixed use -> very dangerous
+	// getFS().commit() -> now getFS() gives the FS of a totally different revision... 
 	public ZKFS getFS() throws IOException {
+		// (assumes this tag points to an inode table)
 		/* TODO: don't like that these accumulate in memory... want some sort of eviction queue across all RefTags.
 		 * Maybe one we can reuse for the directory cache in ZKFS?
 		 */

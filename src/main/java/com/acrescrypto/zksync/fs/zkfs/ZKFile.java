@@ -178,18 +178,6 @@ public class ZKFile extends File {
 		}
 	}
 	
-	protected void calculateRefType() throws IOException {
-		if(inode.getStat().getSize() <= fs.archive.privConfig.getImmediateThreshold()) {
-			inode.setRefType(Inode.REF_TYPE_IMMEDIATE);
-		} else if(inode.getStat().getSize() <= fs.archive.privConfig.getPageSize()) {
-			inode.setRefType(Inode.REF_TYPE_INDIRECT);
-		} else {
-			inode.setRefType(Inode.REF_TYPE_2INDIRECT);
-		}
-		
-		inode.setRefTag(merkel.getRefTag());
-	}
-	
 	@Override
 	public boolean hasData() throws IOException {
 		assertReadable();
@@ -225,9 +213,9 @@ public class ZKFile extends File {
 	public void flush() throws IOException {
 		if(!dirty) return;
 		inode.getStat().setMtime(System.currentTimeMillis() * 1000l * 1000l);
+		inode.setChangedFrom(fs.baseRevision);
 		bufferedPage.flush();
-		calculateRefType();
-		if(inode.getRefType() == Inode.REF_TYPE_2INDIRECT) merkel.commit();
+		merkel.commit();
 		dirty = false;
 	}
 

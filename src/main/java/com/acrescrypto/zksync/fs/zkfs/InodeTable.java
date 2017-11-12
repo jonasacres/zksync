@@ -48,7 +48,6 @@ public class InodeTable extends ZKFile {
 			write(inode.serialize());
 		}
 		
-		// TODO: write parents to file
 		RevisionInfo newRevision = new RevisionInfo(fs);
 		newRevision.commit();
 
@@ -110,9 +109,12 @@ public class InodeTable extends ZKFile {
 		inode.getStat().setCtime(now);
 		inode.getStat().setAtime(now);
 		inode.getStat().setMtime(now);
-		inode.getStat().setMode(0640); // TODO: default mode, uid, gid
+		inode.getStat().setMode(fs.archive.localConfig.getFileMode());
+		inode.getStat().setUser(fs.archive.localConfig.getUser());
+		inode.getStat().setUid(fs.archive.localConfig.getUid());
+		inode.getStat().setGroup(fs.archive.localConfig.getGroup());
+		inode.getStat().setGid(fs.archive.localConfig.getGid());
 		inode.setRefTag(RefTag.blank(fs.archive));
-		inode.setRefType(Inode.REF_TYPE_IMMEDIATE);
 		inodes.put(inode.getStat().getInodeId(), inode);
 		return inode;
 	}

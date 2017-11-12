@@ -5,6 +5,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 
+import org.bouncycastle.util.Arrays;
+
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 
 public class DiffSet {
@@ -65,13 +67,30 @@ public class DiffSet {
 		return revisions;
 	}
 	
-	public RefTag latestRevision() {
+	public RefTag latestRevision() throws IOException {
 		RefTag latest = null;
 		for(RefTag rev : revisions) {
-			if(latest == null || rev.getInfo().generation > latest.getInfo().generation) latest = rev;
-			else if(latest.getInfo().generation == rev.getInfo().generation && rev.getInfo().getStat().getMtime() > rev.getInfo().getStat().getMtime()) latest = rev;
-			// TODO: ^ clean this mess up!!
-			// TODO: further tie-breaking on tag
+			if(latest == null) {
+				latest = rev;
+				continue;
+			}
+			
+			RevisionInfo lInfo = latest.getInfo(), rInfo = rev.getInfo();
+			if(rInfo.generation < lInfo.generation) continue;
+			else if(lInfo.generation > rInfo.generation) {
+				latest = rev;
+				continue;
+			}
+			
+			if(rInfo.getStat().getMtime() < lInfo.getStat().getMtime()) {
+				latest = rev;
+				continue;
+			}
+			
+			if(Arrays.compareUnsigned(rev.hash, latest.hash) < 0) {
+				latest = rev;
+				continue;
+			}
 		}
 		return latest;
 	}
