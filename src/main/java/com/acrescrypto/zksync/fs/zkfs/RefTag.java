@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 
 public class RefTag {
 	protected ZKArchive archive;
-	protected ZKFS fs;
+	protected ZKFS readOnlyFs;
 	protected byte[] tag, hash;
 	protected int refType;	
 	protected long numPages; // TODO: really think this through. 64 bits is safe, but big. 32-bit would be 2^32 pages, or 2^48 bytes by default.
@@ -90,7 +90,7 @@ public class RefTag {
 	}
 	
 	public RevisionInfo getInfo() throws IOException {
-		return getFS().getRevisionInfo();
+		return readOnlyFS().getRevisionInfo();
 	}
 	
 	protected byte[] serialize() {
@@ -100,15 +100,16 @@ public class RefTag {
 		buf.putLong(numPages);
 		return buf.array();
 	}
-
-	// TODO: shared object in mixed use -> very dangerous
-	// getFS().commit() -> now getFS() gives the FS of a totally different revision... 
-	public ZKFS getFS() throws IOException {
-		// (assumes this tag points to an inode table)
+	
+	public ZKFS readOnlyFS() throws IOException {
 		/* TODO: don't like that these accumulate in memory... want some sort of eviction queue across all RefTags.
 		 * Maybe one we can reuse for the directory cache in ZKFS?
 		 */
-		if(fs == null) fs = new ZKFS(this);
-		return fs;
+		if(readOnlyFs == null) readOnlyFs = getFS();
+		return readOnlyFs;
+	}
+	
+	public ZKFS getFS() throws IOException {
+		return new ZKFS(this);
 	}
 }

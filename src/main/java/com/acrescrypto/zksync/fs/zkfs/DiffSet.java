@@ -40,7 +40,7 @@ public class DiffSet {
 		allPaths.add("/");
 		
 		for(RefTag rev : revisions) {
-			for(String path : rev.getFS().opendir("/").listRecursive()) {
+			for(String path : rev.readOnlyFS().opendir("/").listRecursive()) {
 				allPaths.add(path);
 			}
 		}
@@ -57,7 +57,7 @@ public class DiffSet {
 	
 	protected Inode versionOfFileForTag(RefTag tag, String path) throws IOException {
 		try {
-			return tag.getFS().inodeForPath(path);
+			return tag.readOnlyFS().inodeForPath(path);
 		} catch (ENOENTException e) {
 			return null;
 		}
