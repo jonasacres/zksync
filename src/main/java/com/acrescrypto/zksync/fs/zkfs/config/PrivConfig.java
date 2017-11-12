@@ -10,7 +10,7 @@ import javax.json.JsonReader;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 
 public class PrivConfig extends ConfigFile {
 	private int pageSize, immediateThreshold;
@@ -31,7 +31,7 @@ public class PrivConfig extends ConfigFile {
 	}
 	
 	public String path() {
-		return ZKFS.CONFIG_DIR + "config.priv";
+		return ZKArchive.CONFIG_DIR + "config.priv";
 	}
 	
 	public void read() throws IOException {

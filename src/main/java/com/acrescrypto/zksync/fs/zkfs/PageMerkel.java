@@ -10,7 +10,7 @@ import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 
 public class PageMerkel {
-	ZKFS fs;
+	ZKArchive archive;
 	RefTag tag;
 	PageMerkelNode[] nodes;
 	int numPages;
@@ -20,13 +20,13 @@ public class PageMerkel {
 		chunkTagSource.put(refTag.hash);
 		chunkTagSource.putInt(chunk);
 		
-		Key authKey = refTag.fs.deriveKey(ZKFS.KEY_TYPE_AUTH, ZKFS.KEY_INDEX_PAGE_MERKEL, refTag.getHash());
+		Key authKey = refTag.archive.deriveKey(ZKArchive.KEY_TYPE_AUTH, ZKArchive.KEY_INDEX_PAGE_MERKEL, refTag.getHash());
 		byte[] chunkTag = authKey.authenticate(chunkTagSource.array());
 		return ZKFS.pathForHash(chunkTag);
 	}
 	
 	PageMerkel(RefTag tag) throws InaccessibleStorageException {
-		this.fs = tag.fs;
+		this.archive = tag.archive;
 		this.tag = tag;
 		
 		switch(tag.getRefType()) {
@@ -42,14 +42,14 @@ public class PageMerkel {
 	
 	public RefTag getRefTag() {
 		// empty tree => 0 pages => contents = "", guaranteed to be an immediate
-		if(nodes == null || nodes.length == 0) return RefTag.blank(fs);
+		if(nodes == null || nodes.length == 0) return RefTag.blank(archive);
 		nodes[0].recalculate();
 		
 		int type;
 		if(numPages == 0) type = Inode.REF_TYPE_IMMEDIATE; // TODO: not sure about this...
 		else if(numPages == 1) type = Inode.REF_TYPE_INDIRECT;
 		else type = Inode.REF_TYPE_2INDIRECT;
-		return new RefTag(fs, nodes[0].tag, type, numPages);
+		return new RefTag(archive, nodes[0].tag, type, numPages);
 	}
 	
 	public void setPageTag(int pageNum, byte[] pageTag) {
@@ -65,28 +65,28 @@ public class PageMerkel {
 	}
 	
 	public long plaintextSize() {
-		return fs.getCrypto().hashLength()*(2*numPages-1);
+		return archive.crypto.hashLength()*(2*numPages-1);
 	}
 	
 	public RefTag commit() throws InaccessibleStorageException {
-		int chunkCount = (int) Math.ceil( (double) plaintextSize() / fs.getPrivConfig().getPageSize() );
+		int chunkCount = (int) Math.ceil( (double) plaintextSize() / archive.privConfig.getPageSize() );
 		RefTag newTag = getRefTag();
 		
-		ByteBuffer plaintext = ByteBuffer.allocate(nodes.length*fs.getCrypto().hashLength());
+		ByteBuffer plaintext = ByteBuffer.allocate(nodes.length*archive.crypto.hashLength());
 				
 		for(PageMerkelNode node : nodes) plaintext.put(node.tag);
 		for(int i = 0; i < chunkCount; i++) {
 			ByteBuffer chunkText = ByteBuffer.wrap(plaintext.array(),
-					(int) (i*fs.getPrivConfig().getPageSize()),
-					Math.min(fs.getPrivConfig().getPageSize(), plaintext.capacity()));
+					(int) (i*archive.privConfig.getPageSize()),
+					Math.min(archive.privConfig.getPageSize(), plaintext.capacity()));
 			byte[] chunkCiphertext = cipherKey(getRefTag()).wrappedEncrypt(chunkText.array(),
-					(int) fs.getPrivConfig().getPageSize());
+					(int) archive.privConfig.getPageSize());
 			
 			String path = pathForChunk(newTag, i);
 			
 			try {
-				fs.getStorage().write(path, chunkCiphertext);
-				fs.getStorage().squash(path);
+				archive.storage.write(path, chunkCiphertext);
+				archive.storage.squash(path);
 			} catch (IOException e) {
 				throw new InaccessibleStorageException();
 			}
@@ -100,9 +100,9 @@ public class PageMerkel {
 		expectedPages = (int) Math.pow(2, Math.ceil(Math.log(expectedPages)/Math.log(2)));
 		
 		long expectedNodes = 2*expectedPages - 1;
-		int expectedChunks = (int) Math.ceil((double) expectedNodes*fs.getCrypto().hashLength()/fs.getPrivConfig().getPageSize());
+		int expectedChunks = (int) Math.ceil((double) expectedNodes*archive.crypto.hashLength()/archive.privConfig.getPageSize());
 		
-		ByteBuffer readBuf = ByteBuffer.allocate((int) (expectedChunks*fs.getPrivConfig().getPageSize()));
+		ByteBuffer readBuf = ByteBuffer.allocate((int) (expectedChunks*archive.privConfig.getPageSize()));
 		
 		resize(expectedPages);
 		
@@ -113,7 +113,7 @@ public class PageMerkel {
 				String path = pathForChunk(tag, i);
 				byte[] chunkCiphertext;
 				try {
-					chunkCiphertext = fs.getStorage().read(path);
+					chunkCiphertext = archive.storage.read(path);
 				} catch (IOException e) {
 					throw new InaccessibleStorageException();
 				}
@@ -123,7 +123,7 @@ public class PageMerkel {
 			
 			readBuf.rewind();
 			for(int i = 0; i < expectedNodes; i++) {
-				byte[] tag = new byte[fs.getCrypto().hashLength()];
+				byte[] tag = new byte[archive.crypto.hashLength()];
 				readBuf.get(tag);
 				nodes[i].tag = tag;
 			}
@@ -191,7 +191,7 @@ public class PageMerkel {
 					newNodes[n] = nodes[m];
 				} else {
 					// new node: allocate a blank node
-					newNodes[n] = new PageMerkelNode(fs.crypto);
+					newNodes[n] = new PageMerkelNode(archive.crypto);
 					if(2*n+2 < newNodes.length) { // non-leaf node; setup parent/child references
 						newNodes[n].left = newNodes[2*n+1];
 						newNodes[n].right = newNodes[2*n+2];
@@ -206,6 +206,6 @@ public class PageMerkel {
 	}
 	
 	private Key cipherKey(RefTag refTag) {
-		return fs.deriveKey(ZKFS.KEY_TYPE_CIPHER, ZKFS.KEY_INDEX_PAGE_MERKEL, refTag.getBytes());
+		return archive.deriveKey(ZKArchive.KEY_TYPE_CIPHER, ZKArchive.KEY_INDEX_PAGE_MERKEL, refTag.getBytes());
 	}
 }

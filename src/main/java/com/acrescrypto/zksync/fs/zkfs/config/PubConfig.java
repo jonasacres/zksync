@@ -7,7 +7,7 @@ import javax.json.JsonObject;
 import javax.json.JsonReader;
 
 import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 
 // Contains information needed to decrypt archive. Stored in plaintext.
 public class PubConfig extends ConfigFile {
@@ -30,7 +30,7 @@ public class PubConfig extends ConfigFile {
 	}
 
 	public String path() {
-		return ZKFS.CONFIG_DIR + "config.pub";
+		return ZKArchive.CONFIG_DIR + "config.pub";
 	}
 	
 	protected void deserialize(byte[] serialized) {

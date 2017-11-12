@@ -88,7 +88,7 @@ public class Inode {
 	}
 
 	public RefTag getRefTag() {
-		return new RefTag(fs, refId);
+		return new RefTag(fs.archive, refId);
 	}
 
 	public void setRefTag(RefTag refTag) {
@@ -96,7 +96,7 @@ public class Inode {
 	}
 	
 	public byte[] serialize() {
-		int size = stat.getStorageSize() + 2*4 + 2*1 + fs.getCrypto().hashLength();
+		int size = stat.getStorageSize() + 2*4 + 2*1 + fs.archive.crypto.hashLength();
 		ByteBuffer buf = ByteBuffer.allocate(size);
 		buf.putInt(size-4);
 		buf.put(stat.serialize());
@@ -121,8 +121,8 @@ public class Inode {
 		this.nlink = buf.getInt();
 		this.flags = buf.get();
 		this.refType = buf.get();
-		this.refId = new byte[fs.getCrypto().hashLength()];
-		buf.get(this.refId, 0, fs.getCrypto().hashLength());
+		this.refId = new byte[fs.archive.crypto.hashLength()];
+		buf.get(this.refId, 0, fs.archive.crypto.hashLength());
 	}
 	
 	public void addLink() {
@@ -151,7 +151,7 @@ public class Inode {
 	}
 	
 	public int hashCode() {
-		return ByteBuffer.wrap(fs.crypto.hash(serialize())).getInt(); // TODO: super slow, reconsider
+		return ByteBuffer.wrap(fs.archive.crypto.hash(serialize())).getInt(); // TODO: super slow, reconsider
 	}
 	
 	public boolean equals(Object other) {

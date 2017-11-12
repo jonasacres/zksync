@@ -17,14 +17,14 @@ public class InodeTable extends ZKFile {
 	
 	public final static String INODE_TABLE_PATH = "(inode table)";
 	
-	// TODO: fixed-length inode serialization to support partial inode table reads
+	// TODO: fixed-length inode serialization to support partial inode table reads (might be a good next thing to look at...)
 	
 	protected Hashtable<Long,Inode> inodes;
 	protected RevisionInfo revision;
 	protected long nextInodeId;
 	
-	public InodeTable(RefTag tag) throws IOException {
-		this.fs = tag.fs;
+	public InodeTable(ZKFS fs, RefTag tag) throws IOException {
+		this.fs = fs;
 		this.path = INODE_TABLE_PATH;
 		this.mode = O_RDWR;
 		this.inodes = new Hashtable<Long,Inode>();
@@ -111,7 +111,7 @@ public class InodeTable extends ZKFile {
 		inode.getStat().setAtime(now);
 		inode.getStat().setMtime(now);
 		inode.getStat().setMode(0640); // TODO: default mode, uid, gid
-		inode.setRefTag(RefTag.blank(fs));
+		inode.setRefTag(RefTag.blank(fs.archive));
 		inode.setRefType(Inode.REF_TYPE_IMMEDIATE);
 		inodes.put(inode.getStat().getInodeId(), inode);
 		return inode;
@@ -135,7 +135,7 @@ public class InodeTable extends ZKFile {
 	private void initialize() throws InaccessibleStorageException {
 		this.inode = Inode.defaultRootInode(fs);
 		this.inodes.put(INODE_ID_INODE_TABLE, this.inode);
-		this.merkel = new PageMerkel(RefTag.blank(fs));
+		this.merkel = new PageMerkel(RefTag.blank(fs.archive));
 
 		makeRootDir();
 		nextInodeId = USER_INODE_ID_START;

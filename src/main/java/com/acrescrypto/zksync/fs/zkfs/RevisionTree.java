@@ -13,11 +13,11 @@ import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 
 public class RevisionTree {
 	protected ArrayList<RefTag> branchTips;
-	protected ZKFS fs;
+	protected ZKArchive archive;
 	protected int size;
 	
-	public RevisionTree(ZKFS fs) throws IOException {
-		this.fs = fs;
+	public RevisionTree(ZKArchive archive) throws IOException {
+		this.archive = archive;
 		try {
 			read();
 		} catch(ENOENTException exc) {
@@ -66,38 +66,38 @@ public class RevisionTree {
 	}
 	
 	public String getPath() {
-		return Paths.get(ZKFS.REVISION_DIR, "branch-tips").toString();
+		return Paths.get(ZKArchive.REVISION_DIR, "branch-tips").toString();
 	}
 	
 	protected void write() throws IOException {
 		// 64kib branch files seem reasonable
 		// TODO: what happens when we bust the limit? that's 1024 branch tips, which is a lot, but it could happen
-		fs.storage.write(getPath(), branchTipKey().wrappedEncrypt(serialize(), 1024*64));
+		archive.storage.write(getPath(), branchTipKey().wrappedEncrypt(serialize(), 1024*64));
 	}
 	
 	protected void read() throws IOException {
-		deserialize(branchTipKey().wrappedDecrypt(fs.storage.read(getPath())));
+		deserialize(branchTipKey().wrappedDecrypt(archive.storage.read(getPath())));
 	}
 	
 	protected void deserialize(byte[] serialized) {
 		branchTips.clear();
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		byte[] tag = new byte[fs.crypto.hashLength()];
-		while(buf.remaining() > fs.crypto.hashLength()) {
+		byte[] tag = new byte[archive.crypto.hashLength()];
+		while(buf.remaining() > archive.crypto.hashLength()) {
 			buf.get(tag);
-			branchTips.add(new RefTag(fs, tag));
+			branchTips.add(new RefTag(archive, tag));
 		}
 		
 		if(buf.hasRemaining()) throw new InvalidArchiveException("branch tip file appears corrupt: " + getPath());
 	}
 	
 	protected byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(fs.crypto.hashLength()*branchTips.size());
+		ByteBuffer buf = ByteBuffer.allocate(archive.crypto.hashLength()*branchTips.size());
 		for(RefTag tag : branchTips) buf.put(tag.getBytes());
 		return buf.array();
 	}
 	
 	protected Key branchTipKey() {
-		return fs.deriveKey(ZKFS.KEY_TYPE_CIPHER, ZKFS.KEY_INDEX_REVISION_TREE);
+		return archive.deriveKey(ZKArchive.KEY_TYPE_CIPHER, ZKArchive.KEY_INDEX_REVISION_TREE);
 	}
 }

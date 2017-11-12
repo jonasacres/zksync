@@ -15,7 +15,7 @@ public class Page {
 	boolean dirty;
 	
 	public static String pathForTag(byte[] tag) {
-		return ZKFS.DATA_DIR + ZKFS.pathForHash(tag);
+		return ZKArchive.DATA_DIR + ZKFS.pathForHash(tag);
 	}
 	
 	public Page(ZKFile file, int index) throws IOException {
@@ -55,7 +55,7 @@ public class Page {
 			plaintext.put(contents.array(), 0, size);
 			
 			// don't write immediates to disk; the pageTag = refTag = file contents
-			if(pageNum == 0 && size <= file.getFS().getPrivConfig().getImmediateThreshold()) {
+			if(pageNum == 0 && size <= file.fs.archive.privConfig.getImmediateThreshold()) {
 				file.setPageTag(pageNum, plaintext.array());
 				return;
 			}
@@ -64,13 +64,13 @@ public class Page {
 		}
 		
 		byte[] pageTag = this.authKey().authenticate(plaintext.array());
-		byte[] ciphertext = this.textKey(pageTag).wrappedEncrypt(plaintext.array(), (int) file.getFS().getPrivConfig().getPageSize());
+		byte[] ciphertext = this.textKey(pageTag).wrappedEncrypt(plaintext.array(), (int) file.fs.archive.privConfig.getPageSize());
 		this.file.setPageTag(pageNum, pageTag);
 		
 		try {
 			String path = pathForTag(pageTag);
-			file.getFS().getStorage().write(path, ciphertext);
-			file.getFS().getStorage().squash(path); 
+			file.fs.archive.storage.write(path, ciphertext);
+			file.fs.archive.storage.squash(path); 
 		} catch (IOException e) {
 			throw new InaccessibleStorageException();
 		}
@@ -91,7 +91,7 @@ public class Page {
 	}
 	
 	protected Key textKey(byte[] pageTag) {
-		return file.getFS().deriveKey(ZKFS.KEY_TYPE_CIPHER, ZKFS.KEY_INDEX_PAGE, pageTag);
+		return file.fs.archive.deriveKey(ZKArchive.KEY_TYPE_CIPHER, ZKArchive.KEY_INDEX_PAGE, pageTag);
 	}
 	
 	protected Key authKey() {
@@ -113,17 +113,17 @@ public class Page {
 		ByteBuffer buf = ByteBuffer.allocate(12);
 		buf.putLong(file.getInode().getStat().getInodeId()); // no dedupe between files
 		buf.putInt(pageNum); // no dedupe within file
-		return file.getFS().deriveKey(ZKFS.KEY_TYPE_AUTH, ZKFS.KEY_INDEX_PAGE, buf.array());
+		return file.fs.archive.deriveKey(ZKArchive.KEY_TYPE_AUTH, ZKArchive.KEY_INDEX_PAGE, buf.array());
 	}
 	
 	public void load() throws IOException {
-		int pageSize = file.getFS().getPrivConfig().getPageSize();
+		int pageSize = file.fs.archive.privConfig.getPageSize();
 		long totalSize = file.getStat().getSize();
 		boolean isLastPage = pageNum == totalSize/pageSize; 
 		size = (int) (isLastPage ? totalSize % pageSize : pageSize);
 		
-		if(pageNum == 0 && size <= file.getFS().getPrivConfig().getImmediateThreshold()) {
-			contents = ByteBuffer.allocate(file.getFS().getPrivConfig().getPageSize());
+		if(pageNum == 0 && size <= file.fs.archive.privConfig.getImmediateThreshold()) {
+			contents = ByteBuffer.allocate(file.fs.archive.privConfig.getPageSize());
 			if(size > 0) {
 				file.getInode().getRefTag().setLiteral(contents.array(), 0, size);
 			}
@@ -135,7 +135,7 @@ public class Page {
 		String path = pathForTag(pageTag);
 		
 		try {
-			ciphertext = file.getFS().getStorage().read(path);
+			ciphertext = file.fs.archive.storage.read(path);
 		} catch(ENOENTException exc) {
 			if(size > 0) throw new ENOENTException(path);
 			contents = ByteBuffer.allocate(size);
@@ -155,7 +155,7 @@ public class Page {
 	}
 	
 	public void blank() {
-		contents = ByteBuffer.allocate(file.getFS().getPrivConfig().getPageSize());
+		contents = ByteBuffer.allocate(file.fs.archive.privConfig.getPageSize());
 		size = 0;
 		dirty = false;
 	}

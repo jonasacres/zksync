@@ -10,7 +10,6 @@ import com.acrescrypto.zksync.exceptions.UnresolvedDiffException;
 import com.acrescrypto.zksync.fs.zkfs.DiffSet;
 import com.acrescrypto.zksync.fs.zkfs.FileDiff;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
-import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.RevisionInfo;
 import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;

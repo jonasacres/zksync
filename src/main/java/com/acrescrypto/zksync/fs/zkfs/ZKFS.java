@@ -3,66 +3,21 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.util.Hashtable;
 
-import com.acrescrypto.zksync.crypto.*;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
-import com.acrescrypto.zksync.fs.localfs.LocalFS;
-import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
-import com.acrescrypto.zksync.fs.zkfs.config.PrivConfig;
-import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 
 // A ZKSync archive.
 public class ZKFS extends FS {
-	protected CryptoSupport crypto;
 	protected InodeTable inodeTable;
-	protected PubConfig pubConfig;
-	protected PrivConfig privConfig;
-	protected LocalConfig localConfig;
-	protected FS storage;
-	protected KeyFile keyfile;
 	protected Hashtable<String,ZKDirectory> directoriesByPath; // TODO: definitely not happy with this; needs eviction policy
-	
-	public final static int KEY_TYPE_CIPHER = 0;
-	public final static int KEY_TYPE_AUTH = 1;
-	public final static int KEY_TYPE_PRNG = 2;
-	
-	public final static int KEY_INDEX_PAGE = 0;
-	public final static int KEY_INDEX_PAGE_MERKEL = 1;
-	public final static int KEY_INDEX_REVISION = 2;
-	public final static int KEY_INDEX_CONFIG_PRIVATE = 3;
-	public final static int KEY_INDEX_CONFIG_LOCAL = 4;
-	public final static int KEY_INDEX_REVISION_TREE = 5;
-	
+	ZKArchive archive;
+		
 	public final static int MAX_PATH_LEN = 65535;
 	
-	public final static String DATA_DIR = ".zksync/archive/data/";
-	public final static String CONFIG_DIR = ".zksync/archive/config/";
-	public final static String REVISION_DIR = ".zksync/archive/revisions/";
-	public final static String LOCAL_DIR = ".zksync/local/";
-	public final static String ACTIVE_REVISION = ".zskync/local/active-revision";
 	
 	public ZKFS(RefTag rev) throws IOException {
-		this.storage = rev.fs.storage;
-		this.pubConfig = rev.fs.pubConfig;
-		this.privConfig = rev.fs.privConfig;
-		this.crypto = rev.fs.crypto;
-		this.keyfile = rev.fs.keyfile;
-		
-		/* TODO: sure feels like we have too many responsibilities... is archive access as a whole different from
-		 * a FS view of a specific revision? probably! in fact, we now have a chicken-or-egg problem: we have to
-		 * know what reftag we're opening to get a ZKFS, but we need ZKFS to initialize reftags!
-		 * 
-		 * but really, everything above could go in a separate class called "ZKArchive" and everything below
-		 * can stay in here. this would resolve the conundrum, but will require a ton of refactoring. but since i'm
-		 * knee-deep in a big refactor anyway...
-		 */
-		this.inodeTable = new InodeTable(rev);
+		this.inodeTable = new InodeTable(this, rev);
 		this.directoriesByPath = new Hashtable<String,ZKDirectory>();
-	}
-	
-	public RevisionTree getRevisionTree() throws IOException {
-		RevisionTree tree = new RevisionTree(this);
-		return tree;
 	}
 	
 	public RevisionInfo commit(RefTag[] additionalParents, byte[] seed) throws IOException {
@@ -76,15 +31,8 @@ public class ZKFS extends FS {
 		return commit(new RefTag[0], null);
 	}
 	
-	public Key deriveKey(int type, int index, byte[] tweak) {
-		Key[] keys = { keyfile.getCipherRoot(), keyfile.getAuthRoot() };
-		if(type >= keys.length) throw new IllegalArgumentException();
-		return keys[type].derive(index, tweak);
-	}
-	
-	public Key deriveKey(int type, int index) {
-		byte[] empty = {};
-		return deriveKey(type, index, empty);
+	public RefTag currentRefTag() {
+		return inodeTable.inode.getRefTag();
 	}
 	
 	public Inode inodeForPath(String path) throws IOException {
@@ -164,30 +112,6 @@ public class ZKFS extends FS {
 		return inodeTable;
 	}
 	
-	public PubConfig getPubConfig() {
-		return pubConfig;
-	}
-	
-	public PrivConfig getPrivConfig() {
-		return privConfig;
-	}
-	
-	public FS getStorage() {
-		return storage;
-	}
-	
-	public CryptoSupport getCrypto() {
-		return crypto;
-	}
-	
-	public LocalConfig getLocalConfig() {
-		return localConfig;
-	}
-
-	public void setLocalConfig(LocalConfig localConfig) {
-		this.localConfig = localConfig;
-	}
-
 	@Override
 	public void write(String path, byte[] contents) throws IOException {
 		mkdirp(dirname(path));
@@ -383,6 +307,10 @@ public class ZKFS extends FS {
 	public void setAtime(String path, long atime) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setAtime(atime);
+	}
+	
+	public ZKArchive getArchive() {
+		return archive;
 	}
 	
 	protected void initialize() throws IOException {

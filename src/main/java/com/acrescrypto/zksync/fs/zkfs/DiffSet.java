@@ -8,19 +8,18 @@ import java.util.HashSet;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 
 public class DiffSet {
-	protected RevisionInfo[] revisions;
+	protected RefTag[] revisions;
 	RefTag commonAncestor;
 	
-	private HashMap<RefTag,ZKFS> filesystems = new HashMap<RefTag,ZKFS>();
 	HashMap<String,FileDiff> diffs = new HashMap<String,FileDiff>();
 	
-	public DiffSet(RevisionInfo[] revisions) throws IOException {
+	public DiffSet(RefTag[] revisions) throws IOException {
 		this.revisions = revisions;
 		
 		RefTag[] tags = new RefTag[revisions.length];
-		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i].tag;
+		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i];
 		
-		commonAncestor = revisions[0].fs.getRevisionTree().commonAncestorOf(tags);
+		commonAncestor = revisions[0].archive.getRevisionTree().commonAncestorOf(tags);
 		
 		for(String path : allPaths()) {
 			FileDiff diff = versionsOfFile(path);
@@ -28,26 +27,18 @@ public class DiffSet {
 				diffs.put(diff.path, diff);
 			}
 		}
-		
-		filesystems = null;
 	}
 	
 	public Collection<FileDiff> getDiffs() {
 		return diffs.values();
 	}
 	
-	public ZKFS openFS(RefTag tag) throws IOException {
-		filesystems.putIfAbsent(tag, new ZKFS(new RevisionInfo(tag)));
-		return filesystems.get(tag);
-	}
-	
 	public HashSet<String> allPaths() throws IOException {
 		HashSet<String> allPaths = new HashSet<String>();
 		allPaths.add("/");
 		
-		for(RevisionInfo rev : getRevisions()) {
-			ZKFS fs = openFS(rev.tag);
-			for(String path : fs.opendir("/").listRecursive()) {
+		for(RefTag rev : revisions) {
+			for(String path : rev.getFS().opendir("/").listRecursive()) {
 				allPaths.add(path);
 			}
 		}
@@ -56,29 +47,30 @@ public class DiffSet {
 	
 	public FileDiff versionsOfFile(String path) throws IOException {
 		FileDiff diff = new FileDiff(path);
-		for(RevisionInfo rev : getRevisions()) {
-			diff.addVersion(rev, versionOfFileForTag(rev.tag, path));
+		for(RefTag rev : revisions) {
+			diff.addVersion(rev, versionOfFileForTag(rev, path));
 		}
 		return diff;
 	}
 	
 	protected Inode versionOfFileForTag(RefTag tag, String path) throws IOException {
 		try {
-			return openFS(tag).inodeForPath(path);
+			return tag.getFS().inodeForPath(path);
 		} catch (ENOENTException e) {
 			return null;
 		}
 	}
 
-	public RevisionInfo[] getRevisions() {
+	public RefTag[] getRevisions() {
 		return revisions;
 	}
 	
-	public RevisionInfo latestRevision() {
-		RevisionInfo latest = null;
-		for(RevisionInfo rev : revisions) {
-			if(latest == null || rev.generation > latest.generation) latest = rev;
-			else if(latest.generation == rev.generation && rev.supernode.stat.getMtime() > latest.supernode.stat.getMtime()) latest = rev;
+	public RefTag latestRevision() {
+		RefTag latest = null;
+		for(RefTag rev : revisions) {
+			if(latest == null || rev.getInfo().generation > latest.getInfo().generation) latest = rev;
+			else if(latest.getInfo().generation == rev.getInfo().generation && rev.getInfo().getStat().getMtime() > rev.getInfo().getStat().getMtime()) latest = rev;
+			// TODO: ^ clean this mess up!!
 			// TODO: further tie-breaking on tag
 		}
 		return latest;

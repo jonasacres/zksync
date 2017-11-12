@@ -5,7 +5,7 @@ import java.util.HashMap;
 
 public class FileDiff {
 	String path;
-	HashMap<Inode,ArrayList<RevisionInfo>> versions = new HashMap<Inode,ArrayList<RevisionInfo>>();
+	HashMap<Inode,ArrayList<RefTag>> versions = new HashMap<Inode,ArrayList<RefTag>>();
 	protected Inode resolution;
 	protected boolean resolved;
 	
@@ -13,9 +13,9 @@ public class FileDiff {
 		this.path = path;
 	}
 	
-	public void addVersion(RevisionInfo rev, Inode inode) {
-		ArrayList<RevisionInfo> list = versions.getOrDefault(inode, null);
-		if(list == null) versions.put(inode, list = new ArrayList<RevisionInfo>());
+	public void addVersion(RefTag rev, Inode inode) {
+		ArrayList<RefTag> list = versions.getOrDefault(inode, null);
+		if(list == null) versions.put(inode, list = new ArrayList<RefTag>());
 		list.add(rev);
 	}
 	

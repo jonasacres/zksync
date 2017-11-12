@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-import com.acrescrypto.zksync.Util;
-
 /* Stores a revision of the archive. This is needed to bootstrap reading the archive.
  */
 public class RevisionInfo extends ZKFile {
@@ -14,14 +12,14 @@ public class RevisionInfo extends ZKFile {
 
 	// make a new revision based on the contents of an inode table
 	public RevisionInfo(ZKFS fs) {
-		this.generation = fs.inodeTable.revision.generation+1;
+		this.generation = 1+fs.inodeTable.revision.generation;
 		this.fs = fs;
 		
 		addParent(fs.currentRefTag());
 	}
 	
 	public void addParent(RefTag parent) {
-		// TODO: a little worried about keeping generations consistent...
+		generation = Math.min(generation, 1+parent.getInfo().generation);
 		parents.add(parent);
 	}
 	
@@ -33,7 +31,7 @@ public class RevisionInfo extends ZKFile {
 	}
 	
 	protected int parentTagLength() {
-		return fs.crypto.hashLength()+RefTag.REFTAG_EXTRA_DATA_SIZE;
+		return fs.archive.crypto.hashLength()+RefTag.REFTAG_EXTRA_DATA_SIZE;
 	}
 
 	// create plaintext serialized revision data (to be encrypted and written to
@@ -61,7 +59,7 @@ public class RevisionInfo extends ZKFile {
 		for(int i = 0; i < numParents; i++) {
 			byte[] parentBytes = new byte[parentTagLength()];
 			buf.get(parentBytes);
-			parents.add(new RefTag(fs, parentBytes));
+			parents.add(new RefTag(fs.archive, parentBytes));
 		}
 	}
 

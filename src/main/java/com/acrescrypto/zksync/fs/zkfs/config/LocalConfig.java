@@ -8,7 +8,7 @@ import javax.json.JsonReader;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 
 /* Store information specific to this user's copy of the archive; not shared with peers. Encrypted, though peers
  * would have knowledge of key if they did possess encrypted LocalConfig file.
@@ -25,7 +25,7 @@ public class LocalConfig extends ConfigFile {
 	}
 	
 	public String path() {
-		return ZKFS.LOCAL_DIR + "config.local";
+		return ZKArchive.LOCAL_DIR + "config.local";
 	}
 	
 	protected void deserialize(byte[] serialized) {
