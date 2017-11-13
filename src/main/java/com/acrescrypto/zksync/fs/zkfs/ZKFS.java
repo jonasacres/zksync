@@ -5,6 +5,7 @@ import java.util.Hashtable;
 
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
+import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
 // A ZKSync archive.
 public class ZKFS extends FS {
@@ -20,6 +21,12 @@ public class ZKFS extends FS {
 	}
 
 	public static ZKFS fsForStorage(FS storage, char[] passphrase) throws IOException {
+		return fsForStorage(storage, passphrase, null);
+	}
+	
+	public static ZKFS blankArchive(String path, char[] passphrase) throws IOException {
+		LocalFS storage = new LocalFS(path);
+		storage.rmrf("/");
 		return fsForStorage(storage, passphrase, null);
 	}
 	

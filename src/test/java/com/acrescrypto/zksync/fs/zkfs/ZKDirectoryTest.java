@@ -26,7 +26,7 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 		} catch (IOException e) {}
 		(new java.io.File(ZKFSTest.SCRATCH_DIR)).mkdirs();
 
-		scratch = zkscratch = new ZKFS(storage, "zksync".toCharArray());
+		scratch = zkscratch = ZKFS.fsForStorage(storage, "zksync".toCharArray());
 	}
 	
 	@After
