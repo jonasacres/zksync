@@ -34,7 +34,7 @@ public class ZKFSTest extends FSTestBase {
 		} catch (IOException e) {}
 		(new java.io.File(SCRATCH_DIR)).mkdirs();
 
-		scratch = zkscratch =  ZKFS.fsForStorage(storage, "zksync".toCharArray());
+		scratch = zkscratch = ZKFS.fsForStorage(storage, "zksync".toCharArray());
 		prepareExamples();
 	}
 	
@@ -195,6 +195,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testSuccessiveRevisions() throws IOException {
 		int numRevisions = 8;
 		RefTag[] revisions = new RefTag[numRevisions+1];
+		revisions[0] = RefTag.blank(zkscratch.archive);
 		
 		for(int i = 0; i < numRevisions; i++) {
 			ZKFS revFs = revisions[i].getFS();
@@ -220,7 +221,8 @@ public class ZKFSTest extends FSTestBase {
 		
 		for(int i = 0; i < numRevisions; i++) {
 			RefTag parent = null;
-			if(i > 0) parent = revisions[(i-1)/2]; 
+			if(i == 0) parent = RefTag.blank(zkscratch.archive);
+			else parent = revisions[(i-1)/2]; 
 			ZKFS revFs = parent.getFS();
 			revFs.write("intensive-revisions", ("Version " + i).getBytes());
 			revisions[i] = revFs.commit();

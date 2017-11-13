@@ -19,6 +19,7 @@ public class Inode {
 	public static Inode blankInode(ZKFS fs) {
 		Inode blank = new Inode(fs);
 		blank.setStat(new Stat());
+		blank.setRefTag(RefTag.blank(fs.archive));
 		return blank;
 	}
 
@@ -34,6 +35,7 @@ public class Inode {
 		
 		blank.setStat(stat);
 		blank.setFlags(FLAG_RETAIN);
+		blank.setRefTag(RefTag.blank(fs.archive));
 		return blank;
 	}
 	
@@ -94,7 +96,7 @@ public class Inode {
 	}
 	
 	public byte[] serialize() {
-		int size = stat.getStorageSize() + 2*4 + 1 + 2*fs.archive.crypto.hashLength();
+		int size = stat.getStorageSize() + 2*4 + 1 + 2*(RefTag.REFTAG_EXTRA_DATA_SIZE+fs.archive.crypto.hashLength());
 		ByteBuffer buf = ByteBuffer.allocate(size);
 		buf.putInt(size-4);
 		buf.put(stat.serialize());
@@ -102,6 +104,7 @@ public class Inode {
 		buf.put(flags);
 		buf.put(refTag.getBytes());
 		buf.put(changedFrom.getBytes());
+		assert(!buf.hasRemaining());
 		
 		return buf.array();
 	}
@@ -125,6 +128,8 @@ public class Inode {
 		
 		buf.get(refTagBytes, 0, fs.archive.crypto.hashLength());
 		this.changedFrom = new RefTag(fs.archive, refTagBytes);
+		
+		assert(!buf.hasRemaining());
 	}
 	
 	public void addLink() {

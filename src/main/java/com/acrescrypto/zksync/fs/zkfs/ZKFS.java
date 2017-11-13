@@ -31,9 +31,10 @@ public class ZKFS extends FS {
 	}
 	
 	public ZKFS(RefTag revision) throws IOException {
-		this.inodeTable = new InodeTable(this, revision);
+		this.archive = revision.archive;
 		this.directoriesByPath = new Hashtable<String,ZKDirectory>();
 		this.baseRevision = revision;
+		this.inodeTable = new InodeTable(this, revision);
 	}
 	
 	public RefTag commit(RefTag[] additionalParents, byte[] seed) throws IOException {

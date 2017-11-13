@@ -125,7 +125,7 @@ public class Page {
 		if(pageNum == 0 && size < file.fs.archive.crypto.hashLength()) {
 			contents = ByteBuffer.allocate(file.fs.archive.privConfig.getPageSize());
 			if(size > 0) {
-				file.getInode().getRefTag().setLiteral(contents.array(), 0, size);
+				contents.put(file.inode.refTag.getLiteral());
 			}
 			return;
 		}

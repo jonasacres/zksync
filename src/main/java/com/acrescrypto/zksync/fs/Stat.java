@@ -168,6 +168,8 @@ public class Stat {
 		buf.putInt(group.length());
 		buf.put(group.getBytes());
 		
+		assert(!buf.hasRemaining());
+		
 		return buf.array();
 	}
 	
@@ -196,6 +198,7 @@ public class Stat {
 		byte[] groupBuf = new byte[groupLen];
 		buf.get(groupBuf);
 		this.group = new String(groupBuf);
+		assert(!buf.hasRemaining());
 	}
 	
 	public Stat clone() {

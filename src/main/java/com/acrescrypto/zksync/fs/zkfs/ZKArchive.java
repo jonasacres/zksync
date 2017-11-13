@@ -43,8 +43,10 @@ public class ZKArchive {
 	public ZKArchive(FS storage, PassphraseProvider provider) {
 		this.storage = storage;
 		this.pubConfig = new PubConfig(storage);
-		this.keyfile = new KeyFile(this, provider.passphraseForArchive(pubConfig.getArchiveId()));
 		this.crypto = new CryptoSupport(pubConfig);
+		this.keyfile = new KeyFile(this, provider.passphraseForArchive(pubConfig.getArchiveId()));
+		this.privConfig = new PrivConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_PRIVATE));
+		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
 	}
 
 	public Key deriveKey(int type, int index, byte[] tweak) {

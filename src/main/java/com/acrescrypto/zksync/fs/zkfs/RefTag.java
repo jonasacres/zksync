@@ -46,7 +46,7 @@ public class RefTag {
 	
 	public byte[] padHash(byte[] hash) {
 		// this breaks if the hash length is > 255 bytes, but honestly, who needs a hash that long?
-		byte needed = (byte) (hash.length - archive.crypto.hashLength());
+		byte needed = (byte) (archive.crypto.hashLength() - hash.length);
 		if(needed == 0) return hash;
 		ByteBuffer buf = ByteBuffer.allocate(archive.crypto.hashLength());
 		buf.put(hash);
@@ -91,6 +91,10 @@ public class RefTag {
 		this.hash = padHash(buf.array());
 	}
 	
+	public byte[] getLiteral() {
+		return unpadHash(hash);
+	}
+	
 	public RevisionInfo getInfo() throws IOException {
 		if(info == null) info = readOnlyFS().getRevisionInfo();
 		return info;
@@ -101,7 +105,20 @@ public class RefTag {
 		buf.put(hash);
 		buf.put((byte) (this.refType & 0x03));
 		buf.putLong(numPages);
+		buf.put(new byte[REFTAG_EXTRA_DATA_SIZE-8-1]);
+		
+		assert(!buf.hasRemaining());
 		return buf.array();
+	}
+	
+	protected void deserialize(byte[] serialized) {
+		int expectedLen = archive.crypto.hashLength() + REFTAG_EXTRA_DATA_SIZE;
+		assert(serialized.length == expectedLen);
+		ByteBuffer buf = ByteBuffer.wrap(serialized);
+		this.hash = new byte[archive.crypto.hashLength()];
+		buf.get(hash);
+		this.refType = buf.get() & 0x03;
+		this.numPages = buf.getLong();
 	}
 	
 	public ZKFS readOnlyFS() throws IOException {

@@ -216,6 +216,7 @@ public class ZKFile extends File {
 		inode.setChangedFrom(fs.baseRevision);
 		bufferedPage.flush();
 		merkel.commit();
+		inode.setRefTag(merkel.getRefTag());
 		dirty = false;
 	}
 
@@ -241,6 +242,11 @@ public class ZKFile extends File {
 	}
 	
 	protected void inferSize(RefTag tag) throws IOException {
+		if(tag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) {
+			inode.getStat().setSize(tag.getHash().length - tag.getHash()[tag.getHash().length-1]-1);
+			return;
+		}
+		
 		bufferPage((int) (tag.numPages-1));
 		inode.getStat().setSize((tag.numPages-1)*fs.archive.privConfig.getPageSize() + bufferedPage.size);
 	}

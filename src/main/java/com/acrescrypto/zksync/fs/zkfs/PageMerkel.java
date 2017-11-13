@@ -204,6 +204,7 @@ public class PageMerkel {
 			for(int n = newNodes.length-1; n >= 0; n--) {
 				int tier = (int) (Math.log(n+1)/log2); // floor(log2(n+1))
 				int tierThreshold = 3*(1 << (tier - 1)) - 1; // 3*2^(tier-1). Anything above this is a new node.
+				tierThreshold = Math.min(tierThreshold, (1 << tier) + numExistingNodes - 1);
 				
 				if(minN <= n && n < tierThreshold) {
 					// are we an existing node? must be deep enough (minN <= n), and left enough (n < tierThreshold) to be in our subtree.
