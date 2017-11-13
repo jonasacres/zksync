@@ -6,6 +6,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.KeyFile;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
 import com.acrescrypto.zksync.fs.zkfs.config.PrivConfig;
 import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
@@ -35,6 +36,10 @@ public class ZKArchive {
 	protected KeyFile keyfile;
 	protected FS storage;
 	
+	public static ZKArchive archiveAtPath(String path, char[] passphrase) {
+		return new ZKArchive(new LocalFS(path), (byte[] id) -> { return passphrase; });
+	}
+	
 	public ZKArchive(FS storage, PassphraseProvider provider) {
 		this.storage = storage;
 		this.pubConfig = new PubConfig(storage);
@@ -51,6 +56,10 @@ public class ZKArchive {
 	public Key deriveKey(int type, int index) {
 		byte[] empty = {};
 		return deriveKey(type, index, empty);
+	}
+	
+	public ZKFS openRevision(byte[] revision) throws IOException {
+		return new ZKFS(new RefTag(this, revision));
 	}
 	
 	public PubConfig getPubConfig() {

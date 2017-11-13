@@ -55,7 +55,7 @@ public class Page {
 			plaintext.put(contents.array(), 0, size);
 			
 			// don't write immediates to disk; the pageTag = refTag = file contents
-			if(pageNum == 0 && size <= file.fs.archive.privConfig.getImmediateThreshold()) {
+			if(pageNum == 0 && size < file.fs.archive.crypto.hashLength()) {
 				file.setPageTag(pageNum, plaintext.array());
 				return;
 			}
@@ -68,7 +68,7 @@ public class Page {
 		this.file.setPageTag(pageNum, pageTag);
 		
 		try {
-			String path = pathForTag(pageTag);
+			String path = pathForTag(authKey().authenticate(pageTag));
 			file.fs.archive.storage.write(path, ciphertext);
 			file.fs.archive.storage.squash(path); 
 		} catch (IOException e) {
@@ -122,7 +122,7 @@ public class Page {
 		boolean isLastPage = pageNum == totalSize/pageSize; 
 		size = (int) (isLastPage ? totalSize % pageSize : pageSize);
 		
-		if(pageNum == 0 && size <= file.fs.archive.privConfig.getImmediateThreshold()) {
+		if(pageNum == 0 && size < file.fs.archive.crypto.hashLength()) {
 			contents = ByteBuffer.allocate(file.fs.archive.privConfig.getPageSize());
 			if(size > 0) {
 				file.getInode().getRefTag().setLiteral(contents.array(), 0, size);
@@ -132,7 +132,7 @@ public class Page {
 		
 		byte[] pageTag = file.getPageTag(pageNum);
 		byte[] ciphertext;
-		String path = pathForTag(pageTag);
+		String path = pathForTag(authKey().authenticate(pageTag));
 		
 		try {
 			ciphertext = file.fs.archive.storage.read(path);

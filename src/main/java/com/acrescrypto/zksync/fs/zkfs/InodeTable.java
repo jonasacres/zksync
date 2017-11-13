@@ -39,7 +39,7 @@ public class InodeTable extends ZKFile {
 		}		
 	}
 
-	public RevisionInfo commit(RefTag[] additionalParents, byte[] seed) throws IOException {
+	public RefTag commit(RefTag[] additionalParents, byte[] seed) throws IOException {
 		rewind();
 		truncate(0);
 		
@@ -52,7 +52,8 @@ public class InodeTable extends ZKFile {
 		newRevision.commit();
 
 		flush();
-		return revision = newRevision;
+		revision = newRevision;
+		return inode.getRefTag();
 	}
 	
 	public void readTable() throws IOException {

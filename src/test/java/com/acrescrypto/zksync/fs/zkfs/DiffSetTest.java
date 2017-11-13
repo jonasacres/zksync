@@ -23,7 +23,7 @@ public class DiffSetTest {
 	}
 	
 	LocalFS storage;
-	RevisionInfo parent;
+	RefTag parent;
 	RevisionInfo[] children;
 	char[] password = "zksync".toCharArray();
 	
@@ -44,7 +44,7 @@ public class DiffSetTest {
 	public void beforeEach() throws IOException {
 		storage = new LocalFS("/tmp/zksync-diffset");
 		if(storage.exists("/")) storage.rmrf("/");
-		ZKFS fs = new ZKFS(storage, password);
+		ZKFS fs = ZKFS.fsForStorage(storage, password);
 		fs.write("unmodified", "parent".getBytes());
 		fs.write("modified", "replaceme".getBytes());
 		fs.squash("modified");
@@ -52,7 +52,7 @@ public class DiffSetTest {
 		children = new RevisionInfo[NUM_CHILDREN];
 		
 		for(int i = 0; i < NUM_CHILDREN; i++) {
-			fs = new ZKFS(storage, password, parent);
+			fs = ZKFS.fsForStorage(storage, password, parent.getBytes());
 			fs.write("modified", "replaced!".getBytes());
 			fs.write("child", ("text " + i).getBytes()); // don't forget -- making this means / is also changed, so factor that in
 			fs.squash("modified");

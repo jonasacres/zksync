@@ -6,9 +6,10 @@ import java.nio.ByteBuffer;
 public class RefTag {
 	protected ZKArchive archive;
 	protected ZKFS readOnlyFs;
+	protected RevisionInfo info;
 	protected byte[] tag, hash;
 	protected int refType;	
-	protected long numPages; // TODO: really think this through. 64 bits is safe, but big. 32-bit would be 2^32 pages, or 2^48 bytes by default.
+	protected long numPages;
 	public static final byte REF_TYPE_2INDIRECT = 2;
 	public static final byte REF_TYPE_INDIRECT = 1;
 	public static final byte REF_TYPE_IMMEDIATE = 0;
@@ -23,6 +24,7 @@ public class RefTag {
 	}
 	
 	public RefTag(ZKArchive archive, byte[] tag) {
+		if(tag == null) tag = blank(archive).getBytes();
 		if(tag.length != archive.crypto.hashLength() + REFTAG_EXTRA_DATA_SIZE) throw new RuntimeException("received invalid reftag");
 		ByteBuffer buf = ByteBuffer.wrap(tag);
 		
@@ -90,7 +92,8 @@ public class RefTag {
 	}
 	
 	public RevisionInfo getInfo() throws IOException {
-		return readOnlyFS().getRevisionInfo();
+		if(info == null) info = readOnlyFS().getRevisionInfo();
+		return info;
 	}
 	
 	protected byte[] serialize() {

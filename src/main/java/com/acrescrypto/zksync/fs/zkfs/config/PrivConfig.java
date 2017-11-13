@@ -71,11 +71,6 @@ public class PrivConfig extends ConfigFile {
 		this.dirty = true;
 	}
 
-	// TODO: Kill this. It should be hashLength-1. Also, make sure all uses of this imply an immediate iff length < hashLength.
-	public int getImmediateThreshold() {
-		return immediateThreshold;
-	}
-
 	public void setImmediateThreshold(int immediateThreshold) {
 		this.immediateThreshold = immediateThreshold;
 	}

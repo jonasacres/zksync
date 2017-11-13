@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashSet;
 
 /* Stores a revision of the archive. This is needed to bootstrap reading the archive.
@@ -67,5 +68,13 @@ public class RevisionInfo extends ZKFile {
 
 	public long getGeneration() {
 		return generation;
+	}
+
+	public int getNumParents() {
+		return parents.size();
+	}
+	
+	public ArrayList<RefTag> getParents() {
+		return new ArrayList<RefTag>(parents);
 	}
 }

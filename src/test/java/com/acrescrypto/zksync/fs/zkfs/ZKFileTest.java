@@ -32,7 +32,7 @@ public class ZKFileTest extends FileTestBase {
 		} catch (IOException e) {}
 		(new java.io.File(ZKFSTest.SCRATCH_DIR)).mkdirs();
 
-		scratch = zkscratch = new ZKFS(storage, "zksync".toCharArray());
+		scratch = zkscratch = ZKFS.fsForStorage(storage, "zksync".toCharArray());
 	}
 	
 	@After
@@ -47,7 +47,7 @@ public class ZKFileTest extends FileTestBase {
 	
 	@Test
 	public void testImmedateWrite() throws IOException {
-		byte[] contents = new byte[zkscratch.getPrivConfig().getImmediateThreshold()];
+		byte[] contents = new byte[zkscratch.archive.crypto.hashLength()];
 		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
 		ZKFile file = zkscratch.open("immediate-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
 		file.write(contents);
@@ -55,12 +55,12 @@ public class ZKFileTest extends FileTestBase {
 		
 		file = zkscratch.open("immediate-write-test", ZKFile.O_RDONLY);
 		assertTrue(Arrays.equals(file.read(), contents));
-		assertEquals(RefTag.REF_TYPE_IMMEDIATE, file.inode.getRefType());
+		assertEquals(RefTag.REF_TYPE_IMMEDIATE, file.inode.refTag.refType);
 	}
 	
 	@Test
 	public void testSinglePageWrite() throws IOException {
-		byte[] contents = new byte[zkscratch.getPrivConfig().getPageSize()];
+		byte[] contents = new byte[zkscratch.archive.getPrivConfig().getPageSize()];
 		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
 		ZKFile file = zkscratch.open("singlepage-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
 		file.write(contents);
@@ -68,12 +68,12 @@ public class ZKFileTest extends FileTestBase {
 		
 		file = zkscratch.open("singlepage-write-test", ZKFile.O_RDONLY);
 		assertTrue(Arrays.equals(file.read(), contents));
-		assertEquals(RefTag.REF_TYPE_INDIRECT, file.inode.getRefType());
+		assertEquals(RefTag.REF_TYPE_INDIRECT, file.inode.refTag.refType);
 	}
 	
 	@Test
 	public void testMultipageWrite() throws IOException {
-		byte[] contents = new byte[5*zkscratch.getPrivConfig().getPageSize()];
+		byte[] contents = new byte[5*zkscratch.archive.privConfig.getPageSize()];
 		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
 		ZKFile file = zkscratch.open("multipage-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
 		file.write(contents);
@@ -81,22 +81,22 @@ public class ZKFileTest extends FileTestBase {
 		
 		file = zkscratch.open("multipage-write-test", ZKFile.O_RDONLY);
 		assertTrue(Arrays.equals(file.read(), contents));
-		assertEquals(RefTag.REF_TYPE_2INDIRECT, file.inode.getRefType());
+		assertEquals(RefTag.REF_TYPE_2INDIRECT, file.inode.refTag.refType);
 	}
 	
 	@Test
 	public void testPageTimestampSquashing() throws IOException {
-		byte[] contents = new byte[5*zkscratch.getPrivConfig().getPageSize()];
+		byte[] contents = new byte[5*zkscratch.archive.privConfig.getPageSize()];
 		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
 		
 		ZKFile file = zkscratch.open("multipage-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
 		file.write(contents);
 		file.close();
 
-		for(int i = 0; i < Math.ceil(((double) file.getStat().getSize())/file.fs.privConfig.getPageSize()); i++) {
+		for(int i = 0; i < Math.ceil(((double) file.getStat().getSize())/file.fs.archive.privConfig.getPageSize()); i++) {
 			byte[] pageTag = file.getPageTag(i);
-			String path = ZKFS.DATA_DIR + file.fs.pathForHash(pageTag);
-			Stat stat = file.fs.storage.stat(path);
+			String path = ZKArchive.DATA_DIR + ZKFS.pathForHash(pageTag);
+			Stat stat = file.fs.archive.storage.stat(path);
 			assertEquals(0, stat.getAtime());
 			assertEquals(0, stat.getMtime());
 		}

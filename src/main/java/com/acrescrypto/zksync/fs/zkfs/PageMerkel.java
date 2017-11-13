@@ -87,7 +87,7 @@ public class PageMerkel {
 			ByteBuffer chunkText = ByteBuffer.wrap(plaintext.array(),
 					(int) (i*archive.privConfig.getPageSize()),
 					Math.min(archive.privConfig.getPageSize(), plaintext.capacity()));
-			byte[] chunkCiphertext = cipherKey(getRefTag()).wrappedEncrypt(chunkText.array(),
+			byte[] chunkCiphertext = cipherKey(tag).wrappedEncrypt(chunkText.array(),
 					(int) archive.privConfig.getPageSize());
 			
 			String path = pathForChunk(tag, i);
@@ -114,7 +114,19 @@ public class PageMerkel {
 		
 		resize(expectedPages);
 		
-		// TODO: consider not requiring a full readBuf; can we rely on guarantee hashes won't cross chunk boundaries?
+		/* TODO: This and InodeTable are serious hazards, in that they each demand to be read in full. Technically,
+		 * ZKDirectory does the same thing, but it's just a fact of life that directories perform very badly at
+		 * huge sizes in many filesystems, so I don't think I'm in bad company there. 
+		 * 
+		 * But if InodeTable is huge, it will make people download the whole inode table just to get what they want.
+		 * That's bad enough. But even if we fixed it, you'd also still have to read the whole PageMerkel to read
+		 * any part of it! Basically, I want:
+		 * 
+		 *   - locating a reftag in the the archive to be constant in time with respect to the number of revisions or files
+		 *   - reads of a fixed length from a file to be constant in time with respect to the file size
+		 * 
+		 * Neither of those are true right now.
+		 */
 		
 		if(tag.getRefType() == RefTag.REF_TYPE_2INDIRECT) {
 			for(int i = 0; i < expectedChunks; i++) {

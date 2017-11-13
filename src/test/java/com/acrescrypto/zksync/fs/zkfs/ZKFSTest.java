@@ -5,9 +5,7 @@ import static org.junit.Assert.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.Security;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 
 import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -15,7 +13,6 @@ import org.junit.*;
 
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
-import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 
@@ -37,7 +34,7 @@ public class ZKFSTest extends FSTestBase {
 		} catch (IOException e) {}
 		(new java.io.File(SCRATCH_DIR)).mkdirs();
 
-		scratch = zkscratch = new ZKFS(storage, "zksync".toCharArray());
+		scratch = zkscratch =  ZKFS.fsForStorage(storage, "zksync".toCharArray());
 		prepareExamples();
 	}
 	
@@ -58,7 +55,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	@Test
 	public void testMultipageWrite() throws IOException {
-		byte[] text = new byte[10*zkscratch.getPrivConfig().getPageSize()];
+		byte[] text = new byte[10*zkscratch.getArchive().getPrivConfig().getPageSize()];
 		for(int i = 0; i < text.length; i++) text[i] = (byte) (i % 256);
 		scratch.write("multipage-write", text);
 		assertTrue(Arrays.equals(text, scratch.read("multipage-write")));
@@ -66,7 +63,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	@Test
 	public void testMultipageModify() throws IOException {
-		byte[] text = new byte[10*zkscratch.getPrivConfig().getPageSize()];
+		byte[] text = new byte[10*zkscratch.getArchive().getPrivConfig().getPageSize()];
 		ByteBuffer buf = ByteBuffer.wrap(text);
 		for(int i = 0; i < text.length; i++) text[i] = (byte) (i % 256);
 		scratch.write("multipage-modify", text);
@@ -87,7 +84,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	@Test
 	public void testMultipageTruncateSmaller() throws IOException {
-		byte[] text = new byte[10*zkscratch.getPrivConfig().getPageSize()];
+		byte[] text = new byte[10*zkscratch.getArchive().getPrivConfig().getPageSize()];
 		for(int i = 0; i < text.length; i++) text[i] = (byte) (i % 256);
 		scratch.write("multipage-truncate", text);
 		
@@ -141,7 +138,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testPageBoundaryWrites() throws IOException {
 		for(int pageCount = 1; pageCount <= 3; pageCount++) {
 			for(int mod = -1; mod <= 1; mod++) {
-				byte[] buf = generateFileData("page-boundary-test", pageCount*zkscratch.getPrivConfig().getPageSize() + mod);
+				byte[] buf = generateFileData("page-boundary-test", pageCount*zkscratch.getArchive().getPrivConfig().getPageSize() + mod);
 				for(int i = 0; i < buf.length; i++) buf[i] = (byte) (i & 0xff);
 				zkscratch.write("page-boundary-test", buf);
 				
@@ -154,12 +151,12 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testPageBoundaryExtensions() throws IOException {
 		int pageCount = 5;
-		byte[] testData = generateFileData("page-boundary", pageCount*zkscratch.getPrivConfig().getPageSize());
+		byte[] testData = generateFileData("page-boundary", pageCount*zkscratch.getArchive().getPrivConfig().getPageSize());
 		ByteBuffer testBuf = ByteBuffer.wrap(testData);
 		
 		ZKFile testFile = zkscratch.open("page-boundary-extension-test", File.O_RDWR|File.O_CREAT);
 		for(int page = 0; page < pageCount; page++) {
-			int[] writeLengths = { 1, zkscratch.getPrivConfig().getPageSize()-2, 1 };
+			int[] writeLengths = { 1, zkscratch.getArchive().getPrivConfig().getPageSize()-2, 1 };
 			for(int writeLength: writeLengths) {
 				byte[] writeData = new byte[writeLength];
 				testBuf.get(writeData);
@@ -185,9 +182,9 @@ public class ZKFSTest extends FSTestBase {
 		byte[] content = "there is a house down in new orleans they call the rising sun".getBytes();
 		zkscratch.write("basic-archive-test", content);
 		assertTrue(Arrays.equals(content, zkscratch.read("basic-archive-test")));
-		RevisionInfo rev = zkscratch.commit();
+		RefTag rev = zkscratch.commit();
 		
-		ZKFS readFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), rev);
+		ZKFS readFs = rev.readOnlyFS();
 		assertTrue(Arrays.equals(content, readFs.read("basic-archive-test")));
 	}
 	
@@ -195,73 +192,23 @@ public class ZKFSTest extends FSTestBase {
 	// TODO: everything after this should probably go into its own test class (revision, inode table) 
 	
 	@Test
-	public void testStoredRevision() throws IOException {
-		zkscratch.write("storedrevision", "pak chooie unf".getBytes());
-		RevisionInfo rev = zkscratch.commit();
-		String path = rev.getTag().getPath();
-		
-		RefTag readTag = new RefTag(zkscratch, path);
-		RevisionInfo readRev = new RevisionInfo(readTag);
-		ZKFS readFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), readRev);
-		
-		assertTrue(Arrays.equals("pak chooie unf".getBytes(), readFs.read("storedrevision")));
-	}
-	
-	@Test(expected = SecurityException.class)
-	public void testTamperedRevision() throws IOException {
-		zkscratch.write("storedrevision", "pak chooie unf".getBytes());
-		RevisionInfo rev = zkscratch.commit();
-		String path = rev.getTag().getPath();
-		
-		byte[] ciphertext = zkscratch.storage.read(path);
-		ciphertext[200] ^= 0x40; // no significance to the choice of byte or bit; just twiddling an arbitrary bit
-		zkscratch.storage.write(path, ciphertext);
-		
-		RefTag readTag = new RefTag(zkscratch, path);
-		new RevisionInfo(readTag);
-	}
-
-	@Test(expected = SecurityException.class)
-	public void testTamperedRevisionTag() throws IOException {
-		zkscratch.write("storedrevision", "pak chooie unf".getBytes());
-		RevisionInfo rev = zkscratch.commit();
-		String oldPath = rev.getTag().getPath();
-		rev.getTag().tag[4] ^= 0x20; // arbitrary bitflip
-		String path = rev.getTag().getPath();
-		
-		zkscratch.storage.link(oldPath, path);
-		zkscratch.storage.unlink(oldPath);
-		
-		RefTag readTag = new RefTag(zkscratch, path);
-		new RevisionInfo(readTag);
-	}
-	
-	@Test
-	public void testRevisionTimeSquashing() throws IOException {
-		RevisionInfo rev = zkscratch.commit();
-		Stat stat = zkscratch.storage.stat(rev.tag.getPath());
-		assertTrue(stat.getMtime() == 0);
-		assertTrue(stat.getAtime() == 0);
-	}
-	
-	@Test
 	public void testSuccessiveRevisions() throws IOException {
 		int numRevisions = 8;
-		RevisionInfo[] revisions = new RevisionInfo[numRevisions+1];
+		RefTag[] revisions = new RefTag[numRevisions+1];
 		
 		for(int i = 0; i < numRevisions; i++) {
-			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), revisions[i]);
+			ZKFS revFs = revisions[i].getFS();
 			revFs.write("successive-revisions", ("Version " + i).getBytes());
 			revisions[i+1] = revFs.commit();
 		}
 		
 		for(int i = 1; i <= numRevisions; i++) {
-			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), revisions[i]);
+			ZKFS revFs = revisions[i].getFS();
 			byte[] text = ("Version " + (i-1)).getBytes();
 			assertTrue(Arrays.equals(text, revFs.read("successive-revisions")));
-			assertEquals(1, revFs.getInodeTable().getRevision().getNumParents());
+			assertEquals(1, revFs.getRevisionInfo().getNumParents());
 			if(i > 1) {
-				assertEquals(revisions[i-1].getTag(), revFs.getInodeTable().getRevision().getParentTag(0));
+				assertEquals(revisions[i-1], revFs.getRevisionInfo().getParents().get(0));
 			}
 		}
 	}
@@ -269,68 +216,36 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testIntensiveRevisions() throws IOException {
 		int numRevisions = 31;
-		RevisionInfo[] revisions = new RevisionInfo[numRevisions];
+		RefTag[] revisions = new RefTag[numRevisions];
 		
 		for(int i = 0; i < numRevisions; i++) {
-			RevisionInfo parent = null;
+			RefTag parent = null;
 			if(i > 0) parent = revisions[(i-1)/2]; 
-			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), parent);
+			ZKFS revFs = parent.getFS();
 			revFs.write("intensive-revisions", ("Version " + i).getBytes());
 			revisions[i] = revFs.commit();
 		}
 
 		for(int i = 0; i < numRevisions; i++) {
-			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), revisions[i]);
+			ZKFS revFs = revisions[i].getFS();
 			byte[] text = ("Version " + i).getBytes();
 			assertTrue(Arrays.equals(text, revFs.read("intensive-revisions")));
-			assertEquals(1, revFs.getInodeTable().getRevision().getNumParents());
+			assertEquals(1, revFs.getRevisionInfo().getNumParents());
 			if(i > 0) {
-				assertEquals(revisions[(i-1)/2].getTag(), revFs.getInodeTable().getRevision().getParentTag(0));
+				assertEquals(revisions[(i-1)/2], revFs.getRevisionInfo().getParents().get(0));
 			}
 		}
 	}
 	
 	@Test
-	public void testRevisionListing() throws IOException {
-		int numRevisions = 2;
-		HashSet<RefTag> set = new HashSet<RefTag>();
-		RevisionInfo lastRev = null;
-
-		for(int i = 0; i < numRevisions; i++) {
-			ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), lastRev);
-			revFs.write("revision-listing", ("Version " + i).getBytes());
-			lastRev = revFs.commit();
-			set.add(lastRev.getTag());
-		}
-		
-		RevisionTree tree = zkscratch.getRevisionTree();
-		ArrayList<RefTag> tags = tree.revisionTags();
-		
-		assertEquals(numRevisions, set.size());
-		assertEquals(numRevisions, tags.size());
-		for(RefTag tag : tags) {
-			assertTrue(set.contains(tag));
-		}
-	}
-	
-	@Ignore // ignored for now because the immediate threshold is smaller than the minimum table size, and it's not easy to vary (yet)
-	public void testImmediateInodeTable() throws IOException {
-		ZKFS fs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray());
-		RevisionInfo rev = fs.commit();
-		assertTrue(fs.inodeTable.getStat().getSize() < fs.getPrivConfig().getImmediateThreshold());
-		assertEquals(fs.inodeTable.getStat().getSize(), rev.supernode.getStat().getSize());
-		ZKFS revFs = new ZKFS(fs.getStorage(), "zksync".toCharArray(), rev);
-		assertTrue(Arrays.equals(revFs.inodeTable.merkel.getRefTag(), fs.inodeTable.merkel.getRefTag()));
-	}
-	
-	@Test
 	public void testSinglePageInodeTable() throws IOException {
-		RevisionInfo rev = zkscratch.commit();
-		assertTrue(zkscratch.inodeTable.getStat().getSize() > zkscratch.getPrivConfig().getImmediateThreshold());
-		assertTrue(zkscratch.inodeTable.getStat().getSize() < zkscratch.getPrivConfig().getPageSize());
-		assertEquals(zkscratch.inodeTable.getStat().getSize(), rev.supernode.getStat().getSize());
-		ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), rev);
-		assertTrue(Arrays.equals(revFs.inodeTable.merkel.getRefTag(), zkscratch.inodeTable.merkel.getRefTag()));
+		RefTag rev = zkscratch.commit();
+		assertTrue(zkscratch.inodeTable.getStat().getSize() >= zkscratch.archive.crypto.hashLength());
+		assertTrue(zkscratch.inodeTable.getStat().getSize() < zkscratch.archive.getPrivConfig().getPageSize());
+		ZKFS revFs = rev.getFS();
+		assertTrue(Arrays.equals(revFs.inodeTable.merkel.getRefTag().getBytes(), zkscratch.inodeTable.merkel.getRefTag().getBytes()));
+		assertEquals(zkscratch.inodeTable.merkel.numPages, revFs.inodeTable.merkel.numPages);
+		assertEquals(zkscratch.inodeTable.getStat().getSize(), revFs.inodeTable.getStat().getSize());
 	}
 	
 	@Test
@@ -340,11 +255,12 @@ public class ZKFSTest extends FSTestBase {
 			zkscratch.write(path, "foo".getBytes());
 		}
 		
-		RevisionInfo rev = zkscratch.commit();
-		assertTrue(zkscratch.inodeTable.getStat().getSize() > zkscratch.getPrivConfig().getPageSize());
-		assertEquals(zkscratch.inodeTable.getStat().getSize(), rev.supernode.getStat().getSize());
-		ZKFS revFs = new ZKFS(zkscratch.getStorage(), "zksync".toCharArray(), rev);
-		assertTrue(Arrays.equals(revFs.inodeTable.merkel.getRefTag(), zkscratch.inodeTable.merkel.getRefTag()));
+		RefTag rev = zkscratch.commit();
+		assertTrue(zkscratch.inodeTable.getStat().getSize() > zkscratch.archive.getPrivConfig().getPageSize());
+		ZKFS revFs = rev.readOnlyFS();
+		assertTrue(Arrays.equals(revFs.inodeTable.merkel.getRefTag().getBytes(), zkscratch.inodeTable.merkel.getRefTag().getBytes()));
+		assertEquals(zkscratch.inodeTable.merkel.numPages, revFs.inodeTable.merkel.numPages);
+		assertEquals(zkscratch.inodeTable.getStat().getSize(), revFs.inodeTable.getStat().getSize());
 	}
 	
 	@Test
@@ -376,8 +292,8 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testNextInodeIdAfterFSLoad() throws IOException {
 		for(int i = 0; i < 10; i++) zkscratch.write("burner-inode-"+i, ("content"+i).getBytes());
-		RevisionInfo rev = zkscratch.commit();
-		ZKFS recoveredFs = new ZKFS(rev);
+		RefTag rev = zkscratch.commit();
+		ZKFS recoveredFs = rev.readOnlyFS();
 		assertEquals(zkscratch.inodeTable.nextInodeId, recoveredFs.inodeTable.nextInodeId);
 	}
 	
@@ -391,13 +307,13 @@ public class ZKFSTest extends FSTestBase {
 	protected byte[] generatePageData(String key, int pageNum) {
 		ByteBuffer buf = ByteBuffer.allocate(4);
 		buf.putInt(pageNum);
-		return zkscratch.crypto.expand(key.getBytes(), zkscratch.getPrivConfig().getPageSize(), buf.array(), "zksync".getBytes());
+		return zkscratch.archive.crypto.expand(key.getBytes(), zkscratch.archive.getPrivConfig().getPageSize(), buf.array(), "zksync".getBytes());
 	}
 	
 	protected byte[] generateFileData(String key, int length) {
 		ByteBuffer buf = ByteBuffer.allocate(4);
 		buf.putInt(length);
-		return zkscratch.crypto.expand(key.getBytes(), length, buf.array(), "zksync".getBytes());
+		return zkscratch.archive.crypto.expand(key.getBytes(), length, buf.array(), "zksync".getBytes());
 	}
 	
 	public static void cheapenArgon2Costs() {

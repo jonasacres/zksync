@@ -6,6 +6,8 @@ public class Key {
 	private byte[] raw;
 	private CryptoSupport crypto;
 	
+	public static int KEY_INDEX_SALTED_SUBKEY = 255;
+	
 	public Key(CryptoSupport crypto) {
 		this(crypto, crypto.defaultPrng());
 	}
@@ -25,7 +27,7 @@ public class Key {
 	}
 	
 	public Key derive(int index, byte[] data) {
-		if(index > 255) throw new IllegalArgumentException("key derivation index seems way too high");
+		if(index > KEY_INDEX_SALTED_SUBKEY) throw new IllegalArgumentException("key derivation index seems way too high");
 		ByteBuffer saltBuf = ByteBuffer.allocate(data.length+1);
 		saltBuf.put(data);
 		saltBuf.put((byte) index);
@@ -38,19 +40,15 @@ public class Key {
 	
 	public byte[] wrappedEncrypt(byte[] plaintext, int padSize, PRNG rng) {
 		if(padSize < 0) throw new IllegalArgumentException("pad size cannot be negative for wrappedEncrypt");
-		/* TODO: this means we're trusting not only our RNG, but everyone else's RNG. what if RNG output is combined
-		 * with existing key material?
-		 */
-		Key subkey = new Key(crypto, rng);
-		byte[] outerIv = rng.getBytes(crypto.symIvLength()), innerIv = rng.getBytes(crypto.symIvLength());
-		byte[] ciphertext = subkey.encrypt(innerIv, plaintext, padSize);
-		byte[] keywrap = encrypt(outerIv, subkey.raw, 0);
-		ByteBuffer buffer = ByteBuffer.allocate(outerIv.length + innerIv.length + ciphertext.length + keywrap.length + 2*2);
-		buffer.putShort((short) outerIv.length);
-		buffer.put(outerIv);
-		buffer.put(innerIv);
-		buffer.putShort((short) keywrap.length);
-		buffer.put(keywrap);
+		byte[] salt = rng.getBytes(raw.length), iv = rng.getBytes(crypto.symIvLength());
+		Key subkey = derive(KEY_INDEX_SALTED_SUBKEY, salt);
+		byte[] ciphertext = subkey.encrypt(iv, plaintext, padSize);
+
+		ByteBuffer buffer = ByteBuffer.allocate(2*2 + iv.length + salt.length + ciphertext.length);
+		buffer.putShort((short) salt.length);
+		buffer.put(salt);
+		buffer.putShort((short) iv.length);
+		buffer.put(iv);
 		buffer.put(ciphertext);
 		
 		return buffer.array();
@@ -58,19 +56,19 @@ public class Key {
 	
 	public byte[] wrappedDecrypt(byte[] ciphertext) {
 		ByteBuffer buffer = ByteBuffer.wrap(ciphertext);
-		short ivLen = buffer.getShort();
-		byte[] outerIv = new byte[ivLen], innerIv = new byte[ivLen];
-		buffer.get(outerIv, 0, ivLen);
-		buffer.get(innerIv, 0, ivLen);
-		short keywrapLen = buffer.getShort();
-		byte[] subkeyCiphertext = new byte[keywrapLen];
-		buffer.get(subkeyCiphertext, 0, keywrapLen);
+		short saltLen = buffer.getShort();
+		byte[] salt = new byte[saltLen];
+		buffer.get(salt);
 		
-		Key subkey = new Key(crypto, decrypt(outerIv, subkeyCiphertext));
+		short ivLen = buffer.getShort();
+		byte[] iv = new byte[ivLen];
+		buffer.get(iv);
+		
+		Key subkey = derive(KEY_INDEX_SALTED_SUBKEY, salt);
 		
 		byte[] messageCiphertext = new byte[buffer.remaining()];
 		buffer.get(messageCiphertext, 0, messageCiphertext.length);
-		return subkey.decrypt(innerIv, messageCiphertext);
+		return subkey.decrypt(iv, messageCiphertext);
 	}
 	
 	public byte[] encrypt(byte[] iv, byte[] plaintext) {

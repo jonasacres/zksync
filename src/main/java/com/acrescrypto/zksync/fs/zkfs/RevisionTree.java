@@ -43,7 +43,7 @@ public class RevisionTree {
 		if(revision == null) return;
 		set.add(revision);
 		
-		Collection<RefTag> parents = revision.getInfo().parents; // TODO: make sure that this doesn't end up decrypting the revisioninfo twice
+		Collection<RefTag> parents = revision.getInfo().parents;
 		for(RefTag parent : parents) {
 			addAncestorsOf(parent, set);
 		}

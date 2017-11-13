@@ -15,6 +15,13 @@ public class ZKFS extends FS {
 		
 	public final static int MAX_PATH_LEN = 65535;
 	
+	public static ZKFS fsForStorage(FS storage, char[] passphrase, byte[] refTag) throws IOException {
+		return new ZKArchive(storage, (byte[] id) -> { return passphrase; }).openRevision(refTag);
+	}
+
+	public static ZKFS fsForStorage(FS storage, char[] passphrase) throws IOException {
+		return fsForStorage(storage, passphrase, null);
+	}
 	
 	public ZKFS(RefTag revision) throws IOException {
 		this.inodeTable = new InodeTable(this, revision);
@@ -22,14 +29,14 @@ public class ZKFS extends FS {
 		this.baseRevision = revision;
 	}
 	
-	public RevisionInfo commit(RefTag[] additionalParents, byte[] seed) throws IOException {
+	public RefTag commit(RefTag[] additionalParents, byte[] seed) throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) dir.commit();
 		
 		// TODO: We won't get consistent merges, because the timestamps still differ! Need a way to fix that...
 		return inodeTable.commit(additionalParents, seed);
 	}
 	
-	public RevisionInfo commit() throws IOException {
+	public RefTag commit() throws IOException {
 		return commit(new RefTag[0], null);
 	}
 	
@@ -118,7 +125,7 @@ public class ZKFS extends FS {
 	public void write(String path, byte[] contents) throws IOException {
 		mkdirp(dirname(path));
 		
-		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT);		
+		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT);
 		file.write(contents);
 		file.close();
 	}
