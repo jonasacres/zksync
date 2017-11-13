@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs.config;
 
 import java.io.StringReader;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 
 import javax.json.Json;
@@ -33,12 +32,7 @@ public class PubConfig extends ConfigFile {
 		setArgon2Parallelism(defaultArgon2Parallelism);
 		
 		archiveId = new byte[64];
-		try {
-			SecureRandom.getInstanceStrong().nextBytes(archiveId);
-		} catch (NoSuchAlgorithmException e) {
-			e.printStackTrace();
-			throw new RuntimeException("couldn't generate archive ID");
-		}
+		(new SecureRandom()).nextBytes(archiveId);
 	}
 
 	public String path() {

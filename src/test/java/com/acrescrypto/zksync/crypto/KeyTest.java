@@ -68,11 +68,9 @@ public class KeyTest {
 	public void testWrappedEncryptIsStructurallyCorrect() {
 		/* This is a monster test, but it's not easy to split up.
 		 * This proves:
-		 *   - wrappedEncrypt generates random inner and outer IVs (which we test as "not identical from one call to the next")
-		 *   - those IVs are appropriately sized
-		 *   - random inner keys are generated
-		 *   - the inner keys are encrypted correctly using the outer key and outer IV
-		 *   - the ciphertext is encrypted with the inner key and inner IV
+		 *   - wrappedEncrypt generates random salt and IV (which we test as "not identical from one call to the next")
+		 *   - those values are appropriately sized
+		 *   - the ciphertext is encrypted with the salted key and IV
 		 *   - the ciphertext, when decrypted, matches the plaintext
 		 */
 		Key key = new Key(crypto);
@@ -80,33 +78,29 @@ public class KeyTest {
 		byte[][] samples = { key.wrappedEncrypt(plaintext, 0), key.wrappedEncrypt(plaintext, 0) };
 		
 		ByteBuffer[] bufs = { ByteBuffer.wrap(samples[0]), ByteBuffer.wrap(samples[1]) };
-		short[] lens = { bufs[0].getShort(), bufs[1].getShort() };
-		assertTrue(lens[0] == lens[1]);
-		assertTrue(lens[0] == crypto.symIvLength());
+		short[] saltLens = { bufs[0].getShort(), bufs[1].getShort() };
+		assertTrue(saltLens[0] == saltLens[1]);
+		assertTrue(saltLens[0] == crypto.symKeyLength());
 		
-		byte[][] outerIVs = { new byte[lens[0]], new byte[lens[0]] };
-		for(int i = 0; i < outerIVs.length; i++) bufs[i].get(outerIVs[i], 0, outerIVs[i].length);
-		assertFalse(Arrays.equals(outerIVs[0], outerIVs[1]));
+		byte[][] salts = { new byte[saltLens[0]], new byte[saltLens[0]] };
+		for(int i = 0; i < salts.length; i++) bufs[i].get(salts[i], 0, salts[i].length);
+		assertFalse(Arrays.equals(salts[0], salts[1]));
 
-		byte[][] innerIVs = { new byte[lens[0]], new byte[lens[0]] };
-		for(int i = 0; i < innerIVs.length; i++) bufs[i].get(innerIVs[i], 0, innerIVs[i].length);
-		assertFalse(Arrays.equals(innerIVs[0], innerIVs[1]));
-		assertFalse(Arrays.equals(outerIVs[0], innerIVs[0]));
-		assertFalse(Arrays.equals(outerIVs[1], innerIVs[1]));
-		
-		short[] keyLens = { bufs[0].getShort(), bufs[1].getShort() };
-		assertTrue(keyLens[0] == keyLens[1]);
-		byte[][] keyWraps = { new byte[keyLens[0]], new byte[keyLens[1]] };
-		for(int i = 0; i < keyWraps.length; i++) bufs[i].get(keyWraps[i], 0, keyWraps[i].length);
-		byte[][] innerKeys = { null, null };
-		for(int i = 0; i < innerKeys.length; i++) innerKeys[i] = key.decrypt(outerIVs[i], keyWraps[i]);
-		assertFalse(Arrays.equals(innerKeys[0], innerKeys[1]));
-		
+		short[] ivLens = { bufs[0].getShort(), bufs[1].getShort() };
+		assertTrue(ivLens[0] == ivLens[1]);
+		assertTrue(ivLens[0] == crypto.symIvLength());
+
+		byte[][] ivs = { new byte[ivLens[0]], new byte[ivLens[0]] };
+		for(int i = 0; i < ivs.length; i++) bufs[i].get(ivs[i], 0, ivs[i].length);
+		assertFalse(Arrays.equals(ivs[0], ivs[1]));
+		assertFalse(Arrays.equals(salts[0], ivs[0]));
+		assertFalse(Arrays.equals(salts[1], ivs[1]));
+				
 		byte[][] ciphertexts = { new byte[bufs[0].remaining()], new byte[bufs[1].remaining()] };
 		for(int i = 0; i < ciphertexts.length; i++) bufs[i].get(ciphertexts[i]);
 
-		Key[] subkeys = { new Key(crypto, innerKeys[0]), new Key(crypto, innerKeys[1]) };
-		for(int i = 0; i < subkeys.length; i++) assertTrue(Arrays.equals(subkeys[i].decrypt(innerIVs[i], ciphertexts[i]), plaintext));
+		Key[] subkeys = { key.derive(Key.KEY_INDEX_SALTED_SUBKEY, salts[0]), key.derive(Key.KEY_INDEX_SALTED_SUBKEY, salts[1]) };
+		for(int i = 0; i < subkeys.length; i++) assertTrue(Arrays.equals(subkeys[i].decrypt(ivs[i], ciphertexts[i]), plaintext));
 	}
 	
 	@Test
