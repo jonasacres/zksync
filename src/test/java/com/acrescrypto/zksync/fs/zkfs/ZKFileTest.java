@@ -47,7 +47,7 @@ public class ZKFileTest extends FileTestBase {
 	
 	@Test
 	public void testImmedateWrite() throws IOException {
-		byte[] contents = new byte[zkscratch.archive.crypto.hashLength()];
+		byte[] contents = new byte[zkscratch.archive.crypto.hashLength()-1];
 		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
 		ZKFile file = zkscratch.open("immediate-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
 		file.write(contents);
@@ -94,8 +94,8 @@ public class ZKFileTest extends FileTestBase {
 		file.close();
 
 		for(int i = 0; i < Math.ceil(((double) file.getStat().getSize())/file.fs.archive.privConfig.getPageSize()); i++) {
-			byte[] pageTag = file.getPageTag(i);
-			String path = ZKArchive.DATA_DIR + ZKFS.pathForHash(pageTag);
+			Page page = new Page(file, i);
+			String path = ZKArchive.DATA_DIR + ZKFS.pathForHash(page.authKey().authenticate(file.getPageTag(i)));
 			Stat stat = file.fs.archive.storage.stat(path);
 			assertEquals(0, stat.getAtime());
 			assertEquals(0, stat.getMtime());

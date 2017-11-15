@@ -41,9 +41,7 @@ public class RevisionTreeTest {
 				parent = revisions[parentIndex(i)];
 			}
 			
-			ZKFS revFs = parent.getFS();
-			revFs.write("intensive-revisions", ("Version " + i).getBytes());
-			revFs.inodeTable.inode.getStat().setMtime(i*1000l*1000l*1000l*60l); // each rev is 1 minute later
+			ZKFS revFs = parent != null ? parent.getFS() : fs;
 			revisions[i] = revFs.commit();
 		}
 		
@@ -66,9 +64,7 @@ public class RevisionTreeTest {
 			else if(i == mrevisions.length-2) parent = mrevisions[0];
 			else parent = mrevisions[i-1];
 			
-			ZKFS revFs = parent.getFS();
-			revFs.write("multiple-ancestors", ("version " + i).getBytes());
-			revFs.inodeTable.inode.getStat().setMtime(i*1000l*1000l*1000l*60l); // each rev is 1 minute later
+			ZKFS revFs = parent != null ? parent.getFS() : mfs;
 			if(i == mrevisions.length-1) {
 				mrevisions[i] = revFs.commit(new RefTag[] { mrevisions[2] }, null);
 			} else {
@@ -94,10 +90,11 @@ public class RevisionTreeTest {
 	
 	@Test
 	public void testRevisionCount() {
-		assertEquals(NUM_REVISIONS, tree.size());
+		assertEquals(1, tree.branchTips().size());
+		assertEquals(2, mtree.branchTips().size());
 	}
 	
-	@Test
+	@Ignore
 	public void testDefaultRevision() {
 	}
 	
@@ -166,7 +163,7 @@ public class RevisionTreeTest {
 	@Test
 	public void testCommonAncestorRoots() throws IOException {
 		RefTag ancestor = tree.commonAncestorOf(new RefTag[] { revisions[0], revisions[1] });
-		assertTrue(ancestor.equals(RefTag.blank(fs.archive)));
+		assertEquals(RefTag.blank(fs.archive), ancestor);
 	}
 	
 }

@@ -136,7 +136,7 @@ public class RefTag {
 	}
 	
 	public boolean equals(Object other) {
-		if(!other.getClass().equals(this.getClass())) return false;
+		if(other == null || !other.getClass().equals(this.getClass())) return false;
 		return Arrays.equals(((RefTag) other).tag, this.tag);
 	}
 }

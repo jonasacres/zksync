@@ -14,7 +14,6 @@ import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 public class RevisionTree {
 	protected ArrayList<RefTag> branchTips;
 	protected ZKArchive archive;
-	protected int size;
 	
 	public RevisionTree(ZKArchive archive) throws IOException {
 		this.archive = archive;
@@ -23,10 +22,6 @@ public class RevisionTree {
 		} catch(ENOENTException exc) {
 			branchTips = new ArrayList<RefTag>();
 		}
-	}
-	
-	public int size() {
-		return size;
 	}
 	
 	public ArrayList<RefTag> branchTips() {

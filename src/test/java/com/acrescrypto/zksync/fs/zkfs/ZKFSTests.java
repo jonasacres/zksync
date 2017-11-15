@@ -5,7 +5,6 @@ import org.junit.runners.Suite;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-	RevisionTagTest.class,
 	RevisionTreeTest.class,
 	ZKFSTest.class,
 	ZKDirectoryTest.class,
