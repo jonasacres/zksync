@@ -12,7 +12,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 
 public class RevisionTree {
-	protected ArrayList<RefTag> branchTips;
+	protected ArrayList<RefTag> branchTips = new ArrayList<RefTag>();
 	protected ZKArchive archive;
 	
 	public RevisionTree(ZKArchive archive) throws IOException {
@@ -26,6 +26,14 @@ public class RevisionTree {
 	
 	public ArrayList<RefTag> branchTips() {
 		return branchTips;
+	}
+	
+	public void addBranchTip(RefTag newBranch) {
+		branchTips.add(newBranch);
+	}
+	
+	public void removeBranchTip(RefTag oldBranch) {
+		branchTips.remove(oldBranch);
 	}
 	
 	public HashSet<RefTag> ancestorsOf(RefTag revision) throws IOException {
@@ -64,7 +72,7 @@ public class RevisionTree {
 		return Paths.get(ZKArchive.REVISION_DIR, "branch-tips").toString();
 	}
 	
-	protected void write() throws IOException {
+	public void write() throws IOException {
 		/* TODO: Part of me wants to hide this in with the rest of the archive data, but I don't see how to make
 		 * it work given that, unlike archive data, this file is mutable. If it gets synced across with the real
 		 * stuff, one person's is going to overwrite the other's, creating a race condition (and possibly a really
@@ -98,6 +106,7 @@ public class RevisionTree {
 		 */
 		// 64kib branch files seem reasonable
 		// TODO: what happens when we bust the limit? that's 1024 branch tips, which is a lot, but it could happen
+		// TODO: it'd be nice to have a "safe write" and "safe read" mode to deal with crashes/interrupted writes
 		archive.storage.write(getPath(), branchTipKey().wrappedEncrypt(serialize(), 1024*64));
 	}
 	
@@ -108,8 +117,8 @@ public class RevisionTree {
 	protected void deserialize(byte[] serialized) {
 		branchTips.clear();
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		byte[] tag = new byte[archive.crypto.hashLength()];
-		while(buf.remaining() > archive.crypto.hashLength()) {
+		byte[] tag = new byte[archive.crypto.hashLength() + RefTag.REFTAG_EXTRA_DATA_SIZE]; // TODO: this freaking value needs to be a method on archive or something
+		while(buf.remaining() >= (archive.crypto.hashLength() + RefTag.REFTAG_EXTRA_DATA_SIZE)) {
 			buf.get(tag);
 			branchTips.add(new RefTag(archive, tag));
 		}
@@ -118,7 +127,7 @@ public class RevisionTree {
 	}
 	
 	protected byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(archive.crypto.hashLength()*branchTips.size());
+		ByteBuffer buf = ByteBuffer.allocate((archive.crypto.hashLength() + RefTag.REFTAG_EXTRA_DATA_SIZE)*branchTips.size());
 		for(RefTag tag : branchTips) buf.put(tag.getBytes());
 		return buf.array();
 	}

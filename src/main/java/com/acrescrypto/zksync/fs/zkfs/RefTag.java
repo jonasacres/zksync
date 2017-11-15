@@ -135,6 +135,10 @@ public class RefTag {
 		return new ZKFS(this);
 	}
 	
+	public int hashCode() {
+		return ByteBuffer.wrap(tag).getInt();
+	}
+	
 	public boolean equals(Object other) {
 		if(other == null || !other.getClass().equals(this.getClass())) return false;
 		return Arrays.equals(((RefTag) other).tag, this.tag);

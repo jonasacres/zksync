@@ -58,7 +58,13 @@ public class InodeTable extends ZKFile {
 		
 		flush();
 		revision = newRevision;
-		return inode.getRefTag();
+		RefTag tag = inode.getRefTag();
+		RevisionTree tree = fs.archive.getRevisionTree();
+		tree.addBranchTip(tag);
+		tree.removeBranchTip(fs.baseRevision);
+		for(RefTag parent : additionalParents) tree.removeBranchTip(parent);
+		tree.write();
+		return tag;
 	}
 	
 	public void readTable() throws IOException {

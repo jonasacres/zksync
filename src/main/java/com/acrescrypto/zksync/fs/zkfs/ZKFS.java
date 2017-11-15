@@ -43,7 +43,7 @@ public class ZKFS extends FS {
 		}
 		
 		// TODO: We won't get consistent merges, because the timestamps still differ! Need a way to fix that...
-		return inodeTable.commit(additionalParents, seed);
+		return baseRevision = inodeTable.commit(additionalParents, seed);
 	}
 	
 	public RefTag commit() throws IOException {

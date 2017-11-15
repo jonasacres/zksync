@@ -41,7 +41,7 @@ public class RevisionTreeTest {
 				parent = revisions[parentIndex(i)];
 			}
 			
-			ZKFS revFs = parent != null ? parent.getFS() : fs;
+			ZKFS revFs = parent != null ? parent.getFS() : RefTag.blank(fs.archive).getFS();
 			revisions[i] = revFs.commit();
 		}
 		
@@ -77,10 +77,7 @@ public class RevisionTreeTest {
 	
 	public static int parentIndex(int childIndex) {
 		if(childIndex < NUM_ROOTS) return -1;
-		int tier = (int) (Math.floor(Math.log(childIndex+NUM_ROOTS)/Math.log(2)) - Math.log(NUM_ROOTS)/Math.log(2));
-		int offset = (int) (childIndex - Math.pow(2, tier+2) + NUM_ROOTS);
-		int pIndex = (int) (Math.pow(2, tier+1) - NUM_ROOTS) + offset/2;
-		return pIndex; 
+		return (childIndex - NUM_ROOTS) >> 1;
 	}
 	
 	@AfterClass
@@ -90,7 +87,7 @@ public class RevisionTreeTest {
 	
 	@Test
 	public void testRevisionCount() {
-		assertEquals(1, tree.branchTips().size());
+		assertEquals((int) (Math.floor(0.5*(NUM_REVISIONS+1))+2), tree.branchTips().size());
 		assertEquals(2, mtree.branchTips().size());
 	}
 	
