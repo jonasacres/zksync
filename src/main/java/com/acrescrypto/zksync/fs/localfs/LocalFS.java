@@ -231,7 +231,7 @@ public class LocalFS extends FS {
 	@Override
 	public void chown(String path, String user) throws IOException {
 		UserPrincipal userPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByName(user);
-		java.io.File targetFile = new java.io.File(path);
+		java.io.File targetFile = new java.io.File(expandPath(path));
 		Files.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).setOwner(userPrincipal);
 	}
 
@@ -243,7 +243,7 @@ public class LocalFS extends FS {
 	@Override
 	public void chgrp(String path, String group) throws IOException {
 		UserPrincipal groupPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByName(group);
-		java.io.File targetFile = new java.io.File(path);
+		java.io.File targetFile = new java.io.File(expandPath(path));
 		Files.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).setOwner(groupPrincipal);
 	}
 
@@ -316,5 +316,9 @@ public class LocalFS extends FS {
 	
 	public String getRoot() {
 		return root;
+	}
+	
+	protected String expandPath(String path) {
+		return Paths.get(root, path).toString();
 	}
 }

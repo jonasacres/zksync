@@ -149,7 +149,6 @@ public class ZKFile extends File {
 		
 		bufferedPage = new Page(this, pageNum);
 		
-		// TODO: the problem is numPages gets set too high in boundary cases (e.g. 65536 = 2 pages)
 		if(pageNum < inode.getRefTag().getNumPages()) {
 			bufferedPage.load();
 		} else {
@@ -218,8 +217,7 @@ public class ZKFile extends File {
 		inode.getStat().setMtime(System.currentTimeMillis() * 1000l * 1000l);
 		inode.setChangedFrom(fs.baseRevision);
 		bufferedPage.flush();
-		merkel.commit();
-		inode.setRefTag(merkel.getRefTag()); // TODO: replace with merkel.commit() don't wanna do now because i'm in the debugger
+		inode.setRefTag(merkel.commit());
 		dirty = false;
 	}
 
@@ -231,8 +229,10 @@ public class ZKFile extends File {
 	@Override
 	public void copy(File file) throws IOException {
 		assertWritable();
+		file.rewind();
 		int pageSize = fs.archive.privConfig.getPageSize();
 		while(file.hasData()) write(file.read(pageSize));
+		flush();
 		
 		inode.getStat().setAtime(file.getStat().getAtime());
 		inode.getStat().setCtime(file.getStat().getCtime());

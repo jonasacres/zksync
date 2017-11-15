@@ -231,7 +231,17 @@ public class FileTestBase {
 	}
 
 	@Test
-	public void testCopy() {
-		// TODO: write copy test
+	public void testCopy() throws IOException {
+		byte[] data = "You spoony bard!".getBytes();
+		File file = scratch.open("copy", File.O_CREAT|File.O_RDWR);
+		file.write(data);
+		
+		File file2 = scratch.open("copy2", File.O_CREAT|File.O_WRONLY);
+		file2.copy(file);
+		file.close();
+		file2.close();
+		
+		assertTrue(Arrays.equals(data, scratch.read("copy")));
+		assertTrue(Arrays.equals(data, scratch.read("copy2")));
 	}
 }

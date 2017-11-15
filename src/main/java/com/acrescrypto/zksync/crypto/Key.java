@@ -22,10 +22,6 @@ public class Key {
 		this.raw = raw;
 	}
 	
-	public Key derive(int index) {
-		return derive(index, new byte[]{});
-	}
-	
 	public Key derive(int index, byte[] data) {
 		if(index > KEY_INDEX_SALTED_SUBKEY) throw new IllegalArgumentException("key derivation index seems way too high");
 		ByteBuffer saltBuf = ByteBuffer.allocate(data.length+1);
@@ -69,10 +65,6 @@ public class Key {
 		byte[] messageCiphertext = new byte[buffer.remaining()];
 		buffer.get(messageCiphertext, 0, messageCiphertext.length);
 		return subkey.decrypt(iv, messageCiphertext);
-	}
-	
-	public byte[] encrypt(byte[] iv, byte[] plaintext) {
-		return crypto.encrypt(raw, iv, plaintext, null, 0);
 	}
 	
 	public byte[] encrypt(byte[] iv, byte[] plaintext, int padSize) {

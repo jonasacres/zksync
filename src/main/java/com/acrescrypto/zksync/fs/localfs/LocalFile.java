@@ -72,11 +72,13 @@ public class LocalFile extends File {
 	public void write(byte[] data) throws IOException {
 		assertWritable();
 		channel.write(ByteBuffer.wrap(data));
+		size = Math.max(size, channel.position());
 	}
 	
 	@Override
 	public void flush() throws IOException {
 		channel.force(true);
+		fileHandle.getFD().sync();
 	}
 
 	@Override
@@ -109,27 +111,29 @@ public class LocalFile extends File {
 	@Override
 	public void copy(File file) throws IOException {
 		assertWritable();
+		file.rewind();
 		while(file.hasData()) write(file.read(1024*64));
+		flush();
 		
 		// zksync records both numeric and string IDs, but local FS may not map the same numeric ID to the same string
 		// therefore, just use the string name, since that's more portable
 		
-		fs.chgrp(path, file.getStat().getGroup());
-		fs.chown(path, file.getStat().getUser());
-		fs.chmod(path, file.getStat().getMode());
-		fs.setAtime(path, file.getStat().getAtime());
-		fs.setCtime(path, file.getStat().getCtime());
-		fs.setMtime(path, file.getStat().getMtime());
+		try { fs.chgrp(path, file.getStat().getGroup()); } catch(UnsupportedOperationException exc) {}
+		try { fs.chown(path, file.getStat().getUser()); } catch(UnsupportedOperationException exc) {}
+		try { fs.chmod(path, file.getStat().getMode()); } catch(UnsupportedOperationException exc) {}
+		try { fs.setAtime(path, file.getStat().getAtime()); } catch(UnsupportedOperationException exc) {}
+		try { fs.setCtime(path, file.getStat().getCtime()); } catch(UnsupportedOperationException exc) {}
+		try { fs.setMtime(path, file.getStat().getMtime()); } catch(UnsupportedOperationException exc) {}
 	}
 
 	@Override
-	public void rewind() {
-		offset = 0;
+	public void rewind() throws IOException {
+		channel.position(0);
 	}
 
 	@Override
-	public boolean hasData() {
-		return offset < size;
+	public boolean hasData() throws IOException {
+		return channel.position() < channel.size();
 	}
 	
 	protected void assertWritable() throws EACCESException {

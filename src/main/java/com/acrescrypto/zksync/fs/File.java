@@ -29,11 +29,7 @@ public abstract class File implements Closeable {
 		read(buf, 0, (int) maxLength);
 		return buf;
 	}
-	
-	public int read(byte[] buf) throws IOException {
-		return read(buf, 0, buf.length);
-	}
-	
+		
 	public byte[] read() throws IOException {
 		long sizeNeeded = getStat().getSize() - pos();
 		if(sizeNeeded > Integer.MAX_VALUE) throw new IndexOutOfBoundsException();
@@ -50,6 +46,6 @@ public abstract class File implements Closeable {
 	public abstract void close() throws IOException;
 	
 	public abstract void copy(File file) throws IOException;
-	public abstract void rewind();
+	public abstract void rewind() throws IOException;
 	public abstract boolean hasData() throws IOException;
 }

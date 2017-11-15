@@ -105,13 +105,11 @@ public class RevisionTree {
 		 * "Wax" might be a cooler name than "zksync." Archives could be called "waxballs."
 		 */
 		// 64kib branch files seem reasonable
-		// TODO: what happens when we bust the limit? that's 1024 branch tips, which is a lot, but it could happen
-		// TODO: it'd be nice to have a "safe write" and "safe read" mode to deal with crashes/interrupted writes
-		archive.storage.write(getPath(), branchTipKey().wrappedEncrypt(serialize(), 1024*64));
+		archive.storage.safeWrite(getPath(), branchTipKey().wrappedEncrypt(serialize(), 1024*64));
 	}
 	
 	protected void read() throws IOException {
-		deserialize(branchTipKey().wrappedDecrypt(archive.storage.read(getPath())));
+		deserialize(branchTipKey().wrappedDecrypt(archive.storage.safeRead(getPath())));
 	}
 	
 	protected void deserialize(byte[] serialized) {

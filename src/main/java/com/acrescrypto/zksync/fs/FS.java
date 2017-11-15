@@ -99,13 +99,6 @@ public abstract class FS {
 		return sb.toString();
 	}
 	
-	public byte[] hashFromPath(String path) throws EINVALException {
-		String[] comps = path.split("/");
-		if(comps.length < 3) throw new EINVALException(path);
-		String[] hexComps = { comps[comps.length-3], comps[comps.length-2], comps[comps.length-1] };
-		return Util.hexToBytes(String.join("", hexComps));
-	}
-	
 	public boolean exists(String path, boolean followLinks) {
 		try {
 			if(followLinks) stat(path);
@@ -124,5 +117,23 @@ public abstract class FS {
 		try { setCtime(path, 0); } catch(UnsupportedOperationException e) {}
 		try { setMtime(path, 0); } catch(UnsupportedOperationException e) {}
 		try { setAtime(path, 0); } catch(UnsupportedOperationException e) {}
+	}
+	
+	public void safeWrite(String path, byte[] contents) throws IOException {
+		String safety = path + ".safety";
+		write(safety, contents);
+		try {
+			if(exists(path)) unlink(path);
+			link(safety, path);
+		} finally {
+			unlink(safety);
+		}
+		squash(path);
+	}
+	
+	public byte[] safeRead(String path) throws IOException {
+		String safety = path + ".safety";
+		if(exists(safety) && stat(path).getMtime() > 0) return read(safety);
+		return read(path);
 	}
 }
