@@ -13,7 +13,7 @@ public class PageMerkel {
 	ZKArchive archive;
 	RefTag tag;
 	PageMerkelNode[] nodes;
-	int numPages;
+	int numPages, numPagesUsed;
 	
 	public static String pathForChunk(RefTag refTag, int chunk) {
 		ByteBuffer chunkTagSource = ByteBuffer.allocate(refTag.hash.length+4);
@@ -32,7 +32,9 @@ public class PageMerkel {
 		switch(tag.getRefType()) {
 		case RefTag.REF_TYPE_IMMEDIATE:
 		case RefTag.REF_TYPE_INDIRECT:
-			setPageTag(0, tag.getHash());
+			this.numPages = this.numPagesUsed = 1;
+			resize(1);
+			this.nodes[0].tag = tag.getHash();
 			break;
 		case RefTag.REF_TYPE_2INDIRECT:
 			read();
@@ -55,12 +57,14 @@ public class PageMerkel {
 		} else {
 			type = RefTag.REF_TYPE_2INDIRECT;
 		}
-		return new RefTag(archive, nodes[0].tag, type, numPages);
+		
+		return new RefTag(archive, nodes[0].tag, type, numPagesUsed);
 	}
 	
 	public void setPageTag(int pageNum, byte[] pageTag) {
 		if(pageNum >= numPages) resize(pageNum+1);
 		nodes[numPages - 1 + pageNum].setTag(pageTag);
+		numPagesUsed = Math.max(pageNum+1, numPagesUsed);
 	}
 	
 	public byte[] getPageTag(int pageNum) throws NonexistentPageException {
@@ -81,7 +85,7 @@ public class PageMerkel {
 		int chunkCount = (int) Math.ceil( (double) plaintextSize() / archive.privConfig.getPageSize() );
 		
 		ByteBuffer plaintext = ByteBuffer.allocate(nodes.length*archive.crypto.hashLength());
-				
+		
 		for(PageMerkelNode node : nodes) plaintext.put(node.tag);
 		for(int i = 0; i < chunkCount; i++) {
 			ByteBuffer chunkText = ByteBuffer.wrap(plaintext.array(),
@@ -104,7 +108,7 @@ public class PageMerkel {
 	}
 	
 	private void read() throws InaccessibleStorageException {
-		long expectedPages = tag.getNumChunks();
+		long expectedPages = tag.getNumPages();
 		expectedPages = (int) Math.pow(2, Math.ceil(Math.log(expectedPages)/Math.log(2)));
 		
 		long expectedNodes = 2*expectedPages - 1;
@@ -128,30 +132,34 @@ public class PageMerkel {
 		 * Neither of those are true right now.
 		 */
 		
-		if(tag.getRefType() == RefTag.REF_TYPE_2INDIRECT) {
-			for(int i = 0; i < expectedChunks; i++) {
-				String path = pathForChunk(tag, i);
-				byte[] chunkCiphertext;
-				try {
-					chunkCiphertext = archive.storage.read(path);
-				} catch (IOException e) {
-					throw new InaccessibleStorageException();
-				}
-				byte[] chunkPlaintext = cipherKey(tag).wrappedDecrypt(chunkCiphertext);
-				readBuf.put(chunkPlaintext);
-			}
-			
-			readBuf.rewind();
-			for(int i = 0; i < expectedNodes; i++) {
-				byte[] tag = new byte[archive.crypto.hashLength()];
-				readBuf.get(tag);
-				nodes[i].tag = tag;
-			}
-			
-			checkTreeIntegrity();
-		} else {
+		numPages = (int) expectedPages;
+		numPagesUsed = (int) tag.getNumPages();
+		
+		if(tag.getRefType() != RefTag.REF_TYPE_2INDIRECT) {
 			nodes[0].tag = tag.getBytes();
+			return;
 		}
+		
+		for(int i = 0; i < expectedChunks; i++) {
+			String path = pathForChunk(tag, i);
+			byte[] chunkCiphertext;
+			try {
+				chunkCiphertext = archive.storage.read(path);
+			} catch (IOException e) {
+				throw new InaccessibleStorageException();
+			}
+			byte[] chunkPlaintext = cipherKey(tag).wrappedDecrypt(chunkCiphertext);
+			readBuf.put(chunkPlaintext);
+		}
+		
+		readBuf.rewind();
+		for(int i = 0; i < expectedNodes; i++) {
+			byte[] tag = new byte[archive.crypto.hashLength()];
+			readBuf.get(tag);
+			nodes[i].tag = tag;
+		}
+		
+		checkTreeIntegrity();
 	}
 	
 	private void checkTreeIntegrity() {
@@ -222,6 +230,8 @@ public class PageMerkel {
 				}
 			}
 		}
+
+		this.numPagesUsed = Math.min(numPagesUsed, newSize);
 		this.numPages = newSize;
 		this.nodes = newNodes;
 	}

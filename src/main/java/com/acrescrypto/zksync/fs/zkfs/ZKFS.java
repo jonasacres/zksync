@@ -38,7 +38,9 @@ public class ZKFS extends FS {
 	}
 	
 	public RefTag commit(RefTag[] additionalParents, byte[] seed) throws IOException {
-		for(ZKDirectory dir : directoriesByPath.values()) dir.commit();
+		for(ZKDirectory dir : directoriesByPath.values()) {
+			dir.commit();
+		}
 		
 		// TODO: We won't get consistent merges, because the timestamps still differ! Need a way to fix that...
 		return inodeTable.commit(additionalParents, seed);

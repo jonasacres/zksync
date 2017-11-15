@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 public class RefTag {
 	protected ZKArchive archive;
@@ -25,7 +26,7 @@ public class RefTag {
 	
 	public RefTag(ZKArchive archive, byte[] tag) {
 		if(tag == null) tag = blank(archive).getBytes();
-		if(tag.length != archive.crypto.hashLength() + REFTAG_EXTRA_DATA_SIZE) throw new RuntimeException("received invalid reftag");
+		assert(tag.length == archive.crypto.hashLength() + REFTAG_EXTRA_DATA_SIZE);
 		ByteBuffer buf = ByteBuffer.wrap(tag);
 		
 		this.archive = archive;
@@ -34,6 +35,7 @@ public class RefTag {
 		buf.get(this.hash);
 		this.refType = buf.get() & 0x03; // only use low-order two bits for field; others are reserved
 		this.numPages = buf.getLong();
+		this.tag = serialize();
 	}
 	
 	public RefTag(ZKArchive archive, byte[] hash, int refType, long numPages) {
@@ -74,7 +76,7 @@ public class RefTag {
 		return refType;
 	}
 	
-	public long getNumChunks() {
+	public long getNumPages() {
 		return numPages;
 	}
 	
@@ -131,5 +133,10 @@ public class RefTag {
 	
 	public ZKFS getFS() throws IOException {
 		return new ZKFS(this);
+	}
+	
+	public boolean equals(Object other) {
+		if(!other.getClass().equals(this.getClass())) return false;
+		return Arrays.equals(((RefTag) other).tag, this.tag);
 	}
 }

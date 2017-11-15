@@ -46,4 +46,9 @@ public class PageMerkelNode {
 		dirty = true;
 		if(parent != null) parent.markDirty();
 	}
+
+	public boolean isBlank() {
+		for(byte b : tag) if(b != 0) return false;
+		return true;
+	}
 }

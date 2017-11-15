@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.Stat;
 
 public class Inode {
@@ -122,14 +123,12 @@ public class Inode {
 		this.nlink = buf.getInt();
 		this.flags = buf.get();
 		
-		byte[] refTagBytes = new byte[fs.archive.crypto.hashLength()];
-		buf.get(refTagBytes, 0, fs.archive.crypto.hashLength());
+		byte[] refTagBytes = new byte[fs.archive.crypto.hashLength() + RefTag.REFTAG_EXTRA_DATA_SIZE];
+		buf.get(refTagBytes);
 		this.refTag = new RefTag(fs.archive, refTagBytes);
 		
-		buf.get(refTagBytes, 0, fs.archive.crypto.hashLength());
+		buf.get(refTagBytes);
 		this.changedFrom = new RefTag(fs.archive, refTagBytes);
-		
-		assert(!buf.hasRemaining());
 	}
 	
 	public void addLink() {
@@ -168,6 +167,6 @@ public class Inode {
 	}
 	
 	public String toString() {
-		return String.format("%d (%08x) - %d %d bytes, %d %d", stat.getInodeId(), hashCode(), nlink, stat.getSize(), stat.getMtime(), stat.getAtime());
+		return String.format("%d (%08x) - %d %d bytes, %d %d %s", stat.getInodeId(), hashCode(), nlink, stat.getSize(), stat.getMtime(), stat.getAtime(), Util.bytesToHex(refTag.tag));
 	}
 }

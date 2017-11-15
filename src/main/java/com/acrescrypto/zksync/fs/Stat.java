@@ -144,7 +144,7 @@ public class Stat {
 		// long atime, mtime, ctime, size, inodeId;                5*8  = 40
 		// total:                                                         76 + 2*variable
 		
-		return 86 + group.length() + user.length();
+		return 76 + group.length() + user.length();
 	}
 	
 	public byte[] serialize() {

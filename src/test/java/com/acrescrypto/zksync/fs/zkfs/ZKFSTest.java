@@ -11,6 +11,7 @@ import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
@@ -260,6 +261,7 @@ public class ZKFSTest extends FSTestBase {
 		RefTag rev = zkscratch.commit();
 		assertTrue(zkscratch.inodeTable.getStat().getSize() > zkscratch.archive.getPrivConfig().getPageSize());
 		ZKFS revFs = rev.readOnlyFS();
+		
 		assertTrue(Arrays.equals(revFs.inodeTable.merkel.getRefTag().getBytes(), zkscratch.inodeTable.merkel.getRefTag().getBytes()));
 		assertEquals(zkscratch.inodeTable.merkel.numPages, revFs.inodeTable.merkel.numPages);
 		assertEquals(zkscratch.inodeTable.getStat().getSize(), revFs.inodeTable.getStat().getSize());

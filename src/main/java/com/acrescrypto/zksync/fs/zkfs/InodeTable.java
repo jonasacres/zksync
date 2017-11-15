@@ -13,6 +13,8 @@ import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 public class InodeTable extends ZKFile {
 	public final static long INODE_ID_INODE_TABLE = 0;
 	public final static long INODE_ID_ROOT_DIRECTORY = 1;
+	public static final long INODE_ID_REVISION_INFO = 2;
+
 	public final static long USER_INODE_ID_START = 10000;
 	
 	public final static String INODE_TABLE_PATH = "(inode table)";
@@ -34,6 +36,7 @@ public class InodeTable extends ZKFile {
 		} else {
 			this.merkel = new PageMerkel(tag);
 			this.inode = new Inode(fs);
+			this.inode.setRefTag(tag);
 			inferSize(tag);
 			readTable();
 		}		
@@ -43,14 +46,16 @@ public class InodeTable extends ZKFile {
 		rewind();
 		truncate(0);
 		
+		RevisionInfo newRevision = new RevisionInfo(fs);
+		newRevision.reset();
+		for(RefTag parent : additionalParents) newRevision.addParent(parent);
+		newRevision.commit();
+
 		for(Inode inode : inodes.values()) {
 			if(inode.getStat().getInodeId() == InodeTable.INODE_ID_INODE_TABLE) continue;
 			write(inode.serialize());
 		}
 		
-		RevisionInfo newRevision = new RevisionInfo(fs);
-		newRevision.commit();
-
 		flush();
 		revision = newRevision;
 		return inode.getRefTag();
@@ -123,7 +128,6 @@ public class InodeTable extends ZKFile {
 	private void makeRootDir() {
 		Inode rootDir = new Inode(fs);
 		long now = 1000l*1000l*System.currentTimeMillis();
-		rootDir.getStat().setInodeId(nextInodeId++);
 		rootDir.getStat().setCtime(now);
 		rootDir.getStat().setAtime(now);
 		rootDir.getStat().setMtime(now);
@@ -136,12 +140,19 @@ public class InodeTable extends ZKFile {
 		inodes.put(rootDir.getStat().getInodeId(), rootDir);
 	}
 	
+	private void makeEmptyRevision() {
+		Inode revfile = issueInode();
+		revfile.getStat().setInodeId(INODE_ID_REVISION_INFO);
+		inodes.put(revfile.getStat().getInodeId(), revfile);
+	}
+	
 	private void initialize() throws InaccessibleStorageException {
 		this.inode = Inode.defaultRootInode(fs);
 		this.inodes.put(INODE_ID_INODE_TABLE, this.inode);
 		this.merkel = new PageMerkel(RefTag.blank(fs.archive));
 
 		makeRootDir();
+		makeEmptyRevision();
 		nextInodeId = USER_INODE_ID_START;
 	}
 }

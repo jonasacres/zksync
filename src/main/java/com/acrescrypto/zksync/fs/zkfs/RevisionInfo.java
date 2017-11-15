@@ -11,8 +11,14 @@ public class RevisionInfo extends ZKFile {
 	HashSet<RefTag> parents = new HashSet<RefTag>();
 	long generation; // longest path to this revision from root
 	
+	public static String REVISION_INFO_PATH = "(revision info)";
+	
 	public RevisionInfo(ZKFS fs) throws IOException {
 		this.fs = fs;
+		this.path = REVISION_INFO_PATH;
+		this.mode = O_RDWR;
+		this.inode = fs.inodeTable.inodeWithId(InodeTable.INODE_ID_REVISION_INFO);
+		this.merkel = new PageMerkel(this.inode.getRefTag());
 		load();
 	}
 
@@ -24,6 +30,10 @@ public class RevisionInfo extends ZKFile {
 	public void addParent(RefTag parent) throws IOException {
 		generation = Math.max(generation, 1+parent.getInfo().generation);
 		parents.add(parent);
+	}
+	
+	public void reset() {
+		parents.clear();
 	}
 	
 	public void commit() throws IOException {
@@ -51,12 +61,14 @@ public class RevisionInfo extends ZKFile {
 
 	// load plaintext serialized revision data
 	protected void deserialize(byte[] serialized) {
+		parents.clear();
+		if(serialized.length == 0) {
+			this.generation = 0;
+			return;
+		}
+		
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		this.generation = buf.getLong();
-		
-		int authorLen = buf.getShort();
-		byte[] authorBytes = new byte[authorLen];
-		buf.get(authorBytes);
 		
 		int numParents = buf.getInt();
 		for(int i = 0; i < numParents; i++) {

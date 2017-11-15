@@ -118,15 +118,12 @@ public class Page {
 	
 	public void load() throws IOException {
 		int pageSize = file.fs.archive.privConfig.getPageSize();
-		long totalSize = file.getStat().getSize();
-		boolean isLastPage = pageNum == totalSize/pageSize; 
-		size = (int) (isLastPage ? totalSize % pageSize : pageSize);
 		
-		if(pageNum == 0 && size < file.fs.archive.crypto.hashLength()) {
+		if(file.inode.refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) {
+			assert(pageNum == 0);
 			contents = ByteBuffer.allocate(file.fs.archive.privConfig.getPageSize());
-			if(size > 0) {
-				contents.put(file.inode.refTag.getLiteral());
-			}
+			contents.put(file.inode.refTag.getLiteral());
+			size = contents.position();
 			return;
 		}
 		
@@ -136,10 +133,6 @@ public class Page {
 		
 		try {
 			ciphertext = file.fs.archive.storage.read(path);
-		} catch(ENOENTException exc) {
-			if(size > 0) throw new ENOENTException(path);
-			contents = ByteBuffer.allocate(size);
-			return;
 		} catch(IOException exc) {
 			throw new InvalidArchiveException(exc.toString());
 		}
@@ -152,6 +145,7 @@ public class Page {
 		
 		contents = ByteBuffer.allocate(pageSize);
 		contents.put(plaintext);
+		size = contents.position();
 	}
 	
 	public void blank() {
