@@ -17,10 +17,6 @@ import com.acrescrypto.zksync.fs.*;
 public class LocalFS extends FS {
 	protected String root;
 	
-	public LocalFS() {
-		this("/");
-	}
-	
 	public LocalFS(String root) {
 		this.root = root;
 	}

@@ -26,16 +26,9 @@ public class RefTag {
 	
 	public RefTag(ZKArchive archive, byte[] tag) {
 		if(tag == null) tag = blank(archive).getBytes();
-		assert(tag.length == archive.crypto.hashLength() + REFTAG_EXTRA_DATA_SIZE);
-		ByteBuffer buf = ByteBuffer.wrap(tag);
 		
 		this.archive = archive;
-		this.tag = tag;
-		this.hash = new byte[archive.crypto.hashLength()];
-		buf.get(this.hash);
-		this.refType = buf.get() & 0x03; // only use low-order two bits for field; others are reserved
-		this.numPages = buf.getLong();
-		this.tag = serialize();
+		deserialize(tag);
 	}
 	
 	public RefTag(ZKArchive archive, byte[] hash, int refType, long numPages) {
@@ -87,12 +80,6 @@ public class RefTag {
 		return true;
 	}
 	
-	public void setLiteral(byte[] literal, int offset, int length) {
-		ByteBuffer buf = ByteBuffer.allocate(length);
-		buf.put(literal, offset, length);
-		this.hash = padHash(buf.array());
-	}
-	
 	public byte[] getLiteral() {
 		return unpadHash(hash);
 	}
@@ -121,6 +108,7 @@ public class RefTag {
 		buf.get(hash);
 		this.refType = buf.get() & 0x03;
 		this.numPages = buf.getLong();
+		this.tag = serialized.clone();
 	}
 	
 	public ZKFS readOnlyFS() throws IOException {

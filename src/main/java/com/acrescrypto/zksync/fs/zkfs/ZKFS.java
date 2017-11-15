@@ -50,10 +50,6 @@ public class ZKFS extends FS {
 		return commit(new RefTag[0], null);
 	}
 	
-	public RefTag currentRefTag() {
-		return inodeTable.inode.getRefTag();
-	}
-	
 	public Inode inodeForPath(String path) throws IOException {
 		return inodeForPath(path, true);
 	}
@@ -124,7 +120,7 @@ public class ZKFS extends FS {
 	
 	public void assertDirectoryIsEmpty(String path) throws IOException {
 		ZKDirectory dir = opendir(path);
-		if(dir.list().length > 2) throw new ENOTEMPTYException(path);
+		if(dir.list().length > 0) throw new ENOTEMPTYException(path);
 	}
 
 	public InodeTable getInodeTable() {
@@ -278,8 +274,7 @@ public class ZKFS extends FS {
 	public void mkfifo(String path) throws IOException {
 		create(path).getStat().makeFifo();
 	}
-
-
+	
 	@Override
 	public void chmod(String path, int mode) throws IOException {
 		Inode inode = inodeForPath(path);
@@ -334,12 +329,5 @@ public class ZKFS extends FS {
 	
 	public RevisionInfo getRevisionInfo() throws IOException {
 		return new RevisionInfo(this);
-	}
-	
-	protected void initialize() throws IOException {
-		ZKDirectory root = opendir("/");
-		root.link(root.inode, ".");
-		root.link(root.inode, "..");
-		root.close();
 	}
 }

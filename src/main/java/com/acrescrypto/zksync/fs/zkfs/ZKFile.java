@@ -24,23 +24,6 @@ public class ZKFile extends File {
 	protected ZKFile() {}
 	
 	public final static int O_LINK_LITERAL = 1 << 16; // treat symlinks as literal files
-	
-	public ZKFile(ZKFS fs, RefTag tag, int inodeId, int mode) throws IOException {
-		this.fs = fs;
-		this.path = tag.toString();
-		this.mode = mode;
-		this.merkel = new PageMerkel(tag);
-		this.inode = new Inode(fs);
-		
-		inferSize(tag);
-		
-		if((mode & (O_NOFOLLOW | O_LINK_LITERAL)) != 0) {
-			throw new EINVALException("O_LINK_LITERAL, O_NOFOLLOW not valid in direct tag access");
-		}
-		
-		if((mode & O_TRUNC) != 0) truncate(0);
-		if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();
-	}
 		
 	public ZKFile(ZKFS fs, String path, int mode) throws IOException {
 		this.fs = fs;

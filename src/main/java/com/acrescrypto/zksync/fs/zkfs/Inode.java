@@ -17,13 +17,6 @@ public class Inode {
 	
 	public static final byte FLAG_RETAIN = 1 << 0;
 	
-	public static Inode blankInode(ZKFS fs) {
-		Inode blank = new Inode(fs);
-		blank.setStat(new Stat());
-		blank.setRefTag(RefTag.blank(fs.archive));
-		return blank;
-	}
-
 	public static Inode defaultRootInode(ZKFS fs) {
 		Inode blank = new Inode(fs);
 		Stat stat = new Stat();
@@ -44,11 +37,6 @@ public class Inode {
 		this.fs = fs;
 		this.stat = new Stat();
 		this.changedFrom = fs.baseRevision;
-	}
-	
-	public Inode(ZKFS fs, Stat stat) {
-		this.fs = fs;
-		this.stat = stat;
 	}
 	
 	public Inode(ZKFS fs, byte[] serialized) {
@@ -144,16 +132,6 @@ public class Inode {
 				throw new IllegalStateException();
 			}
 		}
-	}
-	
-	public Inode clone() {
-		Inode clone = new Inode(fs);
-		clone.flags = flags;
-		clone.nlink = nlink;
-		clone.refTag = refTag;
-		clone.changedFrom = changedFrom;
-		clone.stat = stat.clone();
-		return clone;
 	}
 	
 	public int hashCode() {

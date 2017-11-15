@@ -106,10 +106,6 @@ public class InodeTable extends ZKFile {
 		return inodes.get(inodeId);
 	}
 	
-	public void replaceInode(long inodeId, Inode inode) {
-		inodes.put(inodeId, inode);
-	}
-	
 	public boolean hasInodeWithId(long inodeId) {
 		return inodes.containsKey(inodeId);
 	}

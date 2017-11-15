@@ -148,8 +148,6 @@ public class DirectoryTestBase {
 		dir.link("linkeexists/a", "b");
 	}
 	
-	// TODO: Test EEXISTS on collisions
-	
 	@Test
 	public void testUnlink() throws IOException {
 		scratch.mkdir("dir-unlink");
@@ -162,5 +160,20 @@ public class DirectoryTestBase {
 		
 		assertFalse(scratch.exists("dir-unlink/doomed"));
 	}
-
+	
+	@Test
+	public void testContainsPositive() throws IOException {
+		scratch.write("dir-contains-positive/a", "a".getBytes());
+		Directory dir = scratch.opendir("dir-contains-positive");
+		assertTrue(dir.contains("a"));
+		dir.close();
+	}
+	
+	@Test
+	public void testContainsNegative() throws IOException {
+		scratch.write("dir-contains-negative/a", "a".getBytes());
+		Directory dir = scratch.opendir("dir-contains-negative");
+		assertFalse(dir.contains("b"));
+		dir.close();
+	}
 }

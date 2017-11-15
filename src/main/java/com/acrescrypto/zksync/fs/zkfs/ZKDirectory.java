@@ -145,12 +145,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 		dirty = true;
 	}
 	
-	public void setParent(Inode newParent) {
-		if(entries.get("..") == newParent.getStat().getInodeId()) return;
-		entries.put("..", newParent.getStat().getInodeId());
-		newParent.addLink();
-	}
-	
 	public void rmdir() throws IOException {
 		if(!entries.get("..").equals(this.getStat().getInodeId())) {
 			ZKDirectory parent = fs.opendir(fs.dirname(this.path));

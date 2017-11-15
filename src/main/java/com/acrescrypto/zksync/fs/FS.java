@@ -5,9 +5,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import com.acrescrypto.zksync.Util;
-import com.acrescrypto.zksync.exceptions.EINVALException;
-
 public abstract class FS {
 	public abstract Stat stat(String path) throws IOException;
 	public abstract Stat lstat(String path) throws IOException;

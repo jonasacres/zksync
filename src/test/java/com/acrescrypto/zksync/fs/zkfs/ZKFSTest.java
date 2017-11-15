@@ -11,6 +11,9 @@ import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
+import com.acrescrypto.zksync.exceptions.EEXISTSException;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
@@ -300,6 +303,40 @@ public class ZKFSTest extends FSTestBase {
 		assertEquals(zkscratch.inodeTable.nextInodeId, recoveredFs.inodeTable.nextInodeId);
 	}
 	
+	@Test
+	public void testAssertPathExistsPositive() throws IOException {
+		zkscratch.write("exists", "i sync, therefore i am".getBytes());
+		zkscratch.assertPathExists("exists");
+	}
+	
+	@Test(expected=ENOENTException.class)
+	public void testAssertPathExistsNegative() throws IOException {
+		zkscratch.assertPathExists("nonexistent");
+	}
+	
+	@Test
+	public void testAssertPathDoesntExistPositive() throws IOException {
+		zkscratch.assertPathDoesntExist("nonexistent");
+	}
+	
+	@Test(expected=EEXISTSException.class)
+	public void testAssertPathDoesntExistNegative() throws IOException {
+		zkscratch.write("exists", "i sync, therefore i am".getBytes());
+		zkscratch.assertPathDoesntExist("exists");
+	}
+	
+	@Test
+	public void testAssertDirectoryIsEmptyPositive() throws IOException {
+		zkscratch.mkdir("emptydir");
+		zkscratch.assertDirectoryIsEmpty("emptydir");
+	}
+	
+	@Test(expected=ENOTEMPTYException.class)
+	public void testAssertDirectoryIsEmptyNegative() throws IOException {
+		zkscratch.write("nonemptydir/a", "some data".getBytes());
+		zkscratch.assertDirectoryIsEmpty("nonemptydir");
+	}
+	
 	// TODO: modes, directories, hardlinks, symlinks, fifos, sockets, chardevs, blockdevs
 	// TODO: open default revision
 	// TODO: open non-default revision
@@ -307,11 +344,6 @@ public class ZKFSTest extends FSTestBase {
 	// TODO: test alternative literal size
 	// TODO: test configurable argon2 parameters
 	
-	protected byte[] generatePageData(String key, int pageNum) {
-		ByteBuffer buf = ByteBuffer.allocate(4);
-		buf.putInt(pageNum);
-		return zkscratch.archive.crypto.expand(key.getBytes(), zkscratch.archive.getPrivConfig().getPageSize(), buf.array(), "zksync".getBytes());
-	}
 	
 	protected byte[] generateFileData(String key, int length) {
 		ByteBuffer buf = ByteBuffer.allocate(4);

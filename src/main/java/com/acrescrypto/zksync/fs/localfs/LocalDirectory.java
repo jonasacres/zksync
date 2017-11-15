@@ -78,7 +78,7 @@ public class LocalDirectory implements Directory {
 	
 	@Override
 	public boolean contains(String entry) {
-		java.io.File file = new java.io.File(Paths.get(path, entry).toString());
+		java.io.File file = new java.io.File(fs.expandPath(Paths.get(path, entry).toString()));
 		return file.exists();
 	}
 	
