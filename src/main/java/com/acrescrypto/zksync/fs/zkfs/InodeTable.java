@@ -157,4 +157,13 @@ public class InodeTable extends ZKFile {
 		makeEmptyRevision();
 		nextInodeId = USER_INODE_ID_START;
 	}
+
+	public void replaceInode(Inode inode) {
+		// TODO: consider cache effects
+		if(inode == null) {
+			inodes.remove(inode.getStat().getInodeId()); // uh-oh.
+		} else {
+			inodes.put(inode.getStat().getInodeId(), inode);
+		}
+	}
 }

@@ -27,6 +27,10 @@ public class FileDiff {
 		return path;
 	}
 	
+	public HashMap<Inode,ArrayList<RefTag>> getVersions() {
+		return versions;
+	}
+	
 	public Inode earliestVersion() {
 		Inode best = null;
 		for(Inode inode : versions.keySet()) {

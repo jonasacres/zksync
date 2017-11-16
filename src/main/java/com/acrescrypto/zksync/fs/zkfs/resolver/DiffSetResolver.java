@@ -19,46 +19,65 @@ public class DiffSetResolver {
 		public Inode resolve(DiffSetResolver setResolver, FileDiff diff);
 	}
 	
-	DiffSet diffSet;
+	DiffSet diffset;
 	ZKFS fs;
 	FileDiffResolver fileResolver;
 	
 	HashMap<String,ArrayList<FileDiff>> diffsByDir = new HashMap<String,ArrayList<FileDiff>>();
 	
-	public DiffSetResolver(DiffSet diffSet, FileDiffResolver fileResolver) throws IOException {
-		this.diffSet = diffSet;
+	public static DiffSetResolver defaultResolver(DiffSet diffset) throws IOException {
+		return latestVersionResolver(diffset);
+	}
+	
+	public static DiffSetResolver latestVersionResolver(DiffSet diffset) throws IOException {
+		return new DiffSetResolver(diffset,
+				(DiffSetResolver setResolver, FileDiff diff) ->
+		{
+			return diff.latestVersion();
+		});
+	}
+	
+	public DiffSetResolver(DiffSet diffset, FileDiffResolver fileResolver) throws IOException {
+		this.diffset = diffset;
 		this.fileResolver = fileResolver;
-		this.fs = new ZKFS(diffSet.latestRevision());
+		this.fs = new ZKFS(diffset.latestRevision());
 	}
 	
 	public RefTag resolve() throws IOException, DiffResolutionException {
+		/* TODO: It sucks, but I think there will have to be a "FileDiffResolution" object whose job is to track
+		 * the exact nature of a resolution. Right now, we track them in terms of inode, which breaks down if we
+		 * do a deletion.
+		 */
 		resolveNonDirectories();
+		assertResolved();
 		resolveDirectories();
-		return fs.commit(diffSet.getRevisions(), null); // TODO: need to derive some secure seed here
+		for(FileDiff diff : diffset.getDiffs()) {
+			fs.getInodeTable().replaceInode(diff.getResolution());
+		}
+		return fs.commit(diffset.getRevisions(), null); // TODO: need to derive some secure seed here
 	}
 	
 	protected void resolveNonDirectories() throws IOException {
-		for(FileDiff diff : diffSet.getDiffs()) {
+		for(FileDiff diff : diffset.getDiffs()) {
 			String dirname = fs.dirname(diff.getPath());
 			diffsByDir.putIfAbsent(dirname, new ArrayList<FileDiff>());
 			diffsByDir.get(dirname).add(diff);
 
 			if(diff.isResolved()) continue;
+			// TODO: seems like this asks about directories...
 			diff.resolve(fileResolver.resolve(this, diff));
 		}
 	}
 	
 	protected void resolveDirectories() throws IOException, DiffResolutionException {
 		for(String alteredDirectory : diffsByDir.keySet()) {
-			FileDiff diff = diffSet.diffForPath(alteredDirectory);
+			FileDiff diff = diffset.diffForPath(alteredDirectory);
 			if(diff == null) throw new IllegalStateException("altered directory " + alteredDirectory + " does not appear in diffset");
-			if(!diff.isResolved()) throw new UnresolvedDiffException(diff);
 			if(!diff.getResolution().getStat().isDirectory()) throw new InconsistentDiffResolutionException(diff);
 			
 			ZKDirectory dir = fs.opendir(alteredDirectory);
 			for(FileDiff fileDiff : diffsByDir.get(alteredDirectory)) {
 				String basename = fs.basename(fileDiff.getPath());
-				if(!fileDiff.isResolved()) throw new UnresolvedDiffException(fileDiff);
 				if(fileDiff.getResolution() == null) {
 					if(dir.contains(basename)) dir.unlink(basename);
 				} else {
@@ -68,8 +87,12 @@ public class DiffSetResolver {
 		}
 	}
 	
+	protected void assertResolved() throws UnresolvedDiffException {
+		for(FileDiff diff : diffset.getDiffs()) if(!diff.isResolved()) throw new UnresolvedDiffException(diff);
+	}
+	
 	public DiffSet getDiffSet() {
-		return diffSet;
+		return diffset;
 	}
 	
 	public ZKFS getFs() {

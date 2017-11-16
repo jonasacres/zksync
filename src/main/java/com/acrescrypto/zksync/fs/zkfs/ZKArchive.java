@@ -64,6 +64,14 @@ public class ZKArchive {
 		return new ZKFS(new RefTag(this, revision));
 	}
 	
+	public ZKFS openRevision(RefTag revision) throws IOException {
+		return openRevision(revision.getBytes());
+	}
+	
+	public ZKFS openBlank() throws IOException {
+		return new ZKFS(RefTag.blank(this));
+	}
+	
 	public PubConfig getPubConfig() {
 		return pubConfig;
 	}

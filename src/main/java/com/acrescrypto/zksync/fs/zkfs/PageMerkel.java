@@ -129,7 +129,10 @@ public class PageMerkel {
 		 *   - locating a reftag in the the archive to be constant in time with respect to the number of revisions or files
 		 *   - reads of a fixed length from a file to be constant in time with respect to the file size
 		 * 
-		 * Neither of those are true right now.
+		 * And the icing on the cake, which might not be possible in conjunction with everything else:
+		 *   - writes of a fixed length to a file are contsant in time with respect to file size
+		 * 
+		 * None of those are true right now.
 		 */
 		
 		numPages = (int) expectedPages;
@@ -196,7 +199,6 @@ public class PageMerkel {
 		 */
 		
 		if(d == 0) {
-			this.numPages = newSize;
 			return;
 		} else if(d < 0) { // tree gets smaller
 			for(int n = 0; n < newNodes.length; n++) {

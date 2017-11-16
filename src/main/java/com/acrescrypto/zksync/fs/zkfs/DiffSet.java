@@ -8,6 +8,8 @@ import java.util.HashSet;
 import org.bouncycastle.util.Arrays;
 
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
+import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.FileDiffResolver;
 
 public class DiffSet {
 	protected RefTag[] revisions;
@@ -97,5 +99,9 @@ public class DiffSet {
 	
 	public FileDiff diffForPath(String path) {
 		return diffs.getOrDefault(path, null);
+	}
+	
+	public DiffSetResolver resolver(FileDiffResolver lambda) throws IOException {
+		return new DiffSetResolver(this, lambda);
 	}
 }

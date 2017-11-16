@@ -13,6 +13,16 @@ public class RevisionInfo extends ZKFile {
 	
 	public static String REVISION_INFO_PATH = "(revision info)";
 	
+	/* TODO No-auto-merge flag
+	 * Right now, it looks like in most use cases, branches are unintentional and undesirable. So, I'm making a pareto
+	 * assumption that it should be as easy as possible to merge branches quickly and automatically. However, there
+	 * are probably some cases in which branching is desired.
+	 * 
+	 * It'd be nice to have a "NO_AUTO_MERGE" flag in a RevisionInfo that says "don't automatically merge me or any
+	 * of my descendants with my siblings or any of their descendants." People can manually merge as desired from
+	 * there.
+	 */
+	
 	public RevisionInfo(ZKFS fs) throws IOException {
 		this.fs = fs;
 		this.path = REVISION_INFO_PATH;
