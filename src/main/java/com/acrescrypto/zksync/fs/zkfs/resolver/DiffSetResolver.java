@@ -44,10 +44,6 @@ public class DiffSetResolver {
 	}
 	
 	public RefTag resolve() throws IOException, DiffResolutionException {
-		/* TODO: It sucks, but I think there will have to be a "FileDiffResolution" object whose job is to track
-		 * the exact nature of a resolution. Right now, we track them in terms of inode, which breaks down if we
-		 * do a deletion.
-		 */
 		resolveNonDirectories();
 		assertResolved();
 		resolveDirectories();
@@ -64,7 +60,15 @@ public class DiffSetResolver {
 			diffsByDir.get(dirname).add(diff);
 
 			if(diff.isResolved()) continue;
-			// TODO: seems like this asks about directories...
+			// TODO: what if this is a directory?
+			// TODO: what if some of the branches have this as a directory, and some have it as something else?
+			/* Directories are complicated because someone might change metadata (uid, gid, mode, etc.) in one
+			 * branch, while editing content (adding and removing files) in multiple branches. The correct merge
+			 * might have both changes.
+			 * 
+			 * resolveDirectories ensures that adds and deletions are consistent with final directory contents.
+			 * It's ambiguous on the point of metadata.
+			 */
 			diff.resolve(fileResolver.resolve(this, diff));
 		}
 	}
@@ -73,17 +77,19 @@ public class DiffSetResolver {
 		for(String alteredDirectory : diffsByDir.keySet()) {
 			FileDiff diff = diffset.diffForPath(alteredDirectory);
 			if(diff == null) throw new IllegalStateException("altered directory " + alteredDirectory + " does not appear in diffset");
-			if(!diff.getResolution().getStat().isDirectory()) throw new InconsistentDiffResolutionException(diff);
+			if(!diff.getResolution().getInode().getStat().isDirectory()) throw new InconsistentDiffResolutionException(diff);
 			
 			ZKDirectory dir = fs.opendir(alteredDirectory);
 			for(FileDiff fileDiff : diffsByDir.get(alteredDirectory)) {
 				String basename = fs.basename(fileDiff.getPath());
-				if(fileDiff.getResolution() == null) {
+				if(fileDiff.getResolution().getInode() == null) {
 					if(dir.contains(basename)) dir.unlink(basename);
 				} else {
-					if(!dir.contains(basename)) dir.link(fileDiff.getResolution(), basename);
+					if(!dir.contains(basename)) dir.link(fileDiff.getResolution().getInode(), basename);
 				}
 			}
+			
+			// TODO: ensure final timestamp is consistent
 		}
 	}
 	

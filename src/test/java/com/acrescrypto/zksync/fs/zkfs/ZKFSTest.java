@@ -296,14 +296,6 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	@Test
-	public void testNextInodeIdAfterFSLoad() throws IOException {
-		for(int i = 0; i < 10; i++) zkscratch.write("burner-inode-"+i, ("content"+i).getBytes());
-		RefTag rev = zkscratch.commit();
-		ZKFS recoveredFs = rev.readOnlyFS();
-		assertEquals(zkscratch.inodeTable.nextInodeId, recoveredFs.inodeTable.nextInodeId);
-	}
-	
-	@Test
 	public void testAssertPathExistsPositive() throws IOException {
 		zkscratch.write("exists", "i sync, therefore i am".getBytes());
 		zkscratch.assertPathExists("exists");

@@ -15,7 +15,7 @@ public class InodeTable extends ZKFile {
 	public final static long INODE_ID_ROOT_DIRECTORY = 1;
 	public static final long INODE_ID_REVISION_INFO = 2;
 
-	public final static long USER_INODE_ID_START = 10000;
+	public final static long USER_INODE_ID_START = 65536;
 	
 	public final static String INODE_TABLE_PATH = "(inode table)";
 	
@@ -23,7 +23,6 @@ public class InodeTable extends ZKFile {
 	
 	protected Hashtable<Long,Inode> inodes;
 	protected RevisionInfo revision;
-	protected long nextInodeId;
 	
 	public InodeTable(ZKFS fs, RefTag tag) throws IOException {
 		this.fs = fs;
@@ -85,7 +84,6 @@ public class InodeTable extends ZKFile {
 			
 			Inode inode = new Inode(fs, buf.array());
 			long inodeId = inode.getStat().getInodeId();
-			if(inodeId >= nextInodeId) nextInodeId = inodeId+1;
 			inodes.put(inodeId, inode);
 		}
 	}
@@ -110,10 +108,18 @@ public class InodeTable extends ZKFile {
 		return inodes.containsKey(inodeId);
 	}
 	
+	protected long issueInodeId() {
+		long id;
+		do {
+			id = ByteBuffer.wrap(fs.archive.crypto.rng(8)).getLong();
+		} while(id < USER_INODE_ID_START || inodes.contains(id));
+		return id;
+	}
+	
 	public Inode issueInode() {
 		Inode inode = new Inode(fs);
 		long now = 1000l*1000l*System.currentTimeMillis();
-		inode.getStat().setInodeId(nextInodeId++);
+		inode.getStat().setInodeId(issueInodeId());
 		inode.getStat().setCtime(now);
 		inode.getStat().setAtime(now);
 		inode.getStat().setMtime(now);
@@ -155,15 +161,14 @@ public class InodeTable extends ZKFile {
 
 		makeRootDir();
 		makeEmptyRevision();
-		nextInodeId = USER_INODE_ID_START;
 	}
 
-	public void replaceInode(Inode inode) {
+	public void replaceInode(FileDiffResolution fileDiffResolution) {
 		// TODO: consider cache effects
-		if(inode == null) {
-			inodes.remove(inode.getStat().getInodeId()); // uh-oh.
+		if(fileDiffResolution.getInode() == null) {
+			inodes.remove(fileDiffResolution.getInodeId());
 		} else {
-			inodes.put(inode.getStat().getInodeId(), inode);
+			inodes.put(fileDiffResolution.getInodeId(), fileDiffResolution.getInode());
 		}
 	}
 }

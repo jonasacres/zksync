@@ -104,27 +104,31 @@ public class DiffSetResolverTest {
 	@Test
 	public void testDeletedFilesSelected() throws IOException, DiffResolutionException {
 		// if we prefer a version in which a file is deleted, is that honored?
+		// TODO: loop this test a few times
 		ZKArchive archive = ZKArchive.archiveAtPath("/tmp/zksync-test/diffset-deleted-files-selected", "zksync".toCharArray());
-		ZKFS fs = archive.openBlank();
-		
-		fs.write("file", "now you see me".getBytes());
-		RefTag base = fs.commit();
-		
-		fs.unlink("file");
-		RefTag revDeleted = fs.commit();
-		
-		fs = archive.openRevision(base);
-		RefTag revNotDeleted = fs.commit();
-		
-		DiffSet diffset = new DiffSet(new RefTag[] { revDeleted, revNotDeleted });
-		RefTag tag = diffset.resolver((DiffSetResolver resolver, FileDiff diff) -> {
-			if(diff.getVersions().containsKey(null)) return null;
-			for(Inode inode : diff.getVersions().keySet()) return inode;
-			throw new RuntimeException("somehow got a diff with no solutions :(");
-		}).resolve();
-		
-		fs = archive.openRevision(tag);
-		assertFalse(fs.exists("file"));
+		for(int i = 0; i < 10; i++) {
+			archive.getStorage().rmrf("/");
+			ZKFS fs = archive.openBlank();
+			
+			fs.write("file", "now you see me".getBytes());
+			RefTag base = fs.commit();
+			
+			fs.unlink("file");
+			RefTag revDeleted = fs.commit();
+			
+			fs = archive.openRevision(base);
+			RefTag revNotDeleted = fs.commit();
+			
+			DiffSet diffset = new DiffSet(new RefTag[] { revDeleted, revNotDeleted });
+			RefTag tag = diffset.resolver((DiffSetResolver resolver, FileDiff diff) -> {
+				if(diff.getVersions().containsKey(null)) return null;
+				for(Inode inode : diff.getVersions().keySet()) return inode;
+				throw new RuntimeException("somehow got a diff with no solutions :(");
+			}).resolve();
+			
+			fs = archive.openRevision(tag);
+			assertFalse(fs.exists("file"));
+		}
 	}
 	
 	// TODO: files that are deleted

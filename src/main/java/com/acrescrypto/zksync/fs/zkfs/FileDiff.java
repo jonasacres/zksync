@@ -5,8 +5,9 @@ import java.util.HashMap;
 
 public class FileDiff {
 	String path;
+	long inodeId;
 	HashMap<Inode,ArrayList<RefTag>> versions = new HashMap<Inode,ArrayList<RefTag>>();
-	protected Inode resolution;
+	protected FileDiffResolution resolution;
 	protected boolean resolved;
 	
 	public FileDiff(String path) {
@@ -34,8 +35,8 @@ public class FileDiff {
 	public Inode earliestVersion() {
 		Inode best = null;
 		for(Inode inode : versions.keySet()) {
-			if(best == null || inode.getStat().getMtime() < best.getStat().getMtime()) best = inode;
-			if(inode.getStat().getMtime() == best.getStat().getMtime() && inode.hashCode() < best.hashCode()) best = inode;
+			if(best == null || inode.modifiedTime < best.modifiedTime) best = inode;
+			if(inode.modifiedTime == best.modifiedTime && inode.hashCode() < best.hashCode()) best = inode;
 		}
 		return best;
 	}
@@ -43,8 +44,8 @@ public class FileDiff {
 	public Inode latestVersion() {
 		Inode best = null;
 		for(Inode inode : versions.keySet()) {
-			if(best == null || inode.getStat().getMtime() > best.getStat().getMtime()) best = inode;
-			if(inode.getStat().getMtime() == best.getStat().getMtime() && inode.hashCode() < best.hashCode()) best = inode;
+			if(best == null || inode.modifiedTime > best.modifiedTime) best = inode;
+			if(inode.modifiedTime == best.modifiedTime && inode.hashCode() < best.hashCode()) best = inode;
 		}
 		return best;
 	}
@@ -53,12 +54,16 @@ public class FileDiff {
 		return resolved;
 	}
 
-	public Inode getResolution() {
+	public FileDiffResolution getResolution() {
 		return resolution;
 	}
 
-	public void resolve(Inode resolution) {
-		this.resolution = resolution;
+	public void resolve(Inode result) {
+		if(result == null) {
+			this.resolution = new FileDiffResolution(inodeId, versions.get(result));
+		} else {
+			this.resolution = new FileDiffResolution(result, versions.get(result));
+		}
 		this.resolved = true;
 	}
 }

@@ -197,8 +197,10 @@ public class ZKFile extends File {
 	@Override
 	public void flush() throws IOException {
 		if(!dirty) return;
-		inode.getStat().setMtime(System.currentTimeMillis() * 1000l * 1000l);
+		long now = System.currentTimeMillis() * 1000l * 1000l;
+		inode.getStat().setMtime(now);
 		inode.setChangedFrom(fs.baseRevision);
+		inode.setModifiedTime(now);
 		bufferedPage.flush();
 		inode.setRefTag(merkel.commit());
 		dirty = false;

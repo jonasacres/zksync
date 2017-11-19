@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.Stat;
@@ -11,9 +10,18 @@ public class Inode {
 	protected Stat stat;
 	protected int nlink;
 	protected byte flags;
+	protected long modifiedTime; // last time we modified inode or file data. can't use stat.ctime, since users own that.
 	protected RefTag refTag;
 	protected RefTag changedFrom; // last revision reftag with previous version
 	protected ZKFS fs;
+	
+	// TODO: modifying metadata, like nlink or stat, should update modifiedTime. test for this.
+	
+	/* TODO: ctime semantics
+	 * Right now, ctime is treated as a "creation time," as in NTFS. Instead, it should be "change time" for inode
+	 * data. This is important for diff merges, where we need to be abel to differentiate between changes to a
+	 * directory's structure, and to its metadata.
+	 */
 	
 	public static final byte FLAG_RETAIN = 1 << 0;
 	
@@ -30,6 +38,7 @@ public class Inode {
 		blank.setStat(stat);
 		blank.setFlags(FLAG_RETAIN);
 		blank.setRefTag(RefTag.blank(fs.archive));
+		blank.setModifiedTime(now);
 		return blank;
 	}
 	
@@ -84,11 +93,20 @@ public class Inode {
 		this.changedFrom = changedFrom;
 	}
 	
+	public long getModifiedTime() {
+		return modifiedTime;
+	}
+	
+	public void setModifiedTime(long modifiedTime) {
+		this.modifiedTime = modifiedTime;
+	}
+	
 	public byte[] serialize() {
-		int size = stat.getStorageSize() + 2*4 + 1 + 2*(RefTag.REFTAG_EXTRA_DATA_SIZE+fs.archive.crypto.hashLength());
+		int size = stat.getStorageSize() + 8 + 2*4 + 1 + 2*(RefTag.REFTAG_EXTRA_DATA_SIZE+fs.archive.crypto.hashLength());
 		ByteBuffer buf = ByteBuffer.allocate(size);
 		buf.putInt(size-4);
 		buf.put(stat.serialize());
+		buf.putLong(modifiedTime);
 		buf.putInt(nlink);
 		buf.put(flags);
 		buf.put(refTag.getBytes());
@@ -108,6 +126,7 @@ public class Inode {
 		buf.get(serializedStat, 0, statLen);
 		this.stat = new Stat(serializedStat);
 		
+		this.modifiedTime = buf.getLong();
 		this.nlink = buf.getInt();
 		this.flags = buf.get();
 		
@@ -135,13 +154,19 @@ public class Inode {
 	}
 	
 	public int hashCode() {
-		return ByteBuffer.wrap(fs.archive.crypto.hash(serialize())).getInt(); // TODO: super slow, reconsider
+		return ByteBuffer.wrap(refTag.getBytes()).getInt();
 	}
 	
 	public boolean equals(Object other) {
 		if(!other.getClass().equals(this.getClass())) return false;
 		Inode __other = (Inode) other;
-		return Arrays.equals(serialize(), __other.serialize());
+		if(!refTag.equals(__other.refTag)) return false;
+		if(!changedFrom.equals(__other.changedFrom)) return false;
+		if(flags != __other.flags) return false;
+		if(nlink != __other.nlink) return false;
+		if(!stat.equals(__other.stat)) return false;
+		// intentionally exclude modifiedTime, since otherwise we won't notice when two revisions are the same in a merge
+		return true;
 	}
 	
 	public String toString() {

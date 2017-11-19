@@ -1,23 +1,25 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import java.util.ArrayList;
+
 public class FileDiffResolution {
 	long inodeId;
 	Inode inode;
-	RefTag revision;
+	ArrayList<RefTag> revisions;
 	
-	public FileDiffResolution(long inodeId, RefTag revision) {
+	public FileDiffResolution(long inodeId, ArrayList<RefTag> revisions) {
 		this.inodeId = inodeId;
-		this.revision = revision;
+		this.revisions = revisions;
 	}
 	
-	public FileDiffResolution(Inode inode, RefTag revision) {
+	public FileDiffResolution(Inode inode, ArrayList<RefTag> revisions) {
 		this.inode = inode;
 		this.inodeId = inode.getStat().getInodeId();
-		this.revision = revision;
+		this.revisions = revisions;
 	}
 	
-	public RefTag getRevision() {
-		return revision;
+	public ArrayList<RefTag> getRevisions() {
+		return revisions;
 	}
 	
 	public Inode getInode() {

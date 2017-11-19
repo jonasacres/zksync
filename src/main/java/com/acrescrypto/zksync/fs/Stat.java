@@ -2,6 +2,8 @@ package com.acrescrypto.zksync.fs;
 
 import java.nio.ByteBuffer;
 
+import org.bouncycastle.util.Arrays;
+
 public class Stat {
 	int gid, uid, mode;
 	private int type;
@@ -270,5 +272,11 @@ public class Stat {
 
 	public void setDevMinor(int devMinor) {
 		this.devMinor = devMinor;
+	}
+	
+	public boolean equals(Object other) {
+		if(other == null) return false;
+		if(!other.getClass().equals(this.getClass())) return false;
+		return Arrays.areEqual(serialize(), ((Stat) other).serialize());
 	}
 }
