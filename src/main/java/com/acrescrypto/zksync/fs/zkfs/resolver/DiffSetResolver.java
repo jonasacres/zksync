@@ -44,53 +44,21 @@ public class DiffSetResolver {
 	}
 	
 	public RefTag resolve() throws IOException, DiffResolutionException {
-		resolveNonDirectories();
-		assertResolved();
+		resolveInodes();
+		resolvePaths();
 		resolveDirectories();
-		for(FileDiff diff : diffset.getDiffs()) {
-			fs.getInodeTable().replaceInode(diff.getResolution());
-		}
-		return fs.commit(diffset.getRevisions(), null); // TODO: need to derive some secure seed here
 	}
 	
-	protected void resolveNonDirectories() throws IOException {
-		for(FileDiff diff : diffset.getDiffs()) {
-			String dirname = fs.dirname(diff.getPath());
-			diffsByDir.putIfAbsent(dirname, new ArrayList<FileDiff>());
-			diffsByDir.get(dirname).add(diff);
-
-			if(diff.isResolved()) continue;
-			// TODO: what if this is a directory?
-			// TODO: what if some of the branches have this as a directory, and some have it as something else?
-			/* Directories are complicated because someone might change metadata (uid, gid, mode, etc.) in one
-			 * branch, while editing content (adding and removing files) in multiple branches. The correct merge
-			 * might have both changes.
-			 * 
-			 * resolveDirectories ensures that adds and deletions are consistent with final directory contents.
-			 * It's ambiguous on the point of metadata.
-			 */
-			diff.resolve(fileResolver.resolve(this, diff));
-		}
+	protected void resolveInodes() throws IOException {
+		// pick the latest inode
+	}
+	
+	protected void resolvePaths() throws IOException {
+		// pick the latest non-null path (or null if this is the only option)
 	}
 	
 	protected void resolveDirectories() throws IOException, DiffResolutionException {
-		for(String alteredDirectory : diffsByDir.keySet()) {
-			FileDiff diff = diffset.diffForPath(alteredDirectory);
-			if(diff == null) throw new IllegalStateException("altered directory " + alteredDirectory + " does not appear in diffset");
-			if(!diff.getResolution().getInode().getStat().isDirectory()) throw new InconsistentDiffResolutionException(diff);
-			
-			ZKDirectory dir = fs.opendir(alteredDirectory);
-			for(FileDiff fileDiff : diffsByDir.get(alteredDirectory)) {
-				String basename = fs.basename(fileDiff.getPath());
-				if(fileDiff.getResolution().getInode() == null) {
-					if(dir.contains(basename)) dir.unlink(basename);
-				} else {
-					if(!dir.contains(basename)) dir.link(fileDiff.getResolution().getInode(), basename);
-				}
-			}
-			
-			// TODO: ensure final timestamp is consistent
-		}
+		// ensure that all selected paths are linked, and all nulled paths are unlinked 
 	}
 	
 	protected void assertResolved() throws UnresolvedDiffException {
