@@ -151,7 +151,7 @@ public class CryptoSupportTest  {
 		 *   make
 		 *   echo -n test | ./argon2 01234567 -t 4 -m 16 -p 1 -l 32 -r # output is our expected result
 		 */
-		byte[] expected = Util.hexToBytes("8c8130ee310833bd6f695df12d1deb4b380e84d21fb0bb5ff2c3f88918d2af6e"); 
+		byte[] expected = Util.hexToBytes("8c8130ee310833bd6f695df12d1deb4b380e84d21fb0bb5ff2c3f88918d2af6e");
 		assertTrue(Arrays.equals(derived, expected));
 	}
 	

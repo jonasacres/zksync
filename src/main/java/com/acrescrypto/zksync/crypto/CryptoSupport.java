@@ -8,7 +8,13 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.bouncycastle.crypto.Digest;
+import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
+import org.bouncycastle.crypto.engines.AESEngine;
+import org.bouncycastle.crypto.modes.AEADBlockCipher;
+import org.bouncycastle.crypto.modes.OCBBlockCipher;
+import org.bouncycastle.crypto.params.AEADParameters;
+import org.bouncycastle.crypto.params.KeyParameter;
 
 import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 
@@ -112,16 +118,7 @@ public class CryptoSupport {
 	public byte[] encrypt(byte[] key, byte[] iv, byte[] plaintext, byte[] associatedData, int padSize)
 	{
 		try {
-			Cipher cipher = Cipher.getInstance("AES/OCB/NoPadding", "BC");
-			cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES/OCB/NoPadding") , new IvParameterSpec(iv));
-			if(associatedData != null) cipher.updateAAD(associatedData, 0, associatedData.length);
-			byte[] paddedPlaintext = padToSize(plaintext, padSize),
-				   ciphertextWithExcess = new byte[paddedPlaintext.length+32];
-			int length = cipher.doFinal(paddedPlaintext, 0, paddedPlaintext.length, ciphertextWithExcess);
-			
-			ByteBuffer ciphertext = ByteBuffer.allocate(length);
-			ciphertext.put(ciphertextWithExcess, 0, length);
-			return ciphertext.array();
+			return processCipher(true, 128, key, iv, padToSize(plaintext, padSize), associatedData);
 		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(1);
@@ -132,17 +129,10 @@ public class CryptoSupport {
 	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, byte[] associatedData, boolean padded)
 	{
 		try {
-			Cipher cipher = Cipher.getInstance("AES/OCB/NoPadding", "BC");
-			cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES/OCB/NoPadding") , new IvParameterSpec(iv));
-			if(associatedData != null) cipher.updateAAD(associatedData);
-			byte[] paddedPlaintext = new byte[ciphertext.length];
-			int actualLength = cipher.doFinal(ciphertext, 0, ciphertext.length, paddedPlaintext);
-			
+			byte[] paddedPlaintext = processCipher(false, 128, key, iv, ciphertext, associatedData);
 			if(padded) return unpad(paddedPlaintext);
-			ByteBuffer buf = ByteBuffer.allocate(actualLength);
-			buf.put(paddedPlaintext, 0, actualLength);
-			return buf.array();
-		} catch(javax.crypto.AEADBadTagException e) {
+			return paddedPlaintext;
+		} catch(InvalidCipherTextException e) { // TODO: make sure this reflects a bad tag
 			throw new SecurityException();
 		} catch(Exception e) {
 			e.printStackTrace();
@@ -157,6 +147,20 @@ public class CryptoSupport {
 		
 		for(int i = 0; i < len; i++) r[i] = (byte) (a[i] ^ b[i]);
 		return r;
+	}
+	
+	protected static byte[] processCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, byte[] ad) throws IllegalStateException, InvalidCipherTextException {
+        KeyParameter key = new KeyParameter(keyBytes);
+        AEADParameters params = new AEADParameters(key, tagLen, iv);
+        AEADBlockCipher cipher = new OCBBlockCipher(new AESEngine(), new AESEngine());
+        cipher.init(encrypt, params);
+
+		byte[] out = new byte[cipher.getOutputSize(in.length)];
+		if(ad != null) cipher.processAADBytes(ad, 0, ad.length);
+        int offset = cipher.processBytes(in, 0, in.length, out, 0);
+        offset += cipher.doFinal(out, offset);
+        
+        return out;
 	}
 	
 	private byte[] padToSize(byte[] raw, int padSize) {
