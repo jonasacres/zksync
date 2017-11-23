@@ -3,10 +3,6 @@ package com.acrescrypto.zksync.crypto;
 import java.nio.ByteBuffer;
 import java.util.Base64;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
@@ -155,15 +151,18 @@ public class CryptoSupport {
         AEADBlockCipher cipher = new OCBBlockCipher(new AESEngine(), new AESEngine());
         cipher.init(encrypt, params);
 
-		byte[] out = new byte[cipher.getOutputSize(in.length)];
+		int offset = 0;
+		byte[] out = new byte[cipher.getOutputSize(in != null ? in.length : 0)];
 		if(ad != null) cipher.processAADBytes(ad, 0, ad.length);
-        int offset = cipher.processBytes(in, 0, in.length, out, 0);
+        if(in != null) offset = cipher.processBytes(in, 0, in.length, out, 0);
         offset += cipher.doFinal(out, offset);
+        assert(offset == out.length);
         
         return out;
 	}
 	
 	private byte[] padToSize(byte[] raw, int padSize) {
+		if(raw == null) return null;
 		if(padSize < 0) return raw.clone();
 		if(padSize == 0) padSize = raw.length + 4;
 		if(raw.length > padSize) {

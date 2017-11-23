@@ -54,8 +54,8 @@ public class CryptoSupportTest  {
 	
 	@Test
 	public void testEncrypt128() {
-		/* these are 128-bit test vectors, and we use 256-bit for zksync. but these vectors cover associated data,
-		 * and so it's nice to exercise that. */
+		/* these are 128-bit test vectors, and we use 256-bit for zksync, but at least this exercises
+		 * the code and ensures it matches something. */
 		byte[][][] vectors = aes128OCBTestVectors();
 		for(byte[][] vector : vectors) {
 			byte[] ciphertext = crypto.encrypt(vector[0], vector[1], vector[3], vector[2], -1);
@@ -64,22 +64,48 @@ public class CryptoSupportTest  {
 	}
 	
 	@Test
-	@Ignore
 	public void testEncrypt256() {
-		// TODO: busted for now because i can't get these test vectors working
-		byte[][][] vectors = aes256OCBTestVectors();
-		int i = 0;
-		for(byte[][] vector : vectors) {
-			byte[] ciphertext = crypto.encrypt(vector[0], vector[1], vector[2], null, -1);
-			Util.hexdump("Case " + i + " key", vector[0]);
-			Util.hexdump("Case " + i + " nonce", vector[1]);
-			Util.hexdump("Case " + i + " plaintext", vector[2]);
-			Util.hexdump("Case " + i + " generated ciphertext", ciphertext);
-			Util.hexdump("Case " + i + " expected ciphertext", vector[3]);
-			Util.hexdump("Case " + i + " expected tag", vector[4]);
-			i++;
-			assertTrue(Arrays.equals(ciphertext, vector[3]));
+		// http://tools.ietf.org/html/rfc7253, Appendix A, page 17
+		byte[] key = concat(new byte[31], num2str(128, 8));
+		byte[] ciphertext = new byte[0];
+		
+		for(int i = 0; i < 128; i++) {
+			byte[] s = new byte[i];
+			byte[] nonce = num2str(3*i+1, 96);
+			ciphertext = concat(ciphertext, ocbencrypt(key, nonce, s, s));
+			nonce = num2str(3*i+2, 96);
+			ciphertext = concat(ciphertext, ocbencrypt(key, nonce, null, s));
+			nonce = num2str(3*i+3, 96);
+			ciphertext = concat(ciphertext, ocbencrypt(key, nonce, s, null));
 		}
+		
+		byte[] nonce = num2str(385, 96);
+		byte[] result = ocbencrypt(key, nonce, ciphertext, null);
+		byte[] expected = Util.hexToBytes("D90EB8E9C977C88B79DD793D7FFA161C");
+		assertTrue(Arrays.equals(expected, result));
+	}
+	
+	protected byte[] num2str(int n, int len) {
+		byte[] str = new byte[len/8];
+		int i = 0;
+		while(n != 0) {
+			str[str.length-i-1] = (byte) (n);
+			i++;
+			n >>>= 8;
+		}
+		
+		return str;
+	}
+	
+	protected byte[] concat(byte[] a, byte[] b) {
+		byte[] c = new byte[a.length + b.length];
+		for(int i = 0; i < a.length; i++) c[i] = a[i];
+		for(int i = 0; i < b.length; i++) c[i+a.length] = b[i];
+		return c;
+	}
+	
+	protected byte[] ocbencrypt(byte[] key, byte[] nonce, byte[] associatedData, byte[] plaintext) {
+		return crypto.encrypt(key, nonce, plaintext, associatedData, -1);
 	}
 	
 	@Test
@@ -153,65 +179,6 @@ public class CryptoSupportTest  {
 		 */
 		byte[] expected = Util.hexToBytes("8c8130ee310833bd6f695df12d1deb4b380e84d21fb0bb5ff2c3f88918d2af6e");
 		assertTrue(Arrays.equals(derived, expected));
-	}
-	
-	private byte[][][] aes256OCBTestVectors() {
-		// Taken from http://web.cs.ucdavis.edu/~rogaway/ocb/ocb256.txt
-		// TODO: I can't make heads or tails of these. The nonce is too long. Reading the spec, it seems like
-		// maybe this is the internal nonce for a supplied nonce of 0 bytes. Whatever it is, I can't match the output.
-		// I guess I could generate some test vectors with OpenSSL and see if they match...
-		
-		return new byte[][][] { // key, nonce, plaintext, ciphertext, tag
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes(""),
-				Util.hexToBytes(""),
-				Util.hexToBytes(""),
-				Util.hexToBytes("796b5fd2716b066932371c17993dcb5a")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes("00000000000000000000000000000001"),
-				Util.hexToBytes("000102"),
-				Util.hexToBytes("a214d8"),
-				Util.hexToBytes("e31b3449bd1b85b257b404a76b5b86f2")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes("00000000000000000000000000000001"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("8ed0923f5b2c650f31a5dd422463377f"),
-				Util.hexToBytes("794904f519ab5376a30cf7771548e319")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes("00000000000000000000000000000001"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f10111213"),
-				Util.hexToBytes("6512529248df82feb506a7aeab3874f7201b6f79"),
-				Util.hexToBytes("042ac0fd6956c2b0b4205dba0b889699")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes("00000000000000000000000000000001"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes("6512529248df82feb506a7aeab3874f7742c85da9d0d6cc91293ce0b333e0343"),
-				Util.hexToBytes("6a91a07cb0bf508fee08b27b5fd9f80d")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes("00000000000000000000000000000001"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021"),
-				Util.hexToBytes("6512529248df82feb506a7aeab3874f7ae809e2f4f88d6a6088f8d0122a7b9e723a5"),
-				Util.hexToBytes("3ba0661c8a716b550150c9effe3b773c")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes("00000000000000000000000000000001"),
-				Util.hexToBytes("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
-				Util.hexToBytes(""), // TODO: 1464d49f9ead864d5e77 ... c3c6c1fec66446150d44 [1000 bytes]
-				Util.hexToBytes("826d7f68f3ce28e1e98191e92b23ab0a")
-			},
-		};
 	}
 	
 	private byte[][][] aes128OCBTestVectors() {
