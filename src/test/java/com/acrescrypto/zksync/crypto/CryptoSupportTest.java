@@ -55,7 +55,12 @@ public class CryptoSupportTest  {
 	@Test
 	public void testEncrypt128() {
 		/* these are 128-bit test vectors, and we use 256-bit for zksync, but at least this exercises
-		 * the code and ensures it matches something. */
+		 * the code and ensures it matches something.
+		 * 
+		 * Really, now that we have a good 256-bit test, this can probably go away. It's a fast test and
+		 * it does kick the tires on the underlying crypto library a bit, even if it's a shorter key than
+		 * zksync uses. If we switch crypto libraries and don't get 128-bit support, we can ditch this. 
+		 * */
 		byte[][][] vectors = aes128OCBTestVectors();
 		for(byte[][] vector : vectors) {
 			byte[] ciphertext = crypto.encrypt(vector[0], vector[1], vector[3], vector[2], -1);
