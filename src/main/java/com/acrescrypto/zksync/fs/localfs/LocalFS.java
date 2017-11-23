@@ -238,9 +238,9 @@ public class LocalFS extends FS {
 
 	@Override
 	public void chgrp(String path, String group) throws IOException {
-		UserPrincipal groupPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByName(group);
+		GroupPrincipal groupPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByGroupName(group);
 		java.io.File targetFile = new java.io.File(expandPath(path));
-		Files.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).setOwner(groupPrincipal);
+		Files.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).setGroup(groupPrincipal);
 	}
 
 	@Override

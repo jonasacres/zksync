@@ -80,9 +80,9 @@ public class FSTestBase extends Object {
 		scratch.write(filename, "some data".getBytes());
 		Stat stat = scratch.stat(filename);
 		Long now = System.currentTimeMillis();
-		assertEquals(0, Math.abs(stat.getCtime()/(1000l*1000l) - now), 50);
+		assertEquals(0, Math.abs(stat.getCtime()/(1000l*1000l) - now), 1000);
 		
-		Long atime = 31337000000l, mtime = 80085000000l;
+		Long atime = 31337000000000l, mtime = 80085000000000l;
 		scratch.setAtime(filename, atime);
 		scratch.setMtime(filename, mtime);
 		
@@ -230,7 +230,7 @@ public class FSTestBase extends Object {
 
 	@Test
 	public void testSetMtime() throws IOException {
-		long ts = 12340000000l;
+		long ts = 12340000000000l;
 		scratch.write("mtime", "tick tock".getBytes());
 		scratch.setMtime("mtime", ts);
 		assertEquals(ts, scratch.stat("mtime").getMtime());
@@ -238,7 +238,7 @@ public class FSTestBase extends Object {
 
 	@Test
 	public void testSetAtime() throws IOException {
-		long ts = 4321000000l;
+		long ts = 4321000000000l;
 		scratch.write("atime", "clock rock".getBytes());
 		scratch.setAtime("atime", ts);
 		assertEquals(ts, scratch.stat("atime").getAtime());

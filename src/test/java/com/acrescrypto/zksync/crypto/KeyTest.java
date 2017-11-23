@@ -53,15 +53,31 @@ public class KeyTest {
 	}
 	
 	@Test
-	@Ignore
 	public void testEncrypt() {
-		// TODO: test encrypt. wait for some 256-bit test vectors tho...
+		// make sure Key is a front-end to CryptoSupport
+		byte[] key = new byte[32], iv = new byte[12];
+		for(int i = 0; i < 128; i++) {
+			byte[] buf = new byte[i];
+			key[31] = (byte) i;
+			iv[11] = (byte) i;
+			byte[] ciphertext = (new Key(crypto, key)).encrypt(iv, buf, -1);
+			byte[] expected = crypto.encrypt(key, iv, buf, null, -1);
+			assertTrue(Arrays.equals(expected, ciphertext));
+		}
 	}
 	
 	@Test
-	@Ignore
 	public void testDecrypt() {
-		// TODO: test decrypt. also needs those test vectors...
+		// make sure we can decrypt what we encrypt
+		byte[] keyBytes = new byte[32], iv = new byte[12];
+		for(int i = 0; i < 128; i++) {
+			byte[] buf = new byte[i];
+			keyBytes[31] = (byte) i;
+			iv[11] = (byte) i;
+			Key key = new Key(crypto, keyBytes);
+			byte[] recovered = key.decrypt(iv, key.encrypt(iv, buf, 0));
+			assertTrue(Arrays.equals(buf, recovered));
+		}
 	}
 	
 	@Test

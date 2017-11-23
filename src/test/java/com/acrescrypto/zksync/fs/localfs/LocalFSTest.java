@@ -8,6 +8,7 @@ import org.junit.*;
 
 import org.apache.commons.io.FileUtils;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -39,13 +40,17 @@ public class LocalFSTest extends FSTestBase {
 	
 	@Test
 	public void testStatIdentifiesDevices() throws IOException {
-		// TODO: skip on windows
+		if(Util.isWindows()) return;
 		LocalFS root = new LocalFS("/");
 		Stat devNull = root.stat("/dev/null");
 		assertTrue(devNull.isCharacterDevice());
-		// TODO: OS X is 3,2 instead of 1,3 as on Linux
-		assertEquals(devNull.getDevMajor(), 1);
-		assertEquals(devNull.getDevMinor(), 3);
+		if(Util.isLinux()) {
+			assertEquals(devNull.getDevMajor(), 1);
+			assertEquals(devNull.getDevMinor(), 3);
+		} else if(Util.isOSX()) {
+			assertEquals(devNull.getDevMajor(), 3);
+			assertEquals(devNull.getDevMinor(), 2);
+		}
 	}
 	
 	@Test @Ignore @Override
