@@ -26,7 +26,7 @@ public class ZKFS extends FS {
 	
 	public static ZKFS blankArchive(String path, char[] passphrase) throws IOException {
 		LocalFS storage = new LocalFS(path);
-		storage.rmrf("/");
+		if(storage.exists("/")) storage.rmrf("/");
 		return fsForStorage(storage, passphrase, null);
 	}
 	
