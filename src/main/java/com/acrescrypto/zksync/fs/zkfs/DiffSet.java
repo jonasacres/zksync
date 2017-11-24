@@ -15,7 +15,13 @@ public class DiffSet {
 	protected RefTag[] revisions;
 	RefTag commonAncestor;
 	
-	HashMap<String,FileDiff> diffs = new HashMap<String,FileDiff>();
+	/* TODO: Diffs aren't really on "files." That's not a meaningful concept in a merge.
+	 * There are inodes (which differ in content), and paths (which differ in inode or existence,
+	 * with nonexistence possibly being an inode of null.)
+	 */
+	
+	HashMap<String,PathDiff> pathDiffs = new HashMap<String,PathDiff>();
+	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>();
 	
 	public DiffSet(RefTag[] revisions) throws IOException {
 		this.revisions = revisions;
@@ -24,17 +30,17 @@ public class DiffSet {
 		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i];
 		
 		commonAncestor = revisions[0].archive.getRevisionTree().commonAncestorOf(tags);
-		
-		for(String path : allPaths()) {
-			FileDiff diff = versionsOfFile(path);
-			if(diff.hasMultipleVersions()) {
-				diffs.put(diff.path, diff);
-			}
-		}
 	}
 	
-	public Collection<FileDiff> getDiffs() {
-		return diffs.values();
+	public HashSet<Long> allInodes() throws IOException {
+		HashSet<Long> allInodes = new HashSet<Long>();
+		for(RefTag rev : revisions) {
+			for(Inode inode : rev.readOnlyFS().getInodeTable().inodes.values()) {
+				allInodes.add(inode.stat.getInodeId());
+			}
+		}
+		
+		return allInodes;
 	}
 	
 	public HashSet<String> allPaths() throws IOException {
@@ -49,22 +55,22 @@ public class DiffSet {
 		return allPaths;
 	}
 	
-	public FileDiff versionsOfFile(String path) throws IOException {
-		FileDiff diff = new FileDiff(path);
-		for(RefTag rev : revisions) {
-			diff.addVersion(rev, versionOfFileForTag(rev, path));
+	public void findInodeDiffs() throws IOException {
+		for(long inodeId : allInodes()) {
+			InodeDiff diff = new InodeDiff(inodeId, revisions);
+			if(!diff.isConflict()) continue;
+			inodeDiffs.put(inodeId, diff);
 		}
-		return diff;
 	}
 	
-	protected Inode versionOfFileForTag(RefTag tag, String path) throws IOException {
-		try {
-			return tag.readOnlyFS().inodeForPath(path);
-		} catch (ENOENTException e) {
-			return null;
+	public void findPathDiffs() throws IOException {
+		for(String path : allPaths()) {
+			PathDiff diff = new PathDiff(path, revisions);
+			if(!diff.isConflict()) continue;
+			pathDiffs.put(path, diff);
 		}
 	}
-
+	
 	public RefTag[] getRevisions() {
 		return revisions;
 	}
@@ -95,10 +101,6 @@ public class DiffSet {
 			}
 		}
 		return latest;
-	}
-	
-	public FileDiff diffForPath(String path) {
-		return diffs.getOrDefault(path, null);
 	}
 	
 	public DiffSetResolver resolver(FileDiffResolver lambda) throws IOException {

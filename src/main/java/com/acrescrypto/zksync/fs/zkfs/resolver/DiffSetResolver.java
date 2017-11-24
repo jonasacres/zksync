@@ -47,6 +47,7 @@ public class DiffSetResolver {
 		resolveInodes();
 		resolvePaths();
 		resolveDirectories();
+		return null;
 	}
 	
 	protected void resolveInodes() throws IOException {
