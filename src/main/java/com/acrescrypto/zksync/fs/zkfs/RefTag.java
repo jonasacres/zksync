@@ -131,4 +131,8 @@ public class RefTag {
 		if(other == null || !other.getClass().equals(this.getClass())) return false;
 		return Arrays.equals(((RefTag) other).tag, this.tag);
 	}
+	
+	public ZKArchive getArchive() {
+		return archive;
+	}
 }

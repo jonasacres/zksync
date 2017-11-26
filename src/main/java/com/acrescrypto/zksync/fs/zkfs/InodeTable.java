@@ -8,6 +8,7 @@ import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
 
 // represents inode table for ZKFS instance. 
 public class InodeTable extends ZKFile {
@@ -163,12 +164,37 @@ public class InodeTable extends ZKFile {
 		makeEmptyRevision();
 	}
 
-	public void replaceInode(FileDiffResolution fileDiffResolution) {
+	public void replaceInode(InodeDiff inodeDiff) {
 		// TODO: consider cache effects
-		if(fileDiffResolution.getInode() == null) {
-			inodes.remove(fileDiffResolution.getInodeId());
+		assert(inodeDiff.isResolved());
+		if(inodeDiff.getResolution() == null) {
+			inodes.remove(inodeDiff.getInodeId());
 		} else {
-			inodes.put(fileDiffResolution.getInodeId(), fileDiffResolution.getInode());
+			Inode existing = inodes.getOrDefault(inodeDiff.getInodeId(), null);
+			Inode duplicated = inodeDiff.getResolution().clone();
+			
+			/* Don't copy the nlink field over, since that corresponds to the directory tree, which we don't copy
+			 * over literally.
+			 */
+			if(existing != null) {
+				duplicated.nlink = existing.nlink;
+				if(duplicated.stat.isDirectory()) {
+					duplicated.refTag = existing.refTag;
+					duplicated.stat.setSize(existing.stat.getSize());
+				}
+			} else {
+				duplicated.nlink = 0;
+				if(duplicated.stat.isDirectory()) {
+					duplicated.refTag = RefTag.blank(fs.archive);
+					duplicated.stat.setSize(0);
+				}
+			}
+			
+			inodes.put(inodeDiff.getInodeId(), duplicated);
 		}
+	}
+	
+	public Hashtable<Long,Inode> getInodes() {
+		return inodes;
 	}
 }

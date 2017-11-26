@@ -1,24 +1,17 @@
-package com.acrescrypto.zksync.fs.zkfs;
+package com.acrescrypto.zksync.fs.zkfs.resolver;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 
-import org.bouncycastle.util.Arrays;
-
-import com.acrescrypto.zksync.exceptions.ENOENTException;
-import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
-import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.FileDiffResolver;
+import com.acrescrypto.zksync.fs.zkfs.Inode;
+import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;
+import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.PathDiffResolver;
 
 public class DiffSet {
 	protected RefTag[] revisions;
 	RefTag commonAncestor;
-	
-	/* TODO: Diffs aren't really on "files." That's not a meaningful concept in a merge.
-	 * There are inodes (which differ in content), and paths (which differ in inode or existence,
-	 * with nonexistence possibly being an inode of null.)
-	 */
 	
 	HashMap<String,PathDiff> pathDiffs = new HashMap<String,PathDiff>();
 	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>();
@@ -29,14 +22,14 @@ public class DiffSet {
 		RefTag[] tags = new RefTag[revisions.length];
 		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i];
 		
-		commonAncestor = revisions[0].archive.getRevisionTree().commonAncestorOf(tags);
+		commonAncestor = revisions[0].getArchive().getRevisionTree().commonAncestorOf(tags);
 	}
 	
 	public HashSet<Long> allInodes() throws IOException {
 		HashSet<Long> allInodes = new HashSet<Long>();
 		for(RefTag rev : revisions) {
-			for(Inode inode : rev.readOnlyFS().getInodeTable().inodes.values()) {
-				allInodes.add(inode.stat.getInodeId());
+			for(Inode inode : rev.readOnlyFS().getInodeTable().getInodes().values()) {
+				allInodes.add(inode.getStat().getInodeId());
 			}
 		}
 		
@@ -76,34 +69,15 @@ public class DiffSet {
 	}
 	
 	public RefTag latestRevision() throws IOException {
-		RefTag latest = null;
-		for(RefTag rev : revisions) {
-			if(latest == null) {
-				latest = rev;
-				continue;
-			}
-			
-			RevisionInfo lInfo = latest.getInfo(), rInfo = rev.getInfo();
-			if(rInfo.generation < lInfo.generation) continue;
-			else if(lInfo.generation > rInfo.generation) {
-				latest = rev;
-				continue;
-			}
-			
-			if(rInfo.getStat().getMtime() < lInfo.getStat().getMtime()) {
-				latest = rev;
-				continue;
-			}
-			
-			if(Arrays.compareUnsigned(rev.hash, latest.hash) < 0) {
-				latest = rev;
-				continue;
-			}
-		}
-		return latest;
+		/* TODO: Order revisions.
+		 * Rule 1: A < B if B is a descendant of A
+		 * Rule 2: A < B if A is not a descendant of B and A has an earlier timestamp than B
+		 * Rule 3: A < B if A is not a descendant of B and A has an identical timestamp to B and A has a lower hash than B
+		 */
+		return null;
 	}
 	
-	public DiffSetResolver resolver(FileDiffResolver lambda) throws IOException {
-		return new DiffSetResolver(this, lambda);
+	public DiffSetResolver resolver(InodeDiffResolver inodeResolver, PathDiffResolver pathResolver) throws IOException {
+		return new DiffSetResolver(this, inodeResolver, pathResolver);
 	}
 }

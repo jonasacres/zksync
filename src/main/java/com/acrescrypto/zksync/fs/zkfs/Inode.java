@@ -3,10 +3,12 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import org.bouncycastle.util.Arrays;
+
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.Stat;
 
-public class Inode {
+public class Inode implements Comparable<Inode> {
 	protected Stat stat;
 	protected int nlink;
 	protected byte flags;
@@ -171,5 +173,17 @@ public class Inode {
 	
 	public String toString() {
 		return String.format("%d (%08x) - %d %d bytes, %d %d %s", stat.getInodeId(), hashCode(), nlink, stat.getSize(), stat.getMtime(), stat.getAtime(), Util.bytesToHex(refTag.tag));
+	}
+
+	@Override
+	public int compareTo(Inode o) {
+		int c;
+		if(modifiedTime != o.modifiedTime) return modifiedTime < o.modifiedTime ? -1 : 1;
+		if((c = Arrays.compareUnsigned(changedFrom.getBytes(), o.changedFrom.getBytes())) != 0) return c;
+		return Arrays.compareUnsigned(serialize(), o.serialize());
+	}
+	
+	public Inode clone() {
+		return new Inode(this.fs, serialize());
 	}
 }

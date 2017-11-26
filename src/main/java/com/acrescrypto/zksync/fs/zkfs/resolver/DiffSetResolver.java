@@ -2,68 +2,119 @@ package com.acrescrypto.zksync.fs.zkfs.resolver;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.List;
 
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
-import com.acrescrypto.zksync.exceptions.InconsistentDiffResolutionException;
-import com.acrescrypto.zksync.exceptions.UnresolvedDiffException;
-import com.acrescrypto.zksync.fs.zkfs.DiffSet;
-import com.acrescrypto.zksync.fs.zkfs.FileDiff;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
 public class DiffSetResolver {
-	public interface FileDiffResolver {
-		public Inode resolve(DiffSetResolver setResolver, FileDiff diff);
+	public interface InodeDiffResolver {
+		public Inode resolve(DiffSetResolver setResolver, InodeDiff diff);
+	}
+	
+	public interface PathDiffResolver {
+		public Long resolve(DiffSetResolver setResolver, PathDiff diff);
 	}
 	
 	DiffSet diffset;
 	ZKFS fs;
-	FileDiffResolver fileResolver;
-	
-	HashMap<String,ArrayList<FileDiff>> diffsByDir = new HashMap<String,ArrayList<FileDiff>>();
+	InodeDiffResolver inodeResolver;
+	PathDiffResolver pathResolver;
 	
 	public static DiffSetResolver defaultResolver(DiffSet diffset) throws IOException {
 		return latestVersionResolver(diffset);
 	}
 	
 	public static DiffSetResolver latestVersionResolver(DiffSet diffset) throws IOException {
-		return new DiffSetResolver(diffset,
-				(DiffSetResolver setResolver, FileDiff diff) ->
-		{
-			return diff.latestVersion();
-		});
+		InodeDiffResolver inodeResolver = (DiffSetResolver setResolver, InodeDiff diff) -> {
+			Inode result = null;
+			for(Inode inode : diff.getResolutions().keySet()) {
+				if(result == null || result.compareTo(inode) < 0) result = inode;
+			}
+			return result;
+		};
+		
+		PathDiffResolver pathResolver = (DiffSetResolver setResolver, PathDiff diff) -> {
+			Inode result = null;
+			
+			for(Long inodeId : diff.getResolutions().keySet()) {
+				if(inodeId == null) continue;
+				Inode inode;
+				try {
+					inode = setResolver.fs.getInodeTable().inodeWithId(inodeId);
+				} catch (ENOENTException e) {
+					throw new IllegalStateException("Inode table didn't contain expected inode " + inodeId);
+				}
+				if(result == null || result.compareTo(inode) < 0) result = inode;
+			}
+			
+			return result != null ? result.getStat().getInodeId() : null;
+		};
+		
+		return new DiffSetResolver(diffset, inodeResolver, pathResolver);
 	}
 	
-	public DiffSetResolver(DiffSet diffset, FileDiffResolver fileResolver) throws IOException {
+	public DiffSetResolver(DiffSet diffset, InodeDiffResolver inodeResolver, PathDiffResolver pathResolver) throws IOException {
 		this.diffset = diffset;
-		this.fileResolver = fileResolver;
+		this.inodeResolver = inodeResolver;
+		this.pathResolver = pathResolver;
 		this.fs = new ZKFS(diffset.latestRevision());
 	}
 	
 	public RefTag resolve() throws IOException, DiffResolutionException {
-		resolveInodes();
-		resolvePaths();
-		resolveDirectories();
+		applyResolvers();
+		resolveDeletedDirectories();
+		applyResolution();
 		return null;
 	}
 	
-	protected void resolveInodes() throws IOException {
-		// pick the latest inode
+	protected void applyResolvers() {
+		for(InodeDiff diff : diffset.inodeDiffs.values()) {
+			diff.setResolution(inodeResolver.resolve(this, diff));
+		}
+
+		for(PathDiff diff : diffset.pathDiffs.values()) {
+			diff.setResolution(pathResolver.resolve(this, diff));
+		}
 	}
 	
-	protected void resolvePaths() throws IOException {
-		// pick the latest non-null path (or null if this is the only option)
+	protected void resolveDeletedDirectories() throws IOException, DiffResolutionException {
+		for(PathDiff diff : diffset.pathDiffs.values()) {
+			if(diff.resolution == null || parentExists(diff.path)) continue;
+			diff.setResolution(null);
+		}
 	}
 	
-	protected void resolveDirectories() throws IOException, DiffResolutionException {
-		// ensure that all selected paths are linked, and all nulled paths are unlinked 
+	protected void applyResolution() throws IOException {
+		for(InodeDiff diff : diffset.inodeDiffs.values()) {
+			fs.getInodeTable().replaceInode(diff);
+		}
+		
+		// need to sort so we do parent directories before children
+		List<PathDiff> pathList = new ArrayList<PathDiff>(diffset.pathDiffs.values());
+		Collections.sort(pathList);
+		
+		for(PathDiff diff : pathList) {
+			assert(diff.isResolved());
+			ZKDirectory dir = fs.opendir(fs.dirname(diff.path));
+			dir.updateLink(diff.resolution, fs.basename(diff.path));
+			dir.close();
+		}
 	}
 	
-	protected void assertResolved() throws UnresolvedDiffException {
-		for(FileDiff diff : diffset.getDiffs()) if(!diff.isResolved()) throw new UnresolvedDiffException(diff);
+	protected boolean parentExists(String path) {
+		String dirname = fs.dirname(path);
+		if(dirname.equals("/")) return true;
+		if(diffset.pathDiffs.containsKey(dirname)) {
+			PathDiff diff = diffset.pathDiffs.get(dirname);
+			if(diff.resolution == null) return false;
+		}
+		return parentExists(dirname);
 	}
 	
 	public DiffSet getDiffSet() {

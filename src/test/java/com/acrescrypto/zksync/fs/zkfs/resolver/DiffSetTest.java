@@ -1,10 +1,9 @@
-package com.acrescrypto.zksync.fs.zkfs;
+package com.acrescrypto.zksync.fs.zkfs.resolver;
 
 import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.security.Security;
-import java.util.Collection;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.After;
@@ -15,6 +14,12 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
+import com.acrescrypto.zksync.fs.zkfs.Inode;
+import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
+import com.acrescrypto.zksync.fs.zkfs.ZKFile;
+import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSet;
 
 
 public class DiffSetTest {
@@ -69,9 +74,9 @@ public class DiffSetTest {
 	public void testDetectsDifferencesBetweenSiblings() throws IOException {
 		RefTag[] list = new RefTag[] { children[0], children[1] };
 		DiffSet diffset = new DiffSet(list);
-		Collection<FileDiff> diffs = diffset.getDiffs();
 		
-		assertEquals(2, diffs.size());
+		assertEquals(2, diffset.inodeDiffs.size());
+		assertEquals(1, diffset.pathDiffs.size());
 		
 		/* TODO: This really makes me think deterministic storage should come back. /modified has the same content
 		 * for each sibling. It doesn't show up as a difference, and it probably shouldn't, because they're the same.
@@ -90,7 +95,7 @@ public class DiffSetTest {
 		LocalFS storage = new LocalFS("/tmp/zksync-diffset-nonimmediate");
 		if(storage.exists("/")) storage.rmrf("/");
 		ZKFS fs = ZKFS.fsForStorage(storage, password);
-		byte[] buf = new byte[fs.archive.privConfig.getPageSize()+1];
+		byte[] buf = new byte[fs.getArchive().getPrivConfig().getPageSize()+1];
 		fs.write("unmodified", buf);
 		fs.write("modified", buf);
 		RefTag parent = fs.commit();
@@ -106,19 +111,19 @@ public class DiffSetTest {
 		}
 
 		DiffSet diffset = new DiffSet(children);
-		Collection<FileDiff> diffs = diffset.getDiffs();
 		storage.rmrf("/");
 		
-		assertEquals(1, diffs.size());
+		assertEquals(1, diffset.inodeDiffs.size());
+		assertEquals(1, diffset.pathDiffs.size());
 	}
 	
 	@Test
 	public void testDetectsParentChildDifferences() throws IOException {
 		RefTag[] list = new RefTag[] { parent, children[0] };
 		DiffSet diffset = new DiffSet(list);
-		Collection<FileDiff> diffs = diffset.getDiffs();
 		
-		assertEquals(3, diffs.size()); // modified, child and /
+		assertEquals(3, diffset.inodeDiffs.size()); // modified, child and /
+		assertEquals(1, diffset.pathDiffs.size()); // child only
 	}
 	
 	@Test
@@ -126,10 +131,10 @@ public class DiffSetTest {
 		/* if we look at the diffs between two of the children, we should see only one diff, because they both
 		 * modify one of the files in the same way.
 		 */
-		assertEquals(1+1, (new DiffSet(new RefTag[] { children[0], children[1] })).getDiffs().size());
+		assertEquals(1+1, (new DiffSet(new RefTag[] { children[0], children[1] })).inodeDiffs.size());
 		
 		/* but if we include the parent, we should see two diffs, because it has the original unmodified file. */
-		assertEquals(2+1, (new DiffSet(new RefTag[] { parent, children[0], children[1] })).getDiffs().size());
+		assertEquals(2+1, (new DiffSet(new RefTag[] { parent, children[0], children[1] })).inodeDiffs.size());
 		
 		// (the +1s are because of implicit change to directory)
 	}
@@ -304,7 +309,7 @@ public class DiffSetTest {
 		trivialDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			revs[0] = fs.commit();
-			fs.inodeForPath(filename).nlink++; // painful to look at, isn't it?
+			fs.inodeForPath(filename).addLink();
 			return 1;
 		});
 	}
@@ -330,19 +335,19 @@ public class DiffSetTest {
 		
 		fs.write("file0", "blah".getBytes());
 		fs.write("file1", "blah".getBytes());
-		fs.inodeForPath("/").stat.setMtime(0);
-		fs.inodeForPath("/").stat.setAtime(0);
+		fs.inodeForPath("/").getStat().setMtime(0);
+		fs.inodeForPath("/").getStat().setAtime(0);
 		revs[0] = fs.commit();
 		
 		fs.unlink("file1");
 		fs.link("file0", "file1");
-		fs.inodeForPath("/").stat.setMtime(0);
-		fs.inodeForPath("/").stat.setAtime(0);
+		fs.inodeForPath("/").getStat().setMtime(0);
+		fs.inodeForPath("/").getStat().setAtime(0);
 		revs[1] = fs.commit();
 
 		DiffSet diffset = new DiffSet(revs);
 		storage.rmrf("/");
-		assertEquals(3, diffset.diffs.size());
+		assertEquals(3, diffset.inodeDiffs.size());
 	}
 	
 	protected void trivialDiffTest(DiffExampleLambda meat) throws IOException {
@@ -357,8 +362,9 @@ public class DiffSetTest {
 		revs[1] = fs.commit();
 		
 		DiffSet diffset = new DiffSet(revs);
+		assertEquals(numDiffs, diffset.inodeDiffs.size());
+		assertTrue(diffset.inodeDiffs.containsKey(fs.inodeForPath(filename).getStat().getInodeId()));
+		assertTrue(diffset.pathDiffs.containsKey(filename));
 		storage.rmrf("/");
-		assertEquals(numDiffs, diffset.diffs.size());
-		assertTrue(diffset.diffs.containsKey(filename));
 	}
 }

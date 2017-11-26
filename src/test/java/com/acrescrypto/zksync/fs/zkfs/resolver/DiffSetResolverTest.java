@@ -5,7 +5,6 @@ import static org.junit.Assert.*;
 import java.io.IOException;
 import java.security.Security;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -14,6 +13,8 @@ import org.junit.*;
 
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.fs.zkfs.*;
+import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;
+import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.PathDiffResolver;
 
 public class DiffSetResolverTest {
 	@BeforeClass
@@ -73,12 +74,10 @@ public class DiffSetResolverTest {
 			versions[i] = fs.commit();
 		}
 		
-		DiffSet diffset = new DiffSet(versions);
 		ArrayList<Inode> solutions = new ArrayList<Inode>();
-		DiffSetResolver resolver = new DiffSetResolver(diffset, (DiffSetResolver r, FileDiff diff) -> {
-			Collection<Inode> inodes = diff.getVersions().keySet();
+		InodeDiffResolver inodeResolver = (DiffSetResolver r, InodeDiff diff) -> {
 			Inode best = null;
-			for(Inode candidate : inodes) {
+			for(Inode candidate : diff.resolutions.keySet()) {
 				if(best == null || Arrays.compareUnsigned(best.getRefTag().getBytes(), candidate.getRefTag().getBytes()) < 0) {
 					best = candidate;
 				}
@@ -86,7 +85,21 @@ public class DiffSetResolverTest {
 			
 			solutions.add(best);
 			return best;
-		});
+		};
+		
+		PathDiffResolver pathResolver = (DiffSetResolver r, PathDiff diff) -> {
+			Long best = null;
+			for(Long candidate : diff.resolutions.keySet()) {
+				if(best == null || candidate.compareTo(best) < 0) {
+					best = candidate;
+				}
+			}
+			
+			return best;
+		};
+		
+		DiffSet diffset = new DiffSet(versions);
+		DiffSetResolver resolver = new DiffSetResolver(diffset, inodeResolver, pathResolver);
 		
 		RefTag merge = resolver.resolve();
 		assertEquals(numFiles+1, solutions.size()); // +1 for root directory
@@ -120,11 +133,19 @@ public class DiffSetResolverTest {
 			RefTag revNotDeleted = fs.commit();
 			
 			DiffSet diffset = new DiffSet(new RefTag[] { revDeleted, revNotDeleted });
-			RefTag tag = diffset.resolver((DiffSetResolver resolver, FileDiff diff) -> {
-				if(diff.getVersions().containsKey(null)) return null;
-				for(Inode inode : diff.getVersions().keySet()) return inode;
+			InodeDiffResolver inodeResolver = (DiffSetResolver r, InodeDiff diff) -> {
+				if(diff.resolutions.containsKey(null)) return null;
+				for(Inode inode : diff.resolutions.keySet()) return inode;
 				throw new RuntimeException("somehow got a diff with no solutions :(");
-			}).resolve();
+			};
+			
+			PathDiffResolver pathResolver = (DiffSetResolver r, PathDiff diff) -> {
+				if(diff.resolutions.containsKey(null)) return null;
+				for(Long inodeId : diff.resolutions.keySet()) return inodeId;
+				throw new RuntimeException("somehow got a diff with no solutions :(");
+			};
+
+			RefTag tag = diffset.resolver(inodeResolver, pathResolver).resolve();
 			
 			fs = archive.openRevision(tag);
 			assertFalse(fs.exists("file"));

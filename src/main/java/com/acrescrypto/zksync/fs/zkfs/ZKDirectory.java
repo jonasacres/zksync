@@ -110,6 +110,18 @@ public class ZKDirectory extends ZKFile implements Directory {
 		
 		return inodeForName(comps.length == 0 ? "/" : comps[0]);
 	}
+	
+	public void updateLink(Long inodeId, String link) throws IOException {
+		if(link.length() > MAX_NAME_LEN) throw new EINVALException(link + ": name too long");
+		if(entries.containsKey(link)) {
+			Long existing = entries.get(link);
+			if(existing.equals(inodeId)) return;
+			unlink(link);
+		}
+		
+		if(inodeId == null) return; // above if clause already unlinked
+		link(fs.inodeTable.inodeWithId(inodeId), link);
+	}
 
 	public void link(Inode inode, String link) throws IOException {
 		if(link.length() > MAX_NAME_LEN) throw new EINVALException(link + ": name too long");
