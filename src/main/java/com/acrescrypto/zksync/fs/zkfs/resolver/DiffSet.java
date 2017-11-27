@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 
 import com.acrescrypto.zksync.fs.zkfs.Inode;
+import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.PathDiffResolver;
@@ -33,6 +34,8 @@ public class DiffSet {
 		HashSet<Long> allInodes = new HashSet<Long>();
 		for(RefTag rev : revisions) {
 			for(Inode inode : rev.readOnlyFS().getInodeTable().getInodes().values()) {
+				// Disregard the RevisionInfo file in calculating diffs, since it always differs and can't be merged.
+				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_REVISION_INFO) continue;
 				allInodes.add(inode.getStat().getInodeId());
 			}
 		}

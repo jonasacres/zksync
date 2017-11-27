@@ -60,14 +60,21 @@ public class DiffSetResolverTest {
 	// TODO: merges should be deterministic
 	
 	@Test
-	public void testRuleIsApplied() throws IOException, DiffResolutionException {
+	public void testInodeRuleIsApplied() throws IOException, DiffResolutionException {
 		// if the resolver lambda picks an inode to use in the merge, does DiffSetResolver actually honor that?
 		RefTag[] versions = new RefTag[2];
 		ZKArchive archive = ZKArchive.archiveAtPath("/tmp/zksync-test/diffset-resolver-rule-is-applied-consistently", "zksync".toCharArray());
-		int numFiles = 50;
+		int numFiles = 64;
+		
+		// create all the files so we have a common inode id
+		ZKFS baseFs = archive.openRevision(RefTag.blank(archive).getBytes());
+		for(int i = 0; i < numFiles; i++) {
+			baseFs.write("file" + i, "base version".getBytes());
+		}
+		RefTag baseRev = baseFs.commit();
 		
 		for(int i = 0; i < versions.length; i++) {
-			ZKFS fs = archive.openRevision(RefTag.blank(archive).getBytes());
+			ZKFS fs = archive.openRevision(baseRev);
 			for(int j = 0; j < numFiles; j++) {
 				fs.write("file" + j, ("version " + i).getBytes());
 			}
@@ -102,7 +109,7 @@ public class DiffSetResolverTest {
 		DiffSetResolver resolver = new DiffSetResolver(diffset, inodeResolver, pathResolver);
 		
 		RefTag merge = resolver.resolve();
-		assertEquals(numFiles+1, solutions.size()); // +1 for root directory
+		assertEquals(numFiles, solutions.size());
 		for(Inode inode : solutions) {
 			Inode mergedVersion = merge.readOnlyFS().getInodeTable().inodeWithId(inode.getStat().getInodeId());
 			assertEquals(inode, mergedVersion);
@@ -160,4 +167,6 @@ public class DiffSetResolverTest {
 	
 	// TODO: exception for unresolved diffs
 	// TODO: exception for inconsistent resolution (path must be a file and a directory)
+	
+	// TODO: nlink consistency
 }

@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.List;
 
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
-import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
@@ -44,11 +43,17 @@ public class DiffSetResolver {
 			
 			for(Long inodeId : diff.getResolutions().keySet()) {
 				if(inodeId == null) continue;
-				Inode inode;
+				Inode inode = null;
 				try {
-					inode = setResolver.fs.getInodeTable().inodeWithId(inodeId);
-				} catch (ENOENTException e) {
-					throw new IllegalStateException("Inode table didn't contain expected inode " + inodeId);
+					InodeDiff idiff = diffset.inodeDiffs.getOrDefault(inodeId, null);
+					if(idiff == null) {
+						// no inode diff for this id; so any reftag's version will work since they're all identical
+						inode = setResolver.fs.getInodeTable().inodeWithId(inodeId);
+					} else {
+						inode = idiff.getResolution();
+					}
+				} catch (IOException e) {
+					throw new IllegalStateException("Encountered exception resolving path collision information for inode " + inodeId);
 				}
 				if(result == null || result.compareTo(inode) < 0) result = inode;
 			}
@@ -67,13 +72,13 @@ public class DiffSetResolver {
 	}
 	
 	public RefTag resolve() throws IOException, DiffResolutionException {
-		applyResolvers();
-		resolveDeletedDirectories();
-		applyResolution();
-		return null;
+		selectResolutions();
+		enforceDirectoryConsistency();
+		applyResolutions();
+		return fs.commit(diffset.revisions, null); // TODO: need a consistent seed here
 	}
 	
-	protected void applyResolvers() {
+	protected void selectResolutions() {
 		for(InodeDiff diff : diffset.inodeDiffs.values()) {
 			diff.setResolution(inodeResolver.resolve(this, diff));
 		}
@@ -83,14 +88,14 @@ public class DiffSetResolver {
 		}
 	}
 	
-	protected void resolveDeletedDirectories() throws IOException, DiffResolutionException {
+	protected void enforceDirectoryConsistency() throws IOException, DiffResolutionException {
 		for(PathDiff diff : diffset.pathDiffs.values()) {
 			if(diff.resolution == null || parentExists(diff.path)) continue;
 			diff.setResolution(null);
 		}
 	}
 	
-	protected void applyResolution() throws IOException {
+	protected void applyResolutions() throws IOException {
 		for(InodeDiff diff : diffset.inodeDiffs.values()) {
 			fs.getInodeTable().replaceInode(diff);
 		}

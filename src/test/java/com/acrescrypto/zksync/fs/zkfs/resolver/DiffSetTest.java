@@ -75,7 +75,7 @@ public class DiffSetTest {
 		RefTag[] list = new RefTag[] { children[0], children[1] };
 		DiffSet diffset = new DiffSet(list);
 		
-		assertEquals(4, diffset.inodeDiffs.size()); // revinfo, root directory, child, modified
+		assertEquals(3, diffset.inodeDiffs.size()); // root directory, child, modified
 		assertEquals(1, diffset.pathDiffs.size()); // /child
 	}
 	
@@ -102,7 +102,7 @@ public class DiffSetTest {
 		DiffSet diffset = new DiffSet(children);
 		storage.rmrf("/");
 		
-		assertEquals(2, diffset.inodeDiffs.size()); // modified, RevisionInfo
+		assertEquals(1, diffset.inodeDiffs.size()); // modified
 		assertEquals(0, diffset.pathDiffs.size());
 	}
 	
@@ -111,7 +111,7 @@ public class DiffSetTest {
 		RefTag[] list = new RefTag[] { parent, children[0] };
 		DiffSet diffset = new DiffSet(list);
 		
-		assertEquals(4, diffset.inodeDiffs.size()); // revinfo, root directory, child, modified
+		assertEquals(3, diffset.inodeDiffs.size()); // root directory, child, modified
 		assertEquals(1, diffset.pathDiffs.size()); // child only
 	}
 	
@@ -120,10 +120,10 @@ public class DiffSetTest {
 		/* if we look at the diffs between two of the children, we should see only one diff, because they both
 		 * modify one of the files in the same way.
 		 */
-		assertEquals(4, (new DiffSet(new RefTag[] { children[0], children[1] })).inodeDiffs.size());
+		assertEquals(3, (new DiffSet(new RefTag[] { children[0], children[1] })).inodeDiffs.size());
 		
 		/* but if we include the parent, we should see two diffs, because it has the original unmodified file. */
-		assertEquals(5, (new DiffSet(new RefTag[] { parent, children[0], children[1] })).inodeDiffs.size());
+		assertEquals(4, (new DiffSet(new RefTag[] { parent, children[0], children[1] })).inodeDiffs.size());
 	}
 	
 	@Test
@@ -330,7 +330,7 @@ public class DiffSetTest {
 
 		DiffSet diffset = new DiffSet(revs);
 		storage.rmrf("/");
-		assertEquals(4, diffset.inodeDiffs.size()); // file0, file1, /, RevisionInfo
+		assertEquals(3, diffset.inodeDiffs.size()); // file0, file1, /
 		assertEquals(1, diffset.pathDiffs.size()); // file1
 		assertTrue(diffset.pathDiffs.containsKey("file1"));
 	}
@@ -347,7 +347,7 @@ public class DiffSetTest {
 		revs[1] = fs.commit();
 		
 		DiffSet diffset = new DiffSet(revs);
-		assertEquals(1+numDiffs, diffset.inodeDiffs.size()); // add one for RevisionInfo
+		assertEquals(numDiffs, diffset.inodeDiffs.size());
 		storage.rmrf("/");
 	}
 }

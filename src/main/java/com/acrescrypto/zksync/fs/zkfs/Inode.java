@@ -162,6 +162,7 @@ public class Inode implements Comparable<Inode> {
 	public boolean equals(Object other) {
 		if(!other.getClass().equals(this.getClass())) return false;
 		Inode __other = (Inode) other;
+		
 		if(!refTag.equals(__other.refTag)) return false;
 		if(!changedFrom.equals(__other.changedFrom)) return false;
 		if(flags != __other.flags) return false;
@@ -177,13 +178,17 @@ public class Inode implements Comparable<Inode> {
 
 	@Override
 	public int compareTo(Inode o) {
+		/* Note that compareTo is very different from equals. equals might be true while compareTo != 0.
+		 * equals leaves out modifiedTime to allow detection of identical revisions; compareTo uses modifiedTime as
+		 * its first key, to allow time-wise sorting.
+		 */
 		int c;
 		if(modifiedTime != o.modifiedTime) return modifiedTime < o.modifiedTime ? -1 : 1;
 		if((c = Arrays.compareUnsigned(changedFrom.getBytes(), o.changedFrom.getBytes())) != 0) return c;
 		return Arrays.compareUnsigned(serialize(), o.serialize());
 	}
 	
-	public Inode clone() {
-		return new Inode(this.fs, serialize());
+	public Inode clone(ZKFS fs) {
+		return new Inode(fs, serialize());
 	}
 }

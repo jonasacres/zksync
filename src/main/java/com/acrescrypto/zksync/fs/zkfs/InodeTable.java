@@ -93,7 +93,9 @@ public class InodeTable extends ZKFile {
 		if(!inodes.containsKey(inodeId)) throw new ENOENTException(String.format("inode %d", inodeId));
 		
 		if(inodeId <= 1) throw new IllegalArgumentException();		
-		if(inodes.get(inodeId).getNlink() > 0) throw new EMLINKException(String.format("inode %d", inodeId));
+		if(inodes.get(inodeId).getNlink() > 0) {
+			throw new EMLINKException(String.format("inode %d", inodeId));
+		}
 		
 		inodes.remove(inodeId);
 	}
@@ -165,16 +167,16 @@ public class InodeTable extends ZKFile {
 	}
 
 	public void replaceInode(InodeDiff inodeDiff) {
-		// TODO: consider cache effects
 		assert(inodeDiff.isResolved());
 		if(inodeDiff.getResolution() == null) {
 			inodes.remove(inodeDiff.getInodeId());
 		} else {
 			Inode existing = inodes.getOrDefault(inodeDiff.getInodeId(), null);
-			Inode duplicated = inodeDiff.getResolution().clone();
+			Inode duplicated = inodeDiff.getResolution().clone(fs);
 			
-			/* Don't copy the nlink field over, since that corresponds to the directory tree, which we don't copy
-			 * over literally.
+			/* anything to do with path structure, we can ignore. that means: nlink for all inodes, and refTag/size
+			 * for directories. Directory structure is recalculated during merge, altering directory contents and
+			 * inode nlinks.
 			 */
 			if(existing != null) {
 				duplicated.nlink = existing.nlink;
@@ -190,7 +192,9 @@ public class InodeTable extends ZKFile {
 				}
 			}
 			
-			inodes.put(inodeDiff.getInodeId(), duplicated);
+			// make sure we retain existing instances, to keep caches square
+			inodes.putIfAbsent(inodeDiff.getInodeId(), new Inode(fs));
+			inodes.get(inodeDiff.getInodeId()).deserialize(duplicated.serialize());
 		}
 	}
 	
