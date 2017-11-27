@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs.resolver;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 
@@ -18,11 +19,14 @@ public class DiffSet {
 	
 	public DiffSet(RefTag[] revisions) throws IOException {
 		this.revisions = revisions;
+		Arrays.sort(this.revisions);
 		
 		RefTag[] tags = new RefTag[revisions.length];
 		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i];
 		
 		commonAncestor = revisions[0].getArchive().getRevisionTree().commonAncestorOf(tags);
+		findInodeDiffs();
+		findPathDiffs();
 	}
 	
 	public HashSet<Long> allInodes() throws IOException {
@@ -69,12 +73,7 @@ public class DiffSet {
 	}
 	
 	public RefTag latestRevision() throws IOException {
-		/* TODO: Order revisions.
-		 * Rule 1: A < B if B is a descendant of A
-		 * Rule 2: A < B if A is not a descendant of B and A has an earlier timestamp than B
-		 * Rule 3: A < B if A is not a descendant of B and A has an identical timestamp to B and A has a lower hash than B
-		 */
-		return null;
+		return revisions[revisions.length-1];
 	}
 	
 	public DiffSetResolver resolver(InodeDiffResolver inodeResolver, PathDiffResolver pathResolver) throws IOException {

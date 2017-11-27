@@ -50,4 +50,8 @@ public class InodeDiff {
 	public Inode getResolution() {
 		return resolution;
 	}
+	
+	public String toString() {
+		return "InodeDiff " + inodeId + " (" + resolutions.size() + " versions)";
+	}
 }

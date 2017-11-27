@@ -50,4 +50,8 @@ public class PathDiff implements Comparable<PathDiff> {
 	public int compareTo(PathDiff other) {
 		return path.compareTo(other.path);
 	}
+
+	public String toString() {
+		return "PathDiff " + path + " (" + resolutions.size() + " versions)";
+	}
 }
