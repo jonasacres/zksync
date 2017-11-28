@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs.resolver;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 
@@ -17,6 +18,14 @@ public class DiffSet {
 	
 	HashMap<String,PathDiff> pathDiffs = new HashMap<String,PathDiff>();
 	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>();
+	
+	public static DiffSet withCollection(Collection<RefTag> revisions) throws IOException {
+		RefTag[] array = new RefTag[revisions.size()];
+		int i = 0;
+		
+		for(RefTag tag : revisions) array[i++] = tag;
+		return new DiffSet(array);
+	}
 	
 	public DiffSet(RefTag[] revisions) throws IOException {
 		this.revisions = revisions;

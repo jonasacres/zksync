@@ -17,6 +17,10 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.PathDiffResolver;
 
 public class DiffSetResolverTest {
+	ZKFS fs;
+	ZKArchive archive;
+	RefTag base;
+	
 	@BeforeClass
 	public static void beforeClass() {
 		ZKFSTest.cheapenArgon2Costs();
@@ -26,6 +30,14 @@ public class DiffSetResolverTest {
 	@AfterClass
 	public static void afterClass() {
 		ZKFSTest.restoreArgon2Costs();
+	}
+	
+	@Before
+	public void before() throws IOException {
+		archive = ZKArchive.archiveAtPath("/tmp/zksync-test/diffset-resolver-tests", "zksync".toCharArray());
+		if(archive.getStorage().exists("/")) archive.getStorage().rmrf("/");
+		fs = archive.openBlank();
+		base = fs.commit();
 	}
 	
 	@Test
@@ -57,13 +69,10 @@ public class DiffSetResolverTest {
 		assertEquals(merge, newLeaves.get(0));
 	}
 
-	// TODO: merges should be deterministic
-	
 	@Test
 	public void testInodeRuleIsApplied() throws IOException, DiffResolutionException {
 		// if the resolver lambda picks an inode to use in the merge, does DiffSetResolver actually honor that?
 		RefTag[] versions = new RefTag[2];
-		ZKArchive archive = ZKArchive.archiveAtPath("/tmp/zksync-test/diffset-resolver-rule-is-applied-consistently", "zksync".toCharArray());
 		int numFiles = 64;
 		
 		// create all the files so we have a common inode id
@@ -115,18 +124,12 @@ public class DiffSetResolverTest {
 			assertEquals(inode, mergedVersion);
 		}
 	}
-	
-	// TODO: directories that turn into files
-	// TODO: files that turn into directories
-	// TODO: directories that are deleted
-	// TODO: directories that are created
-	
+		
 	@Test
 	public void testDeletedFilesSelected() throws IOException, DiffResolutionException {
 		// if we prefer a version in which a file is deleted, is that honored?
-		// TODO: loop this test a few times
 		ZKArchive archive = ZKArchive.archiveAtPath("/tmp/zksync-test/diffset-deleted-files-selected", "zksync".toCharArray());
-		for(int i = 0; i < 10; i++) {
+		for(int i = 0; i < 10; i++) { // we might pass by chance, so re-run n times to make that highly unlikely
 			archive.getStorage().rmrf("/");
 			ZKFS fs = archive.openBlank();
 			
@@ -159,14 +162,103 @@ public class DiffSetResolverTest {
 		}
 	}
 	
-	// TODO: files that are deleted
-	// TODO: files that are conflicted
-	// TODO: files that are created
+	@Test
+	public void testDefaultPicksLatestInode() throws IOException, DiffResolutionException {
+		int numChildren = 50, r = (int) (numChildren*Math.random());
+		
+		for(int i = 0; i < numChildren; i++) {
+			int n = (i + r) % numChildren;
+			ZKFS child = base.getFS();
+			child.setCurrentTime(n);
+			child.write("file", ("version " + n).getBytes());
+			child.commit();
+		}
+		
+		RefTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+		assertEquals("version " + (numChildren-1), new String(merge.readOnlyFS().read("file")));
+	}
 	
-	// TODO: directories that need merging (ensure mtime is plausible, nlinks are correct)
+	@Test
+	public void testDefaultPicksLatestPathLink() throws IOException, DiffResolutionException {
+		int numChildren = 50, r = (int) (numChildren*Math.random());
+		
+		for(int i = 0; i < numChildren; i++) {
+			fs.setCurrentTime(i);
+			fs.write("file"+i, ("file"+i).getBytes());
+		}
+		
+		base = fs.commit();
+		for(int i = 0; i < numChildren; i++) {
+			int n = (i + r) % numChildren;
+			ZKFS child = base.getFS();
+			child.link("file" + n, "file");
+			child.commit();
+		}
+		
+		RefTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+		ZKFS mergeFs = merge.readOnlyFS();
+		long linkedId = mergeFs.inodeForPath("file").getStat().getInodeId(),
+			 expectedId = fs.inodeForPath("file"+(numChildren-1)).getStat().getInodeId();
+		assertEquals(expectedId, linkedId);
+	}
 	
-	// TODO: exception for unresolved diffs
-	// TODO: exception for inconsistent resolution (path must be a file and a directory)
+	@Test
+	public void testDirectoriesMergeContents() throws IOException, DiffResolutionException {
+		for(byte i = 0; i < 4; i++) {
+			fs.write(""+i, (""+i).getBytes());
+			fs.commit();
+			if(i == 1) fs = base.getFS();
+		}
+		
+		RefTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+		ZKFS mergeFs = merge.readOnlyFS();
+		
+		for(byte i = 0; i < 4; i++) assertEquals(""+i, new String(mergeFs.read(""+i)));
+	}
 	
-	// TODO: nlink consistency
+	@Test
+	public void testDefaultPrefersPathExistence() throws IOException, DiffResolutionException {
+		for(int i = 0; i < 8; i++) {
+			fs = archive.openBlank();
+			fs.write("file", "foo".getBytes());
+			base = fs.commit();
+			
+			if(Math.random() < 0.5) {
+				fs.write("file", "bar".getBytes());
+				fs.commit();
+				base.getFS().commit();
+			} else {
+				fs.write("file", "bar".getBytes());
+				fs.commit();
+				fs = base.getFS();
+				fs.unlink("file");
+				fs.commit();
+			}
+			
+			ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+			assertEquals("bar", new String(mergeFs.read("file")));
+		}
+	}
+	
+	@Test
+	public void testDefaultAllowsDeletion() throws IOException, DiffResolutionException {
+		for(int i = 0; i < 8; i++) {
+			fs = archive.openBlank();
+			fs.write("file", "foo".getBytes());
+			base = fs.commit();
+			
+			if(Math.random() < 0.5) {
+				fs.commit();
+				base.getFS().commit();
+			} else {
+				fs.commit();
+				fs = base.getFS();
+				fs.unlink("file");
+				fs.commit();
+			}
+			
+			ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+			assertFalse(mergeFs.exists("file"));
+		}
+	}
 }

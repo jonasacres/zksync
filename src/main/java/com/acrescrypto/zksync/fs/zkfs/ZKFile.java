@@ -197,7 +197,7 @@ public class ZKFile extends File {
 	@Override
 	public void flush() throws IOException {
 		if(!dirty) return;
-		long now = System.currentTimeMillis() * 1000l * 1000l;
+		long now = fs.currentTime();
 		inode.getStat().setMtime(now);
 		inode.setChangedFrom(fs.baseRevision);
 		inode.setModifiedTime(now);

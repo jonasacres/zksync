@@ -8,6 +8,7 @@ import java.util.List;
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
@@ -25,6 +26,10 @@ public class DiffSetResolver {
 	InodeDiffResolver inodeResolver;
 	PathDiffResolver pathResolver;
 	
+	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
+		return defaultResolver(DiffSet.withCollection(archive.getRevisionTree().branchTips()));
+	}
+	
 	public static DiffSetResolver defaultResolver(DiffSet diffset) throws IOException {
 		return latestVersionResolver(diffset);
 	}
@@ -33,7 +38,7 @@ public class DiffSetResolver {
 		InodeDiffResolver inodeResolver = (DiffSetResolver setResolver, InodeDiff diff) -> {
 			Inode result = null;
 			for(Inode inode : diff.getResolutions().keySet()) {
-				if(result == null || result.compareTo(inode) < 0) result = inode;
+				if(result == null || (inode != null && result.compareTo(inode) < 0)) result = inode;
 			}
 			return result;
 		};
@@ -55,8 +60,15 @@ public class DiffSetResolver {
 				} catch (IOException e) {
 					throw new IllegalStateException("Encountered exception resolving path collision information for inode " + inodeId);
 				}
+				
 				if(result == null || result.compareTo(inode) < 0) result = inode;
 			}
+			
+			/* TODO: This doesn't allow for deletion!
+			 * Or at least, merges will countermand deletion, even if no one else touched the deleted file.
+			 * But if the best alternative pre-dates the diffset, let's prefer null. How to tell if alternative
+			 * predates diffset?
+			 */
 			
 			return result != null ? result.getStat().getInodeId() : null;
 		};
