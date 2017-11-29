@@ -132,7 +132,7 @@ public class ZKFile extends File {
 		
 		bufferedPage = new Page(this, pageNum);
 		
-		if(pageNum < inode.getRefTag().getNumPages()) {
+		if(pageNum < merkel.numPages && pageNum < inode.refTag.numPages) {
 			bufferedPage.load();
 		} else {
 			bufferedPage.blank();

@@ -27,30 +27,50 @@ public class DiffSetResolver {
 	PathDiffResolver pathResolver;
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
-		return defaultResolver(DiffSet.withCollection(archive.getRevisionTree().branchTips()));
-	}
-	
-	public static DiffSetResolver defaultResolver(DiffSet diffset) throws IOException {
-		return latestVersionResolver(diffset);
+		return latestVersionResolver(DiffSet.withCollection(archive.getRevisionTree().branchTips()));
 	}
 	
 	public static DiffSetResolver latestVersionResolver(DiffSet diffset) throws IOException {
-		InodeDiffResolver inodeResolver = (DiffSetResolver setResolver, InodeDiff diff) -> {
+		return new DiffSetResolver(diffset, latestInodeResolver(), latestPathResolver());
+	}
+	
+	public static InodeDiffResolver latestInodeResolver() {
+		return (DiffSetResolver setResolver, InodeDiff diff) -> {
 			Inode result = null;
 			for(Inode inode : diff.getResolutions().keySet()) {
 				if(result == null || (inode != null && result.compareTo(inode) < 0)) result = inode;
 			}
 			return result;
 		};
-		
-		PathDiffResolver pathResolver = (DiffSetResolver setResolver, PathDiff diff) -> {
+	}
+	
+	public static PathDiffResolver latestPathResolver() {
+		return (DiffSetResolver setResolver, PathDiff diff) -> {
 			Inode result = null;
+			RefTag ancestorTag = null;
+			Long defaultId = null;
+			
+			try {
+				ancestorTag = setResolver.fs.getArchive().getRevisionTree().commonAncestorOf(setResolver.diffset.revisions);
+				defaultId = ancestorTag.readOnlyFS().inodeForPath(diff.path).getStat().getInodeId();
+			} catch (IOException e1) {
+				if(ancestorTag == null) throw new RuntimeException("Unable to calculate common ancestor in diff merge");
+				// just ignore it if it came from defaultId
+			}
+			
+			if(diff.getResolutions().size() == 2 && diff.getResolutions().containsKey(null)) {
+				// if it's null and one thing, and the one thing is what used to be there, take the null.
+				// else, take the one thing.
+				if(defaultId != null) return null;
+				for(Long inodeId : diff.getResolutions().keySet()) if(inodeId != null) return inodeId;
+			}
 			
 			for(Long inodeId : diff.getResolutions().keySet()) {
 				if(inodeId == null) continue;
+
 				Inode inode = null;
 				try {
-					InodeDiff idiff = diffset.inodeDiffs.getOrDefault(inodeId, null);
+					InodeDiff idiff = setResolver.diffset.inodeDiffs.getOrDefault(inodeId, null);
 					if(idiff == null) {
 						// no inode diff for this id; so any reftag's version will work since they're all identical
 						inode = setResolver.fs.getInodeTable().inodeWithId(inodeId);
@@ -64,16 +84,8 @@ public class DiffSetResolver {
 				if(result == null || result.compareTo(inode) < 0) result = inode;
 			}
 			
-			/* TODO: This doesn't allow for deletion!
-			 * Or at least, merges will countermand deletion, even if no one else touched the deleted file.
-			 * But if the best alternative pre-dates the diffset, let's prefer null. How to tell if alternative
-			 * predates diffset?
-			 */
-			
 			return result != null ? result.getStat().getInodeId() : null;
 		};
-		
-		return new DiffSetResolver(diffset, inodeResolver, pathResolver);
 	}
 	
 	public DiffSetResolver(DiffSet diffset, InodeDiffResolver inodeResolver, PathDiffResolver pathResolver) throws IOException {
@@ -101,7 +113,7 @@ public class DiffSetResolver {
 	}
 	
 	protected void enforceDirectoryConsistency() throws IOException, DiffResolutionException {
-		for(PathDiff diff : diffset.pathDiffs.values()) {
+		for(PathDiff diff : sortedPathDiffs()) {
 			if(diff.resolution == null || parentExists(diff.path)) continue;
 			diff.setResolution(null);
 		}
@@ -112,16 +124,19 @@ public class DiffSetResolver {
 			fs.getInodeTable().replaceInode(diff);
 		}
 		
-		// need to sort so we do parent directories before children
-		List<PathDiff> pathList = new ArrayList<PathDiff>(diffset.pathDiffs.values());
-		Collections.sort(pathList);
-		
-		for(PathDiff diff : pathList) {
+		for(PathDiff diff : sortedPathDiffs()) { // need to sort so we do parent directories before children
 			assert(diff.isResolved());
+			if(!parentExists(diff.path)) continue;
 			ZKDirectory dir = fs.opendir(fs.dirname(diff.path));
 			dir.updateLink(diff.resolution, fs.basename(diff.path));
 			dir.close();
 		}
+	}
+	
+	protected List<PathDiff> sortedPathDiffs() {
+		List<PathDiff> pathList = new ArrayList<PathDiff>(diffset.pathDiffs.values());
+		Collections.sort(pathList);
+		return pathList;
 	}
 	
 	protected boolean parentExists(String path) {

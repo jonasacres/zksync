@@ -140,7 +140,7 @@ public class ZKFS extends FS {
 	public void write(String path, byte[] contents) throws IOException {
 		mkdirp(dirname(path));
 		
-		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT);
+		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT|ZKFile.O_TRUNC);
 		file.write(contents);
 		file.close();
 	}

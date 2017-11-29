@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import com.acrescrypto.zksync.Util;
+
 public class RefTag implements Comparable<RefTag> {
 	protected ZKArchive archive;
 	protected ZKFS readOnlyFs;
@@ -149,5 +151,9 @@ public class RefTag implements Comparable<RefTag> {
 	
 	public ZKArchive getArchive() {
 		return archive;
+	}
+	
+	public String toString() {
+		return "RefTag " + Util.bytesToHex(tag);
 	}
 }

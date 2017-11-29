@@ -166,9 +166,9 @@ public class Inode implements Comparable<Inode> {
 		if(!refTag.equals(__other.refTag)) return false;
 		if(!changedFrom.equals(__other.changedFrom)) return false;
 		if(flags != __other.flags) return false;
-		if(nlink != __other.nlink) return false;
 		if(!stat.equals(__other.stat)) return false;
 		// intentionally exclude modifiedTime, since otherwise we won't notice when two revisions are the same in a merge
+		// also skip nlink, since that confuses diffs involving hardlinks
 		return true;
 	}
 	

@@ -59,7 +59,7 @@ public class DiffSetResolverTest {
 		
 		assertEquals(children.length, leaves.size());
 
-		RefTag merge = DiffSetResolver.defaultResolver(new DiffSet(leavesArray)).resolve();
+		RefTag merge = DiffSetResolver.latestVersionResolver(new DiffSet(leavesArray)).resolve();
 		HashSet<RefTag> mergedParents = new HashSet<RefTag>(merge.getInfo().getParents());
 		assertEquals(children.length, mergedParents.size());
 		for(RefTag child : children) assertTrue(mergedParents.contains(child));
@@ -243,22 +243,156 @@ public class DiffSetResolverTest {
 	@Test
 	public void testDefaultAllowsDeletion() throws IOException, DiffResolutionException {
 		for(int i = 0; i < 8; i++) {
-			fs = archive.openBlank();
+			before();
 			fs.write("file", "foo".getBytes());
 			base = fs.commit();
 			
 			if(Math.random() < 0.5) {
-				fs.commit();
-				base.getFS().commit();
+				fs.unlink("file");
+				fs.commit(); // tip 1 (contains deletion)
+				base.getFS().commit(); // tip 2 (empty)
 			} else {
-				fs.commit();
+				fs.commit(); // tip 1 (empty)
 				fs = base.getFS();
 				fs.unlink("file");
-				fs.commit();
+				fs.commit(); // tip 2 (contains deletion)
 			}
 			
 			ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
 			assertFalse(mergeFs.exists("file"));
 		}
+	}
+	
+	@Test
+	public void testParentDeletionPreemptsChildren() throws IOException, DiffResolutionException {
+		fs.mkdir("dir");
+		base = fs.commit();
+		
+		fs.write("dir/file", "should get deleted".getBytes());
+		fs.commit();
+		fs = base.getFS();
+		fs.rmdir("dir");
+		fs.commit();
+		
+		PathDiffResolver pathResolver = (DiffSetResolver setResolver, PathDiff diff) -> {
+			if(diff.path.equals("dir")) return null;
+			return DiffSetResolver.latestPathResolver().resolve(setResolver, diff);
+		};
+		
+		DiffSetResolver resolver = new DiffSetResolver(DiffSet.withCollection(archive.getRevisionTree().branchTips()),
+				DiffSetResolver.latestInodeResolver(),
+				pathResolver);
+		
+		ZKFS mergeFs = resolver.resolve().readOnlyFS();
+		assertFalse(mergeFs.exists("dir"));
+		assertFalse(mergeFs.exists("dir/file"));
+	}
+	
+	@Test
+	public void testChangedFromIsFirstTiebreaker() throws IOException, DiffResolutionException {
+		for(int i = 0; i < 8; i++) {
+			before();
+			fs.setCurrentTime(0);
+			fs.write("file", "foo".getBytes());
+			base = fs.commit();
+			RefTag[] revs = new RefTag[4];
+			
+			for(int j = 0; j < 4; j++) {
+				if(j == 2) fs = base.getFS();
+				fs.setCurrentTime(1+j%2);
+				fs.write("file", (""+j).getBytes());
+				revs[j] = fs.commit();
+			}
+			
+			ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+			if(Arrays.compareUnsigned(revs[0].getBytes(), revs[2].getBytes()) < 0) {
+				assertEquals("3", new String(mergeFs.read("file")));
+			} else {
+				assertEquals("1", new String(mergeFs.read("file")));
+			}
+		}
+	}
+	
+	@Test
+	public void testSerializedInodeIsSecondTiebraker() throws IOException, DiffResolutionException {
+		for(int i = 0; i < 8; i++) {
+			before();
+			fs.setCurrentTime(0);
+			fs.write("file", "foo".getBytes());
+			base = fs.commit();
+			byte[][] serializations = new byte[2][];
+			
+			for(int j = 0; j < 2; j++) {
+				fs = base.getFS();
+				fs.setCurrentTime(1);
+				fs.write("file", (""+j).getBytes());
+				fs.commit();
+				serializations[j] = fs.inodeForPath("file").serialize();
+			}
+			
+			ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+			if(Arrays.compareUnsigned(serializations[0], serializations[1]) < 0) {
+				assertEquals("1", new String(mergeFs.read("file")));
+			} else {
+				assertEquals("0", new String(mergeFs.read("file")));
+			}
+		}
+	}
+	
+	@Test
+	public void testNlinksConsistentWhenAddingLinks() throws IOException, DiffResolutionException {
+		fs.write("file", "foo".getBytes());
+		base = fs.commit();
+		fs.link("file", "link-a");
+		fs.commit();
+		fs = base.getFS();
+		fs.link("file", "link-b");
+		fs.commit();
+		
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		assertEquals(mergeFs.inodeForPath("file"), mergeFs.inodeForPath("link-a"));
+		assertEquals(mergeFs.inodeForPath("file"), mergeFs.inodeForPath("link-b"));
+		assertEquals(3, mergeFs.inodeForPath("file").getNlink());
+	}
+	
+	@Test
+	public void testNlinksConsistentWhenRemovingLinks() throws IOException, DiffResolutionException {
+		fs.write("file", "foo".getBytes());
+		fs.link("file", "link-a");
+		fs.link("file", "link-b");
+		assertEquals(fs.inodeForPath("file"), fs.inodeForPath("link-a"));
+		assertEquals(fs.inodeForPath("file"), fs.inodeForPath("link-b"));
+		assertEquals(3, fs.inodeForPath("file").getNlink());
+		base = fs.commit();
+		fs.unlink("link-a");
+		fs.commit();
+		fs = base.getFS();
+		fs.unlink("link-b");
+		fs.commit();
+		
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		assertFalse(mergeFs.exists("link-a"));
+		assertFalse(mergeFs.exists("link-b"));
+		assertEquals(1, mergeFs.inodeForPath("file").getNlink());
+	}
+	
+	@Test
+	public void testNlinksConsistentWhenMakingMixedChanges() throws IOException, DiffResolutionException {
+		fs.write("file", "foo".getBytes());
+		fs.link("file", "orig-link");
+		base = fs.commit();
+		fs.unlink("orig-link");
+		fs.link("file", "link-a");
+		fs.commit();
+		fs = base.getFS();
+		fs.link("file", "link-b");
+		fs.commit();
+		base.getFS().commit();
+		
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		assertFalse(mergeFs.exists("orig-link"));
+		assertEquals(mergeFs.inodeForPath("link-a"), mergeFs.inodeForPath("file"));
+		assertEquals(mergeFs.inodeForPath("link-a"), mergeFs.inodeForPath("link-b"));
+		assertEquals(3, mergeFs.inodeForPath("file").getNlink());
 	}
 }

@@ -148,6 +148,7 @@ public class InodeTable extends ZKFile {
 		rootDir.getStat().setUid(0);
 		rootDir.getStat().setGid(0);
 		rootDir.setRefTag(RefTag.blank(fs.archive));
+		rootDir.setFlags(Inode.FLAG_RETAIN);
 		inodes.put(rootDir.getStat().getInodeId(), rootDir);
 	}
 	

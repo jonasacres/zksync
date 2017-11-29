@@ -180,7 +180,7 @@ public class PageMerkel {
 
 	public void resize(long newMinNodes) {
 		double log2 = Math.log(2);
-		int newSize =  (int) Math.pow(2, Math.ceil(Math.log(newMinNodes)/log2));
+		int newSize = newMinNodes > 0 ? (int) Math.pow(2, Math.ceil(Math.log(newMinNodes)/log2)) : 0;
 		PageMerkelNode[] newNodes = new PageMerkelNode[Math.max(2*newSize-1, 1)];
 		
 		int numExistingNodes = nodes == null ? 0 : nodes.length;
@@ -199,7 +199,7 @@ public class PageMerkel {
 		 */
 		
 		if(d == 0) {
-			return;
+			newNodes = nodes;
 		} else if(d < 0) { // tree gets smaller
 			for(int n = 0; n < newNodes.length; n++) {
 				// every tier has a fixed offset in array indexes between old tree and new tree
