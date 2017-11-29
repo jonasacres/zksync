@@ -8,6 +8,7 @@ import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
 
 // represents inode table for ZKFS instance. 
 public class InodeTable extends ZKFile {
@@ -92,7 +93,9 @@ public class InodeTable extends ZKFile {
 		if(!inodes.containsKey(inodeId)) throw new ENOENTException(String.format("inode %d", inodeId));
 		
 		if(inodeId <= 1) throw new IllegalArgumentException();		
-		if(inodes.get(inodeId).getNlink() > 0) throw new EMLINKException(String.format("inode %d", inodeId));
+		if(inodes.get(inodeId).getNlink() > 0) {
+			throw new EMLINKException(String.format("inode %d", inodeId));
+		}
 		
 		inodes.remove(inodeId);
 	}
@@ -145,6 +148,7 @@ public class InodeTable extends ZKFile {
 		rootDir.getStat().setUid(0);
 		rootDir.getStat().setGid(0);
 		rootDir.setRefTag(RefTag.blank(fs.archive));
+		rootDir.setFlags(Inode.FLAG_RETAIN);
 		inodes.put(rootDir.getStat().getInodeId(), rootDir);
 	}
 	
@@ -163,12 +167,39 @@ public class InodeTable extends ZKFile {
 		makeEmptyRevision();
 	}
 
-	public void replaceInode(FileDiffResolution fileDiffResolution) {
-		// TODO: consider cache effects
-		if(fileDiffResolution.getInode() == null) {
-			inodes.remove(fileDiffResolution.getInodeId());
+	public void replaceInode(InodeDiff inodeDiff) {
+		assert(inodeDiff.isResolved());
+		if(inodeDiff.getResolution() == null) {
+			inodes.remove(inodeDiff.getInodeId());
 		} else {
-			inodes.put(fileDiffResolution.getInodeId(), fileDiffResolution.getInode());
+			Inode existing = inodes.getOrDefault(inodeDiff.getInodeId(), null);
+			Inode duplicated = inodeDiff.getResolution().clone(fs);
+			
+			/* anything to do with path structure, we can ignore. that means: nlink for all inodes, and refTag/size
+			 * for directories. Directory structure is recalculated during merge, altering directory contents and
+			 * inode nlinks.
+			 */
+			if(existing != null) {
+				duplicated.nlink = existing.nlink;
+				if(duplicated.stat.isDirectory()) {
+					duplicated.refTag = existing.refTag;
+					duplicated.stat.setSize(existing.stat.getSize());
+				}
+			} else {
+				duplicated.nlink = 0;
+				if(duplicated.stat.isDirectory()) {
+					duplicated.refTag = RefTag.blank(fs.archive);
+					duplicated.stat.setSize(0);
+				}
+			}
+			
+			// make sure we retain existing instances, to keep caches square
+			inodes.putIfAbsent(inodeDiff.getInodeId(), new Inode(fs));
+			inodes.get(inodeDiff.getInodeId()).deserialize(duplicated.serialize());
 		}
+	}
+	
+	public Hashtable<Long,Inode> getInodes() {
+		return inodes;
 	}
 }

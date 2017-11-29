@@ -110,6 +110,18 @@ public class ZKDirectory extends ZKFile implements Directory {
 		
 		return inodeForName(comps.length == 0 ? "/" : comps[0]);
 	}
+	
+	public void updateLink(Long inodeId, String link) throws IOException {
+		if(link.length() > MAX_NAME_LEN) throw new EINVALException(link + ": name too long");
+		if(entries.containsKey(link)) {
+			Long existing = entries.get(link);
+			if(existing.equals(inodeId)) return;
+			unlink(link);
+		}
+		
+		if(inodeId == null) return; // above if clause already unlinked
+		link(fs.inodeTable.inodeWithId(inodeId), link);
+	}
 
 	public void link(Inode inode, String link) throws IOException {
 		if(link.length() > MAX_NAME_LEN) throw new EINVALException(link + ": name too long");
@@ -138,8 +150,13 @@ public class ZKDirectory extends ZKFile implements Directory {
 		
 		String fullPath = Paths.get(path, name).toString();
 		
-		Inode inode = fs.inodeForPath(fullPath);
-		inode.removeLink();
+		try {
+			Inode inode = fs.inodeForPath(fullPath);
+			inode.removeLink();
+		} catch(ENOENTException exc) {
+			// if we have a dead reference, we should be able to unlink it no questions asked
+		}
+		
 		entries.remove(name);
 		fs.uncache(fullPath);
 		dirty = true;
@@ -202,9 +219,9 @@ public class ZKDirectory extends ZKFile implements Directory {
 		while(buf.hasRemaining()) {
 			long inodeId = buf.getLong();
 			short pathLen = buf.getShort();
-			
+
+			// Don't check existence of inodes; it will trip up merges
 			assertIntegrity(inodeId >= 0, String.format("Directory references invalid inode %d", inodeId));
-			assertIntegrity(fs.getInodeTable().hasInodeWithId(inodeId), String.format("Directory references non-existent inode %d", inodeId));
 			assertIntegrity(pathLen >= 0, "Directory references negative path length");
 			assertIntegrity(pathLen <= buf.remaining(), "Directory appears truncated");
 			assertIntegrity(pathLen <= MAX_NAME_LEN, "Directory references name of illegal length");

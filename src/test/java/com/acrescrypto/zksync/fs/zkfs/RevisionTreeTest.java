@@ -30,7 +30,7 @@ public class RevisionTreeTest {
 	
 	public static void setupSingleParentTest() throws IOException {
 		storage = new LocalFS("/tmp/revision-tree-test");
-		storage.rmrf("/");
+		if(storage.exists("/")) storage.rmrf("/");
 		fs = ZKFS.fsForStorage(storage, "zksync".toCharArray());
 
 		revisions = new RefTag[NUM_REVISIONS];

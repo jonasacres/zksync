@@ -3,10 +3,12 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import org.bouncycastle.util.Arrays;
+
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.Stat;
 
-public class Inode {
+public class Inode implements Comparable<Inode> {
 	protected Stat stat;
 	protected int nlink;
 	protected byte flags;
@@ -160,16 +162,33 @@ public class Inode {
 	public boolean equals(Object other) {
 		if(!other.getClass().equals(this.getClass())) return false;
 		Inode __other = (Inode) other;
+		
 		if(!refTag.equals(__other.refTag)) return false;
 		if(!changedFrom.equals(__other.changedFrom)) return false;
 		if(flags != __other.flags) return false;
-		if(nlink != __other.nlink) return false;
 		if(!stat.equals(__other.stat)) return false;
 		// intentionally exclude modifiedTime, since otherwise we won't notice when two revisions are the same in a merge
+		// also skip nlink, since that confuses diffs involving hardlinks
 		return true;
 	}
 	
 	public String toString() {
 		return String.format("%d (%08x) - %d %d bytes, %d %d %s", stat.getInodeId(), hashCode(), nlink, stat.getSize(), stat.getMtime(), stat.getAtime(), Util.bytesToHex(refTag.tag));
+	}
+
+	@Override
+	public int compareTo(Inode o) {
+		/* Note that compareTo is very different from equals. equals might be true while compareTo != 0.
+		 * equals leaves out modifiedTime to allow detection of identical revisions; compareTo uses modifiedTime as
+		 * its first key, to allow time-wise sorting.
+		 */
+		int c;
+		if(modifiedTime != o.modifiedTime) return modifiedTime < o.modifiedTime ? -1 : 1;
+		if((c = Arrays.compareUnsigned(changedFrom.getBytes(), o.changedFrom.getBytes())) != 0) return c;
+		return Arrays.compareUnsigned(serialize(), o.serialize());
+	}
+	
+	public Inode clone(ZKFS fs) {
+		return new Inode(fs, serialize());
 	}
 }

@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-public class RefTag {
+import com.acrescrypto.zksync.Util;
+
+public class RefTag implements Comparable<RefTag> {
 	protected ZKArchive archive;
 	protected ZKFS readOnlyFs;
 	protected RevisionInfo info;
@@ -130,5 +132,28 @@ public class RefTag {
 	public boolean equals(Object other) {
 		if(other == null || !other.getClass().equals(this.getClass())) return false;
 		return Arrays.equals(((RefTag) other).tag, this.tag);
+	}
+	
+	public int compareTo(RefTag other) {
+		try {
+			if(archive.getRevisionTree().ancestorsOf(this).contains(other)) return 1;
+			if(archive.getRevisionTree().ancestorsOf(other).contains(this)) return -1;
+		} catch(Exception exc) {
+			throw new RuntimeException("Caught exception comparing revisions");
+		}
+		
+		int r = (new Long(info.inode.modifiedTime)).compareTo(other.info.inode.modifiedTime);
+		if(r != 0) return r;
+		
+		for(int i = 0; i < tag.length; i++) if(tag[i] != other.tag[i]) return Byte.valueOf(tag[i]).compareTo(other.tag[i]);
+		return 0;
+	}
+	
+	public ZKArchive getArchive() {
+		return archive;
+	}
+	
+	public String toString() {
+		return "RefTag " + Util.bytesToHex(tag);
 	}
 }

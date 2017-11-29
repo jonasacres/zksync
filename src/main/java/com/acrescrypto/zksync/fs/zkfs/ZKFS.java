@@ -13,6 +13,7 @@ public class ZKFS extends FS {
 	protected Hashtable<String,ZKDirectory> directoriesByPath; // TODO: definitely not happy with this; needs eviction policy
 	ZKArchive archive;
 	protected RefTag baseRevision;
+	protected long fixedTime = -1;
 		
 	public final static int MAX_PATH_LEN = 65535;
 	
@@ -26,7 +27,7 @@ public class ZKFS extends FS {
 	
 	public static ZKFS blankArchive(String path, char[] passphrase) throws IOException {
 		LocalFS storage = new LocalFS(path);
-		storage.rmrf("/");
+		if(storage.exists("/")) storage.rmrf("/");
 		return fsForStorage(storage, passphrase, null);
 	}
 	
@@ -37,12 +38,20 @@ public class ZKFS extends FS {
 		this.inodeTable = new InodeTable(this, revision);
 	}
 	
+	public long currentTime() {
+		if(fixedTime < 0) return 1000l*1000l*System.currentTimeMillis();
+		return fixedTime;
+	}
+	
+	public void setCurrentTime(long time) {
+		fixedTime = time;
+	}
+	
 	public RefTag commit(RefTag[] additionalParents, byte[] seed) throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) {
 			dir.commit();
 		}
 		
-		// TODO: We won't get consistent merges, because the timestamps still differ! Need a way to fix that...
 		return baseRevision = inodeTable.commit(additionalParents, seed);
 	}
 	
@@ -131,7 +140,7 @@ public class ZKFS extends FS {
 	public void write(String path, byte[] contents) throws IOException {
 		mkdirp(dirname(path));
 		
-		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT);
+		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT|ZKFile.O_TRUNC);
 		file.write(contents);
 		file.close();
 	}
