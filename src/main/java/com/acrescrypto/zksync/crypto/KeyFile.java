@@ -9,7 +9,7 @@ public class KeyFile {
 	private ZKArchive archive;
 	private Key textRoot, hashRoot;
 	
-	public KeyFile(ZKArchive archive, char[] passphrase) {
+	public KeyFile(ZKArchive archive, char[] passphrase) throws IOException {
 		this.archive = archive;
 		read(passphrase);
 	}
@@ -20,43 +20,38 @@ public class KeyFile {
 		return new Key(archive.getCrypto(), archive.getCrypto().deriveKeyFromPassword(ppBytes, "zksync-salt".getBytes()));
 	}
 	
-	public void read(char[] passphrase) {
+	public void read(char[] passphrase) throws IOException {
 		Key ppKey = makePassphraseKey(passphrase);
 		
 		try {
 			int len = archive.getCrypto().symKeyLength();
-			byte[] ciphertext = archive.getStorage().read(getPath());
-			byte[] plaintext = ppKey.wrappedDecrypt(ciphertext);
+			byte[] plaintext = SecureFile
+					.atPath(archive.getStorage(), getPath(), ppKey, new byte[0], null)
+					.read();
 			byte[][] rawKeys = new byte[2][len];
 			for(int i = 0; i < 2*len; i++) rawKeys[i/len][i % len] = plaintext[i];
 			
 			this.setCipherRoot(new Key(archive.getCrypto(), rawKeys[0]));
 			this.setHashRoot(new Key(archive.getCrypto(), rawKeys[1]));
 		} catch(IOException ex) {
-			generate();
+			generate(ppKey);
 			write(passphrase); // TODO: this is kind of awkward, since there's no way to open-and-fail.
 		}
 	}
 	
-	public void generate() {
-		this.setCipherRoot(new Key(archive.getCrypto()));
-		this.setHashRoot(new Key(archive.getCrypto()));
+	public void generate(Key ppKey) {
+		this.setCipherRoot(ppKey.derive(ZKArchive.KEY_TYPE_CIPHER, new byte[0]));
+		this.setHashRoot(ppKey.derive(ZKArchive.KEY_TYPE_AUTH, new byte[0]));
 	}
 	
-	public void write(char[] passphrase) {
+	public void write(char[] passphrase) throws IOException {
 		Key ppKey = makePassphraseKey(passphrase);
 		int len = archive.getCrypto().symKeyLength();
 		
 		ByteBuffer plaintext = ByteBuffer.allocate(2*len);
 		plaintext.put(this.getCipherRoot().getRaw());
 		plaintext.put(this.getAuthRoot().getRaw());
-		byte[] ciphertext = ppKey.wrappedEncrypt(plaintext.array(), 0);
-		
-		try {
-			archive.getStorage().write(getPath(), ciphertext);
-		} catch(IOException ex) {
-			ex.printStackTrace();
-		}
+		SecureFile.atPath(archive.getStorage(), getPath(), ppKey, new byte[0], null).write(plaintext.array(), 0);
 	}
 	
 	public String getPath() {

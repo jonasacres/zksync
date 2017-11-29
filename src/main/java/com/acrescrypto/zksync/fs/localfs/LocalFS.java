@@ -263,7 +263,7 @@ public class LocalFS extends FS {
 	@Override
 	public void write(String path, byte[] contents) throws IOException {
 		if(!exists(dirname(path))) mkdirp(dirname(path));
-		LocalFile file = open(path, File.O_WRONLY|File.O_CREAT);
+		LocalFile file = open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
 		file.write(contents);
 		file.close();
 	}

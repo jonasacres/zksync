@@ -6,7 +6,6 @@ import java.util.Hashtable;
 
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
-import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
 
@@ -158,7 +157,7 @@ public class InodeTable extends ZKFile {
 		inodes.put(revfile.getStat().getInodeId(), revfile);
 	}
 	
-	private void initialize() throws InaccessibleStorageException {
+	private void initialize() throws IOException {
 		this.inode = Inode.defaultRootInode(fs);
 		this.inodes.put(INODE_ID_INODE_TABLE, this.inode);
 		this.merkel = new PageMerkel(RefTag.blank(fs.archive));

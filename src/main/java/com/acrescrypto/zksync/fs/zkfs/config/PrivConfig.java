@@ -9,6 +9,7 @@ import javax.json.JsonObject;
 import javax.json.JsonReader;
 
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.crypto.SecureFile;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 
@@ -35,12 +36,11 @@ public class PrivConfig extends ConfigFile {
 	}
 	
 	public void read() throws IOException {
-		deserialize(cipherKey.wrappedDecrypt(storage.read(path())));
+		deserialize(SecureFile.atPath(storage, path(), cipherKey, new byte[0], null).read());
 	}
 	
 	public void write() throws IOException {
-		storage.write(path(), cipherKey.wrappedEncrypt(serialize(), 1024));
-		storage.squash(path());
+		SecureFile.atPath(storage, path(), cipherKey, new byte[0], null).write(serialize(), 1024);
 	}
 	
 	protected void deserialize(byte[] serialized) {

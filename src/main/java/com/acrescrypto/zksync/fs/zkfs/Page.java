@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.exceptions.*;
+import com.acrescrypto.zksync.crypto.SecureFile;
 
 // represents a fixed-size page of data from a file. handles encryption/decryption/storage of said page.
 public class Page {
@@ -64,16 +64,12 @@ public class Page {
 		}
 		
 		byte[] pageTag = this.authKey().authenticate(plaintext.array());
-		byte[] ciphertext = this.textKey(pageTag).wrappedEncrypt(plaintext.array(), (int) file.fs.archive.privConfig.getPageSize());
 		this.file.setPageTag(pageNum, pageTag);
 		
-		try {
-			String path = pathForTag(authKey().authenticate(pageTag));
-			file.fs.archive.storage.write(path, ciphertext);
-			file.fs.archive.storage.squash(path); 
-		} catch (IOException e) {
-			throw new InaccessibleStorageException();
-		}
+		// TODO: (urgent!) carefully consider IV
+		SecureFile
+		  .atPath(file.fs.archive.storage, pathForTag(authKey().authenticate(pageTag)), textKey(pageTag), pageTag, null)
+		  .write(plaintext.array(), file.fs.archive.privConfig.getPageSize());
 	}
 	
 	public int read(byte[] buf, int offset, int maxLength) {
@@ -128,16 +124,9 @@ public class Page {
 		}
 		
 		byte[] pageTag = file.getPageTag(pageNum);
-		byte[] ciphertext;
-		String path = pathForTag(authKey().authenticate(pageTag));
-		
-		try {
-			ciphertext = file.fs.archive.storage.read(path);
-		} catch(IOException exc) {
-			throw new InvalidArchiveException(exc.toString());
-		}
-		
-		byte[] plaintext = textKey(pageTag).wrappedDecrypt(ciphertext);
+		byte[] plaintext = SecureFile
+		  .atPath(file.fs.archive.storage, pathForTag(authKey().authenticate(pageTag)), textKey(pageTag), pageTag, null)
+		  .read();
 		
 		if(!Arrays.equals(this.authKey().authenticate(plaintext), pageTag)) {
 			throw new SecurityException();

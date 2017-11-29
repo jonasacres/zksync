@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs.config;
 import java.io.IOException;
 
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.crypto.SecureFile;
 import com.acrescrypto.zksync.fs.FS;
 
 public abstract class ConfigFile {
@@ -35,7 +36,7 @@ public abstract class ConfigFile {
 	public void read() throws IOException {
 		if(storage == null) throw new IOException(path() + "no storage FS supplied");
 		if(cipherKey != null) {
-			deserialize(cipherKey.wrappedDecrypt(storage.read(path())));
+			deserialize(SecureFile.atPath(storage, path(), cipherKey, new byte[0], null).read());
 		} else {
 			deserialize(storage.read(path()));
 		}
@@ -44,7 +45,7 @@ public abstract class ConfigFile {
 	public void write() throws IOException {
 		if(storage == null) throw new IOException(path() + "no storage FS supplied");
 		if(cipherKey != null) {
-			storage.write(path(), cipherKey.wrappedEncrypt(serialize(), 1024));
+			SecureFile.atPath(storage, path(), cipherKey, new byte[0], null).write(serialize(), 1024);
 		} else {
 			storage.write(path(), serialize());
 		}

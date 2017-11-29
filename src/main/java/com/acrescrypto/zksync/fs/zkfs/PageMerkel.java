@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
+import com.acrescrypto.zksync.crypto.SecureFile;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 
@@ -25,7 +25,7 @@ public class PageMerkel {
 		return ZKFS.pathForHash(chunkTag);
 	}
 	
-	PageMerkel(RefTag tag) throws InaccessibleStorageException {
+	PageMerkel(RefTag tag) throws IOException {
 		this.archive = tag.archive;
 		this.tag = tag;
 		
@@ -78,7 +78,7 @@ public class PageMerkel {
 		return archive.crypto.hashLength()*(2*numPages-1);
 	}
 	
-	public RefTag commit() throws InaccessibleStorageException {
+	public RefTag commit() throws IOException {
 		tag = getRefTag();
 		if(tag.getRefType() != RefTag.REF_TYPE_2INDIRECT) return tag;
 		
@@ -91,23 +91,15 @@ public class PageMerkel {
 			ByteBuffer chunkText = ByteBuffer.wrap(plaintext.array(),
 					(int) (i*archive.privConfig.getPageSize()),
 					Math.min(archive.privConfig.getPageSize(), plaintext.capacity()));
-			byte[] chunkCiphertext = cipherKey(tag).wrappedEncrypt(chunkText.array(),
-					(int) archive.privConfig.getPageSize());
-			
-			String path = pathForChunk(tag, i);
-			
-			try {
-				archive.storage.write(path, chunkCiphertext);
-				archive.storage.squash(path);
-			} catch (IOException e) {
-				throw new InaccessibleStorageException();
-			}
+			SecureFile
+			  .atPath(archive.storage, pathForChunk(tag, i), cipherKey(tag), tag.getBytes(), (""+i).getBytes())
+			  .write(chunkText.array(), (int) archive.privConfig.getPageSize());
 		}
 		
 		return tag;
 	}
 	
-	private void read() throws InaccessibleStorageException {
+	private void read() throws IOException {
 		long expectedPages = tag.getNumPages();
 		expectedPages = (int) Math.pow(2, Math.ceil(Math.log(expectedPages)/Math.log(2)));
 		
@@ -143,16 +135,11 @@ public class PageMerkel {
 			return;
 		}
 		
+		// TODO: (urgent!) carefully consider IV
 		for(int i = 0; i < expectedChunks; i++) {
-			String path = pathForChunk(tag, i);
-			byte[] chunkCiphertext;
-			try {
-				chunkCiphertext = archive.storage.read(path);
-			} catch (IOException e) {
-				throw new InaccessibleStorageException();
-			}
-			byte[] chunkPlaintext = cipherKey(tag).wrappedDecrypt(chunkCiphertext);
-			readBuf.put(chunkPlaintext);
+			readBuf.put(SecureFile
+					.atPath(archive.storage, pathForChunk(tag, i), cipherKey(tag), tag.getBytes(), (""+i).getBytes())
+					.read());
 		}
 		
 		readBuf.rewind();

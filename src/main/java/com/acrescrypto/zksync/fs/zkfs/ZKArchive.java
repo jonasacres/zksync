@@ -16,12 +16,13 @@ public class ZKArchive {
 	public final static int KEY_TYPE_AUTH = 1;
 	public final static int KEY_TYPE_PRNG = 2;
 	
-	public final static int KEY_INDEX_PAGE = 0;
-	public final static int KEY_INDEX_PAGE_MERKEL = 1;
-	public final static int KEY_INDEX_REVISION = 2;
-	public final static int KEY_INDEX_CONFIG_PRIVATE = 3;
-	public final static int KEY_INDEX_CONFIG_LOCAL = 4;
-	public final static int KEY_INDEX_REVISION_TREE = 5;
+	public final static int KEY_INDEX_ARCHIVE = 0;
+	public final static int KEY_INDEX_PAGE = 1;
+	public final static int KEY_INDEX_PAGE_MERKEL = 2;
+	public final static int KEY_INDEX_REVISION = 3;
+	public final static int KEY_INDEX_CONFIG_PRIVATE = 4;
+	public final static int KEY_INDEX_CONFIG_LOCAL = 5;
+	public final static int KEY_INDEX_REVISION_TREE = 6;
 
 	public final static String DATA_DIR = ".zksync/archive/data/";
 	public final static String CONFIG_DIR = ".zksync/archive/config/";
@@ -36,11 +37,11 @@ public class ZKArchive {
 	protected KeyFile keyfile;
 	protected FS storage;
 	
-	public static ZKArchive archiveAtPath(String path, char[] passphrase) {
+	public static ZKArchive archiveAtPath(String path, char[] passphrase) throws IOException {
 		return new ZKArchive(new LocalFS(path), (byte[] id) -> { return passphrase; });
 	}
 	
-	public ZKArchive(FS storage, PassphraseProvider provider) {
+	public ZKArchive(FS storage, PassphraseProvider provider) throws IOException {
 		this.storage = storage;
 		this.pubConfig = new PubConfig(storage);
 		this.crypto = new CryptoSupport(pubConfig);

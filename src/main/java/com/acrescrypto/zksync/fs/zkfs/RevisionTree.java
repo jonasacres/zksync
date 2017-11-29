@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.HashSet;
 
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 
@@ -105,11 +106,16 @@ public class RevisionTree {
 		 * "Wax" might be a cooler name than "zksync." Archives could be called "waxballs."
 		 */
 		// 64kib branch files seem reasonable
-		archive.storage.safeWrite(getPath(), branchTipKey().wrappedEncrypt(serialize(), 1024*64));
+		
+		MutableSecureFile
+		  .atPath(archive.storage, getPath(), branchTipKey())
+		  .write(serialize(), 65536);
 	}
 	
 	protected void read() throws IOException {
-		deserialize(branchTipKey().wrappedDecrypt(archive.storage.safeRead(getPath())));
+		deserialize(MutableSecureFile
+		  .atPath(archive.storage, getPath(), branchTipKey())
+		  .read());
 	}
 	
 	protected void deserialize(byte[] serialized) {
