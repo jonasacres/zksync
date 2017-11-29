@@ -17,12 +17,9 @@ public class Inode implements Comparable<Inode> {
 	protected RefTag changedFrom; // last revision reftag with previous version
 	protected ZKFS fs;
 	
-	// TODO: modifying metadata, like nlink or stat, should update modifiedTime. test for this.
-	
 	/* TODO: ctime semantics
 	 * Right now, ctime is treated as a "creation time," as in NTFS. Instead, it should be "change time" for inode
-	 * data. This is important for diff merges, where we need to be abel to differentiate between changes to a
-	 * directory's structure, and to its metadata.
+	 * data.
 	 */
 	
 	public static final byte FLAG_RETAIN = 1 << 0;

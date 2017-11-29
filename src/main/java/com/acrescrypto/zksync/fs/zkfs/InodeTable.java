@@ -38,7 +38,7 @@ public class InodeTable extends ZKFile {
 			this.inode.setRefTag(tag);
 			inferSize(tag);
 			readTable();
-		}		
+		}
 	}
 
 	public RefTag commit(RefTag[] additionalParents, byte[] seed) throws IOException {
@@ -111,6 +111,13 @@ public class InodeTable extends ZKFile {
 	}
 	
 	protected long issueInodeId() {
+		/* TODO: The last gasp of non-determinism...
+		 * Inode IDs need to be unique, even across branches. If two inodes issue with the same ID, they'll
+		 * conflict in a diff merge -- creating bizarre conflicts in which two seemingly unrelated files from
+		 * distinct branches are hardlinked together, and one copy is lost. Random ID allocation solves this,
+		 * but means that inode allocation is non-deterministic (and therefore, so is any revision that involves
+		 * new inodes being allocated).
+		 */
 		long id;
 		do {
 			id = ByteBuffer.wrap(fs.archive.crypto.rng(8)).getLong();
