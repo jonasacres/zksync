@@ -292,16 +292,6 @@ public class DiffSetTest {
 	}
 	
 	@Test
-	public void testNlinksAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
-			fs.write(filename, "blah".getBytes());
-			revs[0] = fs.commit();
-			fs.inodeForPath(filename).addLink();
-			return 1;
-		});
-	}
-	
-	@Test
 	public void testFileTypesAreADifference() throws IOException {
 		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
@@ -325,12 +315,12 @@ public class DiffSetTest {
 		revs[0] = fs.commit();
 		
 		fs.unlink("file1");
-		fs.link("file0", "file1"); // 1 path diff and 2 inode diffs (nlinks changed)
+		fs.link("file0", "file1"); // 1 path diff and 2 inode diff (file1 and /)
 		revs[1] = fs.commit();
 
 		DiffSet diffset = new DiffSet(revs);
 		storage.rmrf("/");
-		assertEquals(3, diffset.inodeDiffs.size()); // file0, file1, /
+		assertEquals(2, diffset.inodeDiffs.size()); // file1, /
 		assertEquals(1, diffset.pathDiffs.size()); // file1
 		assertTrue(diffset.pathDiffs.containsKey("file1"));
 	}
