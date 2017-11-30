@@ -1,8 +1,8 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
-import java.util.Hashtable;
 
+import com.acrescrypto.zksync.HashCache;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
@@ -10,7 +10,7 @@ import com.acrescrypto.zksync.fs.localfs.LocalFS;
 // A ZKSync archive.
 public class ZKFS extends FS {
 	protected InodeTable inodeTable;
-	protected Hashtable<String,ZKDirectory> directoriesByPath; // TODO: definitely not happy with this; needs eviction policy
+	protected HashCache<String,ZKDirectory> directoriesByPath;
 	ZKArchive archive;
 	protected RefTag baseRevision;
 	protected long fixedTime = -1;
@@ -33,7 +33,12 @@ public class ZKFS extends FS {
 	
 	public ZKFS(RefTag revision) throws IOException {
 		this.archive = revision.archive;
-		this.directoriesByPath = new Hashtable<String,ZKDirectory>();
+		this.directoriesByPath = new HashCache<String,ZKDirectory>(128, (String path) -> {
+			assertPathIsDirectory(path);
+			return new ZKDirectory(this, path);
+		}, (String path, ZKDirectory dir) -> {
+			dir.commit();
+		});
 		this.baseRevision = revision;
 		this.inodeTable = new InodeTable(this, revision);
 	}
@@ -97,9 +102,8 @@ public class ZKFS extends FS {
 	}
 	
 	protected Inode create(String path, ZKDirectory parent) throws IOException {
-		Inode inode = inodeTable.issueInode();		
-		parent.link(inode, basename(path));		
-		parent.softcommit();
+		Inode inode = inodeTable.issueInode();
+		parent.link(inode, basename(path));
 		return inode;
 	}
 	
@@ -181,10 +185,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public ZKDirectory opendir(String path) throws IOException {
-		path = absolutePath(path);
-		if(directoriesByPath.containsKey(path)) return directoriesByPath.get(path);
-		assertPathIsDirectory(path);
-		return new ZKDirectory(this, path);
+		return directoriesByPath.get(absolutePath(path));
 	}
 
 	@Override
@@ -231,14 +232,6 @@ public class ZKFS extends FS {
 		uncache(path);
 	}
 	
-	protected void cache(ZKDirectory directory) {
-		directoriesByPath.put(absolutePath(directory.path), directory);
-	}
-	
-	protected void uncache(String path) {
-		directoriesByPath.remove(absolutePath(path));
-	}
-
 	@Override
 	public void link(String source, String dest) throws IOException {
 		Inode target = inodeForPath(source);
@@ -330,6 +323,10 @@ public class ZKFS extends FS {
 	public void setAtime(String path, long atime) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setAtime(atime);
+	}
+	
+	protected void uncache(String path) throws IOException {
+		directoriesByPath.remove(path);
 	}
 	
 	public ZKArchive getArchive() {

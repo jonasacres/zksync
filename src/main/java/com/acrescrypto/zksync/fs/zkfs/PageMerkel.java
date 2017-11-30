@@ -135,7 +135,6 @@ public class PageMerkel {
 			return;
 		}
 		
-		// TODO: (urgent!) carefully consider IV
 		for(int i = 0; i < expectedChunks; i++) {
 			readBuf.put(SecureFile
 					.atPath(archive.storage, pathForChunk(tag, i), cipherKey(tag), tag.getBytes(), (""+i).getBytes())

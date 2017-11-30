@@ -200,16 +200,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 		write(serialize());
 		flush();
 		dirty = false;
-		fs.cache(this);
-	}
-	
-	public void softcommit() {
-		fs.cache(this);
-	}
-	
-	@Override
-	public void close() throws IOException {
-		softcommit(); // this only works because of the in-memory cache; beware that cache changes could break this
 	}
 	
 	private void deserialize(byte[] serialized) {
