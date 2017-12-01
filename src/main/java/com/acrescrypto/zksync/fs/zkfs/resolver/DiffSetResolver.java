@@ -99,7 +99,7 @@ public class DiffSetResolver {
 		selectResolutions();
 		enforceDirectoryConsistency();
 		applyResolutions();
-		return fs.commit(diffset.revisions, null); // TODO: need a consistent seed here
+		return fs.commit(diffset.revisions);
 	}
 	
 	protected void selectResolutions() {

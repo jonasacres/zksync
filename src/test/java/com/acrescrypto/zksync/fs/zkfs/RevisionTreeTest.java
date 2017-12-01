@@ -66,7 +66,7 @@ public class RevisionTreeTest {
 			
 			ZKFS revFs = parent != null ? parent.getFS() : mfs;
 			if(i == mrevisions.length-1) {
-				mrevisions[i] = revFs.commit(new RefTag[] { mrevisions[2] }, null);
+				mrevisions[i] = revFs.commit(new RefTag[] { mrevisions[2] });
 			} else {
 				mrevisions[i] = revFs.commit();
 			}

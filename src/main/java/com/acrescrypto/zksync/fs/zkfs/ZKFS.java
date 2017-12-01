@@ -52,16 +52,16 @@ public class ZKFS extends FS {
 		fixedTime = time;
 	}
 	
-	public RefTag commit(RefTag[] additionalParents, byte[] seed) throws IOException {
+	public RefTag commit(RefTag[] additionalParents) throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) {
 			dir.commit();
 		}
 		
-		return baseRevision = inodeTable.commit(additionalParents, seed);
+		return baseRevision = inodeTable.commit(additionalParents);
 	}
 	
 	public RefTag commit() throws IOException {
-		return commit(new RefTag[0], null);
+		return commit(new RefTag[0]);
 	}
 	
 	public Inode inodeForPath(String path) throws IOException {

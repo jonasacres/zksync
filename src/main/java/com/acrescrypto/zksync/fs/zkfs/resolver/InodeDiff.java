@@ -14,6 +14,10 @@ public class InodeDiff {
 	protected boolean resolved;
 	protected Inode resolution;
 	
+	public InodeDiff(long inodeId) {
+		this.inodeId = inodeId;
+	}
+	
 	public InodeDiff(long inodeId, RefTag[] candidates) throws IOException {
 		this.inodeId = inodeId;
 		for(RefTag candidate : candidates) {
@@ -53,5 +57,9 @@ public class InodeDiff {
 	
 	public String toString() {
 		return "InodeDiff " + inodeId + " (" + resolutions.size() + " versions)";
+	}
+
+	public void add(Inode newInode, ArrayList<RefTag> tags) {
+		resolutions.put(newInode, tags);
 	}
 }

@@ -13,6 +13,7 @@ public class Inode implements Comparable<Inode> {
 	protected int nlink;
 	protected byte flags;
 	protected long modifiedTime; // last time we modified inode or file data. can't use stat.ctime, since users own that.
+	protected long identity; // assigned on inode creation, remains constant
 	protected RefTag refTag;
 	protected RefTag changedFrom; // last revision reftag with previous version
 	protected ZKFS fs;
@@ -100,12 +101,21 @@ public class Inode implements Comparable<Inode> {
 		this.modifiedTime = modifiedTime;
 	}
 	
+	public long getIdentity() {
+		return identity;
+	}
+	
+	public void setIdentity(long newIdentity) {
+		this.identity = newIdentity;
+	}
+	
 	public byte[] serialize() {
-		int size = stat.getStorageSize() + 8 + 2*4 + 1 + 2*(RefTag.REFTAG_EXTRA_DATA_SIZE+fs.archive.crypto.hashLength());
+		int size = stat.getStorageSize() + 2*8 + 2*4 + 1 + 2*(RefTag.REFTAG_EXTRA_DATA_SIZE+fs.archive.crypto.hashLength());
 		ByteBuffer buf = ByteBuffer.allocate(size);
 		buf.putInt(size-4);
 		buf.put(stat.serialize());
 		buf.putLong(modifiedTime);
+		buf.putLong(identity);
 		buf.putInt(nlink);
 		buf.put(flags);
 		buf.put(refTag.getBytes());
@@ -126,6 +136,7 @@ public class Inode implements Comparable<Inode> {
 		this.stat = new Stat(serializedStat);
 		
 		this.modifiedTime = buf.getLong();
+		this.identity = buf.getLong();
 		this.nlink = buf.getInt();
 		this.flags = buf.get();
 		

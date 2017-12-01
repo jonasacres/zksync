@@ -41,7 +41,7 @@ public class InodeTable extends ZKFile {
 		}
 	}
 
-	public RefTag commit(RefTag[] additionalParents, byte[] seed) throws IOException {
+	public RefTag commit(RefTag[] additionalParents) throws IOException {
 		rewind();
 		truncate(0);
 		
@@ -110,17 +110,10 @@ public class InodeTable extends ZKFile {
 		return inodes.containsKey(inodeId);
 	}
 	
-	protected long issueInodeId() {
-		/* TODO: The last gasp of non-determinism...
-		 * Inode IDs need to be unique, even across branches. If two inodes issue with the same ID, they'll
-		 * conflict in a diff merge -- creating bizarre conflicts in which two seemingly unrelated files from
-		 * distinct branches are hardlinked together, and one copy is lost. Random ID allocation solves this,
-		 * but means that inode allocation is non-deterministic (and therefore, so is any revision that involves
-		 * new inodes being allocated).
-		 */
+	public long issueInodeId() {
 		long id;
 		do {
-			id = ByteBuffer.wrap(fs.archive.crypto.rng(8)).getLong();
+			id = ByteBuffer.wrap(fs.archive.crypto.rng(8)).getLong(); // TODO: make inode ids sequential again
 		} while(id < USER_INODE_ID_START || inodes.contains(id));
 		return id;
 	}
@@ -128,6 +121,7 @@ public class InodeTable extends ZKFile {
 	public Inode issueInode() {
 		Inode inode = new Inode(fs);
 		long now = 1000l*1000l*System.currentTimeMillis();
+		inode.setIdentity(ByteBuffer.wrap(fs.archive.crypto.rng(8)).getLong()); // TODO: the new last gasp of non-determinism...
 		inode.getStat().setInodeId(issueInodeId());
 		inode.getStat().setCtime(now);
 		inode.getStat().setAtime(now);
@@ -145,6 +139,7 @@ public class InodeTable extends ZKFile {
 	private void makeRootDir() {
 		Inode rootDir = new Inode(fs);
 		long now = 1000l*1000l*System.currentTimeMillis();
+		rootDir.setIdentity(0);
 		rootDir.getStat().setCtime(now);
 		rootDir.getStat().setAtime(now);
 		rootDir.getStat().setMtime(now);

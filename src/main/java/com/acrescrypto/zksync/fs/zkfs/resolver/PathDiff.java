@@ -13,6 +13,10 @@ public class PathDiff implements Comparable<PathDiff> {
 	protected boolean resolved;
 	protected Long resolution;
 	
+	public PathDiff(String path) {
+		this.path = path;
+	}
+	
 	public PathDiff(String path, RefTag[] candidates) throws IOException {
 		this.path = path;
 		for(RefTag candidate : candidates) {
@@ -53,5 +57,10 @@ public class PathDiff implements Comparable<PathDiff> {
 
 	public String toString() {
 		return "PathDiff " + path + " (" + resolutions.size() + " versions)";
+	}
+
+	public void add(Long newInodeId, RefTag tag) {
+		resolutions.putIfAbsent(newInodeId, new ArrayList<RefTag>());
+		resolutions.get(newInodeId).add(tag);
 	}
 }
