@@ -113,11 +113,11 @@ public class DiffSet {
 
 	protected ArrayList<InodeDiff> renumberInodeDiff(ZKFS fs, InodeDiff diff, Map<Long,Map<RefTag,Long>> idMap) {
 		Map<Long,ArrayList<RefTag>> byIdentity = new HashMap<Long,ArrayList<RefTag>>();
-		long minId = Long.MAX_VALUE;
+		long minIdent = Long.MAX_VALUE;
 
 		for(Inode inode : diff.resolutions.keySet()) {
 			if(inode == null) continue;
-			if(inode.getIdentity() < minId) minId = inode.getIdentity();
+			if(inode.getIdentity() < minIdent) minIdent = inode.getIdentity();
 			ArrayList<RefTag> tags = byIdentity.getOrDefault(inode.getIdentity(), null);
 			if(tags == null) {
 				tags = new ArrayList<RefTag>();
@@ -129,9 +129,9 @@ public class DiffSet {
 
 		ArrayList<InodeDiff> newDiffs = new ArrayList<InodeDiff>();
 		for(Long identity : byIdentity.keySet()) {
-			long newId = identity.equals(minId) ? identity : fs.getInodeTable().issueInodeId();
-			idMap.putIfAbsent(identity, new HashMap<RefTag,Long>());
-			for(RefTag tag : byIdentity.get(identity)) idMap.get(identity).put(tag, newId);
+			long newId = identity.equals(minIdent) ? diff.inodeId : fs.getInodeTable().issueInodeId();
+			idMap.putIfAbsent(diff.inodeId, new HashMap<RefTag,Long>());
+			for(RefTag tag : byIdentity.get(identity)) idMap.get(diff.inodeId).put(tag, newId);
 			newDiffs.add(renumberInodeWithIdentity(fs, diff, newId, identity));
 		}
 
@@ -140,12 +140,15 @@ public class DiffSet {
 
 	protected InodeDiff renumberInodeWithIdentity(ZKFS fs, InodeDiff diff, long newId, long identity) {
 		InodeDiff newDiff = new InodeDiff(newId);
-
+		
 		for(Inode inode : diff.resolutions.keySet()) {
-			if(inode.getIdentity() != identity) continue;
-			Inode newInode = inode.clone(fs);
-			newInode.getStat().setInodeId(newId);
-			newDiff.add(newInode, diff.resolutions.get(inode));
+			if(inode != null && inode.getIdentity() == identity) {
+				Inode newInode = inode.clone(fs);
+				newInode.getStat().setInodeId(newId);
+				newDiff.add(newInode, diff.resolutions.get(inode));
+			} else {
+				newDiff.add(null, diff.resolutions.get(inode));
+			}
 		}
 		
 		return newDiff;
@@ -159,7 +162,9 @@ public class DiffSet {
 				try {
 					Long newInodeId = idMap.get(inodeId).get(tag);
 					newDiff.add(newInodeId, tag);
-				} catch(NullPointerException exc) {}
+				} catch(NullPointerException exc) {
+					newDiff.add(inodeId, tag);
+				}
 			}
 		}
 		
