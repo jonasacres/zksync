@@ -105,9 +105,7 @@ public class Inode implements Comparable<Inode> {
 	}
 	
 	public byte[] serialize() {
-		int size = stat.getStorageSize() + 2*8 + 2*4 + 1 + 2*(fs.archive.refTagSize());
-		ByteBuffer buf = ByteBuffer.allocate(size);
-		buf.putInt(size-4);
+		ByteBuffer buf = ByteBuffer.allocate(fs.inodeTable.inodeSize());
 		buf.put(stat.serialize());
 		buf.putLong(modifiedTime);
 		buf.putLong(identity);
@@ -115,19 +113,15 @@ public class Inode implements Comparable<Inode> {
 		buf.put(flags);
 		buf.put(refTag.getBytes());
 		buf.put(changedFrom.getBytes());
-		assert(!buf.hasRemaining());
 		
 		return buf.array();
 	}
 	
 	public void deserialize(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		buf.getInt(); // inode size; skip
-		int statLen = buf.getInt();
 		
-		buf.position(buf.position()-4); // Stat constructor expects to see statLen at start
-		byte[] serializedStat = new byte[statLen];
-		buf.get(serializedStat, 0, statLen);
+		byte[] serializedStat = new byte[Stat.STAT_SIZE];
+		buf.get(serializedStat);
 		this.stat = new Stat(serializedStat);
 		
 		this.modifiedTime = buf.getLong();

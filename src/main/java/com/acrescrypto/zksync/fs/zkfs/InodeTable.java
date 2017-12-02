@@ -7,6 +7,7 @@ import java.util.Hashtable;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
 
 // represents inode table for ZKFS instance. 
@@ -67,21 +68,19 @@ public class InodeTable extends ZKFile {
 		return tag;
 	}
 	
+	public int inodeSize() {
+		// TODO: consider leaving some space to grow...
+		return Stat.STAT_SIZE + 2*8 + 1*4 + 1 + 2*(fs.archive.refTagSize());
+	}
+	
 	public void readTable() throws IOException {
 		rewind();
-		ByteBuffer buf = ByteBuffer.allocate(1024);
+		ByteBuffer buf = ByteBuffer.allocate(inodeSize());
 		while(hasData()) {
 			buf.clear();
 			
-			read(buf.array(), 0, 4);
-			int size = buf.getInt();
-			if(4+size > buf.capacity()) {
-				buf = ByteBuffer.allocate(4+size);
-				buf.putInt(size);
-			}
-			
-			int readLen = read(buf.array(), buf.position(), size);
-			if(readLen < size) throw new InvalidArchiveException("Inode table ended prematurely");
+			int readLen = read(buf.array(), 0, inodeSize());
+			if(readLen < inodeSize()) throw new InvalidArchiveException("Inode table ended prematurely");
 			
 			Inode inode = new Inode(fs, buf.array());
 			long inodeId = inode.getStat().getInodeId();

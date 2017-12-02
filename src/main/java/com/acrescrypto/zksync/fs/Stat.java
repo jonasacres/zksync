@@ -18,6 +18,14 @@ public class Stat {
 	public final static int TYPE_CHARACTER_DEVICE = 4;
 	public final static int TYPE_FIFO = 5;
 	
+	// int gid, uid, mode, typeFlags, devMajor, devMinor:      6*4  = 24
+	// String group, user:                                    2*32  = 64
+	// long atime, mtime, ctime, size, inodeId;                5*8  = 40
+	// total:                                                         128
+	public final static int STAT_SIZE = 128; // size of serialized inode in bytes
+	public final static int MAX_GROUP_LEN = 32;
+	public final static int MAX_USER_LEN = 32;
+	
 	public Stat() {
 		group = "";
 		user = "";
@@ -139,19 +147,8 @@ public class Stat {
 		this.inodeId = inodeId;
 	}
 	
-	public int getStorageSize() {
-		// int size                                                     =  4
-		// int gid, uid, mode, typeFlags, devMajor, devMinor:      6*4  = 24
-		// String group, user:                           2*4+2*variable =  8 + 2*variable
-		// long atime, mtime, ctime, size, inodeId;                5*8  = 40
-		// total:                                                         76 + 2*variable
-		
-		return 76 + group.length() + user.length();
-	}
-	
 	public byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(getStorageSize());
-		buf.putInt(getStorageSize());
+		ByteBuffer buf = ByteBuffer.allocate(STAT_SIZE);
 		buf.putLong(inodeId);
 		buf.putLong(size);
 		buf.putLong(ctime);
@@ -165,19 +162,16 @@ public class Stat {
 		buf.putInt(getDevMajor());
 		buf.putInt(getDevMinor());
 		
-		buf.putInt(user.length());
 		buf.put(user.getBytes());
-		buf.putInt(group.length());
+		buf.put(new byte[MAX_USER_LEN-user.length()]);
 		buf.put(group.getBytes());
-		
-		assert(!buf.hasRemaining());
+		buf.put(new byte[MAX_GROUP_LEN-group.length()]);
 		
 		return buf.array();
 	}
 	
 	public void deserialize(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		buf.getInt(); // skip storage size
 		this.inodeId = buf.getLong();
 		this.size = buf.getLong();
 		this.ctime = buf.getLong();
@@ -191,13 +185,11 @@ public class Stat {
 		this.setDevMajor(buf.getInt());
 		this.setDevMinor(buf.getInt());
 		
-		int userLen = buf.getInt();
-		byte[] userBuf = new byte[userLen];
+		byte[] userBuf = new byte[MAX_USER_LEN];
 		buf.get(userBuf);
 		this.user = new String(userBuf);
 		
-		int groupLen = buf.getInt();
-		byte[] groupBuf = new byte[groupLen];
+		byte[] groupBuf = new byte[MAX_GROUP_LEN];
 		buf.get(groupBuf);
 		this.group = new String(groupBuf);
 		assert(!buf.hasRemaining());
