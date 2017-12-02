@@ -112,9 +112,9 @@ public class RefTag implements Comparable<RefTag> {
 		assert(serialized.length == expectedLen);
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		this.hash = new byte[archive.crypto.hashLength()];
+		buf.get(hash);
 		this.versionMajor = buf.get();
 		this.versionMinor = buf.get();
-		buf.get(hash);
 		this.refType = buf.get() & 0x03;
 		this.numPages = buf.getLong();
 		this.tag = serialized.clone();
