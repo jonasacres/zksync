@@ -128,7 +128,7 @@ public class CryptoSupport {
 			byte[] paddedPlaintext = processCipher(false, 128, key, iv, ciphertext, associatedData);
 			if(padded) return unpad(paddedPlaintext);
 			return paddedPlaintext;
-		} catch(InvalidCipherTextException e) { // TODO: make sure this reflects a bad tag
+		} catch(InvalidCipherTextException e) {
 			throw new SecurityException();
 		} catch(Exception e) {
 			e.printStackTrace();

@@ -19,7 +19,6 @@ public class PathDiff implements Comparable<PathDiff> {
 	}
 	
 	public PathDiff(String path, RefTag[] candidates, Map<Long, Map<RefTag, Long>> idMap) throws IOException {
-		// TODO: ^ these two constructors are basically identical, so merge them
 		this.path = path;
 		for(RefTag candidate : candidates) {
 			Long inodeId = null;

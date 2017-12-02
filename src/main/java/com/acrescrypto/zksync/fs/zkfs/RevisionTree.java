@@ -121,8 +121,8 @@ public class RevisionTree {
 	protected void deserialize(byte[] serialized) {
 		branchTips.clear();
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		byte[] tag = new byte[archive.crypto.hashLength() + RefTag.REFTAG_EXTRA_DATA_SIZE]; // TODO: this freaking value needs to be a method on archive or something
-		while(buf.remaining() >= (archive.crypto.hashLength() + RefTag.REFTAG_EXTRA_DATA_SIZE)) {
+		byte[] tag = new byte[archive.refTagSize()];
+		while(buf.remaining() >= archive.refTagSize()) {
 			buf.get(tag);
 			branchTips.add(new RefTag(archive, tag));
 		}
@@ -131,7 +131,7 @@ public class RevisionTree {
 	}
 	
 	protected byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate((archive.crypto.hashLength() + RefTag.REFTAG_EXTRA_DATA_SIZE)*branchTips.size());
+		ByteBuffer buf = ByteBuffer.allocate(archive.refTagSize()*branchTips.size());
 		for(RefTag tag : branchTips) buf.put(tag.getBytes());
 		return buf.array();
 	}

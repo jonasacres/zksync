@@ -18,11 +18,6 @@ public class Inode implements Comparable<Inode> {
 	protected RefTag changedFrom; // last revision reftag with previous version
 	protected ZKFS fs;
 	
-	/* TODO: ctime semantics
-	 * Right now, ctime is treated as a "creation time," as in NTFS. Instead, it should be "change time" for inode
-	 * data.
-	 */
-	
 	public static final byte FLAG_RETAIN = 1 << 0;
 	
 	public static Inode defaultRootInode(ZKFS fs) {
@@ -110,7 +105,7 @@ public class Inode implements Comparable<Inode> {
 	}
 	
 	public byte[] serialize() {
-		int size = stat.getStorageSize() + 2*8 + 2*4 + 1 + 2*(RefTag.REFTAG_EXTRA_DATA_SIZE+fs.archive.crypto.hashLength());
+		int size = stat.getStorageSize() + 2*8 + 2*4 + 1 + 2*(fs.archive.refTagSize());
 		ByteBuffer buf = ByteBuffer.allocate(size);
 		buf.putInt(size-4);
 		buf.put(stat.serialize());
@@ -140,7 +135,7 @@ public class Inode implements Comparable<Inode> {
 		this.nlink = buf.getInt();
 		this.flags = buf.get();
 		
-		byte[] refTagBytes = new byte[fs.archive.crypto.hashLength() + RefTag.REFTAG_EXTRA_DATA_SIZE];
+		byte[] refTagBytes = new byte[fs.archive.refTagSize()];
 		buf.get(refTagBytes);
 		this.refTag = new RefTag(fs.archive, refTagBytes);
 		

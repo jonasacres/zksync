@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 
+import com.acrescrypto.zksync.HashCache;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.KeyFile;
@@ -36,6 +37,7 @@ public class ZKArchive {
 	protected LocalConfig localConfig;
 	protected KeyFile keyfile;
 	protected FS storage;
+	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
 	
 	public static ZKArchive archiveAtPath(String path, char[] passphrase) throws IOException {
 		return new ZKArchive(new LocalFS(path), (byte[] id) -> { return passphrase; });
@@ -48,6 +50,9 @@ public class ZKArchive {
 		this.keyfile = new KeyFile(this, provider.passphraseForArchive(pubConfig.getArchiveId()));
 		this.privConfig = new PrivConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_PRIVATE));
 		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
+		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
+			return tag.getFS();
+		}, (RefTag tag, ZKFS fs) -> {});
 	}
 
 	public Key deriveKey(int type, int index, byte[] tweak) {
@@ -99,5 +104,9 @@ public class ZKArchive {
 	
 	public RevisionTree getRevisionTree() throws IOException {
 		return new RevisionTree(this);
+	}
+	
+	public int refTagSize() {
+		return RefTag.REFTAG_EXTRA_DATA_SIZE + crypto.hashLength();
 	}
 }

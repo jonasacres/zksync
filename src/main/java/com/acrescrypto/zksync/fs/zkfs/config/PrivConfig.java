@@ -17,10 +17,6 @@ public class PrivConfig extends ConfigFile {
 	private int pageSize, immediateThreshold;
 	private byte[] archiveId;
 	
-	// TODO: consider allowing an entry for a retired key, to allow recovery of an interrupted rekey operation
-	
-	// TODO: option for user/group info preferences: none, numeric id, string id, both w/ string pref, both w/ id pref. default to "none"
-	
 	public PrivConfig(FS storage, Key cipherKey) {
 		super(storage, cipherKey);
 	}

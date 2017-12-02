@@ -66,9 +66,9 @@ public class Page {
 		byte[] pageTag = this.authKey().authenticate(plaintext.array());
 		this.file.setPageTag(pageNum, pageTag);
 		
-		// TODO: (urgent!) carefully consider IV
+		byte[] authTag = authKey().authenticate(pageTag);
 		SecureFile
-		  .atPath(file.fs.archive.storage, pathForTag(authKey().authenticate(pageTag)), textKey(pageTag), pageTag, null)
+		  .atPath(file.fs.archive.storage, pathForTag(authTag), textKey(pageTag), authTag, null)
 		  .write(plaintext.array(), file.fs.archive.privConfig.getPageSize());
 	}
 	
@@ -124,8 +124,9 @@ public class Page {
 		}
 		
 		byte[] pageTag = file.getPageTag(pageNum);
+		byte[] authTag = authKey().authenticate(pageTag);
 		byte[] plaintext = SecureFile
-		  .atPath(file.fs.archive.storage, pathForTag(authKey().authenticate(pageTag)), textKey(pageTag), pageTag, null)
+		  .atPath(file.fs.archive.storage, pathForTag(authTag), textKey(pageTag), authTag, null)
 		  .read();
 		
 		if(!Arrays.equals(this.authKey().authenticate(plaintext), pageTag)) {

@@ -6,11 +6,13 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.Util;
 
+// TODO: save a byte for archive format
 public class RefTag implements Comparable<RefTag> {
 	protected ZKArchive archive;
 	protected ZKFS readOnlyFs;
 	protected RevisionInfo info;
 	protected byte[] tag, hash;
+	protected byte versionMajor, versionMinor;
 	protected int refType;	
 	protected long numPages;
 	public static final byte REF_TYPE_2INDIRECT = 2;
@@ -19,6 +21,7 @@ public class RefTag implements Comparable<RefTag> {
 	
 	public static int REFTAG_EXTRA_DATA_SIZE = 16;
 	// reserve 16 bytes because you know we'll use it, and it probably won't be enough
+	// 2 bytes version
 	// 1 byte encoding type
 	// 8 bytes num chunks
 	
@@ -92,11 +95,13 @@ public class RefTag implements Comparable<RefTag> {
 	}
 	
 	protected byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(archive.crypto.hashLength() + REFTAG_EXTRA_DATA_SIZE);
+		ByteBuffer buf = ByteBuffer.allocate(archive.refTagSize());
 		buf.put(hash);
+		buf.put(versionMajor);
+		buf.put(versionMinor);
 		buf.put((byte) (this.refType & 0x03));
 		buf.putLong(numPages);
-		buf.put(new byte[REFTAG_EXTRA_DATA_SIZE-8-1]);
+		buf.put(new byte[REFTAG_EXTRA_DATA_SIZE-2-8-1]);
 		
 		assert(!buf.hasRemaining());
 		return buf.array();
@@ -107,6 +112,8 @@ public class RefTag implements Comparable<RefTag> {
 		assert(serialized.length == expectedLen);
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		this.hash = new byte[archive.crypto.hashLength()];
+		this.versionMajor = buf.get();
+		this.versionMinor = buf.get();
 		buf.get(hash);
 		this.refType = buf.get() & 0x03;
 		this.numPages = buf.getLong();
@@ -114,11 +121,7 @@ public class RefTag implements Comparable<RefTag> {
 	}
 	
 	public ZKFS readOnlyFS() throws IOException {
-		/* TODO: don't like that these accumulate in memory... want some sort of eviction queue across all RefTags.
-		 * Maybe one we can reuse for the directory cache in ZKFS?
-		 */
-		if(readOnlyFs == null) readOnlyFs = getFS();
-		return readOnlyFs;
+		return archive.readOnlyFilesystems.get(this);
 	}
 	
 	public ZKFS getFS() throws IOException {
