@@ -171,6 +171,7 @@ public class Inode implements Comparable<Inode> {
 		if(!other.getClass().equals(this.getClass())) return false;
 		Inode __other = (Inode) other;
 		
+		if(identity != __other.identity) return false;
 		if(!refTag.equals(__other.refTag)) return false;
 		if(!changedFrom.equals(__other.changedFrom)) return false;
 		if(flags != __other.flags) return false;

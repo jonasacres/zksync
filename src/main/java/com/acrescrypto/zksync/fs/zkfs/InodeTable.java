@@ -15,7 +15,7 @@ public class InodeTable extends ZKFile {
 	public final static long INODE_ID_ROOT_DIRECTORY = 1;
 	public static final long INODE_ID_REVISION_INFO = 2;
 
-	public final static long USER_INODE_ID_START = 65536;
+	public final static long USER_INODE_ID_START = 16;
 	
 	public final static String INODE_TABLE_PATH = "(inode table)";
 	
@@ -23,6 +23,7 @@ public class InodeTable extends ZKFile {
 	
 	protected Hashtable<Long,Inode> inodes;
 	protected RevisionInfo revision;
+	protected long nextInodeId;
 	
 	public InodeTable(ZKFS fs, RefTag tag) throws IOException {
 		this.fs = fs;
@@ -84,6 +85,7 @@ public class InodeTable extends ZKFile {
 			
 			Inode inode = new Inode(fs, buf.array());
 			long inodeId = inode.getStat().getInodeId();
+			if(inodeId >= nextInodeId) nextInodeId = inodeId+1;
 			inodes.put(inodeId, inode);
 		}
 	}
@@ -111,11 +113,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	public long issueInodeId() {
-		long id;
-		do {
-			id = ByteBuffer.wrap(fs.archive.crypto.rng(8)).getLong(); // TODO: make inode ids sequential again
-		} while(id < USER_INODE_ID_START || inodes.contains(id));
-		return id;
+		return nextInodeId++;
 	}
 	
 	public Inode issueInode() {
@@ -163,6 +161,7 @@ public class InodeTable extends ZKFile {
 		this.inode = Inode.defaultRootInode(fs);
 		this.inodes.put(INODE_ID_INODE_TABLE, this.inode);
 		this.merkel = new PageMerkel(RefTag.blank(fs.archive));
+		this.nextInodeId = USER_INODE_ID_START;
 
 		makeRootDir();
 		makeEmptyRevision();

@@ -31,7 +31,7 @@ public class DiffSetResolver {
 	}
 	
 	public static DiffSetResolver latestVersionResolver(DiffSet diffset) throws IOException {
-		return (new DiffSetResolver(diffset, latestInodeResolver(), latestPathResolver())).renumber();
+		return new DiffSetResolver(diffset, latestInodeResolver(), latestPathResolver());
 	}
 	
 	public static InodeDiffResolver latestInodeResolver() {
@@ -93,11 +93,6 @@ public class DiffSetResolver {
 		this.inodeResolver = inodeResolver;
 		this.pathResolver = pathResolver;
 		this.fs = new ZKFS(diffset.latestRevision());
-	}
-	
-	public DiffSetResolver renumber() {
-		diffset = diffset.renumber(fs);
-		return this;
 	}
 	
 	public RefTag resolve() throws IOException, DiffResolutionException {

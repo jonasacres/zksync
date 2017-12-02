@@ -38,8 +38,7 @@ public class DiffSet {
 		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i];
 		
 		commonAncestor = revisions[0].getArchive().getRevisionTree().commonAncestorOf(tags);
-		findInodeDiffs();
-		findPathDiffs();
+		findPathDiffs(findInodeDiffs(pickMergeFs()));
 	}
 	
 	public DiffSet(DiffSet original, ArrayList<InodeDiff> inodeDiffList, ArrayList<PathDiff> pathDiffList) {
@@ -50,6 +49,7 @@ public class DiffSet {
 	}
 	
 	public HashSet<Long> allInodes() throws IOException {
+		// TODO: allInodes and allPaths makes merging O(n) with the number of total files, changed or not.
 		HashSet<Long> allInodes = new HashSet<Long>();
 		for(RefTag rev : revisions) {
 			for(Inode inode : rev.readOnlyFS().getInodeTable().getInodes().values()) {
@@ -74,17 +74,21 @@ public class DiffSet {
 		return allPaths;
 	}
 	
-	public void findInodeDiffs() throws IOException {
+	public Map<Long,Map<RefTag,Long>> findInodeDiffs(ZKFS mergeFs) throws IOException {
+		Map<Long,Map<RefTag,Long>> idMap = new HashMap<Long,Map<RefTag,Long>>();
 		for(long inodeId : allInodes()) {
 			InodeDiff diff = new InodeDiff(inodeId, revisions);
 			if(!diff.isConflict()) continue;
+			renumberInodeDiff(mergeFs, diff, idMap);
 			inodeDiffs.put(inodeId, diff);
 		}
+		
+		return idMap;
 	}
 	
-	public void findPathDiffs() throws IOException {
+	public void findPathDiffs(Map<Long,Map<RefTag,Long>> idMap) throws IOException {
 		for(String path : allPaths()) {
-			PathDiff diff = new PathDiff(path, revisions);
+			PathDiff diff = new PathDiff(path, revisions, idMap);
 			if(!diff.isConflict()) continue;
 			pathDiffs.put(path, diff);
 		}
@@ -101,17 +105,8 @@ public class DiffSet {
 	public DiffSetResolver resolver(InodeDiffResolver inodeResolver, PathDiffResolver pathResolver) throws IOException {
 		return new DiffSetResolver(this, inodeResolver, pathResolver);
 	}
-	
-	public DiffSet renumber(ZKFS fs) {
-		Map<Long,Map<RefTag,Long>> idMap = new HashMap<Long,Map<RefTag,Long>>();
-		ArrayList<InodeDiff> newInodeDiffs = new ArrayList<InodeDiff>();
-		ArrayList<PathDiff> newPathDiffs = new ArrayList<PathDiff>();
-		for(InodeDiff diff : inodeDiffs.values()) newInodeDiffs.addAll(renumberInodeDiff(fs, diff, idMap));
-		for(PathDiff diff : pathDiffs.values()) newPathDiffs.add(renumberPath(fs, diff, idMap));
-		return new DiffSet(this, newInodeDiffs, newPathDiffs);
-	}
 
-	protected ArrayList<InodeDiff> renumberInodeDiff(ZKFS fs, InodeDiff diff, Map<Long,Map<RefTag,Long>> idMap) {
+	protected void renumberInodeDiff(ZKFS fs, InodeDiff diff, Map<Long,Map<RefTag,Long>> idMap) {
 		Map<Long,ArrayList<RefTag>> byIdentity = new HashMap<Long,ArrayList<RefTag>>();
 		long minIdent = Long.MAX_VALUE;
 
@@ -127,15 +122,12 @@ public class DiffSet {
 			for(RefTag tag : diff.resolutions.get(inode)) tags.add(tag);
 		}
 
-		ArrayList<InodeDiff> newDiffs = new ArrayList<InodeDiff>();
 		for(Long identity : byIdentity.keySet()) {
 			long newId = identity.equals(minIdent) ? diff.inodeId : fs.getInodeTable().issueInodeId();
 			idMap.putIfAbsent(diff.inodeId, new HashMap<RefTag,Long>());
 			for(RefTag tag : byIdentity.get(identity)) idMap.get(diff.inodeId).put(tag, newId);
-			newDiffs.add(renumberInodeWithIdentity(fs, diff, newId, identity));
+			inodeDiffs.put(newId, renumberInodeWithIdentity(fs, diff, newId, identity));
 		}
-
-		return newDiffs;
 	}
 
 	protected InodeDiff renumberInodeWithIdentity(ZKFS fs, InodeDiff diff, long newId, long identity) {
@@ -169,5 +161,15 @@ public class DiffSet {
 		}
 		
 		return newDiff;
+	}
+	
+	protected ZKFS pickMergeFs() throws IOException {
+		RefTag latest = null;
+		for(RefTag tag : revisions) {
+			if(latest == null || tag.compareTo(latest) > 0) latest = tag;
+		}
+		
+		if(latest != null) return latest.getFS();
+		return null;
 	}
 }

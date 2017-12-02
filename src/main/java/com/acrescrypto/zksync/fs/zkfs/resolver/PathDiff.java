@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs.resolver;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
 
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
@@ -17,12 +18,14 @@ public class PathDiff implements Comparable<PathDiff> {
 		this.path = path;
 	}
 	
-	public PathDiff(String path, RefTag[] candidates) throws IOException {
+	public PathDiff(String path, RefTag[] candidates, Map<Long, Map<RefTag, Long>> idMap) throws IOException {
+		// TODO: ^ these two constructors are basically identical, so merge them
 		this.path = path;
 		for(RefTag candidate : candidates) {
 			Long inodeId = null;
 			try {
 				inodeId = candidate.readOnlyFS().inodeForPath(path).getStat().getInodeId();
+				if(idMap != null && idMap.containsKey(inodeId)) inodeId = idMap.get(inodeId).getOrDefault(candidate, inodeId);
 			} catch (ENOENTException e) {}
 			getResolutions().putIfAbsent(inodeId, new ArrayList<RefTag>());
 			getResolutions().get(inodeId).add(candidate);
