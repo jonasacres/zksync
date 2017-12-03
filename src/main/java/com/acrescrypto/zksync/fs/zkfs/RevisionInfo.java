@@ -5,6 +5,8 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashSet;
 
+import com.acrescrypto.zksync.exceptions.ENOENTException;
+
 /* Stores a revision of the archive. This is needed to bootstrap reading the archive.
  */
 public class RevisionInfo extends ZKFile {
@@ -27,9 +29,15 @@ public class RevisionInfo extends ZKFile {
 		this.fs = fs;
 		this.path = REVISION_INFO_PATH;
 		this.mode = O_RDWR;
-		this.inode = fs.inodeTable.inodeWithId(InodeTable.INODE_ID_REVISION_INFO);
-		this.merkel = new PageMerkel(this.inode.getRefTag());
-		load();
+		try {
+			this.inode = fs.inodeTable.inodeWithId(InodeTable.INODE_ID_REVISION_INFO);
+			this.merkel = new PageMerkel(this.inode.getRefTag());
+			load();
+		} catch(ENOENTException exc) {
+			this.inode = fs.inodeTable.issueInode(InodeTable.INODE_ID_REVISION_INFO);
+			this.inode.flags |= Inode.FLAG_RETAIN;
+			this.merkel = new PageMerkel(this.inode.getRefTag());
+		}
 	}
 
 	public void load() throws IOException {

@@ -2,12 +2,11 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Hashtable;
+import java.util.Iterator;
 
+import com.acrescrypto.zksync.HashCache;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
-import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
-import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
 
 // represents inode table for ZKFS instance. 
@@ -20,9 +19,7 @@ public class InodeTable extends ZKFile {
 	
 	public final static String INODE_TABLE_PATH = "(inode table)";
 	
-	// TODO: fixed-length inode serialization to support partial inode table reads (might be a good next thing to look at...)
-	
-	protected Hashtable<Long,Inode> inodes;
+	protected HashCache<Integer,Inode[]> pages;
 	protected RevisionInfo revision;
 	protected long nextInodeId;
 	
@@ -30,7 +27,33 @@ public class InodeTable extends ZKFile {
 		this.fs = fs;
 		this.path = INODE_TABLE_PATH;
 		this.mode = O_RDWR;
-		this.inodes = new Hashtable<Long,Inode>();
+		this.pages = new HashCache<Integer,Inode[]>(64, (Integer pageNum) -> { // TODO: put capacity in localconfig
+			Inode[] inodes = new Inode[inodesPerPage()];
+
+			int offset = pageNum*fs.archive.getPrivConfig().getPageSize();
+			if(offset > inode.getStat().getSize()) throw new ENOENTException("inode table page " + pageNum);
+			if(offset == inode.getStat().getSize()) {
+				blankInodeList(pageNum, inodes);
+				return inodes;
+			}
+			
+			seek(offset, ZKFile.SEEK_SET);
+			ByteBuffer buf = ByteBuffer.wrap(read(fs.archive.getPrivConfig().getPageSize()));
+			int i = 0;
+			byte[] serialized = new byte[inodeSize()];
+			
+			while(buf.remaining() >= inodeSize()) {
+				buf.get(serialized);
+				inodes[i++] = new Inode(this.fs, serialized);
+			}
+			
+			return inodes;
+		}, (Integer pageNum, Inode[] inodes) -> {
+			ByteBuffer buf = ByteBuffer.allocate(fs.archive.getPrivConfig().getPageSize());
+			for(Inode inode : inodes) buf.put(inode.serialize());
+			seek(pageNum*fs.archive.getPrivConfig().getPageSize(), ZKFile.SEEK_SET);
+			write(buf.array());
+		});
 		
 		if(tag.isBlank()) {
 			initialize();
@@ -39,26 +62,33 @@ public class InodeTable extends ZKFile {
 			this.inode = new Inode(fs);
 			this.inode.setRefTag(tag);
 			inferSize(tag);
-			readTable();
+		}
+	}
+
+	private void blankInodeList(Integer pageNum, Inode[] inodes) {
+		for(int i = 0; i < inodes.length; i++) {
+			inodes[i] = new Inode(fs);
+			inodes[i].stat.setInodeId(pageNum*fs.archive.privConfig.getPageSize()/inodeSize()+i);
+			inodes[i].markDeleted();
 		}
 	}
 
 	public RefTag commit(RefTag[] additionalParents) throws IOException {
-		rewind();
-		truncate(0);
-		
+		pages.reset();
+		flush();
+		revision = writeRevision(additionalParents);
+		return updateBranchTips(additionalParents);
+	}
+	
+	protected RevisionInfo writeRevision(RefTag[] additionalParents) throws IOException {
 		RevisionInfo newRevision = new RevisionInfo(fs);
 		newRevision.reset();
 		for(RefTag parent : additionalParents) newRevision.addParent(parent);
 		newRevision.commit();
-
-		for(Inode inode : inodes.values()) {
-			if(inode.getStat().getInodeId() == InodeTable.INODE_ID_INODE_TABLE) continue;
-			write(inode.serialize());
-		}
-		
-		flush();
-		revision = newRevision;
+		return newRevision;
+	}
+	
+	protected RefTag updateBranchTips(RefTag[] additionalParents) throws IOException {
 		RefTag tag = inode.getRefTag();
 		RevisionTree tree = fs.archive.getRevisionTree();
 		tree.addBranchTip(tag);
@@ -69,57 +99,68 @@ public class InodeTable extends ZKFile {
 	}
 	
 	public int inodeSize() {
-		// TODO: consider leaving some space to grow...
-		return Stat.STAT_SIZE + 2*8 + 1*4 + 1 + 2*(fs.archive.refTagSize());
+		return Inode.sizeForFs(fs);
 	}
 	
-	public void readTable() throws IOException {
-		rewind();
-		ByteBuffer buf = ByteBuffer.allocate(inodeSize());
-		while(hasData()) {
-			buf.clear();
-			
-			int readLen = read(buf.array(), 0, inodeSize());
-			if(readLen < inodeSize()) throw new InvalidArchiveException("Inode table ended prematurely");
-			
-			Inode inode = new Inode(fs, buf.array());
-			long inodeId = inode.getStat().getInodeId();
-			if(inodeId >= nextInodeId) nextInodeId = inodeId+1;
-			inodes.put(inodeId, inode);
-		}
-	}
-	
-	public void unlink(long inodeId) throws ENOENTException, EMLINKException {
-		if(!inodes.containsKey(inodeId)) throw new ENOENTException(String.format("inode %d", inodeId));
-		
+	public void unlink(long inodeId) throws IOException {
 		if(inodeId <= 1) throw new IllegalArgumentException();		
-		if(inodes.get(inodeId).getNlink() > 0) {
-			throw new EMLINKException(String.format("inode %d", inodeId));
-		}
-		
-		inodes.remove(inodeId);
+
+		Inode inode = inodeWithId(inodeId);
+		if(inode.getNlink() > 0) throw new EMLINKException(String.format("inode %d", inodeId));
+		// TODO: this is where we're going to add to the freelist when we add that
+		// TODO: also, truncate the file if this is our last inode
 	}
 	
-	public Inode inodeWithId(long inodeId) throws ENOENTException {
-		if(!inodes.containsKey(inodeId)) {
-			throw new ENOENTException(String.format("inode %d", inodeId));
-		}
-		return inodes.get(inodeId);
+	public Inode inodeWithId(long inodeId) throws IOException {
+		Inode inode = pages.get(pageNumForInodeId(inodeId))[offsetForInodeId(inodeId)];
+		if(inode.isDeleted()) throw new ENOENTException("inode " + inodeId);
+		return inode;
 	}
 	
-	public boolean hasInodeWithId(long inodeId) {
-		return inodes.containsKey(inodeId);
+	public int size() {
+		return (int) (inode.getStat().getSize()/inodeSize());
+	}
+	
+	public Inode[] pageForInodeId(long inodeId) throws IOException {
+		return pages.get(pageNumForInodeId(inodeId));
+	}
+	
+	protected int inodesPerPage() {
+		return fs.archive.privConfig.getPageSize()/inodeSize();
+	}
+	
+	protected int pageNumForInodeId(long inodeId) {
+		return (int) (inodeId-1) / inodesPerPage();
+	}
+	
+	protected int offsetForInodeId(long inodeId) {
+		return (int) (inodeId-1) % inodesPerPage();
+	}
+	
+	public boolean hasInodeWithId(long inodeId) throws IOException {
+		try {
+			inodeWithId(inodeId);
+			return true;
+		} catch(ENOENTException exc) {
+			return false;
+		}
 	}
 	
 	public long issueInodeId() {
+		// TODO: draw from the freelist here once we add that
 		return nextInodeId++;
 	}
 	
-	public Inode issueInode() {
-		Inode inode = new Inode(fs);
+	public Inode issueInode() throws IOException {
+		return issueInode(issueInodeId());
+	}
+	
+	public Inode issueInode(long inodeId) throws IOException {
+		Inode inode = pages.get(pageNumForInodeId(inodeId))[offsetForInodeId(inodeId)];
+		assert(inode.isDeleted());
 		long now = 1000l*1000l*System.currentTimeMillis();
 		inode.setIdentity(ByteBuffer.wrap(fs.archive.crypto.rng(8)).getLong()); // TODO: the new last gasp of non-determinism...
-		inode.getStat().setInodeId(issueInodeId());
+		inode.getStat().setInodeId(inodeId);
 		inode.getStat().setCtime(now);
 		inode.getStat().setAtime(now);
 		inode.getStat().setMtime(now);
@@ -129,11 +170,10 @@ public class InodeTable extends ZKFile {
 		inode.getStat().setGroup(fs.archive.localConfig.getGroup());
 		inode.getStat().setGid(fs.archive.localConfig.getGid());
 		inode.setRefTag(RefTag.blank(fs.archive));
-		inodes.put(inode.getStat().getInodeId(), inode);
 		return inode;
 	}
 	
-	private void makeRootDir() {
+	private void makeRootDir() throws IOException {
 		Inode rootDir = new Inode(fs);
 		long now = 1000l*1000l*System.currentTimeMillis();
 		rootDir.setIdentity(0);
@@ -147,18 +187,17 @@ public class InodeTable extends ZKFile {
 		rootDir.getStat().setGid(0);
 		rootDir.setRefTag(RefTag.blank(fs.archive));
 		rootDir.setFlags(Inode.FLAG_RETAIN);
-		inodes.put(rootDir.getStat().getInodeId(), rootDir);
+		setInode(INODE_ID_ROOT_DIRECTORY, rootDir);
 	}
 	
-	private void makeEmptyRevision() {
+	private void makeEmptyRevision() throws IOException {
 		Inode revfile = issueInode();
 		revfile.getStat().setInodeId(INODE_ID_REVISION_INFO);
-		inodes.put(revfile.getStat().getInodeId(), revfile);
+		setInode(revfile.getStat().getInodeId(), revfile);
 	}
 	
 	private void initialize() throws IOException {
 		this.inode = Inode.defaultRootInode(fs);
-		this.inodes.put(INODE_ID_INODE_TABLE, this.inode);
 		this.merkel = new PageMerkel(RefTag.blank(fs.archive));
 		this.nextInodeId = USER_INODE_ID_START;
 
@@ -166,12 +205,15 @@ public class InodeTable extends ZKFile {
 		makeEmptyRevision();
 	}
 
-	public void replaceInode(InodeDiff inodeDiff) {
+	public void replaceInode(InodeDiff inodeDiff) throws IOException {
 		assert(inodeDiff.isResolved());
 		if(inodeDiff.getResolution() == null) {
-			inodes.remove(inodeDiff.getInodeId());
+			unlink(inodeDiff.getInodeId()); // TODO: we may need an unlinkUnsafe that doesn't do nlink check
 		} else {
-			Inode existing = inodes.getOrDefault(inodeDiff.getInodeId(), null);
+			Inode existing;
+			try {
+				existing = inodeWithId(inodeDiff.getInodeId());
+			} catch(ENOENTException exc) { existing = null; }
 			Inode duplicated = inodeDiff.getResolution().clone(fs);
 			
 			/* anything to do with path structure, we can ignore. that means: nlink for all inodes, and refTag/size
@@ -192,13 +234,36 @@ public class InodeTable extends ZKFile {
 				}
 			}
 			
-			// make sure we retain existing instances, to keep caches square
-			inodes.putIfAbsent(inodeDiff.getInodeId(), new Inode(fs));
-			inodes.get(inodeDiff.getInodeId()).deserialize(duplicated.serialize());
+			setInode(inodeDiff.getInodeId(), duplicated);
 		}
 	}
 	
-	public Hashtable<Long,Inode> getInodes() {
-		return inodes;
+	protected void setInode(long inodeId, Inode inode) throws IOException {
+		Inode[] page = pageForInodeId(inodeId);
+		page[offsetForInodeId(inodeId)].deserialize(inode.serialize()); // maintain existing reference for caches
+	}
+	
+	public Iterable<Inode> values() {
+		@SuppressWarnings("resource")
+		InodeTable table = this;
+		return () -> {
+			return new Iterator<Inode>() {
+				int currentInodeId = 1; // inode 0 (inode table) is not included in serialization
+				
+				@Override
+				public boolean hasNext() {
+					return currentInodeId < table.size();
+				}
+				
+				@Override
+				public Inode next() {
+					try {
+						return table.inodeWithId(currentInodeId++);
+					} catch (IOException e) {
+						throw new RuntimeException("unable to get inode " + (currentInodeId-1));
+					}
+				}
+			};
+		};
 	}
 }

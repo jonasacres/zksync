@@ -20,6 +20,11 @@ public class Inode implements Comparable<Inode> {
 	
 	public static final byte FLAG_RETAIN = 1 << 0;
 	
+	public static int sizeForFs(ZKFS fs) {
+		// TODO: consider leaving some space to grow...
+		return Stat.STAT_SIZE + 2*8 + 1*4 + 1 + 2*(fs.archive.refTagSize());
+	}
+	
 	public static Inode defaultRootInode(ZKFS fs) {
 		Inode blank = new Inode(fs);
 		Stat stat = new Stat();
@@ -105,7 +110,7 @@ public class Inode implements Comparable<Inode> {
 	}
 	
 	public byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(fs.inodeTable.inodeSize());
+		ByteBuffer buf = ByteBuffer.allocate(sizeForFs(fs));
 		buf.put(stat.serialize());
 		buf.putLong(modifiedTime);
 		buf.putLong(identity);
@@ -154,6 +159,22 @@ public class Inode implements Comparable<Inode> {
 	
 	public int hashCode() {
 		return ByteBuffer.wrap(refTag.getBytes()).getInt();
+	}
+	
+	public void markDeleted() {
+		long inodeId = stat.getInodeId();
+		stat = new Stat();
+		stat.setInodeId(inodeId);
+		nlink = 0;
+		flags = 0;
+		modifiedTime = 0;
+		identity = 0;
+		refTag = RefTag.blank(fs.archive);
+		changedFrom = RefTag.blank(fs.archive);
+	}
+	
+	public boolean isDeleted() {
+		return nlink <= 0 && (flags & FLAG_RETAIN) == 0;
 	}
 	
 	public boolean equals(Object other) {

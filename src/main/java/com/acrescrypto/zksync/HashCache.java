@@ -59,6 +59,13 @@ public class HashCache<K,V> {
 		return cache.values();
 	}
 	
+	public void reset() throws IOException {
+		while(!evictionQueue.isEmpty()) {
+			K key = evictionQueue.remove();
+			evict.evict(key, cache.get(key));
+		}
+	}
+	
 	protected void enforceCapacityLimit() throws IOException {
 		if(capacity <= 0) return;
 		while(cache.size() > capacity) {
