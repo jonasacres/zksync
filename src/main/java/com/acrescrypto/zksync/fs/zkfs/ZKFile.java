@@ -60,6 +60,7 @@ public class ZKFile extends File {
 	public void setPageTag(int pageNum, byte[] hash) throws IOException {
 		assertWritable();
 		merkel.setPageTag(pageNum, hash);
+		inode.setRefTag(merkel.getRefTag());
 	}
 	
 	public byte[] getPageTag(int pageNum) throws NonexistentPageException {
