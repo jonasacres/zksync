@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.security.Security;
 import java.util.Arrays;
 
@@ -100,6 +101,38 @@ public class ZKFileTest extends FileTestBase {
 			assertEquals(0, stat.getAtime());
 			assertEquals(0, stat.getMtime());
 		}
+	}
+	
+	@Test
+	public void testRandomWrites() throws IOException {
+		int pageSize = zkscratch.archive.privConfig.getPageSize();
+		ZKFile file = zkscratch.open("random-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
+		
+		file.truncate(5*pageSize);
+		file.seek(2*pageSize, ZKFile.SEEK_SET);
+		file.write("bar".getBytes());
+		file.seek(1*pageSize, ZKFile.SEEK_SET);
+		file.write("foo".getBytes());
+		file.seek(4*pageSize-1, ZKFile.SEEK_SET);
+		file.write("split".getBytes());
+		
+		file.seek(1*pageSize, ZKFile.SEEK_SET);
+		assertEquals("foo", new String(file.read(3)));
+		file.seek(2*pageSize, ZKFile.SEEK_SET);
+		assertEquals("bar", new String(file.read(3)));
+		file.seek(4*pageSize-1, ZKFile.SEEK_SET);
+		assertEquals("split", new String(file.read(5)));
+		assertEquals(5*pageSize, file.getStat().getSize());
+		file.close();
+		
+		ByteBuffer wholeThing = ByteBuffer.allocate(5*pageSize);
+		wholeThing.position(1*pageSize);
+		wholeThing.put("foo".getBytes());
+		wholeThing.position(2*pageSize);
+		wholeThing.put("bar".getBytes());
+		wholeThing.position(4*pageSize-1);
+		wholeThing.put("split".getBytes());
+		assertTrue(Arrays.equals(wholeThing.array(), zkscratch.read("random-write-test")));
 	}
 
 	// TODO: test squashing of page merkel chunk timestamps
