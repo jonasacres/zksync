@@ -204,16 +204,20 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testDirectoriesMergeContents() throws IOException, DiffResolutionException {
-		for(byte i = 0; i < 4; i++) {
-			fs.write(""+i, (""+i).getBytes());
-			fs.commit();
-			if(i == 1) fs = base.getFS();
+		for(int j = 0; j < 10; j++) { // repeat due to history of intermittent failures
+			before();
+			for(byte i = 0; i < 4; i++) {
+				fs.write(""+i, (""+i).getBytes());
+				fs.commit();
+				if(i == 1) fs = base.getFS();
+			}
+			
+			RefTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+			ZKFS mergeFs = merge.readOnlyFS();
+			
+			// TODO: this test has intermittent failures, ComparisonFailure: expected:<[1]> but was:<[2]>
+			for(byte i = 0; i < 4; i++) assertEquals(""+i, new String(mergeFs.read(""+i)));
 		}
-		
-		RefTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
-		ZKFS mergeFs = merge.readOnlyFS();
-		
-		for(byte i = 0; i < 4; i++) assertEquals(""+i, new String(mergeFs.read(""+i)));
 	}
 	
 	@Test

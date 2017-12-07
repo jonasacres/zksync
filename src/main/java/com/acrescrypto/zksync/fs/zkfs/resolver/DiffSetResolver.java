@@ -53,7 +53,7 @@ public class DiffSetResolver {
 			try {
 				ancestorTag = setResolver.fs.getArchive().getRevisionTree().commonAncestorOf(setResolver.diffset.revisions);
 				defaultId = ancestorTag.readOnlyFS().inodeForPath(diff.path).getStat().getInodeId();
-			} catch (IOException e1) {
+			} catch (IOException exc) {
 				if(ancestorTag == null) throw new RuntimeException("Unable to calculate common ancestor in diff merge");
 				// just ignore it if it came from defaultId
 			}
@@ -77,7 +77,7 @@ public class DiffSetResolver {
 					} else {
 						inode = idiff.getResolution();
 					}
-				} catch (IOException e) {
+				} catch (IOException exc) {
 					throw new IllegalStateException("Encountered exception resolving path collision information for inode " + inodeId);
 				}
 				
@@ -97,7 +97,6 @@ public class DiffSetResolver {
 	
 	public RefTag resolve() throws IOException, DiffResolutionException {
 		selectResolutions();
-		enforceDirectoryConsistency();
 		applyResolutions();
 		return fs.commit(diffset.revisions);
 	}
@@ -109,13 +108,6 @@ public class DiffSetResolver {
 
 		for(PathDiff diff : diffset.pathDiffs.values()) {
 			diff.setResolution(pathResolver.resolve(this, diff));
-		}
-	}
-	
-	protected void enforceDirectoryConsistency() throws IOException, DiffResolutionException {
-		for(PathDiff diff : sortedPathDiffs()) {
-			if(diff.resolution == null || parentExists(diff.path)) continue;
-			diff.setResolution(null);
 		}
 	}
 	
