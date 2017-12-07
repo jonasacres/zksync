@@ -19,7 +19,7 @@ public class ZKArchive {
 	
 	public final static int KEY_INDEX_ARCHIVE = 0;
 	public final static int KEY_INDEX_PAGE = 1;
-	public final static int KEY_INDEX_PAGE_MERKEL = 2;
+	public final static int KEY_INDEX_PAGE_MERKLE = 2;
 	public final static int KEY_INDEX_REVISION = 3;
 	public final static int KEY_INDEX_CONFIG_PRIVATE = 4;
 	public final static int KEY_INDEX_CONFIG_LOCAL = 5;

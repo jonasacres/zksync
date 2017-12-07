@@ -42,10 +42,10 @@ public class InodeTable extends ZKFile {
 		if(tag.isBlank()) {
 			initialize();
 		} else {
-			this.merkel = new PageMerkel(tag);
+			this.merkle = new PageMerkle(tag);
 			this.inode = new Inode(fs);
 			this.inode.setRefTag(tag);
-			inferSize(tag); // TODO: we may not need this; size will always be numPages*pageSize
+			this.inode.stat.setSize(fs.archive.privConfig.getPageSize() * (tag.numPages-1) + inodesPerPage()*inodeSize());
 			nextInodeId = lookupNextInodeId();
 		}
 	}
@@ -209,7 +209,7 @@ public class InodeTable extends ZKFile {
 	private void initialize() throws IOException {
 		this.inode = Inode.defaultRootInode(fs);
 		this.setInode(this.inode);
-		this.merkel = new PageMerkel(RefTag.blank(fs.archive));
+		this.merkle = new PageMerkle(RefTag.blank(fs.archive));
 		this.nextInodeId = USER_INODE_ID_START;
 
 		makeRootDir();

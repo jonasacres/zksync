@@ -28,7 +28,7 @@ public class RevisionInfo extends ZKFile {
 		this.path = REVISION_INFO_PATH;
 		this.mode = O_RDWR;
 		this.inode = fs.inodeTable.inodeWithId(InodeTable.INODE_ID_REVISION_INFO);
-		this.merkel = new PageMerkel(this.inode.getRefTag());
+		this.merkle = new PageMerkle(this.inode.getRefTag());
 		load();
 	}
 

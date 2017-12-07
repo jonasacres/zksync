@@ -135,5 +135,5 @@ public class ZKFileTest extends FileTestBase {
 		assertTrue(Arrays.equals(wholeThing.array(), zkscratch.read("random-write-test")));
 	}
 
-	// TODO: test squashing of page merkel chunk timestamps
+	// TODO: test squashing of page merkle chunk timestamps
 }

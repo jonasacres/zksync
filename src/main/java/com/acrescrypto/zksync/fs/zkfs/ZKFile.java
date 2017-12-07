@@ -16,7 +16,7 @@ public class ZKFile extends File {
 	protected Inode inode;
 	protected long offset;
 	protected String path;
-	protected PageMerkel merkel;
+	protected PageMerkle merkle;
 	protected int mode;
 	protected Page bufferedPage;
 	protected boolean dirty;
@@ -44,7 +44,7 @@ public class ZKFile extends File {
 			this.inode = fs.create(path);
 		}
 		
-		this.merkel = new PageMerkel(this.inode.getRefTag());
+		this.merkle = new PageMerkle(this.inode.getRefTag());
 		if((mode & O_TRUNC) != 0) truncate(0);
 		if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();
 	}
@@ -59,12 +59,12 @@ public class ZKFile extends File {
 	
 	public void setPageTag(int pageNum, byte[] hash) throws IOException {
 		assertWritable();
-		merkel.setPageTag(pageNum, hash);
-		inode.setRefTag(merkel.getRefTag());
+		merkle.setPageTag(pageNum, hash);
+		inode.setRefTag(merkle.getRefTag());
 	}
 	
 	public byte[] getPageTag(int pageNum) throws NonexistentPageException {
-		return merkel.getPageTag(pageNum);
+		return merkle.getPageTag(pageNum);
 	}
 
 	@Override
@@ -92,9 +92,9 @@ public class ZKFile extends File {
 			seek(oldOffset, SEEK_SET);
 		} else {
 			int newPageCount = (int) Math.ceil((double) size/fs.archive.privConfig.getPageSize());
-			merkel.resize(newPageCount);
-			for(int i = newPageCount; i < merkel.numPages; i++) {
-				merkel.setPageTag(i, new byte[fs.archive.crypto.hashLength()]);
+			merkle.resize(newPageCount);
+			for(int i = newPageCount; i < merkle.numPages; i++) {
+				merkle.setPageTag(i, new byte[fs.archive.crypto.hashLength()]);
 			}
 
 			inode.getStat().setSize(size);
@@ -133,7 +133,7 @@ public class ZKFile extends File {
 		
 		bufferedPage = new Page(this, pageNum);
 		
-		if(pageNum < merkel.numPages && pageNum < inode.refTag.numPages) {
+		if(pageNum < merkle.numPages && pageNum < inode.refTag.numPages) {
 			bufferedPage.load();
 		} else {
 			bufferedPage.blank();
@@ -203,7 +203,7 @@ public class ZKFile extends File {
 		inode.setChangedFrom(fs.baseRevision);
 		inode.setModifiedTime(now);
 		bufferedPage.flush();
-		inode.setRefTag(merkel.commit());
+		inode.setRefTag(merkle.commit());
 		dirty = false;
 	}
 
