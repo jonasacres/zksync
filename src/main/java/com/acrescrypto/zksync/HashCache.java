@@ -67,4 +67,8 @@ public class HashCache<K,V> {
 			evict.evict(key, value);
 		}
 	}
+	
+	public Iterable<K> cachedKeys() {
+		return cache.keySet();
+	}
 }

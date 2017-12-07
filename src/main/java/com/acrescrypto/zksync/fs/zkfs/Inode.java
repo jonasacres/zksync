@@ -23,12 +23,13 @@ public class Inode implements Comparable<Inode> {
 	public static Inode defaultRootInode(ZKFS fs) {
 		Inode blank = new Inode(fs);
 		Stat stat = new Stat();
-		long now = System.currentTimeMillis()*1000l*1000l;
+		long now = fs.currentTime();
 		stat.setAtime(now);
 		stat.setMtime(now);
 		stat.setCtime(now);
 		stat.setUser("zksync");
 		stat.setGroup("zksync");
+		stat.setInodeId(InodeTable.INODE_ID_INODE_TABLE);
 		
 		blank.setStat(stat);
 		blank.setFlags(FLAG_RETAIN);
@@ -41,6 +42,7 @@ public class Inode implements Comparable<Inode> {
 		this.fs = fs;
 		this.stat = new Stat();
 		this.changedFrom = fs.baseRevision;
+		this.refTag = RefTag.blank(fs.archive);
 	}
 	
 	public Inode(ZKFS fs, byte[] serialized) {
@@ -105,7 +107,7 @@ public class Inode implements Comparable<Inode> {
 	}
 	
 	public byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(fs.inodeTable.inodeSize());
+		ByteBuffer buf = ByteBuffer.allocate(InodeTable.inodeSize(fs.archive));
 		buf.put(stat.serialize());
 		buf.putLong(modifiedTime);
 		buf.putLong(identity);
@@ -184,6 +186,20 @@ public class Inode implements Comparable<Inode> {
 		if(modifiedTime != o.modifiedTime) return modifiedTime < o.modifiedTime ? -1 : 1;
 		if((c = Arrays.compareUnsigned(changedFrom.getBytes(), o.changedFrom.getBytes())) != 0) return c;
 		return Arrays.compareUnsigned(serialize(), o.serialize());
+	}
+	
+	public boolean isDeleted() {
+		return nlink == 0 && (flags & FLAG_RETAIN) == 0;
+	}
+	
+	public void markDeleted() {
+		stat = new Stat();
+		refTag = RefTag.blank(fs.archive);
+		changedFrom = RefTag.blank(fs.archive);
+		nlink = 0;
+		modifiedTime = 0;
+		flags = 0;
+		identity = 0;
 	}
 	
 	public Inode clone(ZKFS fs) {

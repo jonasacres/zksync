@@ -52,9 +52,10 @@ public class DiffSet {
 		// TODO: allInodes and allPaths makes merging O(n) with the number of total files, changed or not.
 		HashSet<Long> allInodes = new HashSet<Long>();
 		for(RefTag rev : revisions) {
-			for(Inode inode : rev.readOnlyFS().getInodeTable().getInodes().values()) {
-				// Disregard the RevisionInfo file in calculating diffs, since it always differs and can't be merged.
+			for(Inode inode : rev.readOnlyFS().getInodeTable().values()) {
+				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_INODE_TABLE) continue;
 				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_REVISION_INFO) continue;
+				if(inode.isDeleted()) continue;
 				allInodes.add(inode.getStat().getInodeId());
 			}
 		}

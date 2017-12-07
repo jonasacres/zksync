@@ -193,7 +193,8 @@ public class ZKFS extends FS {
 		assertPathIsDirectory(dirname(path));
 		assertPathDoesntExist(path);
 		
-		create(path).getStat().makeDirectory();
+		Inode created = create(path); 
+		created.getStat().makeDirectory();
 		ZKDirectory dir = opendir(path);
 		dir.link(dir, ".");
 		dir.link(inodeForPath(dirname(path)), "..");

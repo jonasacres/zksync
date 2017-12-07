@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 
@@ -21,10 +20,8 @@ public class InodeDiff {
 	public InodeDiff(long inodeId, RefTag[] candidates) throws IOException {
 		this.inodeId = inodeId;
 		for(RefTag candidate : candidates) {
-			Inode inode = null;
-			try {
-				inode = candidate.readOnlyFS().getInodeTable().inodeWithId(inodeId);
-			} catch (ENOENTException e) {}
+			Inode inode = candidate.readOnlyFS().getInodeTable().inodeWithId(inodeId);
+			if(inode.isDeleted()) inode = null;
 			getResolutions().putIfAbsent(inode, new ArrayList<RefTag>());
 			getResolutions().get(inode).add(candidate);
 		}
