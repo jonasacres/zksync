@@ -70,6 +70,12 @@ public class RefTag implements Comparable<RefTag> {
 		return hash;
 	}
 	
+	public byte[] getShortHash() {
+		byte[] shortHash = new byte[7];
+		for(int i = 0; i < shortHash.length; i++) shortHash[i] = hash[i];
+		return shortHash;
+	}
+	
 	public int getRefType() {
 		return refType;
 	}

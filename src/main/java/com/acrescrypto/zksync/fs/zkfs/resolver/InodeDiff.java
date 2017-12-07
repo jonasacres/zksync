@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 
@@ -58,5 +59,17 @@ public class InodeDiff {
 
 	public void add(Inode newInode, ArrayList<RefTag> tags) {
 		resolutions.put(newInode, tags);
+	}
+	
+	public String dump() {
+		String s = "InodeDiff " + inodeId + ": " + resolutions.size() + " resolutions\n";
+		for(Inode inode : resolutions.keySet()) {
+			s += "  Inode " + (inode == null ? "null" : inode.getIdentity()) + ": " + resolutions.get(inode).size() + " reftags";
+			if(resolved && resolution.equals(inode)) s += " (SELECTED)";
+			s += "\n   ";
+			for(RefTag tag : resolutions.get(inode)) s += " " + Util.bytesToHex(tag.getShortHash());
+			s += "\n";
+		}
+		return s;
 	}
 }

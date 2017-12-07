@@ -81,7 +81,6 @@ public class DiffSet {
 			InodeDiff diff = new InodeDiff(inodeId, revisions);
 			if(!diff.isConflict()) continue;
 			renumberInodeDiff(mergeFs, diff, idMap);
-			inodeDiffs.put(inodeId, diff);
 		}
 		
 		return idMap;
