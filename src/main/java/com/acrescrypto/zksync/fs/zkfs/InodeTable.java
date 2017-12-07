@@ -5,7 +5,6 @@ import java.nio.ByteBuffer;
 import java.util.Iterator;
 
 import com.acrescrypto.zksync.HashCache;
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Stat;
