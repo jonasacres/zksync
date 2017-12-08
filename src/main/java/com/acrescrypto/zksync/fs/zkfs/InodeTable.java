@@ -59,6 +59,7 @@ public class InodeTable extends ZKFile {
 	}
 
 	public RefTag commit(RefTag[] additionalParents) throws IOException {
+		freelist.commit();
 		updateRevisionInfo(additionalParents);
 		syncInodes();
 		updateTree(additionalParents);
@@ -96,7 +97,7 @@ public class InodeTable extends ZKFile {
 	public void unlink(long inodeId) throws IOException {
 		if(!hasInodeWithId(inodeId)) throw new ENOENTException(String.format("inode %d", inodeId));
 		if(inodeId <= 1) throw new IllegalArgumentException();
-
+		
 		Inode inode = inodeWithId(inodeId);
 		if(inode.nlink > 0) {
 			throw new EMLINKException(String.format("inode %d", inodeId));
@@ -181,6 +182,7 @@ public class InodeTable extends ZKFile {
 	
 	protected void setInode(Inode inode) throws IOException {
 		Inode existing = inodeWithId(inode.getStat().getInodeId());
+		if(existing == inode) return; // inode is already set
 		existing.deserialize(inode.serialize());
 	}
 	

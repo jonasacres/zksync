@@ -212,4 +212,9 @@ public class PageMerkle {
 	private Key cipherKey(RefTag refTag) {
 		return archive.deriveKey(ZKArchive.KEY_TYPE_CIPHER, ZKArchive.KEY_INDEX_PAGE_MERKLE, refTag.getBytes());
 	}
+
+	public boolean hasTag(int pageNum) {
+		if(pageNum >= numPagesUsed) return false;
+		return !nodes[numPages - 1 + pageNum].isBlank();
+	}
 }

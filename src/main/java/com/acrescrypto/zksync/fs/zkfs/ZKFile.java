@@ -133,7 +133,7 @@ public class ZKFile extends File {
 		
 		bufferedPage = new Page(this, pageNum);
 		
-		if(pageNum < merkle.numPages && pageNum < inode.refTag.numPages) {
+		if(merkle.hasTag(pageNum) && pageNum < inode.refTag.numPages) {
 			bufferedPage.load();
 		} else {
 			bufferedPage.blank();
@@ -204,6 +204,7 @@ public class ZKFile extends File {
 		inode.setModifiedTime(now);
 		bufferedPage.flush();
 		inode.setRefTag(merkle.commit());
+		fs.inodeTable.setInode(inode);
 		dirty = false;
 	}
 

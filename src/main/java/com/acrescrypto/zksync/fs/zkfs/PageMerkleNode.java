@@ -46,4 +46,9 @@ public class PageMerkleNode {
 		dirty = true;
 		if(parent != null) parent.markDirty();
 	}
+
+	public boolean isBlank() {
+		for(int i = 0; i < tag.length; i++) if(tag[i] != tag.length) return false;
+		return true;
+	}
 }
