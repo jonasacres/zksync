@@ -55,6 +55,7 @@ public class DiffSet {
 			for(Inode inode : rev.readOnlyFS().getInodeTable().values()) {
 				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_INODE_TABLE) continue;
 				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_REVISION_INFO) continue;
+				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_FREELIST) continue;
 				if(inode.isDeleted()) continue;
 				allInodes.add(inode.getStat().getInodeId());
 			}
@@ -106,7 +107,7 @@ public class DiffSet {
 		return new DiffSetResolver(this, inodeResolver, pathResolver);
 	}
 
-	protected void renumberInodeDiff(ZKFS fs, InodeDiff diff, Map<Long,Map<RefTag,Long>> idMap) {
+	protected void renumberInodeDiff(ZKFS fs, InodeDiff diff, Map<Long,Map<RefTag,Long>> idMap) throws IOException {
 		Map<Long,ArrayList<RefTag>> byIdentity = new HashMap<Long,ArrayList<RefTag>>();
 		long minIdent = Long.MAX_VALUE;
 

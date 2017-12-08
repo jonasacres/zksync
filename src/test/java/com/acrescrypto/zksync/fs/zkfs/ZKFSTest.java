@@ -246,7 +246,8 @@ public class ZKFSTest extends FSTestBase {
 	public void testSinglePageInodeTable() throws IOException {
 		RefTag rev = zkscratch.commit();
 		assertTrue(zkscratch.inodeTable.getStat().getSize() >= zkscratch.archive.crypto.hashLength());
-		assertTrue(zkscratch.inodeTable.getStat().getSize() < zkscratch.archive.getPrivConfig().getPageSize());
+		assertTrue(zkscratch.inodeTable.getStat().getSize() <= zkscratch.archive.getPrivConfig().getPageSize());
+		assertEquals(1, zkscratch.inodeTable.inode.refTag.numPages);
 		ZKFS revFs = rev.getFS();
 		assertTrue(Arrays.equals(revFs.inodeTable.merkle.getRefTag().getBytes(), zkscratch.inodeTable.merkle.getRefTag().getBytes()));
 		assertEquals(zkscratch.inodeTable.merkle.numPages, revFs.inodeTable.merkle.numPages);

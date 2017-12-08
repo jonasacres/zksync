@@ -8,19 +8,22 @@ import com.acrescrypto.zksync.HashCache;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.fs.zkfs.FreeList.FreeListExhaustedException;
 import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
 
 // represents inode table for ZKFS instance. 
 public class InodeTable extends ZKFile {
 	public final static long INODE_ID_INODE_TABLE = 0;
 	public final static long INODE_ID_ROOT_DIRECTORY = 1;
-	public static final long INODE_ID_REVISION_INFO = 2;
+	public final static long INODE_ID_REVISION_INFO = 2;
+	public final static long INODE_ID_FREELIST = 3;
 
 	public final static long USER_INODE_ID_START = 16;
 	
 	public final static String INODE_TABLE_PATH = "(inode table)";
 	
 	protected RevisionInfo revision;
+	protected FreeList freelist;
 	public long nextInodeId;
 	
 	protected HashCache<Long,Inode[]> inodesByPage;
@@ -45,7 +48,8 @@ public class InodeTable extends ZKFile {
 			this.merkle = new PageMerkle(tag);
 			this.inode = new Inode(fs);
 			this.inode.setRefTag(tag);
-			this.inode.stat.setSize(fs.archive.privConfig.getPageSize() * (tag.numPages-1) + inodesPerPage()*inodeSize());
+			this.inode.stat.setSize(fs.archive.privConfig.getPageSize() * tag.numPages);
+			this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST));
 			nextInodeId = lookupNextInodeId();
 		}
 	}
@@ -107,7 +111,7 @@ public class InodeTable extends ZKFile {
 		}
 		
 		inode.markDeleted();
-		// TODO: add inode id to freelist
+		freelist.freeInodeId(inodeId);
 	}
 	
 	public Inode inodeWithId(long inodeId) throws IOException {
@@ -118,9 +122,12 @@ public class InodeTable extends ZKFile {
 		return inodeId <= nextInodeId;
 	}
 	
-	public long issueInodeId() {
-		// TODO: pull inode id from freelist
-		return nextInodeId++;
+	public long issueInodeId() throws IOException {
+		try {
+			return freelist.issueInodeId();
+		} catch(FreeListExhaustedException exc) {
+			return nextInodeId++;
+		}
 	}
 	
 	public Inode issueInode() throws IOException {
@@ -165,6 +172,7 @@ public class InodeTable extends ZKFile {
 	protected void commitInodePage(long pageNum, Inode[] inodes) throws IOException {
 		seek(pageNum*fs.archive.privConfig.getPageSize(), SEEK_SET);
 		for(Inode inode : inodes) write(inode.serialize());
+		write(new byte[(int) (fs.archive.privConfig.getPageSize() - (offset % fs.archive.privConfig.getPageSize()))]);
 	}
 	
 	protected long pageNumForInodeId(long inodeId) {
@@ -203,7 +211,15 @@ public class InodeTable extends ZKFile {
 	
 	private void makeEmptyRevision() throws IOException {
 		Inode revfile = issueInode(INODE_ID_REVISION_INFO);
+		revfile.setFlags(Inode.FLAG_RETAIN);
 		setInode(revfile);
+	}
+	
+	private void makeEmptyFreelist() throws IOException {
+		Inode freelistInode = issueInode(INODE_ID_FREELIST);
+		freelistInode.setFlags(Inode.FLAG_RETAIN);
+		this.freelist = new FreeList(freelistInode);
+		setInode(freelistInode);
 	}
 	
 	private void initialize() throws IOException {
@@ -214,6 +230,7 @@ public class InodeTable extends ZKFile {
 
 		makeRootDir();
 		makeEmptyRevision();
+		makeEmptyFreelist();
 	}
 
 	public void replaceInode(InodeDiff inodeDiff) throws IOException {

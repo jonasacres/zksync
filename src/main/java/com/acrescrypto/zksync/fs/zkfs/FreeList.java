@@ -28,10 +28,9 @@ public class FreeList extends ZKFile {
 	}
 	
 	public long issueInodeId() throws IOException {
-		throw new FreeListExhaustedException();
-//		if(available.isEmpty()) loadNextPage();
-//		dirty = true;
-//		return available.pop();
+		if(available.isEmpty()) loadNextPage();
+		dirty = true;
+		return available.pop();
 	}
 	
 	public void freeInodeId(long inodeId) {
