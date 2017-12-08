@@ -24,10 +24,14 @@ public class RevisionInfo extends ZKFile {
 	 */
 	
 	public RevisionInfo(ZKFS fs) throws IOException {
-		this.fs = fs;
+		this(fs.inodeTable.inodeWithId(InodeTable.INODE_ID_REVISION_INFO));
+	}
+	
+	public RevisionInfo(Inode inode) throws IOException {
+		this.fs = inode.fs;
 		this.path = REVISION_INFO_PATH;
 		this.mode = O_RDWR;
-		this.inode = fs.inodeTable.inodeWithId(InodeTable.INODE_ID_REVISION_INFO);
+		this.inode = inode;
 		this.merkle = new PageMerkle(this.inode.getRefTag());
 		load();
 	}

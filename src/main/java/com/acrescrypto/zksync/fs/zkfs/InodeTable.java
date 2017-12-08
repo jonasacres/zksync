@@ -42,16 +42,8 @@ public class InodeTable extends ZKFile {
 			commitInodePage(pageNum, inodes);
 		});
 		
-		if(tag.isBlank()) {
-			initialize();
-		} else {
-			this.merkle = new PageMerkle(tag);
-			this.inode = new Inode(fs);
-			this.inode.setRefTag(tag);
-			this.inode.stat.setSize(fs.archive.privConfig.getPageSize() * tag.numPages);
-			this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST));
-			nextInodeId = lookupNextInodeId();
-		}
+		if(tag.isBlank()) initialize();
+		else readExisting(tag);
 	}
 	
 	protected long lookupNextInodeId() throws IOException {
@@ -231,6 +223,16 @@ public class InodeTable extends ZKFile {
 		makeRootDir();
 		makeEmptyRevision();
 		makeEmptyFreelist();
+	}
+	
+	private void readExisting(RefTag tag) throws IOException {
+		this.merkle = new PageMerkle(tag);
+		this.inode = new Inode(fs);
+		this.inode.setRefTag(tag);
+		this.inode.stat.setSize(fs.archive.privConfig.getPageSize() * tag.numPages);
+		this.revision = new RevisionInfo(inodeWithId(INODE_ID_REVISION_INFO));
+		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST));
+		nextInodeId = lookupNextInodeId();
 	}
 
 	public void replaceInode(InodeDiff inodeDiff) throws IOException {
