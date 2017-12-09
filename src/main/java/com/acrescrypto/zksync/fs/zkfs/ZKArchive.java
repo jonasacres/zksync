@@ -47,7 +47,7 @@ public class ZKArchive {
 		this.storage = storage;
 		this.pubConfig = new PubConfig(storage);
 		this.crypto = new CryptoSupport(pubConfig);
-		this.keyfile = new KeyFile(this, provider.passphraseForArchive(pubConfig.getArchiveId()));
+		this.keyfile = new KeyFile(this).readOrCreate(provider.passphraseForArchive(pubConfig.getArchiveId()));
 		this.privConfig = new PrivConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_PRIVATE));
 		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
 		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {

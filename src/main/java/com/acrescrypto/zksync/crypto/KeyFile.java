@@ -9,9 +9,8 @@ public class KeyFile {
 	private ZKArchive archive;
 	private Key textRoot, hashRoot;
 	
-	public KeyFile(ZKArchive archive, char[] passphrase) throws IOException {
+	public KeyFile(ZKArchive archive) throws IOException {
 		this.archive = archive;
-		read(passphrase);
 	}
 	
 	private Key makePassphraseKey(char[] passphrase) {
@@ -20,23 +19,41 @@ public class KeyFile {
 		return new Key(archive.getCrypto(), archive.getCrypto().deriveKeyFromPassword(ppBytes, "zksync-salt".getBytes()));
 	}
 	
-	public void read(char[] passphrase) throws IOException {
+	public KeyFile readOrCreate(char[] passphrase) throws IOException {
 		Key ppKey = makePassphraseKey(passphrase);
 		
 		try {
-			int len = archive.getCrypto().symKeyLength();
-			byte[] plaintext = SecureFile
-					.atPath(archive.getStorage(), getPath(), ppKey, new byte[0], null)
-					.read();
-			byte[][] rawKeys = new byte[2][len];
-			for(int i = 0; i < 2*len; i++) rawKeys[i/len][i % len] = plaintext[i];
-			
-			this.setCipherRoot(new Key(archive.getCrypto(), rawKeys[0]));
-			this.setHashRoot(new Key(archive.getCrypto(), rawKeys[1]));
+			return read(ppKey);
 		} catch(IOException ex) {
-			generate(ppKey);
-			write(passphrase); // TODO: this is kind of awkward, since there's no way to open-and-fail.
+			return create(ppKey);
 		}
+	}
+	
+	public KeyFile read(char[] passphrase) throws IOException {
+		return read(makePassphraseKey(passphrase));
+	}
+	
+	public KeyFile read(Key ppKey) throws IOException {
+		int len = archive.getCrypto().symKeyLength();
+		byte[] plaintext = SecureFile
+				.atPath(archive.getStorage(), getPath(), ppKey, new byte[0], null)
+				.read();
+		byte[][] rawKeys = new byte[2][len];
+		for(int i = 0; i < 2*len; i++) rawKeys[i/len][i % len] = plaintext[i];
+		
+		this.setCipherRoot(new Key(archive.getCrypto(), rawKeys[0]));
+		this.setHashRoot(new Key(archive.getCrypto(), rawKeys[1]));
+		return this;
+	}
+	
+	public KeyFile create(char[] passphrase) throws IOException {
+		return read(makePassphraseKey(passphrase));
+	}
+	
+	public KeyFile create(Key ppKey) throws IOException {
+		generate(ppKey);
+		write(ppKey);
+		return this;
 	}
 	
 	public void generate(Key ppKey) {
@@ -44,8 +61,7 @@ public class KeyFile {
 		this.setHashRoot(ppKey.derive(ZKArchive.KEY_TYPE_AUTH, new byte[0]));
 	}
 	
-	public void write(char[] passphrase) throws IOException {
-		Key ppKey = makePassphraseKey(passphrase);
+	public void write(Key ppKey) throws IOException {
 		int len = archive.getCrypto().symKeyLength();
 		
 		ByteBuffer plaintext = ByteBuffer.allocate(2*len);

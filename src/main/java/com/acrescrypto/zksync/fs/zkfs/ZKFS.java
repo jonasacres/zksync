@@ -192,14 +192,9 @@ public class ZKFS extends FS {
 	public void mkdir(String path) throws IOException {
 		assertPathIsDirectory(dirname(path));
 		assertPathDoesntExist(path);
-		
-		Inode created = create(path); 
-		created.getStat().makeDirectory();
-		ZKDirectory dir = opendir(path);
-		dir.link(dir, ".");
-		dir.link(inodeForPath(dirname(path)), "..");
+		ZKDirectory dir = opendir(dirname(path));
+		dir.mkdir(basename(path));
 		dir.close();
-		chmod(path, archive.localConfig.getDirectoryMode());
 	}
 	
 	@Override

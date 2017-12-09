@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -14,6 +15,7 @@ import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.File;
 
 public class ZKDirectory extends ZKFile implements Directory {
+	// TODO: Allow partial reads of directories
 	HashMap<String,Long> entries;
 	boolean dirty;
 	
@@ -178,7 +180,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 		if(entries.containsKey(name)) throw new EEXISTSException(fullPath);
 		fs.create(fullPath, this).getStat().makeDirectory();
 
-		// TODO: duplicated from ZKFS... can we consolidate?
 		ZKDirectory dir = fs.opendir(fullPath);
 		dir.link(dir, ".");
 		dir.link(inode, "..");

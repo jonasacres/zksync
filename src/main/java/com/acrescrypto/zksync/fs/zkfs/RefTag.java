@@ -6,13 +6,12 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.Util;
 
-// TODO: save a byte for archive format
 public class RefTag implements Comparable<RefTag> {
 	protected ZKArchive archive;
 	protected ZKFS readOnlyFs;
 	protected RevisionInfo info;
 	protected byte[] tag, hash;
-	protected byte versionMajor, versionMinor;
+	protected byte archiveType, versionMajor, versionMinor;
 	protected int refType;	
 	protected long numPages;
 	public static final byte REF_TYPE_2INDIRECT = 2;
@@ -21,8 +20,9 @@ public class RefTag implements Comparable<RefTag> {
 	
 	public static int REFTAG_EXTRA_DATA_SIZE = 16;
 	// reserve 16 bytes because you know we'll use it, and it probably won't be enough
+	// 1 byte archive type
 	// 2 bytes version
-	// 1 byte encoding type
+	// 1 byte ref type
 	// 8 bytes num chunks
 	
 	public static RefTag blank(ZKArchive archive) {
@@ -103,11 +103,12 @@ public class RefTag implements Comparable<RefTag> {
 	protected byte[] serialize() {
 		ByteBuffer buf = ByteBuffer.allocate(archive.refTagSize());
 		buf.put(hash);
+		buf.put(archiveType);
 		buf.put(versionMajor);
 		buf.put(versionMinor);
 		buf.put((byte) (this.refType & 0x03));
 		buf.putLong(numPages);
-		buf.put(new byte[REFTAG_EXTRA_DATA_SIZE-2-8-1]);
+		buf.put(new byte[REFTAG_EXTRA_DATA_SIZE-2-8-1-1]);
 		
 		assert(!buf.hasRemaining());
 		return buf.array();
@@ -119,6 +120,7 @@ public class RefTag implements Comparable<RefTag> {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		this.hash = new byte[archive.crypto.hashLength()];
 		buf.get(hash);
+		this.archiveType = buf.get();
 		this.versionMajor = buf.get();
 		this.versionMinor = buf.get();
 		this.refType = buf.get() & 0x03;
