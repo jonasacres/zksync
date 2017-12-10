@@ -187,7 +187,7 @@ public class LocalFS extends FS {
 	public void mknod(String path, int type, int major, int minor) throws IOException {
 		if(isWindows()) throw new FileTypeNotSupportedException(path + ": Windows does not support devices");
 		String typeChars[] = { "c", "b", "p" };
-		if(type >= typeChars.length) throw new IllegalArgumentException();
+		if(type < 0 || type >= typeChars.length) throw new IllegalArgumentException();
 		
 		runCommand(new String[] { "mknod", typeChars[type], path, String.format("%d", major), String.format("%d", minor) });
 	}
