@@ -5,7 +5,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 
-import org.apache.commons.io.FileUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -21,8 +20,14 @@ public class SSHFSTest extends FSTestBase {
 	public final static String URL = "jonas@localhost:" + SCRATCH_DIR;
 	public SSHFS sshscratch;
 	
+	public static char[] sshPassphrase() throws IOException {
+		LocalFS fs = new LocalFS("/home/jonas");
+		byte[] ppb = fs.read(".zksync-test-passphrase");
+		return new String(ppb).trim().toCharArray();
+	}
+	
 	public static SSHFS openFs() throws IOException { 
-		return SSHFS.withPassphrase("zksync-test@localhost:", "voice tattoo behind school".toCharArray());
+		return SSHFS.withPassphrase("zksync-test@localhost:", sshPassphrase());
 	}
 
 	@Before

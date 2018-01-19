@@ -1,15 +1,22 @@
 package com.acrescrypto.zksync.fs.sshfs;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Paths;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.FS;
@@ -24,11 +31,28 @@ import net.schmizz.sshj.transport.TransportException;
 import net.schmizz.sshj.userauth.keyprovider.KeyProvider;
 
 public class SSHFS extends FS {
+	public class SSHCommandFailedException extends IOException {
+		String cmdline;
+
+		public SSHCommandFailedException(String cmdline) {
+			this.cmdline = cmdline;
+		}
+
+		/**
+		 * 
+		 */
+		private static final long serialVersionUID = 1L;
+	}
+	
 	protected SSHClient ssh;
 	protected Session session;
 	protected String url;
 	protected HashMap<String,HashMap<Integer,String>> osCommandMap = new HashMap<String,HashMap<Integer,String>>();
 	protected String root;
+	protected Queue<Session> sessions = new LinkedList<Session>();
+	
+	protected Lock sessionLock = new ReentrantLock();
+	protected Condition sessionCond = sessionLock.newCondition();
 	
 	int hostType = HOST_TYPE_UNPROBED;
 	
@@ -85,7 +109,7 @@ public class SSHFS extends FS {
 	public SSHFS(SSHClient ssh, String url) throws IOException {
 		this.ssh = ssh;
 		this.url = url;
-		startSession();
+		startSessions(8);
 		chdir(urlPath(url));
 		this.root = cwd();
 		// TODO: keep the connection alive for 60m idle, reconnect on demand
@@ -138,6 +162,11 @@ public class SSHFS extends FS {
 	public void rmdir(String path) throws IOException {
 		execAndCheck("rmdir", "\"" + qualifiedPath(path) + "\"");
 	}
+	
+	@Override
+	public void rmrf(String path) throws IOException {
+		execAndCheck("rm", "-rf \"" + qualifiedPath(path) + "\"");
+	}
 
 	@Override
 	public void unlink(String path) throws IOException {
@@ -146,7 +175,13 @@ public class SSHFS extends FS {
 
 	@Override
 	public void link(String target, String link) throws IOException {
-		execAndCheck("ln", "\"" + qualifiedPath(target) + "\" \"" + qualifiedPath(link) + "\"");
+		try {
+			execAndCheck("ln", "\"" + qualifiedPath(target) + "\" \"" + qualifiedPath(link) + "\"");
+		} catch(SSHCommandFailedException exc) {
+			if(!exists(target)) throw new ENOENTException(link);
+			if(exists(link)) throw new EEXISTSException(link);
+			throw exc;
+		}
 	}
 
 	@Override
@@ -261,8 +296,42 @@ public class SSHFS extends FS {
 		execAndCheck("cd", "\"" + dest + "\"");
 	}
 	
-	protected void startSession() throws IOException {
-		session = ssh.startSession();
+	protected void startSessions(int count) throws IOException {
+		new Thread(() -> {
+			boolean ownsLock = false;
+			try {
+				for(int i = 0; i < count; i++) {
+					Session newSession = ssh.startSession();
+					sessionLock.lock();
+					ownsLock = true;
+					sessions.add(newSession);
+					sessionCond.signalAll();
+					sessionLock.unlock();
+					ownsLock = false;
+				}
+			} catch (ConnectionException | TransportException e) {
+				e.printStackTrace();
+				if(ownsLock) sessionLock.unlock();
+			}
+		}).start();
+	}
+	
+	protected Session grabSession() throws IOException {
+		sessionLock.lock();
+		while(sessions.isEmpty()) {
+			try {
+				sessionCond.await();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+				sessionLock.unlock();
+				throw new RuntimeException("Unable to get SSH session");
+			}
+		}
+		
+		Session session = sessions.remove();
+		sessionLock.unlock();
+		startSessions(1);
+		return session;
 	}
 	
 	protected String oscmd(String cmd) throws IOException {
@@ -304,12 +373,16 @@ public class SSHFS extends FS {
 	protected byte[] execAndCheck(String command, String args, byte[] stdin) throws IOException {
 		try {
 			String cmdline = String.format("%s%s", oscmd(command), args == null ? "" : " " + args);
-			Command cmd = session.exec(cmdline);
-			startSession();
-			if(stdin != null) cmd.getOutputStream().write(stdin);
+			Command cmd = grabSession().exec(cmdline);
+			if(stdin != null) {
+				OutputStream stream = cmd.getOutputStream();
+				stream.write(stdin);
+				stream.close();
+				cmd.close();
+			}
 			byte[] result = IOUtils.readFully(cmd.getInputStream()).toByteArray();
 			cmd.join(5, TimeUnit.SECONDS);
-			if(cmd.getExitStatus() != 0) throw new IOException("Command failed: " + cmdline);
+			if(cmd.getExitStatus() != 0) throw new SSHCommandFailedException(cmdline);
 			return result;
 		} catch (ConnectionException | TransportException e) {
 			throw new IOException("Caught exception executing " + command);

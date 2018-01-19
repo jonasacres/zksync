@@ -23,7 +23,7 @@ public class SSHDirectory implements Directory {
 
 	@Override
 	public String[] list(int opts) throws IOException {
-		String ls = new String(fs.execAndCheck("ls", "-1 \"" + fs.qualifiedPath(path) + "\""));
+		String ls = new String(fs.execAndCheck("ls", "-a1 \"" + fs.qualifiedPath(path) + "\""));
 		String[] files;
 		if(ls.length() == 0) {
 			files = new String[0];
@@ -51,13 +51,32 @@ public class SSHDirectory implements Directory {
 
 	@Override
 	public String[] listRecursive(int opts) throws IOException {
-		// TODO Auto-generated method stub
-		return null;
+		ArrayList<String> results = new ArrayList<String>();
+		listRecursiveIterate(opts, results, "");
+		String[] buf = new String[results.size()];
+		return results.toArray(buf);
+	}
+	
+	public void listRecursiveIterate(int opts, ArrayList<String> results, String prefix) throws IOException {
+		for(String entry : list(opts & ~Directory.LIST_OPT_OMIT_DIRECTORIES)) {
+			String subpath = Paths.get(prefix, entry).toString(); // what we return in our results
+			String realSubpath = Paths.get(path, entry).toString(); // what we can look up directly in fs
+			if(fs.stat(Paths.get(path, entry).toString()).isDirectory()) {
+				boolean isDotDir = entry.equals(".") || entry.equals("..");
+				if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
+					results.add(subpath);
+				}
+				
+				if(!isDotDir) fs.opendir(realSubpath).listRecursiveIterate(opts, results, subpath);
+			} else {
+				results.add(subpath);
+			}
+		}
 	}
 
 	@Override
 	public boolean contains(String entry) throws IOException {
-		return fs.exists(fs.qualifiedPath(Paths.get(path, entry).toString()));
+		return fs.exists(Paths.get(path, entry).toString());
 	}
 
 	@Override
@@ -79,8 +98,8 @@ public class SSHDirectory implements Directory {
 	}
 
 	@Override
-	public void unlink(String path) throws IOException {
-		fs.unlink(path);
+	public void unlink(String target) throws IOException {
+		fs.unlink(Paths.get(path, target).toString());
 	}
 
 	@Override
