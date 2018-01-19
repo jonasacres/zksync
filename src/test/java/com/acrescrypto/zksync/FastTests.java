@@ -14,6 +14,6 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFSTests;
 	ZKFSTests.class
 })
 
-public class ZKSyncTests {
+public class FastTests {
 
 }

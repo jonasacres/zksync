@@ -27,7 +27,7 @@ public abstract class File implements Closeable {
 		maxLength = (int) Math.min(maxLength, getStat().getSize());
 		byte[] buf = new byte[(int) maxLength];
 		int readBytes = read(buf, 0, (int) maxLength);
-		if(readBytes < buf.length && readBytes > 0) {
+		if(readBytes < buf.length && readBytes >= 0) {
 			byte[] newBuf = new byte[readBytes];
 			for(int i = 0; i < newBuf.length; i++) newBuf[i] = buf[i];
 			buf = newBuf;
