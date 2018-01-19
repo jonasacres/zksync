@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.sshfs;
 
 import java.io.IOException;
 
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -13,10 +14,17 @@ public class SSHFile extends File {
 	
 	protected Stat cachedStat;
 	
-	public SSHFile(SSHFS fs, String path, int mode) {
+	public SSHFile(SSHFS fs, String path, int mode) throws IOException {
 		this.fs = fs;
 		this.path = path;
 		this.mode = mode;
+		
+		try {
+			fs.stat(path);
+		} catch(ENOENTException exc) {
+			if((mode & O_CREAT) == 0) throw exc;
+			fs.execAndCheck("touch", "\"" + fs.qualifiedPath(path) + "\"");
+		}
 	}
 
 	@Override

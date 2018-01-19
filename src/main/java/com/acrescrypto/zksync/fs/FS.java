@@ -41,10 +41,15 @@ public abstract class FS {
 		try {
 			for(String entry : dir.list()) {
 				String subpath = Paths.get(path, entry).toString();
-				Stat lstat = stat(subpath);
-				if(lstat.isDirectory()) rmrf(subpath);
-				else unlink(subpath);
+				Stat lstat = lstat(subpath);
+				if(lstat.isDirectory()) {
+					rmrf(subpath);
+				} else {
+					unlink(subpath);
+				}
 			}
+		} catch(Exception exc) {
+			exc.printStackTrace();
 		} finally {
 			dir.close();
 			rmdir(path);

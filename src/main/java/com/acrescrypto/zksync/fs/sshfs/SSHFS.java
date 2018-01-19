@@ -10,6 +10,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -19,46 +21,106 @@ import net.schmizz.sshj.connection.ConnectionException;
 import net.schmizz.sshj.connection.channel.direct.Session;
 import net.schmizz.sshj.connection.channel.direct.Session.Command;
 import net.schmizz.sshj.transport.TransportException;
+import net.schmizz.sshj.userauth.keyprovider.KeyProvider;
 
 public class SSHFS extends FS {
-	SSHClient ssh;
-	Session session;
-	HashMap<String,HashMap<Integer,String>> osCommandMap = new HashMap<String,HashMap<Integer,String>>(); 
+	protected SSHClient ssh;
+	protected Session session;
+	protected String url;
+	protected HashMap<String,HashMap<Integer,String>> osCommandMap = new HashMap<String,HashMap<Integer,String>>();
+	protected String root;
 	
 	int hostType = HOST_TYPE_UNPROBED;
-	String user;
-	String hostname;
-	String remotePath;
 	
 	public final static int HOST_TYPE_UNPROBED = Integer.MAX_VALUE;
 	public final static int HOST_TYPE_UNKNOWN = -1;
 	public final static int HOST_TYPE_LINUX = 0;
 	public final static int HOST_TYPE_OSX = 1;
+		
+	public static SSHFS withPassphrase(String url, char[] passphrase) throws IOException {
+		SSHClient ssh = setupSSHClient(url);
+		ssh.authPassword(urlUsername(url), passphrase);
+		return new SSHFS(ssh, url);
+	}
 	
-	public SSHFS(String url) throws IOException {
-		parseUrl(url);
-		ssh = new SSHClient();
+	public static SSHFS withKeyfile(String url, String keyfile, char[] passphrase) throws IOException {
+		SSHClient ssh = setupSSHClient(url);
+		KeyProvider provider = ssh.loadKeys(keyfile, passphrase);
+		ssh.authPublickey(urlUsername(url), provider);
+		return new SSHFS(ssh, url);
+
+	}
+	
+	public static SSHFS withDefaultKeyfile(String url) throws IOException {
+		SSHClient ssh = setupSSHClient(url);
+		ssh.authPublickey(urlUsername(url));
+		return new SSHFS(ssh, url);
+	}
+	
+	protected static SSHClient setupSSHClient(String url) throws IOException {
+		SSHClient ssh = new SSHClient();
 		ssh.loadKnownHosts();
-		ssh.connect(url);
+		ssh.connect(urlHostname(url));
+		return ssh;
+	}
+	
+	protected static String urlUsername(String url) {
+		String[] comps = url.split("@");
+		if(comps.length > 1) return comps[0];
+		// TODO: check .ssh/config?
+		return System.getProperty("user.name");
+	}
+	
+	protected static String urlHostname(String url) {
+		String[] comps = url.split("@");
+		return comps[comps.length-1].split(":")[0];
+	}
+	
+	protected static String urlPath(String url) {
+		String[] comps = url.split(":");
+		if(comps.length == 1) return "";
+		return comps[1];
+	}
+	
+	public SSHFS(SSHClient ssh, String url) throws IOException {
+		this.ssh = ssh;
+		this.url = url;
+		startSession();
+		chdir(urlPath(url));
+		this.root = cwd();
 		// TODO: keep the connection alive for 60m idle, reconnect on demand
 	}
 	
 	public void close() throws IOException {
-		ssh.close();
+		try {
+			session.close();
+		} finally {
+			ssh.disconnect();
+		}
 	}
 
 	@Override
 	public Stat stat(String path) throws IOException {
-		return parseStat(new String(execAndCheck("stat", "-L " + qualifiedPath(path))));
+		try {
+			return parseStat(new String(execAndCheck("stat", "-L \"" + qualifiedPath(path) + "\"")));
+		} catch(IOException exc) {
+			throw new ENOENTException(path);
+		}
 	}
 
 	@Override
 	public Stat lstat(String path) throws IOException {
-		return parseStat(new String(execAndCheck("stat", qualifiedPath(path))));
+		try {
+			return parseStat(new String(execAndCheck("stat", "\"" + qualifiedPath(path) + "\"")));
+		} catch(IOException exc) {
+			throw new ENOENTException(path);
+		}
 	}
 
 	@Override
 	public SSHDirectory opendir(String path) throws IOException {
+		Stat stat = stat(path);
+		if(!stat.isDirectory()) throw new EISNOTDIRException(path);
 		return new SSHDirectory(this, path);
 	}
 
@@ -89,7 +151,7 @@ public class SSHFS extends FS {
 
 	@Override
 	public void symlink(String target, String link) throws IOException {
-		execAndCheck("ln", "-s \"" + qualifiedPath(target) + "\" \"" + qualifiedPath(link) + "\"");
+		execAndCheck("ln", "-s \"" + target + "\" \"" + qualifiedPath(link) + "\"");
 	}
 
 	@Override
@@ -141,7 +203,7 @@ public class SSHFS extends FS {
 
 	@Override
 	public void setMtime(String path, long mtime) throws IOException {
-		execAndCheck("touch", "-t " + timestampToTouchFormat(mtime) + " " + qualifiedPath(path));
+		execAndCheck("touch", "-md \"" + timestampToTouchFormat(mtime) + "\" \"" + qualifiedPath(path) + "\"");
 	}
 
 	@Override
@@ -151,14 +213,22 @@ public class SSHFS extends FS {
 
 	@Override
 	public void setAtime(String path, long atime) throws IOException {
-		execAndCheck("touch", "-at " + timestampToTouchFormat(atime) + " " + qualifiedPath(path));
+		execAndCheck("touch", "-ad \"" + timestampToTouchFormat(atime) + "\" \"" + qualifiedPath(path) + "\"");
 	}
 
 	@Override
-	public void write(String path, byte[] contents) throws IOException {
+	public void write(String path, byte[] contents) throws IOException {		
+		try {
+			stat(dirname(path));
+		} catch(ENOENTException exc) {
+			mkdirp(dirname(path));
+		}
+		
 		SSHMemFile memfile = new SSHMemFile(); // TODO: right constructor?
 		memfile.setContents(contents);
-		ssh.newSCPFileTransfer().download(qualifiedPath(path), memfile);
+		ssh.newSCPFileTransfer().upload(memfile, qualifiedPath(path));
+		setMtime(path, 1000l*1000l*System.currentTimeMillis());
+		setAtime(path, 1000l*1000l*System.currentTimeMillis());
 	}
 
 	@Override
@@ -175,7 +245,7 @@ public class SSHFS extends FS {
 
 	@Override
 	public void truncate(String path, long size) throws IOException {
-		execAndCheck("truncate", " -s " + size + " " + qualifiedPath(path));
+		execAndCheck("truncate", " -s " + size + " \"" + qualifiedPath(path) + "\"");
 	}
 	
 	public int getHostType() throws IOException {
@@ -183,7 +253,21 @@ public class SSHFS extends FS {
 		return hostType = discoverHostType();
 	}
 	
+	protected String cwd() throws IOException {
+		return new String(execAndCheck("pwd")).trim();
+	}
+	
+	protected void chdir(String dest) throws IOException {
+		execAndCheck("cd", "\"" + dest + "\"");
+	}
+	
+	protected void startSession() throws IOException {
+		session = ssh.startSession();
+	}
+	
 	protected String oscmd(String cmd) throws IOException {
+		if(cmd.equals("uname")) return "uname"; // stop infinite loop on command for getHostType()
+		
 		return osCommandMap
 		  .getOrDefault(cmd, new HashMap<Integer,String>())
 		  .getOrDefault(getHostType(), cmd);
@@ -197,11 +281,11 @@ public class SSHFS extends FS {
 	}
 	
 	protected String qualifiedPath(String path) {
-		return Paths.get(remotePath, path).toString();
+		return Paths.get(root, path).toString();
 	}
 	
 	protected String timestampToTouchFormat(long timestamp) {
-		return (new SimpleDateFormat("yyyyMMddhhmm.ss")).format(new Date(timestamp/(1000l*1000l)));
+		return (new SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z")).format(new Date(timestamp/(1000l*1000l)));
 	}
 	
 	// TODO: all this command execution stuff should be its own class
@@ -214,17 +298,18 @@ public class SSHFS extends FS {
 	}
 	
 	protected byte[] execAndCheck(String command, String args) throws IOException {
-		return execAndCheck(command, null, null);
+		return execAndCheck(command, args, null);
 	}
 	
 	protected byte[] execAndCheck(String command, String args, byte[] stdin) throws IOException {
 		try {
 			String cmdline = String.format("%s%s", oscmd(command), args == null ? "" : " " + args);
 			Command cmd = session.exec(cmdline);
-			cmd.getOutputStream().write(stdin);
+			startSession();
+			if(stdin != null) cmd.getOutputStream().write(stdin);
 			byte[] result = IOUtils.readFully(cmd.getInputStream()).toByteArray();
 			cmd.join(5, TimeUnit.SECONDS);
-			if(cmd.getExitStatus() != 0) throw new IOException("Command failed: " + command);
+			if(cmd.getExitStatus() != 0) throw new IOException("Command failed: " + cmdline);
 			return result;
 		} catch (ConnectionException | TransportException e) {
 			throw new IOException("Caught exception executing " + command);
@@ -238,25 +323,12 @@ public class SSHFS extends FS {
 	protected void setupCommandMaps() {
 		mapCommand("truncate", HOST_TYPE_OSX, "gtruncate");
 		mapCommand("stat", HOST_TYPE_OSX, "gstat");
+		mapCommand("touch", HOST_TYPE_OSX, "gtouch");
 	}
 	
 	protected void mapCommand(String canonical, int type, String osAlternative) {
 		osCommandMap.putIfAbsent(canonical, new HashMap<Integer,String>());
 		osCommandMap.get(canonical).put(type, osAlternative);
-	}
-	
-	protected void parseUrl(String url) {
-		String[] comps = url.split("@");
-		if(comps.length == 1) user = null; // TODO: default to ssh config?
-		else user = comps[0];
-		
-		comps = comps[comps.length-1].split(":");
-		hostname = comps[0];
-		remotePath = "";
-		for(int i = 1; i < comps.length; i++) {
-			if(i > 1) remotePath += ":";
-			remotePath += comps[i];
-		}
 	}
 	
 	// TODO: all the stat stuff can get split off too
@@ -284,17 +356,17 @@ public class SSHFS extends FS {
 	}
 
 	private long parseStatMtime(String output) {
-		String regex = "\\s*Modify: "+statDateRegex()+"$";
+		String regex = "\\s*Modify: "+statDateRegex();
 		return statDateToEpochNs(patternFromString(regex, output));
 	}
 	
 	private long parseStatAtime(String output) {
-		String regex = "\\s*Access: "+statDateRegex()+"$";
+		String regex = "\\s*Access: "+statDateRegex();
 		return statDateToEpochNs(patternFromString(regex, output));
 	}
 	
 	private long parseStatCtime(String output) {
-		String regex = "\\s*Change: "+statDateRegex()+"$";
+		String regex = "\\s*Change: "+statDateRegex();
 		return statDateToEpochNs(patternFromString(regex, output));
 	}
 	
@@ -303,9 +375,10 @@ public class SSHFS extends FS {
 	}
 	
 	private int parseStatType(String output) {
-		String type = patternFromString("\\s*ID Block: \\d+\\s+([\\w ]*\\w)", output);
+		String type = patternFromString("\\s*IO Block: \\d+\\s+([\\w ]*\\w)", output);
 		if(type == null) throw new RuntimeException("Unable to locate device type in stat");
 		if(type.equals("regular file")) return Stat.TYPE_REGULAR_FILE;
+		if(type.equals("regular empty file")) return Stat.TYPE_REGULAR_FILE;
 		if(type.equals("directory")) return Stat.TYPE_DIRECTORY;
 		if(type.equals("symbolic link")) return Stat.TYPE_SYMLINK;
 		if(type.equals("character special device")) return Stat.TYPE_CHARACTER_DEVICE;
@@ -315,11 +388,19 @@ public class SSHFS extends FS {
 	}
 	
 	private int parseStatDeviceMajor(String output) {
-		return Integer.parseInt(patternFromString("\\s*Device type: (\\d+),\\d+", output));
+		try {
+			return Integer.parseInt(patternFromString("\\s*Device type: (\\d+),\\d+", output));
+		} catch(NumberFormatException exc) {
+			return -1;
+		}
 	}
 	
 	private int parseStatDeviceMinor(String output) {
-		return Integer.parseInt(patternFromString("\\s*Device type: \\d+,(\\d+)", output));
+		try {
+			return Integer.parseInt(patternFromString("\\s*Device type: \\d+,(\\d+)", output));
+		} catch(NumberFormatException exc) {
+			return -1;
+		}
 	}
 	
 	private int parseStatInodeId(String output) {
@@ -331,7 +412,7 @@ public class SSHFS extends FS {
 	}
 	
 	private String parseStatUser(String output) {
-		return patternFromString("\\s*Uid: \\(\\s*\\d+\\s*/\\s*(\\w+)\\s*\\)", output);
+		return patternFromString("\\s*Uid: \\(\\s*\\d+\\s*/\\s*([^)]+)\\)", output);
 	}
 	
 	private int parseStatGid(String output) {
@@ -339,7 +420,7 @@ public class SSHFS extends FS {
 	}
 	
 	private String parseStatGroup(String output) {
-		return patternFromString("\\s*Gid: \\(\\s*\\d+\\s*/\\s*(\\w+)\\s*\\)", output);
+		return patternFromString("\\s*Gid: \\(\\s*\\d+\\s*/\\s*([^)]+)\\)", output);
 	}
 	
 	private String patternFromString(String regex, String data) {
@@ -358,15 +439,16 @@ public class SSHFS extends FS {
 			hour = Integer.parseInt(matcher.group(4)),
 			minute = Integer.parseInt(matcher.group(5)),
 			second = Integer.parseInt(matcher.group(6)),
-			nanosecond = Integer.parseInt(matcher.group(7)),
-			timezone = Integer.parseInt(matcher.group(8));
+			nanosecond = Integer.parseInt(matcher.group(7));
+		String timezone = matcher.group(8);
+		String munged = String.format("%04d %02d %02d %02d %02d %02d %s",
+				year, month, day, hour, minute, second, timezone);
 		try {
-			String munged = String.format("%04d %02d %02d %02d %02d %02d %s",
-					year, month, day, hour, minute, second, timezone);
 			long ms = (new SimpleDateFormat("yyyy MM dd HH mm ss Z")).parse(munged).getTime();
 			return 1000l*1000l*ms+nanosecond;
 		} catch (ParseException e) {
-			throw new RuntimeException("Unable to parse stat date " + statDate);
+			System.out.println("Unable to parse stat date " + statDate + " with regex " + pattern);
+			throw new RuntimeException("Unable to parse stat date " + statDate + " with regex " + pattern);
 		}
 	}
 	

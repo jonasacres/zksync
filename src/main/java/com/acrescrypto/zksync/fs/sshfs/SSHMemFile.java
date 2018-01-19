@@ -1,9 +1,12 @@
 package com.acrescrypto.zksync.fs.sshfs;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+
+import com.acrescrypto.zksync.ResizableOutputStream;
 
 import net.schmizz.sshj.xfer.LocalDestFile;
 import net.schmizz.sshj.xfer.LocalFileFilter;
@@ -11,11 +14,15 @@ import net.schmizz.sshj.xfer.LocalSourceFile;
 
 public class SSHMemFile implements LocalSourceFile, LocalDestFile {
 	public long atime, mtime;
-	public int mode;
+	public int mode = 0644;
 	
 	protected ByteBuffer contentsBuf = ByteBuffer.allocate(0);
+	protected boolean dirty = false;
+	protected ResizableOutputStream outputStream;
+	protected String name;
 	
 	public byte[] contents() {
+		checkDirty();
 		return contentsBuf.array();
 	}
 	
@@ -25,26 +32,25 @@ public class SSHMemFile implements LocalSourceFile, LocalDestFile {
 
 	@Override
 	public SSHMemFile getChild(String arg0) {
-		// TODO Auto-generated method stub
-		return null;
+		throw new RuntimeException("children not supported by SSHMemfile");
 	}
 
 	@Override
 	public OutputStream getOutputStream() throws IOException {
-		// TODO Auto-generated method stub
-		return null;
+		return outputStream = new ResizableOutputStream((byte[] buf, int offset) -> {
+			dirty = true;
+		});
 	}
 
 	@Override
 	public SSHMemFile getTargetDirectory(String arg0) throws IOException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new RuntimeException("writing directories not supported by SSHMemfile");
 	}
 
 	@Override
 	public SSHMemFile getTargetFile(String arg0) throws IOException {
-		// TODO Auto-generated method stub
-		return null;
+		name = arg0;
+		return this;
 	}
 
 	@Override
@@ -64,14 +70,13 @@ public class SSHMemFile implements LocalSourceFile, LocalDestFile {
 
 	@Override
 	public Iterable<SSHMemFile> getChildren(LocalFileFilter filter) throws IOException {
-		// TODO Auto-generated method stub
-		return null;
+		throw new RuntimeException("children not supported by SSHMemfile");
 	}
 
 	@Override
 	public InputStream getInputStream() throws IOException {
-		// TODO Auto-generated method stub
-		return null;
+		checkDirty();
+		return new ByteArrayInputStream(contentsBuf.array());
 	}
 
 	@Override
@@ -86,13 +91,13 @@ public class SSHMemFile implements LocalSourceFile, LocalDestFile {
 
 	@Override
 	public long getLength() {
+		checkDirty();
 		return contentsBuf.capacity();
 	}
 
 	@Override
 	public String getName() {
-		// TODO Auto-generated method stub
-		return null;
+		return name;
 	}
 
 	@Override
@@ -102,19 +107,22 @@ public class SSHMemFile implements LocalSourceFile, LocalDestFile {
 
 	@Override
 	public boolean isDirectory() {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
 	public boolean isFile() {
-		// TODO Auto-generated method stub
-		return false;
+		return true;
 	}
 
 	@Override
 	public boolean providesAtimeMtime() {
 		return true;
 	}
-
+	
+	protected void checkDirty() {
+		if(!dirty) return;
+		contentsBuf = ByteBuffer.wrap(outputStream.toArray());
+		dirty = false;
+	}
 }

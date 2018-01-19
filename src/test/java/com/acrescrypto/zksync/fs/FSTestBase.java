@@ -166,7 +166,8 @@ public class FSTestBase extends Object {
 	public void testSymlink() throws IOException {
 		scratch.write("symlink-target", "over here".getBytes());
 		scratch.symlink("symlink-target", "symlink-link");
-		byte[] a = scratch.read("symlink-target"), b = scratch.read("symlink-link");
+		byte[] a = scratch.read("symlink-target");
+		byte[] b = scratch.read("symlink-link");
 		assertTrue(Arrays.equals(a, b));
 	}
 	

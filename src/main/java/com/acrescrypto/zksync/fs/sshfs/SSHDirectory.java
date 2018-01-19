@@ -13,7 +13,7 @@ public class SSHDirectory implements Directory {
 	
 	public SSHDirectory(SSHFS fs, String path) {
 		this.fs = fs;
-		this.path = path;
+		this.path = fs.absolutePath(path);
 	}
 
 	@Override
@@ -24,7 +24,12 @@ public class SSHDirectory implements Directory {
 	@Override
 	public String[] list(int opts) throws IOException {
 		String ls = new String(fs.execAndCheck("ls", "-1 \"" + fs.qualifiedPath(path) + "\""));
-		String[] files = ls.split("\n");
+		String[] files;
+		if(ls.length() == 0) {
+			files = new String[0];
+		} else {
+			files = ls.split("\n");
+		}
 		
 		ArrayList<String> filtered = new ArrayList<String>();
 		for(String file : files) {
