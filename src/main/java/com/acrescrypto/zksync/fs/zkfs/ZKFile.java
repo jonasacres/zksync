@@ -111,7 +111,8 @@ public class ZKFile extends File {
 	@Override
 	public int read(byte[] buf, int bufOffset, int maxLength) throws IOException {
 		assertReadable();
-		int numToRead = (int) Math.min(maxLength, getStat().getSize()-offset), readLen = numToRead;
+		int numToRead = (int) Math.min(maxLength, getStat().getSize()-offset), readLen = Math.max(0, numToRead);
+
 		while(numToRead > 0) {
 			int neededPageNum = (int) (offset/fs.archive.privConfig.getPageSize());
 			bufferPage(neededPageNum);
