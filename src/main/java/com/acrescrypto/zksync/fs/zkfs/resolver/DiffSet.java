@@ -15,9 +15,10 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.PathDiffResolver;
 
+/* Describes a difference between a set of revisions. */
 public class DiffSet {
-	protected RefTag[] revisions;
-	RefTag commonAncestor;
+	protected RefTag[] revisions; // revisions covered by this DiffSet
+	RefTag commonAncestor; // identifies revision from which all revisions in this diffset descend (may or may not be in the set itself)
 	
 	HashMap<String,PathDiff> pathDiffs = new HashMap<String,PathDiff>();
 	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>();
