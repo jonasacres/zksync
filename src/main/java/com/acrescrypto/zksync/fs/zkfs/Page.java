@@ -7,22 +7,26 @@ import java.util.Arrays;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SecureFile;
 
-// represents a fixed-size page of data from a file. handles encryption/decryption/storage of said page.
+/** represents a fixed-size page of data from a file. handles encryption/decryption/storage of said page. */
 public class Page {
-	private ZKFile file;
-	protected int pageNum, size;
-	private ByteBuffer contents;
-	boolean dirty;
+	private ZKFile file; /** file handle from which this page was opened */
+	protected int pageNum; /** zero-based page number */
+	protected int size; /** size of actual page contents (may be less than fixed page size from filesystem) */
+	private ByteBuffer contents; /** page contents */
+	boolean dirty; /** true if page has been written to since last read/flush */
 	
+	/** path in underlying filesystem to a page identified by tag */
 	public static String pathForTag(byte[] tag) {
 		return ZKArchive.DATA_DIR + ZKFS.pathForHash(tag);
 	}
 	
-	public Page(ZKFile file, int index) throws IOException {
+	/** initialize page object from file and page number */
+	public Page(ZKFile file, int pageNum) throws IOException {
 		this.file = file;
-		this.pageNum = index;
+		this.pageNum = pageNum;
 	}
 	
+	/** truncate page to a given size */
 	public void truncate(int newSize) {
 		if(size == newSize) return;
 		size = newSize;
@@ -33,8 +37,8 @@ public class Page {
 		dirty = true;
 	}
 	
-	/* append plaintext to page. must call finalize() to encrypt and write to storage. 
-	 * @throws IndexOutOfBoundsException content would exceed max page length
+	/** write plaintext to page at current read/write pointer offset. must call finalize() to encrypt and write to storage. 
+	    @throws IndexOutOfBoundsException content would exceed max page length
 	 */
 	public int write(byte[] plaintext, int offset, int length) throws IOException {
 		contents.put(plaintext, offset, length);
@@ -43,7 +47,7 @@ public class Page {
 		return length;
 	}
 	
-	// write all buffered data to storage
+	/** write all buffered data to storage */
 	public void flush() throws IOException {
 		if(!dirty) return;
 		dirty = false;
@@ -72,24 +76,35 @@ public class Page {
 		  .write(plaintext.array(), file.fs.archive.privConfig.getPageSize());
 	}
 	
+	/** read data from page into a supplied buffer
+	 * 
+	 * @param buf buffer into which to place read bytes
+	 * @param offset offset in array in which to place first byte
+	 * @param maxLength maximum number of bytes to read from page (will be less if end of page is reached before maxLength is reached)
+	 * @return
+	 */
 	public int read(byte[] buf, int offset, int maxLength) {
 		int readLen = (int) Math.min(maxLength, size-contents.position());
 		contents.get(buf, offset, readLen);
 		return readLen;
 	}
 	
+	/** set read/write pointer offset  */
 	public void seek(int offset) {
 		contents.position(offset);
 	}
 	
+	/** number of bytes between current read/write pointer offset and end of page contents */
 	public int remaining() {
 		return size - contents.position();
 	}
 	
+	/** key used for encrypting page contents */
 	protected Key textKey(byte[] pageTag) {
 		return file.fs.archive.deriveKey(ZKArchive.KEY_TYPE_CIPHER, ZKArchive.KEY_INDEX_PAGE, pageTag);
 	}
 	
+	/** key used to produce page tag (provides authentication of page contents and basis for page key) */
 	protected Key authKey() {
 		// this is designed to intentionally prevent data deduplication
 		// rationale: deduplication creates a chosen plaintext attack revealing whether data was previously stored
@@ -112,6 +127,7 @@ public class Page {
 		return file.fs.archive.deriveKey(ZKArchive.KEY_TYPE_AUTH, ZKArchive.KEY_INDEX_PAGE, buf.array());
 	}
 	
+	/** load page contents from underlying storage */
 	public void load() throws IOException {
 		int pageSize = file.fs.archive.privConfig.getPageSize();
 		
@@ -136,11 +152,13 @@ public class Page {
 		contents = ByteBuffer.allocate(pageSize);
 		contents.put(plaintext);
 		size = contents.position();
+		dirty = false;
 	}
 	
+	/** set page to empty (zero length, no contents) */
 	public void blank() {
 		contents = ByteBuffer.allocate(file.fs.archive.privConfig.getPageSize());
 		size = 0;
-		dirty = false;
+		dirty = true;
 	}
 }

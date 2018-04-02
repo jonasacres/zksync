@@ -9,12 +9,16 @@ import com.acrescrypto.zksync.crypto.SecureFile;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 
+/** Merkle tree of page tags for a file. Each page tag is a signed hash of the page contents, and is needed to locate
+ * a page in storage. */
 public class PageMerkle {
-	ZKArchive archive;
-	RefTag tag;
-	PageMerkleNode[] nodes;
-	int numPages, numPagesUsed;
+	ZKArchive archive; /** archive to which this merkle belongs */
+	RefTag tag; /** current reftag for tree content */
+	PageMerkleNode[] nodes; /** all nodes in tree, indexed left-right top-bottom */
+	int numPages; /** page capacity for current tree size */
+	int numPagesUsed; /** number of pages issued */
 	
+	/** path to a given chunk of the merkle tree in the underlying filesystem */
 	public static String pathForChunk(RefTag refTag, int chunk) {
 		ByteBuffer chunkTagSource = ByteBuffer.allocate(refTag.hash.length+4);
 		chunkTagSource.put(refTag.hash);
@@ -25,6 +29,7 @@ public class PageMerkle {
 		return ZKFS.pathForHash(chunkTag);
 	}
 	
+	/** initialize a PageMerkle from a file contents RefTag */
 	PageMerkle(RefTag tag) throws IOException {
 		this.archive = tag.archive;
 		this.tag = tag;
@@ -42,6 +47,7 @@ public class PageMerkle {
 		}
 	}
 	
+	/** RefTag for file contents */
 	public RefTag getRefTag() {
 		// empty tree => 0 pages => contents = "", guaranteed to be an immediate
 		if(nodes == null || nodes.length == 0) return RefTag.blank(archive);
@@ -61,12 +67,19 @@ public class PageMerkle {
 		return new RefTag(archive, nodes[0].tag, type, numPagesUsed);
 	}
 	
+	/** set the tag for a given page number, resizing the tree as needed */
 	public void setPageTag(int pageNum, byte[] pageTag) {
 		if(pageNum >= numPages) resize(pageNum+1);
 		nodes[numPages - 1 + pageNum].setTag(pageTag);
 		numPagesUsed = Math.max(pageNum+1, numPagesUsed);
 	}
 	
+	/** get the tag for a given page number
+	 * 
+	 * @param pageNum
+	 * @return
+	 * @throws NonexistentPageException illegal page number (negative, or greater than max page number in file)
+	 */
 	public byte[] getPageTag(int pageNum) throws NonexistentPageException {
 		if(pageNum < 0 || pageNum >= numPages) {
 			throw new NonexistentPageException(tag, pageNum);
@@ -74,10 +87,12 @@ public class PageMerkle {
 		return nodes[numPages - 1 + pageNum].tag.clone();
 	}
 	
+	/** size of plaintext serialization of this PageMerkle */
 	public long plaintextSize() {
 		return archive.crypto.hashLength()*(2*numPages-1);
 	}
 	
+	/** write to storage */
 	public RefTag commit() throws IOException {
 		tag = getRefTag();
 		if(tag.getRefType() != RefTag.REF_TYPE_2INDIRECT) return tag;
@@ -99,6 +114,7 @@ public class PageMerkle {
 		return tag;
 	}
 	
+	/** read contents from storage */
 	private void read() throws IOException {
 		long expectedPages = tag.getNumPages();
 		expectedPages = (int) Math.pow(2, Math.ceil(Math.log(expectedPages)/Math.log(2)));
@@ -136,6 +152,10 @@ public class PageMerkle {
 		checkTreeIntegrity();
 	}
 	
+	/** test that tree root tag is correct
+	 * 
+	 * @throws InvalidArchiveException root tag was not correct
+	 */
 	private void checkTreeIntegrity() {
 		if(nodes.length == 0) return;
 		byte[] treeRoot = nodes[0].tag.clone();
@@ -149,6 +169,8 @@ public class PageMerkle {
 		}
 	}
 
+	/** resize the merkle tree to accommodate a new minimum number of nodes. may be bigger or smaller than previous
+	 * minimum. */
 	public void resize(long newMinNodes) {
 		double log2 = Math.log(2);
 		int newSize = newMinNodes > 0 ? (int) Math.pow(2, Math.ceil(Math.log(newMinNodes)/log2)) : 0;
@@ -209,10 +231,12 @@ public class PageMerkle {
 		this.nodes = newNodes;
 	}
 	
+	/** key used to encrypt serialized merkle tree. */
 	private Key cipherKey(RefTag refTag) {
 		return archive.deriveKey(ZKArchive.KEY_TYPE_CIPHER, ZKArchive.KEY_INDEX_PAGE_MERKLE, refTag.getBytes());
 	}
-
+	
+	/** test if a given page has a tag set yet or not. */
 	public boolean hasTag(int pageNum) {
 		if(pageNum >= numPagesUsed) return false;
 		return !nodes[numPages - 1 + pageNum].isBlank();

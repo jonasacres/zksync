@@ -9,17 +9,21 @@ import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.Stat;
 
 public class Inode implements Comparable<Inode> {
-	protected Stat stat;
-	protected int nlink;
-	protected byte flags;
-	protected long modifiedTime; // last time we modified inode or file data. can't use stat.ctime, since users own that.
-	protected long identity; // assigned on inode creation, remains constant
-	protected RefTag refTag;
-	protected RefTag changedFrom; // last revision reftag with previous version
-	protected ZKFS fs;
+	protected ZKFS fs; /** filesystem containing this inode */
+
+	// the following fields are serialized:
+	protected Stat stat; /** stat object, similar to POSIX struct stat */
+	protected int nlink; /** number of references (eg paths) to this inode */
+	protected byte flags; /** bitmask flag field */
+	protected long modifiedTime; /** last time we modified inode or file data. can't use stat.ctime, since users own that. */
+	protected long identity; /** assigned on inode creation, remains constant, used to distinguish new files vs. modified files on merge */
+	protected RefTag refTag; /** reference to file contents */
+	protected RefTag changedFrom; /** latest revision reftag containing previous version */
 	
+	// for use in flags field
 	public static final byte FLAG_RETAIN = 1 << 0;
 	
+	/** initialize a root inode (refers to the inode table itself) */
 	public static Inode defaultRootInode(ZKFS fs) {
 		Inode blank = new Inode(fs);
 		Stat stat = new Stat();
@@ -38,6 +42,7 @@ public class Inode implements Comparable<Inode> {
 		return blank;
 	}
 	
+	/** initialize a blank inode for a given fs */
 	public Inode(ZKFS fs) {
 		this.fs = fs;
 		this.stat = new Stat();
@@ -45,6 +50,7 @@ public class Inode implements Comparable<Inode> {
 		this.refTag = RefTag.blank(fs.archive);
 	}
 	
+	/** deserialize an inode belonging to a given fs */
 	public Inode(ZKFS fs, byte[] serialized) {
 		this.fs = fs;
 		deserialize(serialized);
@@ -106,6 +112,7 @@ public class Inode implements Comparable<Inode> {
 		this.identity = newIdentity;
 	}
 	
+	/** serialize to plaintext byte array */
 	public byte[] serialize() {
 		ByteBuffer buf = ByteBuffer.allocate(InodeTable.inodeSize(fs.archive));
 		buf.put(stat.serialize());
@@ -119,6 +126,7 @@ public class Inode implements Comparable<Inode> {
 		return buf.array();
 	}
 	
+	/** deserialize from plaintext byte array */
 	public void deserialize(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		
@@ -139,13 +147,15 @@ public class Inode implements Comparable<Inode> {
 		this.changedFrom = new RefTag(fs.archive, refTagBytes);
 	}
 	
+	/** increment link count */
 	public void addLink() {
 		nlink++;
 	}
 	
+	/** decrement link count. automatically unlink if nlink becomes == 0 and FLAG_RETAIN not set. */ 
 	public void removeLink() {
 		nlink--;
-		if((flags & FLAG_RETAIN) == 0 && nlink == 0) {
+		if(isDeleted()) {
 			try {
 				fs.getInodeTable().unlink(stat.getInodeId());
 			} catch (IOException e) {
@@ -154,10 +164,16 @@ public class Inode implements Comparable<Inode> {
 		}
 	}
 	
+	/** hash code based on content reftag */
 	public int hashCode() {
 		return ByteBuffer.wrap(refTag.getBytes()).getInt();
 	}
 	
+	/**
+	 * return true if equal to other inode (matches identity, refTag, changedFrom, falgs, stat).
+	 * WARNING: equals == true NOT the same as compareTo == 0 for Inode!
+	 * @see compareTo
+	 */
 	public boolean equals(Object other) {
 		if(!other.getClass().equals(this.getClass())) return false;
 		Inode __other = (Inode) other;
@@ -172,26 +188,30 @@ public class Inode implements Comparable<Inode> {
 		return true;
 	}
 	
+	/** printable string summary for debug */
 	public String toString() {
 		return String.format("%d (%08x) - %d %d bytes, %d %d %s", stat.getInodeId(), hashCode(), nlink, stat.getSize(), stat.getMtime(), stat.getAtime(), Util.bytesToHex(refTag.tag));
 	}
 
 	@Override
+	/**
+	 * Compares on modifiedTime, changedFrom then serialized inode contents.
+	 * WARNING: compareTo == 0 NOT the same as equals == true! equals leaves out modifiedTime to detect identical changes.
+	 * compareTo includes modifiedTime as its first key to allow time-wise sorting.
+	 */
 	public int compareTo(Inode o) {
-		/* Note that compareTo is very different from equals. equals might be true while compareTo != 0.
-		 * equals leaves out modifiedTime to allow detection of identical revisions; compareTo uses modifiedTime as
-		 * its first key, to allow time-wise sorting.
-		 */
 		int c;
 		if(modifiedTime != o.modifiedTime) return modifiedTime < o.modifiedTime ? -1 : 1;
 		if((c = Arrays.compareUnsigned(changedFrom.getBytes(), o.changedFrom.getBytes())) != 0) return c;
 		return Arrays.compareUnsigned(serialize(), o.serialize());
 	}
 	
+	/** true <=> nlink == 0 and FLAG_RETAIN not set */
 	public boolean isDeleted() {
 		return nlink == 0 && (flags & FLAG_RETAIN) == 0;
 	}
 	
+	/** clear inode contents. */
 	public void markDeleted() {
 		stat = new Stat();
 		refTag = RefTag.blank(fs.archive);
@@ -202,6 +222,7 @@ public class Inode implements Comparable<Inode> {
 		identity = 0;
 	}
 	
+	/** deep copy of this inode */
 	public Inode clone(ZKFS fs) {
 		return new Inode(fs, serialize());
 	}

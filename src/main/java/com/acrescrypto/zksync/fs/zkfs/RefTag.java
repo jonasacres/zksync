@@ -6,6 +6,9 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.Util;
 
+/** Encodes a reference to file data. These are stored inside inodes to allow retrieval of file contents. The RefTag
+ * for the inode table itself identifies a revision in the archive. RefTags contain certain metadata to indicate
+ * how the content is stored. */
 public class RefTag implements Comparable<RefTag> {
 	protected ZKArchive archive;
 	protected ZKFS readOnlyFs;
@@ -14,8 +17,14 @@ public class RefTag implements Comparable<RefTag> {
 	protected byte archiveType, versionMajor, versionMinor;
 	protected int refType;	
 	protected long numPages;
+	
+	/** doubly-indirect storage; tag points to a merkle tree containing tags for each page of data. */
 	public static final byte REF_TYPE_2INDIRECT = 2;
+	
+	/** indirect storage; tag points to a single page, containing the data. */
 	public static final byte REF_TYPE_INDIRECT = 1;
+	
+	/** immediate storage; tag contains the literal data of the file. */
 	public static final byte REF_TYPE_IMMEDIATE = 0;
 	
 	public static int REFTAG_EXTRA_DATA_SIZE = 16;

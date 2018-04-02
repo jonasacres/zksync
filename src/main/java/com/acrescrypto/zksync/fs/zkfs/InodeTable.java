@@ -13,25 +13,41 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
 
 // represents inode table for ZKFS instance. 
 public class InodeTable extends ZKFile {
+	/** storage for all inode data */
 	public final static long INODE_ID_INODE_TABLE = 0;
+	
+	/** top level directory of filesystem */
 	public final static long INODE_ID_ROOT_DIRECTORY = 1;
+	
+	/** metadata about the current revision such as immediate ancestors and generation number */
 	public final static long INODE_ID_REVISION_INFO = 2;
+	
+	/** freelist of avaialble inode IDs */
 	public final static long INODE_ID_FREELIST = 3;
 
+	/** first inode ID issued to actual files */
 	public final static long USER_INODE_ID_START = 16;
 	
+	/** fake value used to fill path field */
 	public final static String INODE_TABLE_PATH = "(inode table)";
 	
-	protected RevisionInfo revision;
+	protected RevisionInfo revision; /** current revision metadata */
 	protected FreeList freelist;
-	public long nextInodeId;
+	public long nextInodeId; /** next inode ID to be issued when freelist is exhausted */
 	
-	protected HashCache<Long,Inode[]> inodesByPage;
+	protected HashCache<Long,Inode[]> inodesByPage; /** in-memory cache of inode data */
 	
+	/** serialized size of an inode for a given archive, in bytes */
 	public static int inodeSize(ZKArchive archive) {
 		return Stat.STAT_SIZE + 2*8 + 1*4 + 1 + 2*(archive.refTagSize());		
 	}
 	
+	/** initialize inode table for FS.
+	 * 
+	 * @param fs filesystem to init inode table for
+	 * @param tag tag for revision to be loaded. if blank tag supplied, a blank inode table is created.
+	 * @throws IOException
+	 */
 	public InodeTable(ZKFS fs, RefTag tag) throws IOException {
 		this.fs = fs;
 		this.path = INODE_TABLE_PATH;
@@ -46,6 +62,7 @@ public class InodeTable extends ZKFile {
 		else readExisting(tag);
 	}
 	
+	/** calculate the next inode ID to be issued (by scanning for the largest issued inode ID) */
 	protected long lookupNextInodeId() throws IOException {
 		Inode[] inodes = inodesByPage.get(inode.refTag.numPages-1);
 		
@@ -57,7 +74,11 @@ public class InodeTable extends ZKFile {
 		
 		return maxInodeId+1;
 	}
-
+	
+	/** write inode table to filesystem, creating a new revision
+	 * 
+	 * @return RefTag for the newly created revision
+	 *  */
 	public RefTag commit(RefTag[] additionalParents) throws IOException {
 		freelist.commit();
 		updateRevisionInfo(additionalParents);
@@ -66,7 +87,9 @@ public class InodeTable extends ZKFile {
 		return inode.refTag;
 	}
 	
+	/** clear the old revision info and replace with a new one */
 	protected void updateRevisionInfo(RefTag[] additionalParents) throws IOException {
+		 // TODO: figure out if we need to add the current revision tag here
 		RevisionInfo newRevision = new RevisionInfo(fs);
 		newRevision.reset();
 		for(RefTag parent : additionalParents) newRevision.addParent(parent);
@@ -74,6 +97,7 @@ public class InodeTable extends ZKFile {
 		revision = newRevision;
 	}
 	
+	/** write out all cached inodes */
 	protected void syncInodes() throws IOException {
 		for(Long pageNum : inodesByPage.cachedKeys()) {
 			commitInodePage(pageNum, inodesByPage.get(pageNum));
@@ -81,6 +105,7 @@ public class InodeTable extends ZKFile {
 		flush();
 	}
 	
+	/** add our new commit to the list of branch tips, and remove our ancestors */
 	protected void updateTree(RefTag[] additionalParents) throws IOException {
 		RefTag tag = inode.getRefTag();
 		RevisionTree tree = fs.archive.getRevisionTree();
@@ -90,10 +115,17 @@ public class InodeTable extends ZKFile {
 		tree.write();
 	}
 	
+	/** size of an inode for this table, in bytes */
 	public int inodeSize() {
 		return inodeSize(fs.archive);
 	}
 	
+	/** remove an inode from the inode table
+	 * 
+	 * @param inodeId inode to be removed
+	 * @throws IllegalArgumentException attempted to remove mandatory inode (eg inode table or root directory)
+	 * @throws EMLINKException inode nlink > 0
+	 */
 	public void unlink(long inodeId) throws IOException {
 		if(!hasInodeWithId(inodeId)) throw new ENOENTException(String.format("inode %d", inodeId));
 		if(inodeId <= 1) throw new IllegalArgumentException();
@@ -107,14 +139,18 @@ public class InodeTable extends ZKFile {
 		freelist.freeInodeId(inodeId);
 	}
 	
+	/** return an inode with a given ID */
 	public Inode inodeWithId(long inodeId) throws IOException {
 		return inodesByPage.get(pageNumForInodeId(inodeId))[pageOffsetForInodeId(inodeId)];
 	}
 	
+	/** test if table contains an inode with the given ID */
 	public boolean hasInodeWithId(long inodeId) {
+		// TODO: consider checking freelist?
 		return inodeId <= nextInodeId;
 	}
 	
+	/** issue next inode ID (draw from freelist if available, or issue next sequential ID if freelist is empty) */
 	public long issueInodeId() throws IOException {
 		try {
 			return freelist.issueInodeId();
@@ -123,10 +159,12 @@ public class InodeTable extends ZKFile {
 		}
 	}
 	
+	/** create a new inode */
 	public Inode issueInode() throws IOException {
 		return issueInode(issueInodeId());
 	}
 	
+	/** issue a new inode with blank content and default metadata */
 	public Inode issueInode(long inodeId) throws IOException {
 		Inode inode = inodeWithId(inodeId);
 		long now = fs.currentTime();
@@ -144,6 +182,7 @@ public class InodeTable extends ZKFile {
 		return inode;
 	}
 	
+	/** array of all inodes stored at a given page number of the inode table */
 	protected Inode[] inodesForPage(long pageNum) throws IOException {
 		Inode[] list = new Inode[inodesPerPage()];
 		seek(pageNum*fs.archive.privConfig.getPageSize(), SEEK_SET);
@@ -162,16 +201,19 @@ public class InodeTable extends ZKFile {
 		return list;
 	}
 	
+	/** write an array of inodes to a given page number */
 	protected void commitInodePage(long pageNum, Inode[] inodes) throws IOException {
 		seek(pageNum*fs.archive.privConfig.getPageSize(), SEEK_SET);
 		for(Inode inode : inodes) write(inode.serialize());
 		write(new byte[(int) (fs.archive.privConfig.getPageSize() - (offset % fs.archive.privConfig.getPageSize()))]);
 	}
 	
+	/** calculate the page number for a given inode id */
 	protected long pageNumForInodeId(long inodeId) {
 		return inodeId/inodesPerPage();
 	}
 	
+	/** calculate the index into a page for a given inode id */
 	protected int pageOffsetForInodeId(long inodeId) {
 		return (int) (inodeId % inodesPerPage());
 	}
@@ -180,12 +222,14 @@ public class InodeTable extends ZKFile {
 		return fs.archive.privConfig.getPageSize()/inodeSize();
 	}
 	
+	/** place an inode into the table, overwriting what's already there (assumes inode id is properly set) */
 	protected void setInode(Inode inode) throws IOException {
 		Inode existing = inodeWithId(inode.getStat().getInodeId());
 		if(existing == inode) return; // inode is already set
 		existing.deserialize(inode.serialize());
 	}
 	
+	/** initialize an empty root directory */
 	private void makeRootDir() throws IOException {
 		Inode rootDir = new Inode(fs);
 		long now = fs.currentTime();
@@ -203,12 +247,14 @@ public class InodeTable extends ZKFile {
 		setInode(rootDir);
 	}
 	
+	/** initialize a blank top-level revision (i.e. one that has no ancestors) */
 	private void makeEmptyRevision() throws IOException {
 		Inode revfile = issueInode(INODE_ID_REVISION_INFO);
 		revfile.setFlags(Inode.FLAG_RETAIN);
 		setInode(revfile);
 	}
 	
+	/** initialize a blank freelist */
 	private void makeEmptyFreelist() throws IOException {
 		Inode freelistInode = issueInode(INODE_ID_FREELIST);
 		freelistInode.setFlags(Inode.FLAG_RETAIN);
@@ -216,6 +262,7 @@ public class InodeTable extends ZKFile {
 		setInode(freelistInode);
 	}
 	
+	/** initialize a blank inode table, including references to blank root directroy, revision info and freelist */
 	private void initialize() throws IOException {
 		this.inode = Inode.defaultRootInode(fs);
 		this.setInode(this.inode);
@@ -227,6 +274,7 @@ public class InodeTable extends ZKFile {
 		makeEmptyFreelist();
 	}
 	
+	/** initialize from existing inode table data, identified by a reftag */
 	private void readExisting(RefTag tag) throws IOException {
 		this.merkle = new PageMerkle(tag);
 		this.inode = new Inode(fs);
@@ -236,7 +284,8 @@ public class InodeTable extends ZKFile {
 		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST));
 		nextInodeId = lookupNextInodeId();
 	}
-
+	
+	/** apply a resolution to an inode conflict from an InodeDiff */
 	public void replaceInode(InodeDiff inodeDiff) throws IOException {
 		assert(inodeDiff.isResolved());
 		if(inodeDiff.getResolution() == null) {
@@ -268,6 +317,7 @@ public class InodeTable extends ZKFile {
 		}
 	}
 	
+	/** Iteraable for all inodes in the table */
 	public Iterable<Inode> values() {
 		@SuppressWarnings("resource")
 		InodeTable self = this;

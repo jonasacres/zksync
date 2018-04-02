@@ -18,11 +18,17 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.PathDiffResolver;
 /* Describes a difference between a set of revisions. */
 public class DiffSet {
 	protected RefTag[] revisions; // revisions covered by this DiffSet
-	RefTag commonAncestor; // identifies revision from which all revisions in this diffset descend (may or may not be in the set itself)
 	
+	/** most recent common ancestor of all revisions in this DiffSet */ 
+	RefTag commonAncestor;
+	
+	/** differences in path listings */
 	HashMap<String,PathDiff> pathDiffs = new HashMap<String,PathDiff>();
-	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>();
 	
+	/** differences in inode listings */
+	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>(); // differences in inode table entries
+	
+	/** build a DiffSet from a collection of RefTags */
 	public static DiffSet withCollection(Collection<RefTag> revisions) throws IOException {
 		RefTag[] array = new RefTag[revisions.size()];
 		int i = 0;
@@ -31,6 +37,7 @@ public class DiffSet {
 		return new DiffSet(array);
 	}
 	
+	/** build a DiffSet from an array of RefTags */
 	public DiffSet(RefTag[] revisions) throws IOException {
 		this.revisions = revisions;
 		Arrays.sort(this.revisions);
@@ -42,6 +49,7 @@ public class DiffSet {
 		findPathDiffs(findInodeDiffs(pickMergeFs()));
 	}
 	
+	/** build a new DiffSet based on an existing one, with some new inode and path diffs */
 	public DiffSet(DiffSet original, ArrayList<InodeDiff> inodeDiffList, ArrayList<PathDiff> pathDiffList) {
 		this.revisions = original.revisions;
 		this.commonAncestor = original.commonAncestor;
@@ -49,6 +57,7 @@ public class DiffSet {
 		for(PathDiff pathDiff : pathDiffList) pathDiffs.put(pathDiff.path, pathDiff);
 	}
 	
+	/** all inode IDs differing in the revisions of this set, excluding inode table, revision info and freelist */
 	public HashSet<Long> allInodes() throws IOException {
 		// TODO: allInodes and allPaths makes merging O(n) with the number of total files, changed or not.
 		HashSet<Long> allInodes = new HashSet<Long>();
@@ -65,6 +74,7 @@ public class DiffSet {
 		return allInodes;
 	}
 	
+	/** all paths differing in the revisions of this set */
 	public HashSet<String> allPaths() throws IOException {
 		HashSet<String> allPaths = new HashSet<String>();
 		allPaths.add("/");
@@ -77,7 +87,11 @@ public class DiffSet {
 		return allPaths;
 	}
 	
-	public Map<Long,Map<RefTag,Long>> findInodeDiffs(ZKFS mergeFs) throws IOException {
+	/** list of inode id -> reftag, renumbered inode id.
+	 * inode IDs are renumbered as necessary to allow preservation of new files created in parallel and issued identical
+	 * inode IDs.
+	 *  */
+	protected Map<Long,Map<RefTag,Long>> findInodeDiffs(ZKFS mergeFs) throws IOException {
 		Map<Long,Map<RefTag,Long>> idMap = new HashMap<Long,Map<RefTag,Long>>();
 		for(long inodeId : allInodes()) {
 			InodeDiff diff = new InodeDiff(inodeId, revisions);
@@ -88,7 +102,8 @@ public class DiffSet {
 		return idMap;
 	}
 	
-	public void findPathDiffs(Map<Long,Map<RefTag,Long>> idMap) throws IOException {
+	/** detect path differences, taking inode renumberings into account. */
+	protected void findPathDiffs(Map<Long,Map<RefTag,Long>> idMap) throws IOException {
 		for(String path : allPaths()) {
 			PathDiff diff = new PathDiff(path, revisions, idMap);
 			if(!diff.isConflict()) continue;
@@ -96,18 +111,29 @@ public class DiffSet {
 		}
 	}
 	
+	/** array of reftags in this diffset */
 	public RefTag[] getRevisions() {
 		return revisions;
 	}
 	
+	/** latest revision in this diffset */
 	public RefTag latestRevision() throws IOException {
 		return revisions[revisions.length-1];
 	}
 	
+	/** make a DiffSetResolver for this specific diffset */
 	public DiffSetResolver resolver(InodeDiffResolver inodeResolver, PathDiffResolver pathResolver) throws IOException {
 		return new DiffSetResolver(this, inodeResolver, pathResolver);
 	}
-
+	
+	/** For inodes whose ID matches but whose identity field does not, we presume they refer to different files that
+	 * must each be preserved. The inode with the lowest identity retains its ID number; all others are issued new IDs.
+	 * 
+	 * @param fs ZKFS to issue inode IDs from
+	 * @param diff InodeDiff describing conflicting inode records 
+	 * @param idMap maps oldId -> RefTag, newId
+	 * @throws IOException
+	 */
 	protected void renumberInodeDiff(ZKFS fs, InodeDiff diff, Map<Long,Map<RefTag,Long>> idMap) throws IOException {
 		Map<Long,ArrayList<RefTag>> byIdentity = new HashMap<Long,ArrayList<RefTag>>();
 		long minIdent = Long.MAX_VALUE;
@@ -131,7 +157,8 @@ public class DiffSet {
 			inodeDiffs.put(newId, renumberInodeWithIdentity(fs, diff, newId, identity));
 		}
 	}
-
+	
+	/** assign a new inode ID to a given identity constant in an inode diffset */
 	protected InodeDiff renumberInodeWithIdentity(ZKFS fs, InodeDiff diff, long newId, long identity) {
 		InodeDiff newDiff = new InodeDiff(newId);
 		
@@ -147,31 +174,9 @@ public class DiffSet {
 		
 		return newDiff;
 	}
-
-	protected PathDiff renumberPath(ZKFS fs, PathDiff diff, Map<Long,Map<RefTag,Long>> idMap) {
-		PathDiff newDiff = new PathDiff(diff.path);
-		
-		for(Long inodeId : diff.resolutions.keySet()) {
-			for(RefTag tag : diff.resolutions.get(inodeId)) {
-				try {
-					Long newInodeId = idMap.get(inodeId).get(tag);
-					newDiff.add(newInodeId, tag);
-				} catch(NullPointerException exc) {
-					newDiff.add(inodeId, tag);
-				}
-			}
-		}
-		
-		return newDiff;
-	}
 	
+	/** deterministically selects a revision within the diffset, and returns a writable ZKFS from that revision */
 	protected ZKFS pickMergeFs() throws IOException {
-		RefTag latest = null;
-		for(RefTag tag : revisions) {
-			if(latest == null || tag.compareTo(latest) > 0) latest = tag;
-		}
-		
-		if(latest != null) return latest.getFS();
-		return null;
+		return latestRevision().getFS();
 	}
 }
