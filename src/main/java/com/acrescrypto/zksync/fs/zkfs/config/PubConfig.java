@@ -31,6 +31,25 @@ public class PubConfig extends ConfigFile {
 		setArgon2MemoryCost(defaultArgon2MemoryCost);
 		setArgon2Parallelism(defaultArgon2Parallelism);
 		
+		/* TODO: There is a serious chicken-and-egg problem here.
+		 * The goal is to be able to locate an archive from a human-readable string, such as a passphrase.
+		 * To get there, that string has to map to an identifier, and the present (and likely correct) answer is a KDF.
+		 * A PBKDF like argon2 has difficulty parameters that must scale over time, and depending on the application.
+		 * But how to find difficulty parameters for existing archives?
+		 * 
+		 * One solution is to fix the parameters for the seed_id used to locate archives in the DHT. These parameters
+		 * could be specified by the DHT itself. But who in the DHT has the power to set/change these values? Perhaps the
+		 * DHT has them as constants, and a new DHT must be constructed to support new constants. But then how does one
+		 * know which DHT to search for a key in?
+		 * 
+		 * This choice is tied to the archive itself. Since all keys are derived from the passphrase somehow, they too
+		 * need these parameters set.
+		 * 
+		 * Perhaps a fixed set of parameters could be used to derive the seed id, which would suffice to locate nodes
+		 * carrying the data, but then a tunable set (encrypted with the seed id) would be used for all the data keys.
+		 * 
+		 * What WON'T work is what we have now, which is making the archiveId totally random.
+		 */
 		archiveId = new byte[64];
 		(new SecureRandom()).nextBytes(archiveId);
 	}

@@ -14,6 +14,11 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 
 public class PrivConfig extends ConfigFile {
+	/** This could be completely obsoleted.
+	 * pageSize is implied by the size of any of the pages we've received.
+	 * immediateThreshold should just be our hash length.
+	 * archiveId is unused right now, possibly unneeded.
+	 */
 	private int pageSize, immediateThreshold;
 	private byte[] archiveId;
 	

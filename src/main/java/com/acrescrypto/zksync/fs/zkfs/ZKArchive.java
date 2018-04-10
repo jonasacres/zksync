@@ -24,6 +24,7 @@ public class ZKArchive {
 	public final static int KEY_INDEX_CONFIG_PRIVATE = 4;
 	public final static int KEY_INDEX_CONFIG_LOCAL = 5;
 	public final static int KEY_INDEX_REVISION_TREE = 6;
+	public final static int KEY_INDEX_SEED = 7;
 
 	public final static String DATA_DIR = ".zksync/archive/data/";
 	public final static String CONFIG_DIR = ".zksync/archive/config/";
