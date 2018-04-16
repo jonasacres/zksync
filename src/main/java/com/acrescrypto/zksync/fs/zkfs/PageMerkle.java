@@ -92,12 +92,17 @@ public class PageMerkle {
 		return archive.crypto.hashLength()*(2*numPages-1);
 	}
 	
+	public int numChunks() {
+		if(numPages <= 1) return 0;
+		return (int) Math.ceil( (double) plaintextSize() / archive.privConfig.getPageSize() );
+	}
+	
 	/** write to storage */
 	public RefTag commit() throws IOException {
 		tag = getRefTag();
 		if(tag.getRefType() != RefTag.REF_TYPE_2INDIRECT) return tag;
 		
-		int chunkCount = (int) Math.ceil( (double) plaintextSize() / archive.privConfig.getPageSize() );
+		int chunkCount = numChunks();
 		
 		ByteBuffer plaintext = ByteBuffer.allocate(nodes.length*archive.crypto.hashLength());
 		

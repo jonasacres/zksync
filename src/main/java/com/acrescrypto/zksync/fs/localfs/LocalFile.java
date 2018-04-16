@@ -130,6 +130,11 @@ public class LocalFile extends File {
 	public void rewind() throws IOException {
 		channel.position(0);
 	}
+	
+	@Override
+	public int available() throws IOException {
+		return (int) (channel.size() - channel.position());
+	}
 
 	@Override
 	public boolean hasData() throws IOException {

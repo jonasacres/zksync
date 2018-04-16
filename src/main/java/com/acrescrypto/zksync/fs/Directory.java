@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
+import java.util.Iterator;
 
 public interface Directory {
 	public final static int LIST_OPT_OMIT_DIRECTORIES = 1 << 0;
@@ -9,6 +10,8 @@ public interface Directory {
 	public String[] list() throws IOException;
 	public String[] list(int opts) throws IOException;
 	public String[] listRecursive() throws IOException;
+	public Iterator<String> listRecursiveIterator(int opts) throws IOException;
+	
 	public boolean contains(String entry) throws IOException;
 	public String[] listRecursive(int opts) throws IOException;
 	public Directory mkdir(String name) throws IOException;

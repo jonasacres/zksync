@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Iterator;
 
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.fs.Directory;
@@ -59,7 +60,7 @@ public class LocalDirectory implements Directory {
 		return results.toArray(buf);
 	}
 	
-	public void listRecursiveIterate(int opts, ArrayList<String> results, String prefix) throws IOException {
+	protected void listRecursiveIterate(int opts, ArrayList<String> results, String prefix) throws IOException {
 		for(String entry : list(opts & ~Directory.LIST_OPT_OMIT_DIRECTORIES)) {
 			String subpath = Paths.get(prefix, entry).toString(); // what we return in our results
 			String realSubpath = Paths.get(path, entry).toString(); // what we can look up directly in fs

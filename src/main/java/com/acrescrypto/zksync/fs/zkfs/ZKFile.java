@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.io.InputStream;
 
 import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EINVALException;
@@ -117,7 +118,10 @@ public class ZKFile extends File {
 	@Override
 	public int read(byte[] buf, int bufOffset, int maxLength) throws IOException {
 		assertReadable();
+		if(bufOffset < 0 || maxLength > buf.length - bufOffset) throw new IndexOutOfBoundsException();
+		
 		int numToRead = (int) Math.min(maxLength, getStat().getSize()-offset), readLen = Math.max(0, numToRead);
+		if(numToRead == 0) return -1;
 
 		while(numToRead > 0) {
 			int neededPageNum = (int) (offset/fs.archive.privConfig.getPageSize());
@@ -255,6 +259,15 @@ public class ZKFile extends File {
 		
 		bufferPage((int) (tag.numPages-1));
 		inode.getStat().setSize((tag.numPages-1)*fs.archive.privConfig.getPageSize() + bufferedPage.size);
+	}
+	
+	protected long available() throws IOException {
+		if(bufferedPage == null) return 0;
+		return bufferedPage.remaining();
+	}
+	
+	protected InputStream encryptedStream() {
+		return new ZKFileCiphertextStream(this);
 	}
 	
 	/** Throw an exception if the file is not open for reading.

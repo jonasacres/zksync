@@ -17,6 +17,7 @@ public class Page {
 	
 	/** path in underlying filesystem to a page identified by tag */
 	public static String pathForTag(byte[] tag) {
+		// TODO: these paths will need to be tied to an archive
 		return ZKArchive.DATA_DIR + ZKFS.pathForHash(tag);
 	}
 	

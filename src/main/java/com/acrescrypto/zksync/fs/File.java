@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.io.InputStream;
 
 public abstract class File implements Closeable {
 	public final static int O_RDONLY = 1 << 0;
@@ -53,4 +54,10 @@ public abstract class File implements Closeable {
 	public abstract void copy(File file) throws IOException;
 	public abstract void rewind() throws IOException;
 	public abstract boolean hasData() throws IOException;
+	
+	public abstract int available() throws IOException;
+	
+	public InputStream getInputStream() {
+		return new FileInputStream(this);
+	}
 }
