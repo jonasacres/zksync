@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.sshfs;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Iterator;
 
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.File;
@@ -72,6 +73,12 @@ public class SSHDirectory implements Directory {
 				results.add(subpath);
 			}
 		}
+	}
+
+	@Override
+	public Iterator<String> listRecursiveIterator(int opts) throws IOException {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 	@Override

@@ -122,4 +122,9 @@ public class SSHFile extends File {
 		return offset < cachedStat.getSize();
 	}
 
+	@Override
+	public int available() throws IOException {
+		return 0;
+	}
+
 }

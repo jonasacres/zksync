@@ -83,7 +83,7 @@ public class PeerSwarm {
 		return null;
 	}
 	
-	public synchronized void openConnections(String address) throws UnsupportedProtocolException {
+	public synchronized void openConnection(String address) throws UnsupportedProtocolException {
 		connections.add(new PeerConnection(this, address));
 	}
 	

@@ -27,12 +27,20 @@ public class PeerConnection implements PeerSocketDelegate {
 	public final byte CMD_REQUEST_PEERS = 0x05;
 	public final byte CMD_ANNOUNCE_TIP = 0x06;
 	
-	protected PeerSocket socket;
-	protected boolean fullPeer;
+	public final int PEER_TYPE_STATIC = 0; // static fileserver; needs subclass to handle
+	public final int PEER_TYPE_BLIND = 1; // has knowledge of seed key, but not archive passphrase; can't decipher data
+	public final int PEER_TYPE_FULL = 2; // live peer with knowledge of archive passphrase
+	
+	public interface PeerConnectionDelegate {
+		void discoveredTip(PeerConnection conn, RefTag tag);
+		void receivedRefTag(PeerConnection conn, RefTag tag);
+		void receivedPage(PeerConnection conn, byte[] tag);
+		void receivedTipFile(PeerConnection conn, byte[] contents);
+	}
 	
 	/** A message can't be sent to the remote peer because this channel hasn't established that we have full read
 	 * access to the archive. */
-	public class BlindPeerException extends Exception {
+	public class PeerCapabilityException extends Exception {
 		private static final long serialVersionUID = 1L;
 	}
 	
@@ -41,6 +49,10 @@ public class PeerConnection implements PeerSocketDelegate {
 		private static final long serialVersionUID = 1L;
 	}
 
+	protected PeerSocket socket;
+	protected int peerType;
+	protected PeerConnectionDelegate delegate;
+	
 	public PeerConnection(PeerSwarm swarm, String address) throws UnsupportedProtocolException {
 		this.socket = PeerSocket.connectToAddress(swarm, address);
 	}
@@ -55,29 +67,33 @@ public class PeerConnection implements PeerSocketDelegate {
 	}
 	
 	/** Request all pages pertaining to a given reftag (including merkle tree chunks). */
-	public void requestRefTags(byte[][] refTags) throws BlindPeerException {
-		assertFullPeer();
+	public void requestRefTags(byte[][] refTags) throws PeerCapabilityException {
+		assertPeerCapability(PEER_TYPE_FULL);
 	}
 	
 	/** Request pages from the archive. */
 	public void requestPages(byte[][] pageTags) {
 	}
 	
-	/** Request pages within indicated range (inclusive) */
-	public void requestPagesInRange(byte[] lower, byte[] upper) {
+	/** Request pages within indicated range (inclusive) 
+	 * @throws PeerCapabilityException */
+	public void requestPagesInRange(byte[] lower, byte[] upper) throws PeerCapabilityException {
+		assertPeerCapability(PEER_TYPE_BLIND);
 	}
 	
-	/** Request peer listing */
-	public void requestPeers() {
+	/** Request peer listing 
+	 * @throws PeerCapabilityException */
+	public void requestPeers() throws PeerCapabilityException {
+		assertPeerCapability(PEER_TYPE_BLIND);
 	}
 	
 	/** Announce the creation/receipt of a new branch tip */
-	public void announceTip(byte[] tipTag) throws BlindPeerException {
-		assertFullPeer();
+	public void announceTip(byte[] tipTag) throws PeerCapabilityException {
+		assertPeerCapability(PEER_TYPE_FULL);
 	}
 	
-	protected void assertFullPeer() throws BlindPeerException {
-		if(!fullPeer) throw new BlindPeerException();
+	protected void assertPeerCapability(int capability) throws PeerCapabilityException {
+		if(peerType < capability) throw new PeerCapabilityException();
 	}
 	
 	protected void assertClientStatus(boolean mustBeClient) throws PeerRoleException {
@@ -91,9 +107,11 @@ public class PeerConnection implements PeerSocketDelegate {
 	protected byte[] proofResponse(byte[] proof) throws ProtocolViolationException {
 		assertState(proof.length == socket.swarm.archive.getCrypto().hashLength());
 		if(Arrays.equals(proof, null)) { // TODO: actual archive proof A
+			peerType = PEER_TYPE_FULL;
 			return null; // TODO: actual archive proof B
 		} else {
 			// either their proof is garbage (meaning they're blind), or we're a blind seed; send garbage
+			peerType = PEER_TYPE_BLIND;
 			return socket.swarm.archive.getCrypto().rng(proof.length);
 		}
 	}
@@ -126,7 +144,7 @@ public class PeerConnection implements PeerSocketDelegate {
 			default:
 				throw new ProtocolViolationException();
 			}
-		} catch(PeerRoleException | BlindPeerException exc) {
+		} catch(PeerRoleException | PeerCapabilityException exc) {
 			throw new ProtocolViolationException();
 		}
 	}
@@ -150,8 +168,18 @@ public class PeerConnection implements PeerSocketDelegate {
 		}
 	}
 	
-	public void handleRequestRefTag(PeerMessage msg) throws BlindPeerException {
-		assertFullPeer();
+	/** TODO: this means we get just one stream from a single (possibly slow) peer... what if we let clients break it up?
+	 * RefTag gives length, so request bitmask showing the pages we want
+	 * respond with bitmask of chunks we offer, followed by ordered stream of pages
+	 * controller ensures each peer has a few pages at a time
+	 * 
+	 * 64-bit starting offset
+	 * Bitmask
+	 * @param msg
+	 * @throws PeerCapabilityException
+	 */
+	public void handleRequestRefTag(PeerMessage msg) throws PeerCapabilityException {
+		assertPeerCapability(PEER_TYPE_FULL);
 		msg.await((ByteBuffer data) -> {
 			assertState(data.remaining() == socket.swarm.archive.refTagSize());
 			RefTag tag = new RefTag(socket.swarm.archive, data.array());
@@ -226,8 +254,8 @@ public class PeerConnection implements PeerSocketDelegate {
 		msg.respond(new ByteArrayInputStream(buf.array()));
 	}
 	
-	public void handleAnnounceTip(PeerMessage msg) throws BlindPeerException {
-		assertFullPeer();
+	public void handleAnnounceTip(PeerMessage msg) throws PeerCapabilityException {
+		assertPeerCapability(PEER_TYPE_FULL);
 		msg.await((ByteBuffer data) -> {
 			assertState(data.remaining() == socket.swarm.archive.refTagSize());
 			// TODO: do we really want to automatically download every new tip? either way... what do we do next?

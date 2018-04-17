@@ -78,6 +78,12 @@ public class LocalDirectory implements Directory {
 	}
 	
 	@Override
+	public Iterator<String> listRecursiveIterator(int opts) throws IOException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
 	public boolean contains(String entry) {
 		java.io.File file = new java.io.File(fs.expandPath(Paths.get(path, entry).toString()));
 		return file.exists();

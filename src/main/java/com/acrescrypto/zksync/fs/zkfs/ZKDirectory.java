@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 
 import com.acrescrypto.zksync.exceptions.*;
@@ -90,6 +91,12 @@ public class ZKDirectory extends ZKFile implements Directory {
 		}
 	}
 	
+	@Override
+	public Iterator<String> listRecursiveIterator(int opts) throws IOException {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
 	public long inodeForName(String name) throws IOException {
 		if(!entries.containsKey(name)) {
 			throw new ENOENTException(Paths.get(path, name).toString());

@@ -261,13 +261,13 @@ public class ZKFile extends File {
 		inode.getStat().setSize((tag.numPages-1)*fs.archive.privConfig.getPageSize() + bufferedPage.size);
 	}
 	
-	protected long available() throws IOException {
+	public int available() throws IOException {
 		if(bufferedPage == null) return 0;
 		return bufferedPage.remaining();
 	}
 	
-	protected InputStream encryptedStream() {
-		return new ZKFileCiphertextStream(this);
+	protected InputStream encryptedStream() throws IOException {
+		return new ZKFileCiphertextStream(this.inode.refTag);
 	}
 	
 	/** Throw an exception if the file is not open for reading.
