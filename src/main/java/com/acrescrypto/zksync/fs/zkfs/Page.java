@@ -15,10 +15,11 @@ public class Page {
 	private ByteBuffer contents; /** page contents */
 	boolean dirty; /** true if page has been written to since last read/flush */
 	
-	/** path in underlying filesystem to a page identified by tag */
-	public static String pathForTag(byte[] tag) {
+	/** path in underlying filesystem to a page identified by tag 
+	 * @param archive */
+	public static String pathForTag(ZKArchive archive, byte[] tag) {
 		// TODO: these paths will need to be tied to an archive
-		return ZKArchive.DATA_DIR + ZKFS.pathForHash(tag);
+		return archive.dataDir() + ZKFS.pathForHash(tag);
 	}
 	
 	/** initialize page object from file and page number */

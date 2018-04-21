@@ -34,6 +34,7 @@ public abstract class PeerSocket {
 	
 	public interface PeerSocketDelegate {
 		public void receivedMessage(PeerMessage message) throws ProtocolViolationException;
+		public void establishedSalt(byte[] sharedSalt);
 	}
 	
 	public boolean hasExtension(String extName) {

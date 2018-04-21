@@ -121,6 +121,15 @@ public abstract class FS {
 		try { setAtime(path, 0); } catch(UnsupportedOperationException e) {}
 	}
 	
+	public void applyStat(String path, Stat stat) throws IOException {
+		try { chown(path, stat.getUser()); } catch(UnsupportedOperationException exc) {}
+		try { chgrp(path, stat.getGroup()); } catch(UnsupportedOperationException exc) {}
+		try { chmod(path, stat.getMode()); } catch(UnsupportedOperationException exc) {}
+		try { setCtime(path, stat.getCtime()); } catch(UnsupportedOperationException exc) {}
+		try { setMtime(path, stat.getMtime()); } catch(UnsupportedOperationException exc) {}
+		try { setAtime(path, stat.getAtime()); } catch(UnsupportedOperationException exc) {}
+	}
+	
 	public void safeWrite(String path, byte[] contents) throws IOException {
 		String safety = path + ".safety";
 		write(safety, contents);
@@ -137,5 +146,9 @@ public abstract class FS {
 		String safety = path + ".safety";
 		if(exists(safety) && stat(path).getMtime() > 0) return read(safety);
 		return read(path);
+	}
+	
+	/** Alert FS that we may need to read this file soon; useful if FS implements some form of caching. */
+	public void expect(String path) {
 	}
 }

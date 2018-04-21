@@ -52,6 +52,7 @@ public class PeerConnection implements PeerSocketDelegate {
 	protected PeerSocket socket;
 	protected int peerType;
 	protected PeerConnectionDelegate delegate;
+	protected byte[] sharedSalt;
 	
 	public PeerConnection(PeerSwarm swarm, String address) throws UnsupportedProtocolException {
 		this.socket = PeerSocket.connectToAddress(swarm, address);
@@ -147,6 +148,11 @@ public class PeerConnection implements PeerSocketDelegate {
 		} catch(PeerRoleException | PeerCapabilityException exc) {
 			throw new ProtocolViolationException();
 		}
+	}
+	
+	@Override
+	public void establishedSalt(byte[] sharedSalt) {
+		this.sharedSalt = sharedSalt;
 	}
 	
 	public void handleAccessProof(PeerMessage msg) throws PeerRoleException, ProtocolViolationException {

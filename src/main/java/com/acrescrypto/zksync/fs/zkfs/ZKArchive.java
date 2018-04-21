@@ -26,7 +26,7 @@ public class ZKArchive {
 	public final static int KEY_INDEX_REVISION_TREE = 6;
 	public final static int KEY_INDEX_SEED = 7;
 
-	public final static String DATA_DIR = ".zksync/archive/data/";
+	public final static String GLOBAL_DATA_DIR = ".zksync/archive/data/";
 	public final static String CONFIG_DIR = ".zksync/archive/config/";
 	public final static String REVISION_DIR = ".zksync/archive/revisions/";
 	public final static String LOCAL_DIR = ".zksync/local/";
@@ -37,6 +37,7 @@ public class ZKArchive {
 	protected PrivConfig privConfig;
 	protected LocalConfig localConfig;
 	protected KeyFile keyfile;
+	protected Keychain keychain; // TODO: rename to keyfile, kill old version of field/class
 	protected FS storage;
 	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
 	
@@ -109,5 +110,10 @@ public class ZKArchive {
 	
 	public int refTagSize() {
 		return RefTag.REFTAG_EXTRA_DATA_SIZE + crypto.hashLength();
+	}
+
+	public String dataDir() {
+		return GLOBAL_DATA_DIR + keyfile.getArchiveId();
+		return null;
 	}
 }
