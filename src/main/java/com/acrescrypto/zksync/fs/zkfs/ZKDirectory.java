@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.File;
@@ -216,7 +217,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		
 		while(buf.hasRemaining()) {
 			long inodeId = buf.getLong();
-			short pathLen = buf.getShort();
+			int pathLen = Util.unsignShort(buf.getShort());
 
 			// Don't check existence of inodes; it will trip up merges
 			assertIntegrity(inodeId >= 0, String.format("Directory references invalid inode %d", inodeId));

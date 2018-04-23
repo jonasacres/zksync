@@ -55,14 +55,14 @@ public class PeerController implements PeerConnectionDelegate {
 	@Override
 	public void discoveredTip(PeerConnection conn, RefTag tag) {
 		// TODO Auto-generated method stub
-		
 	}
+	
 	@Override
 	public void receivedPage(PeerConnection conn, byte[] tag) {
 		runCallbacks(tag);
 		// TODO Auto-generated method stub
-		
 	}
+	
 	@Override
 	public void receivedTipFile(PeerConnection conn, byte[] contents) {
 	}

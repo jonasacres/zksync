@@ -56,6 +56,18 @@ public class Util {
 		for(int i = 0; i < length; i++) newArray[i] = array[i];
 		return newArray;
 	}
+	
+	public static long unsignInt(int intVal) {
+		return intVal >= 0 ? intVal : intVal + 0x100000000l;
+	}
+	
+	public static int unsignShort(short shortVal) {
+		return shortVal >= 0 ? shortVal : shortVal + 0x10000;
+	}
+	
+	public static short unsignByte(byte byteVal) {
+		return (short) (byteVal >= 0 ? byteVal : byteVal + 0x100);
+	}
 
 	public static boolean isLinux() {
 		return true;

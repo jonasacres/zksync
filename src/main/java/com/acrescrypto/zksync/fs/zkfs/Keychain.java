@@ -3,13 +3,14 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SecureFile;
 
 public class Keychain {
 	
 	public final static int KEYFILE_MAGIC = 0x6CF2AA14;
-	public final static short KEYFILE_SECTION_ARCHIVE_INFO = 0x0001;
+	public final static int KEYFILE_SECTION_ARCHIVE_INFO = 0x0001;
 	
 	protected byte[] archiveId;
 	protected Key seedRoot;
@@ -45,8 +46,8 @@ public class Keychain {
 	public void parseFile(ByteBuffer contents) {
 		assertState(contents.getLong() == KEYFILE_MAGIC);
 		while(contents.hasRemaining()) {
-			short type = contents.getShort();
-			short length = contents.getShort();
+			int type = Util.unsignShort(contents.getShort());
+			int length = Util.unsignShort(contents.getShort());
 			int expectedIndex = contents.position() + length;
 			
 			assertState(contents.remaining() >= length);
@@ -65,7 +66,7 @@ public class Keychain {
 	public void parseArchiveInfo(ByteBuffer contents) {
 		pageSize = contents.getLong();
 		
-		int descLen = contents.getShort();
+		int descLen = Util.unsignShort(contents.getShort());
 		byte[] desc = new byte[descLen];
 		contents.get(desc);
 		description = new String(desc);
