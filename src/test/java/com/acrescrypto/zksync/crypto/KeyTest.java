@@ -12,10 +12,9 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 
 public class KeyTest {
-	CryptoSupport crypto = new CryptoSupport(new PubConfig());
+	CryptoSupport crypto = new CryptoSupport();
 	
 	@BeforeClass
 	public static void beforeClass() {

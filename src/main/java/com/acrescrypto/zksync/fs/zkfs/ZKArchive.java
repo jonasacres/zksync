@@ -11,7 +11,6 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
 import com.acrescrypto.zksync.fs.zkfs.config.PrivConfig;
-import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 
 public class ZKArchive {
 	public final static int KEY_TYPE_CIPHER = 0;
@@ -34,7 +33,6 @@ public class ZKArchive {
 	public final static String ACTIVE_REVISION = ".zskync/local/active-revision";
 
 	protected CryptoSupport crypto;
-	protected PubConfig pubConfig;
 	protected PrivConfig privConfig;
 	protected LocalConfig localConfig;
 	protected KeyFile keyfile;
@@ -48,10 +46,9 @@ public class ZKArchive {
 	
 	public ZKArchive(FS storage, PassphraseProvider provider) throws IOException {
 		this.storage = storage;
-		this.pubConfig = new PubConfig(storage);
-		this.crypto = new CryptoSupport(pubConfig);
-		this.keyfile = new KeyFile(this).readOrCreate(provider.passphraseForArchive(pubConfig.getArchiveId()));
+		this.crypto = new CryptoSupport();
 		this.keychain = new Keychain(this, new byte[0]); // TODO: get rid of passphrase provider here, replace with just a passphrase
+		this.keyfile = new KeyFile(this).readOrCreate(provider.passphraseForArchive(keychain.getArchiveId()));
 		this.privConfig = new PrivConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_PRIVATE));
 		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
 		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
@@ -80,10 +77,6 @@ public class ZKArchive {
 	
 	public ZKFS openBlank() throws IOException {
 		return new ZKFS(RefTag.blank(this));
-	}
-	
-	public PubConfig getPubConfig() {
-		return pubConfig;
 	}
 	
 	public PrivConfig getPrivConfig() {

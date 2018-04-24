@@ -12,26 +12,27 @@ import org.bouncycastle.crypto.modes.OCBBlockCipher;
 import org.bouncycastle.crypto.params.AEADParameters;
 import org.bouncycastle.crypto.params.KeyParameter;
 
-import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
-
 import de.mkammerer.argon2.Argon2Factory;
 import de.mkammerer.argon2.jna.Argon2Library;
 import de.mkammerer.argon2.jna.Size_t;
 import de.mkammerer.argon2.jna.Uint32_t;
 
 public class CryptoSupport {
-	private PubConfig pubConfig;
 	private PRNG defaultPrng;
+	public static boolean cheapArgon2; // set to true for tests, false otherwise
 	
-	public CryptoSupport(PubConfig pubConfig) {
+	public final static int ARGON2_TIME_COST = 4;
+	public final static int ARGON2_MEMORY_COST = 65536;
+	public final static int ARGON2_PARALLELISM = 1;
+	
+	public CryptoSupport() {
 		defaultPrng = new PRNG();
-		this.pubConfig = pubConfig;
 	}
 	
 	public byte[] deriveKeyFromPassword(byte[] passphrase, byte[] salt) {
-        final Uint32_t iterations = new Uint32_t(pubConfig.getArgon2TimeCost());
-        final Uint32_t memory = new Uint32_t(pubConfig.getArgon2MemoryCost());
-        final Uint32_t parallelism = new Uint32_t(pubConfig.getArgon2Parallelism());
+        final Uint32_t iterations = new Uint32_t(cheapArgon2 ? 1 : ARGON2_TIME_COST);
+        final Uint32_t memory = new Uint32_t(cheapArgon2 ? 8 : ARGON2_MEMORY_COST);
+        final Uint32_t parallelism = new Uint32_t(ARGON2_PARALLELISM);
         final Uint32_t hashLen = new Uint32_t(symKeyLength());
 
         int len = Argon2Library.INSTANCE.argon2_encodedlen(iterations, memory, parallelism,

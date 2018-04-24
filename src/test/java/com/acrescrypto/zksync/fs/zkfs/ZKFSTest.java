@@ -11,13 +11,13 @@ import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
-import com.acrescrypto.zksync.fs.zkfs.config.PubConfig;
 
 public class ZKFSTest extends FSTestBase {
 	 // TODO: this is going to break on Windows
@@ -345,22 +345,11 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	public static void cheapenArgon2Costs() {
-		// TODO: this broke when we made it static, but right now we really don't care because we never actually want expensive argon2 in tests
-//		// cut down test runtime by making argon2 really cheap
-//		oldDefaultTimeCost = PubConfig.defaultArgon2TimeCost;
-//		oldDefaultMemoryCost = PubConfig.defaultArgon2MemoryCost;
-//		oldDefaultParallelism = PubConfig.defaultArgon2Parallelism;
-//		
-		PubConfig.defaultArgon2TimeCost = 1;
-		PubConfig.defaultArgon2MemoryCost = 32;
-		PubConfig.defaultArgon2Parallelism = 4;
+		CryptoSupport.cheapArgon2 = true;
 	}
 	
 	public static void restoreArgon2Costs() {
-		// TODO: see note for cheapenArgon2Costs
-//		PubConfig.defaultArgon2TimeCost = oldDefaultTimeCost;
-//		PubConfig.defaultArgon2MemoryCost = oldDefaultMemoryCost;
-//		PubConfig.defaultArgon2Parallelism = oldDefaultParallelism;
+		CryptoSupport.cheapArgon2 = false;
 	}
 	
 	public static void deleteFiles() {
