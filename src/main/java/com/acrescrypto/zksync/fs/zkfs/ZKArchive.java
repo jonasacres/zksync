@@ -10,7 +10,6 @@ import com.acrescrypto.zksync.crypto.KeyFile;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
-import com.acrescrypto.zksync.fs.zkfs.config.PrivConfig;
 
 public class ZKArchive {
 	public final static int KEY_TYPE_CIPHER = 0;
@@ -33,7 +32,6 @@ public class ZKArchive {
 	public final static String ACTIVE_REVISION = ".zskync/local/active-revision";
 
 	protected CryptoSupport crypto;
-	protected PrivConfig privConfig;
 	protected LocalConfig localConfig;
 	protected KeyFile keyfile;
 	protected Keychain keychain; // TODO: rename to keyfile, kill old version of field/class
@@ -49,7 +47,6 @@ public class ZKArchive {
 		this.crypto = new CryptoSupport();
 		this.keychain = new Keychain(this, new byte[0]); // TODO: get rid of passphrase provider here, replace with just a passphrase
 		this.keyfile = new KeyFile(this).readOrCreate(provider.passphraseForArchive(keychain.getArchiveId()));
-		this.privConfig = new PrivConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_PRIVATE));
 		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
 		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
 			return tag.getFS();
@@ -79,10 +76,6 @@ public class ZKArchive {
 		return new ZKFS(RefTag.blank(this));
 	}
 	
-	public PrivConfig getPrivConfig() {
-		return privConfig;
-	}
-	
 	public FS getStorage() {
 		return storage;
 	}
@@ -109,5 +102,9 @@ public class ZKArchive {
 
 	public String dataDir() {
 		return GLOBAL_DATA_DIR + Util.bytesToHex(keychain.getArchiveId());
+	}
+
+	public Keychain getKeychain() {
+		return keychain;
 	}
 }

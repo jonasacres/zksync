@@ -75,7 +75,7 @@ public class Page {
 		byte[] authTag = authKey().authenticate(pageTag);
 		SecureFile
 		  .atPath(file.zkfs.archive.storage, pathForTag(file.zkfs.archive, authTag), textKey(pageTag), authTag, null)
-		  .write(plaintext.array(), file.zkfs.archive.privConfig.getPageSize());
+		  .write(plaintext.array(), (int) file.zkfs.archive.keychain.pageSize);
 	}
 	
 	/** read data from page into a supplied buffer
@@ -131,11 +131,11 @@ public class Page {
 	
 	/** load page contents from underlying storage */
 	public void load() throws IOException {
-		int pageSize = file.zkfs.archive.privConfig.getPageSize();
+		int pageSize = (int) file.zkfs.archive.keychain.pageSize;
 		
 		if(file.inode.refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) {
 			assert(pageNum == 0);
-			contents = ByteBuffer.allocate(file.zkfs.archive.privConfig.getPageSize());
+			contents = ByteBuffer.allocate((int) file.zkfs.archive.keychain.pageSize);
 			contents.put(file.inode.refTag.getLiteral());
 			size = contents.position();
 			return;
@@ -159,7 +159,7 @@ public class Page {
 	
 	/** set page to empty (zero length, no contents) */
 	public void blank() {
-		contents = ByteBuffer.allocate(file.zkfs.archive.privConfig.getPageSize());
+		contents = ByteBuffer.allocate((int) file.zkfs.archive.keychain.pageSize);
 		size = 0;
 		dirty = true;
 	}

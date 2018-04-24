@@ -47,7 +47,7 @@ public class FreeList extends ZKFile {
 	/** serialize freelist and write into zkfs */ 
 	public void commit() throws IOException {
 		if(!dirty) return;
-		long offset = Math.max(0, (lastReadPage-1)*zkfs.archive.privConfig.getPageSize());
+		long offset = Math.max(0, (lastReadPage-1)*zkfs.archive.keychain.pageSize);
 		truncate(offset);
 		ByteBuffer buf = ByteBuffer.allocate(8*available.size());
 		for(Long inodeId : available) buf.putLong(inodeId);
@@ -57,7 +57,7 @@ public class FreeList extends ZKFile {
 		
 		lastReadPage = inode.refTag.numPages-1;
 		available.clear();
-		buf.position(buf.capacity() - (buf.capacity() % zkfs.archive.privConfig.getPageSize())); // last page
+		buf.position(buf.capacity() - (int) (buf.capacity() % zkfs.archive.keychain.pageSize)); // last page
 		while(buf.remaining() >= 8) available.push(buf.getLong());
 		dirty = false;
 	}
@@ -70,8 +70,8 @@ public class FreeList extends ZKFile {
 	
 	/** read a specific page of inode IDs */
 	protected void readPage(long pageNum) throws IOException {
-		seek(pageNum*zkfs.archive.privConfig.getPageSize(), SEEK_SET);
-		ByteBuffer buf = ByteBuffer.wrap(read(zkfs.archive.privConfig.getPageSize()));
+		seek(pageNum*zkfs.archive.keychain.pageSize, SEEK_SET);
+		ByteBuffer buf = ByteBuffer.wrap(read((int) zkfs.archive.keychain.pageSize));
 		while(buf.remaining() >= 8) available.push(buf.getLong()); // 8 == sizeof inodeId 
 	}
 }

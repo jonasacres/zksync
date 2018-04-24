@@ -97,12 +97,12 @@ public class ZKFile extends File {
 			long oldOffset = offset;
 			seek(0, SEEK_END);
 			while(size > inode.getStat().getSize()) {
-				byte[] zeros = new byte[(int) Math.min(zkfs.archive.privConfig.getPageSize(), size - inode.getStat().getSize())];
+				byte[] zeros = new byte[(int) Math.min(zkfs.archive.keychain.pageSize, size - inode.getStat().getSize())];
 				write(zeros);
 			}
 			seek(oldOffset, SEEK_SET);
 		} else {
-			int newPageCount = (int) Math.ceil((double) size/zkfs.archive.privConfig.getPageSize());
+			int newPageCount = (int) Math.ceil((double) size/zkfs.archive.keychain.pageSize);
 			merkle.resize(newPageCount);
 			for(int i = newPageCount; i < merkle.numPages; i++) {
 				merkle.setPageTag(i, new byte[zkfs.archive.crypto.hashLength()]);
@@ -111,9 +111,9 @@ public class ZKFile extends File {
 			inode.getStat().setSize(size);
 			if(offset >= size) offset = size;
 			
-			int lastPage = (int) (size/zkfs.archive.privConfig.getPageSize());
+			int lastPage = (int) (size/zkfs.archive.keychain.pageSize);
 			bufferPage(lastPage);
-			bufferedPage.truncate((int) (size % zkfs.archive.privConfig.getPageSize()));
+			bufferedPage.truncate((int) (size % zkfs.archive.keychain.pageSize));
 		}
 		
 		dirty = true;
@@ -128,9 +128,9 @@ public class ZKFile extends File {
 		if(numToRead == 0) return -1;
 
 		while(numToRead > 0) {
-			int neededPageNum = (int) (offset/zkfs.archive.privConfig.getPageSize());
+			int neededPageNum = (int) (offset/zkfs.archive.keychain.pageSize);
 			bufferPage(neededPageNum);
-			bufferedPage.seek((int) (offset % zkfs.archive.privConfig.getPageSize()));
+			bufferedPage.seek((int) (offset % zkfs.archive.keychain.pageSize));
 			int numRead = bufferedPage.read(buf, bufOffset + readLen - numToRead, numToRead);
 			assert(numRead > 0);
 			numToRead -= numRead;
@@ -172,12 +172,12 @@ public class ZKFile extends File {
 		assertWritable();
 		dirty = true;
 		int leftToWrite = length;
-		int pageSize = zkfs.archive.privConfig.getPageSize();
+		int pageSize = (int) zkfs.archive.keychain.pageSize;
 		
 		while(leftToWrite > 0) {
 			int neededPageNum = (int) (this.offset/pageSize);
 			bufferPage(neededPageNum);
-			int offsetInPage = (int) (offset % zkfs.archive.privConfig.getPageSize()), pageCapacity = (int) (pageSize-offsetInPage);
+			int offsetInPage = (int) (offset % zkfs.archive.keychain.pageSize), pageCapacity = (int) (pageSize-offsetInPage);
 			bufferedPage.seek(offsetInPage);
 			int numWritten = bufferedPage.write(data, bufOffset + length - leftToWrite, Math.min(leftToWrite, pageCapacity));
 			
@@ -240,7 +240,7 @@ public class ZKFile extends File {
 	public void copy(File file) throws IOException {
 		assertWritable();
 		file.rewind();
-		int pageSize = zkfs.archive.privConfig.getPageSize();
+		int pageSize = (int) zkfs.archive.keychain.pageSize;
 		while(file.hasData()) write(file.read(pageSize));
 		flush();
 		
@@ -262,7 +262,7 @@ public class ZKFile extends File {
 		}
 		
 		bufferPage((int) (tag.numPages-1));
-		inode.getStat().setSize((tag.numPages-1)*zkfs.archive.privConfig.getPageSize() + bufferedPage.size);
+		inode.getStat().setSize((tag.numPages-1)*zkfs.archive.keychain.pageSize + bufferedPage.size);
 	}
 	
 	public int available() throws IOException {

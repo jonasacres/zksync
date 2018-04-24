@@ -84,7 +84,7 @@ public class DiffSetTest {
 		LocalFS storage = new LocalFS("/tmp/zksync-diffset-nonimmediate");
 		if(storage.exists("/")) storage.rmrf("/");
 		ZKFS fs = ZKFS.fsForStorage(storage, password);
-		byte[] buf = new byte[fs.getArchive().getPrivConfig().getPageSize()+1];
+		byte[] buf = new byte[(int) fs.getArchive().getKeychain().getPageSize()+1];
 		fs.write("unmodified", buf);
 		fs.write("modified", buf);
 		RefTag parent = fs.commit();

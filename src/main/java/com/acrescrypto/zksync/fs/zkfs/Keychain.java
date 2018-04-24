@@ -25,6 +25,8 @@ public class Keychain {
 	
 	protected ZKArchive archive;
 	
+	// NOTE: in theory we support pageSize > MAX_INT, but in practice several operations cast to int and need a refactor
+	// for this to work. TODO: guard against trying to load archives with long-valued page sizes.
 	protected long pageSize;
 	public String description;
 	
@@ -33,6 +35,7 @@ public class Keychain {
 		Key passphraseRoot = new Key(archive.crypto, passphraseRootRaw);
 		
 		this.archive = archive;
+		this.pageSize = 65536;
 		derive(passphraseRoot);
 		
 		archive.keychain = this;
@@ -84,6 +87,10 @@ public class Keychain {
 	public byte[] getArchiveId() {
 		return new byte[archive.crypto.hashLength()];
 		// TODO: return archiveId;
+	}
+	
+	public long getPageSize() {
+		return pageSize;
 	}
 	
 	protected void write() throws IOException {

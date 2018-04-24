@@ -185,8 +185,8 @@ public class InodeTable extends ZKFile {
 	/** array of all inodes stored at a given page number of the inode table */
 	protected Inode[] inodesForPage(long pageNum) throws IOException {
 		Inode[] list = new Inode[inodesPerPage()];
-		seek(pageNum*zkfs.archive.privConfig.getPageSize(), SEEK_SET);
-		ByteBuffer buf = ByteBuffer.wrap(read(zkfs.archive.privConfig.getPageSize()));
+		seek(pageNum*zkfs.archive.keychain.pageSize, SEEK_SET);
+		ByteBuffer buf = ByteBuffer.wrap(read((int) zkfs.archive.keychain.pageSize));
 		byte[] serialized = new byte[inodeSize()];
 		int i = 0;
 		
@@ -203,9 +203,9 @@ public class InodeTable extends ZKFile {
 	
 	/** write an array of inodes to a given page number */
 	protected void commitInodePage(long pageNum, Inode[] inodes) throws IOException {
-		seek(pageNum*zkfs.archive.privConfig.getPageSize(), SEEK_SET);
+		seek(pageNum*zkfs.archive.keychain.pageSize, SEEK_SET);
 		for(Inode inode : inodes) write(inode.serialize());
-		write(new byte[(int) (zkfs.archive.privConfig.getPageSize() - (offset % zkfs.archive.privConfig.getPageSize()))]);
+		write(new byte[(int) (zkfs.archive.keychain.pageSize - (offset % zkfs.archive.keychain.pageSize))]);
 	}
 	
 	/** calculate the page number for a given inode id */
@@ -219,7 +219,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	protected int inodesPerPage() {
-		return zkfs.archive.privConfig.getPageSize()/inodeSize();
+		return (int) zkfs.archive.keychain.pageSize/inodeSize();
 	}
 	
 	/** place an inode into the table, overwriting what's already there (assumes inode id is properly set) */
@@ -279,7 +279,7 @@ public class InodeTable extends ZKFile {
 		this.merkle = new PageMerkle(tag);
 		this.inode = new Inode(zkfs);
 		this.inode.setRefTag(tag);
-		this.inode.stat.setSize(zkfs.archive.privConfig.getPageSize() * tag.numPages);
+		this.inode.stat.setSize(zkfs.archive.keychain.pageSize * tag.numPages);
 		this.revision = new RevisionInfo(inodeWithId(INODE_ID_REVISION_INFO));
 		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST));
 		nextInodeId = lookupNextInodeId();
