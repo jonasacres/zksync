@@ -94,10 +94,10 @@ public class ZKFileTest extends FileTestBase {
 		file.write(contents);
 		file.close();
 
-		for(int i = 0; i < Math.ceil(((double) file.getStat().getSize())/file.fs.archive.privConfig.getPageSize()); i++) {
+		for(int i = 0; i < Math.ceil(((double) file.getStat().getSize())/file.zkfs.archive.privConfig.getPageSize()); i++) {
 			Page page = new Page(file, i);
-			String path = ZKArchive.DATA_DIR + ZKFS.pathForHash(page.authKey().authenticate(file.getPageTag(i)));
-			Stat stat = file.fs.archive.storage.stat(path);
+			String path = Page.pathForTag(zkscratch.archive, page.authKey().authenticate(file.getPageTag(i)));
+			Stat stat = file.zkfs.archive.storage.stat(path);
 			assertEquals(0, stat.getAtime());
 			assertEquals(0, stat.getMtime());
 		}

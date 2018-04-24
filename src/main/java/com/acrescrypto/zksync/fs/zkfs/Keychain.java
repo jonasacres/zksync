@@ -5,7 +5,6 @@ import java.nio.ByteBuffer;
 
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.SecureFile;
 
 public class Keychain {
 	
@@ -39,7 +38,8 @@ public class Keychain {
 		archive.keychain = this;
 		
 		// TODO: read file?
-		parseFile(ByteBuffer.wrap(config.read()));
+		// parseFile(ByteBuffer.wrap(config.read()));
+		initRoots();
 		calculateArchiveId(passphraseRoot);
 	}
 	
@@ -79,6 +79,11 @@ public class Keychain {
 
 		textRoot = new Key(this.archive.crypto, textRootRaw);
 		authRoot = new Key(this.archive.crypto, authRootRaw);
+	}
+	
+	public byte[] getArchiveId() {
+		return new byte[archive.crypto.hashLength()];
+		// TODO: return archiveId;
 	}
 	
 	protected void write() throws IOException {

@@ -186,9 +186,9 @@ public class CompositeFS extends FS {
 	}
 
 	@Override
-	public byte[] read(String path) throws IOException {
+	public byte[] _read(String path) throws IOException {
 		ensurePresent(path);
-		return backingFS.read(path);
+		return backingFS._read(path);
 	}
 
 	@Override
@@ -269,6 +269,9 @@ public class CompositeFS extends FS {
 	}
 	
 	protected FS acquire(String path) throws IOException {
+		/* TODO: ensure that if we have parallel requests for the same path, all subsequent requests block without triggering
+		 * any additional attempts to acquire the file.
+		 */
 		while(true) {
 			FS remoteFS = null;
 			try {
@@ -278,7 +281,7 @@ public class CompositeFS extends FS {
 				Stat stat = pool.getResult();
 				if(remoteFS == null) throw new SupplementaryFSTimeoutException();
 				
-				acquireSpecific(path, stat, remoteFS);				
+				acquireSpecific(path, stat);				
 				backingFS.applyStat(path, stat);
 				
 				return remoteFS;
@@ -288,14 +291,54 @@ public class CompositeFS extends FS {
 		}
 	}
 	
-	protected void acquireSpecific(String path, Stat stat, FS remoteFS) throws IOException {
-		if(remoteFS == null) throw new ENOENTException(path);
-		else if(stat.isSymlink()) acquireSymlink(path, stat, remoteFS);
-		else if(stat.isDevice()) acquireDevice(path, stat, remoteFS);
-		else if(stat.isFifo()) acquireFifo(path, stat, remoteFS);
-		else if(stat.isDirectory()) acquireDirectory(path, stat, remoteFS);
-		else if(stat.isRegularFile()) acquireRegularFile(path, stat, remoteFS);
-		else throw new EINVALException(path);
+	protected FS selectRemoteFS(Stat stat) {
+		long bestTime = Long.MAX_VALUE;
+		FS bestFS = null;
+		ArrayList<FS> untestedFS = new ArrayList<FS>();
+		
+		/* TODO: I'm a bit concerned about this approach. Once we estimate someone as slow, we won't give them another
+		 * shot until we're either so busy we've got no choice, or everyone else becomes slower. Maybe use a weighted
+		 * probability based on speed?
+		 */
+		for(FS fs : supplementaries) {
+			long time = fs.expectedReadWaitTime(stat.getSize());
+			if(time == -1) {
+				untestedFS.add(fs); // FS has no throughput estimate ready, so we don't know how fast it is
+			} else if(bestFS == null || time < bestTime ) {
+				bestTime = time;
+				bestFS = fs;
+			}
+		}
+		
+		/* Select an untested FS with a probability equal to the fraction of supplementary FS that are untested.
+		 * So we'll usually take untested FSes when our current peer list is mostly untested, and taper it off as we
+		 * get more and more estimates back.
+		 */
+		double untestedProb = ((double) untestedFS.size()) / ((double) supplementaries.size());
+		if(Math.random() < untestedProb) {
+			return untestedFS.get((int) Math.random()*untestedFS.size());
+		}
+		
+		return bestFS;
+	}
+	
+	protected void acquireSpecific(String path, Stat stat) throws IOException {
+		while(true) {
+			FS remoteFS = selectRemoteFS(stat);
+			if(remoteFS == null) throw new ENOENTException(path);
+			try {
+				// TODO: How do we distinguish between a file not existing, and us asking a supplementary that didn't happen to have it?
+				if(stat.isSymlink()) acquireSymlink(path, stat, remoteFS);
+				else if(stat.isDevice()) acquireDevice(path, stat, remoteFS);
+				else if(stat.isFifo()) acquireFifo(path, stat, remoteFS);
+				else if(stat.isDirectory()) acquireDirectory(path, stat, remoteFS);
+				else if(stat.isRegularFile()) acquireRegularFile(path, stat, remoteFS);
+				else throw new EINVALException(path);
+				return;
+			} catch(SupplementaryFSFailureException | SupplementaryFSTimeoutException exc) {
+				failSupplementaryFS(remoteFS);
+			}
+		}
 	}
 	
 	protected void acquireSymlink(String path, Stat stat, FS remoteFS) throws IOException {

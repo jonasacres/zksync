@@ -10,15 +10,16 @@ import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
 public class SSHFile extends File {
-	protected SSHFS fs;
 	protected String path;
 	protected int mode;
 	protected long offset;
 	
 	protected Stat cachedStat;
+	protected SSHFS sshfs;
 	
 	public SSHFile(SSHFS fs, String path, int mode) throws IOException {
-		this.fs = fs;
+		super(fs);
+		this.sshfs = fs;
 		this.path = path;
 		this.mode = mode;
 		
@@ -54,11 +55,11 @@ public class SSHFile extends File {
 	}
 	
 	@Override
-	public int read(byte[] buf, int bufOffset, int maxLength) throws IOException {
+	protected int _read(byte[] buf, int bufOffset, int maxLength) throws IOException {
 		if((mode & O_RDONLY) == 0) throw new EACCESException(path);
 		if(offset >= cachedStat.getSize()) return 0;
-		byte[] data = fs.execAndCheck("dd",
-				"ibs=1 count=" + maxLength + " skip=" + offset + " if=\"" + fs.qualifiedPath(path) + "\"");
+		byte[] data = sshfs.execAndCheck("dd",
+				"ibs=1 count=" + maxLength + " skip=" + offset + " if=\"" + sshfs.qualifiedPath(path) + "\"");
 		for(int i = 0; i < data.length; i++) buf[bufOffset+i] = data[i];
 		offset += data.length;
 		return data.length;
@@ -67,8 +68,8 @@ public class SSHFile extends File {
 	@Override
 	public void write(byte[] data) throws IOException {
 		if((mode & O_WRONLY) == 0) throw new EACCESException(path);
-		fs.execAndCheck("dd",
-				"obs=1 conv=notrunc seek=" + offset + " of=\"" + fs.qualifiedPath(path) + "\"",
+		sshfs.execAndCheck("dd",
+				"obs=1 conv=notrunc seek=" + offset + " of=\"" + sshfs.qualifiedPath(path) + "\"",
 				data);
 		offset += data.length;
 		if(offset > getStat().getSize()) getStat().setSize(offset);

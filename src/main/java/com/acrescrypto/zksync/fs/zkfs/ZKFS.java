@@ -150,15 +150,6 @@ public class ZKFS extends FS {
 	}
 
 	@Override
-	public byte[] read(String path) throws IOException {
-		ZKFile file = open(path, ZKFile.O_RDONLY);
-		byte[] buf = file.read();
-		file.close();
-		
-		return buf;
-	}
-
-	@Override
 	public ZKFile open(String path, int mode) throws IOException {
 		assertPathIsNotDirectory(path);
 		return new ZKFile(this, path, mode);

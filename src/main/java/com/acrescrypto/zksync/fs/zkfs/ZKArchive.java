@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 
 import com.acrescrypto.zksync.HashCache;
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.KeyFile;
@@ -50,6 +51,7 @@ public class ZKArchive {
 		this.pubConfig = new PubConfig(storage);
 		this.crypto = new CryptoSupport(pubConfig);
 		this.keyfile = new KeyFile(this).readOrCreate(provider.passphraseForArchive(pubConfig.getArchiveId()));
+		this.keychain = new Keychain(this, new byte[0]); // TODO: get rid of passphrase provider here, replace with just a passphrase
 		this.privConfig = new PrivConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_PRIVATE));
 		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
 		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
@@ -113,7 +115,6 @@ public class ZKArchive {
 	}
 
 	public String dataDir() {
-		return GLOBAL_DATA_DIR + keyfile.getArchiveId();
-		return null;
+		return GLOBAL_DATA_DIR + Util.bytesToHex(keychain.getArchiveId());
 	}
 }

@@ -49,7 +49,7 @@ public class InodeTable extends ZKFile {
 	 * @throws IOException
 	 */
 	public InodeTable(ZKFS fs, RefTag tag) throws IOException {
-		this.fs = fs;
+		super(fs);
 		this.path = INODE_TABLE_PATH;
 		this.mode = O_RDWR;
 		this.inodesByPage = new HashCache<Long,Inode[]>(16, (Long pageNum) -> {
@@ -90,7 +90,7 @@ public class InodeTable extends ZKFile {
 	/** clear the old revision info and replace with a new one */
 	protected void updateRevisionInfo(RefTag[] additionalParents) throws IOException {
 		 // TODO: figure out if we need to add the current revision tag here
-		RevisionInfo newRevision = new RevisionInfo(fs);
+		RevisionInfo newRevision = new RevisionInfo(zkfs);
 		newRevision.reset();
 		for(RefTag parent : additionalParents) newRevision.addParent(parent);
 		newRevision.commit();
@@ -108,16 +108,16 @@ public class InodeTable extends ZKFile {
 	/** add our new commit to the list of branch tips, and remove our ancestors */
 	protected void updateTree(RefTag[] additionalParents) throws IOException {
 		RefTag tag = inode.getRefTag();
-		RevisionTree tree = fs.archive.getRevisionTree();
+		RevisionTree tree = zkfs.archive.getRevisionTree();
 		tree.addBranchTip(tag);
-		tree.removeBranchTip(fs.baseRevision);
+		tree.removeBranchTip(zkfs.baseRevision);
 		for(RefTag parent : additionalParents) tree.removeBranchTip(parent);
 		tree.write();
 	}
 	
 	/** size of an inode for this table, in bytes */
 	public int inodeSize() {
-		return inodeSize(fs.archive);
+		return inodeSize(zkfs.archive);
 	}
 	
 	/** remove an inode from the inode table
@@ -167,35 +167,35 @@ public class InodeTable extends ZKFile {
 	/** issue a new inode with blank content and default metadata */
 	public Inode issueInode(long inodeId) throws IOException {
 		Inode inode = inodeWithId(inodeId);
-		long now = fs.currentTime();
-		inode.setIdentity(ByteBuffer.wrap(fs.archive.crypto.rng(8)).getLong()); // TODO: the new last gasp of non-determinism...
+		long now = zkfs.currentTime();
+		inode.setIdentity(ByteBuffer.wrap(zkfs.archive.crypto.rng(8)).getLong()); // TODO: the new last gasp of non-determinism...
 		inode.getStat().setInodeId(inodeId);
 		inode.getStat().setCtime(now);
 		inode.getStat().setAtime(now);
 		inode.getStat().setMtime(now);
-		inode.getStat().setMode(fs.archive.localConfig.getFileMode());
-		inode.getStat().setUser(fs.archive.localConfig.getUser());
-		inode.getStat().setUid(fs.archive.localConfig.getUid());
-		inode.getStat().setGroup(fs.archive.localConfig.getGroup());
-		inode.getStat().setGid(fs.archive.localConfig.getGid());
-		inode.setRefTag(RefTag.blank(fs.archive));
+		inode.getStat().setMode(zkfs.archive.localConfig.getFileMode());
+		inode.getStat().setUser(zkfs.archive.localConfig.getUser());
+		inode.getStat().setUid(zkfs.archive.localConfig.getUid());
+		inode.getStat().setGroup(zkfs.archive.localConfig.getGroup());
+		inode.getStat().setGid(zkfs.archive.localConfig.getGid());
+		inode.setRefTag(RefTag.blank(zkfs.archive));
 		return inode;
 	}
 	
 	/** array of all inodes stored at a given page number of the inode table */
 	protected Inode[] inodesForPage(long pageNum) throws IOException {
 		Inode[] list = new Inode[inodesPerPage()];
-		seek(pageNum*fs.archive.privConfig.getPageSize(), SEEK_SET);
-		ByteBuffer buf = ByteBuffer.wrap(read(fs.archive.privConfig.getPageSize()));
+		seek(pageNum*zkfs.archive.privConfig.getPageSize(), SEEK_SET);
+		ByteBuffer buf = ByteBuffer.wrap(read(zkfs.archive.privConfig.getPageSize()));
 		byte[] serialized = new byte[inodeSize()];
 		int i = 0;
 		
 		while(buf.remaining() >= serialized.length) {
 			buf.get(serialized);
-			list[i++] = new Inode(fs, serialized);
+			list[i++] = new Inode(zkfs, serialized);
 		}
 		
-		while(i < list.length) list[i++] = new Inode(fs);
+		while(i < list.length) list[i++] = new Inode(zkfs);
 		if(pageNum == 0) list[0] = inode;
 		
 		return list;
@@ -203,9 +203,9 @@ public class InodeTable extends ZKFile {
 	
 	/** write an array of inodes to a given page number */
 	protected void commitInodePage(long pageNum, Inode[] inodes) throws IOException {
-		seek(pageNum*fs.archive.privConfig.getPageSize(), SEEK_SET);
+		seek(pageNum*zkfs.archive.privConfig.getPageSize(), SEEK_SET);
 		for(Inode inode : inodes) write(inode.serialize());
-		write(new byte[(int) (fs.archive.privConfig.getPageSize() - (offset % fs.archive.privConfig.getPageSize()))]);
+		write(new byte[(int) (zkfs.archive.privConfig.getPageSize() - (offset % zkfs.archive.privConfig.getPageSize()))]);
 	}
 	
 	/** calculate the page number for a given inode id */
@@ -219,7 +219,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	protected int inodesPerPage() {
-		return fs.archive.privConfig.getPageSize()/inodeSize();
+		return zkfs.archive.privConfig.getPageSize()/inodeSize();
 	}
 	
 	/** place an inode into the table, overwriting what's already there (assumes inode id is properly set) */
@@ -231,8 +231,8 @@ public class InodeTable extends ZKFile {
 	
 	/** initialize an empty root directory */
 	private void makeRootDir() throws IOException {
-		Inode rootDir = new Inode(fs);
-		long now = fs.currentTime();
+		Inode rootDir = new Inode(zkfs);
+		long now = zkfs.currentTime();
 		rootDir.setIdentity(0);
 		rootDir.getStat().setCtime(now);
 		rootDir.getStat().setAtime(now);
@@ -242,7 +242,7 @@ public class InodeTable extends ZKFile {
 		rootDir.getStat().setMode(0777);
 		rootDir.getStat().setUid(0);
 		rootDir.getStat().setGid(0);
-		rootDir.setRefTag(RefTag.blank(fs.archive));
+		rootDir.setRefTag(RefTag.blank(zkfs.archive));
 		rootDir.setFlags(Inode.FLAG_RETAIN);
 		setInode(rootDir);
 	}
@@ -264,9 +264,9 @@ public class InodeTable extends ZKFile {
 	
 	/** initialize a blank inode table, including references to blank root directroy, revision info and freelist */
 	private void initialize() throws IOException {
-		this.inode = Inode.defaultRootInode(fs);
+		this.inode = Inode.defaultRootInode(zkfs);
 		this.setInode(this.inode);
-		this.merkle = new PageMerkle(RefTag.blank(fs.archive));
+		this.merkle = new PageMerkle(RefTag.blank(zkfs.archive));
 		this.nextInodeId = USER_INODE_ID_START;
 
 		makeRootDir();
@@ -277,9 +277,9 @@ public class InodeTable extends ZKFile {
 	/** initialize from existing inode table data, identified by a reftag */
 	private void readExisting(RefTag tag) throws IOException {
 		this.merkle = new PageMerkle(tag);
-		this.inode = new Inode(fs);
+		this.inode = new Inode(zkfs);
 		this.inode.setRefTag(tag);
-		this.inode.stat.setSize(fs.archive.privConfig.getPageSize() * tag.numPages);
+		this.inode.stat.setSize(zkfs.archive.privConfig.getPageSize() * tag.numPages);
 		this.revision = new RevisionInfo(inodeWithId(INODE_ID_REVISION_INFO));
 		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST));
 		nextInodeId = lookupNextInodeId();
@@ -292,7 +292,7 @@ public class InodeTable extends ZKFile {
 			inodeWithId(inodeDiff.getInodeId()).markDeleted();
 		} else {
 			Inode existing = inodeWithId(inodeDiff.getInodeId());
-			Inode duplicated = inodeDiff.getResolution().clone(fs);
+			Inode duplicated = inodeDiff.getResolution().clone(zkfs);
 			
 			/* anything to do with path structure, we can ignore. that means: nlink for all inodes, and refTag/size
 			 * for directories. Directory structure is recalculated during merge, altering directory contents and
@@ -307,7 +307,7 @@ public class InodeTable extends ZKFile {
 			} else {
 				duplicated.nlink = 0;
 				if(duplicated.stat.isDirectory()) {
-					duplicated.refTag = RefTag.blank(fs.archive);
+					duplicated.refTag = RefTag.blank(zkfs.archive);
 					duplicated.stat.setSize(0);
 				}
 			}

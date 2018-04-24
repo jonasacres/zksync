@@ -270,14 +270,6 @@ public class LocalFS extends FS {
 	}
 
 	@Override
-	public byte[] read(String path) throws IOException {
-		LocalFile file = open(path, File.O_RDONLY);
-		byte[] retval = file.read();
-		file.close();
-		return retval;
-	}
-
-	@Override
 	public LocalFile open(String path, int mode) throws IOException {
 		return new LocalFile(this, path, mode);
 	}

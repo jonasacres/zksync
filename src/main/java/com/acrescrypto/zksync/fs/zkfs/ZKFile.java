@@ -14,7 +14,7 @@ import com.acrescrypto.zksync.fs.Stat;
 
 /** Represents a file handle within a zkfs. */
 public class ZKFile extends File {
-	protected ZKFS fs; /** filesystem to which this file belongs */
+	protected ZKFS zkfs; /** filesystem to which this file belongs */
 	protected Inode inode; /** inode describing metadata of this file */
 	protected long offset; /** current location of file pointer (offset in bytes into file) */
 	protected String path; /** path from which the file was opened */
@@ -23,13 +23,17 @@ public class ZKFile extends File {
 	protected Page bufferedPage; /** buffered page contents (page for current file pointer offset) */
 	protected boolean dirty; /** true if file has been modified since last flush */
 	
-	protected ZKFile() {}
-	
 	public final static int O_LINK_LITERAL = 1 << 16; /** treat symlinks as literal files, needed for lowlevel symlink operations */
+	
+	protected ZKFile(ZKFS fs) {
+		super(fs);
+		this.zkfs = fs;
+	}
 	
 	/** Open a file handle at a path */
 	public ZKFile(ZKFS fs, String path, int mode) throws IOException {
-		this.fs = fs;
+		super(fs);
+		this.zkfs = fs;
 		this.path = path;
 		this.mode = mode;
 		
@@ -54,7 +58,7 @@ public class ZKFile extends File {
 	
 	/** Filesystem for this file */
 	public ZKFS getFS() {
-		return fs;
+		return zkfs;
 	}
 	
 	/** Inode for this file */
@@ -93,30 +97,30 @@ public class ZKFile extends File {
 			long oldOffset = offset;
 			seek(0, SEEK_END);
 			while(size > inode.getStat().getSize()) {
-				byte[] zeros = new byte[(int) Math.min(fs.archive.privConfig.getPageSize(), size - inode.getStat().getSize())];
+				byte[] zeros = new byte[(int) Math.min(zkfs.archive.privConfig.getPageSize(), size - inode.getStat().getSize())];
 				write(zeros);
 			}
 			seek(oldOffset, SEEK_SET);
 		} else {
-			int newPageCount = (int) Math.ceil((double) size/fs.archive.privConfig.getPageSize());
+			int newPageCount = (int) Math.ceil((double) size/zkfs.archive.privConfig.getPageSize());
 			merkle.resize(newPageCount);
 			for(int i = newPageCount; i < merkle.numPages; i++) {
-				merkle.setPageTag(i, new byte[fs.archive.crypto.hashLength()]);
+				merkle.setPageTag(i, new byte[zkfs.archive.crypto.hashLength()]);
 			}
 
 			inode.getStat().setSize(size);
 			if(offset >= size) offset = size;
 			
-			int lastPage = (int) (size/fs.archive.privConfig.getPageSize());
+			int lastPage = (int) (size/zkfs.archive.privConfig.getPageSize());
 			bufferPage(lastPage);
-			bufferedPage.truncate((int) (size % fs.archive.privConfig.getPageSize()));
+			bufferedPage.truncate((int) (size % zkfs.archive.privConfig.getPageSize()));
 		}
 		
 		dirty = true;
 	}
 
 	@Override
-	public int read(byte[] buf, int bufOffset, int maxLength) throws IOException {
+	protected int _read(byte[] buf, int bufOffset, int maxLength) throws IOException {
 		assertReadable();
 		if(bufOffset < 0 || maxLength > buf.length - bufOffset) throw new IndexOutOfBoundsException();
 		
@@ -124,9 +128,9 @@ public class ZKFile extends File {
 		if(numToRead == 0) return -1;
 
 		while(numToRead > 0) {
-			int neededPageNum = (int) (offset/fs.archive.privConfig.getPageSize());
+			int neededPageNum = (int) (offset/zkfs.archive.privConfig.getPageSize());
 			bufferPage(neededPageNum);
-			bufferedPage.seek((int) (offset % fs.archive.privConfig.getPageSize()));
+			bufferedPage.seek((int) (offset % zkfs.archive.privConfig.getPageSize()));
 			int numRead = bufferedPage.read(buf, bufOffset + readLen - numToRead, numToRead);
 			assert(numRead > 0);
 			numToRead -= numRead;
@@ -168,12 +172,12 @@ public class ZKFile extends File {
 		assertWritable();
 		dirty = true;
 		int leftToWrite = length;
-		int pageSize = fs.archive.privConfig.getPageSize();
+		int pageSize = zkfs.archive.privConfig.getPageSize();
 		
 		while(leftToWrite > 0) {
 			int neededPageNum = (int) (this.offset/pageSize);
 			bufferPage(neededPageNum);
-			int offsetInPage = (int) (offset % fs.archive.privConfig.getPageSize()), pageCapacity = (int) (pageSize-offsetInPage);
+			int offsetInPage = (int) (offset % zkfs.archive.privConfig.getPageSize()), pageCapacity = (int) (pageSize-offsetInPage);
 			bufferedPage.seek(offsetInPage);
 			int numWritten = bufferedPage.write(data, bufOffset + length - leftToWrite, Math.min(leftToWrite, pageCapacity));
 			
@@ -217,13 +221,13 @@ public class ZKFile extends File {
 	@Override
 	public void flush() throws IOException {
 		if(!dirty) return;
-		long now = fs.currentTime();
+		long now = zkfs.currentTime();
 		inode.getStat().setMtime(now);
-		inode.setChangedFrom(fs.baseRevision);
+		inode.setChangedFrom(zkfs.baseRevision);
 		inode.setModifiedTime(now);
 		bufferedPage.flush();
 		inode.setRefTag(merkle.commit());
-		fs.inodeTable.setInode(inode);
+		zkfs.inodeTable.setInode(inode);
 		dirty = false;
 	}
 
@@ -236,7 +240,7 @@ public class ZKFile extends File {
 	public void copy(File file) throws IOException {
 		assertWritable();
 		file.rewind();
-		int pageSize = fs.archive.privConfig.getPageSize();
+		int pageSize = zkfs.archive.privConfig.getPageSize();
 		while(file.hasData()) write(file.read(pageSize));
 		flush();
 		
@@ -258,7 +262,7 @@ public class ZKFile extends File {
 		}
 		
 		bufferPage((int) (tag.numPages-1));
-		inode.getStat().setSize((tag.numPages-1)*fs.archive.privConfig.getPageSize() + bufferedPage.size);
+		inode.getStat().setSize((tag.numPages-1)*zkfs.archive.privConfig.getPageSize() + bufferedPage.size);
 	}
 	
 	public int available() throws IOException {

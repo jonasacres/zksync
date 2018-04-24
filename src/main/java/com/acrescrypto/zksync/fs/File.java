@@ -4,6 +4,8 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 
+import com.acrescrypto.zksync.ThroughputTransaction;
+
 public abstract class File implements Closeable {
 	public final static int O_RDONLY = 1 << 0;
 	public final static int O_WRONLY = 1 << 1;
@@ -20,10 +22,24 @@ public abstract class File implements Closeable {
 	public abstract String getPath();
 	public abstract Stat getStat() throws IOException;
 	
+	protected FS fs;
+	protected File(FS fs) {
+		this.fs = fs;
+	}
+	
 	public abstract void truncate(long size) throws IOException;
-	public abstract int read(byte[] buf, int offset, int maxLength) throws IOException;
+	protected abstract int _read(byte[] buf, int offset, int maxLength) throws IOException;
+	
+	public final int read(byte[] buf, int offset, int maxLength) throws IOException {
+		fs.expectRead(maxLength);
+		ThroughputTransaction tx = fs.rxThroughput.beginTransaction();
+		int r = _read(buf, offset, maxLength);
+		tx.finish(r);
+		fs.expectedReadFinished(maxLength);
+		return r;
+	}
 
-	public byte[] read(int maxLength) throws IOException {
+	public final byte[] read(int maxLength) throws IOException {
 		if(maxLength <= 0) maxLength = (int) getStat().getSize();
 		maxLength = (int) Math.min(maxLength, getStat().getSize());
 		byte[] buf = new byte[(int) maxLength];
@@ -36,7 +52,7 @@ public abstract class File implements Closeable {
 		return buf;
 	}
 		
-	public byte[] read() throws IOException {
+	public final byte[] read() throws IOException {
 		long sizeNeeded = getStat().getSize() - pos();
 		if(sizeNeeded > Integer.MAX_VALUE) throw new IndexOutOfBoundsException();
 		return read((int) sizeNeeded);

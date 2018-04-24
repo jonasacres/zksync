@@ -85,7 +85,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 					results.add(subpath);
 				}
 				
-				if(!isDotDir) fs.opendir(realSubpath).listRecursiveIterate(opts, results, subpath);
+				if(!isDotDir) zkfs.opendir(realSubpath).listRecursiveIterate(opts, results, subpath);
 			} else {
 				results.add(subpath);
 			}
@@ -112,7 +112,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 				String nextDir = Paths.get(this.path, comps[0]).toString();
 				String subpath = String.join("/", Arrays.copyOfRange(comps, 1, comps.length));
 				
-				return fs.opendir(nextDir).inodeForPath(subpath);
+				return zkfs.opendir(nextDir).inodeForPath(subpath);
 			} catch (EISNOTDIRException e) {
 				throw new ENOENTException(path);
 			}
@@ -130,7 +130,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		}
 		
 		if(inodeId == null) return; // above if clause already unlinked
-		link(fs.inodeTable.inodeWithId(inodeId), link);
+		link(zkfs.inodeTable.inodeWithId(inodeId), link);
 	}
 
 	public void link(Inode inode, String link) throws IOException {
@@ -145,7 +145,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	@Override
 	public void link(String target, String link) throws IOException {
-		link(fs.inodeForPath(target), link);
+		link(zkfs.inodeForPath(target), link);
 	}
 
 	@Override
@@ -161,20 +161,20 @@ public class ZKDirectory extends ZKFile implements Directory {
 		String fullPath = Paths.get(path, name).toString();
 		
 		try {
-			Inode inode = fs.inodeForPath(fullPath);
+			Inode inode = zkfs.inodeForPath(fullPath);
 			inode.removeLink();
 		} catch(ENOENTException exc) {
 			// if we have a dead reference, we should be able to unlink it no questions asked
 		}
 		
 		entries.remove(name);
-		fs.uncache(fullPath);
+		zkfs.uncache(fullPath);
 		dirty = true;
 	}
 	
 	public void rmdir() throws IOException {
 		if(!entries.get("..").equals(this.getStat().getInodeId())) {
-			ZKDirectory parent = fs.opendir(fs.dirname(this.path));
+			ZKDirectory parent = zkfs.opendir(fs.dirname(this.path));
 			parent.getInode().removeLink();
 			parent.unlink(fs.basename(this.path));
 			parent.close();
@@ -186,13 +186,13 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public Directory mkdir(String name) throws IOException {
 		String fullPath = Paths.get(path, name).toString();
 		if(entries.containsKey(name)) throw new EEXISTSException(fullPath);
-		fs.create(fullPath, this).getStat().makeDirectory();
+		zkfs.create(fullPath, this).getStat().makeDirectory();
 
-		ZKDirectory dir = fs.opendir(fullPath);
+		ZKDirectory dir = zkfs.opendir(fullPath);
 		dir.link(dir, ".");
 		dir.link(inode, "..");
 		dir.flush();
-		fs.chmod(path, fs.archive.localConfig.getDirectoryMode());
+		fs.chmod(path, zkfs.archive.localConfig.getDirectoryMode());
 
 		return dir;
 	}

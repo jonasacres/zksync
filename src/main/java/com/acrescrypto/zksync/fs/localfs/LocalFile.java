@@ -15,10 +15,10 @@ public class LocalFile extends File {
 	protected RandomAccessFile fileHandle;
 	protected FileChannel channel;
 	protected long offset, size;
-	protected LocalFS fs;
 	protected int mode;
 	
 	LocalFile(LocalFS fs, String path, int mode) throws IOException {
+		super(fs);
 		String modeStr = null;
 		if((mode & O_RDWR) != 0) modeStr = "rw";
 		if((mode & O_RDONLY) != 0) modeStr = "r";
@@ -38,7 +38,6 @@ public class LocalFile extends File {
 		
 		this.fileHandle = new RandomAccessFile(Paths.get(fs.getRoot(), path).toString(), modeStr);
 		this.channel = this.fileHandle.getChannel();
-		this.fs = fs;
 		this.path = path;
 		this.mode = mode;
 		
@@ -63,7 +62,7 @@ public class LocalFile extends File {
 	}
 
 	@Override
-	public int read(byte[] buf, int offset, int maxLength) throws IOException {
+	protected int _read(byte[] buf, int offset, int maxLength) throws IOException {
 		assertReadable();
 		return channel.read(ByteBuffer.wrap(buf, offset, maxLength));
 	}

@@ -28,7 +28,7 @@ public class RevisionInfo extends ZKFile {
 	}
 	
 	public RevisionInfo(Inode inode) throws IOException {
-		this.fs = inode.fs;
+		super(inode.fs);
 		this.path = REVISION_INFO_PATH;
 		this.mode = O_RDWR;
 		this.inode = inode;
@@ -58,13 +58,13 @@ public class RevisionInfo extends ZKFile {
 	}
 	
 	protected int parentTagLength() {
-		return fs.archive.crypto.hashLength()+RefTag.REFTAG_EXTRA_DATA_SIZE;
+		return zkfs.archive.crypto.hashLength()+RefTag.REFTAG_EXTRA_DATA_SIZE;
 	}
 
 	// create plaintext serialized revision data (to be encrypted and written to
 	// storage)
 	protected byte[] serialize() throws IOException {
-		addParent(fs.baseRevision);
+		addParent(zkfs.baseRevision);
 		int len = 8 + 4 + parents.size()*parentTagLength();
 		ByteBuffer buf = ByteBuffer.allocate(len);
 		buf.putLong(generation);
@@ -88,7 +88,7 @@ public class RevisionInfo extends ZKFile {
 		for(int i = 0; i < numParents; i++) {
 			byte[] parentBytes = new byte[parentTagLength()];
 			buf.get(parentBytes);
-			parents.add(new RefTag(fs.archive, parentBytes));
+			parents.add(new RefTag(zkfs.archive, parentBytes));
 		}
 	}
 
