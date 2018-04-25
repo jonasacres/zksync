@@ -31,30 +31,30 @@ public class ZKArchive {
 	
 	public final static int DEFAULT_PAGE_SIZE = 65536;
 
-	// TODO: it'll hurt, but crypto and storage need to go away and everyone needs to access through keychain
+	// TODO: it'll hurt, but crypto and storage need to go away and everyone needs to access through config
 	protected CryptoSupport crypto;
 	protected FS storage;
 
 	protected LocalConfig localConfig;
-	protected Keychain keychain; // TODO: rename to keyfile, kill old version of field/class
+	protected ZKArchiveConfig config;
 	protected ZKMaster master;
 	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
 	
-	public ZKArchive(Keychain keychain) throws IOException {
-		this.master = keychain.master;
-		this.storage = keychain.storage;
-		this.crypto = keychain.master.crypto;
+	public ZKArchive(ZKArchiveConfig config) throws IOException {
+		this.master = config.master;
+		this.storage = config.storage;
+		this.crypto = config.master.crypto;
 		
-		this.keychain = keychain;
+		this.config = config;
 		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL)); // TODO: use a local key
 		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
 			return tag.getFS();
 		}, (RefTag tag, ZKFS fs) -> {});
 	}
 	
-	// TODO: Have Keychain do this
+	// TODO: Have ArchiveConfig do this
 	public Key deriveKey(int type, int index, byte[] tweak) {
-		Key[] keys = { keychain.textRoot, keychain.authRoot };
+		Key[] keys = { config.textRoot, config.authRoot };
 		if(type >= keys.length) throw new IllegalArgumentException();
 		return keys[type].derive(index, tweak);
 	}
@@ -105,10 +105,10 @@ public class ZKArchive {
 	}
 
 	public String dataDir() {
-		return dataDirForArchiveId(keychain.archiveId);
+		return dataDirForArchiveId(config.archiveId);
 	}
 
-	public Keychain getKeychain() {
-		return keychain;
+	public ZKArchiveConfig getConfig() {
+		return config;
 	}
 }

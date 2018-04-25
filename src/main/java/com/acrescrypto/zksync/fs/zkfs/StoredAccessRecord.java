@@ -13,7 +13,7 @@ public class StoredAccessRecord {
 	protected boolean seedOnly;
 	
 	public StoredAccessRecord(ZKArchive archive, boolean seedOnly) {
-		this.seedOnly = seedOnly || archive.keychain.isSeedOnly();
+		this.seedOnly = seedOnly || archive.config.isSeedOnly();
 		this.archive = archive;
 	}
 	
@@ -29,8 +29,8 @@ public class StoredAccessRecord {
 		ByteBuffer buf = ByteBuffer.allocate(2+1 + archive.master.crypto.symKeyLength() + archive.master.crypto.hashLength());
 		buf.putShort((short) 0); // version
 		buf.put((byte) (seedOnly ? 1 : 0)); // type
-		buf.put((seedOnly ? archive.keychain.passphraseRoot : archive.keychain.seedRoot).getRaw());
-		buf.put(archive.keychain.archiveId);
+		buf.put((seedOnly ? archive.config.passphraseRoot : archive.config.seedRoot).getRaw());
+		buf.put(archive.config.archiveId);
 		return buf.array();
 	}
 	
@@ -52,7 +52,7 @@ public class StoredAccessRecord {
 		
 		// TODO: build this path in a method somewhere
 		CompositeFS fs = new CompositeFS(master.storage.scopedFS("archives/" + Util.bytesToHex(archiveId)));
-		Keychain keychain = new Keychain(master, key, archiveId, fs, seedOnly);
-		archive = new ZKArchive(keychain);
+		ZKArchiveConfig config = new ZKArchiveConfig(master, key, archiveId, fs, seedOnly);
+		archive = new ZKArchive(config);
 	}
 }

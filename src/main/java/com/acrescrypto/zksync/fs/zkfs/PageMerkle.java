@@ -94,7 +94,7 @@ public class PageMerkle {
 	
 	public int numChunks() {
 		if(numPages <= 1) return 0;
-		return (int) Math.ceil( (double) plaintextSize() / archive.keychain.pageSize );
+		return (int) Math.ceil( (double) plaintextSize() / archive.config.pageSize );
 	}
 	
 	/** write to storage */
@@ -109,11 +109,11 @@ public class PageMerkle {
 		for(PageMerkleNode node : nodes) plaintext.put(node.tag);
 		for(int i = 0; i < chunkCount; i++) {
 			ByteBuffer chunkText = ByteBuffer.wrap(plaintext.array(),
-					(int) (i*archive.keychain.pageSize),
-					(int) Math.min(archive.keychain.pageSize, plaintext.capacity()));
+					(int) (i*archive.config.pageSize),
+					(int) Math.min(archive.config.pageSize, plaintext.capacity()));
 			SecureFile
 			  .atPath(archive.storage, pathForChunk(tag, i), cipherKey(tag), tag.getBytes(), (""+i).getBytes())
-			  .write(chunkText.array(), (int) archive.keychain.pageSize);
+			  .write(chunkText.array(), (int) archive.config.pageSize);
 		}
 		
 		return tag;
@@ -125,9 +125,9 @@ public class PageMerkle {
 		expectedPages = (int) Math.pow(2, Math.ceil(Math.log(expectedPages)/Math.log(2)));
 		
 		long expectedNodes = 2*expectedPages - 1;
-		int expectedChunks = (int) Math.ceil((double) expectedNodes*archive.crypto.hashLength()/archive.keychain.pageSize);
+		int expectedChunks = (int) Math.ceil((double) expectedNodes*archive.crypto.hashLength()/archive.config.pageSize);
 		
-		ByteBuffer readBuf = ByteBuffer.allocate((int) (expectedChunks*archive.keychain.pageSize));
+		ByteBuffer readBuf = ByteBuffer.allocate((int) (expectedChunks*archive.config.pageSize));
 		
 		resize(expectedPages);
 		

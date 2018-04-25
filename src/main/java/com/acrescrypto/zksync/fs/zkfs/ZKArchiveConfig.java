@@ -7,7 +7,7 @@ import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.compositefs.CompositeFS;
 
-public class Keychain {
+public class ZKArchiveConfig {
 	
 	public final static int KEYFILE_MAGIC = 0x6CF2AA14;
 	public final static int KEYFILE_SECTION_ARCHIVE_INFO = 0x0001;
@@ -29,9 +29,6 @@ public class Keychain {
 	protected ZKMaster master;
 	protected CompositeFS storage;
 	
-	// TODO: Keychain might be a misnomer. ArchiveConfig might be better.
-	// TODO: How does a keychain get created?
-	
 	// NOTE: in theory we support pageSize > MAX_INT, but in practice several operations cast to int and need a refactor
 	// for this to work. TODO: guard against trying to load archives with long-valued page sizes.
 	protected long pageSize;
@@ -39,7 +36,7 @@ public class Keychain {
 	
 	/** Read an existing archive. 
 	 * @throws IOException */
-	public Keychain(ZKMaster master, Key key, byte[] archiveId, CompositeFS storage, boolean isSeedKey) throws IOException {
+	public ZKArchiveConfig(ZKMaster master, Key key, byte[] archiveId, CompositeFS storage, boolean isSeedKey) throws IOException {
 		this.master = master;
 		this.pageSize = -1;
 		this.storage = storage;
@@ -55,7 +52,7 @@ public class Keychain {
 	
 	/** Create a new archive. 
 	 * @throws IOException */
-	public Keychain(ZKMaster master, Key passphraseRoot, String description, int pageSize) throws IOException {
+	public ZKArchiveConfig(ZKMaster master, Key passphraseRoot, String description, int pageSize) throws IOException {
 		// TODO: need to establish public key for signing here as well
 		this.master = master;
 		this.pageSize = pageSize;

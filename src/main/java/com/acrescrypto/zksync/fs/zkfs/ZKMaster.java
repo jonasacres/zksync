@@ -41,7 +41,7 @@ public class ZKMaster {
 		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive '" + description + "'");
 		byte[] passphraseRootRaw = crypto.deriveKeyFromPassphrase(passphrase);
 		Key passphraseRoot = new Key(crypto, passphraseRootRaw);
-		Keychain keychain = new Keychain(this, passphraseRoot, description, pageSize);
-		return new ZKArchive(keychain);
+		ZKArchiveConfig config = new ZKArchiveConfig(this, passphraseRoot, description, pageSize);
+		return new ZKArchive(config);
 	}
 }
