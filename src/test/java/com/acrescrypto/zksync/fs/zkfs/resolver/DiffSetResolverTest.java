@@ -135,7 +135,7 @@ public class DiffSetResolverTest {
 		// if we prefer a version in which a file is deleted, is that honored?
 		ZKArchive archive = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "testDeletedFilesSelected");
 		for(int i = 0; i < 10; i++) { // we might pass by chance, so re-run n times to make that highly unlikely
-			archive.getStorage().rmrf("/");
+			if(archive.getStorage().exists("/")) archive.getStorage().rmrf("/");
 			ZKFS fs = archive.openBlank();
 			
 			fs.write("file", "now you see me".getBytes());

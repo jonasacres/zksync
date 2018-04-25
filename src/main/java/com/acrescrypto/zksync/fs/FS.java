@@ -187,4 +187,9 @@ public abstract class FS {
 	/** Alert FS that we may need to read this file soon; useful if FS implements some form of caching. */
 	public void expect(String path) {
 	}
+	
+	/** Return an instance of this FS class whose root is based in the subpath provided. Sort of like a chroot,
+	 * except this FS remains unmodified and the chrooted FS is a new one that is returned. 
+	 * @throws IOException */
+	public abstract FS scopedFS(String path) throws IOException;
 }

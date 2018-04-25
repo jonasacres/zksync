@@ -79,6 +79,6 @@ public class ZKFileCiphertextStream extends InputStream {
 	
 	protected String currentFilePath() throws IOException {
 		if(nextFileNum-1 <= merkle.numChunks()) return PageMerkle.pathForChunk(merkle.tag, nextFileNum);
-		return Page.pathForTag(tag.archive, merkle.getPageTag(nextFileNum-merkle.numChunks()));
+		return Page.pathForTag(merkle.getPageTag(nextFileNum-merkle.numChunks()));
 	}
 }

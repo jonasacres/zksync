@@ -286,6 +286,11 @@ public class SSHFS extends FS {
 		execAndCheck("truncate", " -s " + size + " \"" + qualifiedPath(path) + "\"");
 	}
 	
+	@Override
+	public SSHFS scopedFS(String subpath) throws IOException {
+		return new SSHFS(ssh, Paths.get(url, subpath).toString());
+	}
+	
 	public int getHostType() throws IOException {
 		if(hostType != HOST_TYPE_UNPROBED) return hostType;
 		return hostType = discoverHostType();

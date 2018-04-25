@@ -12,11 +12,13 @@ public class ZKFS extends FS {
 	protected HashCache<String,ZKDirectory> directoriesByPath;
 	ZKArchive archive;
 	protected RefTag baseRevision;
+	protected String root;
 	protected long fixedTime = -1;
 		
 	public final static int MAX_PATH_LEN = 65535;
 	
-	public ZKFS(RefTag revision) throws IOException {
+	public ZKFS(RefTag revision, String root) throws IOException {
+		this.root = root;
 		this.archive = revision.archive;
 		this.directoriesByPath = new HashCache<String,ZKDirectory>(128, (String path) -> {
 			assertPathIsDirectory(path);
@@ -26,6 +28,10 @@ public class ZKFS extends FS {
 		});
 		this.baseRevision = revision;
 		this.inodeTable = new InodeTable(this, revision);
+	}
+	
+	public ZKFS(RefTag revision) throws IOException {
+		this(revision, "/");
 	}
 	
 	public long currentTime() {
@@ -295,6 +301,12 @@ public class ZKFS extends FS {
 	public void setAtime(String path, long atime) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setAtime(atime);
+	}
+	
+	@Override
+	public ZKFS scopedFS(String subpath) {
+		// TODO: This is gonna be a pain. Supporting it would allow nested archives... dunno if that's a good thing!
+		throw new UnsupportedOperationException();
 	}
 	
 	protected void uncache(String path) throws IOException {

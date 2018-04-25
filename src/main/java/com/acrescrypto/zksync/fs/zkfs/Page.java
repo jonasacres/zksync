@@ -15,14 +15,8 @@ public class Page {
 	private ByteBuffer contents; /** page contents */
 	boolean dirty; /** true if page has been written to since last read/flush */
 	
-	/** path in underlying filesystem to a page identified by tag 
-	 * @param archive */
-	public static String pathForTag(ZKArchive archive, byte[] tag) {
-		return archive.dataDir() + ZKFS.pathForHash(tag);
-	}
-	
-	public static String pathForTag(byte[] archiveId, byte[] tag) {
-		return ZKArchive.dataDirForArchiveId(archiveId) + ZKFS.pathForHash(tag);
+	public static String pathForTag(byte[] tag) {
+		return ZKFS.pathForHash(tag);
 	}
 	
 	/** initialize page object from file and page number */
@@ -77,7 +71,7 @@ public class Page {
 		
 		byte[] authTag = authKey().authenticate(pageTag);
 		SecureFile
-		  .atPath(file.zkfs.archive.storage, pathForTag(file.zkfs.archive, authTag), textKey(pageTag), authTag, null)
+		  .atPath(file.zkfs.archive.storage, pathForTag(authTag), textKey(pageTag), authTag, null)
 		  .write(plaintext.array(), (int) file.zkfs.archive.keychain.pageSize);
 	}
 	
@@ -147,7 +141,7 @@ public class Page {
 		byte[] pageTag = file.getPageTag(pageNum);
 		byte[] authTag = authKey().authenticate(pageTag);
 		byte[] plaintext = SecureFile
-		  .atPath(file.zkfs.archive.storage, pathForTag(file.zkfs.archive, authTag), textKey(pageTag), authTag, null)
+		  .atPath(file.zkfs.archive.storage, pathForTag(authTag), textKey(pageTag), authTag, null)
 		  .read();
 		
 		if(!Arrays.equals(this.authKey().authenticate(plaintext), pageTag)) {

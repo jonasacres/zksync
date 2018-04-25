@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.fs.FS;
 
 public class Keychain {
 	
@@ -26,6 +27,7 @@ public class Keychain {
 	protected Key textRoot;
 	
 	protected ZKMaster master;
+	protected FS storage;
 	
 	// TODO: Keychain might be a misnomer. ArchiveConfig might be better.
 	// TODO: How does a keychain get created?
@@ -35,10 +37,12 @@ public class Keychain {
 	protected long pageSize;
 	protected String description;
 	
-	/** Read an existing archive. */
-	public Keychain(ZKMaster master, Key key, byte[] archiveId, boolean isSeedKey) {
+	/** Read an existing archive. 
+	 * @throws IOException */
+	public Keychain(ZKMaster master, Key key, byte[] archiveId, boolean isSeedKey) throws IOException {
 		this.master = master;
 		this.pageSize = -1;
+		this.storage = master.getStorage().scopedFS("archives/" + Util.bytesToHex(archiveId));
 		
 		if(isSeedKey) {
 			deriveFromPassphraseRoot(key);
@@ -46,21 +50,19 @@ public class Keychain {
 			deriveFromSeedRoot(key);
 		}
 		
-		try {
-			read();
-		} catch (IOException e) {
-			// TODO: what if we don't have the key file yet?
-		}
+		read();
 	}
 	
-	/** Create a new archive. */
-	public Keychain(ZKMaster master, Key passphraseRoot, String description, int pageSize) {
+	/** Create a new archive. 
+	 * @throws IOException */
+	public Keychain(ZKMaster master, Key passphraseRoot, String description, int pageSize) throws IOException {
 		// TODO: need to establish public key for signing here as well
 		this.master = master;
 		this.pageSize = pageSize;
 		this.description = description;
 		deriveFromPassphraseRoot(passphraseRoot);
 		initRoots();
+		this.storage = master.storage.scopedFS("archives/" + Util.bytesToHex(archiveId));
 	}
 	
 	public boolean isSeedOnly() {
@@ -68,7 +70,7 @@ public class Keychain {
 	}
 	
 	public void isConfigAvailable() {
-		master.storage.exists(Page.pathForTag(archiveId, configFileTag));
+		storage.exists(Page.pathForTag(configFileTag));
 	}
 	
 	public boolean isConfigLoaded() {
@@ -129,11 +131,11 @@ public class Keychain {
 		writeBuf.put(ciphertext);
 		assertState(!writeBuf.hasRemaining());
 		
-		master.storage.write(Page.pathForTag(archiveId, configFileTag), writeBuf.array());
+		storage.write(Page.pathForTag(configFileTag), writeBuf.array());
 	}
 	
 	public void read() throws IOException {
-		byte[] ciphertext = master.storage.read(Page.pathForTag(archiveId, configFileTag));
+		byte[] ciphertext = storage.read(Page.pathForTag(configFileTag));
 		byte[] serialized = configFileKey.decrypt(configFileIv, ciphertext);
 		deserialize(serialized);
 	}

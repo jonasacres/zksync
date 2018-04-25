@@ -303,6 +303,11 @@ public class LocalFS extends FS {
 		return Files.exists(Paths.get(root, path), linkOpt);
 	}
 	
+	@Override
+	public LocalFS scopedFS(String subpath) {
+		return new LocalFS(Paths.get(root, subpath).toString());
+	}
+	
 	public String getRoot() {
 		return root;
 	}

@@ -215,7 +215,7 @@ public class PeerConnection implements PeerSocketDelegate {
 				data.get(pageTag);
 				try {
 					pages.add(pageTag);
-					pages.add(socket.swarm.archive.getStorage().open(Page.pathForTag(socket.swarm.archive, pageTag), File.O_RDONLY).getInputStream());
+					pages.add(socket.swarm.archive.getStorage().open(Page.pathForTag(pageTag), File.O_RDONLY).getInputStream());
 				} catch (IOException e) {
 					// just skip pages we don't have
 				}

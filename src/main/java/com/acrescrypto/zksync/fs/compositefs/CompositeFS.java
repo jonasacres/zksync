@@ -439,4 +439,14 @@ public class CompositeFS extends FS {
 		
 		outFile.close();
 	}
+	
+	@Override
+	public CompositeFS scopedFS(String subpath) throws IOException {
+		CompositeFS scoped = new CompositeFS(backingFS.scopedFS(subpath));
+		for(FS supplementary : supplementaries) {
+			scoped.addSupplementaryFS(supplementary.scopedFS(subpath));
+		}
+		
+		return scoped;
+	}
 }

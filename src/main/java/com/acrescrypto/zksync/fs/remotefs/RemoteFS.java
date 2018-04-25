@@ -130,5 +130,9 @@ public class RemoteFS extends FS {
 	public void truncate(String path, long size) throws IOException {
 		throw new UnsupportedOperationException();
 	}
-
+	
+	@Override
+	public RemoteFS scopedFS(String subpath) {
+		throw new UnsupportedOperationException(); // no concept of scoping a RemoteFS
+	}
 }

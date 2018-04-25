@@ -31,7 +31,7 @@ public class ZKArchive {
 	
 	public final static int DEFAULT_PAGE_SIZE = 65536;
 
-	// TODO: it'll hurt, but crypto and storage need to go away and everyone needs to access through master
+	// TODO: it'll hurt, but crypto and storage need to go away and everyone needs to access through keychain
 	protected CryptoSupport crypto;
 	protected FS storage;
 
@@ -42,7 +42,7 @@ public class ZKArchive {
 	
 	public ZKArchive(Keychain keychain) throws IOException {
 		this.master = keychain.master;
-		this.storage = keychain.master.storage;
+		this.storage = keychain.storage;
 		this.crypto = keychain.master.crypto;
 		
 		this.keychain = keychain;

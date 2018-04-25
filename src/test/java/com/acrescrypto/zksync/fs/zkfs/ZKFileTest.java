@@ -89,7 +89,7 @@ public class ZKFileTest extends FileTestBase {
 
 		for(int i = 0; i < Math.ceil(((double) file.getStat().getSize())/file.zkfs.archive.keychain.pageSize); i++) {
 			Page page = new Page(file, i);
-			String path = Page.pathForTag(zkscratch.archive, page.authKey().authenticate(file.getPageTag(i)));
+			String path = Page.pathForTag(page.authKey().authenticate(file.getPageTag(i)));
 			Stat stat = file.zkfs.archive.storage.stat(path);
 			assertEquals(0, stat.getAtime());
 			assertEquals(0, stat.getMtime());
