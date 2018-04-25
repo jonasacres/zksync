@@ -80,7 +80,7 @@ public class CompositeFS extends FS {
 
 	@Override
 	public void mkdir(String path) throws IOException {
-		ensurePresent(dirname(path));
+		ensureParentPresent(path);
 		backingFS.mkdir(path);
 	}
 
@@ -91,13 +91,13 @@ public class CompositeFS extends FS {
 
 	@Override
 	public void rmdir(String path) throws IOException {
-		ensurePresent(dirname(path));
+		ensureParentPresent(path);
 		backingFS.rmdir(path);
 	}
 
 	@Override
 	public void unlink(String path) throws IOException {
-		ensurePresent(dirname(path));
+		ensureParentPresent(path);
 		backingFS.unlink(path);
 	}
 
@@ -109,7 +109,7 @@ public class CompositeFS extends FS {
 
 	@Override
 	public void symlink(String target, String link) throws IOException {
-		ensurePresent(dirname(link));
+		ensureParentPresent(target);
 		backingFS.symlink(target, link);
 	}
 
@@ -121,13 +121,13 @@ public class CompositeFS extends FS {
 
 	@Override
 	public void mknod(String path, int type, int major, int minor) throws IOException {
-		ensurePresent(dirname(path));
+		ensureParentPresent(path);
 		backingFS.mknod(path, type, major, minor);
 	}
 
 	@Override
 	public void mkfifo(String path) throws IOException {
-		ensurePresent(dirname(path));
+		ensureParentPresent(path);
 		backingFS.mkfifo(path);
 	}
 
@@ -181,7 +181,7 @@ public class CompositeFS extends FS {
 
 	@Override
 	public void write(String path, byte[] contents) throws IOException {
-		ensurePresent(dirname(path));
+		ensureParentPresent(path);
 		backingFS.write(path, contents);
 	}
 
@@ -250,6 +250,15 @@ public class CompositeFS extends FS {
 		return result;
 	}
 	
+	protected void ensureParentPresent(String path) throws IOException {
+		String parent = dirname(path);
+		try {
+			ensurePresent(parent);
+		} catch(ENOENTException exc) {
+			mkdirp(parent);
+		}
+	}
+	
 	protected TaskPool<FS,Stat> statPool(String path, boolean followLinks) throws IOException {
 		ArrayList<FS> shuffled;
 		synchronized(this) {
@@ -272,7 +281,7 @@ public class CompositeFS extends FS {
 		/* TODO: ensure that if we have parallel requests for the same path, all subsequent requests block without triggering
 		 * any additional attempts to acquire the file.
 		 */
-		while(true) {
+		while(!supplementaries.isEmpty()) {
 			FS remoteFS = null;
 			try {
 				TaskPool<FS,Stat> pool = statPool(path, false).launch().waitForResult(2*expectedLatency);
@@ -289,6 +298,8 @@ public class CompositeFS extends FS {
 				failSupplementaryFS(remoteFS);
 			}
 		}
+		
+		throw new ENOENTException(path);
 	}
 	
 	protected FS selectRemoteFS(Stat stat) {

@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.compositefs.CompositeFS;
 
 public class Keychain {
 	
@@ -27,7 +27,7 @@ public class Keychain {
 	protected Key textRoot;
 	
 	protected ZKMaster master;
-	protected FS storage;
+	protected CompositeFS storage;
 	
 	// TODO: Keychain might be a misnomer. ArchiveConfig might be better.
 	// TODO: How does a keychain get created?
@@ -39,10 +39,10 @@ public class Keychain {
 	
 	/** Read an existing archive. 
 	 * @throws IOException */
-	public Keychain(ZKMaster master, Key key, byte[] archiveId, boolean isSeedKey) throws IOException {
+	public Keychain(ZKMaster master, Key key, byte[] archiveId, CompositeFS storage, boolean isSeedKey) throws IOException {
 		this.master = master;
 		this.pageSize = -1;
-		this.storage = master.getStorage().scopedFS("archives/" + Util.bytesToHex(archiveId));
+		this.storage = storage;
 		
 		if(isSeedKey) {
 			deriveFromPassphraseRoot(key);
@@ -62,7 +62,7 @@ public class Keychain {
 		this.description = description;
 		deriveFromPassphraseRoot(passphraseRoot);
 		initRoots();
-		this.storage = master.storage.scopedFS("archives/" + Util.bytesToHex(archiveId));
+		this.storage = new CompositeFS(master.storage.scopedFS("archives/" + Util.bytesToHex(archiveId)));
 	}
 	
 	public boolean isSeedOnly() {

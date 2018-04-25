@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.EINVALException;
+import com.acrescrypto.zksync.fs.compositefs.CompositeFS;
 
 public class StoredAccessRecord {
 	protected ZKArchive archive;
@@ -48,7 +49,10 @@ public class StoredAccessRecord {
 		
 		this.seedOnly = type != 0;
 		Key key = new Key(master.crypto, keyMaterial);
-		Keychain keychain = new Keychain(master, key, archiveId, seedOnly);
+		
+		// TODO: build this path in a method somewhere
+		CompositeFS fs = new CompositeFS(master.storage.scopedFS("archives/" + Util.bytesToHex(archiveId)));
+		Keychain keychain = new Keychain(master, key, archiveId, fs, seedOnly);
 		archive = new ZKArchive(keychain);
 	}
 }
