@@ -31,30 +31,30 @@ public class ZKArchive {
 	public final static String LOCAL_DIR = ".zksync/local/";
 	public final static String ACTIVE_REVISION = ".zskync/local/active-revision";
 
+	// TODO: it'll hurt, but crypto and storage need to go away and everyone needs to access through master
 	protected CryptoSupport crypto;
-	protected LocalConfig localConfig;
-	protected KeyFile keyfile;
-	protected Keychain keychain; // TODO: rename to keyfile, kill old version of field/class
 	protected FS storage;
+
+	protected LocalConfig localConfig;
+	protected Keychain keychain; // TODO: rename to keyfile, kill old version of field/class
+	protected ZKMaster master;
 	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
 	
-	public static ZKArchive archiveAtPath(String path, char[] passphrase) throws IOException {
-		return new ZKArchive(new LocalFS(path), (byte[] id) -> { return passphrase; });
-	}
-	
-	public ZKArchive(FS storage, PassphraseProvider provider) throws IOException {
-		this.storage = storage;
-		this.crypto = new CryptoSupport();
-		this.keychain = new Keychain(this, new byte[0]); // TODO: get rid of passphrase provider here, replace with just a passphrase
-		this.keyfile = new KeyFile(this).readOrCreate(provider.passphraseForArchive(keychain.getArchiveId()));
-		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL));
+	public ZKArchive(Keychain keychain) throws IOException {
+		this.master = keychain.master;
+		this.storage = keychain.master.storage;
+		this.crypto = keychain.master.crypto;
+		
+		this.keychain = keychain;
+		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL)); // TODO: use a local key
 		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
 			return tag.getFS();
 		}, (RefTag tag, ZKFS fs) -> {});
 	}
-
+	
+	// TODO: Have Keychain do this
 	public Key deriveKey(int type, int index, byte[] tweak) {
-		Key[] keys = { keyfile.getCipherRoot(), keyfile.getAuthRoot() };
+		Key[] keys = { keychain.textRoot, keychain.authRoot };
 		if(type >= keys.length) throw new IllegalArgumentException();
 		return keys[type].derive(index, tweak);
 	}
@@ -99,9 +99,13 @@ public class ZKArchive {
 	public int refTagSize() {
 		return RefTag.REFTAG_EXTRA_DATA_SIZE + crypto.hashLength();
 	}
+	
+	public static String dataDirForArchiveId(byte[] archiveId) {
+		return GLOBAL_DATA_DIR + Util.bytesToHex(archiveId);
+	}
 
 	public String dataDir() {
-		return GLOBAL_DATA_DIR + Util.bytesToHex(keychain.getArchiveId());
+		return dataDirForArchiveId(keychain.archiveId);
 	}
 
 	public Keychain getKeychain() {

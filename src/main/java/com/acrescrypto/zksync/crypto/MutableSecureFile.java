@@ -17,7 +17,6 @@ public class MutableSecureFile extends SecureFile {
 	
 	public byte[] read() throws IOException {
 		/* TODO: IMPORTANT! Encrypt MutableSecureFiles!
-		 * Or obsolete them. My spidey sense tells me we don't actually need this class.
 		 */
 		return fs.read(path);
 	}

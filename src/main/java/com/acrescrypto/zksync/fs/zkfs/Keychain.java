@@ -12,6 +12,8 @@ public class Keychain {
 	public final static int KEYFILE_SECTION_ARCHIVE_INFO = 0x0001;
 	
 	protected byte[] archiveId;
+	protected Key passphraseRoot;
+	
 	protected Key seedRoot;
 	protected Key seedId;
 	protected Key seedRegId;
@@ -23,27 +25,39 @@ public class Keychain {
 	protected Key authRoot;
 	protected Key textRoot;
 	
-	protected ZKArchive archive;
+	protected ZKMaster master;
+	
+	// TODO: Keychain might be a misnomer. ArchiveConfig might be better.
+	// TODO: How does a keychain get created?
 	
 	// NOTE: in theory we support pageSize > MAX_INT, but in practice several operations cast to int and need a refactor
 	// for this to work. TODO: guard against trying to load archives with long-valued page sizes.
 	protected long pageSize;
 	public String description;
 	
-	public Keychain(ZKArchive archive, byte[] passphrase) throws IOException {
-		byte[] passphraseRootRaw = archive.crypto.deriveKeyFromPassword(passphrase, "zksync-salt".getBytes());
-		Key passphraseRoot = new Key(archive.crypto, passphraseRootRaw);
-		
-		this.archive = archive;
+	public static Keychain keychainForId(ZKMaster master, byte[] passphrase, byte[] archiveId) {
+		return null;
+	}
+	
+	public Keychain(ZKMaster master, Key key, byte[] archiveId, boolean isSeedKey) {
+		this.master = master;
 		this.pageSize = 65536;
-		derive(passphraseRoot);
 		
-		archive.keychain = this;
-		
-		// TODO: read file?
-		// parseFile(ByteBuffer.wrap(config.read()));
+		if(isSeedKey) {
+			deriveFromPassphraseRoot(key);
+		} else {
+			deriveFromSeedRoot(key);
+		}
+	}
+	
+	public void initialize() {
+		assert(passphraseRoot != null); // can't do this on a seed archive; this is for creating new archives only
 		initRoots();
 		calculateArchiveId(passphraseRoot);
+	}
+	
+	public boolean isSeedOnly() {
+		return passphraseRoot != null;
 	}
 	
 	public void parseFile(ByteBuffer contents) {
@@ -74,18 +88,18 @@ public class Keychain {
 		contents.get(desc);
 		description = new String(desc);
 		
-		byte[] textRootRaw = new byte[archive.crypto.symKeyLength()];
-		byte[] authRootRaw = new byte[archive.crypto.symKeyLength()];
+		byte[] textRootRaw = new byte[master.crypto.symKeyLength()];
+		byte[] authRootRaw = new byte[master.crypto.symKeyLength()];
 		
 		contents.get(textRootRaw);
 		contents.get(authRootRaw);
 
-		textRoot = new Key(this.archive.crypto, textRootRaw);
-		authRoot = new Key(this.archive.crypto, authRootRaw);
+		textRoot = new Key(this.master.crypto, textRootRaw);
+		authRoot = new Key(this.master.crypto, authRootRaw);
 	}
 	
 	public byte[] getArchiveId() {
-		return new byte[archive.crypto.hashLength()];
+		return new byte[master.crypto.hashLength()];
 		// TODO: return archiveId;
 	}
 	
@@ -93,13 +107,14 @@ public class Keychain {
 		return pageSize;
 	}
 	
-	protected void write() throws IOException {
+	public void write() throws IOException {
 		ByteBuffer writeBuf = ByteBuffer.allocate((int) pageSize);
 		writeBuf.put(configFileIv);
 		byte[] ciphertext = configFileKey.encrypt(configFileIv, buildPlaintext(), (int) pageSize - configFileIv.length);
 		writeBuf.put(ciphertext);
 		assertState(!writeBuf.hasRemaining());
-		archive.storage.write(Page.pathForTag(archive, configFileTag), writeBuf.array());
+		
+		master.storage.write(Page.pathForTag(archiveId, configFileTag), writeBuf.array());
 	}
 	
 	protected byte[] buildPlaintext() {
@@ -123,22 +138,26 @@ public class Keychain {
 	}
 	
 	protected void initRoots() {
-		authRoot = new Key(archive.crypto, archive.crypto.rng(archive.crypto.symKeyLength()));
-		textRoot = new Key(archive.crypto, archive.crypto.rng(archive.crypto.symKeyLength()));
-		configFileIv = archive.crypto.rng(archive.crypto.symIvLength());
+		authRoot = new Key(master.crypto, master.crypto.rng(master.crypto.symKeyLength()));
+		textRoot = new Key(master.crypto, master.crypto.rng(master.crypto.symKeyLength()));
+		configFileIv = master.crypto.rng(master.crypto.symIvLength());
 	}
 	
-	protected void derive(Key passphraseRoot) {		
-		seedRoot = passphraseRoot.derive(0x00, new byte[0]);
-		seedId = seedRoot.derive(0x00, new byte[0]);
-		seedRegId = seedRoot.derive(0x01, new byte[0]);
-		
+	protected void deriveFromPassphraseRoot(Key passphraseRoot) {
+		this.passphraseRoot = passphraseRoot;
+		deriveFromSeedRoot(passphraseRoot.derive(0x00, new byte[0]));		
 		configFileKey = passphraseRoot.derive(0x01, new byte[0]);
 		configFileTag = passphraseRoot.derive(0x02, new byte[0]).getRaw();
 	}
 	
+	protected void deriveFromSeedRoot(Key seedRoot) {
+		this.seedRoot = seedRoot;
+		seedId = seedRoot.derive(0x00, new byte[0]);
+		seedRegId = seedRoot.derive(0x01, new byte[0]);
+	}
+	
 	protected Key keyFileTextKey(byte[] passphrase) {
-		return new Key(archive.crypto, archive.crypto.deriveKeyFromPassword(passphrase, "zksync-salt".getBytes()));
+		return new Key(master.crypto, master.crypto.deriveKeyFromPassword(passphrase, "zksync-salt".getBytes()));
 	}
 	
 	protected Key temporalSeedId(int offset) {

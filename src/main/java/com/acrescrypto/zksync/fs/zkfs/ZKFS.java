@@ -18,7 +18,7 @@ public class ZKFS extends FS {
 	public final static int MAX_PATH_LEN = 65535;
 	
 	public static ZKFS fsForStorage(FS storage, char[] passphrase, byte[] refTag) throws IOException {
-		return new ZKArchive(storage, (byte[] id) -> { return passphrase; }).openRevision(refTag);
+		return new ZKArchive(storage, (String reason) -> { return passphrase; }).openRevision(refTag);
 	}
 
 	public static ZKFS fsForStorage(FS storage, char[] passphrase) throws IOException {

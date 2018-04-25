@@ -22,6 +22,11 @@ public class Page {
 		return archive.dataDir() + ZKFS.pathForHash(tag);
 	}
 	
+	public static String pathForTag(byte[] archiveId, byte[] tag) {
+		// TODO: these paths will need to be tied to an archive
+		return ZKArchive.dataDirForArchiveId(archiveId) + ZKFS.pathForHash(tag);
+	}
+	
 	/** initialize page object from file and page number */
 	public Page(ZKFile file, int pageNum) throws IOException {
 		this.file = file;
