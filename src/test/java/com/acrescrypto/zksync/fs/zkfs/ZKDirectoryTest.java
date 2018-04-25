@@ -3,14 +3,12 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.security.Security;
 
-import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 
 import com.acrescrypto.zksync.fs.DirectoryTestBase;
-import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
 public class ZKDirectoryTest extends DirectoryTestBase {
 	ZKFS zkscratch;
