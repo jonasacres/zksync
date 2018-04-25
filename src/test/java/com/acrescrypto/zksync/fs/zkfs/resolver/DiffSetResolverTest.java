@@ -20,11 +20,13 @@ public class DiffSetResolverTest {
 	ZKFS fs;
 	ZKArchive archive;
 	RefTag base;
+	static ZKMaster master;
 	
 	@BeforeClass
 	public static void beforeClass() {
 		ZKFSTest.cheapenArgon2Costs();
 		Security.addProvider(new BouncyCastleProvider());
+		master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/diffset-resolver-test");
 	}
 	
 	@AfterClass
@@ -34,8 +36,8 @@ public class DiffSetResolverTest {
 	
 	@Before
 	public void before() throws IOException {
-		archive = ZKArchive.archiveAtPath("/tmp/zksync-test/diffset-resolver-tests", "zksync".toCharArray());
-		if(archive.getStorage().exists("/")) archive.getStorage().rmrf("/");
+		master.purge();
+		archive = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "unit test");
 		fs = archive.openBlank();
 		base = fs.commit();
 	}
@@ -43,7 +45,7 @@ public class DiffSetResolverTest {
 	@Test
 	public void testMergesInheritFromAllParents() throws IOException, DiffResolutionException {
 		// do merges correctly list all their parents in their RevisionInfo?
-		ZKFS fs = ZKFS.blankArchive("/tmp/diffset-resolver-merges-inherit-all-parents", "zksync".toCharArray());
+		ZKFS fs = archive.openRevision(base);
 		RefTag parent = fs.commit();
 		RefTag[] children = new RefTag[8];
 		
@@ -55,7 +57,10 @@ public class DiffSetResolverTest {
 		
 		ArrayList<RefTag> leaves = fs.getArchive().getRevisionTree().branchTips();
 		RefTag[] leavesArray = new RefTag[leaves.size()];
-		for(int i = 0; i < leaves.size(); i++) leavesArray[i] = leaves.get(i);
+		for(int i = 0; i < leaves.size(); i++) {
+			leavesArray[i] = leaves.get(i);
+
+		}
 		
 		assertEquals(children.length, leaves.size());
 
@@ -128,7 +133,7 @@ public class DiffSetResolverTest {
 	@Test
 	public void testDeletedFilesSelected() throws IOException, DiffResolutionException {
 		// if we prefer a version in which a file is deleted, is that honored?
-		ZKArchive archive = ZKArchive.archiveAtPath("/tmp/zksync-test/diffset-deleted-files-selected", "zksync".toCharArray());
+		ZKArchive archive = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "testDeletedFilesSelected");
 		for(int i = 0; i < 10; i++) { // we might pass by chance, so re-run n times to make that highly unlikely
 			archive.getStorage().rmrf("/");
 			ZKFS fs = archive.openBlank();

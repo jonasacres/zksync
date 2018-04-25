@@ -17,6 +17,23 @@ public class StoredAccessRecord {
 	}
 	
 	public StoredAccessRecord(ZKMaster master, ByteBuffer buf) throws IOException {
+		deserialize(master, buf);
+	}
+	
+	public ZKArchive getArchive() {
+		return archive;
+	}
+	
+	protected byte[] serialize() {
+		ByteBuffer buf = ByteBuffer.allocate(2+1 + archive.master.crypto.symKeyLength() + archive.master.crypto.hashLength());
+		buf.putShort((short) 0); // version
+		buf.put((byte) (seedOnly ? 1 : 0)); // type
+		buf.put((seedOnly ? archive.keychain.passphraseRoot : archive.keychain.seedRoot).getRaw());
+		buf.put(archive.keychain.archiveId);
+		return buf.array();
+	}
+	
+	protected void deserialize(ZKMaster master, ByteBuffer buf) throws IOException {
 		int version = Util.unsignShort(buf.getShort());
 		if(version != 0) throw new EINVALException("unsupported version");
 		
@@ -33,18 +50,5 @@ public class StoredAccessRecord {
 		Key key = new Key(master.crypto, keyMaterial);
 		Keychain keychain = new Keychain(master, key, archiveId, seedOnly);
 		archive = new ZKArchive(keychain);
-	}
-	
-	public ZKArchive getArchive() {
-		return archive;
-	}
-	
-	public byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(2+1 + archive.master.crypto.symKeyLength() + archive.master.crypto.hashLength());
-		buf.putShort((short) 0); // version
-		buf.put((byte) (seedOnly ? 1 : 0)); // type
-		buf.put((seedOnly ? archive.keychain.passphraseRoot : archive.keychain.seedRoot).getRaw());
-		buf.put(archive.keychain.archiveId);
-		return buf.array();
 	}
 }

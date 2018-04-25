@@ -14,24 +14,19 @@ import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
 public class ZKDirectoryTest extends DirectoryTestBase {
 	ZKFS zkscratch;
+	ZKMaster master;
 	
 	@Before
 	public void beforeEach() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
-		ZKFSTest.deleteFiles();
-		LocalFS storage = new LocalFS(ZKFSTest.SCRATCH_DIR);
-		java.io.File scratchDir = new java.io.File(ZKFSTest.SCRATCH_DIR);
-		try {
-			FileUtils.deleteDirectory(scratchDir);
-		} catch (IOException e) {}
-		(new java.io.File(ZKFSTest.SCRATCH_DIR)).mkdirs();
-
-		scratch = zkscratch = ZKFS.fsForStorage(storage, "zksync".toCharArray());
+		master = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, ZKFSTest.SCRATCH_DIR);
+		scratch = zkscratch = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 	}
 	
 	@After
-	public void afterEach() {
+	public void afterEach() throws IOException {
 		ZKFSTest.restoreArgon2Costs();
+		master.purge();
 	}
 
 	@BeforeClass

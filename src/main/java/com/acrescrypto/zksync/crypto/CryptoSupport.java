@@ -25,11 +25,13 @@ public class CryptoSupport {
 	public final static int ARGON2_MEMORY_COST = 65536;
 	public final static int ARGON2_PARALLELISM = 1;
 	
+	public final static byte[] PASSPHRASE_SALT = "zksync-salt".getBytes();
+	
 	public CryptoSupport() {
 		defaultPrng = new PRNG();
 	}
 	
-	public byte[] deriveKeyFromPassword(byte[] passphrase, byte[] salt) {
+	public byte[] deriveKeyFromPassphrase(byte[] passphrase, byte[] salt) {
         final Uint32_t iterations = new Uint32_t(cheapArgon2 ? 1 : ARGON2_TIME_COST);
         final Uint32_t memory = new Uint32_t(cheapArgon2 ? 8 : ARGON2_MEMORY_COST);
         final Uint32_t parallelism = new Uint32_t(ARGON2_PARALLELISM);
@@ -56,6 +58,10 @@ public class CryptoSupport {
 		key = Base64.getDecoder().decode(base64);
         
         return key;
+	}
+	
+	public byte[] deriveKeyFromPassphrase(byte[] passphrase) {
+		return deriveKeyFromPassphrase(passphrase, PASSPHRASE_SALT);
 	}
 	
 	public HashContext startHash() {

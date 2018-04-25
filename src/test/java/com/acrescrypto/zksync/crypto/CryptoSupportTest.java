@@ -171,7 +171,7 @@ public class CryptoSupportTest  {
 	
 	@Test
 	public void testKeyDerivation() {
-		byte[] derived = crypto.deriveKeyFromPassword("test".getBytes(), "01234567".getBytes());
+		byte[] derived = crypto.deriveKeyFromPassphrase("test".getBytes(), "01234567".getBytes());
 		
 		/* This is a non-standard test vector. Generated using:
 		 *   git clone https://github.com/P-H-C/phc-winner-argon2

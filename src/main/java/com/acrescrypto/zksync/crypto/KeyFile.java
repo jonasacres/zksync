@@ -16,7 +16,7 @@ public class KeyFile {
 	private Key makePassphraseKey(char[] passphrase) {
 		byte[] ppBytes = new byte[passphrase.length];
 		for(int i = 0; i < passphrase.length; i++) ppBytes[i] = (byte) passphrase[i];
-		return new Key(archive.getCrypto(), archive.getCrypto().deriveKeyFromPassword(ppBytes, "zksync-salt".getBytes()));
+		return new Key(archive.getCrypto(), archive.getCrypto().deriveKeyFromPassphrase(ppBytes, "zksync-salt".getBytes()));
 	}
 	
 	public KeyFile readOrCreate(char[] passphrase) throws IOException {

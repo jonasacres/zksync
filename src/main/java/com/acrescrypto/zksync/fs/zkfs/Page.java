@@ -18,12 +18,10 @@ public class Page {
 	/** path in underlying filesystem to a page identified by tag 
 	 * @param archive */
 	public static String pathForTag(ZKArchive archive, byte[] tag) {
-		// TODO: these paths will need to be tied to an archive
 		return archive.dataDir() + ZKFS.pathForHash(tag);
 	}
 	
 	public static String pathForTag(byte[] archiveId, byte[] tag) {
-		// TODO: these paths will need to be tied to an archive
 		return ZKArchive.dataDirForArchiveId(archiveId) + ZKFS.pathForHash(tag);
 	}
 	

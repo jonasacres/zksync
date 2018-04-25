@@ -12,18 +12,21 @@ import org.junit.*;
 import com.acrescrypto.zksync.fs.zkfs.FreeList.FreeListExhaustedException;
 
 public class FreeListTest {
+	static ZKMaster master;
 	ZKArchive archive;
 	ZKFS fs;
 	
 	@BeforeClass
 	public static void beforeClass() throws IOException {
+		master = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-freelist/test");
+		master.purge();
 		ZKFSTest.cheapenArgon2Costs();
 		Security.addProvider(new BouncyCastleProvider());
 	}
 	
 	@Before
 	public void before() throws IOException {
-		archive = ZKArchive.archiveAtPath("/tmp/zksync-freelist/test", "zksync".toCharArray());
+		archive = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		if(archive.storage.exists("/")) archive.storage.rmrf("/");
 		fs = archive.openBlank();
 	}

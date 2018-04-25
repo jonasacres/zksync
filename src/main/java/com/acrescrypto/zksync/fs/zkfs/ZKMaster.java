@@ -1,5 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import java.io.IOException;
+
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.FS;
@@ -11,7 +13,7 @@ public class ZKMaster {
 	protected PassphraseProvider passphraseProvider;
 	protected StoredAccess storedAccess;
 	
-	public ZKMaster openAtPath(PassphraseProvider ppProvider, String path) {
+	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) {
 		return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
 	}
 	
@@ -29,5 +31,17 @@ public class ZKMaster {
 	
 	public FS getStorage() {
 		return storage;
+	}
+	
+	public void purge() throws IOException {
+		if(storage.exists("/")) storage.rmrf("/");
+	}
+	
+	public ZKArchive newArchive(int pageSize, String description) throws IOException {
+		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive '" + description + "'");
+		byte[] passphraseRootRaw = crypto.deriveKeyFromPassphrase(passphrase);
+		Key passphraseRoot = new Key(crypto, passphraseRootRaw);
+		Keychain keychain = new Keychain(this, passphraseRoot, description, pageSize);
+		return new ZKArchive(keychain);
 	}
 }

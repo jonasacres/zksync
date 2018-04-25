@@ -6,9 +6,7 @@ import com.acrescrypto.zksync.HashCache;
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.KeyFile;
 import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
 
 public class ZKArchive {
@@ -30,6 +28,8 @@ public class ZKArchive {
 	public final static String REVISION_DIR = ".zksync/archive/revisions/";
 	public final static String LOCAL_DIR = ".zksync/local/";
 	public final static String ACTIVE_REVISION = ".zskync/local/active-revision";
+	
+	public final static int DEFAULT_PAGE_SIZE = 65536;
 
 	// TODO: it'll hurt, but crypto and storage need to go away and everyone needs to access through master
 	protected CryptoSupport crypto;

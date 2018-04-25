@@ -5,7 +5,6 @@ import java.io.IOException;
 import com.acrescrypto.zksync.HashCache;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
-import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
 // A ZKSync archive.
 public class ZKFS extends FS {
@@ -16,20 +15,6 @@ public class ZKFS extends FS {
 	protected long fixedTime = -1;
 		
 	public final static int MAX_PATH_LEN = 65535;
-	
-	public static ZKFS fsForStorage(FS storage, char[] passphrase, byte[] refTag) throws IOException {
-		return new ZKArchive(storage, (String reason) -> { return passphrase; }).openRevision(refTag);
-	}
-
-	public static ZKFS fsForStorage(FS storage, char[] passphrase) throws IOException {
-		return fsForStorage(storage, passphrase, null);
-	}
-	
-	public static ZKFS blankArchive(String path, char[] passphrase) throws IOException {
-		LocalFS storage = new LocalFS(path);
-		if(storage.exists("/")) storage.rmrf("/");
-		return fsForStorage(storage, passphrase, null);
-	}
 	
 	public ZKFS(RefTag revision) throws IOException {
 		this.archive = revision.archive;

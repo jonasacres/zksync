@@ -13,12 +13,13 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.fs.Stat;
-import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKFile;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSet;
 
 
@@ -27,9 +28,9 @@ public class DiffSetTest {
 		public int diff(ZKFS fs, RefTag[] revs, String filename) throws IOException;
 	}
 	
-	LocalFS storage;
 	RefTag parent;
 	RefTag[] children;
+	ZKMaster master;
 	char[] password = "zksync".toCharArray();
 	
 	public final static int NUM_CHILDREN = 4;
@@ -47,9 +48,9 @@ public class DiffSetTest {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		storage = new LocalFS("/tmp/zksync-diffset");
-		if(storage.exists("/")) storage.rmrf("/");
-		ZKFS fs = ZKFS.fsForStorage(storage, password);
+		master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-diffset");
+		ZKArchive archive = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
+		ZKFS fs = archive.openBlank();
 		fs.write("unmodified", "parent".getBytes());
 		fs.write("modified", "replaceme".getBytes());
 		fs.squash("modified");
@@ -57,7 +58,7 @@ public class DiffSetTest {
 		children = new RefTag[NUM_CHILDREN];
 		
 		for(int i = 0; i < NUM_CHILDREN; i++) {
-			fs = ZKFS.fsForStorage(storage, password, parent.getBytes());
+			fs = archive.openRevision(parent.getBytes());
 			fs.write("modified", "replaced!".getBytes());
 			fs.write("child", ("text " + i).getBytes()); // don't forget -- making this means / is also changed, so factor that in
 			fs.squash("modified");
@@ -67,7 +68,7 @@ public class DiffSetTest {
 	
 	@After
 	public void afterEach() throws IOException {
-		storage.rmrf("/");
+		master.purge();
 	}
 	
 	@Test
@@ -81,9 +82,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testDetectsFakeDifferencesBetweenSiblingsForNonImmediates() throws IOException {
-		LocalFS storage = new LocalFS("/tmp/zksync-diffset-nonimmediate");
-		if(storage.exists("/")) storage.rmrf("/");
-		ZKFS fs = ZKFS.fsForStorage(storage, password);
+		ZKFS fs = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		byte[] buf = new byte[(int) fs.getArchive().getKeychain().getPageSize()+1];
 		fs.write("unmodified", buf);
 		fs.write("modified", buf);
@@ -100,8 +99,7 @@ public class DiffSetTest {
 		}
 
 		DiffSet diffset = new DiffSet(children);
-		storage.rmrf("/");
-		
+	
 		assertEquals(1, diffset.inodeDiffs.size()); // modified
 		assertEquals(0, diffset.pathDiffs.size());
 	}
@@ -303,10 +301,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testDirectoryEntriesAreADifference() throws IOException {
-		String filename = "scratch";
-		LocalFS storage = new LocalFS("/tmp/zksync-diffset-" + filename);
-		if(storage.exists("/")) storage.rmrf("/");
-		ZKFS fs = ZKFS.fsForStorage(storage, password);
+		ZKFS fs = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		
 		RefTag[] revs = new RefTag[2];
 		
@@ -319,25 +314,20 @@ public class DiffSetTest {
 		revs[1] = fs.commit();
 
 		DiffSet diffset = new DiffSet(revs);
-		storage.rmrf("/");
 		assertEquals(2, diffset.inodeDiffs.size()); // file1, /
 		assertEquals(1, diffset.pathDiffs.size()); // file1
 		assertTrue(diffset.pathDiffs.containsKey("file1"));
 	}
 	
 	protected void trivialInodeDiffTest(DiffExampleLambda meat) throws IOException {
-		String filename = "scratch";
-		LocalFS storage = new LocalFS("/tmp/zksync-diffset-" + filename);
-		if(storage.exists("/")) storage.rmrf("/");
-		ZKFS fs = ZKFS.fsForStorage(storage, password);
+		ZKFS fs = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		
 		RefTag[] revs = new RefTag[2];
-		int numDiffs = meat.diff(fs, revs, filename);
+		int numDiffs = meat.diff(fs, revs, "scratch");
 		
 		revs[1] = fs.commit();
 		
 		DiffSet diffset = new DiffSet(revs);
 		assertEquals(numDiffs, diffset.inodeDiffs.size());
-		storage.rmrf("/");
 	}
 }

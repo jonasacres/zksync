@@ -7,7 +7,6 @@ import java.nio.ByteBuffer;
 import java.security.Security;
 import java.util.Arrays;
 
-import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
@@ -17,7 +16,6 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
-import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
 public class ZKFSTest extends FSTestBase {
 	 // TODO: this is going to break on Windows
@@ -25,19 +23,14 @@ public class ZKFSTest extends FSTestBase {
 	
 	int oldDefaultTimeCost, oldDefaultParallelism, oldDefaultMemoryCost;
 	ZKFS zkscratch;
+	static ZKMaster master;
 	
 	@Before
 	public void beforeEach() throws IOException {
 		cheapenArgon2Costs();
-		deleteFiles();
-		LocalFS storage = new LocalFS(SCRATCH_DIR);
-		java.io.File scratchDir = new java.io.File(SCRATCH_DIR);
-		try {
-			FileUtils.deleteDirectory(scratchDir);
-		} catch (IOException e) {}
-		(new java.io.File(SCRATCH_DIR)).mkdirs();
-
-		scratch = zkscratch = ZKFS.fsForStorage(storage, "zksync".toCharArray());
+		master = ZKMaster.openAtPath((String description) -> { return "zksync".getBytes(); }, SCRATCH_DIR);
+		master.purge();
+		scratch = zkscratch = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		prepareExamples();
 	}
 	
@@ -52,8 +45,8 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	@AfterClass
-	public static void afterClass() {
-		deleteFiles();
+	public static void afterClass() throws IOException {
+		master.purge();
 	}
 	
 	@Test
@@ -350,12 +343,5 @@ public class ZKFSTest extends FSTestBase {
 	
 	public static void restoreArgon2Costs() {
 		CryptoSupport.cheapArgon2 = false;
-	}
-	
-	public static void deleteFiles() {
-		java.io.File scratchDir = new java.io.File(SCRATCH_DIR);
-		try {
-			FileUtils.deleteDirectory(scratchDir);
-		} catch (IOException e) {}
 	}
 }

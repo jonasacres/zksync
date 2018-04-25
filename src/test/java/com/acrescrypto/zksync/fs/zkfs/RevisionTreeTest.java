@@ -9,8 +9,6 @@ import java.util.HashSet;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
-import com.acrescrypto.zksync.fs.localfs.LocalFS;
-
 public class RevisionTreeTest {
 	public final static int NUM_REVISIONS = 60;
 	public final static int NUM_ROOTS = 4;
@@ -18,9 +16,10 @@ public class RevisionTreeTest {
 	
 	static RevisionTree tree, mtree;
 	static RefTag[] revisions, mrevisions;
-	static LocalFS storage, mstorage;
+	static ZKMaster singlemaster, multimaster;
 	
 	@BeforeClass
+	
 	public static void beforeClass() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
 		Security.addProvider(new BouncyCastleProvider());
@@ -29,9 +28,9 @@ public class RevisionTreeTest {
 	}
 	
 	public static void setupSingleParentTest() throws IOException {
-		storage = new LocalFS("/tmp/revision-tree-test");
-		if(storage.exists("/")) storage.rmrf("/");
-		fs = ZKFS.fsForStorage(storage, "zksync".toCharArray());
+		singlemaster = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/revision-tree-test-single-parent");
+		if(singlemaster.storage.exists("/")) singlemaster.storage.rmrf("/");
+		fs = singlemaster.newArchive(65536, "singlemaster").openBlank();
 
 		revisions = new RefTag[NUM_REVISIONS];
 		
@@ -49,9 +48,9 @@ public class RevisionTreeTest {
 	}
 	
 	public static void setupMultipleParentTest() throws IOException {
-		mstorage = new LocalFS("/tmp/revision-tree-test-multipleparents");
-		if(mstorage.exists("/")) mstorage.rmrf("/");
-		mfs = ZKFS.fsForStorage(mstorage, "zksync".toCharArray());
+		multimaster = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/revision-tree-test-multi-parent");
+		if(multimaster.storage.exists("/")) multimaster.storage.rmrf("/");
+		mfs = multimaster.newArchive(65536, "multimaster").openBlank();
 		
 		// 0 -> 1 -> 2 -> 3 -> ... -> n-3
 		//  \-> n-2 ->  --\-> n-1 (n-1 is child of 2 and n-2, but not 3 ... n-3

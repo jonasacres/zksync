@@ -20,7 +20,7 @@ public class StoredAccess implements ArchiveDiscovery {
 	public StoredAccess(ZKMaster master) {
 		this.master = master;
 		
-		byte[] storageKeyRaw = master.crypto.deriveKeyFromPassword(master.passphraseProvider.requestPassphrase("Archive keychain"), "zksync".getBytes());
+		byte[] storageKeyRaw = master.crypto.deriveKeyFromPassphrase(master.passphraseProvider.requestPassphrase("Archive keychain"));
 		storageKey = new Key(master.crypto, storageKeyRaw);
 	}
 	
@@ -37,7 +37,24 @@ public class StoredAccess implements ArchiveDiscovery {
 		write();
 	}
 	
-	public void deleteArchive(ZKArchive archive) {
+	public void deleteArchiveAccess(ZKArchive archive) throws IOException {
+		boolean changed = false;
+		for(StoredAccessRecord record : records) {
+			if(Arrays.equals(record.archive.keychain.archiveId, archive.keychain.archiveId)) {
+				records.remove(record);
+				changed = true;
+			}
+		}
+		
+		if(changed) write();
+	}
+	
+	public void purge() throws IOException {
+		records.clear();
+		try {
+			master.storage.unlink(path());
+		} catch (ENOENTException exc) {
+		}
 	}
 	
 	public String path() {

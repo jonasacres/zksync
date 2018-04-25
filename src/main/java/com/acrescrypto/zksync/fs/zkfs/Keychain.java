@@ -33,31 +33,46 @@ public class Keychain {
 	// NOTE: in theory we support pageSize > MAX_INT, but in practice several operations cast to int and need a refactor
 	// for this to work. TODO: guard against trying to load archives with long-valued page sizes.
 	protected long pageSize;
-	public String description;
+	protected String description;
 	
-	public static Keychain keychainForId(ZKMaster master, byte[] passphrase, byte[] archiveId) {
-		return null;
-	}
-	
+	/** Read an existing archive. */
 	public Keychain(ZKMaster master, Key key, byte[] archiveId, boolean isSeedKey) {
 		this.master = master;
-		this.pageSize = 65536;
+		this.pageSize = -1;
 		
 		if(isSeedKey) {
 			deriveFromPassphraseRoot(key);
 		} else {
 			deriveFromSeedRoot(key);
 		}
+		
+		try {
+			read();
+		} catch (IOException e) {
+			// TODO: what if we don't have the key file yet?
+		}
 	}
 	
-	public void initialize() {
-		assert(passphraseRoot != null); // can't do this on a seed archive; this is for creating new archives only
+	/** Create a new archive. */
+	public Keychain(ZKMaster master, Key passphraseRoot, String description, int pageSize) {
+		// TODO: need to establish public key for signing here as well
+		this.master = master;
+		this.pageSize = pageSize;
+		this.description = description;
+		deriveFromPassphraseRoot(passphraseRoot);
 		initRoots();
-		calculateArchiveId(passphraseRoot);
 	}
 	
 	public boolean isSeedOnly() {
 		return passphraseRoot != null;
+	}
+	
+	public void isConfigAvailable() {
+		master.storage.exists(Page.pathForTag(archiveId, configFileTag));
+	}
+	
+	public boolean isConfigLoaded() {
+		return authRoot != null;
 	}
 	
 	public void parseFile(ByteBuffer contents) {
@@ -110,37 +125,73 @@ public class Keychain {
 	public void write() throws IOException {
 		ByteBuffer writeBuf = ByteBuffer.allocate((int) pageSize);
 		writeBuf.put(configFileIv);
-		byte[] ciphertext = configFileKey.encrypt(configFileIv, buildPlaintext(), (int) pageSize - configFileIv.length);
+		byte[] ciphertext = configFileKey.encrypt(configFileIv, serialize(), (int) pageSize - configFileIv.length);
 		writeBuf.put(ciphertext);
 		assertState(!writeBuf.hasRemaining());
 		
 		master.storage.write(Page.pathForTag(archiveId, configFileTag), writeBuf.array());
 	}
 	
-	protected byte[] buildPlaintext() {
+	public void read() throws IOException {
+		byte[] ciphertext = master.storage.read(Page.pathForTag(archiveId, configFileTag));
+		byte[] serialized = configFileKey.decrypt(configFileIv, ciphertext);
+		deserialize(serialized);
+	}
+	
+	protected byte[] serialize() {
 		byte[] descString = description.getBytes();
-		int headerSize = 4;
-		int sectionHeaderSize = 2 + 2;
-		int archiveInfoSize = 8 + 2 + descString.length + textRoot.getRaw().length + authRoot.getRaw().length;
+		int headerSize = 4; // magic
+		int sectionHeaderSize = 2 + 4; // section_type + length
+		int archiveInfoSize = 8 + textRoot.getRaw().length + authRoot.getRaw().length + descString.length; // pageSize + textRoot + authRoot + description
+		
+		assertState(descString.length <= Short.MAX_VALUE);
 		
 		ByteBuffer buf = ByteBuffer.allocate(headerSize+sectionHeaderSize+archiveInfoSize);
 		buf.putLong(KEYFILE_MAGIC);
-		buf.putLong(KEYFILE_SECTION_ARCHIVE_INFO);
+		buf.putShort((short) KEYFILE_SECTION_ARCHIVE_INFO);
+		buf.putInt((short) archiveInfoSize);
 		buf.putLong(pageSize);
-		buf.putShort((short) archiveInfoSize);
-		buf.put(descString);
 		buf.put(textRoot.getRaw());
 		buf.put(authRoot.getRaw());
+		buf.put(descString);
 		
 		assertState(!buf.hasRemaining());
 		
 		return buf.array();
 	}
 	
+	protected void deserialize(byte[] serialized) {
+		ByteBuffer buf = ByteBuffer.wrap(serialized);
+		assertState(buf.getLong() == KEYFILE_MAGIC);
+		while(buf.hasRemaining()) {
+			assertState(buf.remaining() >= 6); // 2-byte type + 4-byte length
+			int type = Util.unsignShort(buf.getShort());
+			int length = buf.getInt();
+			assertState(length >= 8 + 2*master.crypto.symKeyLength());
+			assertState(buf.remaining() >= length);
+			if(type != KEYFILE_SECTION_ARCHIVE_INFO) {
+				// only support one record type in this version...
+				buf.position(buf.position() + length);
+				continue;
+			}
+			
+			this.pageSize = buf.getLong();
+			byte[] textRootRaw = new byte[master.crypto.symKeyLength()],
+				   authRootRaw = new byte[master.crypto.symKeyLength()];
+			this.textRoot = new Key(master.crypto, textRootRaw);
+			this.authRoot = new Key(master.crypto, authRootRaw);
+			byte[] descriptionRaw = new byte[length - 8 + 2*master.crypto.symKeyLength()];
+			buf.get(descriptionRaw);
+			this.description = new String(descriptionRaw);
+			break;
+		}
+	}
+	
 	protected void initRoots() {
 		authRoot = new Key(master.crypto, master.crypto.rng(master.crypto.symKeyLength()));
 		textRoot = new Key(master.crypto, master.crypto.rng(master.crypto.symKeyLength()));
 		configFileIv = master.crypto.rng(master.crypto.symIvLength());
+		calculateArchiveId();
 	}
 	
 	protected void deriveFromPassphraseRoot(Key passphraseRoot) {
@@ -157,7 +208,7 @@ public class Keychain {
 	}
 	
 	protected Key keyFileTextKey(byte[] passphrase) {
-		return new Key(master.crypto, master.crypto.deriveKeyFromPassword(passphrase, "zksync-salt".getBytes()));
+		return new Key(master.crypto, master.crypto.deriveKeyFromPassphrase(passphrase, "zksync-salt".getBytes()));
 	}
 	
 	protected Key temporalSeedId(int offset) {
@@ -182,12 +233,13 @@ public class Keychain {
 		return 1000*60*60*3; // 3 hours
 	}
 	
-	protected void calculateArchiveId(Key passphraseRoot) {
+	protected void calculateArchiveId() {
 		ByteBuffer keyMaterialBuf = ByteBuffer.allocate(authRoot.getRaw().length + textRoot.getRaw().length);
 		keyMaterialBuf.put(authRoot.getRaw());
 		keyMaterialBuf.put(textRoot.getRaw());
 		assertState(!keyMaterialBuf.hasRemaining());
 		archiveId = passphraseRoot.authenticate(keyMaterialBuf.array());
+		// TODO: needs to include signing key
 	}
 	
 	protected void assertState(boolean state) {

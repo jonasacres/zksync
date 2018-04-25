@@ -8,7 +8,6 @@ import java.nio.ByteBuffer;
 import java.security.Security;
 import java.util.Arrays;
 
-import org.apache.commons.io.FileUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.After;
 import org.junit.Before;
@@ -17,28 +16,22 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.fs.FileTestBase;
 import com.acrescrypto.zksync.fs.Stat;
-import com.acrescrypto.zksync.fs.localfs.LocalFS;
 
 public class ZKFileTest extends FileTestBase {
 	ZKFS zkscratch;
+	ZKMaster master;
 	
 	@Before
 	public void beforeEach() throws IOException {
+		master = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, ZKFSTest.SCRATCH_DIR);
 		ZKFSTest.cheapenArgon2Costs();
-		ZKFSTest.deleteFiles();
-		LocalFS storage = new LocalFS(ZKFSTest.SCRATCH_DIR);
-		java.io.File scratchDir = new java.io.File(ZKFSTest.SCRATCH_DIR);
-		try {
-			FileUtils.deleteDirectory(scratchDir);
-		} catch (IOException e) {}
-		(new java.io.File(ZKFSTest.SCRATCH_DIR)).mkdirs();
-
-		scratch = zkscratch = ZKFS.fsForStorage(storage, "zksync".toCharArray());
+		scratch = zkscratch = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 	}
 	
 	@After
-	public void afterEach() {
+	public void afterEach() throws IOException {
 		ZKFSTest.restoreArgon2Costs();
+		master.purge();
 	}
 
 	@BeforeClass
