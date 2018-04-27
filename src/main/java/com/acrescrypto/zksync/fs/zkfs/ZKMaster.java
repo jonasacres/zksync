@@ -12,6 +12,7 @@ public class ZKMaster {
 	protected FS storage;
 	protected PassphraseProvider passphraseProvider;
 	protected StoredAccess storedAccess;
+	protected Key localKey;
 	
 	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) {
 		return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
@@ -21,6 +22,9 @@ public class ZKMaster {
 		this.crypto = crypto;
 		this.storage = storage;
 		this.passphraseProvider = passphraseProvider;
+		
+		byte[] passphrase = passphraseProvider.requestPassphrase("ZKSync storage passphrase");
+		localKey = new Key(crypto, crypto.deriveKeyFromPassphrase(passphrase));
 		
 		this.storedAccess = new StoredAccess(this);
 	}
@@ -37,7 +41,7 @@ public class ZKMaster {
 		if(storage.exists("/")) storage.rmrf("/");
 	}
 	
-	public ZKArchive newArchive(int pageSize, String description) throws IOException {
+	public ZKArchive createArchive(int pageSize, String description) throws IOException {
 		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive '" + description + "'");
 		byte[] passphraseRootRaw = crypto.deriveKeyFromPassphrase(passphrase);
 		Key passphraseRoot = new Key(crypto, passphraseRootRaw);

@@ -119,7 +119,7 @@ public class PeerMessage {
 	}
 	
 	public void respondUnsupported() {
-		// TODO: how to signal this?
+		// TODO P2P: how to signal this?
 	}
 	
 	/** Accumulate all data for a message in memory in a separate thread, and invoke handler when message finished. */

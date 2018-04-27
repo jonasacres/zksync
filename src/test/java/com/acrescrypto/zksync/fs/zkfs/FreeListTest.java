@@ -26,7 +26,7 @@ public class FreeListTest {
 	
 	@Before
 	public void before() throws IOException {
-		archive = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
+		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		if(archive.storage.exists("/")) archive.storage.rmrf("/");
 		fs = archive.openBlank();
 	}

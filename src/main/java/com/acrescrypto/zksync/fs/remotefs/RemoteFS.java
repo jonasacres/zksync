@@ -116,7 +116,7 @@ public class RemoteFS extends FS {
 
 	@Override
 	public byte[] _read(String path) throws IOException {
-		/* TODO: Parse out the specific page/chunk we're trying to access, and request it from the remote peer.
+		/* TODO P2P: Parse out the specific page/chunk we're trying to access, and request it from the remote peer.
 		 */
 		return null;
 	}

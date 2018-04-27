@@ -9,11 +9,12 @@ import com.acrescrypto.zksync.fs.compositefs.CompositeFS;
 
 public class ZKArchiveConfig {
 	
-	public final static int KEYFILE_MAGIC = 0x6CF2AA14;
-	public final static int KEYFILE_SECTION_ARCHIVE_INFO = 0x0001;
+	public final static int CONFIG_MAGIC = 0x6CF2AA14;
+	public final static int CONFIG_SECTION_ARCHIVE_INFO = 0x0001;
 	
 	protected byte[] archiveId;
 	protected Key passphraseRoot;
+	protected Key localRoot;
 	
 	protected Key seedRoot;
 	protected Key seedId;
@@ -30,7 +31,7 @@ public class ZKArchiveConfig {
 	protected CompositeFS storage;
 	
 	// NOTE: in theory we support pageSize > MAX_INT, but in practice several operations cast to int and need a refactor
-	// for this to work. TODO: guard against trying to load archives with long-valued page sizes.
+	// for this to work.
 	protected long pageSize;
 	protected String description;
 	
@@ -54,6 +55,7 @@ public class ZKArchiveConfig {
 	 * @throws IOException */
 	public ZKArchiveConfig(ZKMaster master, Key passphraseRoot, String description, int pageSize) throws IOException {
 		// TODO: need to establish public key for signing here as well
+		assert(pageSize > 0);
 		this.master = master;
 		this.pageSize = pageSize;
 		this.description = description;
@@ -74,8 +76,17 @@ public class ZKArchiveConfig {
 		return authRoot != null;
 	}
 	
+	public byte[] temporalProof(int step, byte[] sharedSecret) {
+		if(isSeedOnly()) return master.crypto.rng(master.crypto.symKeyLength()); // makes logic cleaner for protocol implementation
+		assert(0 <= step && step <= Byte.MAX_VALUE);
+		ByteBuffer timestamp = ByteBuffer.allocate(9);
+		timestamp.putShort((byte) step);
+		timestamp.putLong(System.currentTimeMillis());
+		return passphraseRoot.derive(0x03, timestamp.array()).getRaw();
+	}
+	
 	public void parseFile(ByteBuffer contents) {
-		assertState(contents.getLong() == KEYFILE_MAGIC);
+		assertState(contents.getLong() == CONFIG_MAGIC);
 		while(contents.hasRemaining()) {
 			int type = Util.unsignShort(contents.getShort());
 			int length = Util.unsignShort(contents.getShort());
@@ -83,7 +94,7 @@ public class ZKArchiveConfig {
 			
 			assertState(contents.remaining() >= length);
 			switch(type) {
-			case KEYFILE_SECTION_ARCHIVE_INFO:
+			case CONFIG_SECTION_ARCHIVE_INFO:
 				parseArchiveInfo(contents);
 				break;
 			default:
@@ -113,8 +124,7 @@ public class ZKArchiveConfig {
 	}
 	
 	public byte[] getArchiveId() {
-		return new byte[master.crypto.hashLength()];
-		// TODO: return archiveId;
+		return archiveId;
 	}
 	
 	public long getPageSize() {
@@ -146,8 +156,8 @@ public class ZKArchiveConfig {
 		assertState(descString.length <= Short.MAX_VALUE);
 		
 		ByteBuffer buf = ByteBuffer.allocate(headerSize+sectionHeaderSize+archiveInfoSize);
-		buf.putLong(KEYFILE_MAGIC);
-		buf.putShort((short) KEYFILE_SECTION_ARCHIVE_INFO);
+		buf.putLong(CONFIG_MAGIC);
+		buf.putShort((short) CONFIG_SECTION_ARCHIVE_INFO);
 		buf.putInt((short) archiveInfoSize);
 		buf.putLong(pageSize);
 		buf.put(textRoot.getRaw());
@@ -161,20 +171,22 @@ public class ZKArchiveConfig {
 	
 	protected void deserialize(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		assertState(buf.getLong() == KEYFILE_MAGIC);
+		assertState(buf.getLong() == CONFIG_MAGIC);
 		while(buf.hasRemaining()) {
 			assertState(buf.remaining() >= 6); // 2-byte type + 4-byte length
 			int type = Util.unsignShort(buf.getShort());
 			int length = buf.getInt();
 			assertState(length >= 8 + 2*master.crypto.symKeyLength());
 			assertState(buf.remaining() >= length);
-			if(type != KEYFILE_SECTION_ARCHIVE_INFO) {
+			if(type != CONFIG_SECTION_ARCHIVE_INFO) {
 				// only support one record type in this version...
 				buf.position(buf.position() + length);
 				continue;
 			}
 			
 			this.pageSize = buf.getLong();
+			assertState(this.pageSize > 0 && this.pageSize < Integer.MAX_VALUE); // supporting really long pages is not easy right now
+			
 			byte[] textRootRaw = new byte[master.crypto.symKeyLength()],
 				   authRootRaw = new byte[master.crypto.symKeyLength()];
 			this.textRoot = new Key(master.crypto, textRootRaw);
@@ -195,6 +207,7 @@ public class ZKArchiveConfig {
 	
 	protected void deriveFromPassphraseRoot(Key passphraseRoot) {
 		this.passphraseRoot = passphraseRoot;
+		// TODO P2P: define these constants somewhere
 		deriveFromSeedRoot(passphraseRoot.derive(0x00, new byte[0]));		
 		configFileKey = passphraseRoot.derive(0x01, new byte[0]);
 		configFileTag = passphraseRoot.derive(0x02, new byte[0]).getRaw();
@@ -202,8 +215,10 @@ public class ZKArchiveConfig {
 	
 	protected void deriveFromSeedRoot(Key seedRoot) {
 		this.seedRoot = seedRoot;
+		// TODO P2P: define these constants somewhere
 		seedId = seedRoot.derive(0x00, new byte[0]);
 		seedRegId = seedRoot.derive(0x01, new byte[0]);
+		localRoot = seedRoot.derive(0x02, master.localKey.getRaw());
 	}
 	
 	protected Key keyFileTextKey(byte[] passphrase) {

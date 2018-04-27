@@ -18,7 +18,7 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 	public void beforeEach() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
 		master = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, ZKFSTest.SCRATCH_DIR);
-		scratch = zkscratch = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
+		scratch = zkscratch = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 	}
 	
 	@After

@@ -37,7 +37,7 @@ public class DiffSetResolverTest {
 	@Before
 	public void before() throws IOException {
 		master.purge();
-		archive = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "unit test");
+		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "unit test");
 		fs = archive.openBlank();
 		base = fs.commit();
 	}
@@ -133,7 +133,7 @@ public class DiffSetResolverTest {
 	@Test
 	public void testDeletedFilesSelected() throws IOException, DiffResolutionException {
 		// if we prefer a version in which a file is deleted, is that honored?
-		ZKArchive archive = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "testDeletedFilesSelected");
+		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "testDeletedFilesSelected");
 		for(int i = 0; i < 10; i++) { // we might pass by chance, so re-run n times to make that highly unlikely
 			if(archive.getStorage().exists("/")) archive.getStorage().rmrf("/");
 			ZKFS fs = archive.openBlank();

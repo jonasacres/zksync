@@ -19,9 +19,8 @@ public class StoredAccess implements ArchiveDiscovery {
 	
 	public StoredAccess(ZKMaster master) {
 		this.master = master;
-		
-		byte[] storageKeyRaw = master.crypto.deriveKeyFromPassphrase(master.passphraseProvider.requestPassphrase("Archive keychain"));
-		storageKey = new Key(master.crypto, storageKeyRaw);
+		// TODO P2P: define this constant somewhere
+		storageKey = master.localKey.derive(0x00, new byte[0]);
 	}
 	
 	public void storeArchiveAccess(ZKArchive archive, boolean forceSeedOnly) throws IOException {

@@ -186,7 +186,7 @@ public class LocalFS extends FS {
 	@Override
 	public void mknod(String path, int type, int major, int minor) throws IOException {
 		if(isWindows()) throw new FileTypeNotSupportedException(path + ": Windows does not support devices");
-		// TODO: this seems grossly inconsistent with how the type field works in ZKFS...
+		// TODO P2P: this seems grossly inconsistent with how the type field works in ZKFS...
 		String typeChars[] = { "c", "b", "p" };
 		if(type < 0 || type >= typeChars.length) throw new IllegalArgumentException();
 		

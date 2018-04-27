@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.compositefs;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 
@@ -23,11 +24,11 @@ public class CompositeFS extends FS {
 	HashSet<String> pendingPaths = new HashSet<String>();
 	TaskPool<String,FS> expectationPool; // thread pool for acquiring expected paths
 	
-	/** TODO: Might be nice to set a max downloads per supplementary instead of just a global max. */
+	/** TODO P2P: Might be nice to set a max downloads per supplementary instead of just a global max. */
 	int maxSimultaneousExpectDownloads = 16; // number of expected paths we can download simultaneously
 	int maxSimultaneousSupplementQueries = 8; // number of concurrent stat requests we will make to supplementaries
 	
-	/** TODO: scale these parameters at runtime according to observed performance. Carrier pigeons and datacenters have different expectations...
+	/** TODO P2P: scale these parameters at runtime according to observed performance. Carrier pigeons and datacenters have different expectations...
 	 * maybe even select supplementaries based on observed performance.
 	 */
 	int minThroughput = 56600; // expected minimum throughput bits/second; used to identify FS performing too slowly
@@ -208,6 +209,10 @@ public class CompositeFS extends FS {
 		expectationPool.add(path);
 	}
 	
+	public Collection<FS> getSupplementaries() {
+		return supplementaries;
+	}
+	
 	protected void startExpectationPool() {
 		expectationPool = new TaskPool<String,FS>(maxSimultaneousExpectDownloads, null)
 				.setTask((String path) -> {
@@ -278,7 +283,7 @@ public class CompositeFS extends FS {
 	}
 	
 	protected FS acquire(String path) throws IOException {
-		/* TODO: ensure that if we have parallel requests for the same path, all subsequent requests block without triggering
+		/* TODO P2P: ensure that if we have parallel requests for the same path, all subsequent requests block without triggering
 		 * any additional attempts to acquire the file.
 		 */
 		while(!supplementaries.isEmpty()) {
@@ -307,7 +312,7 @@ public class CompositeFS extends FS {
 		FS bestFS = null;
 		ArrayList<FS> untestedFS = new ArrayList<FS>();
 		
-		/* TODO: I'm a bit concerned about this approach. Once we estimate someone as slow, we won't give them another
+		/* TODO P2P: I'm a bit concerned about this approach. Once we estimate someone as slow, we won't give them another
 		 * shot until we're either so busy we've got no choice, or everyone else becomes slower. Maybe use a weighted
 		 * probability based on speed?
 		 */
@@ -338,7 +343,7 @@ public class CompositeFS extends FS {
 			FS remoteFS = selectRemoteFS(stat);
 			if(remoteFS == null) throw new ENOENTException(path);
 			try {
-				// TODO: How do we distinguish between a file not existing, and us asking a supplementary that didn't happen to have it?
+				// TODO P2P: How do we distinguish between a file not existing, and us asking a supplementary that didn't happen to have it?
 				if(stat.isSymlink()) acquireSymlink(path, stat, remoteFS);
 				else if(stat.isDevice()) acquireDevice(path, stat, remoteFS);
 				else if(stat.isFifo()) acquireFifo(path, stat, remoteFS);
@@ -382,7 +387,7 @@ public class CompositeFS extends FS {
 			supplementaries.remove(failedFS);
 		}
 		
-		// TODO: tell whoever feeds us these connections that we just lost one
+		// TODO P2P: tell whoever feeds us these connections that we just lost one
 	}
 
 	private void acquireDevice(String path, Stat stat, FS remoteFS) throws IOException {
@@ -417,7 +422,7 @@ public class CompositeFS extends FS {
 			throw new SupplementaryFSFailureException(exc);
 		}
 		
-		/* TODO: consider a way to tweak the timeout so that we allow intermittent bursts of huge delays, as long as
+		/* TODO P2P: consider a way to tweak the timeout so that we allow intermittent bursts of huge delays, as long as
 		 * overall throughput is acceptable.
 		 */
 		while(inFile.hasData()) {

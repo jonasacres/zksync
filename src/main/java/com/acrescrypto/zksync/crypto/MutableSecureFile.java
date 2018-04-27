@@ -16,7 +16,7 @@ public class MutableSecureFile extends SecureFile {
 	}
 	
 	public byte[] read() throws IOException {
-		/* TODO: IMPORTANT! Encrypt MutableSecureFiles!
+		/* TODO P2P: IMPORTANT! Encrypt MutableSecureFiles!
 		 */
 		return fs.read(path);
 	}

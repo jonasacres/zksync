@@ -30,7 +30,7 @@ public class ZKFSTest extends FSTestBase {
 		cheapenArgon2Costs();
 		master = ZKMaster.openAtPath((String description) -> { return "zksync".getBytes(); }, SCRATCH_DIR);
 		master.purge();
-		scratch = zkscratch = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
+		scratch = zkscratch = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		prepareExamples();
 	}
 	

@@ -9,7 +9,7 @@ public class DHTEntry {
 	protected byte[] id;
 	
 	public static DHTEntry bootstrapEntry() {
-		// TODO
+		// TODO P2P: Implement
 		return null;
 	}
 	

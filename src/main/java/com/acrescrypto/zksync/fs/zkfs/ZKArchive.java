@@ -19,9 +19,8 @@ public class ZKArchive {
 	public final static int KEY_INDEX_PAGE_MERKLE = 2;
 	public final static int KEY_INDEX_REVISION = 3;
 	public final static int KEY_INDEX_CONFIG_PRIVATE = 4;
-	public final static int KEY_INDEX_CONFIG_LOCAL = 5;
-	public final static int KEY_INDEX_REVISION_TREE = 6;
-	public final static int KEY_INDEX_SEED = 7;
+	public final static int KEY_INDEX_REVISION_TREE = 5;
+	public final static int KEY_INDEX_SEED = 6;
 
 	public final static String GLOBAL_DATA_DIR = ".zksync/archive/data/";
 	public final static String CONFIG_DIR = ".zksync/archive/config/";
@@ -46,7 +45,8 @@ public class ZKArchive {
 		this.crypto = config.master.crypto;
 		
 		this.config = config;
-		this.localConfig = new LocalConfig(storage, deriveKey(KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_LOCAL)); // TODO: use a local key
+		// TODO P2P: define this 0x00 constant somewhere
+		this.localConfig = new LocalConfig(storage, config.localRoot.derive(0x00, new byte[0]));
 		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
 			return tag.getFS();
 		}, (RefTag tag, ZKFS fs) -> {});

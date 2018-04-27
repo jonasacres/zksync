@@ -107,9 +107,10 @@ public class PeerConnection implements PeerSocketDelegate {
 	
 	protected byte[] proofResponse(byte[] proof) throws ProtocolViolationException {
 		assertState(proof.length == socket.swarm.archive.getCrypto().hashLength());
-		if(Arrays.equals(proof, null)) { // TODO: actual archive proof A
+		// temporalProof returns random garbage if we are not a full peer
+		if(Arrays.equals(proof, socket.swarm.archive.getConfig().temporalProof(0, socket.getSharedSecret()))) {
 			peerType = PEER_TYPE_FULL;
-			return null; // TODO: actual archive proof B
+			return socket.swarm.archive.getConfig().temporalProof(1, socket.getSharedSecret());
 		} else {
 			// either their proof is garbage (meaning they're blind), or we're a blind seed; send garbage
 			peerType = PEER_TYPE_BLIND;
@@ -174,7 +175,7 @@ public class PeerConnection implements PeerSocketDelegate {
 		}
 	}
 	
-	/** TODO: this means we get just one stream from a single (possibly slow) peer... what if we let clients break it up?
+	/** TODO P2P: this means we get just one stream from a single (possibly slow) peer... what if we let clients break it up?
 	 * RefTag gives length, so request bitmask showing the pages we want
 	 * respond with bitmask of chunks we offer, followed by ordered stream of pages
 	 * controller ensures each peer has a few pages at a time
@@ -205,7 +206,7 @@ public class PeerConnection implements PeerSocketDelegate {
 		});
 	}
 	
-	// TODO: would we be better off replacing requestPages and requestPagesInRange with requestPagesWithPrefix?
+	// TODO P2P: would we be better off replacing requestPages and requestPagesInRange with requestPagesWithPrefix?
 	public void handleRequestPages(PeerMessage msg) {
 		msg.await((ByteBuffer data) -> {
 			MetaInputStream pages = new MetaInputStream();
@@ -264,7 +265,7 @@ public class PeerConnection implements PeerSocketDelegate {
 		assertPeerCapability(PEER_TYPE_FULL);
 		msg.await((ByteBuffer data) -> {
 			assertState(data.remaining() == socket.swarm.archive.refTagSize());
-			// TODO: do we really want to automatically download every new tip? either way... what do we do next?
+			// TODO P2P: do we really want to automatically download every new tip? either way... what do we do next?
 		});
 	}
 }

@@ -25,7 +25,7 @@ public class ZKFileTest extends FileTestBase {
 	public void beforeEach() throws IOException {
 		master = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, ZKFSTest.SCRATCH_DIR);
 		ZKFSTest.cheapenArgon2Costs();
-		scratch = zkscratch = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
+		scratch = zkscratch = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 	}
 	
 	@After

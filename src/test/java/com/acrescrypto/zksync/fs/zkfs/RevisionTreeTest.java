@@ -30,7 +30,7 @@ public class RevisionTreeTest {
 	public static void setupSingleParentTest() throws IOException {
 		singlemaster = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/revision-tree-test-single-parent");
 		singlemaster.purge();
-		fs = singlemaster.newArchive(65536, "singlemaster").openBlank();
+		fs = singlemaster.createArchive(65536, "singlemaster").openBlank();
 
 		revisions = new RefTag[NUM_REVISIONS];
 		
@@ -50,7 +50,7 @@ public class RevisionTreeTest {
 	public static void setupMultipleParentTest() throws IOException {
 		multimaster = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/revision-tree-test-multi-parent");
 		multimaster.purge();
-		mfs = multimaster.newArchive(65536, "multimaster").openBlank();
+		mfs = multimaster.createArchive(65536, "multimaster").openBlank();
 		
 		// 0 -> 1 -> 2 -> 3 -> ... -> n-3
 		//  \-> n-2 ->  --\-> n-1 (n-1 is child of 2 and n-2, but not 3 ... n-3

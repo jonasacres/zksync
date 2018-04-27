@@ -28,7 +28,7 @@ public abstract class PeerSocket {
 	
 	public static PeerSocket connectToAddress(PeerSwarm swarm, String address) throws UnsupportedProtocolException {
 		if(!addressSupported(address)) throw new UnsupportedProtocolException();
-		// TODO: decode URL, select address
+		// TODO P2P: decode URL, select address
 		return null;
 	}
 	
@@ -50,6 +50,8 @@ public abstract class PeerSocket {
 	public abstract boolean isClient();
 	public abstract void close();
 	
+	public abstract byte[] getSharedSecret();
+	
 	public PeerSwarm getSwarm() {
 		return swarm;
 	}
@@ -64,7 +66,7 @@ public abstract class PeerSocket {
 	
 	/** Immediately close socket and blacklist due to a clear protocol violation. */
 	public void violation() {
-		// TODO: close and blacklist
+		// TODO P2P: close and blacklist
 	}
 	
 	/** Close connection and add strikes against an address; blacklist triggered when strikes reach threshold. */

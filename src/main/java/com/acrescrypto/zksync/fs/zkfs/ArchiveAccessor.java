@@ -35,9 +35,9 @@ public class ArchiveAccessor {
 	
 	public ArchiveAccessor addDefaultDiscoveries() {
 		this.addDiscovery(DHTClient.defaultDHT());
-		// TODO: filesystem discovery
-		// TODO: direct peer discovery
-		// TODO: mdns/udp multicast/other lan discovery?
+		// TODO P2P: filesystem discovery
+		// TODO P2P: direct peer discovery
+		// TODO P2P: mdns/udp multicast/other lan discovery?
 		return this;
 	}
 	
@@ -108,7 +108,7 @@ public class ArchiveAccessor {
 	}
 	
 	protected long timeSlice(int offset) {
-		/* TODO: This is going to cause the DHT to get mobbed every rotation interval as everyone reregisters.
+		/* TODO P2P: This is going to cause the DHT to get mobbed every rotation interval as everyone reregisters.
 		 * Need to smear this out somehow. At any given time, we could be listening for up to 3 IDs per archive.
 		 */
 		return System.currentTimeMillis()/(1000*TEMPORAL_SEED_KEY_INTERVAL_SECONDS) + offset;

@@ -49,7 +49,7 @@ public class DiffSetTest {
 	@Before
 	public void beforeEach() throws IOException {
 		master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-diffset");
-		ZKArchive archive = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
+		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		ZKFS fs = archive.openBlank();
 		fs.write("unmodified", "parent".getBytes());
 		fs.write("modified", "replaceme".getBytes());
@@ -82,7 +82,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testDetectsFakeDifferencesBetweenSiblingsForNonImmediates() throws IOException {
-		ZKFS fs = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
+		ZKFS fs = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		byte[] buf = new byte[(int) fs.getArchive().getConfig().getPageSize()+1];
 		fs.write("unmodified", buf);
 		fs.write("modified", buf);
@@ -301,7 +301,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testDirectoryEntriesAreADifference() throws IOException {
-		ZKFS fs = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
+		ZKFS fs = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		
 		RefTag[] revs = new RefTag[2];
 		
@@ -320,7 +320,7 @@ public class DiffSetTest {
 	}
 	
 	protected void trivialInodeDiffTest(DiffExampleLambda meat) throws IOException {
-		ZKFS fs = master.newArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
+		ZKFS fs = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		
 		RefTag[] revs = new RefTag[2];
 		int numDiffs = meat.diff(fs, revs, "scratch");

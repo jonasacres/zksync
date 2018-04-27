@@ -79,7 +79,7 @@ public class LocalDirectory implements Directory {
 	
 	@Override
 	public Iterator<String> listRecursiveIterator(int opts) throws IOException {
-		// TODO Auto-generated method stub
+		// TODO P2P: Auto-generated method stub
 		return null;
 	}
 
