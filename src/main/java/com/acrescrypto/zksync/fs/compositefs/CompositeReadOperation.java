@@ -56,7 +56,9 @@ public class CompositeReadOperation {
 	public CompositeReadOperation waitForStat() throws IOException {
 		while(stat == null && !isFinished()) {
 			try {
-				this.wait(100);
+				synchronized(this) {
+					this.wait(100);
+				}
 			} catch(InterruptedException exc) {
 			}
 		}
@@ -70,7 +72,9 @@ public class CompositeReadOperation {
 	public CompositeReadOperation waitToFinish() throws IOException {
 		while(!isFinished()) {
 			try {
-				this.wait(100);
+				synchronized(this) {
+					this.wait(100);
+				}
 			} catch (InterruptedException e) {
 			}
 		}

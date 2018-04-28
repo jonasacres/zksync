@@ -137,6 +137,6 @@ public class RevisionTree {
 	}
 	
 	protected Key branchTipKey() {
-		return archive.deriveKey(ZKArchive.KEY_TYPE_CIPHER, ZKArchive.KEY_INDEX_REVISION_TREE);
+		return archive.config.deriveKey(ZKArchiveConfig.KEY_INDEX_ARCHIVE, ZKArchiveConfig.KEY_TYPE_CIPHER, ZKArchiveConfig.KEY_INDEX_REVISION_TREE);
 	}
 }

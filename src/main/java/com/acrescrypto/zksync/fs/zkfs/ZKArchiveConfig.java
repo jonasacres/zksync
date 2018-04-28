@@ -7,25 +7,51 @@ import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.compositefs.CompositeFS;
 
+/** TODO P2P: Review key management.
+ * Keeping separate cipher and auth keys from totally independent entropy sources is cumbersome, and probably not even a
+ * serious security advantage. It was nice on paper, but it's at the point where I have to keep two separate seed keys,
+ * which is not practical. Rework key hierarchy.
+ *
+ */
+
 public class ZKArchiveConfig {
 	
 	public final static int CONFIG_MAGIC = 0x6CF2AA14;
 	public final static int CONFIG_SECTION_ARCHIVE_INFO = 0x0001;
 	
-	protected byte[] archiveId;
-	protected Key passphraseRoot;
-	protected Key localRoot;
+	public final static int KEY_ROOT_PASSPHRASE = 0;
+	public final static int KEY_ROOT_ARCHIVE = 1;
+	public final static int KEY_ROOT_SEED = 2;
+	public final static int KEY_ROOT_LOCAL = 3;
 	
-	protected Key seedRoot;
-	protected Key seedId;
-	protected Key seedRegId;
+	public final static int KEY_TYPE_CIPHER = 0;
+	public final static int KEY_TYPE_AUTH = 1;
+	public final static int KEY_TYPE_ROOT = 2;
+
+	public final static int KEY_INDEX_ARCHIVE = 0;
+	public final static int KEY_INDEX_PAGE = 1;
+	public final static int KEY_INDEX_PAGE_MERKLE = 2;
+	public final static int KEY_INDEX_REVISION = 3;
+	public final static int KEY_INDEX_CONFIG_FILE = 4;
+	public final static int KEY_INDEX_REVISION_TREE = 5;
+	public final static int KEY_INDEX_SEED = 6;
+	public final static int KEY_INDEX_SEED_REG = 7;
+	public final static int KEY_INDEX_SEED_TEMPORAL = 8;
+	public final static int KEY_INDEX_LOCAL = 9;
 	
-	protected Key configFileKey;
-	protected byte[] configFileIv;
-	protected byte[] configFileTag;
+	protected byte[] archiveId; // derived from archive root; will later include public key (TODO)
+
+	protected Key passphraseRoot; // derived from passphrase; used to generate seedRoot and configFileKey/Tag
+	protected Key archiveRoot; // randomly generated and stored encrypted in config file; derives most other keys 
+	protected Key seedRoot; // derived from passphrase; used to participate in DHT and peering, cannot decipher archives
+	protected Key localRoot; // derived from locally-stored entropy combined with seedRoot; encrypts user preferences and any other data not shared with peers
 	
-	protected Key authRoot;
-	protected Key textRoot;
+	protected Key seedId; // derived from seed root; identifies archive family (all archives bearing the same passphrase)
+	protected Key seedRegId; // derived from seed root; unique identifier for registering archive family
+	
+	protected Key configFileKey; // derived from passphrase root; used to encrypt configuration file
+	protected byte[] configFileIv; // rng
+	protected byte[] configFileTag; // derived from passphrase root; used to set location in filesystem of config file
 	
 	protected ZKMaster master;
 	protected CompositeFS storage;
@@ -73,7 +99,7 @@ public class ZKArchiveConfig {
 	}
 	
 	public boolean isConfigLoaded() {
-		return authRoot != null;
+		return archiveRoot != null;
 	}
 	
 	public byte[] temporalProof(int step, byte[] sharedSecret) {
@@ -113,14 +139,9 @@ public class ZKArchiveConfig {
 		contents.get(desc);
 		description = new String(desc);
 		
-		byte[] textRootRaw = new byte[master.crypto.symKeyLength()];
-		byte[] authRootRaw = new byte[master.crypto.symKeyLength()];
-		
-		contents.get(textRootRaw);
-		contents.get(authRootRaw);
-
-		textRoot = new Key(this.master.crypto, textRootRaw);
-		authRoot = new Key(this.master.crypto, authRootRaw);
+		byte[] archiveRootRaw = new byte[master.crypto.symKeyLength()];		
+		contents.get(archiveRootRaw);
+		archiveRoot = new Key(this.master.crypto, archiveRootRaw);
 	}
 	
 	public byte[] getArchiveId() {
@@ -147,11 +168,21 @@ public class ZKArchiveConfig {
 		deserialize(serialized);
 	}
 	
+	public Key deriveKey(int root, int type, int index, byte[] tweak) {
+		Key[] keys = { passphraseRoot, archiveRoot, seedRoot, localRoot };
+		if(type >= keys.length) throw new IllegalArgumentException();
+		return keys[root].derive(((type & 0xFFFF) << 16) | (index & 0xFFFF), tweak);
+	}
+	
+	public Key deriveKey(int root, int type, int index) {
+		return deriveKey(root, type, index, new byte[0]);
+	}
+	
 	protected byte[] serialize() {
 		byte[] descString = description.getBytes();
 		int headerSize = 4; // magic
 		int sectionHeaderSize = 2 + 4; // section_type + length
-		int archiveInfoSize = 8 + textRoot.getRaw().length + authRoot.getRaw().length + descString.length; // pageSize + textRoot + authRoot + description
+		int archiveInfoSize = 8 + archiveRoot.getRaw().length + descString.length; // pageSize + textRoot + authRoot + description
 		
 		assertState(descString.length <= Short.MAX_VALUE);
 		
@@ -160,8 +191,7 @@ public class ZKArchiveConfig {
 		buf.putShort((short) CONFIG_SECTION_ARCHIVE_INFO);
 		buf.putInt((short) archiveInfoSize);
 		buf.putLong(pageSize);
-		buf.put(textRoot.getRaw());
-		buf.put(authRoot.getRaw());
+		buf.put(archiveRoot.getRaw());
 		buf.put(descString);
 		
 		assertState(!buf.hasRemaining());
@@ -176,7 +206,7 @@ public class ZKArchiveConfig {
 			assertState(buf.remaining() >= 6); // 2-byte type + 4-byte length
 			int type = Util.unsignShort(buf.getShort());
 			int length = buf.getInt();
-			assertState(length >= 8 + 2*master.crypto.symKeyLength());
+			assertState(length >= 8 + master.crypto.symKeyLength());
 			assertState(buf.remaining() >= length);
 			if(type != CONFIG_SECTION_ARCHIVE_INFO) {
 				// only support one record type in this version...
@@ -187,11 +217,9 @@ public class ZKArchiveConfig {
 			this.pageSize = buf.getLong();
 			assertState(this.pageSize > 0 && this.pageSize < Integer.MAX_VALUE); // supporting really long pages is not easy right now
 			
-			byte[] textRootRaw = new byte[master.crypto.symKeyLength()],
-				   authRootRaw = new byte[master.crypto.symKeyLength()];
-			this.textRoot = new Key(master.crypto, textRootRaw);
-			this.authRoot = new Key(master.crypto, authRootRaw);
-			byte[] descriptionRaw = new byte[length - 8 + 2*master.crypto.symKeyLength()];
+			byte[] archiveRootRaw = new byte[master.crypto.symKeyLength()];
+			this.archiveRoot = new Key(master.crypto, archiveRootRaw);
+			byte[] descriptionRaw = new byte[length - 8 + master.crypto.symKeyLength()];
 			buf.get(descriptionRaw);
 			this.description = new String(descriptionRaw);
 			break;
@@ -199,26 +227,23 @@ public class ZKArchiveConfig {
 	}
 	
 	protected void initRoots() {
-		authRoot = new Key(master.crypto, master.crypto.rng(master.crypto.symKeyLength()));
-		textRoot = new Key(master.crypto, master.crypto.rng(master.crypto.symKeyLength()));
+		archiveRoot = new Key(master.crypto, master.crypto.rng(master.crypto.symKeyLength()));
 		configFileIv = master.crypto.rng(master.crypto.symIvLength());
 		calculateArchiveId();
 	}
 	
 	protected void deriveFromPassphraseRoot(Key passphraseRoot) {
 		this.passphraseRoot = passphraseRoot;
-		// TODO P2P: define these constants somewhere
-		deriveFromSeedRoot(passphraseRoot.derive(0x00, new byte[0]));		
-		configFileKey = passphraseRoot.derive(0x01, new byte[0]);
-		configFileTag = passphraseRoot.derive(0x02, new byte[0]).getRaw();
+		deriveFromSeedRoot(deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_ROOT, KEY_INDEX_SEED));		
+		configFileKey = deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_FILE, new byte[0]);
+		configFileTag = deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_AUTH, KEY_INDEX_CONFIG_FILE, new byte[0]).getRaw();
 	}
 	
 	protected void deriveFromSeedRoot(Key seedRoot) {
 		this.seedRoot = seedRoot;
-		// TODO P2P: define these constants somewhere
-		seedId = seedRoot.derive(0x00, new byte[0]);
-		seedRegId = seedRoot.derive(0x01, new byte[0]);
-		localRoot = seedRoot.derive(0x02, master.localKey.getRaw());
+		seedId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED, new byte[0]);
+		seedRegId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED_REG, new byte[0]);
+		localRoot = deriveKey(KEY_ROOT_SEED, KEY_TYPE_ROOT, KEY_INDEX_LOCAL, master.localKey.getRaw());
 	}
 	
 	protected Key keyFileTextKey(byte[] passphrase) {
@@ -226,17 +251,17 @@ public class ZKArchiveConfig {
 	}
 	
 	protected Key temporalSeedId(int offset) {
-		return temporalSeedDerivative(0x00, offset);
+		return temporalSeedDerivative(true, offset);
 	}
 	
 	protected Key temporalSeedKey(int offset) {
-		return temporalSeedDerivative(0x01, offset);
+		return temporalSeedDerivative(false, offset);
 	}
 	
-	protected Key temporalSeedDerivative(int index, int offset) {
+	protected Key temporalSeedDerivative(boolean isAuth, int offset) {
 		ByteBuffer timeTweak = ByteBuffer.allocate(8);
 		timeTweak.putLong(timeSlice(offset));
-		return seedId.derive(index, timeTweak.array());
+		return deriveKey(KEY_ROOT_SEED, isAuth ? KEY_TYPE_AUTH : KEY_TYPE_CIPHER, KEY_INDEX_SEED_TEMPORAL, timeTweak.array());
 	}
 	
 	protected long timeSlice(int offset) {
@@ -248,9 +273,8 @@ public class ZKArchiveConfig {
 	}
 	
 	protected void calculateArchiveId() {
-		ByteBuffer keyMaterialBuf = ByteBuffer.allocate(authRoot.getRaw().length + textRoot.getRaw().length);
-		keyMaterialBuf.put(authRoot.getRaw());
-		keyMaterialBuf.put(textRoot.getRaw());
+		ByteBuffer keyMaterialBuf = ByteBuffer.allocate(archiveRoot.getRaw().length);
+		keyMaterialBuf.put(archiveRoot.getRaw());
 		assertState(!keyMaterialBuf.hasRemaining());
 		archiveId = passphraseRoot.authenticate(keyMaterialBuf.array());
 		// TODO: needs to include signing key

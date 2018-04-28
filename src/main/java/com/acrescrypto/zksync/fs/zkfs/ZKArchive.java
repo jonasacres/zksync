@@ -10,18 +10,7 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
 
 public class ZKArchive {
-	public final static int KEY_TYPE_CIPHER = 0;
-	public final static int KEY_TYPE_AUTH = 1;
-	public final static int KEY_TYPE_PRNG = 2;
 	
-	public final static int KEY_INDEX_ARCHIVE = 0;
-	public final static int KEY_INDEX_PAGE = 1;
-	public final static int KEY_INDEX_PAGE_MERKLE = 2;
-	public final static int KEY_INDEX_REVISION = 3;
-	public final static int KEY_INDEX_CONFIG_PRIVATE = 4;
-	public final static int KEY_INDEX_REVISION_TREE = 5;
-	public final static int KEY_INDEX_SEED = 6;
-
 	public final static String GLOBAL_DATA_DIR = ".zksync/archive/data/";
 	public final static String CONFIG_DIR = ".zksync/archive/config/";
 	public final static String REVISION_DIR = ".zksync/archive/revisions/";
@@ -45,23 +34,11 @@ public class ZKArchive {
 		this.crypto = config.master.crypto;
 		
 		this.config = config;
-		// TODO P2P: define this 0x00 constant somewhere
-		this.localConfig = new LocalConfig(storage, config.localRoot.derive(0x00, new byte[0]));
+		Key localKey = config.deriveKey(ZKArchiveConfig.KEY_ROOT_LOCAL, ZKArchiveConfig.KEY_TYPE_CIPHER, ZKArchiveConfig.KEY_INDEX_CONFIG_FILE);
+		this.localConfig = new LocalConfig(storage, localKey);
 		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
 			return tag.getFS();
 		}, (RefTag tag, ZKFS fs) -> {});
-	}
-	
-	// TODO: Have ArchiveConfig do this
-	public Key deriveKey(int type, int index, byte[] tweak) {
-		Key[] keys = { config.textRoot, config.authRoot };
-		if(type >= keys.length) throw new IllegalArgumentException();
-		return keys[type].derive(index, tweak);
-	}
-	
-	public Key deriveKey(int type, int index) {
-		byte[] empty = {};
-		return deriveKey(type, index, empty);
 	}
 	
 	public ZKFS openRevision(byte[] revision) throws IOException {

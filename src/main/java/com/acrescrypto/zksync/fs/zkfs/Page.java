@@ -100,7 +100,7 @@ public class Page {
 	
 	/** key used for encrypting page contents */
 	protected Key textKey(byte[] pageTag) {
-		return file.zkfs.archive.deriveKey(ZKArchive.KEY_TYPE_CIPHER, ZKArchive.KEY_INDEX_PAGE, pageTag);
+		return file.zkfs.archive.config.deriveKey(ZKArchiveConfig.KEY_INDEX_ARCHIVE, ZKArchiveConfig.KEY_TYPE_CIPHER, ZKArchiveConfig.KEY_INDEX_PAGE, pageTag);
 	}
 	
 	/** key used to produce page tag (provides authentication of page contents and basis for page key) */
@@ -123,7 +123,7 @@ public class Page {
 		ByteBuffer buf = ByteBuffer.allocate(12);
 		buf.putLong(file.getInode().getStat().getInodeId()); // no dedupe between files
 		buf.putInt(pageNum); // no dedupe within file
-		return file.zkfs.archive.deriveKey(ZKArchive.KEY_TYPE_AUTH, ZKArchive.KEY_INDEX_PAGE, buf.array());
+		return file.zkfs.archive.config.deriveKey(ZKArchiveConfig.KEY_INDEX_ARCHIVE, ZKArchiveConfig.KEY_TYPE_AUTH, ZKArchiveConfig.KEY_INDEX_PAGE, buf.array());
 	}
 	
 	/** load page contents from underlying storage */
