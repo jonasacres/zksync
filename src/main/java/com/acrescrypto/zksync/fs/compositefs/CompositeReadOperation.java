@@ -1,16 +1,23 @@
 package com.acrescrypto.zksync.fs.compositefs;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
 public class CompositeReadOperation {
 	public interface IncomingDataValidator {
-		public boolean isValid(byte[] data);
+		public boolean isValid(String path, InputStream data);
+	}
+	
+	public interface IncomingStatValidator {
+		public boolean isValid(String path, Stat stat);
 	}
 	
 	public final static int MODE_DOWNLOAD = 0;
@@ -23,20 +30,22 @@ public class CompositeReadOperation {
 	protected String path;
 	protected Thread supervisorThread;
 	protected Stat stat;
-	protected IncomingDataValidator validator;
-	protected byte[] data;
-	protected boolean finished;
+	protected IOException exception;
+	protected IncomingDataValidator dataValidator;
+	protected IncomingStatValidator statValidator;
+	protected boolean finished, success;
 	public int mode;
 	protected int maxWorkers = 4;
 	protected double switchoverThreshold = 0.8;
 	protected long disqualificationInterval = 1000*60*5;
 	
-	public CompositeReadOperation(CompositeFS composite, String path, IncomingDataValidator validator, int mode) {
+	public CompositeReadOperation(CompositeFS composite, String path, IncomingStatValidator statValidator, IncomingDataValidator dataValidator, int mode) {
 		this.composite = composite;
 		this.path = path;
 		this.mode = mode;
 		this.supervisorThread = (new Thread(()->superviseThread()));
-		this.validator = validator;
+		this.statValidator = statValidator;
+		this.dataValidator = dataValidator;
 		supervisorThread.start();
 	}
 	
@@ -44,7 +53,7 @@ public class CompositeReadOperation {
 		return stat;
 	}
 	
-	public CompositeReadOperation waitForStat() {
+	public CompositeReadOperation waitForStat() throws IOException {
 		while(stat == null && !isFinished()) {
 			try {
 				this.wait(100);
@@ -52,16 +61,22 @@ public class CompositeReadOperation {
 			}
 		}
 		
+		if(exception != null) throw exception;
+		if(stat == null) throw new ENOENTException(path);
+		
 		return this;
 	}
 	
-	public CompositeReadOperation waitToFinish() {
+	public CompositeReadOperation waitToFinish() throws IOException {
 		while(!isFinished()) {
 			try {
 				this.wait(100);
 			} catch (InterruptedException e) {
 			}
 		}
+		
+		if(exception != null) throw exception;
+		if(stat == null || !success) throw new ENOENTException(path);
 		
 		return this;
 	}
@@ -70,16 +85,12 @@ public class CompositeReadOperation {
 		return finished;
 	}
 
-	public byte[] getData() {
-		return data;
-	}
-
 	protected void superviseThread() {
 		while(!finished) {
 			FS nextBest = selectFS();
 			if(workers.isEmpty()) {
 				if(nextBest == null) {
-					finish(null);
+					finish(false);
 					return;
 				}
 
@@ -111,7 +122,7 @@ public class CompositeReadOperation {
 	}
 
 	protected synchronized FS selectFS() {
-		// TODO P2P: prune disqualified
+		pruneDisqualified();
 		long bestTime = Long.MAX_VALUE;
 		FS bestFs = null;
 		long size = readSize(), median = medianEta();
@@ -218,61 +229,85 @@ public class CompositeReadOperation {
 		disqualified.put(fs, System.currentTimeMillis());
 	}
 
-	protected void failFS(FS fs) {
-		// TODO P2P: disconnect
-	}
-
 	protected synchronized void finishedWorker(CompositeReadOperationWorker worker) {
 		workers.remove(worker);
 		this.notifyAll();
 	}
 	
-	protected synchronized void receivedStat(Stat stat) {
-		this.stat = stat;
+	protected synchronized void receivedStat(CompositeReadOperationWorker worker) {
+		this.stat = worker.stat;
+		
+		if(!statValidator.isValid(path, stat)) {
+			/** Sent us an illegal stat, e.g. way too big for a zkfs page file. Blacklist that peer! */
+			composite.failSupplementaryFS(worker.fs, true);
+			return;
+		}
+		
 		if(mode != MODE_DOWNLOAD) {
-			finish(null);
+			finish(true);
 			return;
 		}
 		
 		try {
 			if(stat.isRegularFile()) return;
 			else if(stat.isDirectory()) makeDirectory();
-			else finish(null);
+			else {
+				/** SUBTLE: Sending us anything other than a file or directory in this version is a sign of evil, because
+				 * we just don't have cause to do that right now. CompositeFS is only used to sync archives, which consist
+				 * solely of regular files and directories.
+				 */
+				composite.failSupplementaryFS(worker.fs, true);
+			};
 		} catch(IOException exc) {
-			finish(null); // TODO P2P: do we need some stronger sort of failure for when we obtain the file, but the backingfs is hosed?
+			finishException(exc);
 		}
 	}
 	
 	protected void makeDirectory() throws IOException {
 		composite.backingFS.mkdirp(path);
 		composite.backingFS.applyStat(path, stat);
-		finish(null); // TODO P2P: is this distinguishable from failure? i guess stat is set...
+		finish(true);
 	}
 
-	protected synchronized void receivedData(FS fs, byte[] data) {
-		if(!validator.isValid(data)) {
-			failFS(fs);
-			return;
-		}
-		
+	protected synchronized void receivedData(CompositeReadOperationWorker worker) {
 		try {
-			if(stat.isRegularFile()) {
-				composite.backingFS.safeWrite(path, data);
-				composite.backingFS.applyStat(path, stat);
-			} else {
-				// TODO P2P: shouldn't happen, but what if it does?
+			InputStream stream = worker.buf.getInputStream();
+			if(!dataValidator.isValid(path, stream)) {
+				composite.failSupplementaryFS(worker.fs, true);
+				return;
 			}
-		} catch (IOException e) {
-			// TODO P2P: again we need to decide what to do if backingfs fails...
-		}
 
-		finish(data);
+			if(worker.stat.isRegularFile()) {
+				File outFile = composite.backingFS.open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
+				do {
+					byte[] readBuf = new byte[1024];
+					int r = stream.read(readBuf);
+					if(r <= 0) break;
+					outFile.write(readBuf);
+				} while(true);
+				
+				composite.backingFS.applyStat(path, worker.stat);
+				worker.buf.delete();
+				finish(true);
+			} else {
+				// file type changed between when we got the stat and now
+				receivedStat(worker);
+				finish(false); // already should be called in receivedStat, but better safe than sorry
+			}
+		} catch (IOException exc) {
+			finishException(exc);
+		}
+	}
+	
+	protected synchronized void finishException(IOException exc) {
+		this.exception = exc;
+		finish(false);
 	}
 
-	protected synchronized void finish(byte[] data) {
+	protected synchronized void finish(boolean success) {
 		if(finished) return;
-		this.data = data;
 		this.finished = true;
+		this.success = success;
 		for(CompositeReadOperationWorker worker : workers) {
 			worker.abort();
 		}

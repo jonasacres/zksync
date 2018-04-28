@@ -192,4 +192,10 @@ public abstract class FS {
 	 * except this FS remains unmodified and the chrooted FS is a new one that is returned. 
 	 * @throws IOException */
 	public abstract FS scopedFS(String path) throws IOException;
+	
+	/** Close any resources associated with keeping this FS access open, e.g. sockets. The FS object may not be reused. */
+	public void close() throws IOException {}
+	
+	/** If this is a network device, inform the controller that this host is behaving suspiciously and should be blacklisted. */
+	public void blacklist() {}
 }
