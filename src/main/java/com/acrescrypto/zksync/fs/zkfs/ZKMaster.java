@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.FS;
@@ -47,5 +48,13 @@ public class ZKMaster {
 		Key passphraseRoot = new Key(crypto, passphraseRootRaw);
 		ZKArchiveConfig config = new ZKArchiveConfig(this, passphraseRoot, description, pageSize);
 		return new ZKArchive(config);
+	}
+	
+	public String storagePathForArchiveId(byte[] archiveId) {
+		return "archives/" + Util.bytesToHex(archiveId);
+	}
+
+	public FS storageFsForArchiveId(byte[] archiveId) throws IOException {
+		return storage.scopedFS(storagePathForArchiveId(archiveId));
 	}
 }

@@ -5,13 +5,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.Iterator;
 
 import com.acrescrypto.zksync.LambdaInputStream;
 import com.acrescrypto.zksync.MetaInputStream;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
-import com.acrescrypto.zksync.fs.Directory;
+import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
@@ -233,11 +232,11 @@ public class PeerConnection implements PeerSocketDelegate {
 			data.get(startTag);
 			data.get(endTag);
 			try {
-				Iterator<String> pathIterator = socket.swarm.archive.getStorage().opendir("/").listRecursiveIterator(Directory.LIST_OPT_OMIT_DIRECTORIES);
+				DirectoryTraverser traverser = new DirectoryTraverser(socket.swarm.archive.getStorage(), socket.swarm.archive.getStorage().opendir("/"));
 				LambdaInputStream response = new LambdaInputStream(() -> {
-					if(!pathIterator.hasNext()) return null;
+					if(!traverser.hasNext()) return null;
 					try {
-						return socket.swarm.archive.getStorage().open(pathIterator.next(), File.O_RDONLY).getInputStream();
+						return socket.swarm.archive.getStorage().open(traverser.next(), File.O_RDONLY).getInputStream();
 					} catch (IOException e) {
 						return null;
 					}

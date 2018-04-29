@@ -50,8 +50,7 @@ public class StoredAccessRecord {
 		this.seedOnly = type != 0;
 		Key key = new Key(master.crypto, keyMaterial);
 		
-		// TODO P2P: build this path in a method somewhere
-		CompositeFS fs = new CompositeFS(master.storage.scopedFS("archives/" + Util.bytesToHex(archiveId)));
+		CompositeFS fs = new CompositeFS(master.storageFsForArchiveId(archiveId));
 		ZKArchiveConfig config = new ZKArchiveConfig(master, key, archiveId, fs, seedOnly);
 		archive = new ZKArchive(config);
 	}

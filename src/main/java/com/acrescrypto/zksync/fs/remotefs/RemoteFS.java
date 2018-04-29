@@ -2,12 +2,15 @@ package com.acrescrypto.zksync.fs.remotefs;
 
 import java.io.IOException;
 
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.net.PeerConnection;
 
 public class RemoteFS extends FS {
+	PeerConnection connection;
 
 	@Override
 	public Stat stat(String path) throws IOException {
@@ -116,14 +119,16 @@ public class RemoteFS extends FS {
 
 	@Override
 	public byte[] _read(String path) throws IOException {
-		/* TODO P2P: Parse out the specific page/chunk we're trying to access, and request it from the remote peer.
-		 */
+		String trimmed = path.replace("/", "");
+		connection.requestPages(new byte[][] { Util.hexToBytes(trimmed) });
+		// TODO: block until page is received (return data) or confirmed absent (throw ENOENT)
 		return null;
 	}
 
 	@Override
 	public File open(String path, int mode) throws IOException {
-		throw new UnsupportedOperationException();
+		// TODO: need this
+		return null;
 	}
 
 	@Override

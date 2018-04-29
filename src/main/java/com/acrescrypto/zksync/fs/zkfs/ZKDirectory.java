@@ -92,12 +92,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 		}
 	}
 	
-	@Override
-	public Iterator<String> listRecursiveIterator(int opts) throws IOException {
-		// TODO P2P: Auto-generated method stub
-		return null;
-	}
-
 	public long inodeForName(String name) throws IOException {
 		if(!entries.containsKey(name)) {
 			throw new ENOENTException(Paths.get(path, name).toString());

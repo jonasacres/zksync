@@ -7,13 +7,6 @@ import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.compositefs.CompositeFS;
 
-/** TODO P2P: Review key management.
- * Keeping separate cipher and auth keys from totally independent entropy sources is cumbersome, and probably not even a
- * serious security advantage. It was nice on paper, but it's at the point where I have to keep two separate seed keys,
- * which is not practical. Rework key hierarchy.
- *
- */
-
 public class ZKArchiveConfig {
 	
 	public final static int CONFIG_MAGIC = 0x6CF2AA14;
@@ -29,15 +22,16 @@ public class ZKArchiveConfig {
 	public final static int KEY_TYPE_ROOT = 2;
 
 	public final static int KEY_INDEX_ARCHIVE = 0;
-	public final static int KEY_INDEX_PAGE = 1;
-	public final static int KEY_INDEX_PAGE_MERKLE = 2;
-	public final static int KEY_INDEX_REVISION = 3;
-	public final static int KEY_INDEX_CONFIG_FILE = 4;
-	public final static int KEY_INDEX_REVISION_TREE = 5;
-	public final static int KEY_INDEX_SEED = 6;
-	public final static int KEY_INDEX_SEED_REG = 7;
-	public final static int KEY_INDEX_SEED_TEMPORAL = 8;
-	public final static int KEY_INDEX_LOCAL = 9;
+	public final static int KEY_INDEX_LOCAL = 1;
+	public final static int KEY_INDEX_PAGE = 2;
+	public final static int KEY_INDEX_PAGE_MERKLE = 3;
+	public final static int KEY_INDEX_REVISION = 4;
+	public final static int KEY_INDEX_CONFIG_FILE = 5;
+	public final static int KEY_INDEX_REVISION_TREE = 6;
+	public final static int KEY_INDEX_SEED = 7;
+	public final static int KEY_INDEX_SEED_REG = 8;
+	public final static int KEY_INDEX_SEED_TEMPORAL = 9;
+	public final static int KEY_INDEX_STORED_ACCESS = 10;
 	
 	protected byte[] archiveId; // derived from archive root; will later include public key (TODO)
 

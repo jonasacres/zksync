@@ -10,7 +10,6 @@ public interface Directory {
 	public String[] list() throws IOException;
 	public String[] list(int opts) throws IOException;
 	public String[] listRecursive() throws IOException;
-	public Iterator<String> listRecursiveIterator(int opts) throws IOException;
 	
 	public boolean contains(String entry) throws IOException;
 	public String[] listRecursive(int opts) throws IOException;

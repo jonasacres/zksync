@@ -196,11 +196,20 @@ public class SSHFS extends FS {
 
 	@Override
 	public void mknod(String path, int type, int major, int minor) throws IOException {
-		String typeChars[] = { "c", "b", "p" };
-		if(type < 0 || type >= typeChars.length) throw new IllegalArgumentException();
+		String typeStr;
+		switch(type) {
+		case Stat.TYPE_CHARACTER_DEVICE:
+			typeStr = "c";
+			break;
+		case Stat.TYPE_BLOCK_DEVICE:
+			typeStr = "b";
+			break;
+		default:
+			throw new IllegalArgumentException(String.format("Illegal node type: %d", type));
+		}
 		
 		privilegedExecAndCheck("mknod", String.format("%s \"%s\" %d %d",
-				typeChars[type],
+				typeStr,
 				qualifiedPath(path),
 				major,
 				minor));
