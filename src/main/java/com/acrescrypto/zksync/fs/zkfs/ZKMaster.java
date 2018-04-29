@@ -18,7 +18,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected StoredAccess storedAccess;
 	protected Key localKey;
 	protected LinkedList<ArchiveAccessor> accessors = new LinkedList<ArchiveAccessor>();
-	protected HashSet<ZKArchive> allArchives;
+	protected HashSet<ZKArchive> allArchives = new HashSet<ZKArchive>();
 	
 	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) {
 		return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
