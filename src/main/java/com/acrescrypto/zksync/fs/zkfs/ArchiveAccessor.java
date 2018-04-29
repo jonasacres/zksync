@@ -50,15 +50,15 @@ public class ArchiveAccessor {
 	protected HashSet<ZKArchive> knownArchives = new HashSet<ZKArchive>();
 	protected ArrayList<ArchiveAccessorDiscoveryCallback> callbacks = new ArrayList<ArchiveAccessorDiscoveryCallback>();
 	
-	public interface ArchiveAccessorDiscoveryCallback {
-		void discoveredArchive(ZKArchive archive);
-	}
-	
 	public interface ArchiveDiscovery {
 		void discoverArchives(ArchiveAccessor accessor);
 		void stopDiscoveringArchives(ArchiveAccessor accessor);
 	}
 	
+	public interface ArchiveAccessorDiscoveryCallback {
+		void discoveredArchive(ZKArchive archive);
+	}	
+
 	public ArchiveAccessor(ZKMaster master, Key root, int type) {
 		this.master = master;
 		this.type = type;
@@ -76,10 +76,17 @@ public class ArchiveAccessor {
 	
 	public ArchiveAccessor addDefaultDiscoveries() {
 		this.addDiscovery(DHTClient.defaultDHT());
-		// TODO P2P: filesystem discovery
 		// TODO P2P: direct peer discovery
 		// TODO P2P: mdns/udp multicast/other lan discovery?
 		return this;
+	}
+	
+	public void discoveredArchive(ZKArchive archive) {
+		if(knownArchives.contains(archive)) return;
+		knownArchives.add(archive);
+		for(ArchiveAccessorDiscoveryCallback callback : callbacks) {
+			callback.discoveredArchive(archive);
+		}
 	}
 	
 	public ArchiveAccessor addDiscovery(ArchiveDiscovery discovery) {

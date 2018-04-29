@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.LinkedList;
 
 import com.acrescrypto.zksync.Util;
@@ -8,14 +9,16 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
+import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveAccessorDiscoveryCallback;
 
-public class ZKMaster {
+public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected CryptoSupport crypto;
 	protected FS storage;
 	protected PassphraseProvider passphraseProvider;
 	protected StoredAccess storedAccess;
 	protected Key localKey;
 	protected LinkedList<ArchiveAccessor> accessors = new LinkedList<ArchiveAccessor>();
+	protected HashSet<ZKArchive> allArchives;
 	
 	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) {
 		return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
@@ -30,6 +33,14 @@ public class ZKMaster {
 		localKey = new Key(crypto, crypto.deriveKeyFromPassphrase(passphrase));
 		
 		this.storedAccess = new StoredAccess(this);
+		loadStoredAccessors();
+	}
+	
+	public void loadStoredAccessors() {
+		try {
+			storedAccess.read();
+		} catch (IOException e) {
+		}
 	}
 	
 	public CryptoSupport getCrypto() {
@@ -48,11 +59,7 @@ public class ZKMaster {
 		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive '" + description + "'");
 		byte[] passphraseRootRaw = crypto.deriveKeyFromPassphrase(passphrase);
 		Key passphraseRoot = new Key(crypto, passphraseRootRaw);
-		ArchiveAccessor accessor = accessorForRoot(passphraseRoot);
-		if(accessor == null) {
-			accessor = makeAccessorForRoot(passphraseRoot, false);
-		}
-		
+		ArchiveAccessor accessor = makeAccessorForRoot(passphraseRoot, false);
 		ZKArchiveConfig config = new ZKArchiveConfig(accessor, description, pageSize);
 		return new ZKArchive(config);
 	}
@@ -65,7 +72,7 @@ public class ZKMaster {
 		return storage.scopedFS(storagePathForArchiveId(archiveId));
 	}
 	
-	public ArchiveAccessor accessorForRoot(Key rootKey) {
+	public synchronized ArchiveAccessor accessorForRoot(Key rootKey) {
 		for(ArchiveAccessor accessor : accessors) {
 			if(!accessor.isSeedOnly()) {
 				if(accessor.passphraseRoot.equals(rootKey)) return accessor;
@@ -77,9 +84,22 @@ public class ZKMaster {
 		return null;
 	}
 	
-	public ArchiveAccessor makeAccessorForRoot(Key rootKey, boolean isSeed) {
-		ArchiveAccessor accessor = new ArchiveAccessor(this, rootKey, isSeed ? ArchiveAccessor.KEY_ROOT_SEED : ArchiveAccessor.KEY_ROOT_PASSPHRASE);
+	public synchronized ArchiveAccessor makeAccessorForRoot(Key rootKey, boolean isSeed) {
+		ArchiveAccessor accessor = accessorForRoot(rootKey);
+		if(accessor != null) return accessor;
+		
+		accessor = new ArchiveAccessor(this, rootKey, isSeed ? ArchiveAccessor.KEY_ROOT_SEED : ArchiveAccessor.KEY_ROOT_PASSPHRASE);
+		accessor.addCallback(this);
+		ArchiveAccessor existing = accessorForRoot(accessor.seedRoot);
+		if(existing != null) {
+			accessors.remove(existing);
+		}
 		accessors.add(accessor);
 		return accessor;
+	}
+
+	@Override
+	public void discoveredArchive(ZKArchive archive) {
+		allArchives.add(archive);
 	}
 }

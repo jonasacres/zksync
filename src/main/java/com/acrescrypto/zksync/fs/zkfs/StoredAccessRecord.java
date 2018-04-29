@@ -53,7 +53,7 @@ public class StoredAccessRecord {
 		this.seedOnly = type != 0;
 		Key key = new Key(master.crypto, keyMaterial);
 		
-		ArchiveAccessor accessor = new ArchiveAccessor(master, key, type);
+		ArchiveAccessor accessor = master.makeAccessorForRoot(key, seedOnly);
 		ZKArchiveConfig config = new ZKArchiveConfig(accessor, archiveId);
 		archive = new ZKArchive(config);
 	}

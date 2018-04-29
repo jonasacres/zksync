@@ -94,6 +94,7 @@ public class StoredAccess implements ArchiveDiscovery {
 	}
 	
 	protected void deserialize(byte[] serialized) throws IOException {
+		records = new ArrayList<StoredAccessRecord>();
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		while(buf.hasRemaining()) {
 			if(buf.remaining() < 2) throw new EINVALException("invalid stored access file");

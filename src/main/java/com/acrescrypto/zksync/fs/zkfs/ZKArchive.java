@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 import com.acrescrypto.zksync.HashCache;
 import com.acrescrypto.zksync.Util;
@@ -39,6 +40,8 @@ public class ZKArchive {
 		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
 			return tag.getFS();
 		}, (RefTag tag, ZKFS fs) -> {});
+		
+		this.config.accessor.discoveredArchive(this);
 	}
 	
 	public ZKFS openRevision(byte[] revision) throws IOException {
@@ -87,5 +90,10 @@ public class ZKArchive {
 
 	public ZKArchiveConfig getConfig() {
 		return config;
+	}
+	
+	@Override
+	public int hashCode() {
+		return ByteBuffer.wrap(config.archiveId).getInt();
 	}
 }
