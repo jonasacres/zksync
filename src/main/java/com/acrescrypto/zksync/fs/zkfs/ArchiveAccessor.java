@@ -9,13 +9,43 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 
 public class ArchiveAccessor {
-	public final static int ROOT_TYPE_PASSPHRASE = 0;
-	public final static int ROOT_TYPE_SEED = 1;
+	public final static int TEMPORAL_SEED_KEY_INTERVAL_MS = 1000*60*60*3; // Rotate temporal seed IDs every 3 hours
+
+	public final static int KEY_ROOT_PASSPHRASE = 0;
+	public final static int KEY_ROOT_ARCHIVE = 1;
+	public final static int KEY_ROOT_SEED = 2;
+	public final static int KEY_ROOT_LOCAL = 3;
 	
-	public final static int TEMPORAL_SEED_KEY_INTERVAL_SECONDS = 60*60*3; // Rotate temporal seed IDs every 3 hours
+	public final static int KEY_TYPE_CIPHER = 0;
+	public final static int KEY_TYPE_AUTH = 1;
+	public final static int KEY_TYPE_ROOT = 2;
+
+	public final static int KEY_INDEX_ARCHIVE = 0;
+	public final static int KEY_INDEX_LOCAL = 1;
+	public final static int KEY_INDEX_PAGE = 2;
+	public final static int KEY_INDEX_PAGE_MERKLE = 3;
+	public final static int KEY_INDEX_REVISION = 4;
+	public final static int KEY_INDEX_CONFIG_FILE = 5;
+	public final static int KEY_INDEX_REVISION_TREE = 6;
+	public final static int KEY_INDEX_SEED = 7;
+	public final static int KEY_INDEX_SEED_REG = 8;
+	public final static int KEY_INDEX_SEED_TEMPORAL = 9;
+	public final static int KEY_INDEX_STORED_ACCESS = 10;
 	
-	protected Key seedRoot, seedId, seedRegId, configFileKey;
-	protected byte[] configFileTag;
+	protected ZKMaster master;
+
+	protected Key passphraseRoot; // derived from passphrase; used to generate seedRoot and configFileKey/Tag
+	protected Key seedRoot; // derived from passphrase; used to participate in DHT and peering, cannot decipher archives
+	protected Key localRoot; // derived from locally-stored entropy combined with seedRoot; encrypts user preferences and any other data not shared with peers
+	
+	protected Key seedId; // derived from seed root; identifies archive family (all archives bearing the same passphrase)
+	protected Key seedRegId; // derived from seed root; unique identifier for registering archive family
+	
+	protected Key configFileKey; // derived from passphrase root; used to encrypt configuration file
+	protected byte[] configFileTag; // derived from passphrase root; used to set location in filesystem of config file
+	
+	protected int type; // KEY_ROOT_PASSPHRASE or KEY_ROOT_SEED
+
 	protected HashSet<ArchiveDiscovery> discoveryMethods = new HashSet<ArchiveDiscovery>();
 	protected HashSet<ZKArchive> knownArchives = new HashSet<ZKArchive>();
 	protected ArrayList<ArchiveAccessorDiscoveryCallback> callbacks = new ArrayList<ArchiveAccessorDiscoveryCallback>();
@@ -29,8 +59,19 @@ public class ArchiveAccessor {
 		void stopDiscoveringArchives(ArchiveAccessor accessor);
 	}
 	
-	public ArchiveAccessor(Key root, int type) {
-		derive(root, type);
+	public ArchiveAccessor(ZKMaster master, Key root, int type) {
+		this.master = master;
+		this.type = type;
+		switch(type) {
+		case KEY_ROOT_PASSPHRASE:
+			deriveFromPassphraseRoot(root);
+			break;
+		case KEY_ROOT_SEED:
+			deriveFromSeedRoot(root);
+			break;
+		default:
+			throw new RuntimeException("Invalid key type " + type);
+		}
 	}
 	
 	public ArchiveAccessor addDefaultDiscoveries() {
@@ -72,49 +113,62 @@ public class ArchiveAccessor {
 		return this;
 	}
 	
-	protected void derive(Key root, int type) {
-		switch(type) {
-		case ROOT_TYPE_PASSPHRASE:
-			seedRoot = root.derive(0x00, new byte[0]);
-			configFileKey = root.derive(0x01, new byte[0]);
-			configFileTag = root.derive(0x02, new byte[0]).getRaw();
-		case ROOT_TYPE_SEED:
-			seedId = seedRoot.derive(0x00, new byte[0]);
-			seedRegId = seedRoot.derive(0x01, new byte[0]);
-			break;
-		default:
-			throw new RuntimeException("Unsupported key type " + type);
-		}
+	public Collection<ZKArchive> knownArchives() {
+		return knownArchives;
 	}
 	
-	public void discoveredArchive(ZKArchive archive) {
-		for(ArchiveAccessorDiscoveryCallback callback : callbacks) {
-			callback.discoveredArchive(archive);
-		}
+	public boolean isSeedOnly() {
+		return passphraseRoot == null;
+	}
+
+	public Key deriveKey(int root, int type, int index, byte[] tweak) {
+		Key[] keys = { passphraseRoot, null, seedRoot, localRoot };
+		if(root >= keys.length || keys[root] == null) throw new IllegalArgumentException();
+		return keys[root].derive(((type & 0xFFFF) << 16) | (index & 0xFFFF), tweak);
 	}
 	
-	public Key temporalSeedId(int offset) {
-		return temporalSeedDerivative(0x00, offset);
+	public Key deriveKey(int root, int type, int index) {
+		return deriveKey(root, type, index, new byte[0]);
+	}	
+
+	public byte[] temporalProof(int step, byte[] sharedSecret) {
+		if(isSeedOnly()) return master.crypto.rng(master.crypto.symKeyLength()); // makes logic cleaner for protocol implementation
+		assert(0 <= step && step <= Byte.MAX_VALUE);
+		ByteBuffer timestamp = ByteBuffer.allocate(9);
+		timestamp.putShort((byte) step);
+		timestamp.putLong(System.currentTimeMillis());
+		return passphraseRoot.derive(0x03, timestamp.array()).getRaw();
 	}
 	
-	public Key temporalSeedKey(int offset) {
-		return temporalSeedDerivative(0x01, offset);
+	protected void deriveFromPassphraseRoot(Key passphraseRoot) {
+		this.passphraseRoot = passphraseRoot;
+		deriveFromSeedRoot(deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_ROOT, KEY_INDEX_SEED));		
+		configFileKey = deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_FILE, new byte[0]);
+		configFileTag = deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_AUTH, KEY_INDEX_CONFIG_FILE, new byte[0]).getRaw();
 	}
 	
-	protected Key temporalSeedDerivative(int index, int offset) {
+	protected void deriveFromSeedRoot(Key seedRoot) {
+		this.seedRoot = seedRoot;
+		seedId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED, new byte[0]);
+		seedRegId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED_REG, new byte[0]);
+		localRoot = deriveKey(KEY_ROOT_SEED, KEY_TYPE_ROOT, KEY_INDEX_LOCAL, master.localKey.getRaw());
+	}
+	
+	protected Key temporalSeedId(int offset) {
+		return temporalSeedDerivative(true, offset);
+	}
+	
+	protected Key temporalSeedKey(int offset) {
+		return temporalSeedDerivative(false, offset);
+	}
+	
+	protected Key temporalSeedDerivative(boolean isAuth, int offset) {
 		ByteBuffer timeTweak = ByteBuffer.allocate(8);
 		timeTweak.putLong(timeSlice(offset));
-		return seedId.derive(index, timeTweak.array());
+		return deriveKey(KEY_ROOT_SEED, isAuth ? KEY_TYPE_AUTH : KEY_TYPE_CIPHER, KEY_INDEX_SEED_TEMPORAL, timeTweak.array());
 	}
 	
 	protected long timeSlice(int offset) {
-		/* TODO P2P: This is going to cause the DHT to get mobbed every rotation interval as everyone reregisters.
-		 * Need to smear this out somehow. At any given time, we could be listening for up to 3 IDs per archive.
-		 */
-		return System.currentTimeMillis()/(1000*TEMPORAL_SEED_KEY_INTERVAL_SECONDS) + offset;
-	}
-	
-	public Collection<ZKArchive> knownArchives() {
-		return knownArchives;
+		return TEMPORAL_SEED_KEY_INTERVAL_MS * (System.currentTimeMillis()/TEMPORAL_SEED_KEY_INTERVAL_MS + offset);
 	}
 }

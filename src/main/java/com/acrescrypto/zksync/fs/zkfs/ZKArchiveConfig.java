@@ -9,46 +9,20 @@ import com.acrescrypto.zksync.fs.compositefs.CompositeFS;
 
 public class ZKArchiveConfig {
 	
+	/** TODO: Reallocate responsibilities between this and ArchiveAccessor.
+	 * Accessor should have all keys except archiveRoot.
+	 */
+	
 	public final static int CONFIG_MAGIC = 0x6CF2AA14;
 	public final static int CONFIG_SECTION_ARCHIVE_INFO = 0x0001;
 	
-	public final static int KEY_ROOT_PASSPHRASE = 0;
-	public final static int KEY_ROOT_ARCHIVE = 1;
-	public final static int KEY_ROOT_SEED = 2;
-	public final static int KEY_ROOT_LOCAL = 3;
-	
-	public final static int KEY_TYPE_CIPHER = 0;
-	public final static int KEY_TYPE_AUTH = 1;
-	public final static int KEY_TYPE_ROOT = 2;
-
-	public final static int KEY_INDEX_ARCHIVE = 0;
-	public final static int KEY_INDEX_LOCAL = 1;
-	public final static int KEY_INDEX_PAGE = 2;
-	public final static int KEY_INDEX_PAGE_MERKLE = 3;
-	public final static int KEY_INDEX_REVISION = 4;
-	public final static int KEY_INDEX_CONFIG_FILE = 5;
-	public final static int KEY_INDEX_REVISION_TREE = 6;
-	public final static int KEY_INDEX_SEED = 7;
-	public final static int KEY_INDEX_SEED_REG = 8;
-	public final static int KEY_INDEX_SEED_TEMPORAL = 9;
-	public final static int KEY_INDEX_STORED_ACCESS = 10;
 	
 	protected byte[] archiveId; // derived from archive root; will later include public key (TODO)
 
-	protected Key passphraseRoot; // derived from passphrase; used to generate seedRoot and configFileKey/Tag
 	protected Key archiveRoot; // randomly generated and stored encrypted in config file; derives most other keys 
-	protected Key seedRoot; // derived from passphrase; used to participate in DHT and peering, cannot decipher archives
-	protected Key localRoot; // derived from locally-stored entropy combined with seedRoot; encrypts user preferences and any other data not shared with peers
-	
-	protected Key seedId; // derived from seed root; identifies archive family (all archives bearing the same passphrase)
-	protected Key seedRegId; // derived from seed root; unique identifier for registering archive family
-	
-	protected Key configFileKey; // derived from passphrase root; used to encrypt configuration file
 	protected byte[] configFileIv; // rng
-	protected byte[] configFileTag; // derived from passphrase root; used to set location in filesystem of config file
-	
-	protected ZKMaster master;
 	protected CompositeFS storage;
+	protected ArchiveAccessor accessor;
 	
 	// NOTE: in theory we support pageSize > MAX_INT, but in practice several operations cast to int and need a refactor
 	// for this to work.
@@ -57,15 +31,13 @@ public class ZKArchiveConfig {
 	
 	/** Read an existing archive. 
 	 * @throws IOException */
-	public ZKArchiveConfig(ZKMaster master, Key key, byte[] archiveId, CompositeFS storage, boolean isSeedKey) throws IOException {
-		this.master = master;
+	public ZKArchiveConfig(ArchiveAccessor accessor, byte[] archiveId) throws IOException {
+		this.accessor = accessor;
 		this.pageSize = -1;
-		this.storage = storage;
+		this.storage = new CompositeFS(accessor.master.storageFsForArchiveId(archiveId));
 		
-		if(isSeedKey) {
-			deriveFromPassphraseRoot(key);
-		} else {
-			deriveFromSeedRoot(key);
+		if(!accessor.isSeedOnly()) {
+			read();
 		}
 		
 		read();
@@ -73,36 +45,25 @@ public class ZKArchiveConfig {
 	
 	/** Create a new archive. 
 	 * @throws IOException */
-	public ZKArchiveConfig(ZKMaster master, Key passphraseRoot, String description, int pageSize) throws IOException {
+	public ZKArchiveConfig(ArchiveAccessor accessor, String description, int pageSize) throws IOException {
 		// TODO: need to establish public key for signing here as well
 		assert(pageSize > 0);
-		this.master = master;
+		assert(!accessor.isSeedOnly());
+		
+		this.accessor = accessor;
 		this.pageSize = pageSize;
 		this.description = description;
-		deriveFromPassphraseRoot(passphraseRoot);
-		initRoots();
-		this.storage = new CompositeFS(master.storage.scopedFS("archives/" + Util.bytesToHex(archiveId)));
-	}
-	
-	public boolean isSeedOnly() {
-		return passphraseRoot != null;
+		
+		initArchiveSpecific();
+		this.storage = new CompositeFS(accessor.master.storageFsForArchiveId(archiveId));
 	}
 	
 	public void isConfigAvailable() {
-		storage.exists(Page.pathForTag(configFileTag));
+		storage.exists(Page.pathForTag(accessor.configFileTag));
 	}
 	
 	public boolean isConfigLoaded() {
 		return archiveRoot != null;
-	}
-	
-	public byte[] temporalProof(int step, byte[] sharedSecret) {
-		if(isSeedOnly()) return master.crypto.rng(master.crypto.symKeyLength()); // makes logic cleaner for protocol implementation
-		assert(0 <= step && step <= Byte.MAX_VALUE);
-		ByteBuffer timestamp = ByteBuffer.allocate(9);
-		timestamp.putShort((byte) step);
-		timestamp.putLong(System.currentTimeMillis());
-		return passphraseRoot.derive(0x03, timestamp.array()).getRaw();
 	}
 	
 	public void parseFile(ByteBuffer contents) {
@@ -133,9 +94,9 @@ public class ZKArchiveConfig {
 		contents.get(desc);
 		description = new String(desc);
 		
-		byte[] archiveRootRaw = new byte[master.crypto.symKeyLength()];		
+		byte[] archiveRootRaw = new byte[accessor.master.crypto.symKeyLength()];		
 		contents.get(archiveRootRaw);
-		archiveRoot = new Key(this.master.crypto, archiveRootRaw);
+		archiveRoot = new Key(accessor.master.crypto, archiveRootRaw);
 	}
 	
 	public byte[] getArchiveId() {
@@ -149,23 +110,22 @@ public class ZKArchiveConfig {
 	public void write() throws IOException {
 		ByteBuffer writeBuf = ByteBuffer.allocate((int) pageSize);
 		writeBuf.put(configFileIv);
-		byte[] ciphertext = configFileKey.encrypt(configFileIv, serialize(), (int) pageSize - configFileIv.length);
+		byte[] ciphertext = accessor.configFileKey.encrypt(configFileIv, serialize(), (int) pageSize - configFileIv.length);
 		writeBuf.put(ciphertext);
 		assertState(!writeBuf.hasRemaining());
 		
-		storage.write(Page.pathForTag(configFileTag), writeBuf.array());
+		storage.write(Page.pathForTag(accessor.configFileTag), writeBuf.array());
 	}
 	
 	public void read() throws IOException {
-		byte[] ciphertext = storage.read(Page.pathForTag(configFileTag));
-		byte[] serialized = configFileKey.decrypt(configFileIv, ciphertext);
+		byte[] ciphertext = storage.read(Page.pathForTag(accessor.configFileTag));
+		byte[] serialized = accessor.configFileKey.decrypt(configFileIv, ciphertext);
 		deserialize(serialized);
 	}
 	
 	public Key deriveKey(int root, int type, int index, byte[] tweak) {
-		Key[] keys = { passphraseRoot, archiveRoot, seedRoot, localRoot };
-		if(type >= keys.length) throw new IllegalArgumentException();
-		return keys[root].derive(((type & 0xFFFF) << 16) | (index & 0xFFFF), tweak);
+		if(root != ArchiveAccessor.KEY_ROOT_PASSPHRASE) return accessor.deriveKey(root, type, index, tweak);
+		return archiveRoot.derive(((type & 0xFFFF) << 16) | (index & 0xFFFF), tweak);
 	}
 	
 	public Key deriveKey(int root, int type, int index) {
@@ -200,7 +160,7 @@ public class ZKArchiveConfig {
 			assertState(buf.remaining() >= 6); // 2-byte type + 4-byte length
 			int type = Util.unsignShort(buf.getShort());
 			int length = buf.getInt();
-			assertState(length >= 8 + master.crypto.symKeyLength());
+			assertState(length >= 8 + accessor.master.crypto.symKeyLength());
 			assertState(buf.remaining() >= length);
 			if(type != CONFIG_SECTION_ARCHIVE_INFO) {
 				// only support one record type in this version...
@@ -211,70 +171,34 @@ public class ZKArchiveConfig {
 			this.pageSize = buf.getLong();
 			assertState(this.pageSize > 0 && this.pageSize < Integer.MAX_VALUE); // supporting really long pages is not easy right now
 			
-			byte[] archiveRootRaw = new byte[master.crypto.symKeyLength()];
-			this.archiveRoot = new Key(master.crypto, archiveRootRaw);
-			byte[] descriptionRaw = new byte[length - 8 + master.crypto.symKeyLength()];
+			byte[] archiveRootRaw = new byte[accessor.master.crypto.symKeyLength()];
+			this.archiveRoot = new Key(accessor.master.crypto, archiveRootRaw);
+			byte[] descriptionRaw = new byte[length - 8 + accessor.master.crypto.symKeyLength()];
 			buf.get(descriptionRaw);
 			this.description = new String(descriptionRaw);
 			break;
 		}
 	}
 	
-	protected void initRoots() {
-		archiveRoot = new Key(master.crypto, master.crypto.rng(master.crypto.symKeyLength()));
-		configFileIv = master.crypto.rng(master.crypto.symIvLength());
+	protected void initArchiveSpecific() {
+		archiveRoot = new Key(accessor.master.crypto, accessor.master.crypto.rng(accessor.master.crypto.symKeyLength()));
+		configFileIv = accessor.master.crypto.rng(accessor.master.crypto.symIvLength());
 		calculateArchiveId();
-	}
-	
-	protected void deriveFromPassphraseRoot(Key passphraseRoot) {
-		this.passphraseRoot = passphraseRoot;
-		deriveFromSeedRoot(deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_ROOT, KEY_INDEX_SEED));		
-		configFileKey = deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_FILE, new byte[0]);
-		configFileTag = deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_AUTH, KEY_INDEX_CONFIG_FILE, new byte[0]).getRaw();
-	}
-	
-	protected void deriveFromSeedRoot(Key seedRoot) {
-		this.seedRoot = seedRoot;
-		seedId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED, new byte[0]);
-		seedRegId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED_REG, new byte[0]);
-		localRoot = deriveKey(KEY_ROOT_SEED, KEY_TYPE_ROOT, KEY_INDEX_LOCAL, master.localKey.getRaw());
-	}
-	
-	protected Key keyFileTextKey(byte[] passphrase) {
-		return new Key(master.crypto, master.crypto.deriveKeyFromPassphrase(passphrase, "zksync-salt".getBytes()));
-	}
-	
-	protected Key temporalSeedId(int offset) {
-		return temporalSeedDerivative(true, offset);
-	}
-	
-	protected Key temporalSeedKey(int offset) {
-		return temporalSeedDerivative(false, offset);
-	}
-	
-	protected Key temporalSeedDerivative(boolean isAuth, int offset) {
-		ByteBuffer timeTweak = ByteBuffer.allocate(8);
-		timeTweak.putLong(timeSlice(offset));
-		return deriveKey(KEY_ROOT_SEED, isAuth ? KEY_TYPE_AUTH : KEY_TYPE_CIPHER, KEY_INDEX_SEED_TEMPORAL, timeTweak.array());
-	}
-	
-	protected long timeSlice(int offset) {
-		return timeSliceInterval() * (System.currentTimeMillis()/timeSliceInterval() + offset);
-	}
-	
-	protected int timeSliceInterval() {
-		return 1000*60*60*3; // 3 hours
 	}
 	
 	protected void calculateArchiveId() {
 		ByteBuffer keyMaterialBuf = ByteBuffer.allocate(archiveRoot.getRaw().length);
 		keyMaterialBuf.put(archiveRoot.getRaw());
 		assertState(!keyMaterialBuf.hasRemaining());
-		archiveId = passphraseRoot.authenticate(keyMaterialBuf.array());
+		archiveId = accessor.passphraseRoot.authenticate(keyMaterialBuf.array());
 		// TODO: needs to include signing key
 	}
 	
 	protected void assertState(boolean state) {
 		if(!state) throw new RuntimeException();
+	}
+
+	public ArchiveAccessor getAccessor() {
+		return accessor;
 	}
 }

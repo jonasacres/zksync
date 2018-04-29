@@ -24,7 +24,7 @@ public class PageMerkle {
 		chunkTagSource.put(refTag.hash);
 		chunkTagSource.putInt(chunk);
 		
-		Key authKey = refTag.archive.config.deriveKey(ZKArchiveConfig.KEY_INDEX_ARCHIVE, ZKArchiveConfig.KEY_TYPE_AUTH, ZKArchiveConfig.KEY_INDEX_PAGE_MERKLE, refTag.getHash());
+		Key authKey = refTag.archive.config.deriveKey(ArchiveAccessor.KEY_INDEX_ARCHIVE, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE_MERKLE, refTag.getHash());
 		byte[] chunkTag = authKey.authenticate(chunkTagSource.array());
 		return ZKFS.pathForHash(chunkTag);
 	}
@@ -238,7 +238,7 @@ public class PageMerkle {
 	
 	/** key used to encrypt serialized merkle tree. */
 	private Key cipherKey(RefTag refTag) {
-		return archive.config.deriveKey(ZKArchiveConfig.KEY_INDEX_ARCHIVE, ZKArchiveConfig.KEY_TYPE_CIPHER, ZKArchiveConfig.KEY_INDEX_PAGE_MERKLE, refTag.getBytes());
+		return archive.config.deriveKey(ArchiveAccessor.KEY_INDEX_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_PAGE_MERKLE, refTag.getBytes());
 	}
 	
 	/** test if a given page has a tag set yet or not. */

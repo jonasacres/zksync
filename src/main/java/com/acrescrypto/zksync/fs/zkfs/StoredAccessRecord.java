@@ -6,14 +6,13 @@ import java.nio.ByteBuffer;
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.EINVALException;
-import com.acrescrypto.zksync.fs.compositefs.CompositeFS;
 
 public class StoredAccessRecord {
 	protected ZKArchive archive;
 	protected boolean seedOnly;
 	
 	public StoredAccessRecord(ZKArchive archive, boolean seedOnly) {
-		this.seedOnly = seedOnly || archive.config.isSeedOnly();
+		this.seedOnly = seedOnly;
 		this.archive = archive;
 	}
 	
@@ -26,10 +25,14 @@ public class StoredAccessRecord {
 	}
 	
 	protected byte[] serialize() {
+		boolean writeAsSeed = seedOnly || archive.config.accessor.isSeedOnly();
+		int type = writeAsSeed ? ArchiveAccessor.KEY_INDEX_SEED : ArchiveAccessor.KEY_ROOT_PASSPHRASE;
+		Key key = writeAsSeed ? archive.config.accessor.seedRoot : archive.config.accessor.passphraseRoot;
+		
 		ByteBuffer buf = ByteBuffer.allocate(2+1 + archive.master.crypto.symKeyLength() + archive.master.crypto.hashLength());
 		buf.putShort((short) 0); // version
-		buf.put((byte) (seedOnly ? 1 : 0)); // type
-		buf.put((seedOnly ? archive.config.passphraseRoot : archive.config.seedRoot).getRaw());
+		buf.put((byte) type); // type
+		buf.put(key.getRaw());
 		buf.put(archive.config.archiveId);
 		return buf.array();
 	}
@@ -50,8 +53,8 @@ public class StoredAccessRecord {
 		this.seedOnly = type != 0;
 		Key key = new Key(master.crypto, keyMaterial);
 		
-		CompositeFS fs = new CompositeFS(master.storageFsForArchiveId(archiveId));
-		ZKArchiveConfig config = new ZKArchiveConfig(master, key, archiveId, fs, seedOnly);
+		ArchiveAccessor accessor = new ArchiveAccessor(master, key, type);
+		ZKArchiveConfig config = new ZKArchiveConfig(accessor, archiveId);
 		archive = new ZKArchive(config);
 	}
 }

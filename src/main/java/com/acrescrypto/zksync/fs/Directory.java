@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
-import java.util.Iterator;
 
 public interface Directory {
 	public final static int LIST_OPT_OMIT_DIRECTORIES = 1 << 0;

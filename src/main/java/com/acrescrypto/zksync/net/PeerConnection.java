@@ -107,9 +107,9 @@ public class PeerConnection implements PeerSocketDelegate {
 	protected byte[] proofResponse(byte[] proof) throws ProtocolViolationException {
 		assertState(proof.length == socket.swarm.archive.getCrypto().hashLength());
 		// temporalProof returns random garbage if we are not a full peer
-		if(Arrays.equals(proof, socket.swarm.archive.getConfig().temporalProof(0, socket.getSharedSecret()))) {
+		if(Arrays.equals(proof, socket.swarm.archive.getConfig().getAccessor().temporalProof(0, socket.getSharedSecret()))) {
 			peerType = PEER_TYPE_FULL;
-			return socket.swarm.archive.getConfig().temporalProof(1, socket.getSharedSecret());
+			return socket.swarm.archive.getConfig().getAccessor().temporalProof(1, socket.getSharedSecret());
 		} else {
 			// either their proof is garbage (meaning they're blind), or we're a blind seed; send garbage
 			peerType = PEER_TYPE_BLIND;

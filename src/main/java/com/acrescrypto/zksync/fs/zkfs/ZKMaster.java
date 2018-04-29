@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.util.LinkedList;
 
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
@@ -14,6 +15,7 @@ public class ZKMaster {
 	protected PassphraseProvider passphraseProvider;
 	protected StoredAccess storedAccess;
 	protected Key localKey;
+	protected LinkedList<ArchiveAccessor> accessors = new LinkedList<ArchiveAccessor>();
 	
 	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) {
 		return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
@@ -46,7 +48,12 @@ public class ZKMaster {
 		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive '" + description + "'");
 		byte[] passphraseRootRaw = crypto.deriveKeyFromPassphrase(passphrase);
 		Key passphraseRoot = new Key(crypto, passphraseRootRaw);
-		ZKArchiveConfig config = new ZKArchiveConfig(this, passphraseRoot, description, pageSize);
+		ArchiveAccessor accessor = accessorForRoot(passphraseRoot);
+		if(accessor == null) {
+			accessor = makeAccessorForRoot(passphraseRoot, false);
+		}
+		
+		ZKArchiveConfig config = new ZKArchiveConfig(accessor, description, pageSize);
 		return new ZKArchive(config);
 	}
 	
@@ -56,5 +63,23 @@ public class ZKMaster {
 
 	public FS storageFsForArchiveId(byte[] archiveId) throws IOException {
 		return storage.scopedFS(storagePathForArchiveId(archiveId));
+	}
+	
+	public ArchiveAccessor accessorForRoot(Key rootKey) {
+		for(ArchiveAccessor accessor : accessors) {
+			if(!accessor.isSeedOnly()) {
+				if(accessor.passphraseRoot.equals(rootKey)) return accessor;
+			}
+			
+			if(accessor.seedRoot.equals(rootKey)) return accessor;
+		}
+		
+		return null;
+	}
+	
+	public ArchiveAccessor makeAccessorForRoot(Key rootKey, boolean isSeed) {
+		ArchiveAccessor accessor = new ArchiveAccessor(this, rootKey, isSeed ? ArchiveAccessor.KEY_ROOT_SEED : ArchiveAccessor.KEY_ROOT_PASSPHRASE);
+		accessors.add(accessor);
+		return accessor;
 	}
 }

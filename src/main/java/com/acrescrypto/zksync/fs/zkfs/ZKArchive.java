@@ -29,12 +29,12 @@ public class ZKArchive {
 	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
 	
 	public ZKArchive(ZKArchiveConfig config) throws IOException {
-		this.master = config.master;
+		this.master = config.accessor.master;
 		this.storage = config.storage;
-		this.crypto = config.master.crypto;
+		this.crypto = config.accessor.master.crypto;
 		
 		this.config = config;
-		Key localKey = config.deriveKey(ZKArchiveConfig.KEY_ROOT_LOCAL, ZKArchiveConfig.KEY_TYPE_CIPHER, ZKArchiveConfig.KEY_INDEX_CONFIG_FILE);
+		Key localKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_CONFIG_FILE);
 		this.localConfig = new LocalConfig(storage, localKey);
 		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
 			return tag.getFS();
