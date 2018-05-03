@@ -83,7 +83,7 @@ public class DiffSetTest {
 	@Test
 	public void testDetectsFakeDifferencesBetweenSiblingsForNonImmediates() throws IOException {
 		ZKFS fs = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
-		byte[] buf = new byte[(int) fs.getArchive().getConfig().getPageSize()+1];
+		byte[] buf = new byte[fs.getArchive().getConfig().getPageSize()+1];
 		fs.write("unmodified", buf);
 		fs.write("modified", buf);
 		RefTag parent = fs.commit();

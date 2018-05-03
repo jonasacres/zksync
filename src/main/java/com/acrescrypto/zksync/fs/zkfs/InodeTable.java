@@ -219,7 +219,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	protected int inodesPerPage() {
-		return (int) zkfs.archive.config.pageSize/inodeSize();
+		return zkfs.archive.config.pageSize/inodeSize();
 	}
 	
 	/** place an inode into the table, overwriting what's already there (assumes inode id is properly set) */

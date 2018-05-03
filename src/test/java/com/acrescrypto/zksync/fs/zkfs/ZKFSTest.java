@@ -51,7 +51,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	@Test
 	public void testMultipageWrite() throws IOException {
-		byte[] text = new byte[(int) (10*zkscratch.getArchive().config.pageSize)];
+		byte[] text = new byte[10*zkscratch.getArchive().config.pageSize];
 		for(int i = 0; i < text.length; i++) text[i] = (byte) (i % 256);
 		scratch.write("multipage-write", text);
 		assertTrue(Arrays.equals(text, scratch.read("multipage-write")));
@@ -59,7 +59,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	@Test
 	public void testMultipageModify() throws IOException {
-		byte[] text = new byte[(int) (10*zkscratch.getArchive().config.pageSize)];
+		byte[] text = new byte[10*zkscratch.getArchive().config.pageSize];
 		ByteBuffer buf = ByteBuffer.wrap(text);
 		for(int i = 0; i < text.length; i++) text[i] = (byte) (i % 256);
 		scratch.write("multipage-modify", text);
@@ -80,7 +80,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	@Test
 	public void testMultipageTruncateSmaller() throws IOException {
-		byte[] text = new byte[(int) (10*zkscratch.getArchive().config.pageSize)];
+		byte[] text = new byte[10*zkscratch.getArchive().config.pageSize];
 		for(int i = 0; i < text.length; i++) text[i] = (byte) (i % 256);
 		scratch.write("multipage-truncate", text);
 		
@@ -134,7 +134,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testPageBoundaryWrites() throws IOException {
 		for(int pageCount = 1; pageCount <= 3; pageCount++) {
 			for(int mod = -1; mod <= 1; mod++) {
-				byte[] buf = generateFileData("page-boundary-test", (int) (pageCount*zkscratch.getArchive().config.pageSize + mod));
+				byte[] buf = generateFileData("page-boundary-test", pageCount*zkscratch.getArchive().config.pageSize + mod);
 				for(int i = 0; i < buf.length; i++) buf[i] = (byte) (i & 0xff);
 				zkscratch.write("page-boundary-test", buf);
 				
@@ -147,12 +147,12 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testPageBoundaryExtensions() throws IOException {
 		int pageCount = 5;
-		byte[] testData = generateFileData("page-boundary", (int) (pageCount*zkscratch.getArchive().config.pageSize));
+		byte[] testData = generateFileData("page-boundary", pageCount*zkscratch.getArchive().config.pageSize);
 		ByteBuffer testBuf = ByteBuffer.wrap(testData);
 		
 		ZKFile testFile = zkscratch.open("page-boundary-extension-test", File.O_RDWR|File.O_CREAT);
 		for(int page = 0; page < pageCount; page++) {
-			int[] writeLengths = { 1, (int) zkscratch.getArchive().config.pageSize-2, 1 };
+			int[] writeLengths = { 1, zkscratch.getArchive().config.pageSize-2, 1 };
 			for(int writeLength: writeLengths) {
 				byte[] writeData = new byte[writeLength];
 				testBuf.get(writeData);
@@ -327,8 +327,6 @@ public class ZKFSTest extends FSTestBase {
 	// TODO: open default revision
 	// TODO: open non-default revision
 	// TODO: test alternative page size
-	// TODO: test alternative literal size
-	// TODO: test configurable argon2 parameters
 	
 	
 	protected byte[] generateFileData(String key, int length) {

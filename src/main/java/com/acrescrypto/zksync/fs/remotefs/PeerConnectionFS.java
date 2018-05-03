@@ -9,7 +9,7 @@ import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.net.PeerConnection;
 
-public class RemoteFS extends FS {
+public class PeerConnectionFS extends FS {
 	PeerConnection connection;
 
 	@Override
@@ -119,16 +119,15 @@ public class RemoteFS extends FS {
 
 	@Override
 	public byte[] _read(String path) throws IOException {
-		String trimmed = path.replace("/", "");
-		connection.requestPages(new byte[][] { Util.hexToBytes(trimmed) });
-		// TODO: block until page is received (return data) or confirmed absent (throw ENOENT)
+		byte[] pageTag = Util.hexToBytes(path.replace("/", ""));
+		// TODO P2P: tell the connection we want that page
+		connection.getSocket().getSwarm().waitForPage(pageTag);
 		return null;
 	}
 
 	@Override
 	public File open(String path, int mode) throws IOException {
-		// TODO: need this
-		return null;
+		return new PeerConnectionFile(this, path, mode);
 	}
 
 	@Override
@@ -137,7 +136,7 @@ public class RemoteFS extends FS {
 	}
 	
 	@Override
-	public RemoteFS scopedFS(String subpath) {
+	public PeerConnectionFS scopedFS(String subpath) {
 		throw new UnsupportedOperationException(); // no concept of scoping a RemoteFS
 	}
 }

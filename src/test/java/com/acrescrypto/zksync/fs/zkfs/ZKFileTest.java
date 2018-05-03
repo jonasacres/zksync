@@ -54,7 +54,7 @@ public class ZKFileTest extends FileTestBase {
 	
 	@Test
 	public void testSinglePageWrite() throws IOException {
-		byte[] contents = new byte[(int) zkscratch.archive.config.pageSize];
+		byte[] contents = new byte[zkscratch.archive.config.pageSize];
 		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
 		ZKFile file = zkscratch.open("singlepage-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
 		file.write(contents);
@@ -67,7 +67,7 @@ public class ZKFileTest extends FileTestBase {
 	
 	@Test
 	public void testMultipageWrite() throws IOException {
-		byte[] contents = new byte[(int) (5*zkscratch.archive.config.pageSize)];
+		byte[] contents = new byte[5*zkscratch.archive.config.pageSize];
 		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
 		ZKFile file = zkscratch.open("multipage-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
 		file.write(contents);
@@ -80,7 +80,7 @@ public class ZKFileTest extends FileTestBase {
 	
 	@Test
 	public void testPageTimestampSquashing() throws IOException {
-		byte[] contents = new byte[(int) (5*zkscratch.archive.config.pageSize)];
+		byte[] contents = new byte[5*zkscratch.archive.config.pageSize];
 		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
 		
 		ZKFile file = zkscratch.open("multipage-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
@@ -98,7 +98,7 @@ public class ZKFileTest extends FileTestBase {
 	
 	@Test
 	public void testRandomWrites() throws IOException {
-		int pageSize = (int) zkscratch.archive.config.pageSize;
+		int pageSize = zkscratch.archive.config.pageSize;
 		ZKFile file = zkscratch.open("random-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
 		
 		file.truncate(5*pageSize);

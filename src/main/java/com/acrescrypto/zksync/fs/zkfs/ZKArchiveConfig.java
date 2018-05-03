@@ -9,24 +9,17 @@ import com.acrescrypto.zksync.fs.compositefs.CompositeFS;
 
 public class ZKArchiveConfig {
 	
-	/** TODO: Reallocate responsibilities between this and ArchiveAccessor.
-	 * Accessor should have all keys except archiveRoot.
-	 */
-	
 	public final static int CONFIG_MAGIC = 0x6CF2AA14;
 	public final static int CONFIG_SECTION_ARCHIVE_INFO = 0x0001;
 	
 	
-	protected byte[] archiveId; // derived from archive root; will later include public key (TODO)
+	protected byte[] archiveId; // derived from archive root; will later include public key
 
 	protected Key archiveRoot; // randomly generated and stored encrypted in config file; derives most other keys 
 	protected byte[] configFileIv; // rng
 	protected CompositeFS storage;
 	protected ArchiveAccessor accessor;
-	
-	// NOTE: in theory we support pageSize > MAX_INT, but in practice several operations cast to int and need a refactor
-	// for this to work.
-	protected long pageSize;
+	protected int pageSize;
 	protected String description;
 	
 	/** Read an existing archive. 
@@ -87,7 +80,9 @@ public class ZKArchiveConfig {
 	}
 	
 	public void parseArchiveInfo(ByteBuffer contents) {
-		pageSize = contents.getLong();
+		long longPageSize = contents.getLong();
+		assertState(0 < longPageSize && longPageSize <= Integer.MAX_VALUE);
+		pageSize = (int) longPageSize;
 		
 		int descLen = Util.unsignShort(contents.getShort());
 		byte[] desc = new byte[descLen];
@@ -103,14 +98,14 @@ public class ZKArchiveConfig {
 		return archiveId;
 	}
 	
-	public long getPageSize() {
+	public int getPageSize() {
 		return pageSize;
 	}
 	
 	public void write() throws IOException {
-		ByteBuffer writeBuf = ByteBuffer.allocate((int) pageSize);
+		ByteBuffer writeBuf = ByteBuffer.allocate(pageSize);
 		writeBuf.put(configFileIv);
-		byte[] ciphertext = accessor.configFileKey.encrypt(configFileIv, serialize(), (int) pageSize - configFileIv.length);
+		byte[] ciphertext = accessor.configFileKey.encrypt(configFileIv, serialize(), pageSize - configFileIv.length);
 		writeBuf.put(ciphertext);
 		assertState(!writeBuf.hasRemaining());
 		
@@ -168,8 +163,9 @@ public class ZKArchiveConfig {
 				continue;
 			}
 			
-			this.pageSize = buf.getLong();
-			assertState(this.pageSize > 0 && this.pageSize < Integer.MAX_VALUE); // supporting really long pages is not easy right now
+			long longPageSize = buf.getLong();
+			assertState(longPageSize > 0 && longPageSize <= Integer.MAX_VALUE);
+			this.pageSize = (int) longPageSize; // supporting long (2GB+) page sizes is not easy right now
 			
 			byte[] archiveRootRaw = new byte[accessor.master.crypto.symKeyLength()];
 			this.archiveRoot = new Key(accessor.master.crypto, archiveRootRaw);

@@ -1,41 +1,35 @@
 package com.acrescrypto.zksync.net;
-
-import java.io.ByteArrayInputStream;
+import java.io.EOFException;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.HashSet;
 
-import com.acrescrypto.zksync.LambdaInputStream;
-import com.acrescrypto.zksync.MetaInputStream;
+import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
-import com.acrescrypto.zksync.fs.DirectoryTraverser;
+import com.acrescrypto.zksync.fs.ChunkableFileHandle;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
-import com.acrescrypto.zksync.fs.zkfs.ZKFileCiphertextStream;
 import com.acrescrypto.zksync.net.PeerSocket.PeerSocketDelegate;
 
 public class PeerConnection implements PeerSocketDelegate {
-	public final byte CMD_ACCESS_PROOF = 0x00;
-	public final byte CMD_REQUEST_TIPS = 0x01;
-	public final byte CMD_REQUEST_REF_TAG = 0x02;
-	public final byte CMD_REQUEST_PAGES = 0x03;
-	public final byte CMD_REQUEST_PAGES_IN_RANGE = 0x04;
-	public final byte CMD_REQUEST_PEERS = 0x05;
-	public final byte CMD_ANNOUNCE_TIP = 0x06;
+	public final int CMD_ACCESS_PROOF = 0x00;
+	public final int CMD_ANNOUNCE_PEERS = 0x01;
+	public final int CMD_ANNOUNCE_TAGS = 0x02;
+	public final int CMD_ANNOUNCE_TIPS = 0x03;
+	public final int CMD_REQUEST_ALL = 0x04;
+	public final int CMD_REQUEST_REF_TAGS = 0x05;
+	public final int CMD_REQUEST_REVISION_CONTENTS = 0x06;
+	public final int CMD_REQUEST_TAGS = 0x07;
+	public final int CMD_SEND_PAGE = 0x08;
+	public final int CMD_SET_PAUSED = 0x09;
 	
 	public final int PEER_TYPE_STATIC = 0; // static fileserver; needs subclass to handle
 	public final int PEER_TYPE_BLIND = 1; // has knowledge of seed key, but not archive passphrase; can't decipher data
 	public final int PEER_TYPE_FULL = 2; // live peer with knowledge of archive passphrase
-	
-	public interface PeerConnectionDelegate {
-		void discoveredTip(PeerConnection conn, RefTag tag);
-		void receivedRefTag(PeerConnection conn, RefTag tag);
-		void receivedPage(PeerConnection conn, byte[] tag);
-		void receivedTipFile(PeerConnection conn, byte[] contents);
-	}
 	
 	/** A message can't be sent to the remote peer because this channel hasn't established that we have full read
 	 * access to the archive. */
@@ -50,46 +44,62 @@ public class PeerConnection implements PeerSocketDelegate {
 
 	protected PeerSocket socket;
 	protected int peerType;
-	protected PeerConnectionDelegate delegate;
 	protected byte[] sharedSalt;
+	protected HashSet<Long> announcedTags;
+	protected boolean remotePaused;
+	boolean sentProof;
 	
 	public PeerConnection(PeerSwarm swarm, String address) throws UnsupportedProtocolException {
 		this.socket = PeerSocket.connectToAddress(swarm, address);
 	}
 	
-	public void sendAccessProof() throws PeerRoleException {
-		assertClientStatus(true);
-		// if our archive has read access: send proof. else: send rng garbage.
+	public PeerSocket getSocket() {
+		return socket;
 	}
 	
-	/** Request branch tips file */
-	public void requestTips() {
+	public void sendAccessProof() throws PeerRoleException {
+		assertClientStatus(true);
+		ArchiveAccessor accessor = socket.getSwarm().getArchive().getConfig().getAccessor();
+		byte[] payload = accessor.temporalProof(0, socket.getSharedSecret());
+		send(CMD_ACCESS_PROOF, payload);
+	}
+	
+	public void announceTags(RefTag[] tags) {
+		send(CMD_ACCESS_PROOF, serializeRefTags(tags));
+	}
+	
+	public void announceTips() {
+		// TODO P2P: define an object for these signed branch tips...
+	}
+	
+	public void requestAll() {
+		send(CMD_REQUEST_ALL, new byte[0]);
 	}
 	
 	/** Request all pages pertaining to a given reftag (including merkle tree chunks). */
-	public void requestRefTags(byte[][] refTags) throws PeerCapabilityException {
+	public void requestRefTags(RefTag[] refTags) throws PeerCapabilityException {
 		assertPeerCapability(PEER_TYPE_FULL);
+		send(CMD_REQUEST_REF_TAGS, serializeRefTags(refTags));
 	}
 	
-	/** Request pages from the archive. */
-	public void requestPages(byte[][] pageTags) {
-	}
-	
-	/** Request pages within indicated range (inclusive) 
-	 * @throws PeerCapabilityException */
-	public void requestPagesInRange(byte[] lower, byte[] upper) throws PeerCapabilityException {
-		assertPeerCapability(PEER_TYPE_BLIND);
-	}
-	
-	/** Request peer listing 
-	 * @throws PeerCapabilityException */
-	public void requestPeers() throws PeerCapabilityException {
-		assertPeerCapability(PEER_TYPE_BLIND);
-	}
-	
-	/** Announce the creation/receipt of a new branch tip */
-	public void announceTip(byte[] tipTag) throws PeerCapabilityException {
+	public void requestRevisionContents(RefTag[] tips) throws PeerCapabilityException {
 		assertPeerCapability(PEER_TYPE_FULL);
+		send(CMD_REQUEST_REVISION_CONTENTS, serializeRefTags(tips));
+	}
+	
+	public void sendPage(RefTag tag) throws IOException {
+		File file = tag.getArchive().getStorage().open(Page.pathForTag(tag.getBytes()), File.O_RDONLY);
+		new PeerMessageOutgoing(this, (byte) CMD_SEND_PAGE, tag, file);
+	}
+	
+	public void setPaused(boolean paused) {
+		send(CMD_SET_PAUSED, new byte[] { (byte) (paused ? 0x01 : 0x00) });
+	}
+	
+	protected byte[] serializeRefTags(RefTag[] tags) {
+		ByteBuffer buf = ByteBuffer.allocate(tags.length * RefTag.REFTAG_SHORT_SIZE);
+		for(RefTag tag : tags) buf.put(tag.getBytes());
+		return buf.array();
 	}
 	
 	protected void assertPeerCapability(int capability) throws PeerCapabilityException {
@@ -118,34 +128,51 @@ public class PeerConnection implements PeerSocketDelegate {
 	}
 
 	@Override
-	public void receivedMessage(PeerMessage msg) throws ProtocolViolationException {
+	public void handle(PeerMessageIncoming msg) throws ProtocolViolationException, EOFException {
 		try {
 			switch(msg.cmd) {
 			case CMD_ACCESS_PROOF:
 				handleAccessProof(msg);
 				break;
-			case CMD_REQUEST_TIPS:
-				handleRequestTips(msg);
+			case CMD_ANNOUNCE_PEERS:
+				handleAnnouncePeers(msg);
 				break;
-			case CMD_REQUEST_REF_TAG:
-				handleRequestRefTag(msg);
+			case CMD_ANNOUNCE_TAGS:
+				handleAnnounceTags(msg);
 				break;
-			case CMD_REQUEST_PAGES:
-				handleRequestPages(msg);
+			case CMD_ANNOUNCE_TIPS:
+				handleAnnounceTips(msg);
 				break;
-			case CMD_REQUEST_PAGES_IN_RANGE:
-				handleRequestPagesInRange(msg);
+			case CMD_REQUEST_ALL:
+				handleRequestAll(msg);
 				break;
-			case CMD_REQUEST_PEERS:
-				handleRequestPeers(msg);
+			case CMD_REQUEST_REF_TAGS:
+				handleRequestRefTags(msg);
 				break;
-			case CMD_ANNOUNCE_TIP:
-				handleAnnounceTip(msg);
+			case CMD_REQUEST_REVISION_CONTENTS:
+				handleRequestRevisionContents(msg);
+				break;
+			case CMD_REQUEST_TAGS:
+				handleRequestTags(msg);
+				break;
+			case CMD_SEND_PAGE:
+				handleSendPage(msg);
+				break;
+			case CMD_SET_PAUSED:
+				handleSetPaused(msg);
 				break;
 			default:
 				throw new ProtocolViolationException();
 			}
-		} catch(PeerRoleException | PeerCapabilityException exc) {
+		} catch(PeerRoleException | PeerCapabilityException | IOException exc) {
+			/* Arguably, blacklisting people because we had a local IOException is unfair. But, there are two real
+			 * possibilities here:
+			 *   1. They're doing something nasty that's triggering IOExceptions. THey deserve it.
+			 *   2. They're not doing anything nasty. In which case, we're getting IOExceptions doing normal stuff, so
+			 *      it's not like we can participate as peers right now anyway.
+			 * But then... how long is a blacklist entry good for? We might cut ourselves off from a swarm because we
+			 * had a mount become temporarily inaccessible or something.
+			 */
 			throw new ProtocolViolationException();
 		}
 	}
@@ -155,116 +182,128 @@ public class PeerConnection implements PeerSocketDelegate {
 		this.sharedSalt = sharedSalt;
 	}
 	
-	public void handleAccessProof(PeerMessage msg) throws PeerRoleException, ProtocolViolationException {
-		assertClientStatus(false);
-		msg.await((ByteBuffer data) -> {
-			assertState(data.remaining() == socket.swarm.archive.getCrypto().hashLength());
-			byte[] proof = new byte[data.remaining()];
-			data.get(proof);
-			msg.respond(new ByteArrayInputStream(proofResponse(proof)));
-		});
+	protected void handleAccessProof(PeerMessageIncoming msg) throws PeerRoleException, ProtocolViolationException, EOFException {
+		ArchiveAccessor accessor = this.socket.swarm.archive.getConfig().getAccessor();
+		int theirStep = this.socket.isClient() ? 0x01 : 0x00;
+		byte[] expected = accessor.temporalProof(theirStep, this.socket.getSharedSecret());
+		byte[] received = msg.rxBuf.read(expected.length);
+		msg.rxBuf.requireEOF();
+		
+		peerType = Arrays.equals(expected, received) ? PEER_TYPE_FULL : PEER_TYPE_BLIND;
+		if(!socket.isClient()) {
+			byte[] response = peerType == PEER_TYPE_FULL 
+					? accessor.temporalProof(0x01, socket.getSharedSecret())
+					: socket.swarm.archive.getCrypto().prng(this.socket.getSharedSecret()).getBytes(expected.length);
+			send(CMD_ACCESS_PROOF, response);
+		}
 	}
 	
-	public void handleRequestTips(PeerMessage msg) {
+	protected void handleAnnouncePeers(PeerMessageIncoming msg) throws EOFException, ProtocolViolationException {
+		while(!msg.rxBuf.isEOF()) {
+			int urlLen = Util.unsignByte(msg.rxBuf.get());
+			assertState(urlLen > 0);
+			byte[] urlBytes = msg.rxBuf.read(urlLen);
+			socket.swarm.addPeer(new String(urlBytes));
+		}
+	}
+	
+	protected void handleAnnounceTags(PeerMessageIncoming msg) throws EOFException {
+		assert(RefTag.REFTAG_SHORT_SIZE == 8); // This code depends on tags being sent as 64-bit values.
+		while(!msg.rxBuf.isEOF()) {
+			Long shortTag = msg.rxBuf.getLong();
+			synchronized(this) {
+				announcedTags.add(shortTag);
+			}
+		}
+	}
+	
+	protected void handleAnnounceTips(PeerMessageIncoming msg) {
+		// TODO P2P: decide how these are encoded
+	}
+	
+	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException {
+		msg.rxBuf.requireEOF();
+		// TODO P2P: OK to start sending missing pages
+	}
+	
+	protected void handleRequestRefTags(PeerMessageIncoming msg) throws EOFException, PeerCapabilityException {
+		assertPeerCapability(PEER_TYPE_FULL);
+		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
+		while(!msg.rxBuf.isEOF()) {
+			msg.rxBuf.get(shortTag);
+			// TODO P2P: expand the reftag to full length, find all its pages, enqueue to send
+		}
+	}
+	
+	protected void handleRequestRevisionContents(PeerMessageIncoming msg) throws EOFException, PeerCapabilityException {
+		assertPeerCapability(PEER_TYPE_FULL);
+		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
+		while(!msg.rxBuf.isEOF()) {
+			msg.rxBuf.get(shortTag);
+			// TODO P2P: Broader question: how to stop abusive clients from opening a zillion requests / leaving messages incomplete and abandoning?
+			// TODO P2P: expand the reftag to full length, open the ZKFS, enqueue all pages to send
+		}
+	}
+	
+	protected void handleRequestTags(PeerMessageIncoming msg) throws EOFException {
+		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
+		while(!msg.rxBuf.isEOF()) {
+			msg.rxBuf.get(shortTag);
+			// TODO P2P: expand the reftag to full length, find it on disk, enqueue to send
+		}
+	}
+	
+	protected void handleSendPage(PeerMessageIncoming msg) throws IOException, ProtocolViolationException {
+		byte[] tagData = msg.rxBuf.read(RefTag.blank(socket.swarm.archive).getBytes().length);
+		int expectedChunks = (int) Math.ceil(((double) socket.swarm.archive.getConfig().getPageSize())/PeerMessage.FILE_CHUNK_SIZE);
+		ChunkableFileHandle handle = socket.swarm.fileHandleForTag(new RefTag(socket.swarm.archive, tagData));
+		
 		try {
-			String path = socket.swarm.archive.getRevisionTree().getPath();
-			msg.respond(socket.swarm.archive.getStorage().open(path, File.O_RDONLY).getInputStream());
-		} catch(IOException exc) {
-			msg.respond(new ByteArrayInputStream(new byte[0]));
-		}
+			while(!msg.rxBuf.isEOF()) {
+				long offset = Util.unsignInt(msg.rxBuf.getInt());
+				assertState(0 <= offset && offset < expectedChunks && offset <= Integer.MAX_VALUE);
+				byte[] chunkData = msg.rxBuf.read(PeerMessage.FILE_CHUNK_SIZE);
+				handle.writeChunk((int) offset, chunkData);
+				// TODO P2P: how to detect liar peers that send garbage data? we know how to detect a bad page, but how about a bad chunk?
+			}
+		} catch(EOFException exc) {} // we're allowed to cancel these transfers at any time, causing EOF; just ignore it
 	}
 	
-	/** TODO P2P: this means we get just one stream from a single (possibly slow) peer... what if we let clients break it up?
-	 * RefTag gives length, so request bitmask showing the pages we want
-	 * respond with bitmask of chunks we offer, followed by ordered stream of pages
-	 * controller ensures each peer has a few pages at a time
-	 * 
-	 * 64-bit starting offset
-	 * Bitmask
-	 * @param msg
-	 * @throws PeerCapabilityException
-	 */
-	public void handleRequestRefTag(PeerMessage msg) throws PeerCapabilityException {
-		assertPeerCapability(PEER_TYPE_FULL);
-		msg.await((ByteBuffer data) -> {
-			assertState(data.remaining() == socket.swarm.archive.refTagSize());
-			RefTag tag = new RefTag(socket.swarm.archive, data.array());
-			assertState(tag.getRefType() != RefTag.REF_TYPE_IMMEDIATE);
-			
+	protected void handleSetPaused(PeerMessageIncoming msg) throws ProtocolViolationException, EOFException {
+		byte pausedByte = msg.rxBuf.get();
+		assertState(pausedByte == 0x00 || pausedByte == 0x01);
+		msg.rxBuf.requireEOF();
+		setRemotePaused(pausedByte == 0x01);
+	}
+	
+	protected void send(int cmd, byte[] payload) {
+		assert(cmd > 0 && cmd <= Byte.MAX_VALUE);
+		new PeerMessageOutgoing(this, (byte) cmd, payload);
+	}
+	
+	public boolean isPausable(byte cmd) {
+		return cmd == CMD_SEND_PAGE;
+	}
+	
+	public boolean wantsFile(RefTag tag) {
+		return !announcedTags.contains(tag.getShortHash());
+	}
+	
+	public boolean wantsChunk(RefTag tag, int chunkIndex) {
+		if(!wantsFile(tag)) return false;
+		return true; // TODO P2P: implement
+	}
+	
+	public synchronized void setRemotePaused(boolean paused) {
+		this.remotePaused = paused;
+		this.notifyAll();
+	}
+
+	public synchronized void waitForUnpause() {
+		while(remotePaused) {
 			try {
-				ByteBuffer pageCount = ByteBuffer.allocate(8);
-				pageCount.putLong(tag.getNumPages());
-				MetaInputStream contents = new MetaInputStream(new InputStream[] {
-						new ByteArrayInputStream(pageCount.array()),
-						new ZKFileCiphertextStream(tag)
-				});
-				msg.respond(contents);
-			} catch (IOException e) {
-				msg.respond(new ByteArrayInputStream(new byte[0])); // send empty response for reftags we don't have
-			}
-		});
-	}
-	
-	// TODO P2P: would we be better off replacing requestPages and requestPagesInRange with requestPagesWithPrefix?
-	public void handleRequestPages(PeerMessage msg) {
-		msg.await((ByteBuffer data) -> {
-			MetaInputStream pages = new MetaInputStream();
-			byte[] pageTag = new byte[socket.swarm.archive.getCrypto().hashLength()];
-			assertState(data.remaining() % pageTag.length == 0);
-			while(data.remaining() > 0) {
-				data.get(pageTag);
-				try {
-					pages.add(pageTag);
-					pages.add(socket.swarm.archive.getStorage().open(Page.pathForTag(pageTag), File.O_RDONLY).getInputStream());
-				} catch (IOException e) {
-					// just skip pages we don't have
-				}
-			}
-			msg.respond(pages);
-		});
-	}
-	
-	public void handleRequestPagesInRange(PeerMessage msg) {
-		msg.await((ByteBuffer data) -> {
-			byte[] startTag = new byte[socket.swarm.archive.getCrypto().hashLength()];
-			byte[] endTag = new byte[startTag.length];
-			assertState(data.remaining() == 2*startTag.length);
-			data.get(startTag);
-			data.get(endTag);
-			try {
-				DirectoryTraverser traverser = new DirectoryTraverser(socket.swarm.archive.getStorage(), socket.swarm.archive.getStorage().opendir("/"));
-				LambdaInputStream response = new LambdaInputStream(() -> {
-					if(!traverser.hasNext()) return null;
-					try {
-						return socket.swarm.archive.getStorage().open(traverser.next(), File.O_RDONLY).getInputStream();
-					} catch (IOException e) {
-						return null;
-					}
-				});
-				
-				msg.respond(response);
-			} catch (IOException e) {
-				msg.respond(new ByteArrayInputStream(new byte[0]));
-			}
-		});
-	}
-	
-	public void handleRequestPeers(PeerMessage msg) {
-		int length = 0;
-		for(String peer : socket.swarm.knownPeers) length += peer.length()+2;
-		ByteBuffer buf = ByteBuffer.allocate(length);
-		for(String peer : socket.swarm.knownPeers) {
-			buf.putShort((short) peer.getBytes().length);
-			buf.put(peer.getBytes());
+				this.wait();
+			} catch(InterruptedException e) {}
 		}
-		msg.respond(new ByteArrayInputStream(buf.array()));
-	}
-	
-	public void handleAnnounceTip(PeerMessage msg) throws PeerCapabilityException {
-		assertPeerCapability(PEER_TYPE_FULL);
-		msg.await((ByteBuffer data) -> {
-			assertState(data.remaining() == socket.swarm.archive.refTagSize());
-			// TODO P2P: do we really want to automatically download every new tip? either way... what do we do next?
-		});
 	}
 }

@@ -1,10 +1,15 @@
 package com.acrescrypto.zksync.net;
 
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
 
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.fs.ChunkableFileHandle;
+import com.acrescrypto.zksync.fs.zkfs.Page;
+import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 
 public class PeerSwarm {
@@ -13,12 +18,17 @@ public class PeerSwarm {
 	protected HashSet<String> connectedAddresses = new HashSet<String>();
 	protected ArrayList<PeerDiscoveryApparatus> discoveryApparatuses = new ArrayList<PeerDiscoveryApparatus>(); // It's "apparatuses." I looked it up.
 	protected ZKArchive archive;
+	protected HashMap<Long,ChunkableFileHandle> activeFiles = new HashMap<Long,ChunkableFileHandle>();
 	
 	int maxSocketCount = 128;
 	int maxPeerListSize = 1024;
 	
 	public PeerSwarm(ZKArchive archive) {
 		this.archive = archive;
+	}
+	
+	public ZKArchive getArchive() {
+		return archive;
 	}
 	
 	public synchronized void openedConnection(PeerConnection connection) {
@@ -89,5 +99,29 @@ public class PeerSwarm {
 	
 	public synchronized void connectionFailed(String address) {
 		connectedAddresses.remove(address);
+	}
+	
+	public byte[] waitForPage(byte[] tag) {
+		// TODO P2P: block until a given page is received
+		return null;
+	}
+	
+	public ChunkableFileHandle fileHandleForTag(RefTag tag) throws IOException {
+		long shortTag = tag.getShortHash();
+		if(!activeFiles.containsKey(shortTag)) {
+			String path = Page.pathForTag(tag.getHash());
+			ChunkableFileHandle fileHandle = new ChunkableFileHandle(archive.getStorage(), path, archive.getConfig().getPageSize(), PeerMessage.FILE_CHUNK_SIZE);
+			activeFiles.put(shortTag, fileHandle);
+			return fileHandle;
+		}
+		
+		return activeFiles.get(shortTag);
+	}
+	
+	protected void receivedPage(byte[] tag, byte[] contents) {
+		// TODO P2P: tell all the peerconnections not to specifically grab this page anyomre
+	}
+	
+	protected void receivedTips(byte[] tipsFile) {
 	}
 }

@@ -109,8 +109,8 @@ public class PageMerkle {
 		for(PageMerkleNode node : nodes) plaintext.put(node.tag);
 		for(int i = 0; i < chunkCount; i++) {
 			ByteBuffer chunkText = ByteBuffer.wrap(plaintext.array(),
-					(int) (i*archive.config.pageSize),
-					(int) Math.min(archive.config.pageSize, plaintext.capacity()));
+					(i*archive.config.pageSize),
+					Math.min(archive.config.pageSize, plaintext.capacity()));
 			SecureFile
 			  .atPath(archive.storage, pathForChunk(tag, i), cipherKey(tag), tag.getBytes(), (""+i).getBytes())
 			  .write(chunkText.array(), (int) archive.config.pageSize);

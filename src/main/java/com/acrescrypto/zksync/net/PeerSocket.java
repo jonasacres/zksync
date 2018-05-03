@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.net;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -10,11 +11,10 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 
 public abstract class PeerSocket {
 	protected PeerSwarm swarm;
-	protected LinkedList<PeerMessage> outgoing = new LinkedList<PeerMessage>();
-	protected LinkedList<PeerMessage> ready = new LinkedList<PeerMessage>();
-	
-	protected HashMap<Integer,PeerMessage> waitingResponse = new HashMap<Integer,PeerMessage>();
-	protected HashMap<Integer,PeerMessage> incomingRequests = new HashMap<Integer,PeerMessage>();
+	protected PeerSocketDelegate delegate;
+	protected LinkedList<PeerMessageOutgoing> outgoing = new LinkedList<PeerMessageOutgoing>();
+	protected LinkedList<PeerMessageOutgoing> ready = new LinkedList<PeerMessageOutgoing>();	
+	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
 	
 	protected int nextMessageId;
 	
@@ -33,7 +33,7 @@ public abstract class PeerSocket {
 	}
 	
 	public interface PeerSocketDelegate {
-		public void receivedMessage(PeerMessage message) throws ProtocolViolationException;
+		public void handle(PeerMessageIncoming message) throws ProtocolViolationException, EOFException;
 		public void establishedSalt(byte[] sharedSalt);
 	}
 	
@@ -80,12 +80,11 @@ public abstract class PeerSocket {
 		close();
 	}
 	
-	protected void sendMessage(PeerMessage msg) throws IOException {
+	protected void sendMessage(PeerMessageOutgoing msg) throws IOException {
 		write(msg.txBuf.array(), 0, msg.txBuf.position());
 		msg.clearTxBuf();
-		outgoing.remove(msg);
-		if(!msg.txClosed()) {
-			outgoing.add(msg);
+		if(msg.txClosed()) {
+			outgoing.remove(msg);
 		}
 	}
 	
@@ -111,24 +110,26 @@ public abstract class PeerSocket {
 		new Thread(() -> {
 			try {
 				while(true) {
-					ByteBuffer buf = ByteBuffer.allocate(maxPayloadSize() + PeerMessage.headerLength());
-					read(buf.array(), 0, PeerMessage.headerLength());
+					ByteBuffer buf = ByteBuffer.allocate(maxPayloadSize() + PeerMessage.HEADER_LENGTH);
+					read(buf.array(), 0, PeerMessageIncoming.HEADER_LENGTH);
 					
 					int msgId = buf.getInt();
 					int len = buf.getInt();
 					byte cmd = buf.get(), flags = buf.get();
 					assertState(len <= maxPayloadSize());
-					read(buf.array(), buf.position(), len);
 					
-					if((msgId & 0x7FFFFFFF) == 0) {
-						incomingRequests.putIfAbsent(msgId, new PeerMessage(this, cmd, msgId));				
-						incomingRequests.get(msgId).addPayload(buf.array());
-						if((flags & PeerMessage.FLAG_FINAL) != 0) incomingRequests.remove(msgId);
-					} else {
-						msgId &= 0x7FFFFFFF;
-						assertState(waitingResponse.containsKey(msgId));
-						waitingResponse.get(msgId).addPayload(buf.array());
-						if((flags & PeerMessage.FLAG_FINAL) != 0) waitingResponse.remove(msgId);
+					byte[] payload = new byte[len];
+					read(payload, 0, payload.length);
+					
+					if(!incoming.containsKey(msgId)) {
+						// TODO P2P: this is a conundrum... replace delegate with connection?
+						incoming.put(msgId, new PeerMessageIncoming(connection, cmd, flags, msgId));
+					}
+					
+					PeerMessageIncoming msg = incoming.get(msgId);
+					msg.receivedData(flags, payload);
+					if(msg.rxBuf.isEOF()) {
+						incoming.remove(msgId);
 					}
 				}
 			} catch(ProtocolViolationException exc) {
@@ -137,7 +138,7 @@ public abstract class PeerSocket {
 		}).start();
 	}
 	
-	protected synchronized void dataReady(PeerMessage msg) {
+	protected synchronized void dataReady(PeerMessageOutgoing msg) {
 		ready.add(msg);
 		outgoing.notifyAll();
 	}

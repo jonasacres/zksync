@@ -67,7 +67,7 @@ public class InodeDiff {
 			s += "  Inode " + (inode == null ? "null" : inode.getIdentity()) + ": " + resolutions.get(inode).size() + " reftags";
 			if(resolved && resolution.equals(inode)) s += " (SELECTED)";
 			s += "\n   ";
-			for(RefTag tag : resolutions.get(inode)) s += " " + Util.bytesToHex(tag.getShortHash());
+			for(RefTag tag : resolutions.get(inode)) s += " " + Util.bytesToHex(tag.getShortHashBytes());
 			s += "\n";
 		}
 		return s;

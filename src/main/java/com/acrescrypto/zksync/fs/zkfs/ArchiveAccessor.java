@@ -139,12 +139,22 @@ public class ArchiveAccessor {
 	}	
 
 	public byte[] temporalProof(int step, byte[] sharedSecret) {
-		if(isSeedOnly()) return master.crypto.rng(master.crypto.symKeyLength()); // makes logic cleaner for protocol implementation
 		assert(0 <= step && step <= Byte.MAX_VALUE);
-		ByteBuffer timestamp = ByteBuffer.allocate(9);
+		ByteBuffer timestamp = ByteBuffer.allocate(9+sharedSecret.length);
 		timestamp.putShort((byte) step);
-		timestamp.putLong(System.currentTimeMillis());
-		return passphraseRoot.derive(0x03, timestamp.array()).getRaw();
+		timestamp.putLong(timeSlice(0));
+		timestamp.put(sharedSecret);
+
+		if(isSeedOnly()) {
+			/* Use a garbage "proof" if we don't actually have knowledge of the passphrase key. We use a combination of
+			 * time, the shared secret and a local key derivative to ensure that this garbage result "feels" like the
+			 * real deal: it changes with the timestamp, it is specific to a shared secret, and cannot be distinguished
+			 * from the real passphrase-derivative version unless someone knows the passphrase root. 
+			 */
+			byte[] rngSeed = localRoot.derive(0x03, timestamp.array()).getRaw();
+			return master.crypto.prng(rngSeed).getBytes(master.crypto.hashLength()); // makes logic cleaner for protocol implementation
+		}
+		return passphraseRoot.derive(0x03, timestamp.array()).getRaw(); // TODO P2P: Evil magic number!
 	}
 	
 	protected void deriveFromPassphraseRoot(Key passphraseRoot) {

@@ -172,7 +172,7 @@ public class ZKFile extends File {
 		assertWritable();
 		dirty = true;
 		int leftToWrite = length;
-		int pageSize = (int) zkfs.archive.config.pageSize;
+		int pageSize = zkfs.archive.config.pageSize;
 		
 		while(leftToWrite > 0) {
 			int neededPageNum = (int) (this.offset/pageSize);
@@ -240,7 +240,7 @@ public class ZKFile extends File {
 	public void copy(File file) throws IOException {
 		assertWritable();
 		file.rewind();
-		int pageSize = (int) zkfs.archive.config.pageSize;
+		int pageSize = zkfs.archive.config.pageSize;
 		while(file.hasData()) write(file.read(pageSize));
 		flush();
 		

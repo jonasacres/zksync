@@ -6,6 +6,7 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.Util;
 
+// TODO P2P: Confused terminology... "tag" can refer either to the bare hash, or this more fluent "RefTag".
 /** Encodes a reference to file data. These are stored inside inodes to allow retrieval of file contents. The RefTag
  * for the inode table itself identifies a revision in the archive. RefTags contain certain metadata to indicate
  * how the content is stored. */
@@ -33,6 +34,8 @@ public class RefTag implements Comparable<RefTag> {
 	// 2 bytes version
 	// 1 byte ref type
 	// 8 bytes num chunks
+	
+	public static int REFTAG_SHORT_SIZE = 8;
 	
 	public static RefTag blank(ZKArchive archive) {
 		return new RefTag(archive, new byte[0], RefTag.REF_TYPE_IMMEDIATE, 0);
@@ -79,10 +82,14 @@ public class RefTag implements Comparable<RefTag> {
 		return hash;
 	}
 	
-	public byte[] getShortHash() {
-		byte[] shortHash = new byte[7];
+	public byte[] getShortHashBytes() {
+		byte[] shortHash = new byte[8];
 		for(int i = 0; i < shortHash.length; i++) shortHash[i] = hash[i];
 		return shortHash;
+	}
+	
+	public long getShortHash() {
+		return ByteBuffer.wrap(hash).getLong();
 	}
 	
 	public int getRefType() {
