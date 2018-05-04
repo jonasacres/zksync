@@ -10,6 +10,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.FreeList.FreeListExhaustedException;
 import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
+import com.acrescrypto.zksync.net.PageQueue.ReftagPageQueueEntry;
 
 // represents inode table for ZKFS instance. 
 public class InodeTable extends ZKFile {

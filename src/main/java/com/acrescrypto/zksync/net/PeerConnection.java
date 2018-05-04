@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedList;
 
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
@@ -11,8 +12,11 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.ChunkableFileHandle;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
+import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.Page;
+import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.net.PeerSocket.PeerSocketDelegate;
 
 public class PeerConnection implements PeerSocketDelegate {
@@ -47,10 +51,12 @@ public class PeerConnection implements PeerSocketDelegate {
 	protected byte[] sharedSalt;
 	protected HashSet<Long> announcedTags;
 	protected boolean remotePaused;
+	protected PageQueue queue;
 	boolean sentProof;
 	
 	public PeerConnection(PeerSwarm swarm, String address) throws UnsupportedProtocolException {
 		this.socket = PeerSocket.connectToAddress(swarm, address);
+		this.queue = new PageQueue(this);
 	}
 	
 	public PeerSocket getSocket() {
@@ -127,8 +133,7 @@ public class PeerConnection implements PeerSocketDelegate {
 		}
 	}
 
-	@Override
-	public void handle(PeerMessageIncoming msg) throws ProtocolViolationException, EOFException {
+	public void handle(PeerMessageIncoming msg) throws ProtocolViolationException {
 		try {
 			switch(msg.cmd) {
 			case CMD_ACCESS_PROOF:
@@ -172,14 +177,10 @@ public class PeerConnection implements PeerSocketDelegate {
 			 *      it's not like we can participate as peers right now anyway.
 			 * But then... how long is a blacklist entry good for? We might cut ourselves off from a swarm because we
 			 * had a mount become temporarily inaccessible or something.
+			 * TODO P2P: reconsider how to handle IOExceptions when we go to implement the blacklist
 			 */
 			throw new ProtocolViolationException();
 		}
-	}
-	
-	@Override
-	public void establishedSalt(byte[] sharedSalt) {
-		this.sharedSalt = sharedSalt;
 	}
 	
 	protected void handleAccessProof(PeerMessageIncoming msg) throws PeerRoleException, ProtocolViolationException, EOFException {
@@ -228,28 +229,34 @@ public class PeerConnection implements PeerSocketDelegate {
 	
 	protected void handleRequestRefTags(PeerMessageIncoming msg) throws EOFException, PeerCapabilityException {
 		assertPeerCapability(PEER_TYPE_FULL);
-		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
+		int priority = msg.rxBuf.getInt();
+		
 		while(!msg.rxBuf.isEOF()) {
-			msg.rxBuf.get(shortTag);
-			// TODO P2P: expand the reftag to full length, find all its pages, enqueue to send
+			// TODO P2P: require full length reftag; too expensive to figure out what they mean from a prefix
+			RefTag tag;
+			// ...
+			sendTagContents(priority, tag);
+			
+			// TODO P2P: send the page at the given priority
 		}
 	}
 	
 	protected void handleRequestRevisionContents(PeerMessageIncoming msg) throws EOFException, PeerCapabilityException {
 		assertPeerCapability(PEER_TYPE_FULL);
 		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
+		int priority = msg.rxBuf.getInt();
+		
 		while(!msg.rxBuf.isEOF()) {
 			msg.rxBuf.get(shortTag);
-			// TODO P2P: Broader question: how to stop abusive clients from opening a zillion requests / leaving messages incomplete and abandoning?
-			// TODO P2P: expand the reftag to full length, open the ZKFS, enqueue all pages to send
 		}
 	}
 	
 	protected void handleRequestTags(PeerMessageIncoming msg) throws EOFException {
 		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
+		int priority = msg.rxBuf.getInt();
 		while(!msg.rxBuf.isEOF()) {
 			msg.rxBuf.get(shortTag);
-			// TODO P2P: expand the reftag to full length, find it on disk, enqueue to send
+			sendPageTag(priority, ByteBuffer.wrap(shortTag).getLong());
 		}
 	}
 	
@@ -285,6 +292,10 @@ public class PeerConnection implements PeerSocketDelegate {
 		return cmd == CMD_SEND_PAGE;
 	}
 	
+	public boolean wantsFile(byte[] tag) {
+		return !announcedTags.contains(ByteBuffer.wrap(tag).getLong());
+	}
+
 	public boolean wantsFile(RefTag tag) {
 		return !announcedTags.contains(tag.getShortHash());
 	}
@@ -305,5 +316,21 @@ public class PeerConnection implements PeerSocketDelegate {
 				this.wait();
 			} catch(InterruptedException e) {}
 		}
+	}
+	
+	protected void sendEverything() {
+		queue.startSendingEverything();
+	}
+	
+	protected void sendRevisionContents(int priority, RefTag refTag) {
+		queue.addRevisionTag(priority, refTag);
+	}
+	
+	protected void sendTagContents(int priority, RefTag refTag) {
+		queue.addRefTagContents(priority, refTag);
+	}
+	
+	protected void sendPageTag(int priority, long shortTag) {
+		queue.addPageTag(priority, shortTag);
 	}
 }

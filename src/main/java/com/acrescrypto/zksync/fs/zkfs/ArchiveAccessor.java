@@ -8,6 +8,9 @@ import java.util.HashSet;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 
+/** TODO Signing: Add the concept of a write passphrase, which derives the private signing key for the archive. 
+ */
+
 public class ArchiveAccessor {
 	public final static int TEMPORAL_SEED_KEY_INTERVAL_MS = 1000*60*60*3; // Rotate temporal seed IDs every 3 hours
 

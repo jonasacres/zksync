@@ -18,19 +18,22 @@ public class PageMerkle {
 	int numPages; /** page capacity for current tree size */
 	int numPagesUsed; /** number of pages issued */
 	
-	/** path to a given chunk of the merkle tree in the underlying filesystem */
-	public static String pathForChunk(RefTag refTag, int chunk) {
+	public static byte[] tagForChunk(RefTag refTag, int chunk) {
 		ByteBuffer chunkTagSource = ByteBuffer.allocate(refTag.hash.length+4);
 		chunkTagSource.put(refTag.hash);
 		chunkTagSource.putInt(chunk);
 		
 		Key authKey = refTag.archive.config.deriveKey(ArchiveAccessor.KEY_INDEX_ARCHIVE, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE_MERKLE, refTag.getHash());
-		byte[] chunkTag = authKey.authenticate(chunkTagSource.array());
-		return ZKFS.pathForHash(chunkTag);
+		return authKey.authenticate(chunkTagSource.array());
+	}
+	
+	/** path to a given chunk of the merkle tree in the underlying filesystem */
+	public static String pathForChunk(RefTag refTag, int chunk) {
+		return ZKFS.pathForHash(tagForChunk(refTag, chunk));
 	}
 	
 	/** initialize a PageMerkle from a file contents RefTag */
-	PageMerkle(RefTag tag) throws IOException {
+	public PageMerkle(RefTag tag) throws IOException {
 		this.archive = tag.archive;
 		this.tag = tag;
 		
@@ -245,5 +248,9 @@ public class PageMerkle {
 	public boolean hasTag(int pageNum) {
 		if(pageNum >= numPagesUsed) return false;
 		return !nodes[numPages - 1 + pageNum].isBlank();
+	}
+
+	public byte[] tagForChunk(int index) {
+		return PageMerkle.tagForChunk(tag, index);
 	}
 }

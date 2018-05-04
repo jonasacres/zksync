@@ -106,6 +106,7 @@ public class PeerMessageIncoming extends PeerMessage {
 		this.cmd = cmd;
 		this.flags = flags;
 		this.msgId = msgId;
+		processThread();
 	}
 	
 	public void receivedData(byte flags, byte[] data) {
@@ -123,15 +124,11 @@ public class PeerMessageIncoming extends PeerMessage {
 		}
 	}
 	
-	public void respondUnsupported() {
-		// TODO P2P: how to signal this?
-	}
-	
 	protected void processThread() {
 		new Thread(() -> {
 			try {
 				connection.handle(this);
-			} catch(ProtocolViolationException|EOFException exc) {
+			} catch(ProtocolViolationException exc) {
 				connection.socket.violation();
 			}
 		}).start();;

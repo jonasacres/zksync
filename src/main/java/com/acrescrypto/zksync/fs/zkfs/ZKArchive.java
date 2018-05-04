@@ -2,11 +2,13 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 
 import com.acrescrypto.zksync.HashCache;
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
 
@@ -28,6 +30,7 @@ public class ZKArchive {
 	protected ZKArchiveConfig config;
 	protected ZKMaster master;
 	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
+	protected ArrayList<byte[]> allTags;
 	
 	public ZKArchive(ZKArchiveConfig config) throws IOException {
 		this.master = config.accessor.master;
@@ -95,5 +98,32 @@ public class ZKArchive {
 	@Override
 	public int hashCode() {
 		return ByteBuffer.wrap(config.archiveId).getInt();
+	}
+
+	public byte[] expandShortTag(long shortTag) {
+		for(byte[] tag : allTags) {
+			if(ByteBuffer.wrap(tag).getLong() == shortTag) return tag;
+		}
+		return null;
+	}
+	
+	protected void loadAllTags() {
+		if(allTags != null && allTags.size() > 0) return;
+		allTags = new ArrayList<byte[]>();
+		try {
+			DirectoryTraverser traverser = new DirectoryTraverser(storage, storage.opendir("/"));
+			while(traverser.hasNext()) {
+				String path = traverser.next();
+				byte[] tag = Util.hexToBytes(path.replace("/", ""));
+				allTags.add(tag);
+			}
+		} catch (IOException e) {
+			return;
+		}
+	}
+	
+	public ArrayList<byte[]> allTags() {
+		loadAllTags();
+		return allTags;
 	}
 }

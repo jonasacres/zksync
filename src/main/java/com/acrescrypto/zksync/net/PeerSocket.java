@@ -1,6 +1,5 @@
 package com.acrescrypto.zksync.net;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -11,7 +10,7 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 
 public abstract class PeerSocket {
 	protected PeerSwarm swarm;
-	protected PeerSocketDelegate delegate;
+	protected PeerConnection connection;
 	protected LinkedList<PeerMessageOutgoing> outgoing = new LinkedList<PeerMessageOutgoing>();
 	protected LinkedList<PeerMessageOutgoing> ready = new LinkedList<PeerMessageOutgoing>();	
 	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
@@ -30,11 +29,6 @@ public abstract class PeerSocket {
 		if(!addressSupported(address)) throw new UnsupportedProtocolException();
 		// TODO P2P: decode URL, select address
 		return null;
-	}
-	
-	public interface PeerSocketDelegate {
-		public void handle(PeerMessageIncoming message) throws ProtocolViolationException, EOFException;
-		public void establishedSalt(byte[] sharedSalt);
 	}
 	
 	public boolean hasExtension(String extName) {
@@ -121,12 +115,15 @@ public abstract class PeerSocket {
 					byte[] payload = new byte[len];
 					read(payload, 0, payload.length);
 					
+					PeerMessageIncoming msg;
+					
 					if(!incoming.containsKey(msgId)) {
-						// TODO P2P: this is a conundrum... replace delegate with connection?
-						incoming.put(msgId, new PeerMessageIncoming(connection, cmd, flags, msgId));
+						msg = new PeerMessageIncoming(connection, cmd, flags, msgId);
+						incoming.put(msgId, msg);
+					} else {
+						msg = incoming.get(msgId);
 					}
 					
-					PeerMessageIncoming msg = incoming.get(msgId);
 					msg.receivedData(flags, payload);
 					if(msg.rxBuf.isEOF()) {
 						incoming.remove(msgId);
