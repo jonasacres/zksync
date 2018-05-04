@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.LinkedList;
 
 import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
@@ -12,14 +11,10 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.ChunkableFileHandle;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
-import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.Page;
-import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
-import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.net.PeerSocket.PeerSocketDelegate;
 
-public class PeerConnection implements PeerSocketDelegate {
+public class PeerConnection {
 	public final int CMD_ACCESS_PROOF = 0x00;
 	public final int CMD_ANNOUNCE_PEERS = 0x01;
 	public final int CMD_ANNOUNCE_TAGS = 0x02;
@@ -224,7 +219,7 @@ public class PeerConnection implements PeerSocketDelegate {
 	
 	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException {
 		msg.rxBuf.requireEOF();
-		// TODO P2P: OK to start sending missing pages
+		sendEverything();
 	}
 	
 	protected void handleRequestRefTags(PeerMessageIncoming msg) throws EOFException, PeerCapabilityException {
@@ -234,10 +229,7 @@ public class PeerConnection implements PeerSocketDelegate {
 		while(!msg.rxBuf.isEOF()) {
 			// TODO P2P: require full length reftag; too expensive to figure out what they mean from a prefix
 			RefTag tag;
-			// ...
 			sendTagContents(priority, tag);
-			
-			// TODO P2P: send the page at the given priority
 		}
 	}
 	
@@ -247,7 +239,9 @@ public class PeerConnection implements PeerSocketDelegate {
 		int priority = msg.rxBuf.getInt();
 		
 		while(!msg.rxBuf.isEOF()) {
-			msg.rxBuf.get(shortTag);
+			RefTag tag;
+			// TODO P2P: read reftag
+			sendRevisionContents(priority, tag);
 		}
 	}
 	
