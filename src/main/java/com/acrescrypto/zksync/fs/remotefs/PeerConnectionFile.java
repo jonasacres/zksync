@@ -39,7 +39,7 @@ public class PeerConnectionFile extends File {
 	@Override
 	public Stat getStat() throws IOException {
 		if(stat != null) return stat;
-		// TODO P2P: verify existence of file; construct fake stat once obtained
+		// TODO P2P: (implement) verify existence of file; construct fake stat once obtained
 		return null;
 	}
 
@@ -53,7 +53,7 @@ public class PeerConnectionFile extends File {
 		if(doesntExist) throw new ENOENTException(path);
 		if(readBuf.position() == pageBuf.position()) {
 			if(!pageBuf.hasRemaining()) return -1;
-			// TODO: block until pageBuf has more bytes
+			// TODO P2P: (refactor) block until pageBuf has more bytes
 		}
 		
 		int readLength = Math.min(maxLength, pageBuf.position() - readBuf.position());
@@ -93,7 +93,7 @@ public class PeerConnectionFile extends File {
 
 	@Override
 	public void close() throws IOException {
-		// TODO P2P: Auto-generated method stub
+		// TODO P2P: (implement)
 		
 	}
 

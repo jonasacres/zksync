@@ -28,21 +28,21 @@ public class HashCache<K,V> {
 		this.evict = evict;
 	}
 	
-	public V get(K key) throws IOException {
+	public synchronized V get(K key) throws IOException {
 		V result = cache.getOrDefault(key, null);
 		if(result == null) result = add(key);
 		resetKey(key);
 		return result;
 	}
 		
-	protected V add(K key) throws IOException {
+	protected synchronized V add(K key) throws IOException {
 		V result = lookup.getValue(key);
 		cache.put(key, result);
 		enforceCapacityLimit();
 		return result;
 	}
 	
-	public V remove(K key) throws IOException {
+	public synchronized V remove(K key) throws IOException {
 		if(!cache.containsKey(key)) return null;
 		V value = cache.get(key);
 		evictionQueue.remove(key);
@@ -55,7 +55,7 @@ public class HashCache<K,V> {
 		evictionQueue.add(key);
 	}
 	
-	public Collection<V> values() {
+	public synchronized Collection<V> values() {
 		return cache.values();
 	}
 	

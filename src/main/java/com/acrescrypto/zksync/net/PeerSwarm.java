@@ -102,7 +102,7 @@ public class PeerSwarm {
 	}
 	
 	public byte[] waitForPage(byte[] tag) {
-		// TODO P2P: block until a given page is received
+		// TODO P2P: (implement) block until a given page is received
 		return null;
 	}
 	
@@ -119,7 +119,7 @@ public class PeerSwarm {
 	}
 	
 	protected void receivedPage(byte[] tag, byte[] contents) {
-		// TODO P2P: tell all the peerconnections not to specifically grab this page anyomre
+		// TODO P2P: (implement) tell all the peerconnections not to specifically grab this page anyomre
 	}
 	
 	protected void receivedTips(byte[] tipsFile) {

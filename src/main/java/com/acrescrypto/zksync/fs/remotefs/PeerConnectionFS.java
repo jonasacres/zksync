@@ -120,7 +120,7 @@ public class PeerConnectionFS extends FS {
 	@Override
 	public byte[] _read(String path) throws IOException {
 		byte[] pageTag = Util.hexToBytes(path.replace("/", ""));
-		// TODO P2P: tell the connection we want that page
+		connection.requestPageTags(new byte[][] {pageTag});
 		connection.getSocket().getSwarm().waitForPage(pageTag);
 		return null;
 	}
@@ -137,6 +137,6 @@ public class PeerConnectionFS extends FS {
 	
 	@Override
 	public PeerConnectionFS scopedFS(String subpath) {
-		throw new UnsupportedOperationException(); // no concept of scoping a RemoteFS
+		throw new UnsupportedOperationException(); // no concept of scoping a PeerConnectionFS
 	}
 }

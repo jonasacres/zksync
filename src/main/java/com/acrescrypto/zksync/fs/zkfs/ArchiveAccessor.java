@@ -79,8 +79,8 @@ public class ArchiveAccessor {
 	
 	public ArchiveAccessor addDefaultDiscoveries() {
 		this.addDiscovery(DHTClient.defaultDHT());
-		// TODO P2P: direct peer discovery
-		// TODO P2P: mdns/udp multicast/other lan discovery?
+		// TODO P2P: (design) direct peer discovery
+		// TODO P2P: (design) mdns/udp multicast/other lan discovery?
 		return this;
 	}
 	
@@ -157,7 +157,7 @@ public class ArchiveAccessor {
 			byte[] rngSeed = localRoot.derive(0x03, timestamp.array()).getRaw();
 			return master.crypto.prng(rngSeed).getBytes(master.crypto.hashLength()); // makes logic cleaner for protocol implementation
 		}
-		return passphraseRoot.derive(0x03, timestamp.array()).getRaw(); // TODO P2P: Evil magic number!
+		return passphraseRoot.derive(0x03, timestamp.array()).getRaw(); // TODO P2P: (refactor) Evil magic number!
 	}
 	
 	protected void deriveFromPassphraseRoot(Key passphraseRoot) {

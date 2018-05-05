@@ -15,20 +15,20 @@ import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 
 public class PeerConnection {
-	public final int CMD_ACCESS_PROOF = 0x00;
-	public final int CMD_ANNOUNCE_PEERS = 0x01;
-	public final int CMD_ANNOUNCE_TAGS = 0x02;
-	public final int CMD_ANNOUNCE_TIPS = 0x03;
-	public final int CMD_REQUEST_ALL = 0x04;
-	public final int CMD_REQUEST_REF_TAGS = 0x05;
-	public final int CMD_REQUEST_REVISION_CONTENTS = 0x06;
-	public final int CMD_REQUEST_TAGS = 0x07;
-	public final int CMD_SEND_PAGE = 0x08;
-	public final int CMD_SET_PAUSED = 0x09;
+	public final static int CMD_ACCESS_PROOF = 0x00;
+	public final static int CMD_ANNOUNCE_PEERS = 0x01;
+	public final static int CMD_ANNOUNCE_TAGS = 0x02;
+	public final static int CMD_ANNOUNCE_TIPS = 0x03;
+	public final static int CMD_REQUEST_ALL = 0x04;
+	public final static int CMD_REQUEST_REF_TAGS = 0x05;
+	public final static int CMD_REQUEST_REVISION_CONTENTS = 0x06;
+	public final static int CMD_REQUEST_PAGES_TAGS = 0x07;
+	public final static int CMD_SEND_PAGE = 0x08;
+	public final static int CMD_SET_PAUSED = 0x09;
 	
-	public final int PEER_TYPE_STATIC = 0; // static fileserver; needs subclass to handle
-	public final int PEER_TYPE_BLIND = 1; // has knowledge of seed key, but not archive passphrase; can't decipher data
-	public final int PEER_TYPE_FULL = 2; // live peer with knowledge of archive passphrase
+	public final static int PEER_TYPE_STATIC = 0; // static fileserver; needs subclass to handle
+	public final static int PEER_TYPE_BLIND = 1; // has knowledge of seed key, but not archive passphrase; can't decipher data
+	public final static int PEER_TYPE_FULL = 2; // live peer with knowledge of archive passphrase
 	
 	/** A message can't be sent to the remote peer because this channel hasn't established that we have full read
 	 * access to the archive. */
@@ -70,11 +70,20 @@ public class PeerConnection {
 	}
 	
 	public void announceTips() {
-		// TODO P2P: define an object for these signed branch tips...
+		// TODO P2P: (design) define an object for these signed branch tips...
 	}
 	
 	public void requestAll() {
 		send(CMD_REQUEST_ALL, new byte[0]);
+	}
+	
+	public void requestPageTags(byte[][] pageTags) {
+		ByteBuffer pageTagsMerged = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE*pageTags.length);
+		for(byte[] tag : pageTags) {
+			pageTagsMerged.put(tag);
+		}
+		
+		send(CMD_REQUEST_PAGES_TAGS, pageTagsMerged.array());
 	}
 	
 	/** Request all pages pertaining to a given reftag (including merkle tree chunks). */
@@ -98,7 +107,7 @@ public class PeerConnection {
 	}
 	
 	protected byte[] serializeRefTags(RefTag[] tags) {
-		ByteBuffer buf = ByteBuffer.allocate(tags.length * RefTag.REFTAG_SHORT_SIZE);
+		ByteBuffer buf = ByteBuffer.allocate(tags.length * socket.swarm.archive.refTagSize());
 		for(RefTag tag : tags) buf.put(tag.getBytes());
 		return buf.array();
 	}
@@ -152,7 +161,7 @@ public class PeerConnection {
 			case CMD_REQUEST_REVISION_CONTENTS:
 				handleRequestRevisionContents(msg);
 				break;
-			case CMD_REQUEST_TAGS:
+			case CMD_REQUEST_PAGES_TAGS:
 				handleRequestTags(msg);
 				break;
 			case CMD_SEND_PAGE:
@@ -172,7 +181,7 @@ public class PeerConnection {
 			 *      it's not like we can participate as peers right now anyway.
 			 * But then... how long is a blacklist entry good for? We might cut ourselves off from a swarm because we
 			 * had a mount become temporarily inaccessible or something.
-			 * TODO P2P: reconsider how to handle IOExceptions when we go to implement the blacklist
+			 * TODO P2P: (design) reconsider how to handle IOExceptions when we go to implement the blacklist
 			 */
 			throw new ProtocolViolationException();
 		}
@@ -214,7 +223,7 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceTips(PeerMessageIncoming msg) {
-		// TODO P2P: decide how these are encoded
+		// TODO P2P: (design) decide how these are encoded
 	}
 	
 	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException {
@@ -224,23 +233,22 @@ public class PeerConnection {
 	
 	protected void handleRequestRefTags(PeerMessageIncoming msg) throws EOFException, PeerCapabilityException {
 		assertPeerCapability(PEER_TYPE_FULL);
+		byte[] refTagBytes = new byte[socket.swarm.archive.refTagSize()];
 		int priority = msg.rxBuf.getInt();
 		
 		while(!msg.rxBuf.isEOF()) {
-			// TODO P2P: require full length reftag; too expensive to figure out what they mean from a prefix
-			RefTag tag;
+			RefTag tag = new RefTag(socket.swarm.archive, msg.rxBuf.read(refTagBytes));
 			sendTagContents(priority, tag);
 		}
 	}
 	
 	protected void handleRequestRevisionContents(PeerMessageIncoming msg) throws EOFException, PeerCapabilityException {
 		assertPeerCapability(PEER_TYPE_FULL);
-		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
+		byte[] refTagBytes = new byte[socket.swarm.archive.refTagSize()];
 		int priority = msg.rxBuf.getInt();
 		
 		while(!msg.rxBuf.isEOF()) {
-			RefTag tag;
-			// TODO P2P: read reftag
+			RefTag tag = new RefTag(socket.swarm.archive, msg.rxBuf.read(refTagBytes));
 			sendRevisionContents(priority, tag);
 		}
 	}
@@ -265,7 +273,7 @@ public class PeerConnection {
 				assertState(0 <= offset && offset < expectedChunks && offset <= Integer.MAX_VALUE);
 				byte[] chunkData = msg.rxBuf.read(PeerMessage.FILE_CHUNK_SIZE);
 				handle.writeChunk((int) offset, chunkData);
-				// TODO P2P: how to detect liar peers that send garbage data? we know how to detect a bad page, but how about a bad chunk?
+				// TODO P2P: (design) how to detect liar peers that send garbage data? we know how to detect a bad page, but how about a bad chunk?
 			}
 		} catch(EOFException exc) {} // we're allowed to cancel these transfers at any time, causing EOF; just ignore it
 	}
@@ -295,8 +303,12 @@ public class PeerConnection {
 	}
 	
 	public boolean wantsChunk(RefTag tag, int chunkIndex) {
+		/* Right now, this is really just equivalent to wantsFile. Eventually we can add some support to decide if we
+		 * need to send an individual file chunk down. This would be useful in cases where a page takes a long time to
+		 * send to a client, and multiple peers might be sending it simultaneously.
+		 */
 		if(!wantsFile(tag)) return false;
-		return true; // TODO P2P: implement
+		return true;
 	}
 	
 	public synchronized void setRemotePaused(boolean paused) {

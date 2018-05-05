@@ -16,11 +16,11 @@ public class DHTPeerReference {
 	}
 	
 	protected void deserialize(byte[] serialized) {
-		// TODO P2P
+		// TODO P2P: (implement)
 	}
 	
 	protected byte[] serialize() {
-		// TODO P2P
+		// TODO P2P: (implement)
 		return null;
 	}
 }

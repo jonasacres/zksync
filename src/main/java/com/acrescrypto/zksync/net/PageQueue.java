@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.PriorityQueue;
 
+import com.acrescrypto.zksync.HashCache;
 import com.acrescrypto.zksync.Shuffler;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
@@ -19,11 +20,14 @@ import com.acrescrypto.zksync.fs.zkfs.RefTag;
  * within a given priority level, to allow greater parallelism in acquiring files from the swarm.
  */
 public class PageQueue {
+	protected static HashCache<RefTag,InodeTable> tableCache = new HashCache<RefTag,InodeTable>(8, (refTag)->refTag.readOnlyFS().getInodeTable(), (tag, table)->table.close());
+	protected static HashCache<RefTag,PageMerkle> merkleCache = new HashCache<RefTag,PageMerkle>(8, (refTag)->new PageMerkle(refTag), (tag, merkle)->{});
+	
 	protected abstract class PageQueueEntry {
 		protected int priority, step;
 		protected Shuffler shuffler;
 		
-		public PageQueueEntry(int priority) {
+		public PageQueueEntry(int priority) throws IOException {
 			this.priority = priority;
 			int size = size();
 			if(size > 0) shuffler = Shuffler.fixedShuffler(size);
@@ -34,7 +38,7 @@ public class PageQueue {
 			while(hasNext() && obj == null) {
 				try {
 					obj = element(shuffler.next());
-				} catch(IOException exc) {} // TODO P2P: Ignore IOExceptions; but is it wise?
+				} catch(IOException exc) {} // TODO P2P: (review) Ignore IOExceptions; but is it wise?
 			}
 			
 			return obj;
@@ -46,14 +50,14 @@ public class PageQueue {
 		}
 		
 		public abstract Object element(int index) throws IOException;
-		public abstract int size();
+		public abstract int size() throws IOException;
 	}
 	
 	protected class EverythingPageQueueEntry extends PageQueueEntry {
 		ArrayList<byte[]> tags;
 		int tagsRead;
 		
-		public EverythingPageQueueEntry(int priority) {
+		public EverythingPageQueueEntry(int priority) throws IOException {
 			super(priority);
 			ArrayList<byte[]> allTags = connection.socket.swarm.archive.allTags();
 			this.tags = new ArrayList<byte[]>(allTags.size());
@@ -67,12 +71,19 @@ public class PageQueue {
 		}
 		
 		public PageTagPageQueueEntry getNext() {
-			byte[] tag;
-			do {
-				tag = tags.get(tagsRead++);
-			} while(!connection.wantsFile(tag));
+			PageTagPageQueueEntry entry = null;
+			while(hasNext() && entry == null) {
+				byte[] tag;
+				do {
+					tag = tags.get(tagsRead++);
+				} while(!connection.wantsFile(tag));
+				
+				try {
+					entry = new PageTagPageQueueEntry(priority, tag);
+				} catch (IOException e) {} // TODO P2P: (review) same as in superclass version. Is it wise to squelch IOExceptions here?
+			}
 
-			return new PageTagPageQueueEntry(priority, tag);
+			return entry;
 		}
 		
 		public boolean hasNext() {
@@ -98,33 +109,41 @@ public class PageQueue {
 	protected class RevisionPageQueueEntry extends PageQueueEntry {
 		RefTag revTag;
 		
-		public RevisionPageQueueEntry(int priority, RefTag revTag) {
+		public RevisionPageQueueEntry(int priority, RefTag revTag) throws IOException {
 			super(priority);
 			this.revTag = revTag;
 		}
 
 		@Override
 		public ReftagPageQueueEntry element(int index) throws IOException {
-			RefTag tag = inodeTable().inodeWithId(index).getRefTag();
+			RefTag tag;
+			synchronized(tableCache) {
+				tag = inodeTable().inodeWithId(index).getRefTag();
+			}
+			
 			if(tag.isBlank() || tag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) return null;
 			return new ReftagPageQueueEntry(priority, tag);
 		}
 
 		@Override
-		public int size() {
-			InodeTable table = inodeTable();
-			return (int) (table.getStat().getSize()/table.inodeSize());
+		public int size() throws IOException {
+			synchronized(tableCache) { // eviction from tableCache means closing InodeTable, so ensure we're not evicted until done
+				InodeTable table = inodeTable();
+				return (int) (table.getStat().getSize()/table.inodeSize());
+			}
 		}
 		
-		protected InodeTable inodeTable() {
-			return null; // TODO P2P: implement. maybe with a hashcache to avoid excessive memory use?
+		protected InodeTable inodeTable() throws IOException {
+			synchronized(tableCache) {
+				return tableCache.get(revTag);
+			}
 		}
 	}
 	
 	protected class ReftagPageQueueEntry extends PageQueueEntry {
 		RefTag refTag;
 		
-		public ReftagPageQueueEntry(int priority, RefTag refTag) {
+		public ReftagPageQueueEntry(int priority, RefTag refTag) throws IOException {
 			super(priority);
 			this.refTag = refTag;
 		}
@@ -140,19 +159,19 @@ public class PageQueue {
 		}
 
 		@Override
-		public int size() {
+		public int size() throws IOException {
 			return (int) refTag.getNumPages() + merkle().numChunks();
 		}
 		
-		protected PageMerkle merkle() {
-			return null; // TODO P2P: implement, maybe with a hashcache
+		protected PageMerkle merkle() throws IOException {
+			return merkleCache.get(refTag);
 		}
 	}
 	
 	protected class PageTagPageQueueEntry extends PageQueueEntry {
 		byte[] tag;
 		
-		public PageTagPageQueueEntry(int priority, byte[] prefix) {
+		public PageTagPageQueueEntry(int priority, byte[] prefix) throws IOException {
 			super(priority);
 			this.tag = prefix;
 		}
@@ -167,16 +186,8 @@ public class PageQueue {
 			return (int) Math.ceil(connection.socket.swarm.archive.getConfig().getPageSize()/PeerMessage.FILE_CHUNK_SIZE);
 		}
 		
-		protected byte[] tag() throws IOException {
-			if(tag.length < connection.socket.swarm.archive.getCrypto().hashLength()) {
-				// TODO P2P: expand tag prefix, overwrite tag variable, throw IOException if not found
-			}
-			
-			return tag;
-		}
-		
 		protected String path() throws IOException {
-			return Page.pathForTag(tag());
+			return Page.pathForTag(tag);
 		}
 	}
 
@@ -184,7 +195,7 @@ public class PageQueue {
 		String path;
 		int chunkOffset;
 		
-		public ChunkPageQueueEntry(int priority, String path, int chunkOffset) {
+		public ChunkPageQueueEntry(int priority, String path, int chunkOffset) throws IOException {
 			super(priority);
 			this.path = path;
 			this.chunkOffset = chunkOffset;
@@ -238,7 +249,7 @@ public class PageQueue {
 		entries = new PriorityQueue<PageQueueEntry>(64, comparator);
 	}
 	
-	public void startSendingEverything() {
+	public void startSendingEverything() throws IOException {
 		if(everythingEntry != null) return;
 		everythingEntry = new EverythingPageQueueEntry(0);
 	}
@@ -284,7 +295,7 @@ public class PageQueue {
 			entries.add(entry);
 			expandNextEntry();
 		} else {
-			// TODO P2P: ensure we understand the consequences of an exception in every thread we spin up (not limited to just this example)
+			// TODO P2P: (review) ensure we understand the consequences of an exception in every thread we spin up (not limited to just this example)
 			throw new RuntimeException("got invalid class back from page queue");
 		}
 		
@@ -314,17 +325,16 @@ public class PageQueue {
 		}
 	}
 	
-	public synchronized void addPageTag(int priority, long shortTag) {
+	public synchronized void addPageTag(int priority, long shortTag) throws IOException {
 		byte[] pageTag = connection.socket.swarm.archive.expandShortTag(shortTag);
 		addEntry(new PageTagPageQueueEntry(priority, pageTag));
 	}
 	
-	public synchronized void addRefTagContents(int priority, RefTag refTag) {
+	public synchronized void addRefTagContents(int priority, RefTag refTag) throws IOException {
 		addEntry(new ReftagPageQueueEntry(priority, refTag));
 	}
 	
-	public synchronized void addRevisionTag(int priority, RefTag refTag) {
-		// TODO P2P: handle case where we don't have that revision
+	public synchronized void addRevisionTag(int priority, RefTag refTag) throws IOException {
 		addEntry(new RevisionPageQueueEntry(priority, refTag));
 	}
 	
