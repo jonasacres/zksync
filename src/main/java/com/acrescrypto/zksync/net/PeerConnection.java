@@ -5,14 +5,17 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
 
-import com.acrescrypto.zksync.Util;
+import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.ChunkableFileHandle;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
+import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.utility.Logger;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PeerConnection {
 	public final static int CMD_ACCESS_PROOF = 0x00;
@@ -47,6 +50,7 @@ public class PeerConnection {
 	protected HashSet<Long> announcedTags;
 	protected boolean remotePaused;
 	protected PageQueue queue;
+	protected boolean receivedTags, receivedProof;
 	boolean sentProof;
 	
 	public PeerConnection(PeerSwarm swarm, String address) throws UnsupportedProtocolException {
@@ -173,7 +177,7 @@ public class PeerConnection {
 			default:
 				throw new ProtocolViolationException();
 			}
-		} catch(PeerRoleException | PeerCapabilityException | IOException exc) {
+		} catch(PeerRoleException | PeerCapabilityException | IOException | InvalidSignatureException exc) {
 			/* Arguably, blacklisting people because we had a local IOException is unfair. But, there are two real
 			 * possibilities here:
 			 *   1. They're doing something nasty that's triggering IOExceptions. THey deserve it.
@@ -201,6 +205,8 @@ public class PeerConnection {
 					: socket.swarm.archive.getCrypto().prng(this.socket.getSharedSecret()).getBytes(expected.length);
 			send(CMD_ACCESS_PROOF, response);
 		}
+		
+		receivedProof = true;
 	}
 	
 	protected void handleAnnouncePeers(PeerMessageIncoming msg) throws EOFException, ProtocolViolationException {
@@ -220,18 +226,26 @@ public class PeerConnection {
 				announcedTags.add(shortTag);
 			}
 		}
+		
+		receivedTags = true;
 	}
 	
-	protected void handleAnnounceTips(PeerMessageIncoming msg) {
-		// TODO P2P: (design) decide how these are encoded
+	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
+		byte[] obfTagRaw = new byte[ObfuscatedRefTag.sizeForArchive(socket.swarm.archive)];
+		while(!msg.rxBuf.isEOF()) {
+			msg.rxBuf.get(obfTagRaw);
+			ObfuscatedRefTag obfTag = new ObfuscatedRefTag(socket.swarm.archive, obfTagRaw);
+			obfTag.assertValid();
+			// TODO P2P: (refactor) Rewrite revision storage so we can have a sequence of obfuscated tags
+		}
 	}
 	
-	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException {
+	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException, IOException {
 		msg.rxBuf.requireEOF();
 		sendEverything();
 	}
 	
-	protected void handleRequestRefTags(PeerMessageIncoming msg) throws EOFException, PeerCapabilityException {
+	protected void handleRequestRefTags(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
 		assertPeerCapability(PEER_TYPE_FULL);
 		byte[] refTagBytes = new byte[socket.swarm.archive.refTagSize()];
 		int priority = msg.rxBuf.getInt();
@@ -242,7 +256,7 @@ public class PeerConnection {
 		}
 	}
 	
-	protected void handleRequestRevisionContents(PeerMessageIncoming msg) throws EOFException, PeerCapabilityException {
+	protected void handleRequestRevisionContents(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
 		assertPeerCapability(PEER_TYPE_FULL);
 		byte[] refTagBytes = new byte[socket.swarm.archive.refTagSize()];
 		int priority = msg.rxBuf.getInt();
@@ -253,7 +267,7 @@ public class PeerConnection {
 		}
 	}
 	
-	protected void handleRequestTags(PeerMessageIncoming msg) throws EOFException {
+	protected void handleRequestTags(PeerMessageIncoming msg) throws IOException {
 		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
 		int priority = msg.rxBuf.getInt();
 		while(!msg.rxBuf.isEOF()) {
@@ -319,24 +333,42 @@ public class PeerConnection {
 	public synchronized void waitForUnpause() {
 		while(remotePaused) {
 			try {
-				this.wait();
+				this.wait(50);
 			} catch(InterruptedException e) {}
+			assertConnected();
 		}
 	}
 	
-	protected void sendEverything() {
+	protected void sendEverything() throws IOException {
 		queue.startSendingEverything();
 	}
 	
-	protected void sendRevisionContents(int priority, RefTag refTag) {
+	protected void sendRevisionContents(int priority, RefTag refTag) throws IOException {
 		queue.addRevisionTag(priority, refTag);
 	}
 	
-	protected void sendTagContents(int priority, RefTag refTag) {
+	protected void sendTagContents(int priority, RefTag refTag) throws IOException {
 		queue.addRefTagContents(priority, refTag);
 	}
 	
-	protected void sendPageTag(int priority, long shortTag) {
+	protected void sendPageTag(int priority, long shortTag) throws IOException {
 		queue.addPageTag(priority, shortTag);
+	}
+	
+	public synchronized void waitForReady() {
+		while(!(receivedProof && receivedTags)) {
+			try {
+				this.wait(50);
+			} catch (InterruptedException e) {}
+			assertConnected();
+		}
+	}
+	
+	protected void assertConnected() {
+		// TODO P2P: test that the socket is alive, throw an exception otherwise
+	}
+
+	public boolean hasFile(long shortTag) {
+		return announcedTags.contains(shortTag);
 	}
 }

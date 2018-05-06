@@ -5,8 +5,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import com.acrescrypto.zksync.ThroughputMeter;
-import com.acrescrypto.zksync.ThroughputTransaction;
+import com.acrescrypto.zksync.utility.ThroughputMeter;
+import com.acrescrypto.zksync.utility.ThroughputTransaction;
 
 public abstract class FS {
 	public abstract Stat stat(String path) throws IOException;

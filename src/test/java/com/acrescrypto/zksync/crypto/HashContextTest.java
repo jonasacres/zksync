@@ -5,8 +5,8 @@ import java.util.Arrays;
 
 import org.junit.Test;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.HashContext;
+import com.acrescrypto.zksync.utility.Util;
 
 import junit.framework.TestCase;
 

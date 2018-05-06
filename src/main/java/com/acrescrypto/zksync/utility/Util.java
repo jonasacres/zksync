@@ -1,4 +1,4 @@
-package com.acrescrypto.zksync;
+package com.acrescrypto.zksync.utility;
 
 import com.acrescrypto.zksync.crypto.HashContext;
 

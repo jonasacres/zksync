@@ -2,12 +2,12 @@ package com.acrescrypto.zksync.fs.remotefs;
 
 import java.io.IOException;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.net.PeerConnection;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PeerConnectionFS extends FS {
 	PeerConnection connection;

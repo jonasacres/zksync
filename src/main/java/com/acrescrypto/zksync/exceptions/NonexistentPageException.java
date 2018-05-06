@@ -2,8 +2,8 @@ package com.acrescrypto.zksync.exceptions;
 
 import java.io.IOException;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.utility.Util;
 
 public class NonexistentPageException extends IOException {
 

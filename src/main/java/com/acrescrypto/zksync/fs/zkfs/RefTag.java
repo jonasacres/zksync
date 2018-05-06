@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import com.acrescrypto.zksync.Util;
+import com.acrescrypto.zksync.utility.Util;
 
 // TODO P2P: (refactor) Confused terminology... "tag" can refer either to the bare hash, or this more fluent "RefTag".
 /** Encodes a reference to file data. These are stored inside inodes to allow retrieval of file contents. The RefTag

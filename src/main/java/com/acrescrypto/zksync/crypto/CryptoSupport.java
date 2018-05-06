@@ -129,6 +129,21 @@ public class CryptoSupport {
 		}
 	}
 	
+	/* Encrypt a message with ECB (electronic codebook) mode. This is generally considered a bad idea.
+	 * You probably want "encrypt."
+	 */
+	@Deprecated
+	public byte[] encryptUnsafeDangerousWarningECBMode(byte[] key, byte[] plaintext) {
+		// TODO P2P: (implement) implement ecb encrypt.
+		return null;
+	}
+	
+	@Deprecated
+	public byte[] decryptUnsafeDangerousWarningECBMode(byte[] key, byte[] ciphertext) {
+		// TODO P2P: (implement) implement ecb decrypt
+		return null;
+	}
+	
 	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, byte[] associatedData, boolean padded)
 	{
 		try {
@@ -142,6 +157,16 @@ public class CryptoSupport {
 			System.exit(1);
 			return null; // unreachable, but it makes the compiler happy
 		}
+	}
+	
+	public byte[] sign(byte[] privKey, byte[] text) {
+		// TODO P2P: (implement)
+		return new byte[0];
+	}
+	
+	public boolean verify(byte[] pubKey, byte[] text, byte[] signature) {
+		// TODO P2P: (implement)
+		return true;
 	}
 	
 	public static byte[] xor(byte[] a, byte[] b) {
@@ -215,5 +240,14 @@ public class CryptoSupport {
 	
 	public int hashLength() {
 		return 512/8; // 512-bit hashes
+	}
+
+	public int symBlockSize() {
+		return symIvLength();
+	}
+
+	public int signatureSize() {
+		// TODO P2P: (implement) fixed signature size
+		return 0;
 	}
 }

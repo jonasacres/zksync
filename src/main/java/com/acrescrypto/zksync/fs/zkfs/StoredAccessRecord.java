@@ -3,9 +3,9 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.EINVALException;
+import com.acrescrypto.zksync.utility.Util;
 
 public class StoredAccessRecord {
 	protected ZKArchive archive;

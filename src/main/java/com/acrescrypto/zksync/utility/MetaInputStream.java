@@ -1,4 +1,4 @@
-package com.acrescrypto.zksync;
+package com.acrescrypto.zksync.utility;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;

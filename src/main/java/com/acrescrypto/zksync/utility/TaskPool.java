@@ -1,4 +1,4 @@
-package com.acrescrypto.zksync;
+package com.acrescrypto.zksync.utility;
 
 import java.util.ArrayList;
 import java.util.Collection;

@@ -10,10 +10,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.utility.Util;
 
 public class ZKDirectory extends ZKFile implements Directory {
 	// TODO: Allow partial reads of directories

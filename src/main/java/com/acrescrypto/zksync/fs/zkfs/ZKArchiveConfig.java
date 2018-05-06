@@ -3,9 +3,11 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.crypto.PrivateKey;
+import com.acrescrypto.zksync.crypto.PublicKey;
 import com.acrescrypto.zksync.fs.compositefs.CompositeFS;
+import com.acrescrypto.zksync.utility.Util;
 
 public class ZKArchiveConfig {
 	
@@ -15,7 +17,9 @@ public class ZKArchiveConfig {
 	
 	protected byte[] archiveId; // derived from archive root; will later include public key
 
-	protected Key archiveRoot; // randomly generated and stored encrypted in config file; derives most other keys 
+	protected Key archiveRoot; // randomly generated and stored encrypted in config file; derives most other keys
+	protected PrivateKey privKey; // derived from the write key root
+	protected PublicKey pubKey; // matches privKey
 	protected byte[] configFileIv; // rng
 	protected CompositeFS storage;
 	protected ArchiveAccessor accessor;
@@ -125,6 +129,16 @@ public class ZKArchiveConfig {
 	
 	public Key deriveKey(int root, int type, int index) {
 		return deriveKey(root, type, index, new byte[0]);
+	}
+	
+	public PrivateKey getPrivKey() {
+		// TODO P2P: (implement) derive privkey
+		return privKey;
+	}
+	
+	public PublicKey getPubKey() {
+		// TODO P2P: (implement) derive pubkey
+		return pubKey;
 	}
 	
 	protected byte[] serialize() {

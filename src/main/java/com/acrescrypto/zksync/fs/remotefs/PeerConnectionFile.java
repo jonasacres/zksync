@@ -8,6 +8,7 @@ import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.utility.Util;
 
 /** Handles fetching a file from a remote peer. The only supported operation is fetching a page file in a read-only,
  * sequential operation covering the entire file.
@@ -19,6 +20,7 @@ public class PeerConnectionFile extends File {
 	protected Stat stat;
 	protected boolean doesntExist;
 	protected ByteBuffer pageBuf, readBuf;
+	protected long shortTag;
 	
 	public PeerConnectionFile(PeerConnectionFS fs, String path, int mode) throws EINVALException {
 		super(fs);
@@ -26,9 +28,12 @@ public class PeerConnectionFile extends File {
 		this.mode = mode;
 		this.pageBuf = ByteBuffer.allocate(fs.connection.getSocket().getSwarm().getArchive().getConfig().getPageSize());
 		this.readBuf = ByteBuffer.wrap(pageBuf.array());
+		this.shortTag = ByteBuffer.wrap(Util.hexToBytes(path.replace("/", ""))).getLong();
 		if(this.mode != File.O_RDONLY) {
-			throw new EINVALException(path);
+			throw new EINVALException(path); // TODO P2P: (review) right exception for "tried to open r/o file as writable?"
 		}
+		
+		// TODO P2P: (refactor) This class needs to actually fill up pageBuf somewhere! Callback from swarm?
 	}
 
 	@Override
@@ -39,8 +44,26 @@ public class PeerConnectionFile extends File {
 	@Override
 	public Stat getStat() throws IOException {
 		if(stat != null) return stat;
-		// TODO P2P: (implement) verify existence of file; construct fake stat once obtained
-		return null;
+		fs.connection.waitForReady();
+		if(!fs.connection.hasFile(shortTag)) throw new ENOENTException(path);
+		
+		Stat stat = new Stat();
+		stat.setGid(0);
+		stat.setUid(0);
+		stat.setMode(0444); // read-only for everyone
+		stat.setType(Stat.TYPE_REGULAR_FILE);
+		stat.setDevMinor(0);
+		stat.setDevMajor(0);
+		stat.setGroup("root");
+		stat.setUser("root");
+		stat.setAtime(0);
+		stat.setCtime(0);
+		stat.setMtime(0);
+		stat.setSize(fs.connection.getSocket().getSwarm().getArchive().getConfig().getPageSize());
+		stat.setInodeId(shortTag);
+		this.stat = stat;
+		
+		return stat;
 	}
 
 	@Override
@@ -93,8 +116,6 @@ public class PeerConnectionFile extends File {
 
 	@Override
 	public void close() throws IOException {
-		// TODO P2P: (implement)
-		
 	}
 
 	@Override

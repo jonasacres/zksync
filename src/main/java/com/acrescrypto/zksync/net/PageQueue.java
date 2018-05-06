@@ -7,13 +7,15 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.PriorityQueue;
 
-import com.acrescrypto.zksync.HashCache;
-import com.acrescrypto.zksync.Shuffler;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.utility.HashCache;
+import com.acrescrypto.zksync.utility.Logger;
+import com.acrescrypto.zksync.utility.Shuffler;
 
 /** Enqueue page requests by priority. To conserve memory, bulk requests for reftag contents or revisions or page files
  * are mapped into individual chunks on a just-in-time basis. A best-effort is made to randomize the order of chunks
@@ -38,7 +40,11 @@ public class PageQueue {
 			while(hasNext() && obj == null) {
 				try {
 					obj = element(shuffler.next());
-				} catch(IOException exc) {} // TODO P2P: (review) Ignore IOExceptions; but is it wise?
+				} catch(ENOENTException exc) {
+					Logger.exception(Logger.LOG_INFO, exc);
+				} catch(IOException exc) {
+					Logger.exception(Logger.LOG_ERROR, exc);
+				}
 			}
 			
 			return obj;
@@ -80,7 +86,11 @@ public class PageQueue {
 				
 				try {
 					entry = new PageTagPageQueueEntry(priority, tag);
-				} catch (IOException e) {} // TODO P2P: (review) same as in superclass version. Is it wise to squelch IOExceptions here?
+				} catch(ENOENTException exc) {
+					Logger.exception(Logger.LOG_INFO, exc);
+				} catch(IOException exc) {
+					Logger.exception(Logger.LOG_ERROR, exc);
+				}
 			}
 
 			return entry;

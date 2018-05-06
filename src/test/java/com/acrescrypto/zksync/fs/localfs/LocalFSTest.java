@@ -8,9 +8,9 @@ import org.junit.*;
 
 import org.apache.commons.io.FileUtils;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.utility.Util;
 
 
 public class LocalFSTest extends FSTestBase {

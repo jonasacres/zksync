@@ -5,8 +5,8 @@ import java.nio.ByteBuffer;
 
 import org.bouncycastle.util.Arrays;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.utility.Util;
 
 public class Inode implements Comparable<Inode> {
 	protected ZKFS fs; /** filesystem containing this inode */

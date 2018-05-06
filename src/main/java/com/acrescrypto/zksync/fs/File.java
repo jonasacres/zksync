@@ -4,7 +4,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 
-import com.acrescrypto.zksync.ThroughputTransaction;
+import com.acrescrypto.zksync.utility.ThroughputTransaction;
 
 public abstract class File implements Closeable {
 	public final static int O_RDONLY = 1 << 0;

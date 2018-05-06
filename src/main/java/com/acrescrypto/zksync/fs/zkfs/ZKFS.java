@@ -2,9 +2,9 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 
-import com.acrescrypto.zksync.HashCache;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
+import com.acrescrypto.zksync.utility.HashCache;
 
 // A ZKSync archive.
 public class ZKFS extends FS {

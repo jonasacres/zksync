@@ -6,7 +6,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
-import com.acrescrypto.zksync.ResizableOutputStream;
+import com.acrescrypto.zksync.utility.ResizableOutputStream;
 
 import net.schmizz.sshj.xfer.LocalDestFile;
 import net.schmizz.sshj.xfer.LocalFileFilter;

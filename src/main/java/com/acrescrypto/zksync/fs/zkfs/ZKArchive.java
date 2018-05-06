@@ -4,13 +4,13 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
-import com.acrescrypto.zksync.HashCache;
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
+import com.acrescrypto.zksync.utility.HashCache;
+import com.acrescrypto.zksync.utility.Util;
 
 public class ZKArchive {
 	

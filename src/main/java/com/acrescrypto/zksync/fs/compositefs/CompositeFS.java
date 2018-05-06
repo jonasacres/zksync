@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 
-import com.acrescrypto.zksync.TaskPool;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
@@ -13,6 +12,7 @@ import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.compositefs.CompositeReadOperation.IncomingDataValidator;
 import com.acrescrypto.zksync.fs.compositefs.CompositeReadOperation.IncomingStatValidator;
+import com.acrescrypto.zksync.utility.TaskPool;
 
 /** Pulls data from a variety of "supplementary" sources, storing them as they are acquired to a permanent "backing fs."
  * e.g.  a bunch of supplementary network filesystems, backing to a LocalFS instance.

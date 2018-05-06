@@ -4,9 +4,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.utility.Util;
 
 public class InodeDiff {
 	protected HashMap<Inode,ArrayList<RefTag>> resolutions = new HashMap<Inode,ArrayList<RefTag>>();

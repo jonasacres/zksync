@@ -2,11 +2,11 @@ package com.acrescrypto.zksync.fs.compositefs;
 
 import java.io.IOException;
 
-import com.acrescrypto.zksync.StorableBuffer;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.utility.StorableBuffer;
 
 public class CompositeReadOperationWorker {
 	protected CompositeReadOperation op;

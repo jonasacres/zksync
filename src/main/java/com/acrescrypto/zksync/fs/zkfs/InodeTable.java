@@ -4,12 +4,12 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 
-import com.acrescrypto.zksync.HashCache;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.FreeList.FreeListExhaustedException;
 import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
+import com.acrescrypto.zksync.utility.HashCache;
 
 // represents inode table for ZKFS instance. 
 public class InodeTable extends ZKFile {

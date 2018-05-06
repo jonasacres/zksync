@@ -5,12 +5,12 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import com.acrescrypto.zksync.Util;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveDiscovery;
+import com.acrescrypto.zksync.utility.Util;
 
 public class StoredAccess implements ArchiveDiscovery {
 	protected ArrayList<StoredAccessRecord> records = new ArrayList<StoredAccessRecord>();

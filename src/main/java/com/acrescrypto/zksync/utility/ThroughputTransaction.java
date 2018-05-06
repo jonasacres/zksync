@@ -1,4 +1,4 @@
-package com.acrescrypto.zksync;
+package com.acrescrypto.zksync.utility;
 
 public class ThroughputTransaction {
 	protected long startTime, endTime;
