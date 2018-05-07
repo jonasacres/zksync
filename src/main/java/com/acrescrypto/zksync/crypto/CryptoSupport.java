@@ -1,21 +1,38 @@
 package com.acrescrypto.zksync.crypto;
 
 import java.nio.ByteBuffer;
+import java.security.InvalidKeyException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.Signature;
+import java.security.SignatureException;
 import java.util.Base64;
 
+import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
 import org.bouncycastle.crypto.engines.AESEngine;
 import org.bouncycastle.crypto.modes.AEADBlockCipher;
+import org.bouncycastle.crypto.modes.CBCBlockCipher;
 import org.bouncycastle.crypto.modes.OCBBlockCipher;
 import org.bouncycastle.crypto.params.AEADParameters;
 import org.bouncycastle.crypto.params.KeyParameter;
+import org.bouncycastle.crypto.params.ParametersWithIV;
+
+import com.acrescrypto.zksync.utility.Logger;
 
 import de.mkammerer.argon2.Argon2Factory;
 import de.mkammerer.argon2.jna.Argon2Library;
 import de.mkammerer.argon2.jna.Size_t;
 import de.mkammerer.argon2.jna.Uint32_t;
+import net.i2p.crypto.eddsa.EdDSAEngine;
+import net.i2p.crypto.eddsa.EdDSAPrivateKey;
+import net.i2p.crypto.eddsa.EdDSAPublicKey;
+import net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable;
+import net.i2p.crypto.eddsa.spec.EdDSAParameterSpec;
+import net.i2p.crypto.eddsa.spec.EdDSAPrivateKeySpec;
+import net.i2p.crypto.eddsa.spec.EdDSAPublicKeySpec;
 
 public class CryptoSupport {
 	private PRNG defaultPrng;
@@ -121,52 +138,82 @@ public class CryptoSupport {
 	public byte[] encrypt(byte[] key, byte[] iv, byte[] plaintext, byte[] associatedData, int padSize)
 	{
 		try {
-			return processCipher(true, 128, key, iv, padToSize(plaintext, padSize), associatedData);
-		} catch (Exception e) {
-			e.printStackTrace();
+			return processAEADCipher(true, 128, key, iv, padToSize(plaintext, padSize), associatedData);
+		} catch (Exception exc) {
+			Logger.exception(Logger.LOG_FATAL, exc);
 			System.exit(1);
 			return null; // unreachable, but it makes the compiler happy
 		}
 	}
 	
-	/* Encrypt a message with ECB (electronic codebook) mode. This is generally considered a bad idea.
-	 * You probably want "encrypt."
-	 */
-	@Deprecated
-	public byte[] encryptUnsafeDangerousWarningECBMode(byte[] key, byte[] plaintext) {
-		// TODO P2P: (implement) implement ecb encrypt.
-		return null;
-	}
-	
-	@Deprecated
-	public byte[] decryptUnsafeDangerousWarningECBMode(byte[] key, byte[] ciphertext) {
-		// TODO P2P: (implement) implement ecb decrypt
-		return null;
-	}
-	
 	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, byte[] associatedData, boolean padded)
 	{
 		try {
-			byte[] paddedPlaintext = processCipher(false, 128, key, iv, ciphertext, associatedData);
+			byte[] paddedPlaintext = processAEADCipher(false, 128, key, iv, ciphertext, associatedData);
 			if(padded) return unpad(paddedPlaintext);
 			return paddedPlaintext;
-		} catch(InvalidCipherTextException e) {
+		} catch(InvalidCipherTextException exc) {
+			Logger.exception(Logger.LOG_SECURITY, exc);
 			throw new SecurityException();
-		} catch(Exception e) {
-			e.printStackTrace();
+		} catch(Exception exc) {
+			Logger.exception(Logger.LOG_FATAL, exc);
+			System.exit(1);
+			return null; // unreachable, but it makes the compiler happy
+		}
+	}
+	
+	public byte[] encryptCBC(byte[] key, byte[] iv, byte[] plaintext, int padSize) {
+		try {
+			return processOrdinaryCipher(true, 128, key, iv, padToSize(plaintext, padSize));
+		} catch (Exception exc) {
+			Logger.exception(Logger.LOG_FATAL, exc);
+			System.exit(1);
+			return null; // unreachable, but it makes the compiler happy
+		}
+	}
+	
+	public byte[] decryptCBC(byte[] key, byte[] iv, byte[] ciphertext, boolean padded) {
+		try {
+			byte[] paddedPlaintext = processOrdinaryCipher(false, 128, key, iv, ciphertext);
+			if(padded) return unpad(paddedPlaintext);
+			return paddedPlaintext;
+		} catch(Exception exc) {
+			Logger.exception(Logger.LOG_FATAL, exc);
 			System.exit(1);
 			return null; // unreachable, but it makes the compiler happy
 		}
 	}
 	
 	public byte[] sign(byte[] privKey, byte[] text) {
-		// TODO P2P: (implement)
-		return new byte[0];
+		try {
+	        EdDSAParameterSpec spec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
+	        Signature sgr = new EdDSAEngine(MessageDigest.getInstance(spec.getHashAlgorithm()));
+	        EdDSAPrivateKeySpec key = new EdDSAPrivateKeySpec(privKey, spec);
+	        EdDSAPrivateKey sKey = new EdDSAPrivateKey(key);
+	        sgr.initSign(sKey);
+	        sgr.update(text);
+			return sgr.sign();
+		} catch(NoSuchAlgorithmException | InvalidKeyException | SignatureException exc) {
+			Logger.exception(Logger.LOG_FATAL, exc);
+			System.exit(1);
+			return null;
+		}
 	}
 	
-	public boolean verify(byte[] pubKey, byte[] text, byte[] signature) {
-		// TODO P2P: (implement)
-		return true;
+	public boolean verify(byte[] pubKeyBytes, byte[] text, byte[] signature) {
+		try {
+			EdDSAParameterSpec spec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
+	        Signature sgr = new EdDSAEngine(MessageDigest.getInstance(spec.getHashAlgorithm()));
+	        EdDSAPublicKeySpec pubKey = new EdDSAPublicKeySpec(pubKeyBytes, spec);
+            EdDSAPublicKey vKey = new EdDSAPublicKey(pubKey);
+            sgr.initVerify(vKey);
+            sgr.update(text);
+            return sgr.verify(signature);
+		} catch(NoSuchAlgorithmException | SignatureException | InvalidKeyException exc) {
+			Logger.exception(Logger.LOG_FATAL, exc);
+			System.exit(1);
+			return false;
+		}
 	}
 	
 	public static byte[] xor(byte[] a, byte[] b) {
@@ -177,7 +224,7 @@ public class CryptoSupport {
 		return r;
 	}
 	
-	protected static byte[] processCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, byte[] ad) throws IllegalStateException, InvalidCipherTextException {
+	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, byte[] ad) throws IllegalStateException, InvalidCipherTextException {
         KeyParameter key = new KeyParameter(keyBytes);
         AEADParameters params = new AEADParameters(key, tagLen, iv);
         AEADBlockCipher cipher = new OCBBlockCipher(new AESEngine(), new AESEngine());
@@ -188,6 +235,20 @@ public class CryptoSupport {
 		if(ad != null) cipher.processAADBytes(ad, 0, ad.length);
         if(in != null) offset = cipher.processBytes(in, 0, in.length, out, 0);
         offset += cipher.doFinal(out, offset);
+        assert(offset == out.length);
+        
+        return out;
+	}
+	
+	protected static byte[] processOrdinaryCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in) throws IllegalStateException {
+        KeyParameter key = new KeyParameter(keyBytes);
+        CipherParameters params = new ParametersWithIV(key, iv);
+        CBCBlockCipher cipher = new CBCBlockCipher(new AESEngine());
+        cipher.init(encrypt, params);
+
+		int offset = 0;
+		byte[] out = new byte[in.length];
+        if(in != null) offset = cipher.processBlock(in, 0, out, 0);
         assert(offset == out.length);
         
         return out;

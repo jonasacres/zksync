@@ -183,4 +183,8 @@ public class RefTag implements Comparable<RefTag> {
 	public String toString() {
 		return "RefTag " + Util.bytesToHex(tag);
 	}
+
+	public ObfuscatedRefTag obfuscate() {
+		return new ObfuscatedRefTag(this);
+	}
 }

@@ -43,6 +43,7 @@ public abstract class PeerSocket {
 	public abstract void read(byte[] data, int offset, int length);
 	public abstract boolean isClient();
 	public abstract void close();
+	public abstract boolean isClosed();
 	
 	public abstract byte[] getSharedSecret();
 	

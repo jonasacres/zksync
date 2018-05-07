@@ -1,35 +1,29 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 
 /** Store a reftag in a means that is extremely difficult to understand without knowledge of the archive root key.
  * The security guarantees for this secrecy are weaker than those for actual archive contents. This is because
- * this level of privacy can be obtained without adding to the storage size of these records, while strengthening it to
- * the degree used elsewhere would require additional storage and introduce new security considerations, complicating the
- * logic. 
+ * this level of privacy can be obtained without adding to the storage size of these records.
  * 
- * To be clear, because I know reviewers will balk: the reftag is encrypted in ECB mode. This is because having a
- * deterministic output makes it possible for seed peers to de-duplicate reftags without understanding what they are.
- * Of course, this means matched blocks can be correlated. This is extremely unlikely to happen in the earlier blocks,
- * which are hash output; it's reasonably likely to happen in the final block which is metadata. At the time of this
- * writing, that metadata could be used by a peer to see when the archive inode table grows enough to need a new page.
+ * The reftag is first "mangled" by computing the HMAC of its hash bytes using an archive root-derivative key.
+ * The mangled reftag is produced by taking the original hash bytes, and concatenating them with the XOR of the
+ * first bytes of the HMAC with the metadata bytes. Thus, the metadata bytes (which are very low-entropy) are XORed
+ * with a high-entropy source known only to parties who possess the archive root key.
  * 
- * So we XOR it with the HMAC of the first block of the hash, signed with the archive key, prior to encryption.
+ * The resulting mangled hash is encrypted in CBC mode with a fixed IV of null bytes. This will reveal reftags sharing
+ * a common prefix of one or more blocks; however, since the prefix is a hash, this is extremely unlikely.
  * 
- * The upshot of this that we have a safer way to store revision tags. I would not call it wholly secure, but it is
- * impossible to guarantee the security of these. Seed peers will almost certainly be able to figure out which pages
- * belong to inode tables, because those will be the first pages everyone asks for.
- * 
- * I explained this idea to a few people, and the reactions were negative. "If the data's important, secure it with an
- * IV! But if it's not, why encrypt it at all?" Well, I don't know what value the attackers get from having it, and I'm
- * not sure I can actually keep them from getting it. But while it's hard to get, there's nothing forcing me to disclose
- * the reftags to make zksync work, and I'm in no way benefited from non-keyholders knowing it.
+ * The purpose here is not to make it impossible for an adversary to learn reftags. That's likely to be too impractical,
+ * since there are other means by which reftags might be discovered. However, those means are significantly harder than
+ * just reading the revision file. The purpose of this technique is to add cost to the adversary.
  */
 
-public class ObfuscatedRefTag {
+public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	protected ZKArchive archive;
 	protected byte[] ciphertext;
 	protected byte[] signature;
@@ -43,11 +37,11 @@ public class ObfuscatedRefTag {
 		deserialize(serialized);
 	}
 	
-	@SuppressWarnings("deprecation")
 	public ObfuscatedRefTag(RefTag refTag) {
+		// TODO P2P: (review) It's been suggested to use a 512-bit block cipher here...
 		this.archive = refTag.archive;
 		Key key = archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
-		this.ciphertext = archive.crypto.encryptUnsafeDangerousWarningECBMode(key.getRaw(), refTag.getBytes());
+		this.ciphertext = archive.crypto.encryptCBC(key.getRaw(), new byte[archive.crypto.symIvLength()], refTag.getBytes(), 0);
 		this.signature = archive.crypto.sign(archive.config.privKey.getBytes(), ciphertext);
 	}
 	
@@ -67,10 +61,9 @@ public class ObfuscatedRefTag {
 		if(!verify()) throw new InvalidSignatureException();
 	}
 	
-	@SuppressWarnings("deprecation")
 	public RefTag decrypt() throws InvalidSignatureException {
 		Key key = archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
-		byte[] mangled = archive.crypto.decryptUnsafeDangerousWarningECBMode(key.getRaw(), this.ciphertext);
+		byte[] mangled = archive.crypto.decryptCBC(key.getRaw(), new byte[archive.crypto.symIvLength()], this.ciphertext, false);
 		byte[] plaintext = transform(mangled);
 		return new RefTag(archive, plaintext);
 	}
@@ -107,5 +100,23 @@ public class ObfuscatedRefTag {
 		buffer.put(ciphertext);
 		buffer.put(signature);
 		return buffer.array();
+	}
+	
+	public boolean equals(Object obj) {
+		if(!ObfuscatedRefTag.class.isInstance(obj)) return false;
+		return Arrays.equals(serialize(), ((ObfuscatedRefTag) obj).serialize());
+	}
+	
+	public int compareTo(ObfuscatedRefTag other) {
+		byte[] me = serialize(), them = other.serialize();
+		for(int i = 0; i < Math.min(me.length, them.length); i++) {
+			if(me[i] == them[i]) continue;
+			if(me[i] < them[i]) return -1;
+			return 1;
+		}
+		
+		if(me.length < them.length) return -1;
+		else if(me.length > them.length) return 1;
+		return 0;
 	}
 }

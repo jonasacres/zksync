@@ -7,6 +7,7 @@ import java.util.HashSet;
 
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.ChunkableFileHandle;
 import com.acrescrypto.zksync.fs.File;
@@ -14,7 +15,6 @@ import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
-import com.acrescrypto.zksync.utility.Logger;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerConnection {
@@ -73,8 +73,12 @@ public class PeerConnection {
 		send(CMD_ACCESS_PROOF, serializeRefTags(tags));
 	}
 	
-	public void announceTips() {
-		// TODO P2P: (design) define an object for these signed branch tips...
+	public void announceTips() throws IOException {
+		ByteBuffer buf = ByteBuffer.allocate(socket.swarm.archive.getRevisionTree().branchTips().size() * ObfuscatedRefTag.sizeForArchive(socket.swarm.archive));
+		for(RefTag tag : socket.swarm.archive.getRevisionTree().branchTips()) {
+			buf.put(tag.obfuscate().serialize());
+		}
+		send(CMD_ANNOUNCE_TAGS, buf.array());
 	}
 	
 	public void requestAll() {
@@ -330,7 +334,7 @@ public class PeerConnection {
 		this.notifyAll();
 	}
 
-	public synchronized void waitForUnpause() {
+	public synchronized void waitForUnpause() throws SocketClosedException {
 		while(remotePaused) {
 			try {
 				this.wait(50);
@@ -355,7 +359,7 @@ public class PeerConnection {
 		queue.addPageTag(priority, shortTag);
 	}
 	
-	public synchronized void waitForReady() {
+	public synchronized void waitForReady() throws SocketClosedException {
 		while(!(receivedProof && receivedTags)) {
 			try {
 				this.wait(50);
@@ -364,8 +368,10 @@ public class PeerConnection {
 		}
 	}
 	
-	protected void assertConnected() {
-		// TODO P2P: test that the socket is alive, throw an exception otherwise
+	protected void assertConnected() throws SocketClosedException {
+		if(socket.isClosed()) {
+			throw new SocketClosedException();
+		}
 	}
 
 	public boolean hasFile(long shortTag) {

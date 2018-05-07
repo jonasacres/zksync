@@ -22,7 +22,7 @@ public class PeerConnectionFile extends File {
 	protected ByteBuffer pageBuf, readBuf;
 	protected long shortTag;
 	
-	public PeerConnectionFile(PeerConnectionFS fs, String path, int mode) throws EINVALException {
+	public PeerConnectionFile(PeerConnectionFS fs, String path, int mode) throws EACCESException {
 		super(fs);
 		this.path = path;
 		this.mode = mode;
@@ -30,7 +30,7 @@ public class PeerConnectionFile extends File {
 		this.readBuf = ByteBuffer.wrap(pageBuf.array());
 		this.shortTag = ByteBuffer.wrap(Util.hexToBytes(path.replace("/", ""))).getLong();
 		if(this.mode != File.O_RDONLY) {
-			throw new EINVALException(path); // TODO P2P: (review) right exception for "tried to open r/o file as writable?"
+			throw new EACCESException(path); // TODO P2P: (review) right exception for "tried to open r/o file as writable?"
 		}
 		
 		// TODO P2P: (refactor) This class needs to actually fill up pageBuf somewhere! Callback from swarm?

@@ -13,7 +13,8 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 
 public class RevisionTree {
-	protected ArrayList<RefTag> branchTips = new ArrayList<RefTag>();
+	protected ArrayList<ObfuscatedRefTag> branchTips = new ArrayList<ObfuscatedRefTag>();
+	protected ArrayList<RefTag> plainBranchTips = new ArrayList<RefTag>();
 	protected ZKArchive archive;
 	
 	public RevisionTree(ZKArchive archive) throws IOException {
@@ -21,19 +22,27 @@ public class RevisionTree {
 		try {
 			read();
 		} catch(ENOENTException exc) {
-			branchTips = new ArrayList<RefTag>();
+			branchTips = new ArrayList<ObfuscatedRefTag>();
 		}
 	}
 	
-	public ArrayList<RefTag> branchTips() {
+	public ArrayList<ObfuscatedRefTag> branchTips() {
 		return branchTips;
 	}
 	
 	public void addBranchTip(RefTag newBranch) {
+		branchTips.add(newBranch.obfuscate());
+	}
+	
+	public void addBranchTip(ObfuscatedRefTag newBranch) {
 		branchTips.add(newBranch);
 	}
 	
 	public void removeBranchTip(RefTag oldBranch) {
+		branchTips.remove(oldBranch.obfuscate());
+	}
+	
+	public void removeBranchTip(ObfuscatedRefTag oldBranch) {
 		branchTips.remove(oldBranch);
 	}
 	
@@ -74,39 +83,6 @@ public class RevisionTree {
 	}
 	
 	public void write() throws IOException {
-		/* TODO: Part of me wants to hide this in with the rest of the archive data, but I don't see how to make
-		 * it work given that, unlike archive data, this file is mutable. If it gets synced across with the real
-		 * stuff, one person's is going to overwrite the other's, creating a race condition (and possibly a really
-		 * dumb outcome where someone loses the ability to read the branch tip with all their stuff).
-		 * 
-		 * The files could get keyed to something specific, like an ID in the daemon or something. Then people would
-		 * clutter up each other's data directories with their own unique, snowflake copy of the branch list.
-		 * 
-		 * One possible solution would be to thumbprint them in some way that, although their filenames would reveal
-		 * no information to an observer, someone in possession of the archive key could recognize it as a branch
-		 * file, with a negligible chance of confusion.
-		 * 
-		 * One solution might be to derive some unique prefix, and automatically reject and prune any observed files
-		 * matching this and not some user-specific suffix.
-		 * 
-		 * But, if I had two users' data directories, and compared the differences, I'd see the matched prefixes and
-		 * be able to distinguish some limited information about the number of branches. This is not catastrophic,
-		 * but not ideal. It seems likely to be an issue in any solution, since two peers in sync will differ only
-		 * in their branch files.
-		 * 
-		 * A better solution may be to disguise branch files of all monitored archives together with a random
-		 * number (significantly larger than the actual number of branch files) of decoy files. This will make it
-		 * difficult to distinguish the number of archives on a system, or the size of the archive sets. A single
-		 * file may be hidden amongst them using some hash derived from the user's passphrase, providing an index
-		 * of actual meaningful branch files.
-		 * 
-		 * So really, there are two "balls of wax": an objective one that is synced with peers, and a subjective
-		 * one that is never intentionally shared, but can't be considered private.
-		 * 
-		 * "Wax" might be a cooler name than "zksync." Archives could be called "waxballs."
-		 */
-		// 64kib branch files seem reasonable
-		
 		MutableSecureFile
 		  .atPath(archive.storage, getPath(), branchTipKey())
 		  .write(serialize(), 65536);
@@ -121,22 +97,22 @@ public class RevisionTree {
 	protected void deserialize(byte[] serialized) {
 		branchTips.clear();
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		byte[] tag = new byte[archive.refTagSize()];
+		byte[] tag = new byte[ObfuscatedRefTag.sizeForArchive(archive)];
 		while(buf.remaining() >= archive.refTagSize()) {
 			buf.get(tag);
-			branchTips.add(new RefTag(archive, tag));
+			branchTips.add(new ObfuscatedRefTag(archive, tag));
 		}
 		
 		if(buf.hasRemaining()) throw new InvalidArchiveException("branch tip file appears corrupt: " + getPath());
 	}
 	
 	protected byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(archive.refTagSize()*branchTips.size());
-		for(RefTag tag : branchTips) buf.put(tag.getBytes());
+		ByteBuffer buf = ByteBuffer.allocate(ObfuscatedRefTag.sizeForArchive(archive)*branchTips.size());
+		for(ObfuscatedRefTag tag : branchTips) buf.put(tag.serialize());
 		return buf.array();
 	}
 	
 	protected Key branchTipKey() {
-		return archive.config.deriveKey(ArchiveAccessor.KEY_INDEX_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REVISION_TREE);
+		return archive.config.deriveKey(ArchiveAccessor.KEY_INDEX_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REVISION_TREE);
 	}
 }

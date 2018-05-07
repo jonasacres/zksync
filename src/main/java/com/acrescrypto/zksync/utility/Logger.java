@@ -1,3 +1,4 @@
+// TODO P2P: (refactor) use a real java logging library! don't we already have slf4j?
 package com.acrescrypto.zksync.utility;
 
 import java.sql.Timestamp;
@@ -32,7 +33,14 @@ public class Logger {
 	}
 	
 	public static void log(int level, String msg) {
+		if(level < Logger.level) return;
 		String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Timestamp(System.currentTimeMillis()));
 		System.out.println(timestamp + " " + levelName(level) + ": " + msg);
+	}
+	
+	public static int setLevel(int newLevel) {
+		int oldLevel = Logger.level;
+		Logger.level = newLevel;
+		return oldLevel;
 	}
 }
