@@ -19,8 +19,9 @@ import org.bouncycastle.crypto.modes.OCBBlockCipher;
 import org.bouncycastle.crypto.params.AEADParameters;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.params.ParametersWithIV;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
 
-import com.acrescrypto.zksync.utility.Logger;
 
 import de.mkammerer.argon2.Argon2Factory;
 import de.mkammerer.argon2.jna.Argon2Library;
@@ -36,6 +37,7 @@ import net.i2p.crypto.eddsa.spec.EdDSAPublicKeySpec;
 
 public class CryptoSupport {
 	private PRNG defaultPrng;
+	private Logger logger = LoggerFactory.getLogger(CryptoSupport.class);
 	public static boolean cheapArgon2; // set to true for tests, false otherwise
 	
 	public final static int ARGON2_TIME_COST = 4;
@@ -140,7 +142,7 @@ public class CryptoSupport {
 		try {
 			return processAEADCipher(true, 128, key, iv, padToSize(plaintext, padSize), associatedData);
 		} catch (Exception exc) {
-			Logger.exception(Logger.LOG_FATAL, exc);
+			logger.error("Encountered exception encrypting data", exc);
 			System.exit(1);
 			return null; // unreachable, but it makes the compiler happy
 		}
@@ -153,10 +155,10 @@ public class CryptoSupport {
 			if(padded) return unpad(paddedPlaintext);
 			return paddedPlaintext;
 		} catch(InvalidCipherTextException exc) {
-			Logger.exception(Logger.LOG_SECURITY, exc);
+			logger.warn("Unable to validate AEAD ciphertext", exc);
 			throw new SecurityException();
 		} catch(Exception exc) {
-			Logger.exception(Logger.LOG_FATAL, exc);
+			logger.error("Encountered exception decrypting data", exc);
 			System.exit(1);
 			return null; // unreachable, but it makes the compiler happy
 		}
@@ -166,7 +168,7 @@ public class CryptoSupport {
 		try {
 			return processOrdinaryCipher(true, 128, key, iv, padToSize(plaintext, padSize));
 		} catch (Exception exc) {
-			Logger.exception(Logger.LOG_FATAL, exc);
+			logger.error("Encountered exception encrypting data", exc);
 			System.exit(1);
 			return null; // unreachable, but it makes the compiler happy
 		}
@@ -178,7 +180,7 @@ public class CryptoSupport {
 			if(padded) return unpad(paddedPlaintext);
 			return paddedPlaintext;
 		} catch(Exception exc) {
-			Logger.exception(Logger.LOG_FATAL, exc);
+			logger.error("Encountered exception decrypting data", exc);
 			System.exit(1);
 			return null; // unreachable, but it makes the compiler happy
 		}
@@ -194,7 +196,7 @@ public class CryptoSupport {
 	        sgr.update(text);
 			return sgr.sign();
 		} catch(NoSuchAlgorithmException | InvalidKeyException | SignatureException exc) {
-			Logger.exception(Logger.LOG_FATAL, exc);
+			logger.error("Encountered exception signing data", exc);
 			System.exit(1);
 			return null;
 		}
@@ -210,7 +212,7 @@ public class CryptoSupport {
             sgr.update(text);
             return sgr.verify(signature);
 		} catch(NoSuchAlgorithmException | SignatureException | InvalidKeyException exc) {
-			Logger.exception(Logger.LOG_FATAL, exc);
+			logger.error("Encountered exception verifying signature", exc);
 			System.exit(1);
 			return false;
 		}

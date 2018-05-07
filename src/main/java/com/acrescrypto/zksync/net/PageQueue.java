@@ -7,6 +7,9 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.PriorityQueue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
@@ -14,7 +17,6 @@ import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.utility.HashCache;
-import com.acrescrypto.zksync.utility.Logger;
 import com.acrescrypto.zksync.utility.Shuffler;
 
 /** Enqueue page requests by priority. To conserve memory, bulk requests for reftag contents or revisions or page files
@@ -22,6 +24,7 @@ import com.acrescrypto.zksync.utility.Shuffler;
  * within a given priority level, to allow greater parallelism in acquiring files from the swarm.
  */
 public class PageQueue {
+	private Logger logger = LoggerFactory.getLogger(PageQueue.class);
 	protected static HashCache<RefTag,InodeTable> tableCache = new HashCache<RefTag,InodeTable>(8, (refTag)->refTag.readOnlyFS().getInodeTable(), (tag, table)->table.close());
 	protected static HashCache<RefTag,PageMerkle> merkleCache = new HashCache<RefTag,PageMerkle>(8, (refTag)->new PageMerkle(refTag), (tag, merkle)->{});
 	
@@ -41,9 +44,9 @@ public class PageQueue {
 				try {
 					obj = element(shuffler.next());
 				} catch(ENOENTException exc) {
-					Logger.exception(Logger.LOG_INFO, exc);
+					logger.info("Unable to queue file for transmission to peer", exc);
 				} catch(IOException exc) {
-					Logger.exception(Logger.LOG_ERROR, exc);
+					logger.error("Unable to queue file for transmission to peer", exc);
 				}
 			}
 			
@@ -87,9 +90,9 @@ public class PageQueue {
 				try {
 					entry = new PageTagPageQueueEntry(priority, tag);
 				} catch(ENOENTException exc) {
-					Logger.exception(Logger.LOG_INFO, exc);
+					logger.info("Unable to queue file for transmission to peer", exc);
 				} catch(IOException exc) {
-					Logger.exception(Logger.LOG_ERROR, exc);
+					logger.error("Unable to queue file for transmission to peer", exc);
 				}
 			}
 

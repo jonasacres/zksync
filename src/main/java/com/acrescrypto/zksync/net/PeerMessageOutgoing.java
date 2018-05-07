@@ -7,6 +7,10 @@ import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Queue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 
@@ -17,6 +21,7 @@ public class PeerMessageOutgoing extends PeerMessage {
 	protected File file;
 	protected RefTag refTag;
 	protected Queue<Integer> chunkList = new LinkedList<Integer>();
+	private Logger logger = LoggerFactory.getLogger(PeerMessageOutgoing.class);
 	
 	public PeerMessageOutgoing(PeerConnection connection, byte cmd, RefTag refTag, File file) throws IOException {
 		this.connection = connection;
@@ -52,7 +57,12 @@ public class PeerMessageOutgoing extends PeerMessage {
 				if(txEOF || !txBuf.hasRemaining()) {
 					addTxHeader();
 					if(connection.isPausable(cmd)) {
-						connection.waitForUnpause();
+						try {
+							connection.waitForUnpause();
+						} catch (SocketClosedException exc) {
+							logger.debug("Socket closed while sending message type {} (id={})", cmd, msgId, exc);
+							break;
+						}
 					}
 					connection.socket.dataReady(this);
 				}

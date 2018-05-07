@@ -7,15 +7,20 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 
 public class RevisionTree {
 	protected ArrayList<ObfuscatedRefTag> branchTips = new ArrayList<ObfuscatedRefTag>();
 	protected ArrayList<RefTag> plainBranchTips = new ArrayList<RefTag>();
 	protected ZKArchive archive;
+	private Logger logger = LoggerFactory.getLogger(RevisionTree.class);
 	
 	public RevisionTree(ZKArchive archive) throws IOException {
 		this.archive = archive;
@@ -30,20 +35,37 @@ public class RevisionTree {
 		return branchTips;
 	}
 	
+	public ArrayList<RefTag> plainBranchTips() {
+		return plainBranchTips;
+	}
+	
 	public void addBranchTip(RefTag newBranch) {
+		plainBranchTips.add(newBranch);
 		branchTips.add(newBranch.obfuscate());
 	}
 	
-	public void addBranchTip(ObfuscatedRefTag newBranch) {
+	public void addBranchTip(ObfuscatedRefTag newBranch) throws InvalidSignatureException {
+		newBranch.assertValid();
 		branchTips.add(newBranch);
+		if(!archive.config.accessor.isSeedOnly()) {
+			plainBranchTips.add(newBranch.decrypt());
+		}
 	}
 	
 	public void removeBranchTip(RefTag oldBranch) {
+		plainBranchTips.remove(oldBranch);
 		branchTips.remove(oldBranch.obfuscate());
 	}
 	
 	public void removeBranchTip(ObfuscatedRefTag oldBranch) {
 		branchTips.remove(oldBranch);
+		if(!archive.config.accessor.isSeedOnly()) {
+			try {
+				plainBranchTips.remove(oldBranch.decrypt());
+			} catch (InvalidSignatureException exc) {
+				logger.info("Signature verification failed on obfuscated reftag meant for deletion", exc);
+			}
+		}
 	}
 	
 	public HashSet<RefTag> ancestorsOf(RefTag revision) throws IOException {
@@ -100,7 +122,14 @@ public class RevisionTree {
 		byte[] tag = new byte[ObfuscatedRefTag.sizeForArchive(archive)];
 		while(buf.remaining() >= archive.refTagSize()) {
 			buf.get(tag);
-			branchTips.add(new ObfuscatedRefTag(archive, tag));
+			try {
+				ObfuscatedRefTag obfTag = new ObfuscatedRefTag(archive, tag);
+				obfTag.assertValid();
+				branchTips.add(obfTag);
+				plainBranchTips.add(obfTag.decrypt());
+			} catch (InvalidSignatureException exc) {
+				logger.error("Invalid signature on stored obfuscating reftag; skipping", exc);
+			}
 		}
 		
 		if(buf.hasRemaining()) throw new InvalidArchiveException("branch tip file appears corrupt: " + getPath());
@@ -108,7 +137,14 @@ public class RevisionTree {
 	
 	protected byte[] serialize() {
 		ByteBuffer buf = ByteBuffer.allocate(ObfuscatedRefTag.sizeForArchive(archive)*branchTips.size());
-		for(ObfuscatedRefTag tag : branchTips) buf.put(tag.serialize());
+		for(ObfuscatedRefTag tag : branchTips) {
+			try {
+				tag.assertValid();
+			} catch (InvalidSignatureException exc) {
+				logger.error("Invalid signature on obfuscated reftag; omitting from storage", exc);
+			}
+			buf.put(tag.serialize());
+		}
 		return buf.array();
 	}
 	

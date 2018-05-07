@@ -75,7 +75,7 @@ public class PeerConnection {
 	
 	public void announceTips() throws IOException {
 		ByteBuffer buf = ByteBuffer.allocate(socket.swarm.archive.getRevisionTree().branchTips().size() * ObfuscatedRefTag.sizeForArchive(socket.swarm.archive));
-		for(RefTag tag : socket.swarm.archive.getRevisionTree().branchTips()) {
+		for(RefTag tag : socket.swarm.archive.getRevisionTree().plainBranchTips()) {
 			buf.put(tag.obfuscate().serialize());
 		}
 		send(CMD_ANNOUNCE_TAGS, buf.array());

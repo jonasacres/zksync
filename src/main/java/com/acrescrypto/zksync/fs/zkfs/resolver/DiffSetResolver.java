@@ -27,7 +27,7 @@ public class DiffSetResolver {
 	PathDiffResolver pathResolver;
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
-		return latestVersionResolver(DiffSet.withCollection(archive.getRevisionTree().branchTips()));
+		return latestVersionResolver(DiffSet.withCollection(archive.getRevisionTree().plainBranchTips()));
 	}
 	
 	public static DiffSetResolver latestVersionResolver(DiffSet diffset) throws IOException {
