@@ -11,17 +11,17 @@ import net.i2p.crypto.eddsa.spec.EdDSAPublicKeySpec;
 
 // TODO: (refactor) It's somewhat confusing with the existing JCA that we have a "PublicKey" that doesn't fit into the framework at all. Ditto for PrivateKey...
 public class PublicKey {
-	public final static int KEY_SIZE = 256/8;
-	public final static int SIG_SIZE = 512/8;
 	protected EdDSAPublicKey pubKey;
+	protected CryptoSupport crypto;
 	
-	public PublicKey(PrivateKey privateKey) {
-		this(privateKey.privKey.getA().toByteArray());
+	protected PublicKey(PrivateKey privateKey) {
+		this(privateKey.crypto, privateKey.privKey.getA().toByteArray());
 	}
 	
-	public PublicKey(byte[] raw) {
+	protected PublicKey(CryptoSupport crypto, byte[] raw) {
 		EdDSAParameterSpec edSpec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
 		EdDSAPublicKeySpec pubKeySpec = new EdDSAPublicKeySpec(raw, edSpec);
+		this.crypto = crypto;
 		this.pubKey = new EdDSAPublicKey(pubKeySpec);
 	}
 

@@ -177,13 +177,13 @@ public class ZKArchiveConfig {
 	
 	protected void deserializeSeedPortion(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		byte[] pubKeyBytes = new byte[PublicKey.KEY_SIZE];
+		byte[] pubKeyBytes = new byte[accessor.master.crypto.asymPublicKeySize()];
 		byte[] fingerprintBytes = new byte[accessor.master.crypto.hashLength()];
 		assertState(buf.remaining() == pubKeyBytes.length + fingerprintBytes.length);
 		buf.get(pubKeyBytes);
 		buf.get(fingerprintBytes);
 		
-		this.pubKey = new PublicKey(pubKeyBytes);
+		this.pubKey = accessor.master.crypto.makePublicKey(pubKeyBytes);
 		assertState(Arrays.equals(archiveId, calculateArchiveId(fingerprintBytes)));
 	}
 	
@@ -240,7 +240,7 @@ public class ZKArchiveConfig {
 	
 	protected void deriveKeypair() {
 		this.writeRoot = accessor.passphraseRoot; // TODO P2P: (refactor) allow some means of supplying a separate write passphrase
-		privKey = new PrivateKey(writeRoot.getRaw());
+		privKey = accessor.master.crypto.makePrivateKey(writeRoot.getRaw());
 		pubKey = privKey.publicKey();
 	}
 

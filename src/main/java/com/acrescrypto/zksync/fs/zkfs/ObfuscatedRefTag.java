@@ -30,7 +30,7 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	protected byte[] signature;
 	
 	public static int sizeForArchive(ZKArchive archive) {
-		return archive.refTagSize() + PublicKey.SIG_SIZE;
+		return archive.refTagSize() + archive.crypto.asymSignatureSize();
 	}
 	
 	public ObfuscatedRefTag(ZKArchive archive, byte[] serialized) {

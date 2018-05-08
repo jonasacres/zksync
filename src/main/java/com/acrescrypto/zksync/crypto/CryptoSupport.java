@@ -249,6 +249,14 @@ public class CryptoSupport {
 		return defaultPrng.getBytes(numBytes);
 	}
 	
+	public PrivateKey makePrivateKey(byte[] privateKeyMaterial) {
+		return new PrivateKey(this, privateKeyMaterial);
+	}
+	
+	public PublicKey makePublicKey(byte[] publicKeyMaterial) {
+		return new PublicKey(this, publicKeyMaterial);
+	}
+	
 	public int symKeyLength() {
 		return 256/8; // 256-bit symmetric keys 
 	}
@@ -263,5 +271,17 @@ public class CryptoSupport {
 
 	public int symBlockSize() {
 		return 128/8; // AES has 128-bit blocks
+	}
+	
+	public int asymPrivateKeySize() {
+		return 256/8;
+	}
+	
+	public int asymPublicKeySize() {
+		return 256/8;
+	}
+	
+	public int asymSignatureSize() {
+		return 512/8;
 	}
 }

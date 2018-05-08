@@ -12,15 +12,16 @@ import net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable;
 import net.i2p.crypto.eddsa.spec.EdDSAParameterSpec;
 import net.i2p.crypto.eddsa.spec.EdDSAPrivateKeySpec;
 
-// TODO P2P: (refactor) Bring this back under the umbrella of CryptoSupport
 public class PrivateKey {
 	protected PublicKey publicKey;
 	protected EdDSAPrivateKey privKey;
+	protected CryptoSupport crypto;
 	protected static Logger logger = LoggerFactory.getLogger(PrivateKey.class);
 	
-	public PrivateKey(byte[] raw) {
+	protected PrivateKey(CryptoSupport crypto, byte[] raw) {
 		EdDSAParameterSpec edSpec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
 		EdDSAPrivateKeySpec privKeySpec = new EdDSAPrivateKeySpec(raw, edSpec);
+		this.crypto = crypto;
 		this.privKey = new EdDSAPrivateKey(privKeySpec);
 	}
 	
