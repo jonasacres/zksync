@@ -26,10 +26,14 @@ public class PublicKey {
 	}
 
 	public boolean verify(byte[] message, byte[] signature) {
+		return verify(message, 0, message.length, signature, 0, signature.length);
+	}
+	
+	public boolean verify(byte[] message, int msgOffset, int msgLen, byte[] signature, int sigOffset, int sigLen) {
 		EdDSAEngine engine = new EdDSAEngine();
 		try {
 			engine.initVerify(pubKey);
-			return engine.verifyOneShot(message, signature);
+			return engine.verifyOneShot(message, msgOffset, msgLen, signature, sigOffset, sigLen);
 		} catch (SignatureException | InvalidKeyException e) {
 			return false;
 		}

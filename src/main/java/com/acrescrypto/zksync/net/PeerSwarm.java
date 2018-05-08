@@ -5,30 +5,37 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.ChunkableFileHandle;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
-import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PeerSwarm {
 	protected ArrayList<PeerConnection> connections = new ArrayList<PeerConnection>();
 	protected HashSet<String> knownPeers = new HashSet<String>();
 	protected HashSet<String> connectedAddresses = new HashSet<String>();
 	protected ArrayList<PeerDiscoveryApparatus> discoveryApparatuses = new ArrayList<PeerDiscoveryApparatus>(); // It's "apparatuses." I looked it up.
-	protected ZKArchive archive;
+	protected ZKArchiveConfig config;
+	protected HashSet<Long> currentTags = new HashSet<Long>();
 	protected HashMap<Long,ChunkableFileHandle> activeFiles = new HashMap<Long,ChunkableFileHandle>();
+	protected HashMap<Long,Condition> pageWaits = new HashMap<Long,Condition>();
+	protected Lock pageWaitLock = new ReentrantLock();
 	
 	int maxSocketCount = 128;
 	int maxPeerListSize = 1024;
 	
-	public PeerSwarm(ZKArchive archive) {
-		this.archive = archive;
+	public PeerSwarm(ZKArchiveConfig config) {
+		this.config = config;
 	}
 	
-	public ZKArchive getArchive() {
-		return archive;
+	public ZKArchiveConfig getConfig() {
+		return config;
 	}
 	
 	public synchronized void openedConnection(PeerConnection connection) {
@@ -72,7 +79,7 @@ public class PeerSwarm {
 		new Thread(() -> {
 			while(true) {
 				for(PeerDiscoveryApparatus apparatus : discoveryApparatuses) {
-					for(String address : apparatus.discoveredPeers(archive)) {
+					for(String address : apparatus.discoveredPeers(config.getArchive())) {
 						addPeer(address);
 					}
 				}
@@ -101,16 +108,24 @@ public class PeerSwarm {
 		connectedAddresses.remove(address);
 	}
 	
-	public byte[] waitForPage(byte[] tag) {
-		// TODO P2P: (implement) block until a given page is received
-		return null;
+	public synchronized void waitForPage(byte[] tag) {
+		long shortTag = Util.shortTag(tag);
+		if(currentTags.contains(shortTag)) return;
+		
+		pageWaitLock.lock();
+		if(!pageWaits.containsKey(shortTag)) {
+			pageWaits.put(shortTag, pageWaitLock.newCondition());
+		}
+		
+		pageWaits.get(shortTag).awaitUninterruptibly();
+		pageWaitLock.unlock();
 	}
 	
 	public ChunkableFileHandle fileHandleForTag(RefTag tag) throws IOException {
 		long shortTag = tag.getShortHash();
 		if(!activeFiles.containsKey(shortTag)) {
 			String path = Page.pathForTag(tag.getHash());
-			ChunkableFileHandle fileHandle = new ChunkableFileHandle(archive.getStorage(), path, archive.getConfig().getPageSize(), PeerMessage.FILE_CHUNK_SIZE);
+			ChunkableFileHandle fileHandle = new ChunkableFileHandle(config.getStorage(), path, config.getPageSize(), PeerMessage.FILE_CHUNK_SIZE);
 			activeFiles.put(shortTag, fileHandle);
 			return fileHandle;
 		}
@@ -118,10 +133,37 @@ public class PeerSwarm {
 		return activeFiles.get(shortTag);
 	}
 	
-	protected void receivedPage(byte[] tag, byte[] contents) {
-		// TODO P2P: (implement) tell all the peerconnections not to specifically grab this page anyomre
+	protected synchronized void receivedPage(byte[] tag) {
+		long shortTag = Util.shortTag(tag);
+		activeFiles.remove(shortTag);
+		currentTags.add(shortTag);
+		pageWaitLock.lock();
+		if(pageWaits.containsKey(shortTag)) {
+			pageWaits.get(shortTag).notifyAll();
+		}
+		pageWaitLock.unlock();
+		
+		announceTag(tag);
+	}
+	
+	public void announceTag(byte[] tag) {
+		long shortTag = Util.shortTag(tag);
+		for(PeerConnection connection : connections) {
+			connection.announceTag(shortTag);
+		}
 	}
 	
 	protected void receivedTips(byte[] tipsFile) {
+		// TODO P2P: (implement)
+	}
+
+	public void requestTag(byte[] pageTag) {
+		requestTag(Util.shortTag(pageTag));
+	}
+	
+	public void requestTag(long shortTag) {
+		for(PeerConnection connection : connections) {
+			connection.requestPageTag(shortTag);
+		}
 	}
 }

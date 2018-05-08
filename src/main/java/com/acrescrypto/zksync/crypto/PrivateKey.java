@@ -26,10 +26,14 @@ public class PrivateKey {
 	}
 	
 	public byte[] sign(byte[] message) {
+		return sign(message, 0, message.length);
+	}
+	
+	public byte[] sign(byte[] message, int offset, int length) {
 		EdDSAEngine engine = new EdDSAEngine();
 		try {
 			engine.initSign(privKey);
-			return engine.signOneShot(message);
+			return engine.signOneShot(message, offset, length);
 		} catch (SignatureException | InvalidKeyException exc) {
 			// This just plain shouldn't happen.
 			logger.error("Error in signing message", exc);
@@ -37,9 +41,13 @@ public class PrivateKey {
 			return null;
 		}
 	}
-	
+
 	public boolean verify(byte[] message, byte[] signature) {
 		return publicKey().verify(message, signature);
+	}
+	
+	public boolean verify(byte[] message, int msgOffset, int msgLen, byte[] signature, int sigOffset, int sigLen) {
+		return publicKey().verify(message, msgOffset, msgLen, signature, sigOffset, sigLen);
 	}
 	
 	public PublicKey publicKey() {

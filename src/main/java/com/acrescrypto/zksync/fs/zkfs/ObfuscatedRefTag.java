@@ -4,7 +4,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.PublicKey;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 
 /** Store a reftag in a means that is extremely difficult to understand without knowledge of the archive root key.

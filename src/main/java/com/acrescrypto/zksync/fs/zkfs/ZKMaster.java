@@ -9,6 +9,7 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveAccessorDiscoveryCallback;
+import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
@@ -19,6 +20,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected Key localKey;
 	protected LinkedList<ArchiveAccessor> accessors = new LinkedList<ArchiveAccessor>();
 	protected HashSet<ZKArchive> allArchives = new HashSet<ZKArchive>();
+	protected Blacklist blacklist;
 	
 	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) {
 		return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
@@ -32,7 +34,10 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		byte[] passphrase = passphraseProvider.requestPassphrase("ZKSync storage passphrase");
 		localKey = new Key(crypto, crypto.deriveKeyFromPassphrase(passphrase));
 		
+		// TODO P2P: (refactor) Local key should be RNG-generated, secured with derived key
+		
 		this.storedAccess = new StoredAccess(this);
+		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive(0x10, new byte[0])); // TODO P2P: (refactor) evil magic number!
 		loadStoredAccessors();
 	}
 	
@@ -41,6 +46,10 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 			storedAccess.read();
 		} catch (IOException e) {
 		}
+	}
+	
+	public Blacklist getBlacklist() {
+		return blacklist;
 	}
 	
 	public CryptoSupport getCrypto() {
@@ -61,7 +70,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		Key passphraseRoot = new Key(crypto, passphraseRootRaw);
 		ArchiveAccessor accessor = makeAccessorForRoot(passphraseRoot, false);
 		ZKArchiveConfig config = new ZKArchiveConfig(accessor, description, pageSize);
-		return new ZKArchive(config);
+		return config.archive;
 	}
 	
 	public String storagePathForArchiveId(byte[] archiveId) {
@@ -96,6 +105,11 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		}
 		accessors.add(accessor);
 		return accessor;
+	}
+	
+	public FS localStorageFsForArchiveId(byte[] archiveId) throws IOException {
+		long tag = Util.shortTag(localKey.authenticate(archiveId));
+		return storage.scopedFS("local/" + String.format("%16x", tag));
 	}
 
 	@Override

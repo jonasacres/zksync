@@ -1,5 +1,7 @@
 package com.acrescrypto.zksync.utility;
 
+import java.nio.ByteBuffer;
+
 import com.acrescrypto.zksync.crypto.HashContext;
 
 public class Util {
@@ -67,6 +69,10 @@ public class Util {
 	
 	public static short unsignByte(byte byteVal) {
 		return (short) (byteVal >= 0 ? byteVal : byteVal + 0x100);
+	}
+	
+	public static long shortTag(byte[] tag) {
+		return ByteBuffer.wrap(tag).getLong();
 	}
 
 	public static boolean isLinux() {

@@ -55,6 +55,6 @@ public class StoredAccessRecord {
 		
 		ArchiveAccessor accessor = master.makeAccessorForRoot(key, seedOnly);
 		ZKArchiveConfig config = new ZKArchiveConfig(accessor, archiveId);
-		archive = new ZKArchive(config);
+		archive = config.getArchive();
 	}
 }

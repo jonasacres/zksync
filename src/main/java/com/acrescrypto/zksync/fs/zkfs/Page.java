@@ -6,6 +6,7 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SecureFile;
+import com.acrescrypto.zksync.utility.Util;
 
 /** represents a fixed-size page of data from a file. handles encryption/decryption/storage of said page. */
 public class Page {
@@ -17,6 +18,10 @@ public class Page {
 	
 	public static String pathForTag(byte[] tag) {
 		return ZKFS.pathForHash(tag);
+	}
+	
+	public static byte[] tagForPath(String path) {
+		return Util.hexToBytes(path.replace("/", ""));
 	}
 	
 	/** initialize page object from file and page number */

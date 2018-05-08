@@ -32,14 +32,14 @@ public class ZKArchive {
 	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
 	protected ArrayList<byte[]> allTags;
 	
-	public ZKArchive(ZKArchiveConfig config) throws IOException {
+	protected ZKArchive(ZKArchiveConfig config) throws IOException {
 		this.master = config.accessor.master;
 		this.storage = config.storage;
 		this.crypto = config.accessor.master.crypto;
 		
 		this.config = config;
 		Key localKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_CONFIG_FILE);
-		this.localConfig = new LocalConfig(storage, localKey);
+		this.localConfig = new LocalConfig(config.localStorage, localKey);
 		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
 			return tag.getFS();
 		}, (RefTag tag, ZKFS fs) -> {});
@@ -57,6 +57,10 @@ public class ZKArchive {
 	
 	public ZKFS openBlank() throws IOException {
 		return new ZKFS(RefTag.blank(this));
+	}
+	
+	public ZKMaster getMaster() {
+		return master;
 	}
 	
 	public FS getStorage() {

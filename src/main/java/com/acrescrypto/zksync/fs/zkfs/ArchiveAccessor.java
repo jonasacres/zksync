@@ -195,4 +195,8 @@ public class ArchiveAccessor {
 	protected long timeSlice(int offset) {
 		return TEMPORAL_SEED_KEY_INTERVAL_MS * (System.currentTimeMillis()/TEMPORAL_SEED_KEY_INTERVAL_MS + offset);
 	}
+
+	public ZKMaster getMaster() {
+		return master;
+	}
 }

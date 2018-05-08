@@ -68,7 +68,7 @@ public class PageQueue {
 		
 		public EverythingPageQueueEntry(int priority) throws IOException {
 			super(priority);
-			ArrayList<byte[]> allTags = connection.socket.swarm.archive.allTags();
+			ArrayList<byte[]> allTags = connection.socket.swarm.config.getArchive().allTags();
 			this.tags = new ArrayList<byte[]>(allTags.size());
 			for(int i = 0; i < allTags.size(); i++) {
 				int j = (int) ((i+1)*Math.random());
@@ -196,7 +196,7 @@ public class PageQueue {
 	
 		@Override
 		public int size() {
-			return (int) Math.ceil(connection.socket.swarm.archive.getConfig().getPageSize()/PeerMessage.FILE_CHUNK_SIZE);
+			return (int) Math.ceil(connection.socket.swarm.config.getPageSize()/PeerMessage.FILE_CHUNK_SIZE);
 		}
 		
 		protected String path() throws IOException {
@@ -217,7 +217,7 @@ public class PageQueue {
 		@Override
 		public byte[] getNext() {
 			try {
-				File file = connection.socket.swarm.archive.getStorage().open(path, File.O_RDONLY);
+				File file = connection.socket.swarm.config.getStorage().open(path, File.O_RDONLY);
 				file.seek(chunkOffset * PeerMessage.FILE_CHUNK_SIZE, File.SEEK_SET);
 				return file.read(PeerMessage.FILE_CHUNK_SIZE);
 			} catch(IOException exc) {
@@ -339,7 +339,7 @@ public class PageQueue {
 	}
 	
 	public synchronized void addPageTag(int priority, long shortTag) throws IOException {
-		byte[] pageTag = connection.socket.swarm.archive.expandShortTag(shortTag);
+		byte[] pageTag = connection.socket.swarm.config.getArchive().expandShortTag(shortTag);
 		addEntry(new PageTagPageQueueEntry(priority, pageTag));
 	}
 	

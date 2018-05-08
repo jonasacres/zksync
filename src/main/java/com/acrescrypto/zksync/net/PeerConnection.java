@@ -3,6 +3,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
@@ -15,6 +16,7 @@ import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerConnection {
@@ -25,7 +27,7 @@ public class PeerConnection {
 	public final static int CMD_REQUEST_ALL = 0x04;
 	public final static int CMD_REQUEST_REF_TAGS = 0x05;
 	public final static int CMD_REQUEST_REVISION_CONTENTS = 0x06;
-	public final static int CMD_REQUEST_PAGES_TAGS = 0x07;
+	public final static int CMD_REQUEST_PAGE_TAGS = 0x07;
 	public final static int CMD_SEND_PAGE = 0x08;
 	public final static int CMD_SET_PAUSED = 0x09;
 	
@@ -64,34 +66,51 @@ public class PeerConnection {
 	
 	public void sendAccessProof() throws PeerRoleException {
 		assertClientStatus(true);
-		ArchiveAccessor accessor = socket.getSwarm().getArchive().getConfig().getAccessor();
+		ArchiveAccessor accessor = socket.getSwarm().getConfig().getAccessor();
 		byte[] payload = accessor.temporalProof(0, socket.getSharedSecret());
 		send(CMD_ACCESS_PROOF, payload);
 	}
 	
-	public void announceTags(RefTag[] tags) {
-		send(CMD_ACCESS_PROOF, serializeRefTags(tags));
+	public void announceTag(long shortTag) {
+		ByteBuffer tag = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
+		tag.putLong(shortTag);
+		send(CMD_ANNOUNCE_TAGS, tag.array());
+	}
+	
+	public void announceTags(Collection<RefTag> tags) {
+		ByteBuffer serialized = ByteBuffer.allocate(tags.size() * RefTag.REFTAG_SHORT_SIZE);
+		for(RefTag tag : tags) {
+			serialized.putLong(tag.getShortHash());
+		}
+		send(CMD_ANNOUNCE_TAGS, serialized.array());
 	}
 	
 	public void announceTips() throws IOException {
-		ByteBuffer buf = ByteBuffer.allocate(socket.swarm.archive.getRevisionTree().branchTips().size() * ObfuscatedRefTag.sizeForArchive(socket.swarm.archive));
-		for(RefTag tag : socket.swarm.archive.getRevisionTree().plainBranchTips()) {
+		ZKArchive archive = socket.swarm.config.getArchive();
+		ByteBuffer buf = ByteBuffer.allocate(archive.getRevisionTree().branchTips().size() * ObfuscatedRefTag.sizeForArchive(archive));
+		for(RefTag tag : archive.getRevisionTree().plainBranchTips()) {
 			buf.put(tag.obfuscate().serialize());
 		}
-		send(CMD_ANNOUNCE_TAGS, buf.array());
+		send(CMD_ANNOUNCE_TIPS, buf.array());
 	}
 	
 	public void requestAll() {
 		send(CMD_REQUEST_ALL, new byte[0]);
 	}
 	
+	public void requestPageTag(long shortTag) {
+		ByteBuffer buf = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
+		buf.putLong(shortTag);
+		send(CMD_REQUEST_PAGE_TAGS, buf.array());
+	}
+
 	public void requestPageTags(byte[][] pageTags) {
 		ByteBuffer pageTagsMerged = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE*pageTags.length);
 		for(byte[] tag : pageTags) {
 			pageTagsMerged.put(tag);
 		}
 		
-		send(CMD_REQUEST_PAGES_TAGS, pageTagsMerged.array());
+		send(CMD_REQUEST_PAGE_TAGS, pageTagsMerged.array());
 	}
 	
 	/** Request all pages pertaining to a given reftag (including merkle tree chunks). */
@@ -115,7 +134,7 @@ public class PeerConnection {
 	}
 	
 	protected byte[] serializeRefTags(RefTag[] tags) {
-		ByteBuffer buf = ByteBuffer.allocate(tags.length * socket.swarm.archive.refTagSize());
+		ByteBuffer buf = ByteBuffer.allocate(tags.length * socket.swarm.config.getArchive().refTagSize());
 		for(RefTag tag : tags) buf.put(tag.getBytes());
 		return buf.array();
 	}
@@ -133,15 +152,15 @@ public class PeerConnection {
 	}
 	
 	protected byte[] proofResponse(byte[] proof) throws ProtocolViolationException {
-		assertState(proof.length == socket.swarm.archive.getCrypto().hashLength());
+		assertState(proof.length == socket.swarm.config.getArchive().getCrypto().hashLength());
 		// temporalProof returns random garbage if we are not a full peer
-		if(Arrays.equals(proof, socket.swarm.archive.getConfig().getAccessor().temporalProof(0, socket.getSharedSecret()))) {
+		if(Arrays.equals(proof, socket.swarm.config.getAccessor().temporalProof(0, socket.getSharedSecret()))) {
 			peerType = PEER_TYPE_FULL;
-			return socket.swarm.archive.getConfig().getAccessor().temporalProof(1, socket.getSharedSecret());
+			return socket.swarm.config.getAccessor().temporalProof(1, socket.getSharedSecret());
 		} else {
 			// either their proof is garbage (meaning they're blind), or we're a blind seed; send garbage
 			peerType = PEER_TYPE_BLIND;
-			return socket.swarm.archive.getCrypto().rng(proof.length);
+			return socket.swarm.config.getAccessor().getMaster().getCrypto().rng(proof.length);
 		}
 	}
 
@@ -169,7 +188,7 @@ public class PeerConnection {
 			case CMD_REQUEST_REVISION_CONTENTS:
 				handleRequestRevisionContents(msg);
 				break;
-			case CMD_REQUEST_PAGES_TAGS:
+			case CMD_REQUEST_PAGE_TAGS:
 				handleRequestTags(msg);
 				break;
 			case CMD_SEND_PAGE:
@@ -196,7 +215,7 @@ public class PeerConnection {
 	}
 	
 	protected void handleAccessProof(PeerMessageIncoming msg) throws PeerRoleException, ProtocolViolationException, EOFException {
-		ArchiveAccessor accessor = this.socket.swarm.archive.getConfig().getAccessor();
+		ArchiveAccessor accessor = this.socket.swarm.config.getAccessor();
 		int theirStep = this.socket.isClient() ? 0x01 : 0x00;
 		byte[] expected = accessor.temporalProof(theirStep, this.socket.getSharedSecret());
 		byte[] received = msg.rxBuf.read(expected.length);
@@ -206,7 +225,7 @@ public class PeerConnection {
 		if(!socket.isClient()) {
 			byte[] response = peerType == PEER_TYPE_FULL 
 					? accessor.temporalProof(0x01, socket.getSharedSecret())
-					: socket.swarm.archive.getCrypto().prng(this.socket.getSharedSecret()).getBytes(expected.length);
+					: socket.swarm.config.getAccessor().getMaster().getCrypto().prng(this.socket.getSharedSecret()).getBytes(expected.length);
 			send(CMD_ACCESS_PROOF, response);
 		}
 		
@@ -235,12 +254,12 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
-		byte[] obfTagRaw = new byte[ObfuscatedRefTag.sizeForArchive(socket.swarm.archive)];
+		ZKArchive archive = socket.swarm.config.getArchive();
+		byte[] obfTagRaw = new byte[ObfuscatedRefTag.sizeForArchive(archive)];
 		while(!msg.rxBuf.isEOF()) {
 			msg.rxBuf.get(obfTagRaw);
-			ObfuscatedRefTag obfTag = new ObfuscatedRefTag(socket.swarm.archive, obfTagRaw);
-			obfTag.assertValid();
-			// TODO P2P: (refactor) Rewrite revision storage so we can have a sequence of obfuscated tags
+			ObfuscatedRefTag obfTag = new ObfuscatedRefTag(archive, obfTagRaw);
+			archive.getRevisionTree().addBranchTip(obfTag);
 		}
 	}
 	
@@ -250,23 +269,25 @@ public class PeerConnection {
 	}
 	
 	protected void handleRequestRefTags(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
+		ZKArchive archive = socket.swarm.config.getArchive();
 		assertPeerCapability(PEER_TYPE_FULL);
-		byte[] refTagBytes = new byte[socket.swarm.archive.refTagSize()];
+		byte[] refTagBytes = new byte[archive.refTagSize()];
 		int priority = msg.rxBuf.getInt();
 		
 		while(!msg.rxBuf.isEOF()) {
-			RefTag tag = new RefTag(socket.swarm.archive, msg.rxBuf.read(refTagBytes));
+			RefTag tag = new RefTag(archive, msg.rxBuf.read(refTagBytes));
 			sendTagContents(priority, tag);
 		}
 	}
 	
 	protected void handleRequestRevisionContents(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
+		ZKArchive archive = socket.swarm.config.getArchive();
 		assertPeerCapability(PEER_TYPE_FULL);
-		byte[] refTagBytes = new byte[socket.swarm.archive.refTagSize()];
+		byte[] refTagBytes = new byte[archive.refTagSize()];
 		int priority = msg.rxBuf.getInt();
 		
 		while(!msg.rxBuf.isEOF()) {
-			RefTag tag = new RefTag(socket.swarm.archive, msg.rxBuf.read(refTagBytes));
+			RefTag tag = new RefTag(archive, msg.rxBuf.read(refTagBytes));
 			sendRevisionContents(priority, tag);
 		}
 	}
@@ -281,9 +302,10 @@ public class PeerConnection {
 	}
 	
 	protected void handleSendPage(PeerMessageIncoming msg) throws IOException, ProtocolViolationException {
-		byte[] tagData = msg.rxBuf.read(RefTag.blank(socket.swarm.archive).getBytes().length);
-		int expectedChunks = (int) Math.ceil(((double) socket.swarm.archive.getConfig().getPageSize())/PeerMessage.FILE_CHUNK_SIZE);
-		ChunkableFileHandle handle = socket.swarm.fileHandleForTag(new RefTag(socket.swarm.archive, tagData));
+		ZKArchive archive = socket.swarm.config.getArchive();
+		byte[] tagData = msg.rxBuf.read(archive.refTagSize());
+		int expectedChunks = (int) Math.ceil(((double) archive.getConfig().getPageSize())/PeerMessage.FILE_CHUNK_SIZE);
+		ChunkableFileHandle handle = socket.swarm.fileHandleForTag(new RefTag(archive, tagData));
 		
 		try {
 			while(!msg.rxBuf.isEOF()) {
@@ -291,6 +313,9 @@ public class PeerConnection {
 				assertState(0 <= offset && offset < expectedChunks && offset <= Integer.MAX_VALUE);
 				byte[] chunkData = msg.rxBuf.read(PeerMessage.FILE_CHUNK_SIZE);
 				handle.writeChunk((int) offset, chunkData);
+				if(handle.isFinished()) {
+					socket.swarm.receivedPage(tagData);
+				}
 				// TODO P2P: (design) how to detect liar peers that send garbage data? we know how to detect a bad page, but how about a bad chunk?
 			}
 		} catch(EOFException exc) {} // we're allowed to cancel these transfers at any time, causing EOF; just ignore it

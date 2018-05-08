@@ -61,12 +61,8 @@ public abstract class PeerSocket {
 	
 	/** Immediately close socket and blacklist due to a clear protocol violation. */
 	public void violation() {
-		// TODO P2P: (implement) close and blacklist
-	}
-	
-	/** Close connection and add strikes against an address; blacklist triggered when strikes reach threshold. */
-	public void violation(int strikes) {
 		close();
+		swarm.config.getArchive().getMaster().getBlacklist().add(address, Integer.MAX_VALUE);
 	}
 	
 	/** Handle some sort of I/O exception */

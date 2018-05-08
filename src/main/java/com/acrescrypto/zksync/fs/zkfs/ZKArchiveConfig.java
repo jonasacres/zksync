@@ -7,7 +7,10 @@ import java.util.Arrays;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateKey;
 import com.acrescrypto.zksync.crypto.PublicKey;
-import com.acrescrypto.zksync.fs.compositefs.CompositeFS;
+import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.backedfs.BackedFS;
+import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
+import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKArchiveConfig {
@@ -23,21 +26,28 @@ public class ZKArchiveConfig {
 	protected PrivateKey privKey; // derived from the write key root
 	protected PublicKey pubKey; // matches privKey
 	protected byte[] configFileIv; // rng
-	protected CompositeFS storage;
+	protected BackedFS storage;
+	protected FS localStorage;
 	protected ArchiveAccessor accessor;
 	protected int pageSize;
 	protected String description;
+	protected ZKArchive archive;
+	protected PeerSwarm swarm;
 	
 	/** Read an existing archive. 
 	 * @throws IOException */
 	public ZKArchiveConfig(ArchiveAccessor accessor, byte[] archiveId) throws IOException {
 		this.accessor = accessor;
 		this.pageSize = -1;
-		this.storage = new CompositeFS(accessor.master.storageFsForArchiveId(archiveId));
+		this.swarm = new PeerSwarm(this);
+		this.storage = new BackedFS(accessor.master.storageFsForArchiveId(archiveId), new SwarmFS(swarm));
+		this.localStorage = accessor.master.localStorageFsForArchiveId(archiveId);
 		
 		if(!accessor.isSeedOnly()) {
 			read();
 		}
+		
+		this.archive = new ZKArchive(this);
 	}
 	
 	/** Create a new archive. 
@@ -51,7 +61,10 @@ public class ZKArchiveConfig {
 		this.description = description;
 		
 		initArchiveSpecific();
-		this.storage = new CompositeFS(accessor.master.storageFsForArchiveId(archiveId));
+		this.swarm = new PeerSwarm(this);
+		this.storage = new BackedFS(accessor.master.storageFsForArchiveId(archiveId), new SwarmFS(swarm));
+		this.localStorage = accessor.master.localStorageFsForArchiveId(archiveId);
+		this.archive = new ZKArchive(this);
 	}
 	
 	public void isConfigAvailable() {
@@ -106,14 +119,14 @@ public class ZKArchiveConfig {
 	}
 	
 	public void write() throws IOException {
-		ByteBuffer writeBuf = ByteBuffer.allocate(pageSize);
+		ByteBuffer writeBuf = ByteBuffer.allocate(pageSize+accessor.master.crypto.asymSignatureSize());
 		byte[] seedPortion = serializeSeedPortion();
 		byte[] seedCiphertext = accessor.configFileSeedKey.encrypt(configFileIv, seedPortion, 256);
 		writeBuf.put(seedCiphertext);
 		byte[] ciphertext = accessor.configFileKey.encrypt(configFileIv, serializeSecurePortion(), writeBuf.remaining());
 		writeBuf.put(ciphertext);
+		writeBuf.put(privKey.sign(writeBuf.array(), 0, writeBuf.position()));
 		assertState(!writeBuf.hasRemaining());
-		// TODO P2P: (implement) Add a signature
 		
 		storage.write(Page.pathForTag(accessor.configFileTag), writeBuf.array());
 	}
@@ -124,9 +137,12 @@ public class ZKArchiveConfig {
 		contents.get(seedCiphertext);
 		deserializeSeedPortion(accessor.configFileSeedKey.decrypt(configFileIv, seedCiphertext));
 		
-		byte[] secureCiphertext = new byte[contents.remaining()];
+		byte[] secureCiphertext = new byte[contents.remaining()-accessor.master.crypto.asymSignatureSize()];
 		contents.get(secureCiphertext);
 		deserializeSecurePortion(accessor.configFileKey.decrypt(configFileIv, secureCiphertext));
+		
+		int sigSize = accessor.master.crypto.asymSignatureSize();
+		pubKey.verify(contents.array(), 0, contents.capacity()-sigSize, contents.array(), contents.capacity()-sigSize, sigSize);
 	}
 	
 	public Key deriveKey(int root, int type, int index, byte[] tweak) {
@@ -246,5 +262,21 @@ public class ZKArchiveConfig {
 
 	public ArchiveAccessor getAccessor() {
 		return accessor;
+	}
+	
+	public PeerSwarm getSwarm() {
+		return swarm;
+	}
+	
+	public ZKArchive getArchive() {
+		return archive;
+	}
+	
+	public FS getStorage() {
+		return storage;
+	}
+	
+	public FS getLocalStorage() {
+		return localStorage;
 	}
 }

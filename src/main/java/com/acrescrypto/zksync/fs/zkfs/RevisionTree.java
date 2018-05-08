@@ -106,13 +106,13 @@ public class RevisionTree {
 	
 	public void write() throws IOException {
 		MutableSecureFile
-		  .atPath(archive.storage, getPath(), branchTipKey())
+		  .atPath(archive.config.localStorage, getPath(), branchTipKey())
 		  .write(serialize(), 65536);
 	}
 	
 	protected void read() throws IOException {
 		deserialize(MutableSecureFile
-		  .atPath(archive.storage, getPath(), branchTipKey())
+		  .atPath(archive.config.localStorage, getPath(), branchTipKey())
 		  .read());
 	}
 	

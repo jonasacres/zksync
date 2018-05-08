@@ -1,20 +1,46 @@
-package com.acrescrypto.zksync.fs.remotefs;
+package com.acrescrypto.zksync.fs.swarmfs;
 
 import java.io.IOException;
 
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
-import com.acrescrypto.zksync.net.PeerConnection;
+import com.acrescrypto.zksync.fs.zkfs.Page;
+import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.utility.Util;
 
-public class PeerConnectionFS extends FS {
-	PeerConnection connection;
+public class SwarmFS extends FS {
+	PeerSwarm swarm;
+
+	public SwarmFS(PeerSwarm swarm) {
+		this.swarm = swarm;
+	}
 
 	@Override
 	public Stat stat(String path) throws IOException {
-		throw new UnsupportedOperationException();
+		byte[] tag = Page.tagForPath(path);
+		if(tag.length != swarm.getConfig().getAccessor().getMaster().getCrypto().hashLength()) {
+			throw new ENOENTException(path);
+		}
+
+		Stat stat = new Stat();
+		stat.setGid(0);
+		stat.setUid(0);
+		stat.setMode(0400);
+		stat.setType(Stat.TYPE_REGULAR_FILE);
+		stat.setDevMinor(0);
+		stat.setDevMajor(0);
+		stat.setGroup("root");
+		stat.setUser("root");
+		stat.setAtime(0);
+		stat.setMtime(0);
+		stat.setCtime(0);
+		stat.setSize(swarm.getConfig().getPageSize());
+		stat.setInodeId(Util.shortTag(tag));
+		
+		return stat;
 	}
 
 	@Override
@@ -119,15 +145,17 @@ public class PeerConnectionFS extends FS {
 
 	@Override
 	public byte[] _read(String path) throws IOException {
-		byte[] pageTag = Util.hexToBytes(path.replace("/", ""));
-		connection.requestPageTags(new byte[][] {pageTag});
-		connection.getSocket().getSwarm().waitForPage(pageTag);
-		return null;
+		byte[] pageTag = Page.tagForPath(path);
+		swarm.requestTag(pageTag);
+		swarm.waitForPage(pageTag);
+		return swarm.getConfig().getStorage().read(path);
 	}
 
 	@Override
 	public File open(String path, int mode) throws IOException {
-		return new PeerConnectionFile(this, path, mode);
+		byte[] pageTag = Page.tagForPath(path);
+		swarm.waitForPage(pageTag);
+		return swarm.getConfig().getStorage().open(path, mode);
 	}
 
 	@Override
@@ -136,7 +164,7 @@ public class PeerConnectionFS extends FS {
 	}
 	
 	@Override
-	public PeerConnectionFS scopedFS(String subpath) {
+	public SwarmFS scopedFS(String subpath) {
 		throw new UnsupportedOperationException(); // no concept of scoping a PeerConnectionFS
 	}
 }
