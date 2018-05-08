@@ -132,6 +132,9 @@ public class ZKFile extends File {
 			bufferPage(neededPageNum);
 			bufferedPage.seek((int) (offset % zkfs.archive.config.pageSize));
 			int numRead = bufferedPage.read(buf, bufOffset + readLen - numToRead, numToRead);
+			if(numRead == 0) {
+				int x = 7;
+			}
 			assert(numRead > 0);
 			numToRead -= numRead;
 			offset += numRead;

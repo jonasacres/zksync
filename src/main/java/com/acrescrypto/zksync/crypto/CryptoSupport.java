@@ -1,13 +1,9 @@
 package com.acrescrypto.zksync.crypto;
 
 import java.nio.ByteBuffer;
-import java.security.InvalidKeyException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.Signature;
-import java.security.SignatureException;
 import java.util.Base64;
 
+import org.bouncycastle.crypto.BufferedBlockCipher;
 import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.InvalidCipherTextException;
@@ -19,21 +15,14 @@ import org.bouncycastle.crypto.modes.OCBBlockCipher;
 import org.bouncycastle.crypto.params.AEADParameters;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.params.ParametersWithIV;
+
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
-
 
 import de.mkammerer.argon2.Argon2Factory;
 import de.mkammerer.argon2.jna.Argon2Library;
 import de.mkammerer.argon2.jna.Size_t;
 import de.mkammerer.argon2.jna.Uint32_t;
-import net.i2p.crypto.eddsa.EdDSAEngine;
-import net.i2p.crypto.eddsa.EdDSAPrivateKey;
-import net.i2p.crypto.eddsa.EdDSAPublicKey;
-import net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable;
-import net.i2p.crypto.eddsa.spec.EdDSAParameterSpec;
-import net.i2p.crypto.eddsa.spec.EdDSAPrivateKeySpec;
-import net.i2p.crypto.eddsa.spec.EdDSAPublicKeySpec;
 
 public class CryptoSupport {
 	private PRNG defaultPrng;
@@ -164,9 +153,9 @@ public class CryptoSupport {
 		}
 	}
 	
-	public byte[] encryptCBC(byte[] key, byte[] iv, byte[] plaintext, int padSize) {
+	public byte[] encryptCBC(byte[] key, byte[] iv, byte[] plaintext) {
 		try {
-			return processOrdinaryCipher(true, 128, key, iv, padToSize(plaintext, padSize));
+			return processOrdinaryCipher(true, key, iv, plaintext);
 		} catch (Exception exc) {
 			logger.error("Encountered exception encrypting data", exc);
 			System.exit(1);
@@ -174,47 +163,14 @@ public class CryptoSupport {
 		}
 	}
 	
-	public byte[] decryptCBC(byte[] key, byte[] iv, byte[] ciphertext, boolean padded) {
+	public byte[] decryptCBC(byte[] key, byte[] iv, byte[] ciphertext) {
 		try {
-			byte[] paddedPlaintext = processOrdinaryCipher(false, 128, key, iv, ciphertext);
-			if(padded) return unpad(paddedPlaintext);
+			byte[] paddedPlaintext = processOrdinaryCipher(false, key, iv, ciphertext);
 			return paddedPlaintext;
 		} catch(Exception exc) {
 			logger.error("Encountered exception decrypting data", exc);
 			System.exit(1);
 			return null; // unreachable, but it makes the compiler happy
-		}
-	}
-	
-	public byte[] sign(byte[] privKey, byte[] text) {
-		try {
-	        EdDSAParameterSpec spec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
-	        Signature sgr = new EdDSAEngine(MessageDigest.getInstance(spec.getHashAlgorithm()));
-	        EdDSAPrivateKeySpec key = new EdDSAPrivateKeySpec(privKey, spec);
-	        EdDSAPrivateKey sKey = new EdDSAPrivateKey(key);
-	        sgr.initSign(sKey);
-	        sgr.update(text);
-			return sgr.sign();
-		} catch(NoSuchAlgorithmException | InvalidKeyException | SignatureException exc) {
-			logger.error("Encountered exception signing data", exc);
-			System.exit(1);
-			return null;
-		}
-	}
-	
-	public boolean verify(byte[] pubKeyBytes, byte[] text, byte[] signature) {
-		try {
-			EdDSAParameterSpec spec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
-	        Signature sgr = new EdDSAEngine(MessageDigest.getInstance(spec.getHashAlgorithm()));
-	        EdDSAPublicKeySpec pubKey = new EdDSAPublicKeySpec(pubKeyBytes, spec);
-            EdDSAPublicKey vKey = new EdDSAPublicKey(pubKey);
-            sgr.initVerify(vKey);
-            sgr.update(text);
-            return sgr.verify(signature);
-		} catch(NoSuchAlgorithmException | SignatureException | InvalidKeyException exc) {
-			logger.error("Encountered exception verifying signature", exc);
-			System.exit(1);
-			return false;
 		}
 	}
 	
@@ -242,15 +198,15 @@ public class CryptoSupport {
         return out;
 	}
 	
-	protected static byte[] processOrdinaryCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in) throws IllegalStateException {
+	protected static byte[] processOrdinaryCipher(boolean encrypt, byte[] keyBytes, byte[] iv, byte[] in) throws IllegalStateException {
         KeyParameter key = new KeyParameter(keyBytes);
         CipherParameters params = new ParametersWithIV(key, iv);
-        CBCBlockCipher cipher = new CBCBlockCipher(new AESEngine());
+        BufferedBlockCipher cipher = new BufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
         cipher.init(encrypt, params);
 
 		int offset = 0;
 		byte[] out = new byte[in.length];
-        if(in != null) offset = cipher.processBlock(in, 0, out, 0);
+        if(in != null) offset = cipher.processBytes(in, 0, in.length, out, 0);
         assert(offset == out.length);
         
         return out;
@@ -298,7 +254,7 @@ public class CryptoSupport {
 	}
 	
 	public int symIvLength() {
-		return 64/8; // 64-bit IV 
+		return 64/8; // 64-bit IV (note: this is for AEAD, do not use for CBC mode)
 	}
 	
 	public int hashLength() {
@@ -306,11 +262,6 @@ public class CryptoSupport {
 	}
 
 	public int symBlockSize() {
-		return symIvLength();
-	}
-
-	public int signatureSize() {
-		// TODO P2P: (implement) fixed signature size
-		return 0;
+		return 128/8; // AES has 128-bit blocks
 	}
 }

@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.crypto.PublicKey;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 
 /** Store a reftag in a means that is extremely difficult to understand without knowledge of the archive root key.
@@ -29,7 +30,7 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	protected byte[] signature;
 	
 	public static int sizeForArchive(ZKArchive archive) {
-		return archive.refTagSize() + archive.crypto.signatureSize();
+		return archive.refTagSize() + PublicKey.SIG_SIZE;
 	}
 	
 	public ObfuscatedRefTag(ZKArchive archive, byte[] serialized) {
@@ -41,8 +42,8 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 		// TODO P2P: (review) It's been suggested to use a 512-bit block cipher here...
 		this.archive = refTag.archive;
 		Key key = archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
-		this.ciphertext = archive.crypto.encryptCBC(key.getRaw(), new byte[archive.crypto.symIvLength()], refTag.getBytes(), 0);
-		this.signature = archive.crypto.sign(archive.config.privKey.getBytes(), ciphertext);
+		this.ciphertext = archive.crypto.encryptCBC(key.getRaw(), new byte[archive.crypto.symBlockSize()], transform(refTag.getBytes()));
+		this.signature = archive.config.privKey.sign(ciphertext);
 	}
 	
 	public int ciphertextLength() {
@@ -54,7 +55,7 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	}
 	
 	public boolean verify() {
-		return archive.crypto.verify(archive.config.pubKey.getBytes(), this.ciphertext, this.signature);
+		return archive.config.pubKey.verify(ciphertext, signature);
 	}
 	
 	public void assertValid() throws InvalidSignatureException {
@@ -63,7 +64,7 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	
 	public RefTag decrypt() throws InvalidSignatureException {
 		Key key = archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
-		byte[] mangled = archive.crypto.decryptCBC(key.getRaw(), new byte[archive.crypto.symIvLength()], this.ciphertext, false);
+		byte[] mangled = archive.crypto.decryptCBC(key.getRaw(), new byte[archive.crypto.symBlockSize()], this.ciphertext);
 		byte[] plaintext = transform(mangled);
 		return new RefTag(archive, plaintext);
 	}

@@ -45,7 +45,8 @@ public class ArchiveAccessor {
 	protected Key seedId; // derived from seed root; identifies archive family (all archives bearing the same passphrase)
 	protected Key seedRegId; // derived from seed root; unique identifier for registering archive family
 	
-	protected Key configFileKey; // derived from passphrase root; used to encrypt configuration file
+	protected Key configFileKey; // derived from passphrase root; used to encrypt secure portion of configuration file
+	protected Key configFileSeedKey; // derived from passphrase root; used to encrypt seed portion of configuration file
 	protected byte[] configFileTag; // derived from passphrase root; used to set location in filesystem of config file
 	
 	protected int type; // KEY_ROOT_PASSPHRASE or KEY_ROOT_SEED
@@ -134,7 +135,9 @@ public class ArchiveAccessor {
 
 	public Key deriveKey(int root, int type, int index, byte[] tweak) {
 		Key[] keys = { passphraseRoot, null, seedRoot, localRoot };
-		if(root >= keys.length || keys[root] == null) throw new IllegalArgumentException();
+		if(root >= keys.length || keys[root] == null) {
+			throw new IllegalArgumentException();
+		}
 		return keys[root].derive(((type & 0xFFFF) << 16) | (index & 0xFFFF), tweak);
 	}
 	
