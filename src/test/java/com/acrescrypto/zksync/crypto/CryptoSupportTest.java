@@ -9,9 +9,6 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.utility.Util;
@@ -26,7 +23,6 @@ public class CryptoSupportTest  {
 	
 	@AfterClass
 	public static void afterClass() {
-		Logger root = (Logger)LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
 	}
 	
 	@Test
