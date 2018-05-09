@@ -134,6 +134,7 @@ public class PeerSwarm {
 	}
 	
 	protected synchronized void receivedPage(byte[] tag) {
+		// TODO P2P: (implement) Validate that the page is valid, and if not, ask for its replacement.
 		long shortTag = Util.shortTag(tag);
 		activeFiles.remove(shortTag);
 		currentTags.add(shortTag);
@@ -153,10 +154,6 @@ public class PeerSwarm {
 		}
 	}
 	
-	protected void receivedTips(byte[] tipsFile) {
-		// TODO P2P: (implement)
-	}
-
 	public void requestTag(byte[] pageTag) {
 		requestTag(Util.shortTag(pageTag));
 	}

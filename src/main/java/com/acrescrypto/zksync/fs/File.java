@@ -4,8 +4,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 
-import com.acrescrypto.zksync.utility.ThroughputTransaction;
-
 public abstract class File implements Closeable {
 	public final static int O_RDONLY = 1 << 0;
 	public final static int O_WRONLY = 1 << 1;
@@ -32,9 +30,7 @@ public abstract class File implements Closeable {
 	
 	public final int read(byte[] buf, int offset, int maxLength) throws IOException {
 		fs.expectRead(maxLength);
-		ThroughputTransaction tx = fs.rxThroughput.beginTransaction();
 		int r = _read(buf, offset, maxLength);
-		tx.finish(r);
 		fs.expectedReadFinished(maxLength);
 		return r;
 	}

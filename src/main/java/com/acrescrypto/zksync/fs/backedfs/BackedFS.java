@@ -8,23 +8,12 @@ import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
-import com.acrescrypto.zksync.utility.TaskPool;
 
-/** Pulls data from a variety of "supplementary" sources, storing them as they are acquired to a permanent "backing fs."
- * e.g.  a bunch of supplementary network filesystems, backing to a LocalFS instance.
- * 
- * This is useful for ZKArchive storage, where all the files are immutable and each peer either has the file or it does
- * not.
- *
- */
 public class BackedFS extends FS {
 	protected FS cacheFS; // We check this first, and if something isn't here, we try to download it and write it here.
 	protected FS backupFS; // This is where we go to look for data we don't have.
 
 	HashSet<String> pendingPaths = new HashSet<String>();
-	TaskPool<String,Object> expectationPool; // thread pool for acquiring expected paths
-	
-	int maxSimultaneousExpectDownloads = 16; // number of expected paths we can download simultaneously
 
 	public BackedFS(FS cacheFS, FS backupFS) {
 		this.cacheFS = cacheFS;
@@ -184,24 +173,6 @@ public class BackedFS extends FS {
 	public void truncate(String path, long size) throws IOException {
 		ensurePresent(path);
 		cacheFS.truncate(path, size);
-	}
-	
-	@Override
-	public synchronized void expect(String path) {
-		expectationPool.add(path);
-	}
-	
-	protected void startExpectationPool() {
-		expectationPool = new TaskPool<String,Object>(maxSimultaneousExpectDownloads, null)
-				.setTask((String path) -> {
-					try {
-						ensurePresent(path);
-					} catch (IOException e) {
-					}
-					return null;
-				})
-				.holdOpen()
-				.launch();
 	}
 	
 	/** Acquire a page from our supplementary sources and write to our backing FS, blocking until we've done so.

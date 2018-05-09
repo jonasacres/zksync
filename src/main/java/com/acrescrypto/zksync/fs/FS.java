@@ -5,9 +5,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import com.acrescrypto.zksync.utility.ThroughputMeter;
-import com.acrescrypto.zksync.utility.ThroughputTransaction;
-
 public abstract class FS {
 	public abstract Stat stat(String path) throws IOException;
 	public abstract Stat lstat(String path) throws IOException;
@@ -38,7 +35,6 @@ public abstract class FS {
 	public abstract File open(String path, int mode) throws IOException;
 	public abstract void truncate(String path, long size) throws IOException;
 	
-	protected ThroughputMeter rxThroughput = new ThroughputMeter();
 	protected long expectedReadBytes = 0;
 	
 	protected synchronized void expectRead(long count) {
@@ -49,15 +45,6 @@ public abstract class FS {
 		expectedReadBytes -= count;
 	}
 	
-	public long getBytesPerSecond() {
-		return rxThroughput.getBytesPerSecond();
-	}
-	
-	public long expectedReadWaitTime(long bytes) {
-		if(getBytesPerSecond() < 0) return -1;
-		return 1000*(bytes + expectedReadBytes)/getBytesPerSecond();
-	}
-	
 	public byte[] _read(String path) throws IOException {
 		File file = open(path, File.O_RDONLY);
 		byte[] bytes = file.read();
@@ -66,10 +53,7 @@ public abstract class FS {
 	}
 	
 	public final byte[] read(String path) throws IOException {
-		ThroughputTransaction transaction = rxThroughput.beginTransaction();
-		byte[] bytes = _read(path);
-		transaction.finish(bytes.length);
-		return bytes;
+		return _read(path);
 	}
 	
 	public void rmrf(String path) throws IOException {

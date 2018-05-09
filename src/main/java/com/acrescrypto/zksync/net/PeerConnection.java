@@ -309,6 +309,18 @@ public class PeerConnection {
 		
 		try {
 			while(!msg.rxBuf.isEOF()) {
+				/* A frustrating shortcoming of the current design, with no obvious solution in sight, is that it's not
+				 * clear how we can prove an individual chunk is real. This means that we can't blacklist people for
+				 * sending us garbage data. We can still filter out garbage once we get a complete page, because pages
+				 * can be validated.
+				 * 
+				 * This creates some possibility for a DoS, provided one has knowledge of the seed key: offer
+				 * 1 incorrect chunk of each page, forcing the client to waste time retrying the file, as many times as
+				 * it takes before the client happens to get chunks exclusively from honest peers. Which is probably
+				 * forever, or at least as long as the evil peer is on.
+				 * 
+				 * TODO P2P: (design) There has to be a way to stop this madness.
+				 */
 				long offset = Util.unsignInt(msg.rxBuf.getInt());
 				assertState(0 <= offset && offset < expectedChunks && offset <= Integer.MAX_VALUE);
 				byte[] chunkData = msg.rxBuf.read(PeerMessage.FILE_CHUNK_SIZE);
@@ -316,7 +328,6 @@ public class PeerConnection {
 				if(handle.isFinished()) {
 					socket.swarm.receivedPage(tagData);
 				}
-				// TODO P2P: (design) how to detect liar peers that send garbage data? we know how to detect a bad page, but how about a bad chunk?
 			}
 		} catch(EOFException exc) {} // we're allowed to cancel these transfers at any time, causing EOF; just ignore it
 	}

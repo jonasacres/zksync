@@ -7,20 +7,22 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 
 /** Store a reftag in a means that is extremely difficult to understand without knowledge of the archive root key.
- * The security guarantees for this secrecy are weaker than those for actual archive contents. This is because
- * this level of privacy can be obtained without adding to the storage size of these records.
+ * The security guarantees for this secrecy are weaker than those for actual archive contents. Hence, it is described
+ * as "obfuscated" rather than "encrypted" or "secure."
  * 
- * The reftag is first "mangled" by computing the HMAC of its hash bytes using an archive root-derivative key.
- * The mangled reftag is produced by taking the original hash bytes, and concatenating them with the XOR of the
- * first bytes of the HMAC with the metadata bytes. Thus, the metadata bytes (which are very low-entropy) are XORed
- * with a high-entropy source known only to parties who possess the archive root key.
+ * This methodology will reveal reftags in 2^64 hashes, due to the fact that it uses CBC-mode encryption with a fixed IV.
+ * Therefore, reftags with a matched prefix of one or more 128-bit blocks will produce obfuscated reftags with the same
+ * number of matched blocks. It will take an average of 2^64 obfuscated reftags for a one-block collision to take place,
+ * which is sufficient to reveal the reftag.
  * 
- * The resulting mangled hash is encrypted in CBC mode with a fixed IV of null bytes. This will reveal reftags sharing
- * a common prefix of one or more blocks; however, since the prefix is a hash, this is extremely unlikely.
+ * Revealing the reftag does not immediately compromise the security of the archive. Secrecy of the reftag is not
+ * necessary for secrecy of any part of the archive. However, since concealing as much information as possible is a
+ * design goal of this project, some effort is made here to protect the reftags.
  * 
- * The purpose here is not to make it impossible for an adversary to learn reftags. That's likely to be too impractical,
- * since there are other means by which reftags might be discovered. However, those means are significantly harder than
- * just reading the revision file. The purpose of this technique is to add cost to the adversary.
+ * Further security could be obtained using a cipher whose block size matches the hash length; e.g. Threefish. This
+ * was deemed to add unacceptable complexity to the format, since it would mean requiring support for a second block
+ * cipher. Similarly, the reftags could be protected with random IVs; this would require more store space and
+ * bandwidth, and also seriously complicate the process of allowing blind peers to de-duplicate reftags.
  */
 
 public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
@@ -38,7 +40,6 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	}
 	
 	public ObfuscatedRefTag(RefTag refTag) {
-		// TODO P2P: (review) It's been suggested to use a 512-bit block cipher here...
 		this.archive = refTag.archive;
 		Key key = archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
 		this.ciphertext = archive.crypto.encryptCBC(key.getRaw(), new byte[archive.crypto.symBlockSize()], transform(refTag.getBytes()));
