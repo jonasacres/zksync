@@ -122,7 +122,7 @@ public class Page {
 		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_PAGE, buf.array());
 	}
 	
-	/** key used to produce page tag (provides authentication of page contents and basis for page key) */
+	/** key used to produce page tag (provides authentication of page contents) */
 	protected Key authKey() {
 		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE);
 	}

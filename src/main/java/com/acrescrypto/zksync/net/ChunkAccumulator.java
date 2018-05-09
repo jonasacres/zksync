@@ -9,9 +9,7 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -30,9 +28,9 @@ public class ChunkAccumulator {
 		FS scratchFS;
 		byte[] hash;
 		
-		public ChunkVersion(FS scratchFS, byte[] chunk, Key hashKey) throws IOException {
+		public ChunkVersion(FS scratchFS, byte[] chunk) throws IOException {
 			this.scratchFS = scratchFS;
-			this.hash = hashKey.authenticate(chunk);
+			this.hash = swarm.config.getAccessor().getMaster().getCrypto().hash(chunk);
 			write(chunk);
 		}
 		
@@ -57,14 +55,12 @@ public class ChunkAccumulator {
 	protected int numChunksExpected;
 	protected ArrayList<LinkedList<ChunkVersion>> chunksByIndex = new ArrayList<LinkedList<ChunkVersion>>();
 	protected ArrayList<LinkedList<PeerChunkInfo>> peersByIndex = new ArrayList<LinkedList<PeerChunkInfo>>();
-	protected Key hashKey;
 	protected PeerSwarm swarm;
 	protected final Logger logger = LoggerFactory.getLogger(ChunkAccumulator.class); 
 	
 	public ChunkAccumulator(PeerSwarm swarm, byte[] tag, int numChunksExpected) {
 		this.swarm = swarm;
 		this.tag = tag;
-		this.hashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_ACCUMULATOR);
 		this.numChunksExpected = numChunksExpected;
 		
 		for(int i = 0; i < numChunksExpected; i++) {
@@ -75,7 +71,7 @@ public class ChunkAccumulator {
 	
 	public boolean addChunk(int index, byte[] chunk, PeerConnection peer) throws IOException {
 		boolean needsInsert = true;
-		ChunkVersion version = new ChunkVersion(peer.socket.swarm.config.getAccessor().getMaster().scratchStorage(), chunk, hashKey);
+		ChunkVersion version = new ChunkVersion(peer.socket.swarm.config.getAccessor().getMaster().scratchStorage(), chunk);
 		
 		for(ChunkVersion existing : chunksByIndex.get(index)) {
 			if(Arrays.equals(existing.hash, version.hash)) {
