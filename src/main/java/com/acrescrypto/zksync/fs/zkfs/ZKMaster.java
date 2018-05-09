@@ -4,8 +4,12 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.LinkedList;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveAccessorDiscoveryCallback;
@@ -13,6 +17,7 @@ import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
+	public final static String KEYFILE = "keyfile"; 
 	protected CryptoSupport crypto;
 	protected FS storage;
 	protected PassphraseProvider passphraseProvider;
@@ -21,23 +26,19 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected LinkedList<ArchiveAccessor> accessors = new LinkedList<ArchiveAccessor>();
 	protected HashSet<ZKArchive> allArchives = new HashSet<ZKArchive>();
 	protected Blacklist blacklist;
+	protected Logger logger = LoggerFactory.getLogger(ZKMaster.class);
 	
-	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) {
+	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) throws IOException {
 		return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
 	}
 	
-	public ZKMaster(CryptoSupport crypto, FS storage, PassphraseProvider passphraseProvider) {
+	public ZKMaster(CryptoSupport crypto, FS storage, PassphraseProvider passphraseProvider) throws IOException {
 		this.crypto = crypto;
 		this.storage = storage;
 		this.passphraseProvider = passphraseProvider;
-		
-		byte[] passphrase = passphraseProvider.requestPassphrase("ZKSync storage passphrase");
-		localKey = new Key(crypto, crypto.deriveKeyFromPassphrase(passphrase));
-		
-		// TODO P2P: (refactor) Local key should be RNG-generated, secured with derived key
-		
+		getLocalKey();
 		this.storedAccess = new StoredAccess(this);
-		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive(0x10, new byte[0])); // TODO P2P: (refactor) evil magic number!
+		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive(ArchiveAccessor.KEY_INDEX_BLACKLIST, new byte[0]));
 		loadStoredAccessors();
 	}
 	
@@ -45,6 +46,34 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		try {
 			storedAccess.read();
 		} catch (IOException e) {
+		}
+	}
+	
+	public void getLocalKey() throws IOException {
+		Key ppKey;
+		do {
+			byte[] passphrase = passphraseProvider.requestPassphrase("ZKSync storage passphrase");
+			ppKey = new Key(crypto, crypto.deriveKeyFromPassphrase(passphrase));
+		} while(!attemptPassphraseKey(ppKey));
+	}
+	
+	protected boolean attemptPassphraseKey(Key ppKey) throws IOException {
+		MutableSecureFile keyFile = MutableSecureFile.atPath(storage, KEYFILE, ppKey);
+		if(storage.exists(KEYFILE)) {
+			try {
+				localKey = new Key(crypto, keyFile.read());
+				assert(localKey.getRaw().length == crypto.symKeyLength());
+				logger.info("Successfully decrypted key file with passphrase");
+				return true;
+			} catch(SecurityException exc) {
+				logger.warn("Supplied passphrase did not match key file");
+				return false;
+			}
+		} else {
+			// TODO: it'd be nice to ask for a passphrase confirmation here...
+			logger.info("No keyfile found; creating...");
+			localKey = new Key(crypto, crypto.rng(crypto.symKeyLength()));
+			return true;
 		}
 	}
 	

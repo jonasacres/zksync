@@ -6,6 +6,9 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
@@ -53,6 +56,7 @@ public class PeerConnection {
 	protected boolean remotePaused;
 	protected PageQueue queue;
 	protected boolean receivedTags, receivedProof;
+	protected final Logger logger = LoggerFactory.getLogger(PeerConnection.class);
 	boolean sentProof;
 	
 	public PeerConnection(PeerSwarm swarm, String address) throws UnsupportedProtocolException {
@@ -206,10 +210,10 @@ public class PeerConnection {
 			 *   1. They're doing something nasty that's triggering IOExceptions. THey deserve it.
 			 *   2. They're not doing anything nasty. In which case, we're getting IOExceptions doing normal stuff, so
 			 *      it's not like we can participate as peers right now anyway.
-			 * But then... how long is a blacklist entry good for? We might cut ourselves off from a swarm because we
-			 * had a mount become temporarily inaccessible or something.
-			 * TODO P2P: (design) reconsider how to handle IOExceptions when we go to implement the blacklist
+			 * Sadly, there's the possibility that we cut ourselves off for a long time because we had a volume go
+			 * unmounted or something. That's not great. An opportunity for future improvement...
 			 */
+			logger.warn("Blacklisting peer " + socket.getAddress() + " due to exception", exc);
 			throw new ProtocolViolationException();
 		}
 	}

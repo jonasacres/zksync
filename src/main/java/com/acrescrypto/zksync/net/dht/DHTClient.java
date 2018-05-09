@@ -21,13 +21,13 @@ public class DHTClient implements ArchiveDiscovery {
 	
 	@Override
 	public void discoverArchives(ArchiveAccessor accessor) {
-		// TODO P2P: (implement) Auto-generated method stub
+		// TODO DHT: (implement) Auto-generated method stub
 		accessors.add(accessor);
 	}
 
 	@Override
 	public void stopDiscoveringArchives(ArchiveAccessor accessor) {
-		// TODO P2P: (implement) Auto-generated method stub
+		// TODO DHT: (implement) Auto-generated method stub
 		accessors.remove(accessor);
 	}
 	

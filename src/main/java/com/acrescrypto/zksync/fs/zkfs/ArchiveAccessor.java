@@ -35,6 +35,7 @@ public class ArchiveAccessor {
 	public final static int KEY_INDEX_SEED_TEMPORAL = 9;
 	public final static int KEY_INDEX_STORED_ACCESS = 10;
 	public final static int KEY_INDEX_REFTAG = 11;
+	public final static int KEY_INDEX_BLACKLIST = 12;
 	
 	protected ZKMaster master;
 
@@ -81,8 +82,8 @@ public class ArchiveAccessor {
 	
 	public ArchiveAccessor addDefaultDiscoveries() {
 		this.addDiscovery(DHTClient.defaultDHT());
-		// TODO P2P: (design) direct peer discovery
-		// TODO P2P: (design) mdns/udp multicast/other lan discovery?
+		// TODO DHT: (design) direct peer discovery
+		// TODO DHT: (design) mdns/udp multicast/other lan discovery?
 		return this;
 	}
 	
@@ -147,21 +148,18 @@ public class ArchiveAccessor {
 
 	public byte[] temporalProof(int step, byte[] sharedSecret) {
 		assert(0 <= step && step <= Byte.MAX_VALUE);
-		ByteBuffer timestamp = ByteBuffer.allocate(9+sharedSecret.length);
-		timestamp.putShort((byte) step);
-		timestamp.putLong(timeSlice(0));
-		timestamp.put(sharedSecret);
-
-		if(isSeedOnly()) {
-			/* Use a garbage "proof" if we don't actually have knowledge of the passphrase key. We use a combination of
-			 * time, the shared secret and a local key derivative to ensure that this garbage result "feels" like the
-			 * real deal: it changes with the timestamp, it is specific to a shared secret, and cannot be distinguished
-			 * from the real passphrase-derivative version unless someone knows the passphrase root. 
-			 */
-			byte[] rngSeed = localRoot.derive(0x03, timestamp.array()).getRaw();
-			return master.crypto.prng(rngSeed).getBytes(master.crypto.hashLength()); // makes logic cleaner for protocol implementation
-		}
-		return passphraseRoot.derive(0x03, timestamp.array()).getRaw(); // TODO P2P: (refactor) Evil magic number!
+		ByteBuffer timeSecretTweak = ByteBuffer.allocate(9+sharedSecret.length);
+		timeSecretTweak.putShort((byte) step);
+		timeSecretTweak.putLong(timeSlice(0));
+		timeSecretTweak.put(sharedSecret);
+		
+		/* Use a garbage "proof" if we don't actually have knowledge of the passphrase key. We use a combination of
+		 * time, the shared secret and a local key derivative to ensure that this garbage result "feels" like the
+		 * real deal: it changes with the timestamp, it is specific to a shared secret, and cannot be distinguished
+		 * from the real passphrase-derivative version unless someone knows the passphrase root. 
+		 */
+		int root = isSeedOnly() ? KEY_ROOT_LOCAL : KEY_ROOT_PASSPHRASE;
+		return deriveKey(root, KEY_TYPE_AUTH, KEY_INDEX_SEED_TEMPORAL, timeSecretTweak.array()).getRaw();
 	}
 	
 	protected void deriveFromPassphraseRoot(Key passphraseRoot) {
