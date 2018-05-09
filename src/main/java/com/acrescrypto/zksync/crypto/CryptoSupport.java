@@ -137,10 +137,25 @@ public class CryptoSupport {
 		}
 	}
 	
-	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, byte[] associatedData, boolean padded)
+	public byte[] encrypt(byte[] key, byte[] iv, byte[] plaintext, int offset, int length, byte[] associatedData, int adOffset, int adLen, int padSize)
 	{
 		try {
-			byte[] paddedPlaintext = processAEADCipher(false, 128, key, iv, ciphertext, associatedData);
+			return processAEADCipher(true, 128, key, iv, padToSize(plaintext, padSize), associatedData);
+		} catch (Exception exc) {
+			logger.error("Encountered exception encrypting data", exc);
+			System.exit(1);
+			return null; // unreachable, but it makes the compiler happy
+		}
+	}
+	
+	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, byte[] associatedData, boolean padded)
+	{
+		return decrypt(key, iv, ciphertext, 0, ciphertext.length, associatedData, 0, associatedData == null ? 0 : associatedData.length, padded);
+	}
+	
+	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, int offset, int length, byte[] associatedData, int adOffset, int adLen, boolean padded) {
+		try {
+			byte[] paddedPlaintext = processAEADCipher(false, 128, key, iv, ciphertext, offset, length, associatedData, adOffset, adLen);
 			if(padded) return unpad(paddedPlaintext);
 			return paddedPlaintext;
 		} catch(InvalidCipherTextException exc) {
@@ -183,15 +198,19 @@ public class CryptoSupport {
 	}
 	
 	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, byte[] ad) throws IllegalStateException, InvalidCipherTextException {
+        return processAEADCipher(encrypt, tagLen, keyBytes, iv, in, 0, in == null ? 0 : in.length, ad, 0, ad == null ? 0 : ad.length);
+	}
+	
+	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, int inOffset, int inLen, byte[] ad, int adOffset, int adLen) throws IllegalStateException, InvalidCipherTextException {
         KeyParameter key = new KeyParameter(keyBytes);
         AEADParameters params = new AEADParameters(key, tagLen, iv);
         AEADBlockCipher cipher = new OCBBlockCipher(new AESEngine(), new AESEngine());
         cipher.init(encrypt, params);
 
 		int offset = 0;
-		byte[] out = new byte[cipher.getOutputSize(in != null ? in.length : 0)];
-		if(ad != null) cipher.processAADBytes(ad, 0, ad.length);
-        if(in != null) offset = cipher.processBytes(in, 0, in.length, out, 0);
+		byte[] out = new byte[cipher.getOutputSize(in != null ? inLen : 0)];
+		if(ad != null) cipher.processAADBytes(ad, adOffset, adLen);
+        if(in != null) offset = cipher.processBytes(in, inOffset, inLen, out, 0);
         offset += cipher.doFinal(out, offset);
         assert(offset == out.length);
         

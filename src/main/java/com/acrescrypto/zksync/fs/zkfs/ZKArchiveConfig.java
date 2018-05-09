@@ -279,4 +279,12 @@ public class ZKArchiveConfig {
 	public FS getLocalStorage() {
 		return localStorage;
 	}
+
+	public boolean validatePage(byte[] tag, byte[] allegedPage) {
+		Key authKey = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE);
+		int sigOffset = allegedPage.length - pubKey.getCrypto().asymSignatureSize();
+		if(!Arrays.equals(tag, authKey.authenticate(allegedPage))) return false;
+		if(!pubKey.verify(allegedPage, 0, sigOffset, allegedPage, sigOffset, pubKey.getCrypto().asymSignatureSize())) return false;
+		return true;
+	}
 }

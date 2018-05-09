@@ -6,10 +6,10 @@ import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.fs.FS;
 
 public class SecureFile {
-	Key key;
-	byte[] iv;
-	FS fs;
-	String path;
+	protected Key key;
+	protected byte[] iv;
+	protected FS fs;
+	protected String path;
 	
 	public static SecureFile atPath(FS fs, String path, Key key, byte[] ivMaterial, byte[] salt) {
 		return new SecureFile(fs, path, key, ivMaterial, salt);

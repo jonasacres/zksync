@@ -110,6 +110,10 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		return storage.scopedFS(storagePathForArchiveId(archiveId));
 	}
 	
+	public FS scratchStorage() throws IOException {
+		return storage.scopedFS("scratch");
+	}
+	
 	public synchronized ArchiveAccessor accessorForRoot(Key rootKey) {
 		for(ArchiveAccessor accessor : accessors) {
 			if(!accessor.isSeedOnly()) {

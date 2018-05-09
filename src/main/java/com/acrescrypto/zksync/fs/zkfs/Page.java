@@ -2,10 +2,9 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.SecureFile;
+import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.utility.Util;
 
 /** represents a fixed-size page of data from a file. handles encryption/decryption/storage of said page. */
@@ -71,13 +70,10 @@ public class Page {
 			plaintext = contents;
 		}
 		
-		byte[] pageTag = this.authKey().authenticate(plaintext.array());
-		this.file.setPageTag(pageNum, pageTag);
-		
-		byte[] authTag = authKey().authenticate(pageTag);
-		SecureFile
-		  .atPath(file.zkfs.archive.storage, pathForTag(authTag), textKey(pageTag), authTag, null)
+		byte[] pageTag = SignedSecureFile
+		  .withParams(file.zkfs.archive.storage, textKey(), authKey(), file.zkfs.archive.config.privKey)
 		  .write(plaintext.array(), file.zkfs.archive.config.pageSize);
+		this.file.setPageTag(pageNum, pageTag);
 	}
 	
 	/** read data from page into a supplied buffer
@@ -104,12 +100,7 @@ public class Page {
 	}
 	
 	/** key used for encrypting page contents */
-	protected Key textKey(byte[] pageTag) {
-		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_INDEX_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_PAGE, pageTag);
-	}
-	
-	/** key used to produce page tag (provides authentication of page contents and basis for page key) */
-	protected Key authKey() {
+	protected Key textKey() {
 		// this is designed to intentionally prevent data deduplication
 		// rationale: deduplication creates a chosen plaintext attack revealing whether data was previously stored
 		// attacker must have access to archive size and ability to get keyholder to inject arbitrary data
@@ -124,11 +115,16 @@ public class Page {
 		
 		// without further ado, let's go about the nasty business of killing the feature other content-addressable
 		// encrypted file storage systems like to brag about.
-		
-		ByteBuffer buf = ByteBuffer.allocate(12);
+		ByteBuffer buf = ByteBuffer.allocate(20);
 		buf.putLong(file.getInode().getStat().getInodeId()); // no dedupe between files
+		buf.putLong(file.getInode().getIdentity()); // guard against key reuse when inodes are recycled
 		buf.putInt(pageNum); // no dedupe within file
-		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_INDEX_ARCHIVE, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE, buf.array());
+		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_PAGE, buf.array());
+	}
+	
+	/** key used to produce page tag (provides authentication of page contents and basis for page key) */
+	protected Key authKey() {
+		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE);
 	}
 	
 	/** load page contents from underlying storage */
@@ -144,14 +140,9 @@ public class Page {
 		}
 		
 		byte[] pageTag = file.getPageTag(pageNum);
-		byte[] authTag = authKey().authenticate(pageTag);
-		byte[] plaintext = SecureFile
-		  .atPath(file.zkfs.archive.storage, pathForTag(authTag), textKey(pageTag), authTag, null)
+		byte[] plaintext = SignedSecureFile
+		  .withTag(pageTag, file.zkfs.archive.storage, textKey(), authKey(), file.zkfs.archive.config.pubKey)
 		  .read();
-		
-		if(!Arrays.equals(this.authKey().authenticate(plaintext), pageTag)) {
-			throw new SecurityException();
-		}
 		
 		contents = ByteBuffer.allocate(pageSize);
 		contents.put(plaintext);

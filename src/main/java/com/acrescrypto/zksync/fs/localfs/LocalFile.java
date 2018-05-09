@@ -68,9 +68,9 @@ public class LocalFile extends File {
 	}
 
 	@Override
-	public void write(byte[] data) throws IOException {
+	public void write(byte[] data, int offset, int length) throws IOException {
 		assertWritable();
-		channel.write(ByteBuffer.wrap(data));
+		channel.write(ByteBuffer.wrap(data, offset, length));
 		size = Math.max(size, channel.position());
 	}
 	

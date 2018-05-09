@@ -13,8 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
-import com.acrescrypto.zksync.fs.ChunkableFileHandle;
-import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.utility.Util;
@@ -26,7 +24,7 @@ public class PeerSwarm {
 	protected ArrayList<PeerDiscoveryApparatus> discoveryApparatuses = new ArrayList<PeerDiscoveryApparatus>(); // It's "apparatuses." I looked it up.
 	protected ZKArchiveConfig config;
 	protected HashSet<Long> currentTags = new HashSet<Long>();
-	protected HashMap<Long,ChunkableFileHandle> activeFiles = new HashMap<Long,ChunkableFileHandle>();
+	protected HashMap<Long,ChunkAccumulator> activeFiles = new HashMap<Long,ChunkAccumulator>();
 	protected HashMap<Long,Condition> pageWaits = new HashMap<Long,Condition>();
 	protected Lock pageWaitLock = new ReentrantLock();
 	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
@@ -135,11 +133,11 @@ public class PeerSwarm {
 		pageWaitLock.unlock();
 	}
 	
-	public ChunkableFileHandle fileHandleForTag(RefTag tag) throws IOException {
+	public ChunkAccumulator accumulatorForTag(RefTag tag) throws IOException {
 		long shortTag = tag.getShortHash();
 		if(!activeFiles.containsKey(shortTag)) {
-			String path = Page.pathForTag(tag.getHash());
-			ChunkableFileHandle fileHandle = new ChunkableFileHandle(config.getStorage(), path, config.getPageSize(), PeerMessage.FILE_CHUNK_SIZE);
+			int numChunksExpected = (int) Math.ceil((double) config.getPageSize() / PeerMessage.FILE_CHUNK_SIZE);
+			ChunkAccumulator fileHandle = new ChunkAccumulator(this, tag.getHash(), numChunksExpected);
 			activeFiles.put(shortTag, fileHandle);
 			return fileHandle;
 		}
@@ -148,7 +146,6 @@ public class PeerSwarm {
 	}
 	
 	protected synchronized void receivedPage(byte[] tag) {
-		// TODO P2P: (implement) Validate that the page is valid, and if not, ask for its replacement.
 		long shortTag = Util.shortTag(tag);
 		activeFiles.remove(shortTag);
 		currentTags.add(shortTag);

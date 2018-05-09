@@ -19,13 +19,21 @@ public class Key {
 	}
 	
 	public byte[] encrypt(byte[] iv, byte[] plaintext, int padSize) {
-		return crypto.encrypt(raw, iv, plaintext, null, padSize);
+		return encrypt(iv, plaintext, 0, plaintext.length, padSize);
+	}
+	
+	public byte[] encrypt(byte[] iv, byte[] plaintext, int offset, int length, int padSize) {
+		return crypto.encrypt(raw, iv, plaintext, offset, length, null, 0, 0, padSize);
 	}
 	
 	public byte[] decrypt(byte[] iv, byte[] ciphertext) {
-		return crypto.decrypt(raw, iv, ciphertext, null, true);
+		return decrypt(iv, ciphertext, 0, ciphertext.length);
 	}
 	
+	public byte[] decrypt(byte[] iv, byte[] ciphertext, int offset, int length) {
+		return crypto.decrypt(raw, iv, ciphertext, offset, length, null, 0, 0, true);
+	}
+
 	public byte[] authenticate(byte[] data) {
 		return crypto.authenticate(raw, data);
 	}

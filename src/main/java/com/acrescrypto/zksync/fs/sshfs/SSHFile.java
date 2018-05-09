@@ -66,11 +66,11 @@ public class SSHFile extends File {
 	}
 
 	@Override
-	public void write(byte[] data) throws IOException {
+	public void write(byte[] data, int offset, int length) throws IOException {
 		if((mode & O_WRONLY) == 0) throw new EACCESException(path);
 		sshfs.execAndCheck("dd",
 				"obs=1 conv=notrunc seek=" + offset + " of=\"" + sshfs.qualifiedPath(path) + "\"",
-				data);
+				data, offset, length);
 		offset += data.length;
 		if(offset > getStat().getSize()) getStat().setSize(offset);
 	}

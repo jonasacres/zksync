@@ -42,4 +42,8 @@ public class PublicKey {
 	public byte[] getBytes() {
 		return pubKey.getA().toByteArray();
 	}
+	
+	public CryptoSupport getCrypto() {
+		return crypto;
+	}
 }

@@ -51,7 +51,11 @@ public abstract class File implements Closeable {
 		return seek(0, SEEK_CUR);
 	}
 	
-	public abstract void write(byte[] data) throws IOException;
+	public void write(byte[] data) throws IOException {
+		write(data, 0, data.length);
+	}
+	
+	public abstract void write(byte[] data, int offset, int length) throws IOException;
 	public abstract long seek(long pos, int mode) throws IOException;
 	public abstract void flush() throws IOException;
 	public abstract void close() throws IOException;

@@ -385,12 +385,16 @@ public class SSHFS extends FS {
 	}
 	
 	protected byte[] execAndCheck(String command, String args, byte[] stdin) throws IOException {
+		return execAndCheck(command, args, stdin, 0, stdin == null ? 0 : stdin.length);
+	}
+	
+	protected byte[] execAndCheck(String command, String args, byte[] stdin, int stdinOffset, int stdinLen) throws IOException {
 		try {
 			String cmdline = String.format("%s%s", oscmd(command), args == null ? "" : " " + args);
 			Command cmd = grabSession().exec(cmdline);
 			if(stdin != null) {
 				OutputStream stream = cmd.getOutputStream();
-				stream.write(stdin);
+				stream.write(stdin, stdinOffset, stdinLen);
 				stream.close();
 				cmd.close();
 			}
