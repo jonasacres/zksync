@@ -144,7 +144,7 @@ public class SwarmFS extends FS {
 	}
 
 	@Override
-	public byte[] _read(String path) throws IOException {
+	public byte[] read(String path) throws IOException {
 		byte[] pageTag = Page.tagForPath(path);
 		swarm.requestTag(pageTag);
 		swarm.waitForPage(pageTag);

@@ -35,25 +35,11 @@ public abstract class FS {
 	public abstract File open(String path, int mode) throws IOException;
 	public abstract void truncate(String path, long size) throws IOException;
 	
-	protected long expectedReadBytes = 0;
-	
-	protected synchronized void expectRead(long count) {
-		expectedReadBytes += count;
-	}
-	
-	protected synchronized void expectedReadFinished(long count) {
-		expectedReadBytes -= count;
-	}
-	
-	public byte[] _read(String path) throws IOException {
+	public byte[] read(String path) throws IOException {
 		File file = open(path, File.O_RDONLY);
 		byte[] bytes = file.read();
 		file.close();
 		return bytes;
-	}
-	
-	public final byte[] read(String path) throws IOException {
-		return _read(path);
 	}
 	
 	public void rmrf(String path) throws IOException {

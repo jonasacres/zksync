@@ -55,7 +55,7 @@ public class SSHFile extends File {
 	}
 	
 	@Override
-	protected int _read(byte[] buf, int bufOffset, int maxLength) throws IOException {
+	public int read(byte[] buf, int bufOffset, int maxLength) throws IOException {
 		if((mode & O_RDONLY) == 0) throw new EACCESException(path);
 		if(offset >= cachedStat.getSize()) return 0;
 		byte[] data = sshfs.execAndCheck("dd",

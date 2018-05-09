@@ -26,14 +26,7 @@ public abstract class File implements Closeable {
 	}
 	
 	public abstract void truncate(long size) throws IOException;
-	protected abstract int _read(byte[] buf, int offset, int maxLength) throws IOException;
-	
-	public final int read(byte[] buf, int offset, int maxLength) throws IOException {
-		fs.expectRead(maxLength);
-		int r = _read(buf, offset, maxLength);
-		fs.expectedReadFinished(maxLength);
-		return r;
-	}
+	public abstract int read(byte[] buf, int offset, int maxLength) throws IOException;
 
 	public final byte[] read(int maxLength) throws IOException {
 		if(maxLength <= 0) maxLength = (int) getStat().getSize();

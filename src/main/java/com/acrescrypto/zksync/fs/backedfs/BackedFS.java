@@ -152,7 +152,7 @@ public class BackedFS extends FS {
 	}
 
 	@Override
-	public byte[] _read(String path) throws IOException {
+	public byte[] read(String path) throws IOException {
 		try {
 			return cacheFS.read(path);
 		} catch(ENOENTException exc) {
@@ -194,7 +194,7 @@ public class BackedFS extends FS {
 		
 		try {
 			if(!cacheFS.exists(path)) {
-				acquire(path);
+				read(path);
 			}
 		} finally {			
 			synchronized(pendingPaths) {
@@ -209,10 +209,6 @@ public class BackedFS extends FS {
 		 */
 		String parent = dirname(path);
 		mkdirp(parent);
-	}
-	
-	protected void acquire(String path) throws IOException {
-		_read(path);
 	}
 	
 	@Override

@@ -120,7 +120,7 @@ public class ZKFile extends File {
 	}
 
 	@Override
-	protected int _read(byte[] buf, int bufOffset, int maxLength) throws IOException {
+	public int read(byte[] buf, int bufOffset, int maxLength) throws IOException {
 		assertReadable();
 		if(bufOffset < 0 || maxLength > buf.length - bufOffset) throw new IndexOutOfBoundsException();
 		

@@ -276,12 +276,9 @@ public class SSHFS extends FS {
 	}
 
 	@Override
-	public byte[] _read(String path) throws IOException {
+	public byte[] read(String path) throws IOException {
 		SSHMemFile memfile = new SSHMemFile(); // TODO: right constructor?
-		long expectedBytes = stat(path).getSize();
-		expectRead(expectedBytes);
 		ssh.newSCPFileTransfer().download(qualifiedPath(path), memfile);
-		expectedReadFinished(expectedBytes);
 		return memfile.contents();
 	}
 
