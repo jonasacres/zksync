@@ -51,21 +51,25 @@ public class PeerMessageOutgoing extends PeerMessage {
 
 	protected void runTxThread() {
 		new Thread(() -> {
-			while(!txEOF) {
-				waitForTxBufAvailability();
-				loadTxBuf();
-				if(txEOF || !txBuf.hasRemaining()) {
-					addTxHeader();
-					if(connection.isPausable(cmd)) {
-						try {
-							connection.waitForUnpause();
-						} catch (SocketClosedException exc) {
-							logger.debug("Socket closed while sending message type {} (id={})", cmd, msgId, exc);
-							break;
+			try {
+				while(!txEOF) {
+					waitForTxBufAvailability();
+					loadTxBuf();
+					if(txEOF || !txBuf.hasRemaining()) {
+						addTxHeader();
+						if(connection.isPausable(cmd)) {
+							try {
+								connection.waitForUnpause();
+							} catch (SocketClosedException exc) {
+								logger.debug("Socket closed while sending message type {} (id={})", cmd, msgId, exc);
+								break;
+							}
 						}
+						connection.socket.dataReady(this);
 					}
-					connection.socket.dataReady(this);
 				}
+			} catch(Exception exc) {
+				logger.error("Outgoing message thread to {} caught exception", connection.socket.getAddress(), exc);
 			}
 		}).start();
 	}

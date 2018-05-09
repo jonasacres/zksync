@@ -2,11 +2,15 @@ package com.acrescrypto.zksync.net.dht;
 
 import java.util.HashSet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveDiscovery;
 
 public class DHTClient implements ArchiveDiscovery {
 	protected HashSet<ArchiveAccessor> accessors = new HashSet<ArchiveAccessor>();
+	protected final Logger logger = LoggerFactory.getLogger(DHTClient.class);
 	private static DHTClient defaultDHT;
 	
 	public static DHTClient defaultDHT() {
@@ -43,6 +47,11 @@ public class DHTClient implements ArchiveDiscovery {
 	
 	private void dhtThread() {
 		while(true) {
+			try {
+				
+			} catch(Exception exc) {
+				logger.error("DHTClient thread caught exception", exc);
+			}
 		}
 	}
 }

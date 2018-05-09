@@ -5,6 +5,9 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.LinkedList;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 
@@ -16,6 +19,7 @@ public abstract class PeerSocket {
 	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
 	
 	protected int nextMessageId;
+	protected final Logger logger = LoggerFactory.getLogger(PeerSocket.class);
 	
 	private String address;
 	
@@ -62,12 +66,14 @@ public abstract class PeerSocket {
 	/** Immediately close socket and blacklist due to a clear protocol violation. */
 	public void violation() {
 		close();
+		logger.warn("Logged violation for peer {}", getAddress());
 		swarm.config.getArchive().getMaster().getBlacklist().add(address, Integer.MAX_VALUE);
 	}
 	
 	/** Handle some sort of I/O exception */
 	public void ioexception(IOException exc) {
 		/* These are probably our fault. There is the possibility that they are caused by malicious actors. */
+		logger.error("Socket for peer {} caught IOException", getAddress(), exc);
 		close();
 	}
 	
@@ -93,6 +99,8 @@ public abstract class PeerSocket {
 				} catch (InterruptedException e) {}
 			} catch (IOException exc) {
 				ioexception(exc);
+			} catch(Exception exc) {
+				logger.error("Socket send thread for peer {} caught exception", getAddress(), exc);
 			}
 		}).start();
 	}
@@ -127,6 +135,9 @@ public abstract class PeerSocket {
 					}
 				}
 			} catch(ProtocolViolationException exc) {
+				violation();
+			} catch(Exception exc) {
+				logger.error("Socket receive thread for {} caught exception", getAddress(), exc);
 				violation();
 			}
 		}).start();

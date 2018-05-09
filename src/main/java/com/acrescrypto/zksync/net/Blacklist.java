@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
@@ -15,6 +18,7 @@ public class Blacklist {
 	protected FS fs;
 	protected String path;
 	protected Key key;
+	protected final Logger logger = LoggerFactory.getLogger(Blacklist.class);
 	
 	public Blacklist(FS fs, String path, Key key) {
 		this.fs = fs;
@@ -31,8 +35,10 @@ public class Blacklist {
 	public void add(String address, int durationMs) {
 		BlacklistEntry entry = blockedAddresses.getOrDefault(address, null);
 		if(entry != null) {
+			logger.warn("Renewing blacklist entry for {} for {}ms", address, durationMs);
 			entry.update(durationMs);
 		} else {
+			logger.warn("Adding blacklist entry for {} for {}ms", address, durationMs);
 			entry = new BlacklistEntry(address, durationMs);
 			blockedAddresses.put(address, entry);
 		}

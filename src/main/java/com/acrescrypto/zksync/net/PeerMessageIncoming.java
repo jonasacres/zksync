@@ -3,11 +3,15 @@ package com.acrescrypto.zksync.net;
 import java.io.EOFException;
 import java.nio.ByteBuffer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 
 public class PeerMessageIncoming extends PeerMessage {
 	protected DataBuffer rxBuf;
 	protected PeerMessageHandler handler;
+	protected final Logger logger = LoggerFactory.getLogger(PeerMessageIncoming.class);
 	
 	protected class DataBuffer {
 		protected ByteBuffer buf = ByteBuffer.allocate(PeerMessage.MESSAGE_SIZE);
@@ -116,12 +120,6 @@ public class PeerMessageIncoming extends PeerMessage {
 		if(isFinal) {
 			rxBuf.setEOF();
 		}
-		
-		try {
-			handler.handle(msgId, rxBuf, isFinal);
-		} catch(ProtocolViolationException|EOFException exc) {
-			connection.socket.violation();
-		}
 	}
 	
 	protected void processThread() {
@@ -130,6 +128,8 @@ public class PeerMessageIncoming extends PeerMessage {
 				connection.handle(this);
 			} catch(ProtocolViolationException exc) {
 				connection.socket.violation();
+			} catch(Exception exc) {
+				logger.error("Peer message handler thread for {} encountered exception", connection.socket.getAddress(), exc);
 			}
 		}).start();;
 	}

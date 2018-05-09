@@ -301,14 +301,14 @@ public class PageQueue {
 	protected void expandNextEntry() {
 		PageQueueEntry entry = entries.peek();
 		Object next = entry.getNext();
-		if(RefTag.class.isInstance(next)) {
+		if(next instanceof RefTag) {
 			pages.putIfAbsent(entry.priority, new LinkedList<RefTag>());
 			pages.get(entry.priority).add((RefTag) next);
-		} else if(ReftagPageQueueEntry.class.isInstance(next)) {
+		} else if(next instanceof ReftagPageQueueEntry) {
 			entries.add(entry);
 			expandNextEntry();
 		} else {
-			// TODO P2P: (review) ensure we understand the consequences of an exception in every thread we spin up (not limited to just this example)
+			logger.error("PageQueue generated unexpected class " + next.getClass().toString());
 			throw new RuntimeException("got invalid class back from page queue");
 		}
 		

@@ -255,7 +255,7 @@ public class ZKArchiveConfig {
 	}
 	
 	protected void deriveKeypair() {
-		this.writeRoot = accessor.passphraseRoot; // TODO P2P: (refactor) allow some means of supplying a separate write passphrase
+		this.writeRoot = accessor.passphraseRoot; // TODO: allow some means of supplying a separate write passphrase
 		privKey = accessor.master.crypto.makePrivateKey(writeRoot.getRaw());
 		pubKey = privKey.publicKey();
 	}

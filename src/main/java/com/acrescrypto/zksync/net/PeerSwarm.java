@@ -9,6 +9,9 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.ChunkableFileHandle;
 import com.acrescrypto.zksync.fs.zkfs.Page;
@@ -26,6 +29,7 @@ public class PeerSwarm {
 	protected HashMap<Long,ChunkableFileHandle> activeFiles = new HashMap<Long,ChunkableFileHandle>();
 	protected HashMap<Long,Condition> pageWaits = new HashMap<Long,Condition>();
 	protected Lock pageWaitLock = new ReentrantLock();
+	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
 	
 	int maxSocketCount = 128;
 	int maxPeerListSize = 1024;
@@ -67,9 +71,13 @@ public class PeerSwarm {
 				} catch(InterruptedException exc) {}
 				
 				try {
+					logger.trace("Connecting to address ", addr);
 					openConnection(addr);
 				} catch(UnsupportedProtocolException exc) {
+					logger.info("Skipping unsupported address: " + addr);
 					connectionFailed(addr);
+				} catch(Exception exc) {
+					logger.error("Connection thread caught exception handling address {}", addr, exc);
 				}
 			}
 		}).start();
@@ -78,14 +86,20 @@ public class PeerSwarm {
 	public void discoveryThread() {
 		new Thread(() -> {
 			while(true) {
-				for(PeerDiscoveryApparatus apparatus : discoveryApparatuses) {
-					for(String address : apparatus.discoveredPeers(config.getArchive())) {
-						addPeer(address);
+				int delay = 100;
+				try {
+					for(PeerDiscoveryApparatus apparatus : discoveryApparatuses) {
+						for(String address : apparatus.discoveredPeers(config.getArchive())) {
+							addPeer(address);
+						}
 					}
+				} catch(Exception exc) {
+					logger.error("Discovery thread encountered exception", exc);
+					delay = 3000;
 				}
 				
 				try {
-					TimeUnit.MILLISECONDS.sleep(100);
+					TimeUnit.MILLISECONDS.sleep(delay);
 				} catch (InterruptedException e) {}
 			}
 		}).start();
