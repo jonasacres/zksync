@@ -26,4 +26,8 @@ public class PRNG {
 		rng.nextBytes(output);
 		return output;
 	}
+
+	public int getInt() {
+		return rng.nextInt();
+	}
 }

@@ -9,6 +9,7 @@ import java.util.HashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
@@ -24,14 +25,15 @@ import com.acrescrypto.zksync.utility.Util;
 public class PeerConnection {
 	public final static int CMD_ACCESS_PROOF = 0x00;
 	public final static int CMD_ANNOUNCE_PEERS = 0x01;
-	public final static int CMD_ANNOUNCE_TAGS = 0x02;
-	public final static int CMD_ANNOUNCE_TIPS = 0x03;
-	public final static int CMD_REQUEST_ALL = 0x04;
-	public final static int CMD_REQUEST_REF_TAGS = 0x05;
-	public final static int CMD_REQUEST_REVISION_CONTENTS = 0x06;
-	public final static int CMD_REQUEST_PAGE_TAGS = 0x07;
-	public final static int CMD_SEND_PAGE = 0x08;
-	public final static int CMD_SET_PAUSED = 0x09;
+	public final static int CMD_ANNOUNCE_SELF_AD = 0x02;
+	public final static int CMD_ANNOUNCE_TAGS = 0x03;
+	public final static int CMD_ANNOUNCE_TIPS = 0x04;
+	public final static int CMD_REQUEST_ALL = 0x05;
+	public final static int CMD_REQUEST_REF_TAGS = 0x06;
+	public final static int CMD_REQUEST_REVISION_CONTENTS = 0x07;
+	public final static int CMD_REQUEST_PAGE_TAGS = 0x08;
+	public final static int CMD_SEND_PAGE = 0x09;
+	public final static int CMD_SET_PAUSED = 0x0a;
 	
 	public final static int PEER_TYPE_STATIC = 0; // static fileserver; needs subclass to handle
 	public final static int PEER_TYPE_BLIND = 1; // has knowledge of seed key, but not archive passphrase; can't decipher data
@@ -58,8 +60,15 @@ public class PeerConnection {
 	protected final Logger logger = LoggerFactory.getLogger(PeerConnection.class);
 	boolean sentProof;
 	
-	public PeerConnection(PeerSwarm swarm, String address) throws UnsupportedProtocolException {
-		this.socket = PeerSocket.connectToAddress(swarm, address);
+	public PeerConnection(PeerSwarm swarm, PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
+		this.socket = PeerSocket.connectToAd(swarm, ad);
+		socket.connection = this;
+		this.queue = new PageQueue(this);
+	}
+	
+	public PeerConnection(PeerSocket socket) {
+		this.socket = socket;
+		socket.connection = this;
 		this.queue = new PageQueue(this);
 	}
 	
@@ -78,6 +87,43 @@ public class PeerConnection {
 		ByteBuffer tag = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
 		tag.putLong(shortTag);
 		send(CMD_ANNOUNCE_TAGS, tag.array());
+	}
+	
+	public void announceSelf(PeerAdvertisement ad) {
+		byte[] serializedAd = ad.serialize();
+		ByteBuffer serialized = ByteBuffer.allocate(serializedAd.length);
+		assert(serializedAd.length <= Short.MAX_VALUE);
+		serialized.putShort((short) serializedAd.length);
+		serialized.put(serializedAd);
+		send(CMD_ANNOUNCE_SELF_AD, serialized.array());
+	}
+	
+	public void announcePeer(PeerAdvertisement ad) {
+		byte[] serializedAd = ad.serialize();
+		ByteBuffer serialized = ByteBuffer.allocate(serializedAd.length);
+		assert(serializedAd.length <= Short.MAX_VALUE);
+		serialized.putShort((short) serializedAd.length);
+		serialized.put(serializedAd);
+		send(CMD_ANNOUNCE_PEERS, serialized.array());
+	}
+	
+	public void announcePeers(Collection<PeerAdvertisement> ads) {
+		byte[][] serializations = new byte[ads.size()][];
+		int len = 0, idx = 0;
+		for(PeerAdvertisement ad : ads) {
+			byte[] serialization = ad.serialize();
+			serializations[idx++] = serialization;
+			len += serialization.length + 2;
+		}
+		
+		ByteBuffer allSerialization = ByteBuffer.allocate(len);
+		for(byte[] serialization : serializations) {
+			assert(serialization.length <= Short.MAX_VALUE); // technically this can be 65535, but we should come nowhere close
+			allSerialization.putShort((short) serialization.length);
+			allSerialization.put(serialization);
+		}
+		
+		send(CMD_ANNOUNCE_PEERS, allSerialization.array());
 	}
 	
 	public void announceTags(Collection<RefTag> tags) {
@@ -176,6 +222,9 @@ public class PeerConnection {
 			case CMD_ANNOUNCE_PEERS:
 				handleAnnouncePeers(msg);
 				break;
+			case CMD_ANNOUNCE_SELF_AD:
+				handleAnnounceSelfAd(msg);
+				break;
 			case CMD_ANNOUNCE_TAGS:
 				handleAnnounceTags(msg);
 				break;
@@ -201,7 +250,8 @@ public class PeerConnection {
 				handleSetPaused(msg);
 				break;
 			default:
-				throw new ProtocolViolationException();
+				logger.info("Ignoring unknown request command {} from {}", msg.cmd, socket.getAddress());
+				break;
 			}
 		} catch(PeerRoleException | PeerCapabilityException | IOException | InvalidSignatureException exc) {
 			/* Arguably, blacklisting people because we had a local IOException is unfair. But, there are two real
@@ -237,10 +287,29 @@ public class PeerConnection {
 	
 	protected void handleAnnouncePeers(PeerMessageIncoming msg) throws EOFException, ProtocolViolationException {
 		while(!msg.rxBuf.isEOF()) {
-			int urlLen = Util.unsignByte(msg.rxBuf.get());
-			assertState(urlLen > 0);
-			byte[] urlBytes = msg.rxBuf.read(urlLen);
-			socket.swarm.addPeer(new String(urlBytes));
+			int adLen = Util.unsignShort(msg.rxBuf.getShort());
+			byte[] adRaw = new byte[adLen];
+			msg.rxBuf.get(adRaw);
+			PeerAdvertisement ad = PeerAdvertisement.deserialize(adRaw);
+			try {
+				if(ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) continue;
+				socket.swarm.addPeer(ad);
+			} catch (IOException e) {
+			}
+		}
+	}
+	
+	protected void handleAnnounceSelfAd(PeerMessageIncoming msg) throws ProtocolViolationException, EOFException {
+		while(!msg.rxBuf.isEOF()) {
+			int adLen = Util.unsignShort(msg.rxBuf.getShort());
+			byte[] adRaw = new byte[adLen];
+			msg.rxBuf.get(adRaw);
+			PeerAdvertisement ad = PeerAdvertisement.deserializeWithPeer(adRaw, msg.connection);
+			try {
+				if(ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) continue;
+				socket.swarm.addPeer(ad);
+			} catch (IOException e) {
+			}
 		}
 	}
 	
@@ -404,5 +473,13 @@ public class PeerConnection {
 
 	public void blacklist() {
 		socket.violation();
+	}
+
+	public void close() {
+		try {
+			socket.close();
+		} catch(IOException exc) {
+			logger.warn("Caught exception closing socket to address {}", socket.getAddress(), exc);
+		}
 	}
 }

@@ -12,45 +12,99 @@ import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.BlacklistedException;
+import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
 import com.acrescrypto.zksync.utility.Util;
 
-public class PeerSwarm {
+public class PeerSwarm implements BlacklistCallback {
 	protected ArrayList<PeerConnection> connections = new ArrayList<PeerConnection>();
-	protected HashSet<String> knownPeers = new HashSet<String>();
-	protected HashSet<String> connectedAddresses = new HashSet<String>();
-	protected ArrayList<PeerDiscoveryApparatus> discoveryApparatuses = new ArrayList<PeerDiscoveryApparatus>(); // It's "apparatuses." I looked it up.
+	protected HashSet<PeerAdvertisement> knownAds = new HashSet<PeerAdvertisement>();
+	protected HashSet<PeerAdvertisement> connectedAds = new HashSet<PeerAdvertisement>();
+	protected ArrayList<PeerDiscoveryApparatus> discoveryApparatuses = new ArrayList<PeerDiscoveryApparatus>();
 	protected ZKArchiveConfig config;
 	protected HashSet<Long> currentTags = new HashSet<Long>();
 	protected HashMap<Long,ChunkAccumulator> activeFiles = new HashMap<Long,ChunkAccumulator>();
 	protected HashMap<Long,Condition> pageWaits = new HashMap<Long,Condition>();
 	protected Lock pageWaitLock = new ReentrantLock();
 	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
+	protected boolean closed;
 	
 	int maxSocketCount = 128;
 	int maxPeerListSize = 1024;
 	
 	public PeerSwarm(ZKArchiveConfig config) {
 		this.config = config;
+		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
+	}
+	
+	public synchronized void close() {
+		closed = true;
+		for(PeerConnection connection : connections) {
+			connection.close();
+		}
+		
+		pageWaitLock.lock();
+		for(Condition cond : pageWaits.values()) {
+			cond.notifyAll();
+		}
+		pageWaitLock.unlock();
+		
+		this.config.getAccessor().getMaster().getBlacklist().removeCallback(this);
 	}
 	
 	public ZKArchiveConfig getConfig() {
 		return config;
 	}
 	
+	@Override
+	public synchronized void blacklistedAddress(String address) {
+		for(PeerConnection connection : connections) {
+			PeerAdvertisement ad = connection.socket.getAd();
+			if(connection.socket.matchesAddress(address) || (ad != null && ad.matchesAddress(address))) {
+				connection.close();
+			}
+		}
+		
+		for(PeerAdvertisement ad : knownAds) {
+			if(ad.matchesAddress(address)) {
+				knownAds.remove(ad);
+			}
+		}
+	}
+	
 	public synchronized void openedConnection(PeerConnection connection) {
-		connectedAddresses.add(connection.socket.getAddress());
-		knownPeers.add(connection.socket.getAddress());
+		if(closed) {
+			connection.close();
+			return;
+		}
+		
+		PeerAdvertisement ad = connection.socket.getAd();
+		if(ad != null) {
+			connectedAds.remove(ad);
+			connectedAds.add(connection.socket.getAd());
+			knownAds.remove(ad);
+			knownAds.add(connection.socket.getAd());
+		}
 		connections.add(connection);
 	}
 	
-	public synchronized void addPeer(String address) {
-		if(knownPeers.size() >= maxPeerListSize) return;
-		if(!PeerSocket.addressSupported(address)) return;
+	public synchronized void addPeer(PeerAdvertisement ad) {
+		// This could be improved. Once we hit capacity, how can we prune ads for low-quality peers for higher-quality ones?
+		if(knownAds.size() >= maxPeerListSize) return;
+		if(!PeerSocket.adSupported(ad)) return;
 		
-		knownPeers.add(address);
+		knownAds.remove(ad);
+		knownAds.add(ad);
+	}
+	
+	public synchronized void advertiseSelf(PeerAdvertisement ad) {
+		for(PeerConnection connection : connections) {
+			connection.announceSelf(ad);
+		}
 	}
 	
 	public synchronized void addApparatus(PeerDiscoveryApparatus apparatus) {
@@ -59,23 +113,23 @@ public class PeerSwarm {
 	
 	public void connectionThread() {
 		new Thread(() -> {
-			while(true) {
-				String addr = selectConnectionAddress();
+			while(!closed) {
+				PeerAdvertisement ad = selectConnectionAd();
 				try {
-					if(addr == null || connections.size() >= maxSocketCount) {
+					if(ad == null || connections.size() >= maxSocketCount) {
 						TimeUnit.MILLISECONDS.sleep(100);
 						continue;
 					}
 				} catch(InterruptedException exc) {}
 				
 				try {
-					logger.trace("Connecting to address ", addr);
-					openConnection(addr);
+					logger.trace("Connecting to address ", ad);
+					openConnection(ad);
 				} catch(UnsupportedProtocolException exc) {
-					logger.info("Skipping unsupported address: " + addr);
-					connectionFailed(addr);
+					logger.info("Skipping unsupported address: " + ad);
+					connectionFailed(ad);
 				} catch(Exception exc) {
-					logger.error("Connection thread caught exception handling address {}", addr, exc);
+					logger.error("Connection thread caught exception handling address {}", ad, exc);
 				}
 			}
 		}).start();
@@ -83,12 +137,12 @@ public class PeerSwarm {
 	
 	public void discoveryThread() {
 		new Thread(() -> {
-			while(true) {
+			while(!closed) {
 				int delay = 100;
 				try {
 					for(PeerDiscoveryApparatus apparatus : discoveryApparatuses) {
-						for(String address : apparatus.discoveredPeers(config.getArchive())) {
-							addPeer(address);
+						for(PeerAdvertisement ad : apparatus.discoveredPeers(config.getArchive())) {
+							addPeer(ad);
 						}
 					}
 				} catch(Exception exc) {
@@ -103,21 +157,22 @@ public class PeerSwarm {
 		}).start();
 	}
 	
-	public synchronized String selectConnectionAddress() {
-		for(String peer : knownPeers) {
-			if(connectedAddresses.contains(peer)) continue;
-			return peer;
+	public synchronized PeerAdvertisement selectConnectionAd() {
+		for(PeerAdvertisement ad : knownAds) {
+			if(connectedAds.contains(ad)) continue;
+			return ad;
 		}
 		
 		return null;
 	}
 	
-	public synchronized void openConnection(String address) throws UnsupportedProtocolException {
-		connections.add(new PeerConnection(this, address));
+	public synchronized void openConnection(PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
+		if(closed) return;
+		connections.add(new PeerConnection(this, ad));
 	}
 	
-	public synchronized void connectionFailed(String address) {
-		connectedAddresses.remove(address);
+	public synchronized void connectionFailed(PeerAdvertisement address) {
+		connectedAds.remove(address);
 	}
 	
 	public synchronized void waitForPage(byte[] tag) {

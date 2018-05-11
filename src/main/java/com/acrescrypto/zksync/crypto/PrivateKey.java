@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.crypto;
 
+import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.SignatureException;
 
@@ -32,9 +33,10 @@ public class PrivateKey {
 	public byte[] sign(byte[] message, int offset, int length) {
 		EdDSAEngine engine = new EdDSAEngine();
 		try {
+			engine.setParameter(EdDSAEngine.ONE_SHOT_MODE);
 			engine.initSign(privKey);
 			return engine.signOneShot(message, offset, length);
-		} catch (SignatureException | InvalidKeyException exc) {
+		} catch (SignatureException | InvalidKeyException | InvalidAlgorithmParameterException exc) {
 			// This just plain shouldn't happen.
 			logger.error("Error in signing message", exc);
 			System.exit(1);

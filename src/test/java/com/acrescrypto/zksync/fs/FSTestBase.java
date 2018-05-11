@@ -216,7 +216,7 @@ public class FSTestBase extends Object {
 		scratch.write("chown", "contents".getBytes());
 		scratch.chown("chown", "root");
 		assertEquals("root", scratch.stat("chown").getUser());
-		scratch.chown("chown", "jonas"); // TODO: needs another user
+		scratch.chown("chown", System.getProperty("user.name"));
 		assertEquals("jonas", scratch.stat("chown").getUser());
 	}
 
@@ -225,7 +225,7 @@ public class FSTestBase extends Object {
 		scratch.write("chgrp", "contents".getBytes());
 		scratch.chgrp("chgrp", "root");
 		assertEquals("root", scratch.stat("chgrp").getGroup());
-		scratch.chgrp("chgrp", "jonas"); // TODO: needs another user
+		scratch.chgrp("chgrp", System.getProperty("user.name"));
 		assertEquals("jonas", scratch.stat("chgrp").getGroup());
 	}
 

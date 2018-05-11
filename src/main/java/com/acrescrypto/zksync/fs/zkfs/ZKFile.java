@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
-import java.io.InputStream;
 
 import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EINVALException;
@@ -269,10 +268,6 @@ public class ZKFile extends File {
 	public int available() throws IOException {
 		if(bufferedPage == null) return 0;
 		return bufferedPage.remaining();
-	}
-	
-	protected InputStream encryptedStream() throws IOException {
-		return new ZKFileCiphertextStream(this.inode.refTag);
 	}
 	
 	/** Throw an exception if the file is not open for reading.

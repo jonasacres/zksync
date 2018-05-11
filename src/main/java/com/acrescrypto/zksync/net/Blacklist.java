@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.net;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.LinkedList;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,12 +20,18 @@ public class Blacklist {
 	protected String path;
 	protected Key key;
 	protected final Logger logger = LoggerFactory.getLogger(Blacklist.class);
+	protected LinkedList<BlacklistCallback> callbacks = new LinkedList<BlacklistCallback>();
+	
+	protected interface BlacklistCallback {
+		void blacklistedAddress(String address);
+	}
 	
 	public Blacklist(FS fs, String path, Key key) {
 		this.fs = fs;
 		this.path = path;
 		this.key = key;
 	}
+	
 	
 	public void write() throws IOException {
 		byte[] serialized = serialize();
@@ -42,6 +49,14 @@ public class Blacklist {
 			entry = new BlacklistEntry(address, durationMs);
 			blockedAddresses.put(address, entry);
 		}
+	}
+	
+	public void addCallback(BlacklistCallback callback) {
+		callbacks.add(callback);
+	}
+	
+	public void removeCallback(BlacklistCallback callback) {
+		callbacks.remove(callback);
 	}
 	
 	public void read() throws IOException, InvalidBlacklistException {

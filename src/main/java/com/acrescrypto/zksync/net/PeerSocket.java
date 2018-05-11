@@ -8,6 +8,7 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 
@@ -25,14 +26,16 @@ public abstract class PeerSocket {
 	
 	public final static String EXT_FULL_PEER = "EXT_FULL_PEER";
 	
-	public static boolean addressSupported(String address) {
-		return false;
+	public static boolean adSupported(PeerAdvertisement ad) {
+		return ad instanceof TCPPeerAdvertisement;
 	}
-	
-	public static PeerSocket connectToAddress(PeerSwarm swarm, String address) throws UnsupportedProtocolException {
-		if(!addressSupported(address)) throw new UnsupportedProtocolException();
-		// TODO P2P: (implement) decode URL, select address
-		return null;
+
+	public static PeerSocket connectToAd(PeerSwarm swarm, PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
+		if(ad instanceof TCPPeerAdvertisement) {
+			return new TCPPeerSocket(swarm, (TCPPeerAdvertisement) ad);
+		} else {
+			throw new UnsupportedProtocolException();
+		}
 	}
 	
 	public boolean hasExtension(String extName) {
@@ -43,10 +46,12 @@ public abstract class PeerSocket {
 		return null;
 	}
 	
-	public abstract void write(byte[] data, int offset, int length);
-	public abstract void read(byte[] data, int offset, int length);
+	public abstract PeerAdvertisement getAd();
+
+	public abstract void write(byte[] data, int offset, int length) throws IOException, ProtocolViolationException;
+	public abstract int read(byte[] data, int offset, int length) throws IOException, ProtocolViolationException;
 	public abstract boolean isClient();
-	public abstract void close();
+	public abstract void close() throws IOException;
 	public abstract boolean isClosed();
 	
 	public abstract byte[] getSharedSecret();
@@ -65,7 +70,11 @@ public abstract class PeerSocket {
 	
 	/** Immediately close socket and blacklist due to a clear protocol violation. */
 	public void violation() {
-		close();
+		try {
+			close();
+		} catch (IOException exc) {
+			logger.warn("Caught exception closing socket to peer {}", getAddress(), exc);
+		}
 		logger.warn("Logged violation for peer {}", getAddress());
 		swarm.config.getArchive().getMaster().getBlacklist().add(address, Integer.MAX_VALUE);
 	}
@@ -74,10 +83,14 @@ public abstract class PeerSocket {
 	public void ioexception(IOException exc) {
 		/* These are probably our fault. There is the possibility that they are caused by malicious actors. */
 		logger.error("Socket for peer {} caught IOException", getAddress(), exc);
-		close();
+		try {
+			close();
+		} catch (IOException e) {
+			logger.warn("Caught exception closing socket to peer {}", getAddress(), exc);
+		}
 	}
 	
-	protected void sendMessage(PeerMessageOutgoing msg) throws IOException {
+	protected void sendMessage(PeerMessageOutgoing msg) throws IOException, ProtocolViolationException {
 		write(msg.txBuf.array(), 0, msg.txBuf.position());
 		msg.clearTxBuf();
 		if(msg.txClosed()) {
@@ -154,5 +167,9 @@ public abstract class PeerSocket {
 	
 	protected void assertState(boolean test) throws ProtocolViolationException {
 		if(!test) throw new ProtocolViolationException();
+	}
+
+	public boolean matchesAddress(String address) {
+		return this.address.equals(address);
 	}
 }
