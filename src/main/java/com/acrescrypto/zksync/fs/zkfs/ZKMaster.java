@@ -14,6 +14,7 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveAccessorDiscoveryCallback;
 import com.acrescrypto.zksync.net.Blacklist;
+import com.acrescrypto.zksync.net.TCPPeerSocketListener;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
@@ -27,6 +28,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected HashSet<ZKArchive> allArchives = new HashSet<ZKArchive>();
 	protected Blacklist blacklist;
 	protected Logger logger = LoggerFactory.getLogger(ZKMaster.class);
+	protected TCPPeerSocketListener listener;
 	
 	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) throws IOException {
 		return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
@@ -40,6 +42,11 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		this.storedAccess = new StoredAccess(this);
 		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive(ArchiveAccessor.KEY_INDEX_BLACKLIST, new byte[0]));
 		loadStoredAccessors();
+	}
+	
+	// Expect this to be deprecated someday.
+	public void listenOnTCP() throws IOException {
+		listener = new TCPPeerSocketListener(blacklist, 0);
 	}
 	
 	public void loadStoredAccessors() {
@@ -83,6 +90,11 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public CryptoSupport getCrypto() {
 		return crypto;
+	}
+	
+	// Expect this to be deprecated someday.
+	public TCPPeerSocketListener getTCPListener() {
+		return listener;
 	}
 	
 	public FS getStorage() {

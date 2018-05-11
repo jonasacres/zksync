@@ -63,10 +63,14 @@ public class TCPPeerSocketListener {
 			return curve25519.calculateAgreement(remotePubKey, privateKey);
 		}
 		
+		public TCPPeerAdvertisement localAd() {
+			return new TCPPeerAdvertisement(publicKey, "localhost", port);
+		}
+		
 		public void announce(int port) {
 			new Thread(() -> {
 				try {
-					TCPPeerAdvertisement ad = new TCPPeerAdvertisement(publicKey, "", port);
+					TCPPeerAdvertisement ad = localAd();
 					swarm.advertiseSelf(ad);
 				} catch(Exception exc) {
 					logger.error("Announce thread caught exception", exc);
@@ -136,6 +140,14 @@ public class TCPPeerSocketListener {
 		adListeners.add(new TCPPeerAdvertisementListener(curve25519, swarm, port));
 	}
 	
+	public TCPPeerAdvertisementListener listenerForSwarm(PeerSwarm swarm) {
+		for(TCPPeerAdvertisementListener listener : adListeners) {
+			if(listener.swarm == swarm) return listener;
+		}
+		
+		return null;
+	}
+		
 	protected MutableSecureFile cachedPortFile() {
 		// stealing blacklist's FS and key is a bit sneaky and un-kosher, but what the hell...
 		return MutableSecureFile.atPath(blacklist.fs, "tcp-port", blacklist.key.derive(0, new byte[0]));
