@@ -15,6 +15,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 
 public class TCPPeerSocket extends PeerSocket {
 	public final static int MAX_MSG_LEN = 65536; // maximum ciphertext length; largest buffer a peer needs to hold in memory at once
@@ -166,9 +167,14 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	protected void sendHandshake(byte[] remotePubKey) throws IOException, ProtocolViolationException {
+		ByteBuffer keyHashInput = ByteBuffer.allocate(2*keyPair.getPublicKey().length);
+		keyHashInput.put(keyPair.getPublicKey());
+		keyHashInput.put(remotePubKey);
+		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
+		
 		byte[] tempSharedSecret = curve25519.calculateAgreement(remotePubKey, keyPair.getPrivateKey());
 		byte[] proof = swarm.config.getAccessor().temporalProof(0, tempSharedSecret);
-		byte[] keyHash = crypto.authenticate(remotePubKey, keyPair.getPublicKey());
+		byte[] keyHash = keyHashKey.authenticate(keyHashInput.array());
 		
 		out.write(keyPair.getPublicKey());
 		out.write(keyHash);

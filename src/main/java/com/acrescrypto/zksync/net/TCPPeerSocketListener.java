@@ -17,6 +17,7 @@ import org.whispersystems.curve25519.Curve25519;
 import org.whispersystems.curve25519.Curve25519KeyPair;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
@@ -49,7 +50,12 @@ public class TCPPeerSocketListener {
 		}
 		
 		public boolean matchesKeyHash(byte[] remotePubKey, byte[] keyHash) {
-			byte[] expectedKeyHash = crypto.authenticate(publicKey, remotePubKey);
+			ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.symKeyLength());
+			keyHashInput.put(remotePubKey);
+			keyHashInput.put(publicKey);
+			Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
+			
+			byte[] expectedKeyHash = keyHashKey.authenticate(keyHashInput.array());
 			return Arrays.equals(expectedKeyHash, keyHash);
 		}
 		
