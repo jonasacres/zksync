@@ -48,7 +48,7 @@ public class RevisionTree {
 		newBranch.assertValid();
 		branchTips.add(newBranch);
 		if(!archive.config.accessor.isSeedOnly()) {
-			plainBranchTips.add(newBranch.decrypt());
+			plainBranchTips.add(newBranch.reveal());
 		}
 	}
 	
@@ -61,7 +61,7 @@ public class RevisionTree {
 		branchTips.remove(oldBranch);
 		if(!archive.config.accessor.isSeedOnly()) {
 			try {
-				plainBranchTips.remove(oldBranch.decrypt());
+				plainBranchTips.remove(oldBranch.reveal());
 			} catch (InvalidSignatureException exc) {
 				logger.info("Signature verification failed on obfuscated reftag meant for deletion", exc);
 			}
@@ -126,7 +126,7 @@ public class RevisionTree {
 				ObfuscatedRefTag obfTag = new ObfuscatedRefTag(archive, tag);
 				obfTag.assertValid();
 				branchTips.add(obfTag);
-				plainBranchTips.add(obfTag.decrypt());
+				plainBranchTips.add(obfTag.reveal());
 			} catch (InvalidSignatureException exc) {
 				logger.error("Invalid signature on stored obfuscating reftag; skipping", exc);
 			}

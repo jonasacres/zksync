@@ -6,7 +6,7 @@ public class Shuffler {
 	/** x > 1, where at most 1 in x entries in a fixed shuffling will be out of bounds.
 	 * Higher value increases CPU utilization to reduce memory consumption. 
 	 */
-	public final static double FIXED_MAX_INEFFICENCY = 2.0;
+	public final static double FIXED_MAX_INEFFICIENCY = 2.0;
 	
 	public static class ShuffleOrdering {
 		static HashMap<Integer,ShuffleOrdering> fixedOrderings = new HashMap<Integer,ShuffleOrdering>();
@@ -33,7 +33,7 @@ public class Shuffler {
 	}
 	
 	public static Shuffler fixedShuffler(int size) {
-		int roundSize = (int) Math.pow(FIXED_MAX_INEFFICENCY, Math.ceil(Math.log(size)/Math.log(FIXED_MAX_INEFFICENCY)));
+		int roundSize = (int) Math.pow(FIXED_MAX_INEFFICIENCY, Math.ceil(Math.log(size)/Math.log(FIXED_MAX_INEFFICIENCY)));
 		return new Shuffler(ShuffleOrdering.fixedOrdering(roundSize), size);
 	}
 	

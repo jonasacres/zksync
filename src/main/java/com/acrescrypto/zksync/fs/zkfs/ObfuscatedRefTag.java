@@ -62,7 +62,8 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 		if(!verify()) throw new InvalidSignatureException();
 	}
 	
-	public RefTag decrypt() throws InvalidSignatureException {
+	public RefTag reveal() throws InvalidSignatureException {
+		assertValid();
 		Key key = archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
 		byte[] mangled = archive.crypto.decryptCBC(key.getRaw(), new byte[archive.crypto.symBlockSize()], this.ciphertext);
 		byte[] plaintext = transform(mangled);

@@ -42,6 +42,7 @@ public class ZKArchiveConfig {
 		this.swarm = new PeerSwarm(this);
 		this.storage = new BackedFS(accessor.master.storageFsForArchiveId(archiveId), new SwarmFS(swarm));
 		this.localStorage = accessor.master.localStorageFsForArchiveId(archiveId);
+		this.archiveId = archiveId;
 		
 		if(!accessor.isSeedOnly()) {
 			read();
@@ -65,6 +66,7 @@ public class ZKArchiveConfig {
 		this.storage = new BackedFS(accessor.master.storageFsForArchiveId(archiveId), new SwarmFS(swarm));
 		this.localStorage = accessor.master.localStorageFsForArchiveId(archiveId);
 		this.archive = new ZKArchive(this);
+		write();
 	}
 	
 	public void isConfigAvailable() {
@@ -119,11 +121,15 @@ public class ZKArchiveConfig {
 	}
 	
 	public void write() throws IOException {
+		// TODO P2P: (refactor) consider futureproofing this. what if we actually want to use the reserved bytes someday?
 		ByteBuffer writeBuf = ByteBuffer.allocate(pageSize+accessor.master.crypto.asymSignatureSize());
 		byte[] seedPortion = serializeSeedPortion();
+		byte[] securePortion = serializeSecurePortion();
 		byte[] seedCiphertext = accessor.configFileSeedKey.encrypt(configFileIv, seedPortion, 256);
+		writeBuf.put(configFileIv);
 		writeBuf.put(seedCiphertext);
-		byte[] ciphertext = accessor.configFileKey.encrypt(configFileIv, serializeSecurePortion(), writeBuf.remaining());
+		int padLen = writeBuf.remaining()-accessor.master.crypto.asymSignatureSize()-4-accessor.master.crypto.symTagLength();
+		byte[] ciphertext = accessor.configFileKey.encrypt(configFileIv, securePortion, padLen);
 		writeBuf.put(ciphertext);
 		writeBuf.put(privKey.sign(writeBuf.array(), 0, writeBuf.position()));
 		assertState(!writeBuf.hasRemaining());
@@ -133,7 +139,9 @@ public class ZKArchiveConfig {
 	
 	public void read() throws IOException {
 		ByteBuffer contents = ByteBuffer.wrap(storage.read(Page.pathForTag(accessor.configFileTag)));
-		byte[] seedCiphertext = new byte[256];
+		byte[] seedCiphertext = new byte[256 + accessor.master.crypto.symTagLength() + 4];
+		configFileIv = new byte[accessor.master.crypto.symIvLength()];
+		contents.get(configFileIv);
 		contents.get(seedCiphertext);
 		deserializeSeedPortion(accessor.configFileSeedKey.decrypt(configFileIv, seedCiphertext));
 		
@@ -165,7 +173,7 @@ public class ZKArchiveConfig {
 	protected byte[] serializeSeedPortion() {
 		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length + accessor.master.crypto.hashLength());
 		buf.put(pubKey.getBytes());
-		buf.put(accessor.seedRoot.authenticate(archiveRoot.getRaw()));
+		buf.put(deriveArchiveFingerprint());
 		assertState(!buf.hasRemaining());
 		return buf.array();
 	}
@@ -179,7 +187,7 @@ public class ZKArchiveConfig {
 		assertState(descString.length <= Short.MAX_VALUE);
 		
 		ByteBuffer buf = ByteBuffer.allocate(headerSize+sectionHeaderSize+archiveInfoSize);
-		buf.putLong(CONFIG_MAGIC);
+		buf.putInt(CONFIG_MAGIC);
 		buf.putShort((short) CONFIG_SECTION_ARCHIVE_INFO);
 		buf.putInt((short) archiveInfoSize);
 		buf.putLong(pageSize);
@@ -201,11 +209,12 @@ public class ZKArchiveConfig {
 		
 		this.pubKey = accessor.master.crypto.makePublicKey(pubKeyBytes);
 		assertState(Arrays.equals(archiveId, calculateArchiveId(fingerprintBytes)));
+		assertState(Arrays.equals(configFileIv, calculateConfigFileIv()));
 	}
 	
 	protected void deserializeSecurePortion(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		assertState(buf.getLong() == CONFIG_MAGIC);
+		assertState(buf.getInt() == CONFIG_MAGIC);
 		while(buf.hasRemaining()) {
 			assertState(buf.remaining() >= 6); // 2-byte type + 4-byte length
 			int type = Util.unsignShort(buf.getShort());
@@ -224,7 +233,7 @@ public class ZKArchiveConfig {
 			
 			byte[] archiveRootRaw = new byte[accessor.master.crypto.symKeyLength()];
 			this.archiveRoot = new Key(accessor.master.crypto, archiveRootRaw);
-			byte[] descriptionRaw = new byte[length - 8 + accessor.master.crypto.symKeyLength()];
+			byte[] descriptionRaw = new byte[length - 8 - accessor.master.crypto.symKeyLength()];
 			buf.get(descriptionRaw);
 			this.description = new String(descriptionRaw);
 			break;
@@ -233,9 +242,9 @@ public class ZKArchiveConfig {
 	
 	protected void initArchiveSpecific() {
 		archiveRoot = new Key(accessor.master.crypto, accessor.master.crypto.rng(accessor.master.crypto.symKeyLength()));
-		configFileIv = accessor.master.crypto.rng(accessor.master.crypto.symIvLength());
 		deriveKeypair();
 		archiveId = calculateArchiveId(deriveArchiveFingerprint());
+		configFileIv = calculateConfigFileIv();
 	}
 	
 	protected byte[] deriveArchiveFingerprint() {
@@ -247,7 +256,12 @@ public class ZKArchiveConfig {
 		keyMaterialBuf.put(archiveFingerprint);
 		keyMaterialBuf.put(pubKey.getBytes());
 		assertState(!keyMaterialBuf.hasRemaining());
-		return accessor.seedRoot.authenticate(keyMaterialBuf.array());
+		byte[] id = accessor.seedRoot.authenticate(keyMaterialBuf.array());
+		return id;
+	}
+	
+	protected byte[] calculateConfigFileIv() {
+		return accessor.master.crypto.expand(accessor.seedRoot.getRaw(), accessor.master.crypto.symIvLength(), "zksync".getBytes(), archiveId);
 	}
 	
 	protected void assertState(boolean state) {

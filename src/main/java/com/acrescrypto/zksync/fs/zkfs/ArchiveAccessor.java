@@ -135,6 +135,11 @@ public class ArchiveAccessor {
 	public boolean isSeedOnly() {
 		return passphraseRoot == null;
 	}
+	
+	public void becomeSeedOnly() {
+		passphraseRoot = null;
+		configFileKey = null;
+	}
 
 	public Key deriveKey(int root, int type, int index, byte[] tweak) {
 		Key[] keys = { passphraseRoot, null, seedRoot, localRoot };
@@ -168,7 +173,6 @@ public class ArchiveAccessor {
 		this.passphraseRoot = passphraseRoot;
 		deriveFromSeedRoot(deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_ROOT, KEY_INDEX_SEED));		
 		configFileKey = deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_FILE, new byte[0]);
-		configFileTag = deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_AUTH, KEY_INDEX_CONFIG_FILE, new byte[0]).getRaw();
 	}
 	
 	protected void deriveFromSeedRoot(Key seedRoot) {
@@ -176,6 +180,8 @@ public class ArchiveAccessor {
 		seedId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED, new byte[0]);
 		seedRegId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED_REG, new byte[0]);
 		localRoot = deriveKey(KEY_ROOT_SEED, KEY_TYPE_ROOT, KEY_INDEX_LOCAL, master.localKey.getRaw());
+		configFileTag = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_CONFIG_FILE, new byte[0]).getRaw();
+		configFileSeedKey = deriveKey(KEY_ROOT_SEED, KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_FILE, new byte[0]);
 	}
 	
 	protected Key temporalSeedId(int offset) {

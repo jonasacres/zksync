@@ -26,7 +26,7 @@ public class StoredAccessRecord {
 	
 	protected byte[] serialize() {
 		boolean writeAsSeed = seedOnly || archive.config.accessor.isSeedOnly();
-		int type = writeAsSeed ? ArchiveAccessor.KEY_INDEX_SEED : ArchiveAccessor.KEY_ROOT_PASSPHRASE;
+		int type = writeAsSeed ? 1 : 0;
 		Key key = writeAsSeed ? archive.config.accessor.seedRoot : archive.config.accessor.passphraseRoot;
 		
 		ByteBuffer buf = ByteBuffer.allocate(2+1 + archive.master.crypto.symKeyLength() + archive.master.crypto.hashLength());

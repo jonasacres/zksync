@@ -9,7 +9,6 @@ import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
 import org.bouncycastle.crypto.engines.AESEngine;
-import org.bouncycastle.crypto.modes.AEADBlockCipher;
 import org.bouncycastle.crypto.modes.CBCBlockCipher;
 import org.bouncycastle.crypto.modes.OCBBlockCipher;
 import org.bouncycastle.crypto.params.AEADParameters;
@@ -129,7 +128,7 @@ public class CryptoSupport {
 	public byte[] encrypt(byte[] key, byte[] iv, byte[] plaintext, byte[] associatedData, int padSize)
 	{
 		try {
-			return processAEADCipher(true, 128, key, iv, padToSize(plaintext, padSize), associatedData);
+			return processAEADCipher(true, 8*symTagLength(), key, iv, padToSize(plaintext, padSize), associatedData);
 		} catch (Exception exc) {
 			logger.error("Encountered exception encrypting data", exc);
 			System.exit(1);
@@ -140,7 +139,7 @@ public class CryptoSupport {
 	public byte[] encrypt(byte[] key, byte[] iv, byte[] plaintext, int offset, int length, byte[] associatedData, int adOffset, int adLen, int padSize)
 	{
 		try {
-			return processAEADCipher(true, 128, key, iv, padToSize(plaintext, padSize), associatedData);
+			return processAEADCipher(true, 8*symTagLength(), key, iv, padToSize(plaintext, padSize), associatedData);
 		} catch (Exception exc) {
 			logger.error("Encountered exception encrypting data", exc);
 			System.exit(1);
@@ -204,11 +203,12 @@ public class CryptoSupport {
 	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, int inOffset, int inLen, byte[] ad, int adOffset, int adLen) throws IllegalStateException, InvalidCipherTextException {
         KeyParameter key = new KeyParameter(keyBytes);
         AEADParameters params = new AEADParameters(key, tagLen, iv);
-        AEADBlockCipher cipher = new OCBBlockCipher(new AESEngine(), new AESEngine());
+        OCBBlockCipher cipher = new OCBBlockCipher(new AESEngine(), new AESEngine());
         cipher.init(encrypt, params);
 
 		int offset = 0;
-		byte[] out = new byte[cipher.getOutputSize(in != null ? inLen : 0)];
+		int outLen = cipher.getOutputSize(in != null ? inLen : 0);
+		byte[] out = new byte[outLen];
 		if(ad != null) cipher.processAADBytes(ad, adOffset, adLen);
         if(in != null) offset = cipher.processBytes(in, inOffset, inLen, out, 0);
         offset += cipher.doFinal(out, offset);
@@ -242,7 +242,6 @@ public class CryptoSupport {
 		ByteBuffer padded = ByteBuffer.allocate(padSize+4);
 		padded.putInt(raw.length);
 		padded.put(raw);
-		while(padded.position() < padSize) padded.put((byte) 0);
 		return padded.array();
 	}
 	
@@ -282,6 +281,10 @@ public class CryptoSupport {
 	
 	public int symIvLength() {
 		return 64/8; // 64-bit IV (note: this is for AEAD, do not use for CBC mode)
+	}
+	
+	public int symTagLength() {
+		return 128/8;
 	}
 	
 	public int hashLength() {
