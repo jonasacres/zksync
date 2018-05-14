@@ -11,7 +11,7 @@ import org.junit.Test;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 
-public class FSTestBase extends Object {
+public class FSTestBase {
 	protected FS scratch;
 	protected boolean examplesPrepared = false;
 	

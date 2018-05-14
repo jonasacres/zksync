@@ -5,6 +5,9 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public abstract class FS {
 	public abstract Stat stat(String path) throws IOException;
 	public abstract Stat lstat(String path) throws IOException;
@@ -35,6 +38,8 @@ public abstract class FS {
 	public abstract File open(String path, int mode) throws IOException;
 	public abstract void truncate(String path, long size) throws IOException;
 	
+	private Logger logger = LoggerFactory.getLogger(FS.class);
+	
 	public byte[] read(String path) throws IOException {
 		File file = open(path, File.O_RDONLY);
 		byte[] bytes = file.read();
@@ -55,7 +60,7 @@ public abstract class FS {
 				}
 			}
 		} catch(Exception exc) {
-			exc.printStackTrace();
+			logger.error("Caught exception on rmrf(\"{}\"), exists={}: ", path, exists(path), exc);
 		} finally {
 			dir.close();
 			rmdir(path);

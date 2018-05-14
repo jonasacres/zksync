@@ -37,8 +37,6 @@ public class LocalFS extends FS {
 				GroupPrincipal group = Files.readAttributes(path, PosixFileAttributes.class, LinkOption.NOFOLLOW_LINKS).group();
 				stat.setGroup(group.getName());
 			}
-			stat.setSize(Files.size(path));
-			
 			int type = getStatType(path, linkOpt);
 			if(type >= 0) {
 				stat.setType(type);
@@ -46,8 +44,14 @@ public class LocalFS extends FS {
 				scrapeLSForUnixSpecific(stat, path.toString());
 			}
 			
+			if(stat.isSymlink()) {
+				stat.setSize(0);
+			} else {
+				stat.setSize(Files.size(path));
+			}
+						
 			if(!isWindows()) stat.setInodeId((Long) Files.getAttribute(path, "unix:ino", linkOpt));
-		} catch(NoSuchFileException e) {
+		} catch(NoSuchFileException exc) {
 			throw new ENOENTException(path.toString());
 		}
 		
@@ -175,12 +179,17 @@ public class LocalFS extends FS {
 
 	@Override
 	public void symlink(String source, String dest) throws IOException {
-		Files.createSymbolicLink(Paths.get(root, dest), Paths.get(source));
+		Files.createSymbolicLink(Paths.get(root, dest), Paths.get(root, source));
 	}
 	
 	@Override
 	public String readlink(String link) throws IOException {
-		return Files.readSymbolicLink(Paths.get(root, link)).toString();
+		String target = Files.readSymbolicLink(Paths.get(root, link)).toString();
+		if(target.startsWith(root)) {
+			return target.substring(root.length()+1, target.length());
+		}
+		
+		return target;
 	}
 
 	@Override
@@ -198,7 +207,7 @@ public class LocalFS extends FS {
 			throw new IllegalArgumentException(String.format("Illegal node type: %d", type));
 		}
 		
-		runCommand(new String[] { "mknod", typeStr, path, String.format("%d", major), String.format("%d", minor) });
+		runCommand(new String[] { "mknod", typeStr, expandPath(path), String.format("%d", major), String.format("%d", minor) });
 	}
 
 	@Override
@@ -235,9 +244,13 @@ public class LocalFS extends FS {
 
 	@Override
 	public void chown(String path, String user) throws IOException {
-		UserPrincipal userPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByName(user);
-		java.io.File targetFile = new java.io.File(expandPath(path));
-		Files.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).setOwner(userPrincipal);
+		try {
+			UserPrincipal userPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByName(user);
+			java.io.File targetFile = new java.io.File(expandPath(path));
+			Files.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).setOwner(userPrincipal);
+		} catch(FileSystemException exc) {
+			throw new UnsupportedOperationException();
+		}
 	}
 
 	@Override
@@ -247,9 +260,13 @@ public class LocalFS extends FS {
 
 	@Override
 	public void chgrp(String path, String group) throws IOException {
-		GroupPrincipal groupPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByGroupName(group);
-		java.io.File targetFile = new java.io.File(expandPath(path));
-		Files.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).setGroup(groupPrincipal);
+		try {
+			GroupPrincipal groupPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByGroupName(group);
+			java.io.File targetFile = new java.io.File(expandPath(path));
+			Files.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).setGroup(groupPrincipal);
+		} catch(FileSystemException exc) {
+			throw new UnsupportedOperationException();
+		}
 	}
 
 	@Override

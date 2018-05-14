@@ -36,7 +36,8 @@ public class LocalFile extends File {
 		} catch(ENOENTException e) {
 		}
 		
-		this.fileHandle = new RandomAccessFile(Paths.get(fs.getRoot(), path).toString(), modeStr);
+		String fullPath = Paths.get(fs.getRoot(), path).toString();
+		this.fileHandle = new RandomAccessFile(fullPath, modeStr);
 		this.channel = this.fileHandle.getChannel();
 		this.path = path;
 		this.mode = mode;

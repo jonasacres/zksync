@@ -9,6 +9,20 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
+/** This is written, and partially tested, as a generic FS. In truth, there are some MAJOR gaps.
+ * Because right now BackedFS only has one use case, and that's to pair a LocalFS to a SwarmFS to retrieve pages,
+ * there's not much use of devices/symlinks/hardlinks/etc. Therefore, it has some odd semantics.
+ * 
+ * 1. The behavior of accessing anything except a directory or regular file is untested and probably broken.
+ *    This includes symlinks.
+ *    
+ * 2. Calls that create filesystem entries (e.g. link, symlink, write, mkdir) implicitly mkdirp the parent of
+ *    the path you supply, on the theory that saving the latency of stat'ing every directory in the path from
+ *    the backupFS (which might be across a network connection) is of greater value than preserving consistency
+ *    in behavior in this regard.
+ * 
+ * None of the above should be relied upon, as it may be change later if BackedFS winds up having other uses.
+ */
 public class BackedFS extends FS {
 	protected FS cacheFS; // We check this first, and if something isn't here, we try to download it and write it here.
 	protected FS backupFS; // This is where we go to look for data we don't have.
@@ -34,13 +48,20 @@ public class BackedFS extends FS {
 		try {
 			return cacheFS.lstat(path);
 		} catch(ENOENTException exc) {
-			return backupFS.stat(path);
+			return backupFS.lstat(path);
 		}
 	}
 
 	@Override
+	/** This will almost certainly end in tears, since we can't guarantee that the directory
+	 * actually has correct contents. But support is provided.
+	 */
 	public Directory opendir(String path) throws IOException {
-		ensurePresent(path);
+		if(!cacheFS.exists(path)) {
+			if(backupFS.stat(path).isDirectory()) {
+				mkdirp(path);
+			}
+		}
 		return cacheFS.opendir(path);
 	}
 
@@ -70,12 +91,13 @@ public class BackedFS extends FS {
 	@Override
 	public void link(String target, String link) throws IOException {
 		ensurePresent(target);
+		ensureParentPresent(link);
 		cacheFS.link(target, link);
 	}
 
 	@Override
 	public void symlink(String target, String link) throws IOException {
-		ensureParentPresent(target);
+		ensureParentPresent(link);
 		cacheFS.symlink(target, link);
 	}
 
@@ -153,25 +175,37 @@ public class BackedFS extends FS {
 
 	@Override
 	public byte[] read(String path) throws IOException {
-		try {
-			return cacheFS.read(path);
-		} catch(ENOENTException exc) {
-			return backupFS.read(path);
-		}
+		ensurePresent(path);
+		return cacheFS.read(path);
 	}
 
 	@Override
 	public File open(String path, int mode) throws IOException {
-		try {
-			return cacheFS.open(path, mode);
-		} catch(ENOENTException exc) {
-			return backupFS.open(path, mode);
+		if((mode & File.O_TRUNC) == 0) {
+			try {			
+				ensurePresent(path);
+			} catch(ENOENTException exc) {
+				if((mode & File.O_CREAT) == 0) throw exc;
+			}
 		}
+		
+		if((mode & File.O_CREAT) != 0)  {
+			mkdirp(dirname(path));
+		}
+		return cacheFS.open(path, mode);
 	}
 
 	@Override
 	public void truncate(String path, long size) throws IOException {
-		ensurePresent(path);
+		if(size != 0) {
+			ensurePresent(path);
+		} else {
+			// stat is a potentially expensive call to the backup, but lets us preserve ENOENT behavior
+			stat(path);
+			cacheFS.write(path, new byte[0]);
+			return;
+		}
+		
 		cacheFS.truncate(path, size);
 	}
 	
@@ -182,10 +216,11 @@ public class BackedFS extends FS {
 	 * @throws IOException
 	 */
 	protected void ensurePresent(String path) throws IOException {
-		synchronized(pendingPaths) {
+		if(cacheFS.exists(path, false)) return;
+		synchronized(this) {
 			while(pendingPaths.contains(path)) {
 				try {
-					pendingPaths.wait();
+					this.wait();
 				} catch (InterruptedException e) {}
 			}
 			
@@ -194,11 +229,15 @@ public class BackedFS extends FS {
 		
 		try {
 			if(!cacheFS.exists(path)) {
-				read(path);
+				Stat stat = backupFS.stat(path);
+				byte[] data = backupFS.read(path);
+				cacheFS.write(path, data);
+				cacheFS.applyStat(path, stat);
 			}
 		} finally {			
-			synchronized(pendingPaths) {
+			synchronized(this) {
 				pendingPaths.remove(path);
+				this.notifyAll();
 			}
 		}
 	}
@@ -208,7 +247,9 @@ public class BackedFS extends FS {
 		 * already have a good reason to believe that it is, and skipping that check saves us a lot of network time.
 		 */
 		String parent = dirname(path);
-		mkdirp(parent);
+		if(!cacheFS.exists(parent)) {
+			mkdirp(parent);
+		}
 	}
 	
 	@Override
