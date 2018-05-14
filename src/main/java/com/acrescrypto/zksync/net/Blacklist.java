@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.utility.Util;
@@ -23,13 +24,14 @@ public class Blacklist {
 	protected LinkedList<BlacklistCallback> callbacks = new LinkedList<BlacklistCallback>();
 	
 	protected interface BlacklistCallback {
-		void blacklistedAddress(String address);
+		void blacklistedAddress(String address, int durationMs);
 	}
 	
-	public Blacklist(FS fs, String path, Key key) {
+	public Blacklist(FS fs, String path, Key key) throws IOException, InvalidBlacklistException {
 		this.fs = fs;
 		this.path = path;
 		this.key = key;
+		read();
 	}
 	
 	
@@ -39,7 +41,7 @@ public class Blacklist {
 		MutableSecureFile.atPath(fs, path, key).write(serialize(), padLen);
 	}
 	
-	public void add(String address, int durationMs) {
+	public void add(String address, int durationMs) throws IOException {
 		BlacklistEntry entry = blockedAddresses.getOrDefault(address, null);
 		if(entry != null) {
 			logger.warn("Renewing blacklist entry for {} for {}ms", address, durationMs);
@@ -48,6 +50,11 @@ public class Blacklist {
 			logger.warn("Adding blacklist entry for {} for {}ms", address, durationMs);
 			entry = new BlacklistEntry(address, durationMs);
 			blockedAddresses.put(address, entry);
+		}
+		write();
+		
+		for(BlacklistCallback callback : callbacks) {
+			callback.blacklistedAddress(address, durationMs);
 		}
 	}
 	
@@ -60,7 +67,12 @@ public class Blacklist {
 	}
 	
 	public void read() throws IOException, InvalidBlacklistException {
-		deserialize(MutableSecureFile.atPath(fs, path, key).read());
+		try {
+			deserialize(MutableSecureFile.atPath(fs, path, key).read());
+		} catch(ENOENTException exc) {
+		} catch(SecurityException exc) {
+			throw new InvalidBlacklistException();
+		}
 	}
 	
 	public boolean contains(String address) {
@@ -97,6 +109,7 @@ public class Blacklist {
 	
 	public void deserialize(byte[] serialized) throws InvalidBlacklistException {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
+		blockedAddresses.clear();
 		while(buf.hasRemaining()) {
 			assertState(buf.remaining() >= 10);
 			buf.position(buf.position() + 8);

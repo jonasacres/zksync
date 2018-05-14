@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
+import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveAccessorDiscoveryCallback;
@@ -32,10 +33,15 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected TCPPeerSocketListener listener;
 	
 	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) throws IOException {
-		return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
+		try {
+			return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
+		} catch (InvalidBlacklistException e) {
+			// TODO: refactoring all the tests to catch InBlEx would be annoying, so this is an alternative... But probably a bandaid.
+			throw new RuntimeException();
+		}
 	}
 	
-	public ZKMaster(CryptoSupport crypto, FS storage, PassphraseProvider passphraseProvider) throws IOException {
+	public ZKMaster(CryptoSupport crypto, FS storage, PassphraseProvider passphraseProvider) throws IOException, InvalidBlacklistException {
 		this.crypto = crypto;
 		this.storage = storage;
 		this.passphraseProvider = passphraseProvider;

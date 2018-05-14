@@ -68,15 +68,16 @@ public abstract class PeerSocket {
 		return 64*1024;
 	}
 	
-	/** Immediately close socket and blacklist due to a clear protocol violation. */
+	/** Immediately close socket and blacklist due to a clear protocol violation. 
+	 * @throws IOException */
 	public void violation() {
+		logger.warn("Logging violation for peer {}", getAddress());
 		try {
 			close();
+			swarm.config.getArchive().getMaster().getBlacklist().add(address, Integer.MAX_VALUE);
 		} catch (IOException exc) {
 			logger.warn("Caught exception closing socket to peer {}", getAddress(), exc);
 		}
-		logger.warn("Logged violation for peer {}", getAddress());
-		swarm.config.getArchive().getMaster().getBlacklist().add(address, Integer.MAX_VALUE);
 	}
 	
 	/** Handle some sort of I/O exception */

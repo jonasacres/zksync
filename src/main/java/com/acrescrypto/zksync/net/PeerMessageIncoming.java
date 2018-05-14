@@ -127,6 +127,7 @@ public class PeerMessageIncoming extends PeerMessage {
 			try {
 				connection.handle(this);
 			} catch(ProtocolViolationException exc) {
+				logger.warn("Peer message handlker for {} encountered protocol violation", connection.socket.getAddress(), exc);
 				connection.socket.violation();
 			} catch(Exception exc) {
 				logger.error("Peer message handler thread for {} encountered exception", connection.socket.getAddress(), exc);

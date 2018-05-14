@@ -17,8 +17,6 @@ import org.bouncycastle.crypto.params.ParametersWithIV;
 
 import org.slf4j.LoggerFactory;
 
-import com.acrescrypto.zksync.utility.Util;
-
 import org.slf4j.Logger;
 
 import de.mkammerer.argon2.Argon2Factory;

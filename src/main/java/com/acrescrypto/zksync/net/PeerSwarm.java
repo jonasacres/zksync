@@ -61,7 +61,7 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	@Override
-	public synchronized void blacklistedAddress(String address) {
+	public synchronized void blacklistedAddress(String address, int durationMs) {
 		for(PeerConnection connection : connections) {
 			PeerAdvertisement ad = connection.socket.getAd();
 			if(connection.socket.matchesAddress(address) || (ad != null && ad.matchesAddress(address))) {
