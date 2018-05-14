@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
@@ -129,5 +130,13 @@ public class ZKArchive {
 	public ArrayList<byte[]> allTags() {
 		loadAllTags();
 		return allTags;
+	}
+	
+	public boolean equals(Object other) {
+		if(!(other instanceof ZKArchive)) {
+			return false;
+		}
+		
+		return Arrays.equals(config.archiveId, ((ZKArchive) other).config.archiveId);
 	}
 }

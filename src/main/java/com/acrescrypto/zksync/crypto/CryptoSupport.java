@@ -16,6 +16,9 @@ import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.params.ParametersWithIV;
 
 import org.slf4j.LoggerFactory;
+
+import com.acrescrypto.zksync.utility.Util;
+
 import org.slf4j.Logger;
 
 import de.mkammerer.argon2.Argon2Factory;
@@ -63,7 +66,7 @@ public class CryptoSupport {
         if(base64.charAt(base64.length()-1) == 0x00) base64 = base64.substring(0, base64.length()-1);
         byte[] key = {};
 		key = Base64.getDecoder().decode(base64);
-        
+		
         return key;
 	}
 	
@@ -160,10 +163,6 @@ public class CryptoSupport {
 		} catch(InvalidCipherTextException exc) {
 			logger.warn("Unable to validate AEAD ciphertext", exc);
 			throw new SecurityException();
-		} catch(Exception exc) {
-			logger.error("Encountered exception decrypting data", exc);
-			System.exit(1);
-			return null; // unreachable, but it makes the compiler happy
 		}
 	}
 	
@@ -178,14 +177,8 @@ public class CryptoSupport {
 	}
 	
 	public byte[] decryptCBC(byte[] key, byte[] iv, byte[] ciphertext) {
-		try {
-			byte[] paddedPlaintext = processOrdinaryCipher(false, key, iv, ciphertext);
-			return paddedPlaintext;
-		} catch(Exception exc) {
-			logger.error("Encountered exception decrypting data", exc);
-			System.exit(1);
-			return null; // unreachable, but it makes the compiler happy
-		}
+		byte[] paddedPlaintext = processOrdinaryCipher(false, key, iv, ciphertext);
+		return paddedPlaintext;
 	}
 	
 	public static byte[] xor(byte[] a, byte[] b) {

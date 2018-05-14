@@ -36,19 +36,29 @@ public class StoredAccess implements ArchiveDiscovery {
 	}
 	
 	public void deleteArchiveAccess(ZKArchive archive) throws IOException {
-		boolean changed = false;
+		StoredAccessRecord killableRecord = null;
 		for(StoredAccessRecord record : records) {
 			if(Arrays.equals(record.archive.config.archiveId, archive.config.archiveId)) {
-				records.remove(record);
-				changed = true;
+				killableRecord = record;
+				break;
 			}
 		}
 		
-		if(changed) write();
+		if(killableRecord != null) {
+			records.remove(killableRecord);
+			write();
+		}
+		
+		master.removedArchive(archive);
 	}
 	
 	public void purge() throws IOException {
+		for(StoredAccessRecord record : records) {
+			master.removedArchive(record.archive);
+		}
+		
 		records.clear();
+		
 		try {
 			master.storage.unlink(path());
 		} catch (ENOENTException exc) {
@@ -61,7 +71,8 @@ public class StoredAccess implements ArchiveDiscovery {
 	
 	public void read() throws IOException {
 		try {
-			deserialize(master.storage.read(path()));
+			MutableSecureFile file = new MutableSecureFile(master.storage, path(), storageKey);
+			deserialize(file.read());
 		} catch(ENOENTException exc) {
 			records.clear();
 			return;
@@ -74,7 +85,7 @@ public class StoredAccess implements ArchiveDiscovery {
 	}
 	
 	protected byte[] serialize() {
-		/* TODO: review code, ensure serialize() methods consistently return either plaintext and are wrapped by
+		/* TODO: (review), ensure serialize() methods consistently return either plaintext and are wrapped by
 		 * an encryption method as needed so we can rely on serialize() always returning plaintext.
 		 */
 		byte[][] recordBufs = new byte[records.size()][];
@@ -85,8 +96,10 @@ public class StoredAccess implements ArchiveDiscovery {
 			length += recordBufs[i].length;
 		}
 		
-		ByteBuffer plaintextBuf = ByteBuffer.allocate(length);
+		ByteBuffer plaintextBuf = ByteBuffer.allocate(length + 2*records.size());
 		for(byte[] recordBuf : recordBufs) {
+			assert(recordBuf.length <= Short.MAX_VALUE);
+			plaintextBuf.putShort((short) recordBuf.length);
 			plaintextBuf.put(recordBuf);
 		}
 		
@@ -100,7 +113,8 @@ public class StoredAccess implements ArchiveDiscovery {
 			if(buf.remaining() < 2) throw new EINVALException("invalid stored access file");
 			int length = Util.unsignShort(buf.getShort());
 			if(buf.remaining() < length) throw new EINVALException("invalid stored access file");
-			records.add(new StoredAccessRecord(master, buf));
+			StoredAccessRecord record = new StoredAccessRecord(master, buf);
+			records.add(record);
 		}
 	}
 
