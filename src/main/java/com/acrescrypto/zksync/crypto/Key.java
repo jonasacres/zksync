@@ -12,9 +12,9 @@ public class Key {
 	}
 	
 	public Key derive(int index, byte[] data) {
-		ByteBuffer saltBuf = ByteBuffer.allocate(data.length+1);
+		ByteBuffer saltBuf = ByteBuffer.allocate(data.length+4);
 		saltBuf.put(data);
-		saltBuf.put((byte) index);
+		saltBuf.putInt(index);
 		return new Key(crypto, crypto.expand(raw, crypto.symKeyLength(), saltBuf.array(), "zksync".getBytes()));
 	}
 	

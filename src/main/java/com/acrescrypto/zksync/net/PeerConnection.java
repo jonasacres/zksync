@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.net;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 
@@ -15,7 +14,6 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.File;
-import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
@@ -74,13 +72,6 @@ public class PeerConnection {
 	
 	public PeerSocket getSocket() {
 		return socket;
-	}
-	
-	public void sendAccessProof() throws PeerRoleException {
-		assertClientStatus(true);
-		ArchiveAccessor accessor = socket.getSwarm().getConfig().getAccessor();
-		byte[] payload = accessor.temporalProof(0, socket.getSharedSecret());
-		send(CMD_ACCESS_PROOF, payload);
 	}
 	
 	public void announceTag(long shortTag) {
@@ -200,25 +191,9 @@ public class PeerConnection {
 		if(!state) throw new ProtocolViolationException();
 	}
 	
-	protected byte[] proofResponse(byte[] proof) throws ProtocolViolationException {
-		assertState(proof.length == socket.swarm.config.getArchive().getCrypto().hashLength());
-		// temporalProof returns random garbage if we are not a full peer
-		if(Arrays.equals(proof, socket.swarm.config.getAccessor().temporalProof(0, socket.getSharedSecret()))) {
-			peerType = PEER_TYPE_FULL;
-			return socket.swarm.config.getAccessor().temporalProof(1, socket.getSharedSecret());
-		} else {
-			// either their proof is garbage (meaning they're blind), or we're a blind seed; send garbage
-			peerType = PEER_TYPE_BLIND;
-			return socket.swarm.config.getAccessor().getMaster().getCrypto().rng(proof.length);
-		}
-	}
-
 	public void handle(PeerMessageIncoming msg) throws ProtocolViolationException {
 		try {
 			switch(msg.cmd) {
-			case CMD_ACCESS_PROOF:
-				handleAccessProof(msg);
-				break;
 			case CMD_ANNOUNCE_PEERS:
 				handleAnnouncePeers(msg);
 				break;
@@ -253,7 +228,7 @@ public class PeerConnection {
 				logger.info("Ignoring unknown request command {} from {}", msg.cmd, socket.getAddress());
 				break;
 			}
-		} catch(PeerRoleException | PeerCapabilityException | IOException | InvalidSignatureException exc) {
+		} catch(PeerCapabilityException | IOException | InvalidSignatureException exc) {
 			/* Arguably, blacklisting people because we had a local IOException is unfair. But, there are two real
 			 * possibilities here:
 			 *   1. They're doing something nasty that's triggering IOExceptions. THey deserve it.
@@ -265,24 +240,6 @@ public class PeerConnection {
 			logger.warn("Blacklisting peer " + socket.getAddress() + " due to exception", exc);
 			throw new ProtocolViolationException();
 		}
-	}
-	
-	protected void handleAccessProof(PeerMessageIncoming msg) throws PeerRoleException, ProtocolViolationException, EOFException {
-		ArchiveAccessor accessor = this.socket.swarm.config.getAccessor();
-		int theirStep = this.socket.isClient() ? 0x01 : 0x00;
-		byte[] expected = accessor.temporalProof(theirStep, this.socket.getSharedSecret());
-		byte[] received = msg.rxBuf.read(expected.length);
-		msg.rxBuf.requireEOF();
-		
-		peerType = Arrays.equals(expected, received) ? PEER_TYPE_FULL : PEER_TYPE_BLIND;
-		if(!socket.isClient()) {
-			byte[] response = peerType == PEER_TYPE_FULL 
-					? accessor.temporalProof(0x01, socket.getSharedSecret())
-					: socket.swarm.config.getAccessor().getMaster().getCrypto().prng(this.socket.getSharedSecret()).getBytes(expected.length);
-			send(CMD_ACCESS_PROOF, response);
-		}
-		
-		receivedProof = true;
 	}
 	
 	protected void handleAnnouncePeers(PeerMessageIncoming msg) throws EOFException, ProtocolViolationException {

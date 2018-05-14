@@ -235,14 +235,19 @@ public class TCPPeerSocketListener {
 		byte[] pubKey = new byte[adListeners.getFirst().crypto.asymPublicKeySize()];
 		byte[] keyHash = new byte[adListeners.getFirst().crypto.hashLength()];
 		byte[] proof = new byte[adListeners.getFirst().crypto.hashLength()];
+		byte[] timeIndexBytes = new byte[4];
 		
 		IOUtils.readFully(in, pubKey);
 		IOUtils.readFully(in, keyHash);
+		IOUtils.readFully(in, timeIndexBytes);
 		IOUtils.readFully(in, proof);
 		
 		TCPPeerAdvertisementListener ad = findMatchingAdvertisement(pubKey, keyHash);
+		int timeIndex = ByteBuffer.wrap(timeIndexBytes).getInt();
+		int timeDiff = (int) Math.abs(System.currentTimeMillis() - ad.swarm.config.getAccessor().timeSlice(timeIndex));
+		assertState(timeDiff <= ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS + 1000);
 		byte[] tempSharedSecret = curve25519.calculateAgreement(pubKey, ad.privateKey);
-		byte[] expectedProof = ad.swarm.config.getAccessor().temporalProof(0, tempSharedSecret);
+		byte[] expectedProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
 		
 		int peerType;
 		if(Arrays.equals(expectedProof, proof)) {

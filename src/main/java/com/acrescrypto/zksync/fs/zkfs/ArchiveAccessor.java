@@ -146,18 +146,20 @@ public class ArchiveAccessor {
 		if(root >= keys.length || keys[root] == null) {
 			throw new IllegalArgumentException();
 		}
-		return keys[root].derive(((type & 0xFFFF) << 16) | (index & 0xFFFF), tweak);
+		
+		int modifier = ((type & 0xFFFF) << 16) | (index & 0xFFFF);
+		return keys[root].derive(modifier, tweak);
 	}
 	
 	public Key deriveKey(int root, int type, int index) {
 		return deriveKey(root, type, index, new byte[0]);
 	}	
 
-	public byte[] temporalProof(int step, byte[] sharedSecret) {
+	public byte[] temporalProof(int offset, int step, byte[] sharedSecret) {
 		assert(0 <= step && step <= Byte.MAX_VALUE);
 		ByteBuffer timeSecretTweak = ByteBuffer.allocate(9+sharedSecret.length);
-		timeSecretTweak.putShort((byte) step);
-		timeSecretTweak.putLong(timeSlice(0));
+		timeSecretTweak.put((byte) step);
+		timeSecretTweak.putLong(timeSlice(offset));
 		timeSecretTweak.put(sharedSecret);
 		
 		/* Use a garbage "proof" if we don't actually have knowledge of the passphrase key. We use a combination of
@@ -198,8 +200,13 @@ public class ArchiveAccessor {
 		return deriveKey(KEY_ROOT_SEED, isAuth ? KEY_TYPE_AUTH : KEY_TYPE_CIPHER, KEY_INDEX_SEED_TEMPORAL, timeTweak.array());
 	}
 	
-	protected long timeSlice(int offset) {
-		return TEMPORAL_SEED_KEY_INTERVAL_MS * (System.currentTimeMillis()/TEMPORAL_SEED_KEY_INTERVAL_MS + offset);
+	public int timeSliceIndex() {
+		return (int) (System.currentTimeMillis()/TEMPORAL_SEED_KEY_INTERVAL_MS);
+	}
+	
+	public long timeSlice(int index) {
+		// TODO: (refactor) Eliminate all references to System.currentTimeMillis() and replace with something we can more easily control in tests.
+		return TEMPORAL_SEED_KEY_INTERVAL_MS * index;
 	}
 
 	public ZKMaster getMaster() {

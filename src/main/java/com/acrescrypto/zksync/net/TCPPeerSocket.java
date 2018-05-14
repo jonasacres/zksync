@@ -172,12 +172,14 @@ public class TCPPeerSocket extends PeerSocket {
 		keyHashInput.put(remotePubKey);
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		
+		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
 		byte[] tempSharedSecret = curve25519.calculateAgreement(remotePubKey, keyPair.getPrivateKey());
-		byte[] proof = swarm.config.getAccessor().temporalProof(0, tempSharedSecret);
+		byte[] proof = swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
 		byte[] keyHash = keyHashKey.authenticate(keyHashInput.array());
 		
 		out.write(keyPair.getPublicKey());
 		out.write(keyHash);
+		out.write(ByteBuffer.allocate(4).putInt(timeIndex).array());
 		out.write(proof);
 		
 		byte[] remoteEphemeralPubKey = readRaw(remotePubKey.length);

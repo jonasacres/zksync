@@ -17,7 +17,8 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetTest;
 	DiffSetResolverTest.class,
 	ObfuscatedRefTagTest.class,
 	StoredAccessRecordTest.class,
-	StoredAccessTest.class
+	StoredAccessTest.class,
+	ArchiveAccessor.class
 })
 
 public class ZKFSTests {
