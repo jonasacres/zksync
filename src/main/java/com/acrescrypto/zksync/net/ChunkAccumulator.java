@@ -9,6 +9,7 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.utility.Util;
@@ -53,6 +54,7 @@ public class ChunkAccumulator {
 	
 	protected byte[] tag;
 	protected int numChunksExpected;
+	protected boolean finished;
 	protected ArrayList<LinkedList<ChunkVersion>> chunksByIndex = new ArrayList<LinkedList<ChunkVersion>>();
 	protected ArrayList<LinkedList<PeerChunkInfo>> peersByIndex = new ArrayList<LinkedList<PeerChunkInfo>>();
 	protected PeerSwarm swarm;
@@ -69,8 +71,10 @@ public class ChunkAccumulator {
 		}
 	}
 	
-	public boolean addChunk(int index, byte[] chunk, PeerConnection peer) throws IOException {
+	public synchronized boolean addChunk(int index, byte[] chunk, PeerConnection peer) throws IOException {
+		if(finished) return true;
 		boolean needsInsert = true;
+		if(index >= numChunksExpected || index < 0) throw new EINVALException(Util.bytesToHex(tag) + ":" + index);
 		ChunkVersion version = new ChunkVersion(peer.socket.swarm.config.getAccessor().getMaster().scratchStorage(), chunk);
 		
 		for(ChunkVersion existing : chunksByIndex.get(index)) {
@@ -124,6 +128,7 @@ public class ChunkAccumulator {
 			return false;
 		}
 		
+		finished = true;
 		swarm.config.getStorage().write(Page.pathForTag(tag), allegedPage);
 		burnHeretics(chunks);
 		closeFiles();

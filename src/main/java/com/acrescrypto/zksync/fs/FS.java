@@ -171,6 +171,10 @@ public abstract class FS {
 	/** Close any resources associated with keeping this FS access open, e.g. sockets. The FS object may not be reused. */
 	public void close() throws IOException {}
 	
-	/** If this is a network device, inform the controller that this host is behaving suspiciously and should be blacklisted. */
-	public void blacklist() {}
+	/** Remove all content from filesystem */
+	public void purge() throws IOException {
+		if(exists("/")) {
+			rmrf("/");
+		}
+	}
 }

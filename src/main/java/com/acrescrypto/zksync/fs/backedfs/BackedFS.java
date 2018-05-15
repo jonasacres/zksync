@@ -256,4 +256,12 @@ public class BackedFS extends FS {
 	public BackedFS scopedFS(String subpath) throws IOException {
 		return new BackedFS(cacheFS.scopedFS(subpath), backupFS.scopedFS(subpath));
 	}
+
+	public FS getCacheFS() {
+		return cacheFS;
+	}
+	
+	public FS getBackupFS() {
+		return backupFS;
+	}
 }

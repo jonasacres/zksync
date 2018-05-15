@@ -74,7 +74,7 @@ public abstract class PeerSocket {
 		logger.warn("Logging violation for peer {}", getAddress());
 		try {
 			close();
-			swarm.config.getArchive().getMaster().getBlacklist().add(address, Integer.MAX_VALUE);
+			swarm.config.getArchive().getMaster().getBlacklist().add(getAddress(), Integer.MAX_VALUE);
 		} catch (IOException exc) {
 			logger.warn("Caught exception closing socket to peer {}", getAddress(), exc);
 		}
@@ -171,6 +171,6 @@ public abstract class PeerSocket {
 	}
 
 	public boolean matchesAddress(String address) {
-		return this.address.equals(address);
+		return getAddress().equals(address);
 	}
 }

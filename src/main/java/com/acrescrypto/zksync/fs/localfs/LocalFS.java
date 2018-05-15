@@ -165,7 +165,11 @@ public class LocalFS extends FS {
 
 	@Override
 	public void unlink(String path) throws IOException {
-		Files.delete(Paths.get(root, path));
+		try {
+			Files.delete(Paths.get(root, path));
+		} catch(NoSuchFileException exc) {
+			throw new ENOENTException(path);
+		}
 	}
 
 	@Override
