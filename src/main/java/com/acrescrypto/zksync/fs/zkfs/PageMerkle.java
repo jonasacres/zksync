@@ -7,7 +7,6 @@ import java.util.Arrays;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SecureFile;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
-import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 
 /** Merkle tree of page tags for a file. Each page tag is a signed hash of the page contents, and is needed to locate
  * a page in storage. */
@@ -15,7 +14,7 @@ public class PageMerkle {
 	ZKArchive archive; /** archive to which this merkle belongs */
 	RefTag tag; /** current reftag for tree content */
 	PageMerkleNode[] nodes; /** all nodes in tree, indexed left-right top-bottom */
-	int numPages; /** page capacity for current tree size */
+	int maxPages; /** page capacity for current tree size */
 	int numPagesUsed; /** number of pages issued */
 	
 	public static byte[] tagForChunk(RefTag refTag, int chunk) {
@@ -40,7 +39,7 @@ public class PageMerkle {
 		switch(tag.getRefType()) {
 		case RefTag.REF_TYPE_IMMEDIATE:
 		case RefTag.REF_TYPE_INDIRECT:
-			this.numPages = this.numPagesUsed = 1;
+			this.maxPages = this.numPagesUsed = 1;
 			resize(1);
 			this.nodes[0].tag = tag.getHash();
 			break;
@@ -57,7 +56,7 @@ public class PageMerkle {
 		nodes[0].recalculate();
 		
 		int type;
-		if(numPages == 1) {
+		if(maxPages == 1) {
 			if(nodes[0].tag.length < archive.crypto.hashLength()) {
 				type = RefTag.REF_TYPE_IMMEDIATE;
 			} else {
@@ -72,8 +71,8 @@ public class PageMerkle {
 	
 	/** set the tag for a given page number, resizing the tree as needed */
 	public void setPageTag(int pageNum, byte[] pageTag) {
-		if(pageNum >= numPages) resize(pageNum+1);
-		nodes[numPages - 1 + pageNum].setTag(pageTag);
+		if(pageNum >= maxPages) resize(pageNum+1);
+		nodes[maxPages - 1 + pageNum].setTag(pageTag);
 		numPagesUsed = Math.max(pageNum+1, numPagesUsed);
 	}
 	
@@ -81,23 +80,23 @@ public class PageMerkle {
 	 * 
 	 * @param pageNum
 	 * @return
-	 * @throws NonexistentPageException illegal page number (negative, or greater than max page number in file)
 	 */
-	public byte[] getPageTag(int pageNum) throws NonexistentPageException {
-		if(pageNum < 0 || pageNum >= numPages) {
-			throw new NonexistentPageException(tag, pageNum);
-		}
-		return nodes[numPages - 1 + pageNum].tag.clone();
+	public byte[] getPageTag(int pageNum) {
+		return nodes[maxPages - 1 + pageNum].tag.clone();
 	}
 	
 	/** size of plaintext serialization of this PageMerkle */
 	public long plaintextSize() {
-		return archive.crypto.hashLength()*(2*numPages-1);
+		return archive.crypto.hashLength()*(2*maxPages-1);
 	}
 	
 	public int numChunks() {
-		if(numPages <= 1) return 0;
+		if(maxPages <= 1) return 0;
 		return (int) Math.ceil( (double) plaintextSize() / archive.config.pageSize );
+	}
+	
+	public int numPages() {
+		return numPagesUsed;
 	}
 	
 	/** write to storage */
@@ -136,7 +135,7 @@ public class PageMerkle {
 		
 		/* TODO: Allow partial reads of PageMerkle */
 		
-		numPages = (int) expectedPages;
+		maxPages = (int) expectedPages;
 		numPagesUsed = (int) tag.getNumPages();
 		
 		if(tag.getRefType() != RefTag.REF_TYPE_2INDIRECT) {
@@ -235,7 +234,7 @@ public class PageMerkle {
 		}
 
 		this.numPagesUsed = Math.min(numPagesUsed, newSize);
-		this.numPages = newSize;
+		this.maxPages = newSize;
 		this.nodes = newNodes;
 	}
 	
@@ -247,10 +246,14 @@ public class PageMerkle {
 	/** test if a given page has a tag set yet or not. */
 	public boolean hasTag(int pageNum) {
 		if(pageNum >= numPagesUsed) return false;
-		return !nodes[numPages - 1 + pageNum].isBlank();
+		return !nodes[maxPages - 1 + pageNum].isBlank();
 	}
 
 	public byte[] tagForChunk(int index) {
 		return PageMerkle.tagForChunk(tag, index);
+	}
+	
+	public ZKArchive getArchive() {
+		return archive;
 	}
 }

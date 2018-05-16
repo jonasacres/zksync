@@ -7,7 +7,6 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
 import com.acrescrypto.zksync.utility.HashCache;
@@ -106,30 +105,11 @@ public class ZKArchive {
 	}
 
 	public byte[] expandShortTag(long shortTag) {
+		// TODO P2P: (refactor) this is AWFUL
 		for(byte[] tag : allTags) {
 			if(ByteBuffer.wrap(tag).getLong() == shortTag) return tag;
 		}
 		return null;
-	}
-	
-	protected void loadAllTags() {
-		if(allTags != null && allTags.size() > 0) return;
-		allTags = new ArrayList<byte[]>();
-		try {
-			DirectoryTraverser traverser = new DirectoryTraverser(storage, storage.opendir("/"));
-			while(traverser.hasNext()) {
-				String path = traverser.next();
-				byte[] tag = Util.hexToBytes(path.replace("/", ""));
-				allTags.add(tag);
-			}
-		} catch (IOException e) {
-			return;
-		}
-	}
-	
-	public ArrayList<byte[]> allTags() {
-		loadAllTags();
-		return allTags;
 	}
 	
 	public boolean equals(Object other) {

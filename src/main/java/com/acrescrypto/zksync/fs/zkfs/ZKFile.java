@@ -7,7 +7,6 @@ import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
-import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -73,7 +72,7 @@ public class ZKFile extends File {
 	}
 	
 	/** Obtain page merkle reference for a specific page number. */
-	public byte[] getPageTag(int pageNum) throws NonexistentPageException {
+	public byte[] getPageTag(int pageNum) {
 		return merkle.getPageTag(pageNum);
 	}
 
@@ -103,7 +102,7 @@ public class ZKFile extends File {
 		} else {
 			int newPageCount = (int) Math.ceil((double) size/zkfs.archive.config.pageSize);
 			merkle.resize(newPageCount);
-			for(int i = newPageCount; i < merkle.numPages; i++) {
+			for(int i = newPageCount; i < merkle.maxPages; i++) {
 				merkle.setPageTag(i, new byte[zkfs.archive.crypto.hashLength()]);
 			}
 

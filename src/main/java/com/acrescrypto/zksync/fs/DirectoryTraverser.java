@@ -2,10 +2,10 @@ package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.Stack;
+import java.util.LinkedList;
 
 public class DirectoryTraverser {
-	Stack<String> paths = new Stack<String>();
+	LinkedList<String> paths = new LinkedList<String>();
 	String nextPath;
 	
 	FS fs;
@@ -33,18 +33,13 @@ public class DirectoryTraverser {
 		/* a bit convoluted, but we stage the next result in nextPath so we can filter out directories while still
 		 * having hasNext() work in all cases.
 		 */
-		nextPath = paths.isEmpty() ? null : paths.pop();
+		nextPath = popPath();
 		if(nextPath == null) return;
 		
 		if(hideDirectories) {
-			while(fs.stat(nextPath).isDirectory()) {
+			while(nextPath != null && fs.stat(nextPath).isDirectory()) {
 				addDirectory(fs.opendir(nextPath));
-				if(paths.isEmpty()) {
-					nextPath = null;
-					break;
-				}
-				
-				nextPath = paths.pop();
+				nextPath = popPath();
 			}
 		} else {
 			if(fs.stat(nextPath).isDirectory()) {
@@ -58,5 +53,15 @@ public class DirectoryTraverser {
 		for(String path : subpaths) {
 			paths.add(Paths.get(dir.getPath(), path).toString());
 		}
+	}
+	
+	protected String popPath() {
+		/** right now our only customer is PageQueue which really wants stuff in random order.
+		 * This isn't a uniform distribution: files from directories we've visited will be selected more often
+		 * than files in directories we haven't visited yet. This should be good enough for our purposes. 
+		 */
+		if(paths.isEmpty()) return null;
+		int index = (int) (Math.random() * paths.size());
+		return paths.remove(index);
 	}
 }

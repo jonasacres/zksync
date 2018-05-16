@@ -61,13 +61,13 @@ public class PeerConnection {
 	public PeerConnection(PeerSwarm swarm, PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
 		this.socket = PeerSocket.connectToAd(swarm, ad);
 		socket.connection = this;
-		this.queue = new PageQueue(this);
+		this.queue = new PageQueue(socket.swarm.config.getArchive());
 	}
 	
 	public PeerConnection(PeerSocket socket) {
 		this.socket = socket;
 		socket.connection = this;
-		this.queue = new PageQueue(this);
+		this.queue = new PageQueue(socket.swarm.config.getArchive());
 	}
 	
 	public PeerSocket getSocket() {

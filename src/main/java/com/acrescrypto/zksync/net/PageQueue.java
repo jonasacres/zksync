@@ -1,357 +1,256 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.PriorityQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.acrescrypto.zksync.exceptions.ENOENTException;
-import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.fs.DirectoryTraverser;
+import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
-import com.acrescrypto.zksync.utility.HashCache;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.utility.Shuffler;
 
-/** Enqueue page requests by priority. To conserve memory, bulk requests for reftag contents or revisions or page files
- * are mapped into individual chunks on a just-in-time basis. A best-effort is made to randomize the order of chunks
- * within a given priority level, to allow greater parallelism in acquiring files from the swarm.
- */
 public class PageQueue {
-	private Logger logger = LoggerFactory.getLogger(PageQueue.class);
-	protected static HashCache<RefTag,InodeTable> tableCache = new HashCache<RefTag,InodeTable>(8, (refTag)->refTag.readOnlyFS().getInodeTable(), (tag, table)->table.close());
-	protected static HashCache<RefTag,PageMerkle> merkleCache = new HashCache<RefTag,PageMerkle>(8, (refTag)->new PageMerkle(refTag), (tag, merkle)->{});
+	public final static int DEFAULT_EVERYTHING_PRIORITY = -10;
 	
-	protected abstract class PageQueueEntry {
-		protected int priority, step;
-		protected Shuffler shuffler;
+	public class ChunkReference {
+		FS fs;
+		byte[] tag;
+		int index;
 		
-		public PageQueueEntry(int priority) throws IOException {
-			this.priority = priority;
-			int size = size();
-			if(size > 0) shuffler = Shuffler.fixedShuffler(size);
+		protected ChunkReference(FS fs, byte[] tag, int index) {
+			this.fs = fs;
+			this.tag = tag;
+			this.index = index;
 		}
 		
-		public Object getNext() {
-			Object obj = null;
-			while(hasNext() && obj == null) {
-				try {
-					obj = element(shuffler.next());
-				} catch(ENOENTException exc) {
-					logger.info("Unable to queue file for transmission to peer", exc);
-				} catch(IOException exc) {
-					logger.error("Unable to queue file for transmission to peer", exc);
-				}
-			}
-			
-			return obj;
-		}
-		
-		public boolean hasNext() {
-			if(shuffler == null) return false;
-			return shuffler.hasNext();
-		}
-		
-		public abstract Object element(int index) throws IOException;
-		public abstract int size() throws IOException;
-	}
-	
-	protected class EverythingPageQueueEntry extends PageQueueEntry {
-		ArrayList<byte[]> tags;
-		int tagsRead;
-		
-		public EverythingPageQueueEntry(int priority) throws IOException {
-			super(priority);
-			ArrayList<byte[]> allTags = connection.socket.swarm.config.getArchive().allTags();
-			this.tags = new ArrayList<byte[]>(allTags.size());
-			for(int i = 0; i < allTags.size(); i++) {
-				int j = (int) ((i+1)*Math.random());
-				if(i != j) {
-					this.tags.set(i, this.tags.get(j));
-				}
-				this.tags.set(j, allTags.get(i));
-			}
-		}
-		
-		public PageTagPageQueueEntry getNext() {
-			PageTagPageQueueEntry entry = null;
-			while(hasNext() && entry == null) {
-				byte[] tag;
-				do {
-					tag = tags.get(tagsRead++);
-				} while(!connection.wantsFile(tag));
-				
-				try {
-					entry = new PageTagPageQueueEntry(priority, tag);
-				} catch(ENOENTException exc) {
-					logger.info("Unable to queue file for transmission to peer", exc);
-				} catch(IOException exc) {
-					logger.error("Unable to queue file for transmission to peer", exc);
-				}
-			}
-
-			return entry;
-		}
-		
-		public boolean hasNext() {
-			return tagsRead < tags.size();
-		}
-		
-		public void add(byte[] tag) {
-			int location = (int) (Math.random() * (tags.size() - tagsRead)) + tagsRead;
-			tags.add(location, tag);
-		}
-		
-		@Override
-		public Object element(int index) throws IOException {
+		public byte[] getData() {
 			return null;
 		}
-
+	}
+	
+	abstract class QueueItem implements Comparable<QueueItem> {
+		int priority;
+		QueueItem(int priority) { this.priority = priority; }
+		QueueItem nextChild() { return null; }
+		ChunkReference reference() { return null; }
+		abstract int classPriority();
+		
 		@Override
-		public int size() {
-			return 0;
+		public int compareTo(QueueItem other) {
+			if(other.priority != this.priority) return Integer.compare(priority, other.priority);
+			return Integer.compare(classPriority(), other.classPriority());
 		}
 	}
+	
+	class ChunkQueueItem extends QueueItem {
+		ChunkReference reference;
 		
-	protected class RevisionPageQueueEntry extends PageQueueEntry {
+		ChunkQueueItem(int priority, ChunkReference reference) {
+			super(priority);
+			this.reference = reference;
+		}
+		
+		@Override
+		ChunkReference reference() {
+			return reference;
+		}
+		
+		@Override
+		int classPriority() { return 0; }
+	}
+	
+	class PageQueueItem extends QueueItem {
+		ZKArchive archive;
+		byte[] tag;
+		Shuffler shuffler;
+		
+		PageQueueItem(int priority, ZKArchive archive, long shortTag) {
+			this(priority, archive, archive.expandShortTag(shortTag));
+		}
+		
+		PageQueueItem(int priority, ZKArchive archive, byte[] tag) {
+			super(priority);
+			this.archive = archive;
+			this.tag = tag;
+			
+			if(tag == null || !archive.getStorage().exists(Page.pathForTag(tag))) {
+				shuffler = Shuffler.fixedShuffler(0);
+			} else {
+				int numChunks = (int) Math.ceil((double) archive.getConfig().getPageSize() / PeerMessage.FILE_CHUNK_SIZE);
+				shuffler = Shuffler.fixedShuffler(numChunks);
+			}
+		}
+		
+		@Override
+		QueueItem nextChild() {
+			if(!shuffler.hasNext()) return null;
+			return new ChunkQueueItem(priority, new ChunkReference(archive.getStorage(), tag, shuffler.next()));
+		}
+		
+		@Override
+		int classPriority() { return -10; }
+	}
+	
+	class RefTagContentsQueueItem extends QueueItem {
+		PageMerkle merkle;
+		Shuffler shuffler;
+		
+		RefTagContentsQueueItem(int priority, RefTag refTag) {
+			super(priority);
+			if(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) {
+				shuffler = Shuffler.fixedShuffler(0);
+			} else {
+				try {
+					this.merkle = new PageMerkle(refTag);
+					shuffler = Shuffler.fixedShuffler(merkle.numPages());
+				} catch(IOException exc) {
+					shuffler = Shuffler.fixedShuffler(0);
+				}
+			}
+		}
+		
+		@Override
+		QueueItem nextChild() {
+			if(!shuffler.hasNext()) return null;
+			return new PageQueueItem(priority, merkle.getArchive(), merkle.getPageTag(shuffler.next()));
+		}
+		
+		@Override
+		int classPriority() { return -20; }
+	}
+	
+	class RevisionQueueItem extends QueueItem {
+		InodeTable inodeTable;
+		Shuffler shuffler;
 		RefTag revTag;
 		
-		public RevisionPageQueueEntry(int priority, RefTag revTag) throws IOException {
+		RevisionQueueItem(int priority, RefTag revTag) {
 			super(priority);
 			this.revTag = revTag;
-		}
-
-		@Override
-		public ReftagPageQueueEntry element(int index) throws IOException {
-			RefTag tag;
-			synchronized(tableCache) {
-				tag = inodeTable().inodeWithId(index).getRefTag();
-			}
-			
-			if(tag.isBlank() || tag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) return null;
-			return new ReftagPageQueueEntry(priority, tag);
-		}
-
-		@Override
-		public int size() throws IOException {
-			synchronized(tableCache) { // eviction from tableCache means closing InodeTable, so ensure we're not evicted until done
-				InodeTable table = inodeTable();
-				return (int) (table.getStat().getSize()/table.inodeSize());
-			}
-		}
-		
-		protected InodeTable inodeTable() throws IOException {
-			synchronized(tableCache) {
-				return tableCache.get(revTag);
-			}
-		}
-	}
-	
-	protected class ReftagPageQueueEntry extends PageQueueEntry {
-		RefTag refTag;
-		
-		public ReftagPageQueueEntry(int priority, RefTag refTag) throws IOException {
-			super(priority);
-			this.refTag = refTag;
-		}
-
-		@Override
-		public PageTagPageQueueEntry element(int index) throws IOException {
-			PageMerkle merkle = merkle();
-			if(index < merkle.numChunks()) {
-				return new PageTagPageQueueEntry(priority, merkle.tagForChunk(index));
-			} else {
-				return new PageTagPageQueueEntry(priority, merkle.getPageTag(index-merkle.numChunks()));
-			}
-		}
-
-		@Override
-		public int size() throws IOException {
-			return (int) refTag.getNumPages() + merkle().numChunks();
-		}
-		
-		protected PageMerkle merkle() throws IOException {
-			return merkleCache.get(refTag);
-		}
-	}
-	
-	protected class PageTagPageQueueEntry extends PageQueueEntry {
-		byte[] tag;
-		
-		public PageTagPageQueueEntry(int priority, byte[] prefix) throws IOException {
-			super(priority);
-			this.tag = prefix;
-		}
-		
-		@Override
-		public ChunkPageQueueEntry element(int index) throws IOException {
-			return new ChunkPageQueueEntry(priority, path(), index);
-		}
-	
-		@Override
-		public int size() {
-			return (int) Math.ceil(connection.socket.swarm.config.getPageSize()/PeerMessage.FILE_CHUNK_SIZE);
-		}
-		
-		protected String path() throws IOException {
-			return Page.pathForTag(tag);
-		}
-	}
-
-	protected class ChunkPageQueueEntry extends PageQueueEntry {
-		String path;
-		int chunkOffset;
-		
-		public ChunkPageQueueEntry(int priority, String path, int chunkOffset) throws IOException {
-			super(priority);
-			this.path = path;
-			this.chunkOffset = chunkOffset;
-		}
-	
-		@Override
-		public byte[] getNext() {
 			try {
-				File file = connection.socket.swarm.config.getStorage().open(path, File.O_RDONLY);
-				file.seek(chunkOffset * PeerMessage.FILE_CHUNK_SIZE, File.SEEK_SET);
-				return file.read(PeerMessage.FILE_CHUNK_SIZE);
+				this.inodeTable = revTag.getArchive().openRevision(revTag).getInodeTable();
+				assert(inodeTable.nextInodeId <= Integer.MAX_VALUE);
+				this.shuffler = Shuffler.fixedShuffler((int) inodeTable.nextInodeId);
 			} catch(IOException exc) {
+				this.shuffler = Shuffler.fixedShuffler(0);
+			}
+		}
+		
+		@Override
+		QueueItem nextChild() {
+			try {
+				RefTag refTag;			
+
+				do {
+					if(!shuffler.hasNext()) return null;
+					int inodeId = shuffler.next();
+					refTag = inodeTable.inodeWithId(inodeId).getRefTag();
+				} while(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);
+				
+				return new RefTagContentsQueueItem(priority, refTag);
+			} catch (IOException exc) {
+				logger.error("Caught exception queuing revision tag {}", revTag, exc);
 				return null;
 			}
 		}
-	
-		@Override
-		public boolean hasNext() {
-			return false;
-		}
-	
-		@Override
-		public int size() {
-			return 0;
-		}
-
-		@Override
-		public Object element(int index) throws IOException {
-			return null;
-		}
-	}
-
-	protected PeerConnection connection;
-	protected PriorityQueue<PageQueueEntry> entries;
-	protected HashMap<Integer,LinkedList<RefTag>> pages;
-	protected int currentPriority;
-	protected EverythingPageQueueEntry everythingEntry;
-	
-	public PageQueue(PeerConnection connection) {
-		this.connection = connection;
-		Comparator<? super PageQueueEntry> comparator = (a, b)->{
-			if(a.priority == b.priority) {
-				if(a.getClass().equals(b.getClass())) return 0;
-				if(ReftagPageQueueEntry.class.isInstance(a)) return -1;
-				return 1; // reftags go before revisions
-			} else {
-				return Integer.compare(b.priority, a.priority); // higher priority goes first
-			}
-		};
 		
-		entries = new PriorityQueue<PageQueueEntry>(64, comparator);
+		@Override
+		int classPriority() { return -30; }
 	}
 	
-	public void startSendingEverything() throws IOException {
-		if(everythingEntry != null) return;
-		everythingEntry = new EverythingPageQueueEntry(0);
+	class EverythingQueueItem extends QueueItem {
+		DirectoryTraverser traverser;
+		ZKArchive archive;
+		
+		EverythingQueueItem(int priority, ZKArchive archive) {
+			super(priority);
+			this.archive = archive;
+			try {
+				traverser = new DirectoryTraverser(this.archive.getStorage(), this.archive.getStorage().opendir("/"));
+			} catch(IOException exc) {
+				logger.error("Caught exception establishing EverythingQueueItem", exc);
+			}
+		}
+		
+		@Override
+		QueueItem nextChild() {
+			if(traverser == null || !traverser.hasNext()) return null;
+			try {
+				String path = traverser.next();
+				return new PageQueueItem(priority, archive, Page.tagForPath(path));
+			} catch (IOException exc) {
+				logger.error("Caught exception queuing next tag in EverythingQueueItem", exc);
+				return null;
+			}
+		}
+		
+		@Override
+		int classPriority() { return -40; }
+	}
+	
+	private Logger logger = LoggerFactory.getLogger(PageQueue.class);
+	protected PriorityQueue<QueueItem> itemsByPriority = new PriorityQueue<QueueItem>();
+	protected ZKArchive archive;
+	
+	public PageQueue(ZKArchive archive) {
+		archive = this.archive;
+	}
+	
+	public void addPageTag(int priority, long shortTag) {
+		addItem(new PageQueueItem(priority, archive, shortTag));
+	}
+	
+	public void addRefTagContents(int priority, RefTag refTag) {
+		addItem(new RefTagContentsQueueItem(priority, refTag));
+	}
+	
+	public void addRevisionTag(int priority, RefTag revTag) {
+		addItem(new RevisionQueueItem(priority, revTag));
+	}
+	
+	public void startSendingEverything() {
+		addItem(new EverythingQueueItem(DEFAULT_EVERYTHING_PRIORITY, archive));
 	}
 	
 	public void stopSendingEverything() {
-		entries.remove(everythingEntry);
-		everythingEntry = null;
 	}
 	
-	public void stopAll() {
-		entries.clear();
-		everythingEntry = null;
+	public synchronized void stopAll() {
+		itemsByPriority.clear();
 	}
 	
-	public synchronized RefTag nextPageTag() {
-		return popNextPage();
+	public boolean hasNextChunk() {
+		return !itemsByPriority.isEmpty();
 	}
 	
-	protected synchronized RefTag popNextPage() {
-		if(!entries.isEmpty() && !pages.containsKey(currentPriority)) {
-			assert(entries.peek().priority == currentPriority);
-			expandNextEntry();
+	public synchronized ChunkReference nextChunk() {
+		while(!hasNextChunk()) {
+			try {
+				this.wait();
+			} catch(InterruptedException exc) {}
 		}
+
+		QueueItem head, child;
+		do {
+			head = itemsByPriority.peek();
+			child = head.nextChild();
+			if(child != null) {
+				itemsByPriority.add(child);
+			}
+		} while(child != null);
 		
-		LinkedList<RefTag> list = pages.get(currentPriority);
-		int idx = (int) (Math.random()*list.size());
-		RefTag tag = list.remove(idx);
-		if(list.isEmpty()) {
-			list.remove(currentPriority);
-			recalculateCurrentPriority();
-		}
-		
-		return tag;
+		itemsByPriority.poll();
+		return head.reference();
 	}
 	
-	protected void expandNextEntry() {
-		PageQueueEntry entry = entries.peek();
-		Object next = entry.getNext();
-		if(next instanceof RefTag) {
-			pages.putIfAbsent(entry.priority, new LinkedList<RefTag>());
-			pages.get(entry.priority).add((RefTag) next);
-		} else if(next instanceof ReftagPageQueueEntry) {
-			entries.add(entry);
-			expandNextEntry();
-		} else {
-			logger.error("PageQueue generated unexpected class " + next.getClass().toString());
-			throw new RuntimeException("got invalid class back from page queue");
-		}
-		
-		if(!entry.hasNext()) {
-			entries.remove(entry);
-		}
-	}
-	
-	protected void recalculateCurrentPriority() {
-		Integer bestPage = null, bestEntry = null;
-		for(int priority : pages.keySet()) {
-			if(bestPage == null || bestPage < priority) bestPage = priority;
-		}
-		
-		if(!entries.isEmpty()) {
-			bestEntry = entries.peek().priority;
-		}
-		
-		if(bestEntry == null && bestPage == null) {
-			currentPriority = 0;
-		} else if(bestEntry == null) {
-			currentPriority = bestPage;
-		} else if(bestPage == null) {
-			currentPriority = bestEntry;
-		} else {
-			currentPriority = Math.max(bestPage, bestEntry);
-		}
-	}
-	
-	public synchronized void addPageTag(int priority, long shortTag) throws IOException {
-		byte[] pageTag = connection.socket.swarm.config.getArchive().expandShortTag(shortTag);
-		addEntry(new PageTagPageQueueEntry(priority, pageTag));
-	}
-	
-	public synchronized void addRefTagContents(int priority, RefTag refTag) throws IOException {
-		addEntry(new ReftagPageQueueEntry(priority, refTag));
-	}
-	
-	public synchronized void addRevisionTag(int priority, RefTag refTag) throws IOException {
-		addEntry(new RevisionPageQueueEntry(priority, refTag));
-	}
-	
-	protected void addEntry(PageQueueEntry entry) {
-		entries.add(entry);
+	protected synchronized void addItem(QueueItem item) {
+		itemsByPriority.add(item);
+		this.notifyAll();
 	}
 }

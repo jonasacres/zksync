@@ -7,9 +7,9 @@ import org.junit.runners.Suite;
 @Suite.SuiteClasses({
 	BlacklistEntryTest.class,
 	BlacklistTest.class,
-	ChunkAccumulatorTest.class
+	ChunkAccumulatorTest.class,
+	PageQueueTest.class
 })
 
 public class NetTests {
-
 }
