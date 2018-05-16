@@ -167,4 +167,8 @@ public class SwarmFS extends FS {
 	public SwarmFS scopedFS(String subpath) {
 		throw new UnsupportedOperationException(); // no concept of scoping a PeerConnectionFS
 	}
+	
+	public PeerSwarm getSwarm() {
+		return swarm;
+	}
 }

@@ -136,9 +136,17 @@ public class ArchiveAccessor {
 		return passphraseRoot == null;
 	}
 	
+	public ArchiveAccessor makeSeedOnly() {
+		if(isSeedOnly()) return this;
+		ArchiveAccessor newAccessor = new ArchiveAccessor(master, passphraseRoot, type);
+		newAccessor.becomeSeedOnly();
+		return newAccessor;
+	}
+	
 	public void becomeSeedOnly() {
 		passphraseRoot = null;
 		configFileKey = null;
+		type = KEY_ROOT_SEED;
 	}
 
 	public Key deriveKey(int root, int type, int index, byte[] tweak) {

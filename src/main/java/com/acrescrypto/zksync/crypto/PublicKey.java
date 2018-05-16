@@ -46,6 +46,12 @@ public class PublicKey {
 		}
 	}
 	
+	public void assertValid(byte[] message, int msgOffset, int msgLen, byte[] signature, int sigOffset, int sigLen) {
+		if(!verify(message, msgOffset, msgLen, signature, sigOffset, sigLen)) {
+			throw new SecurityException();
+		}
+	}
+	
 	public byte[] getBytes() {
 		return pubKey.getA().toByteArray();
 	}

@@ -14,6 +14,7 @@ import java.util.Arrays;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.Key;
@@ -132,6 +133,11 @@ public class ArchiveAccessorTest {
 		assertFalse(Arrays.equals(accessor.deriveKey(0, 0, 0).getRaw(), accessor.deriveKey(0, 0, 1).getRaw()));
 	}
 	
+	@Test @Ignore
+	public void testDeriveKeyMatchesTestVectors() {
+		// TODO: test vectors
+	}
+	
 	@Test
 	public void testDeriveKeyRejectsArchiveRoot() {
 		try {
@@ -151,9 +157,21 @@ public class ArchiveAccessorTest {
 	public void testBecomeSeedOnly() {
 		assertFalse(accessor.isSeedOnly());
 		assertNotNull(accessor.passphraseRoot);
+		assertEquals(ArchiveAccessor.KEY_ROOT_PASSPHRASE, accessor.type);
 		accessor.becomeSeedOnly();
 		assertNull(accessor.passphraseRoot);
 		assertTrue(accessor.isSeedOnly());
+		assertEquals(ArchiveAccessor.KEY_ROOT_SEED, accessor.type);
+	}
+	
+	@Test
+	public void testMakeSeedOnly() {
+		assertFalse(accessor.isSeedOnly());
+		assertNotNull(accessor.passphraseRoot);
+		ArchiveAccessor seedOnly = accessor.makeSeedOnly();
+		assertNull(seedOnly.passphraseRoot);
+		assertTrue(seedOnly.isSeedOnly());
+		assertEquals(ArchiveAccessor.KEY_ROOT_SEED, seedOnly.type);
 	}
 	
 	@Test
