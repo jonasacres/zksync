@@ -9,14 +9,24 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 
 public class PeerMessageIncoming extends PeerMessage {
-	protected DataBuffer rxBuf;
+	protected DataBuffer rxBuf = new DataBuffer();
 	protected PeerMessageHandler handler;
 	protected final Logger logger = LoggerFactory.getLogger(PeerMessageIncoming.class);
+	protected boolean finished;
+	
+	/** Limit on how much data a message can accumulate in its read buffer. When this limit is reached,
+	 * calls to receivedData will block until the buffer is cleared via read operations.
+	 */
+	public final static int MAX_BUFFER_SIZE = 1024*512; // 512k ought to be enough for anybody
 	
 	protected class DataBuffer {
 		protected ByteBuffer buf = ByteBuffer.allocate(PeerMessage.MESSAGE_SIZE);
 		protected ByteBuffer readBuf = ByteBuffer.wrap(buf.array());
 		protected boolean eof;
+		
+		public DataBuffer() {
+			readBuf.limit(0);
+		}
 		
 		public synchronized void write(byte[] data) {
 			if(buf.remaining() < data.length) {
@@ -88,12 +98,21 @@ public class PeerMessageIncoming extends PeerMessage {
 			
 			if(readBuf.remaining() < data.length) throw new EOFException();
 			readBuf.get(data);
+			this.notifyAll();
 			return data;
 		}
 		
-		protected void resizeBuffer(int additionalSpaceNeeded) {
+		protected synchronized void resizeBuffer(int additionalSpaceNeeded) {
+			assert(additionalSpaceNeeded <= MAX_BUFFER_SIZE);
 			int totalSpaceNeeded = buf.position() - readBuf.position() + additionalSpaceNeeded;
-			ByteBuffer newBuf = ByteBuffer.allocate(totalSpaceNeeded);
+			while(totalSpaceNeeded > MAX_BUFFER_SIZE) {
+				try {
+					this.wait();
+				} catch (InterruptedException e) {}
+				totalSpaceNeeded = buf.position() - readBuf.position() + additionalSpaceNeeded;
+			}
+			
+			ByteBuffer newBuf = ByteBuffer.allocate(Math.max(totalSpaceNeeded, buf.capacity()));
 			newBuf.put(readBuf.array(), readBuf.position(), buf.position()-readBuf.position());
 			buf = newBuf;
 			readBuf = ByteBuffer.wrap(buf.array());
@@ -122,16 +141,31 @@ public class PeerMessageIncoming extends PeerMessage {
 		}
 	}
 	
+	public boolean isFinished() {
+		return finished;
+	}
+	
+	public synchronized void waitForFinish() {
+		if(finished) return;
+		while(!finished) {
+			try {
+				this.wait();
+			} catch (InterruptedException e) {}
+		}
+	}
+	
 	protected void processThread() {
 		new Thread(() -> {
 			try {
 				connection.handle(this);
 			} catch(ProtocolViolationException exc) {
-				logger.warn("Peer message handlker for {} encountered protocol violation", connection.socket.getAddress(), exc);
+				logger.warn("Peer message handler for {} encountered protocol violation", connection.socket.getAddress(), exc);
 				connection.socket.violation();
 			} catch(Exception exc) {
 				logger.error("Peer message handler thread for {} encountered exception", connection.socket.getAddress(), exc);
 			}
-		}).start();;
+			finished = true;
+			synchronized(this) { this.notifyAll(); }
+		}).start();
 	}
 }

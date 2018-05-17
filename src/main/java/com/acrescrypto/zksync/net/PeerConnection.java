@@ -70,6 +70,8 @@ public class PeerConnection {
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
 	}
 	
+	protected PeerConnection() {}
+	
 	public PeerSocket getSocket() {
 		return socket;
 	}

@@ -129,13 +129,14 @@ public abstract class PeerSocket {
 					int msgId = buf.getInt();
 					int len = buf.getInt();
 					byte cmd = buf.get(), flags = buf.get();
-					assertState(len <= maxPayloadSize());
+					assertState(0 <= len && len <= maxPayloadSize());
 					
 					byte[] payload = new byte[len];
 					read(payload, 0, payload.length);
 					
 					PeerMessageIncoming msg;
 					
+					// TODO P2P: (redesign) Stop adversaries from opening a huge number of simultaneous incoming messages
 					if(!incoming.containsKey(msgId)) {
 						msg = new PeerMessageIncoming(connection, cmd, flags, msgId);
 						incoming.put(msgId, msg);
