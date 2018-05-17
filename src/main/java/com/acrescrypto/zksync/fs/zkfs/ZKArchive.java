@@ -30,7 +30,6 @@ public class ZKArchive {
 	protected ZKArchiveConfig config;
 	protected ZKMaster master;
 	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
-	protected ArrayList<byte[]> allTags;
 	
 	protected ZKArchive(ZKArchiveConfig config) throws IOException {
 		this.master = config.accessor.master;
@@ -45,6 +44,12 @@ public class ZKArchive {
 		}, (RefTag tag, ZKFS fs) -> {});
 		
 		this.config.accessor.discoveredArchive(this);
+	}
+	
+	public ZKArchive cacheOnlyArchive() throws IOException {
+		ZKArchive cacheOnly = new ZKArchive(config);
+		cacheOnly.storage = config.getCacheStorage();
+		return cacheOnly;
 	}
 	
 	public ZKFS openRevision(byte[] revision) throws IOException {
@@ -104,12 +109,8 @@ public class ZKArchive {
 		return ByteBuffer.wrap(config.archiveId).getInt();
 	}
 
-	public byte[] expandShortTag(long shortTag) {
-		// TODO P2P: (refactor) this is AWFUL
-		for(byte[] tag : allTags) {
-			if(ByteBuffer.wrap(tag).getLong() == shortTag) return tag;
-		}
-		return null;
+	public byte[] expandShortTag(long shortTag) throws IOException {
+		return Page.expandTag(storage, shortTag);
 	}
 	
 	public boolean equals(Object other) {

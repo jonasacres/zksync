@@ -102,16 +102,6 @@ public abstract class FS {
 		return String.join("/", comps);
 	}
 	
-	public static String pathForHash(byte[] hash) {
-	    StringBuilder sb = new StringBuilder();
-	    for(int i = 0; i < hash.length; i++) {
-	        sb.append(String.format("%02x", hash[i]));
-	    	if(i < 2) sb.append("/");
-	    }
-	    
-		return sb.toString();
-	}
-	
 	public boolean exists(String path, boolean followLinks) {
 		try {
 			if(followLinks) stat(path);

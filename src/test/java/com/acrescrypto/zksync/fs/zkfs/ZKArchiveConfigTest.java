@@ -385,6 +385,16 @@ public class ZKArchiveConfigTest {
 	}
 	
 	@Test
+	public void getCacheStorage() throws IOException {
+		ZKArchiveConfig[] configs = { config, seedConfig };
+		for(ZKArchiveConfig cfg : configs) {
+			assertTrue(cfg.getStorage() instanceof BackedFS);
+			BackedFS backed = (BackedFS) cfg.getStorage();
+			assertEquals(backed.getCacheFS(), cfg.getCacheStorage());
+		}
+	}
+	
+	@Test
 	public void testDeriveKeyMatchesArchiveAccessor() {
 		assertTrue(Arrays.equals(config.deriveKey(0, 0, 0).getRaw(), accessor.deriveKey(0, 0, 0).getRaw()));
 		assertTrue(Arrays.equals(config.deriveKey(2, 0, 0).getRaw(), accessor.deriveKey(2, 0, 0).getRaw()));

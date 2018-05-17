@@ -315,6 +315,10 @@ public class ZKArchiveConfig {
 	public FS getLocalStorage() {
 		return localStorage;
 	}
+	
+	public FS getCacheStorage() {
+		return storage.getCacheFS();
+	}
 
 	public boolean validatePage(byte[] tag, byte[] allegedPage) {		
 		Key authKey = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE);

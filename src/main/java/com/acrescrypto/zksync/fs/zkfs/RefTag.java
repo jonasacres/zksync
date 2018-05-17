@@ -56,6 +56,10 @@ public class RefTag implements Comparable<RefTag> {
 		this.tag = serialize();
 	}
 	
+	public RefTag cacheOnlyTag() throws IOException {
+		return new RefTag(archive.cacheOnlyArchive(), hash, refType, numPages);
+	}
+	
 	public byte[] padHash(byte[] hash) {
 		// this breaks if the hash length is > 255 bytes, but honestly, who needs a hash that long?
 		byte needed = (byte) (archive.crypto.hashLength() - hash.length);

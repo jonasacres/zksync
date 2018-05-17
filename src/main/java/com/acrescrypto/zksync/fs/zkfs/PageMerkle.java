@@ -7,6 +7,7 @@ import java.util.Arrays;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SecureFile;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.fs.FS;
 
 /** Merkle tree of page tags for a file. Each page tag is a signed hash of the page contents, and is needed to locate
  * a page in storage. */
@@ -28,7 +29,7 @@ public class PageMerkle {
 	
 	/** path to a given chunk of the merkle tree in the underlying filesystem */
 	public static String pathForChunk(RefTag refTag, int chunk) {
-		return ZKFS.pathForHash(tagForChunk(refTag, chunk));
+		return Page.pathForTag(tagForChunk(refTag, chunk));
 	}
 	
 	/** initialize a PageMerkle from a file contents RefTag */

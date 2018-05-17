@@ -1,6 +1,6 @@
 package com.acrescrypto.zksync.utility;
 
-import java.util.HashMap;
+import java.io.IOException;
 
 public class Shuffler {
 	/** x > 1, where at most 1 in x entries in a fixed shuffling will be out of bounds.
@@ -9,13 +9,22 @@ public class Shuffler {
 	public final static double FIXED_MAX_INEFFICIENCY = 2.0;
 	
 	public static class ShuffleOrdering {
-		static HashMap<Integer,ShuffleOrdering> fixedOrderings = new HashMap<Integer,ShuffleOrdering>();
+		static HashCache<Integer,ShuffleOrdering> fixedOrderings = new HashCache<Integer,ShuffleOrdering>(32, (size)->new ShuffleOrdering(size), (size, order)->{});
+		
 		static ShuffleOrdering fixedOrdering(int size) {
-			if(!fixedOrderings.containsKey(size)) {
-				fixedOrderings.put(size, new ShuffleOrdering(size));
+			try {
+				return fixedOrderings.get(size);
+			} catch(IOException exc) {
+				throw new RuntimeException();
 			}
-			
-			return fixedOrderings.get(size);
+		}
+		
+		static void purgeFixedOrderings() {
+			try {
+				fixedOrderings.removeAll();
+			} catch (IOException e) {
+				throw new RuntimeException();
+			}
 		}
 		
 		public int[] order;
@@ -30,6 +39,10 @@ public class Shuffler {
 				order[j] = i;
 			}
 		}
+	}
+	
+	public static void purgeFixedOrderings() {
+		ShuffleOrdering.purgeFixedOrderings();
 	}
 	
 	public static Shuffler fixedShuffler(int size) {

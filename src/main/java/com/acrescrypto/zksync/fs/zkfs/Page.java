@@ -5,6 +5,9 @@ import java.nio.ByteBuffer;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SignedSecureFile;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.fs.Directory;
+import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.utility.Util;
 
 /** represents a fixed-size page of data from a file. handles encryption/decryption/storage of said page. */
@@ -16,11 +19,34 @@ public class Page {
 	boolean dirty; /** true if page has been written to since last read/flush */
 	
 	public static String pathForTag(byte[] tag) {
-		return ZKFS.pathForHash(tag);
+	    StringBuilder sb = new StringBuilder();
+	    for(int i = 0; i < tag.length; i++) {
+	        sb.append(String.format("%02x", tag[i]));
+	    	if(i < 2) sb.append("/");
+	    }
+	    
+		return sb.toString();
 	}
 	
 	public static byte[] tagForPath(String path) {
 		return Util.hexToBytes(path.replace("/", ""));
+	}
+	
+	public static byte[] expandTag(FS storage, long shortTag) throws IOException {
+		String path = pathForTag(ByteBuffer.allocate(8).putLong(shortTag).array());
+		String parent = storage.dirname(path);
+		String basename = storage.basename(path);
+		
+		try {
+			Directory dir = storage.opendir(parent);
+			for(String subpath : dir.list()) {
+				if(storage.basename(subpath).startsWith(basename)) {
+					return tagForPath(subpath);
+				}
+			}
+		} catch(ENOENTException exc) {}
+		
+		return null;
 	}
 	
 	/** initialize page object from file and page number */

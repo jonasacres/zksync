@@ -35,16 +35,16 @@ public class PageQueue {
 	}
 	
 	abstract class QueueItem implements Comparable<QueueItem> {
-		int priority;
+		int priority; // higher comes first
 		QueueItem(int priority) { this.priority = priority; }
 		QueueItem nextChild() { return null; }
 		ChunkReference reference() { return null; }
-		abstract int classPriority();
+		abstract int classPriority(); // tiebreaker between equal priority; higher goes first.
 		
 		@Override
 		public int compareTo(QueueItem other) {
-			if(other.priority != this.priority) return Integer.compare(priority, other.priority);
-			return Integer.compare(classPriority(), other.classPriority());
+			if(other.priority != this.priority) return -Integer.compare(priority, other.priority);
+			return -Integer.compare(classPriority(), other.classPriority());
 		}
 	}
 	
@@ -69,10 +69,6 @@ public class PageQueue {
 		ZKArchive archive;
 		byte[] tag;
 		Shuffler shuffler;
-		
-		PageQueueItem(int priority, ZKArchive archive, long shortTag) {
-			this(priority, archive, archive.expandShortTag(shortTag));
-		}
 		
 		PageQueueItem(int priority, ZKArchive archive, byte[] tag) {
 			super(priority);
@@ -107,7 +103,7 @@ public class PageQueue {
 				shuffler = Shuffler.fixedShuffler(0);
 			} else {
 				try {
-					this.merkle = new PageMerkle(refTag);
+					this.merkle = new PageMerkle(refTag.cacheOnlyTag());
 					shuffler = Shuffler.fixedShuffler(merkle.numPages());
 				} catch(IOException exc) {
 					shuffler = Shuffler.fixedShuffler(0);
@@ -134,10 +130,10 @@ public class PageQueue {
 			super(priority);
 			this.revTag = revTag;
 			try {
-				this.inodeTable = revTag.getArchive().openRevision(revTag).getInodeTable();
+				this.inodeTable = revTag.cacheOnlyTag().readOnlyFS().getInodeTable();
 				assert(inodeTable.nextInodeId <= Integer.MAX_VALUE);
 				this.shuffler = Shuffler.fixedShuffler((int) inodeTable.nextInodeId);
-			} catch(IOException exc) {
+			} catch(IOException|SecurityException exc) {
 				this.shuffler = Shuffler.fixedShuffler(0);
 			}
 		}
@@ -167,6 +163,7 @@ public class PageQueue {
 	class EverythingQueueItem extends QueueItem {
 		DirectoryTraverser traverser;
 		ZKArchive archive;
+		boolean done;
 		
 		EverythingQueueItem(int priority, ZKArchive archive) {
 			super(priority);
@@ -180,7 +177,11 @@ public class PageQueue {
 		
 		@Override
 		QueueItem nextChild() {
-			if(traverser == null || !traverser.hasNext()) return null;
+			if(traverser == null || !traverser.hasNext()) {
+				done = true;
+				return null;
+			}
+			
 			try {
 				String path = traverser.next();
 				return new PageQueueItem(priority, archive, Page.tagForPath(path));
@@ -197,13 +198,26 @@ public class PageQueue {
 	private Logger logger = LoggerFactory.getLogger(PageQueue.class);
 	protected PriorityQueue<QueueItem> itemsByPriority = new PriorityQueue<QueueItem>();
 	protected ZKArchive archive;
+	protected EverythingQueueItem everythingItem;
 	
 	public PageQueue(ZKArchive archive) {
-		archive = this.archive;
+		this.archive = archive;
+	}
+	
+	public void addChunkReference(int priority, ChunkReference reference) {
+		addItem(new ChunkQueueItem(priority, reference));
 	}
 	
 	public void addPageTag(int priority, long shortTag) {
-		addItem(new PageQueueItem(priority, archive, shortTag));
+		try {
+			addPageTag(priority, archive.expandShortTag(shortTag));
+		} catch (IOException exc) {
+			logger.error("Caught exception queuing short tag {}", String.format("%16x", shortTag), exc);
+		}
+	}
+	
+	public void addPageTag(int priority, byte[] pageTag) {
+		addItem(new PageQueueItem(priority, archive, pageTag));
 	}
 	
 	public void addRefTagContents(int priority, RefTag refTag) {
@@ -215,10 +229,14 @@ public class PageQueue {
 	}
 	
 	public void startSendingEverything() {
-		addItem(new EverythingQueueItem(DEFAULT_EVERYTHING_PRIORITY, archive));
+		if(everythingItem != null && !everythingItem.done) return;
+		everythingItem = new EverythingQueueItem(DEFAULT_EVERYTHING_PRIORITY, archive);
+		addItem(everythingItem);
 	}
 	
 	public void stopSendingEverything() {
+		if(everythingItem == null) return;
+		itemsByPriority.remove(everythingItem);
 	}
 	
 	public synchronized void stopAll() {
@@ -226,6 +244,7 @@ public class PageQueue {
 	}
 	
 	public boolean hasNextChunk() {
+		unpackNextReference();
 		return !itemsByPriority.isEmpty();
 	}
 	
@@ -235,22 +254,26 @@ public class PageQueue {
 				this.wait();
 			} catch(InterruptedException exc) {}
 		}
-
-		QueueItem head, child;
-		do {
-			head = itemsByPriority.peek();
-			child = head.nextChild();
-			if(child != null) {
-				itemsByPriority.add(child);
-			}
-		} while(child != null);
 		
-		itemsByPriority.poll();
-		return head.reference();
+		return itemsByPriority.poll().reference();
 	}
 	
 	protected synchronized void addItem(QueueItem item) {
 		itemsByPriority.add(item);
 		this.notifyAll();
+	}
+	
+	protected synchronized void unpackNextReference() {
+		while(!itemsByPriority.isEmpty()) {
+			QueueItem head = itemsByPriority.peek();
+			QueueItem child = head.nextChild();
+			if(child != null) {
+				itemsByPriority.add(child);
+			} else if(head.reference() == null) {
+				itemsByPriority.poll();
+			} else {
+				return;
+			}
+		}
 	}
 }
