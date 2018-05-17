@@ -1,6 +1,5 @@
 package com.acrescrypto.zksync.net;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -10,39 +9,22 @@ import java.util.Queue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.acrescrypto.zksync.exceptions.SocketClosedException;
-import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 
 public class PeerMessageOutgoing extends PeerMessage {
 	protected ByteBuffer txBuf;
 	protected boolean txEOF;
 	protected InputStream txPayload;
-	protected File file;
 	protected RefTag refTag;
 	protected Queue<Integer> chunkList = new LinkedList<Integer>();
 	private Logger logger = LoggerFactory.getLogger(PeerMessageOutgoing.class);
 	
-	public PeerMessageOutgoing(PeerConnection connection, byte cmd, RefTag refTag, File file) throws IOException {
-		this.connection = connection;
-		this.cmd = cmd;
-		this.txPayload = new ByteArrayInputStream(refTag.getBytes());
-		this.file = file;
-		this.msgId = connection.socket.issueMessageId();
-		buildChunkList();
-		runTxThread();
-	}
-
 	public PeerMessageOutgoing(PeerConnection connection, byte cmd, InputStream txPayload) {
 		this.connection = connection;
 		this.cmd = cmd;
 		this.txPayload = txPayload;
 		this.msgId = connection.socket.issueMessageId();
 		runTxThread();
-	}
-	
-	public PeerMessageOutgoing(PeerConnection connection, byte cmd, byte[] txPayload) {
-		this(connection, cmd, new ByteArrayInputStream(txPayload));
 	}
 
 	public boolean txClosed() {
@@ -53,20 +35,14 @@ public class PeerMessageOutgoing extends PeerMessage {
 		new Thread(() -> {
 			try {
 				while(!txEOF) {
-					waitForTxBufAvailability();
-					loadTxBuf();
-					if(txEOF || !txBuf.hasRemaining()) {
-						addTxHeader();
-						if(connection.isPausable(cmd)) {
-							try {
-								connection.waitForUnpause();
-							} catch (SocketClosedException exc) {
-								logger.debug("Socket closed while sending message type {} (id={})", cmd, msgId, exc);
-								break;
-							}
-						}
-						connection.socket.dataReady(this);
+					resizeBuffer(txPayload.available());
+					loadBytesFromStream();
+					
+					if(connection.isPausable(cmd)) {
+						connection.waitForUnpause();
 					}
+					
+					connection.socket.dataReady(this);
 				}
 			} catch(Exception exc) {
 				logger.error("Outgoing message thread to {} caught exception", connection.socket.getAddress(), exc);
@@ -74,47 +50,31 @@ public class PeerMessageOutgoing extends PeerMessage {
 		}).start();
 	}
 	
-	protected void waitForTxBufAvailability() {
-		while(!txEOF && !txBuf.hasRemaining()) {
-			try {
-				this.wait();
-			} catch (InterruptedException exc) {}
-		}
-	}
-	
-	protected void loadTxBuf() {
-		try {
-			while(txBuf.remaining() > 0 && !txEOF) {
-				if(txPayload != null) loadFromTxPayload();
-				else if(file != null) loadFromFile();
-				else txEOF = true;
+	protected void loadBytesFromStream() {
+		if(txEOF) return;
+		synchronized(this) {
+			while(!txBuf.hasRemaining()) {
+				try {
+					this.wait();
+				} catch(InterruptedException exc) {}
 			}
-		} catch (IOException exc) {
-			connection.socket.ioexception(exc);
-		}
-	}
-	
-	protected void loadFromTxPayload() throws IOException {
-		int r = txPayload.read(txBuf.array(), txBuf.position(), txBuf.remaining());
-		if(r == -1) {
-			txPayload = null;
-		} else {
-			txBuf.position(txBuf.position() + r);
-		}
-	}
-	
-	protected void loadFromFile() throws IOException {
-		if(chunkList.isEmpty() || !connection.wantsFile(refTag)) {
-			file.close();
-			file = null;
-			return;
 		}
 		
-		int chunk = chunkList.remove();
-		if(!connection.wantsChunk(refTag, chunk)) return; // outer loop will cycle through the chunk queue
-		int readBytes = Math.min(txBuf.remaining(), FILE_CHUNK_SIZE);
-		file.seek(chunk*FILE_CHUNK_SIZE, File.SEEK_SET);
-		txBuf.put(file.read(readBytes));
+		int readLen;
+		try {
+			readLen = txPayload.read(txBuf.array(), txBuf.position(), txBuf.remaining());
+		} catch(IOException exc) {
+			readLen = -1;
+		}
+		
+		if(readLen > 0) {
+			synchronized(this) {
+				txBuf.position(txBuf.position() + readLen);
+				addTxHeader();
+			}
+		} else if(readLen < 0) {
+			txEOF = true;
+		}
 	}
 	
 	protected void addTxHeader() {
@@ -126,26 +86,32 @@ public class PeerMessageOutgoing extends PeerMessage {
 		headerBuf.putShort((short) 0);
 	}
 	
+	protected int minPayloadBufferSize() {
+		return 256;
+	}
+	
+	protected int maxPayloadBufferSize() {
+		return connection.socket.maxPayloadSize();
+	}
+	
+	protected synchronized void resizeBuffer(int numBytesRequested) {
+		// buffer has header + payload space. payload space is requested amount, with a hard minimum of 256 and max of socket's maxPayloadSize
+		int bufferSize = (txBuf == null ? 0 : txBuf.position()) + numBytesRequested;
+		bufferSize = Math.min(bufferSize, maxPayloadBufferSize()); // no bigger than max size
+		bufferSize = Math.max(bufferSize, minPayloadBufferSize()); // no smaller than min size
+		bufferSize += HEADER_LENGTH;
+			
+		// never shrink the buffer; start small but assume if we had big bursts before, we'll see big bursts again
+		if(txBuf == null || txBuf.capacity() < bufferSize) {
+			ByteBuffer newTxBuf = ByteBuffer.allocate(bufferSize);
+			if(txBuf != null) newTxBuf.put(txBuf.array(), 0, txBuf.position());
+			else newTxBuf.position(HEADER_LENGTH);
+			txBuf = newTxBuf;
+		}
+	}
+	
 	protected synchronized void clearTxBuf() {
 		txBuf.position(HEADER_LENGTH);
 		this.notifyAll();
-	}
-	
-	protected void buildChunkList() throws IOException {
-		if(file == null) return;
-		
-		int numChunks = (int) Math.ceil((double) file.getStat().getSize()/FILE_CHUNK_SIZE);
-		int[] chunkArray = new int[numChunks];
-		for(int i = 0; i < numChunks; i++) {
-			int j = (int) ((i+1)*Math.random());
-			if(j != i) {
-				chunkArray[i] = chunkArray[j];
-			}
-			chunkArray[j] = i;
-		}
-		
-		for(int idx : chunkArray) {
-			chunkList.add(idx);
-		}
 	}
 }

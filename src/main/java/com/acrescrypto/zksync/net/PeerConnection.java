@@ -1,4 +1,5 @@
 package com.acrescrypto.zksync.net;
+import java.io.ByteArrayInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -13,9 +14,7 @@ import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
-import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
-import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.utility.Util;
@@ -164,11 +163,6 @@ public class PeerConnection {
 	public void requestRevisionContents(RefTag[] tips) throws PeerCapabilityException {
 		assertPeerCapability(PEER_TYPE_FULL);
 		send(CMD_REQUEST_REVISION_CONTENTS, serializeRefTags(tips));
-	}
-	
-	public void sendPage(RefTag tag) throws IOException {
-		File file = tag.getArchive().getStorage().open(Page.pathForTag(tag.getBytes()), File.O_RDONLY);
-		new PeerMessageOutgoing(this, (byte) CMD_SEND_PAGE, tag, file);
 	}
 	
 	public void setPaused(boolean paused) {
@@ -357,7 +351,7 @@ public class PeerConnection {
 	
 	protected void send(int cmd, byte[] payload) {
 		assert(cmd > 0 && cmd <= Byte.MAX_VALUE);
-		new PeerMessageOutgoing(this, (byte) cmd, payload);
+		new PeerMessageOutgoing(this, (byte) cmd, new ByteArrayInputStream(payload));
 	}
 	
 	public boolean isPausable(byte cmd) {

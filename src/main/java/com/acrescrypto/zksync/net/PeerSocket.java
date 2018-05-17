@@ -92,8 +92,11 @@ public abstract class PeerSocket {
 	}
 	
 	protected void sendMessage(PeerMessageOutgoing msg) throws IOException, ProtocolViolationException {
-		write(msg.txBuf.array(), 0, msg.txBuf.position());
-		msg.clearTxBuf();
+		synchronized(msg) {
+			write(msg.txBuf.array(), 0, msg.txBuf.position());
+			msg.clearTxBuf();
+		}
+		
 		if(msg.txClosed()) {
 			outgoing.remove(msg);
 		}

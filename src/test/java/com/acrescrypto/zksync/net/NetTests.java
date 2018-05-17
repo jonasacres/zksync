@@ -9,7 +9,8 @@ import org.junit.runners.Suite;
 	BlacklistTest.class,
 	ChunkAccumulatorTest.class,
 	PageQueueTest.class,
-	PeerMessageIncomingTest.class
+	PeerMessageIncomingTest.class,
+	PeerMessageOutgoingTest.class,
 })
 
 public class NetTests {
