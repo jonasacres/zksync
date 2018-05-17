@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
