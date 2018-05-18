@@ -323,4 +323,7 @@ public class FSTestBase {
 		scratch.open("O_CREAT_nonpreexisting", File.O_WRONLY|File.O_CREAT).close();
 		assertTrue(scratch.exists("O_CREAT_nonpreexisting"));
 	}
+	
+	// TODO: really need some good tests on scoped filesystems
+	// TODO: also need a test on purge, rmrf("/")
 }

@@ -122,8 +122,7 @@ public class ZKArchiveConfigTest {
 	@BeforeClass
 	public static void beforeAll() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
-		master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-chunkaccumulator");
-		master.storage.purge();
+		master = ZKMaster.openBlankTestVolume();
 		key = new Key(master.crypto, master.crypto.rng(master.crypto.symKeyLength()));
 		accessor = master.makeAccessorForRoot(key, false);
 		seedAccessor = accessor.makeSeedOnly();

@@ -30,9 +30,7 @@ public class StoredAccessTest {
 	
 	@Before
 	public void before() throws IOException {
-		master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-storedaccess");
-		master.purge();
-		master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-storedaccess");
+		master = ZKMaster.openBlankTestVolume();
 	}
 	
 	@After
@@ -46,7 +44,7 @@ public class StoredAccessTest {
 		master.storedAccess.storeArchiveAccess(archive, false);
 		assertTrue(master.allArchives().contains(archive));
 		
-		ZKMaster clone = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-storedaccess");
+		ZKMaster clone = ZKMaster.openTestVolume();
 		assertTrue(clone.allArchives().contains(archive));
 		assertEquals(1, clone.allArchives.size());
 		assertFalse(clone.allArchives.getLast().config.accessor.isSeedOnly());
@@ -58,7 +56,7 @@ public class StoredAccessTest {
 		master.storedAccess.storeArchiveAccess(archive, true);
 		assertTrue(master.allArchives().contains(archive));
 		
-		ZKMaster clone = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-storedaccess");
+		ZKMaster clone = ZKMaster.openTestVolume();
 		assertTrue(clone.allArchives().contains(archive));
 		assertEquals(1, clone.allArchives.size());
 		assertTrue(clone.allArchives.getLast().config.accessor.isSeedOnly());
@@ -72,14 +70,14 @@ public class StoredAccessTest {
 		master.storedAccess.storeArchiveAccess(archiveB, false);
 		assertTrue(master.allArchives().contains(archiveA));
 		
-		ZKMaster clone = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-storedaccess");
+		ZKMaster clone = ZKMaster.openTestVolume();
 		assertTrue(clone.allArchives().contains(archiveA));
 		assertEquals(2, clone.allArchives.size());
 		
 		master.storedAccess.deleteArchiveAccess(archiveA);
 		assertFalse(master.allArchives().contains(archiveA));
 		assertTrue(master.allArchives().contains(archiveB));
-		clone = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-storedaccess");
+		clone = ZKMaster.openTestVolume();
 		assertFalse(clone.allArchives().contains(archiveA));
 		assertTrue(clone.allArchives().contains(archiveB));
 	}
@@ -92,7 +90,7 @@ public class StoredAccessTest {
 		master.storedAccess.purge();
 		assertFalse(master.allArchives().contains(archive));
 
-		ZKMaster clone = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-storedaccess");
+		ZKMaster clone = ZKMaster.openTestVolume();
 		assertFalse(clone.allArchives().contains(archive));
 }
 }

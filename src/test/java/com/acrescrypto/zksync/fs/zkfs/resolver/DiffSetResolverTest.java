@@ -27,7 +27,7 @@ public class DiffSetResolverTest {
 		ZKFSTest.cheapenArgon2Costs();
 		Security.addProvider(new BouncyCastleProvider());
 		try {
-			master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/diffset-resolver-test");
+			master = ZKMaster.openBlankTestVolume();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

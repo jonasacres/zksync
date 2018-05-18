@@ -10,6 +10,6 @@ import org.junit.runners.Suite;
 	LocalDirectoryTest.class
 })
 
-public class LocalTests {
+public class LocalFSTests {
 
 }

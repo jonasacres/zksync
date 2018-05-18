@@ -24,7 +24,7 @@ public class Blacklist {
 	protected LinkedList<BlacklistCallback> callbacks = new LinkedList<BlacklistCallback>();
 	
 	protected interface BlacklistCallback {
-		void blacklistedAddress(String address, int durationMs);
+		void disconnectAddress(String address, int durationMs);
 	}
 	
 	public Blacklist(FS fs, String path, Key key) throws IOException, InvalidBlacklistException {
@@ -54,7 +54,7 @@ public class Blacklist {
 		write();
 		
 		for(BlacklistCallback callback : callbacks) {
-			callback.blacklistedAddress(address, durationMs);
+			callback.disconnectAddress(address, durationMs);
 		}
 	}
 	

@@ -30,7 +30,7 @@ public class LocalDirectory implements Directory {
 		ArrayList<String> paths = new ArrayList<String>();
 		for(Path entry: Files.newDirectoryStream(Paths.get(fs.root, path))) {
 			String entryPath = Paths.get(path, entry.getFileName().toString()).toString();
-			if((opts & LIST_OPT_OMIT_DIRECTORIES) == 1 && fs.stat(entryPath).isDirectory()) continue;
+			if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(entryPath).isDirectory()) continue;
 			paths.add(entry.getFileName().toString());
 		}
 		

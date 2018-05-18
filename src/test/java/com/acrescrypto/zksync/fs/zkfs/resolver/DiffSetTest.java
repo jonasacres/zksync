@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.security.Security;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -48,7 +47,7 @@ public class DiffSetTest {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-diffset");
+		master = ZKMaster.openBlankTestVolume();
 		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		ZKFS fs = archive.openBlank();
 		fs.write("unmodified", "parent".getBytes());
@@ -64,11 +63,6 @@ public class DiffSetTest {
 			fs.squash("modified");
 			children[i] = fs.commit();
 		}
-	}
-	
-	@After
-	public void afterEach() throws IOException {
-		master.purge();
 	}
 	
 	@Test

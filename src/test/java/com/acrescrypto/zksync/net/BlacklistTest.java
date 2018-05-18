@@ -106,7 +106,7 @@ public class BlacklistTest {
 		int durationMs = 1000;
 		HoldGuy holder = new HoldGuy();
 		blacklist.addCallback(new BlacklistCallback() {
-			public void blacklistedAddress(String cbAddress, int cbDurationMs) {
+			public void disconnectAddress(String cbAddress, int cbDurationMs) {
 				assertEquals(address, cbAddress);
 				assertEquals(durationMs, cbDurationMs);
 				holder.passed = true;
@@ -124,7 +124,7 @@ public class BlacklistTest {
 		HoldGuy holder = new HoldGuy();
 		holder.passed = true;
 		BlacklistCallback callback = new BlacklistCallback() {
-			public void blacklistedAddress(String cbAddress, int cbDurationMs) {
+			public void disconnectAddress(String cbAddress, int cbDurationMs) {
 				holder.passed = false;
 			}
 		};

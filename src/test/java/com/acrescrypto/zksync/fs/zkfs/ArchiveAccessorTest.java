@@ -29,7 +29,7 @@ public class ArchiveAccessorTest {
 	@BeforeClass
 	public static void beforeAll() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
-		master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-archive-accessor");
+		master = ZKMaster.openBlankTestVolume();
 	}
 	
 	@Before
@@ -42,7 +42,6 @@ public class ArchiveAccessorTest {
 	
 	@AfterClass
 	public static void afterAll() throws IOException {
-		master.purge();
 		ZKFSTest.restoreArgon2Costs();
 	}
 	

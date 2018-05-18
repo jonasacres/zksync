@@ -135,7 +135,7 @@ public class ChunkAccumulatorTest {
 	@BeforeClass
 	public static void beforeAll() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
-		master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-chunkaccumulator");
+		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		
 		ZKFS fs = archive.openBlank();

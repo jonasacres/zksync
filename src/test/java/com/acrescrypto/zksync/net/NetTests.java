@@ -11,6 +11,7 @@ import org.junit.runners.Suite;
 	PageQueueTest.class,
 	PeerMessageIncomingTest.class,
 	PeerMessageOutgoingTest.class,
+	PeerSwarmTest.class,
 })
 
 public class NetTests {

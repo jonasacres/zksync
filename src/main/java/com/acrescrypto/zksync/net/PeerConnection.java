@@ -246,7 +246,7 @@ public class PeerConnection {
 			PeerAdvertisement ad = PeerAdvertisement.deserialize(adRaw);
 			try {
 				if(ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) continue;
-				socket.swarm.addPeer(ad);
+				socket.swarm.addPeerAdvertisement(ad);
 			} catch (IOException e) {
 			}
 		}
@@ -260,7 +260,7 @@ public class PeerConnection {
 			PeerAdvertisement ad = PeerAdvertisement.deserializeWithPeer(adRaw, msg.connection);
 			try {
 				if(ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) continue;
-				socket.swarm.addPeer(ad);
+				socket.swarm.addPeerAdvertisement(ad);
 			} catch (IOException e) {
 			}
 		}

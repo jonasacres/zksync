@@ -35,7 +35,7 @@ public class ObfuscatedRefTagTest {
 
 	@Before
 	public void beforeEach() throws IOException {
-		master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-diffset");
+		master = ZKMaster.openBlankTestVolume();
 		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		ZKFS fs = archive.openBlank();
 		fs.write("test", "test".getBytes());

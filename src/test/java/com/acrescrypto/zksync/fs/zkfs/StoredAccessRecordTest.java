@@ -20,13 +20,12 @@ public class StoredAccessRecordTest {
 	public void beforeClass() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
 		Security.addProvider(new BouncyCastleProvider());
-		master = ZKMaster.openAtPath((String reason) -> { return "zksync".getBytes(); }, "/tmp/zksync-diffset");
+		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 	}
 	
 	@After
 	public void afterClass() throws IOException {
-		master.purge();
 		ZKFSTest.restoreArgon2Costs();
 	}
 	

@@ -24,7 +24,6 @@ public class PeerSwarm implements BlacklistCallback {
 	protected ArrayList<PeerConnection> connections = new ArrayList<PeerConnection>();
 	protected HashSet<PeerAdvertisement> knownAds = new HashSet<PeerAdvertisement>();
 	protected HashSet<PeerAdvertisement> connectedAds = new HashSet<PeerAdvertisement>();
-	protected ArrayList<PeerDiscoveryApparatus> discoveryApparatuses = new ArrayList<PeerDiscoveryApparatus>();
 	protected ZKArchiveConfig config;
 	protected HashSet<Long> currentTags = new HashSet<Long>();
 	protected HashMap<Long,ChunkAccumulator> activeFiles = new HashMap<Long,ChunkAccumulator>();
@@ -61,7 +60,7 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	@Override
-	public synchronized void blacklistedAddress(String address, int durationMs) {
+	public synchronized void disconnectAddress(String address, int durationMs) {
 		for(PeerConnection connection : connections) {
 			PeerAdvertisement ad = connection.socket.getAd();
 			if(connection.socket.matchesAddress(address) || (ad != null && ad.matchesAddress(address))) {
@@ -92,7 +91,7 @@ public class PeerSwarm implements BlacklistCallback {
 		connections.add(connection);
 	}
 	
-	public synchronized void addPeer(PeerAdvertisement ad) {
+	public synchronized void addPeerAdvertisement(PeerAdvertisement ad) {
 		// This could be improved. Once we hit capacity, how can we prune ads for low-quality peers for higher-quality ones?
 		if(knownAds.size() >= maxPeerListSize) return;
 		if(!PeerSocket.adSupported(ad)) return;
@@ -107,27 +106,22 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public synchronized void addApparatus(PeerDiscoveryApparatus apparatus) {
-		discoveryApparatuses.add(apparatus);
-	}
-	
 	public void connectionThread() {
 		new Thread(() -> {
 			while(!closed) {
 				PeerAdvertisement ad = selectConnectionAd();
-				try {
-					if(ad == null || connections.size() >= maxSocketCount) {
+				if(ad == null || connections.size() >= maxSocketCount) {
+					try {
 						TimeUnit.MILLISECONDS.sleep(100);
-						continue;
-					}
-				} catch(InterruptedException exc) {}
+					} catch(InterruptedException exc) {}
+					continue;
+				}
 				
 				try {
 					logger.trace("Connecting to address ", ad);
 					openConnection(ad);
 				} catch(UnsupportedProtocolException exc) {
 					logger.info("Skipping unsupported address: " + ad);
-					connectionFailed(ad);
 				} catch(Exception exc) {
 					logger.error("Connection thread caught exception handling address {}", ad, exc);
 				}
@@ -135,29 +129,8 @@ public class PeerSwarm implements BlacklistCallback {
 		}).start();
 	}
 	
-	public void discoveryThread() {
-		new Thread(() -> {
-			while(!closed) {
-				int delay = 100;
-				try {
-					for(PeerDiscoveryApparatus apparatus : discoveryApparatuses) {
-						for(PeerAdvertisement ad : apparatus.discoveredPeers(config.getArchive())) {
-							addPeer(ad);
-						}
-					}
-				} catch(Exception exc) {
-					logger.error("Discovery thread encountered exception", exc);
-					delay = 3000;
-				}
-				
-				try {
-					TimeUnit.MILLISECONDS.sleep(delay);
-				} catch (InterruptedException e) {}
-			}
-		}).start();
-	}
-	
-	public synchronized PeerAdvertisement selectConnectionAd() {
+	protected synchronized PeerAdvertisement selectConnectionAd() {
+		// TODO P2P: (refactor) maybe keep an unconnectedAds list to make this faster?
 		for(PeerAdvertisement ad : knownAds) {
 			if(connectedAds.contains(ad)) continue;
 			return ad;
@@ -166,13 +139,10 @@ public class PeerSwarm implements BlacklistCallback {
 		return null;
 	}
 	
-	public synchronized void openConnection(PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
+	protected synchronized void openConnection(PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
+		// TODO P2P: (refactor) too many exceptions. How do we get a ProtocolViolation just on instantiation?
 		if(closed) return;
 		connections.add(new PeerConnection(this, ad));
-	}
-	
-	public synchronized void connectionFailed(PeerAdvertisement address) {
-		connectedAds.remove(address);
 	}
 	
 	public synchronized void waitForPage(byte[] tag) {
@@ -213,7 +183,7 @@ public class PeerSwarm implements BlacklistCallback {
 		announceTag(tag);
 	}
 	
-	public void announceTag(byte[] tag) {
+	protected void announceTag(byte[] tag) {
 		long shortTag = Util.shortTag(tag);
 		for(PeerConnection connection : connections) {
 			connection.announceTag(shortTag);

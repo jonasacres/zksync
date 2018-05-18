@@ -28,7 +28,7 @@ public class RevisionTreeTest {
 	}
 	
 	public static void setupSingleParentTest() throws IOException {
-		singlemaster = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/revision-tree-test-single-parent");
+		singlemaster = ZKMaster.openTestVolume((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/revision-tree-test-single-parent");
 		singlemaster.purge();
 		fs = singlemaster.createArchive(65536, "singlemaster").openBlank();
 
@@ -48,7 +48,7 @@ public class RevisionTreeTest {
 	}
 	
 	public static void setupMultipleParentTest() throws IOException {
-		multimaster = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/revision-tree-test-multi-parent");
+		multimaster = ZKMaster.openTestVolume((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/revision-tree-test-multi-parent");
 		multimaster.purge();
 		mfs = multimaster.createArchive(65536, "multimaster").openBlank();
 		

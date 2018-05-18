@@ -28,8 +28,7 @@ public class ZKFSTest extends FSTestBase {
 	@Before
 	public void beforeEach() throws IOException {
 		cheapenArgon2Costs();
-		master = ZKMaster.openAtPath((String description) -> { return "zksync".getBytes(); }, SCRATCH_DIR);
-		master.purge();
+		master = ZKMaster.openBlankTestVolume();
 		scratch = zkscratch = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		prepareExamples();
 	}

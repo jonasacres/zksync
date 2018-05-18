@@ -14,13 +14,16 @@ import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveAccessorDiscoveryCallback;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.TCPPeerSocketListener;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
-	public final static String KEYFILE = "keyfile"; 
+	public final static String TEST_VOLUME = "test";
+	public final static String KEYFILE = "keyfile";
+	
 	protected CryptoSupport crypto;
 	protected FS storage;
 	protected PassphraseProvider passphraseProvider;
@@ -31,6 +34,24 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected Blacklist blacklist;
 	protected Logger logger = LoggerFactory.getLogger(ZKMaster.class);
 	protected TCPPeerSocketListener listener;
+	
+	public static ZKMaster openTestVolume() throws IOException {
+		return openTestVolume((String reason) -> { return "zksync".getBytes(); }, TEST_VOLUME);
+	}
+	
+	public static ZKMaster openBlankTestVolume() throws IOException {
+		RAMFS.removeVolume(TEST_VOLUME);
+		return openTestVolume();
+	}
+	
+	public static ZKMaster openTestVolume(PassphraseProvider ppProvider, String name) throws IOException {
+		try {
+			return new ZKMaster(new CryptoSupport(), RAMFS.volumeWithName(name), ppProvider);
+		} catch (InvalidBlacklistException e) {
+			// TODO: refactoring all the tests to catch InBlEx would be annoying, so this is an alternative... But probably a bandaid.
+			throw new RuntimeException();
+		}
+	}
 	
 	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) throws IOException {
 		try {

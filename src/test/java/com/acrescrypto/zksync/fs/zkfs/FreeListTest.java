@@ -18,8 +18,7 @@ public class FreeListTest {
 	
 	@BeforeClass
 	public static void beforeClass() throws IOException {
-		master = ZKMaster.openAtPath((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-freelist/test");
-		master.purge();
+		master = ZKMaster.openBlankTestVolume();
 		ZKFSTest.cheapenArgon2Costs();
 		Security.addProvider(new BouncyCastleProvider());
 	}
