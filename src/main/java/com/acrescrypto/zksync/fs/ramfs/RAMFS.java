@@ -250,4 +250,8 @@ public class RAMFS extends FS {
 		if(path.equals(".")) path = "/";
 		return Paths.get("/", scope, path).toString();
 	}
+	
+	public String getRoot() {
+		return scope;
+	}
 }

@@ -15,7 +15,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.fs.localfs.LocalFS;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
 
 public class BlacklistTest {
@@ -24,7 +24,7 @@ public class BlacklistTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
-		fs = new LocalFS("/tmp/blacklist-test");
+		fs = new RAMFS();
 		if(fs.exists("/")) fs.rmrf("/");
 	}
 	

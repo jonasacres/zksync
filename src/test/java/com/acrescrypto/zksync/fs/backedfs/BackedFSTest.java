@@ -22,7 +22,7 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
-import com.acrescrypto.zksync.fs.localfs.LocalFS;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 
 public class BackedFSTest extends FSTestBase {
 	class DummyFS extends FS {
@@ -148,7 +148,7 @@ public class BackedFSTest extends FSTestBase {
 	final static String NONEXISTENT_DIR = "testdir-nonexistent";
 	final static String NONEXISTENT_FILE = NONEXISTENT_DIR + "/doesnt-exist";
 	BackedFS backedFS;
-	LocalFS cacheFS;
+	RAMFS cacheFS;
 	DummyFS backupFS;
 	
 	public interface Operation {
@@ -219,8 +219,7 @@ public class BackedFSTest extends FSTestBase {
 
 	@Before
 	public void beforeEach() throws IOException {
-		// TODO: refactor these test classes to use some static constructor for crossplatform support (not all systems will have /tmp)
-		cacheFS = new LocalFS("/tmp/zksync-backedfs");
+		cacheFS = new RAMFS();
 		if(cacheFS.exists("/")) cacheFS.rmrf("/");
 		backupFS = new DummyFS();
 		cacheFS.write(CACHED_FILE, CACHED_DATA);
@@ -425,13 +424,18 @@ public class BackedFSTest extends FSTestBase {
 	@Test
 	public void testSetCtimeAcquiresFile() throws IOException {
 		expectRead(UNCACHED_FILE, ()->{
-			try {
-				backedFS.setCtime(UNCACHED_FILE, 1234);
-			} catch(UnsupportedOperationException exc) {}
+			backedFS.setCtime(UNCACHED_FILE, 1234);
 		});
 	}
 	
-	// TODO: can't test setCtime on a LocalFS... consider using something else to test?
+	@Test
+	public void testSetCtimeSetsTimestamp() throws IOException {
+		int timestamp = 3000;
+		assertFalse(cacheFS.stat(CACHED_FILE).getCtime() == timestamp);
+		backedFS.setCtime(CACHED_FILE, timestamp);
+		assertTrue(cacheFS.stat(CACHED_FILE).getCtime() == timestamp);
+		assertNoBackupAccess();
+	}
 	
 	@Test
 	public void testSetCtimeThrowsENOENT() throws IOException {
@@ -666,10 +670,10 @@ public class BackedFSTest extends FSTestBase {
 	@Test
 	public void testScopedFS() throws IOException {
 		String scope = "scope";
-		String expectedCacheRoot = Paths.get(((LocalFS) backedFS.cacheFS).getRoot(), scope).toString();
+		String expectedCacheRoot = Paths.get(((RAMFS) backedFS.cacheFS).getRoot(), scope).toString();
 		String expectedBackupRoot = Paths.get(((DummyFS) backedFS.backupFS).scope, scope).toString();
 		BackedFS scoped = backedFS.scopedFS("scope");
-		assertEquals(expectedCacheRoot, ((LocalFS) scoped.cacheFS).getRoot());
+		assertEquals(expectedCacheRoot, ((RAMFS) scoped.cacheFS).getRoot());
 		assertEquals(expectedBackupRoot, ((DummyFS) scoped.backupFS).scope);
 	}
 	
