@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.net;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -9,17 +10,20 @@ import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.concurrent.TimeoutException;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PRNG;
+import com.acrescrypto.zksync.net.PeerMessageOutgoing.MessageSegment;
 
 public class PeerMessageOutgoingTest {
 	class DummySocket extends PeerSocket {
-		PeerMessageOutgoing received;
+		MessageSegment received;
 		int messageId = 1234;
+		int timeoutMs = 250;
 		byte[] written;
 		
 		@Override public PeerAdvertisement getAd() { return null; }
@@ -30,16 +34,26 @@ public class PeerMessageOutgoingTest {
 		@Override public boolean isClosed() { return false; }
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public String getAddress() { return "dummy"; }
-		@Override public synchronized void dataReady(PeerMessageOutgoing msg) { received = msg; this.notifyAll(); }
+		@Override public synchronized void dataReady(MessageSegment segment) {
+			received = segment;
+			segment.delivered();
+			this.notifyAll();
+		}
+		
 		@Override public int issueMessageId() { return messageId; }
-		public synchronized void waitForDataReady() { while(received == null) try { this.wait(); } catch(InterruptedException exc) {} } 
+		public synchronized void waitForDataReady() throws TimeoutException {
+			if(received == null) {
+				try { this.wait(timeoutMs); } catch(InterruptedException exc) {}
+				if(received == null) throw new TimeoutException();
+			} 
+		}
+		
 		public byte[] readBufferedMessage(PeerMessageOutgoing msg) {
 			synchronized(msg) {
-				ByteBuffer buf = ByteBuffer.allocate(msg.txBuf.position());
-				buf.put(msg.txBuf.array(), 0, msg.txBuf.position());
-				msg.clearTxBuf();
+				byte[] content = new byte[received.content.limit()];
+				System.arraycopy(received.content.array(), 0, content, 0, content.length);
 				received = null;
-				return buf.array();
+				return content;
 			}
 		}
 	}
@@ -69,7 +83,7 @@ public class PeerMessageOutgoingTest {
 	PeerMessageOutgoing msg;
 	PRNG readPRNG, writePRNG;
 	
-	public void assertReceivedMessage(byte[] expectedPayload, boolean expectEOF) {
+	public void assertReceivedMessage(byte[] expectedPayload, boolean expectEOF) throws TimeoutException {
 		ByteBuffer expected = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH + expectedPayload.length);
 		expected.putInt(msg.msgId);
 		expected.putInt(expectedPayload.length);
@@ -79,7 +93,7 @@ public class PeerMessageOutgoingTest {
 		expected.put(expectedPayload);
 		
 		socket.waitForDataReady();
-		assertEquals(msg, socket.received);
+		assertEquals(msg, socket.received.msg);
 		byte[] received = socket.readBufferedMessage(msg);
 		assertTrue(Arrays.equals(expected.array(), received));
 	}
@@ -106,121 +120,130 @@ public class PeerMessageOutgoingTest {
 	}
 	
 	@Test
-	public void testNotifiesSocketWhenDataReady() throws IOException {
+	public void testNotifiesSocketWhenDataReady() throws IOException, TimeoutException {
 		assertNull(socket.received);
 		writeEnd.write(new byte[1]);
-		try { Thread.sleep(1); } catch(InterruptedException exc) { exc.printStackTrace(); }
-		assertEquals(msg, socket.received);
+		writeEnd.flush();
+		socket.waitForDataReady();
+		assertEquals(msg, socket.received.msg);
 	}
 	
 	@Test
 	public void testDoesNotSendWhenConnectionIsPaused() throws IOException {
 		connection.pause();
 		writeEnd.write(new byte[4]);
-		try { Thread.sleep(1); } catch(InterruptedException exc) { exc.printStackTrace(); }
+		writeEnd.flush();
+		try {
+			socket.waitForDataReady();
+		} catch(TimeoutException exc) {}
 		assertNull(socket.received);
 	}
 	
 	@Test
-	public void testResumesSendingWhenConnectionIsUnpaused() throws IOException {
+	public void testResumesSendingWhenConnectionIsUnpaused() throws IOException, TimeoutException {
 		connection.pause();
 		writeEnd.write(new byte[4]);
+		writeEnd.flush();
 		connection.unpause();
-		try { Thread.sleep(1); } catch(InterruptedException exc) { exc.printStackTrace(); }
-		assertEquals(msg, socket.received);
+		socket.waitForDataReady();
+		assertEquals(msg, socket.received.msg);
 	}
 	
 	@Test
-	public void testSendsNonpausableCommandsWhenPaused() throws IOException {
+	public void testSendsNonpausableCommandsWhenPaused() throws IOException, TimeoutException {
 		PipedOutputStream writeEnd2 = new PipedOutputStream();
 		PeerMessageOutgoing nonpausable = new PeerMessageOutgoing(connection, (byte) (CMD+1), new PipedInputStream(writeEnd2));
 		
 		connection.pause();
 		writeEnd2.write(new byte[4]);
-		try { Thread.sleep(1); } catch(InterruptedException exc) { exc.printStackTrace(); }
-		assertEquals(nonpausable, socket.received);
+		writeEnd2.flush();
+		socket.waitForDataReady();
+		assertEquals(nonpausable, socket.received.msg);
 	}
 	
 	@Test
-	public void testBuildsValidHeader() throws IOException {
+	public void testBuildsValidHeader() throws IOException, TimeoutException {
 		byte[] payload = "Hello, world!".getBytes();
 		writeEnd.write(payload);
+		writeEnd.flush();
 		assertReceivedMessage(payload, false);
 	}
 	
 	@Test
-	public void testUpdatesHeaderInSuccessiveWrites() throws IOException {
+	public void testMergesSuccessiveWrites() throws IOException, TimeoutException {
+		// I'm uneasy about this test. Very timing dependent.
 		byte[] payload = "Hello, world!".getBytes();
 		writeEnd.write(payload, 0, 5);
+		writeEnd.flush();
 		writeEnd.write(payload, 5, payload.length - 5);
+		writeEnd.flush();
 		assertReceivedMessage(payload, false);
 	}
 	
 	@Test
-	public void testSendBigMessageThenLittle() throws IOException {
+	public void testSendBigMessageThenLittle() throws IOException, TimeoutException {
 		byte[] bigMessage = writePRNG.getBytes(2*msg.minPayloadBufferSize());
 		byte[] littleMessage = writePRNG.getBytes(msg.minPayloadBufferSize()-1);
 
-		System.out.println(System.currentTimeMillis() + " - writing");
 		writeEnd.write(bigMessage);
-		System.out.println(System.currentTimeMillis() + " - waiting");
-		try { Thread.sleep(1); } catch(InterruptedException exc) { exc.printStackTrace(); }
-		System.out.println(System.currentTimeMillis() + " - receiving");
+		writeEnd.flush();
 		assertReceivedMessage(bigMessage, false);
 		
-		System.out.println(System.currentTimeMillis() + " - writing little");
 		writeEnd.write(littleMessage);
-		System.out.println(System.currentTimeMillis() + " - waiting");
-		try { Thread.sleep(1); } catch(InterruptedException exc) { exc.printStackTrace(); }
-		System.out.println(System.currentTimeMillis() + " - receiving");
+		writeEnd.flush();
 		assertReceivedMessage(littleMessage, false);
-		System.out.println(System.currentTimeMillis() + " - received");
 	}
 	
 	@Test
-	public void testSendLittleMessageThenBig() throws IOException {
+	public void testSendLittleMessageThenBig() throws IOException, TimeoutException {
 		byte[] bigMessage = writePRNG.getBytes(2*msg.minPayloadBufferSize());
 		byte[] littleMessage = writePRNG.getBytes(msg.minPayloadBufferSize()-1);
 		
 		writeEnd.write(littleMessage);
-		try { Thread.sleep(1); } catch(InterruptedException exc) { exc.printStackTrace(); }
+		writeEnd.flush();
+		socket.waitForDataReady();
 		assertReceivedMessage(littleMessage, false);
 
 		writeEnd.write(bigMessage);
-		try { Thread.sleep(1); } catch(InterruptedException exc) { exc.printStackTrace(); }
+		writeEnd.flush();
 		assertReceivedMessage(bigMessage, false);
-}
+	}
 	
 	@Test
-	public void testSendOversizedMessages() throws IOException {
-		byte[] oversized = writePRNG.getBytes(2*msg.maxPayloadBufferSize());
+	public void testSendOversizedMessages() throws IOException, TimeoutException {
+		// TODO: this test has been haunted by race conditions. remove this line if it's been a while and they've gone away. 5/17/18
+		byte[] oversized = writePRNG.getBytes(100*msg.maxPayloadBufferSize());
 		ByteBuffer readBuf = ByteBuffer.allocate(oversized.length);
 		
 		new Thread(()-> {
 			try {
 				writeEnd.write(oversized);
-				writeEnd.close();
+				writeEnd.flush();
+				// these pipes seem to close before all data is read if the thread dies; keep thread going until buffer fills
+				while(readBuf.hasRemaining()) {
+					try { Thread.sleep(100); } catch (InterruptedException e) {}
+				}
 			} catch(IOException exc) {
 				exc.printStackTrace();
 			}
 		}).start();
 		
-		while(!msg.txEOF) {
+		while(readBuf.hasRemaining()) {
 			socket.waitForDataReady();
 			ByteBuffer chunk = ByteBuffer.wrap(socket.readBufferedMessage(msg));
-			assertTrue(chunk.capacity() >= PeerMessage.HEADER_LENGTH);
-			assertTrue(readBuf.remaining() >= chunk.capacity() - PeerMessage.HEADER_LENGTH);
-			readBuf.put(chunk.array(), PeerMessage.HEADER_LENGTH, chunk.capacity() - PeerMessage.HEADER_LENGTH);
+			chunk.position(PeerMessage.HEADER_LENGTH);
+			readBuf.put(chunk);
 		}
 		
+		assertEquals(oversized.length, readBuf.position());
 		assertTrue(Arrays.equals(oversized, readBuf.array()));
 	}
 	
-	// sends data to socket with header
-	// injects header to each successive write operation
-	// supports variably-sized write operations
-	
-	// txClosed false if EOF not reached
-	// sets txClosed on EOF
-	// thread safety
+	@Test
+	public void testSetsTxClosed() throws IOException {
+		assertFalse(msg.txClosed());
+		writeEnd.close();
+		try { Thread.sleep(1); } catch(InterruptedException exc) {}
+		assertTrue(msg.txClosed());
+	}
 }

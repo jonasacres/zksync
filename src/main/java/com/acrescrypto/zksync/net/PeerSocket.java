@@ -11,12 +11,13 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.net.PeerMessageOutgoing.MessageSegment;
 
 public abstract class PeerSocket {
 	protected PeerSwarm swarm;
 	protected PeerConnection connection;
 	protected LinkedList<PeerMessageOutgoing> outgoing = new LinkedList<PeerMessageOutgoing>();
-	protected LinkedList<PeerMessageOutgoing> ready = new LinkedList<PeerMessageOutgoing>();	
+	protected LinkedList<MessageSegment> ready = new LinkedList<MessageSegment>();	
 	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
 	
 	protected int nextMessageId;
@@ -91,14 +92,12 @@ public abstract class PeerSocket {
 		}
 	}
 	
-	protected void sendMessage(PeerMessageOutgoing msg) throws IOException, ProtocolViolationException {
-		synchronized(msg) {
-			write(msg.txBuf.array(), 0, msg.txBuf.position());
-			msg.clearTxBuf();
-		}
+	protected void sendMessage(MessageSegment segment) throws IOException, ProtocolViolationException {
+		write(segment.content.array(), 0, segment.content.limit());
+		segment.delivered();
 		
-		if(msg.txClosed()) {
-			outgoing.remove(msg);
+		if(segment.msg.txClosed()) {
+			outgoing.remove(segment.msg);
 		}
 	}
 	
@@ -161,8 +160,8 @@ public abstract class PeerSocket {
 		}).start();
 	}
 	
-	protected synchronized void dataReady(PeerMessageOutgoing msg) {
-		ready.add(msg);
+	protected synchronized void dataReady(MessageSegment segment) {
+		ready.add(segment);
 		outgoing.notifyAll();
 	}
 	

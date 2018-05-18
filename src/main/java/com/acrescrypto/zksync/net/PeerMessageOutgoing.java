@@ -12,11 +12,45 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 
 public class PeerMessageOutgoing extends PeerMessage {
-	protected ByteBuffer txBuf;
+	protected class MessageSegment {
+		PeerMessageOutgoing msg;
+		ByteBuffer content;
+		boolean delivered;
+		
+		public MessageSegment(PeerMessageOutgoing msg, ByteBuffer content) {
+			this.msg = msg;
+			this.content = content;
+			addHeader();
+		}
+		
+		protected void addHeader() {
+			ByteBuffer headerBuf = ByteBuffer.wrap(content.array());
+			headerBuf.putInt(msgId);
+			headerBuf.putInt(content.limit() - PeerMessage.HEADER_LENGTH);
+			headerBuf.put(cmd);
+			headerBuf.put((byte) (flags | (msg.txClosed() ? FLAG_FINAL : 0x00)));
+			headerBuf.putShort((short) 0);
+		}
+		
+		protected synchronized void delivered() {
+			delivered = true;
+			this.notifyAll();
+		}
+		
+		protected synchronized void waitForDelivery() {
+			while(!delivered) {
+				try {
+					this.wait();
+				} catch (InterruptedException e) { }
+			}
+		}
+	}
+	
 	protected boolean txEOF;
 	protected InputStream txPayload;
 	protected RefTag refTag;
 	protected Queue<Integer> chunkList = new LinkedList<Integer>();
+	protected MessageSegment queuedSegment;
 	private Logger logger = LoggerFactory.getLogger(PeerMessageOutgoing.class);
 	
 	public PeerMessageOutgoing(PeerConnection connection, byte cmd, InputStream txPayload) {
@@ -30,19 +64,29 @@ public class PeerMessageOutgoing extends PeerMessage {
 	public boolean txClosed() {
 		return txEOF;
 	}
+	
+	public int minPayloadBufferSize() {
+		return 256;
+	}
+	
+	public int maxPayloadBufferSize() {
+		return PeerMessage.MESSAGE_SIZE;
+	}
 
 	protected void runTxThread() {
 		new Thread(() -> {
 			try {
-				while(!txEOF) {
-					resizeBuffer(txPayload.available());
-					loadBytesFromStream();
+				while(!txClosed()) {
+					if(queuedSegment != null) queuedSegment.waitForDelivery();
+					accumulateNext();
 					
 					if(connection.isPausable(cmd)) {
 						connection.waitForUnpause();
 					}
 					
-					connection.socket.dataReady(this);
+					if(queuedSegment != null) {
+						sendNext();
+					}
 				}
 			} catch(Exception exc) {
 				logger.error("Outgoing message thread to {} caught exception", connection.socket.getAddress(), exc);
@@ -50,68 +94,62 @@ public class PeerMessageOutgoing extends PeerMessage {
 		}).start();
 	}
 	
-	protected void loadBytesFromStream() {
-		if(txEOF) return;
-		synchronized(this) {
-			while(!txBuf.hasRemaining()) {
-				try {
-					this.wait();
-				} catch(InterruptedException exc) {}
-			}
+	protected void waitForSend() {
+		if(queuedSegment == null) return;
+		while(!queuedSegment.delivered) {
+			try {
+				synchronized(queuedSegment) {
+					queuedSegment.wait();
+				}
+			} catch(InterruptedException exc) {}
 		}
-		
-		int readLen;
+	}
+	
+	protected void accumulateNext() throws IOException {
+		int startingSize = minPayloadBufferSize();
 		try {
-			readLen = txPayload.read(txBuf.array(), txBuf.position(), txBuf.remaining());
+			startingSize = Math.min(maxPayloadBufferSize(), Math.max(startingSize, txPayload.available()));
 		} catch(IOException exc) {
-			readLen = -1;
-		}
-		
-		if(readLen > 0) {
-			synchronized(this) {
-				txBuf.position(txBuf.position() + readLen);
-				addTxHeader();
-			}
-		} else if(readLen < 0) {
 			txEOF = true;
 		}
-	}
-	
-	protected void addTxHeader() {
-		ByteBuffer headerBuf = ByteBuffer.wrap(txBuf.array());
-		headerBuf.putInt(msgId);
-		headerBuf.putInt(txBuf.position()-HEADER_LENGTH);
-		headerBuf.put(cmd);
-		headerBuf.put((byte) (flags | (txEOF ? FLAG_FINAL : 0x00)));
-		headerBuf.putShort((short) 0);
-	}
-	
-	protected int minPayloadBufferSize() {
-		return 256;
-	}
-	
-	protected int maxPayloadBufferSize() {
-		return connection.socket.maxPayloadSize();
-	}
-	
-	protected synchronized void resizeBuffer(int numBytesRequested) {
-		// buffer has header + payload space. payload space is requested amount, with a hard minimum of 256 and max of socket's maxPayloadSize
-		int bufferSize = (txBuf == null ? 0 : txBuf.position()) + numBytesRequested;
-		bufferSize = Math.min(bufferSize, maxPayloadBufferSize()); // no bigger than max size
-		bufferSize = Math.max(bufferSize, minPayloadBufferSize()); // no smaller than min size
-		bufferSize += HEADER_LENGTH;
+		
+		ByteBuffer buffer = ByteBuffer.allocate(startingSize);
+		buffer.position(HEADER_LENGTH);
+		while(true) {
+			if(!buffer.hasRemaining()) {
+				if(buffer.capacity() == maxPayloadBufferSize()) break;
+				int newCapacity = Math.min(2*buffer.capacity(), maxPayloadBufferSize());
+				ByteBuffer newBuffer = ByteBuffer.allocate(newCapacity);
+				newBuffer.put(buffer.array());
+				buffer = newBuffer;
+			}
 			
-		// never shrink the buffer; start small but assume if we had big bursts before, we'll see big bursts again
-		if(txBuf == null || txBuf.capacity() < bufferSize) {
-			ByteBuffer newTxBuf = ByteBuffer.allocate(bufferSize);
-			if(txBuf != null) newTxBuf.put(txBuf.array(), 0, txBuf.position());
-			else newTxBuf.position(HEADER_LENGTH);
-			txBuf = newTxBuf;
+			int r;
+			
+			try {
+				r = txPayload.read(buffer.array(), buffer.position(), buffer.remaining());
+			} catch(IOException exc) {
+				r = -1;
+			}
+
+			if(r < 0) {
+				txEOF = true;
+				break;
+			}
+			
+			buffer.position(buffer.position() + r);
+			if(txPayload.available() > 0) continue;
+			try { Thread.sleep(1); } catch(InterruptedException exc) {}
+			if(txPayload.available() == 0) break;
 		}
+		
+		buffer.limit(buffer.position());
+		buffer.rewind();
+		
+		queuedSegment = new MessageSegment(this, buffer);
 	}
 	
-	protected synchronized void clearTxBuf() {
-		txBuf.position(HEADER_LENGTH);
-		this.notifyAll();
+	protected void sendNext() throws IOException {
+		connection.socket.dataReady(queuedSegment);
 	}
 }
