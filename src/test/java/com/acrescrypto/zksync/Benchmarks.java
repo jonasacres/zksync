@@ -2,6 +2,9 @@ package com.acrescrypto.zksync;
 
 import static org.junit.Assert.fail;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
@@ -20,7 +23,8 @@ public class Benchmarks {
 	public final static int DEFAULT_TEST_INTERVAL_MS = 1000;
 	
 	public static void beginBenchmarkSuite(String description) {
-		output("Begin benchmark: " + description);
+		String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+		output(timestamp + " Benchmarking " + description);
 	}
 	
 	public static int run(String unit, int interval, BenchmarkTest test) {
