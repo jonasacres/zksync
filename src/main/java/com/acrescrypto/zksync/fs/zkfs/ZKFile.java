@@ -224,7 +224,7 @@ public class ZKFile extends File {
 		inode.getStat().setMtime(now);
 		inode.setChangedFrom(zkfs.baseRevision);
 		inode.setModifiedTime(now);
-		bufferedPage.flush();
+		if(bufferedPage != null) bufferedPage.flush();
 		inode.setRefTag(merkle.commit());
 		zkfs.inodeTable.setInode(inode);
 		dirty = false;

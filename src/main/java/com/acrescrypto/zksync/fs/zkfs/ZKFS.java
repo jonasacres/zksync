@@ -192,7 +192,7 @@ public class ZKFS extends FS {
 	@Override
 	public void rmdir(String path) throws IOException {
 		assertDirectoryIsEmpty(path);
-		if(path.equals("/")) throw new EINVALException("cannot delete root directory");
+		if(path.equals("/")) return; // quietly ignore for rmrf("/") support; used to throw new EINVALException("cannot delete root directory");
 		
 		ZKDirectory dir = opendir(path);
 		dir.rmdir();

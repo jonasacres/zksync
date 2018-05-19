@@ -227,7 +227,7 @@ public class CryptoSupport {
 		if(padSize < 0) return raw.clone();
 		if(padSize == 0) padSize = raw.length + 4;
 		if(raw.length > padSize) {
-			throw new IllegalArgumentException("attempted to pad data beyond maximum size");
+			throw new IllegalArgumentException("attempted to pad data beyond maximum size (" + raw.length + " > " + padSize + ")");
 		}
 		
 		ByteBuffer padded = ByteBuffer.allocate(padSize+4);
@@ -259,6 +259,10 @@ public class CryptoSupport {
 	}
 	
 	public PrivateKey makePrivateKey(byte[] privateKeyMaterial) {
+		if(privateKeyMaterial.length != asymPrivateKeySize()) {
+			privateKeyMaterial = this.expand(privateKeyMaterial, asymPrivateKeySize(), "zksync-salt".getBytes(), new byte[0]);
+		}
+		
 		return new PrivateKey(this, privateKeyMaterial);
 	}
 	
