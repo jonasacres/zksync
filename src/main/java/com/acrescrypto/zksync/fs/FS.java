@@ -34,11 +34,15 @@ public abstract class FS {
 	public abstract void setCtime(String path, long ctime) throws IOException;
 	public abstract void setAtime(String path, long atime) throws IOException;
 	
-	public abstract void write(String path, byte[] contents) throws IOException;
+	public abstract void write(String path, byte[] contents, int offset, int length) throws IOException;
 	public abstract File open(String path, int mode) throws IOException;
 	public abstract void truncate(String path, long size) throws IOException;
 	
 	private Logger logger = LoggerFactory.getLogger(FS.class);
+	
+	public void write(String path, byte[] contents) throws IOException {
+		write(path, contents, 0, contents.length);
+	}
 	
 	public byte[] read(String path) throws IOException {
 		File file = open(path, File.O_RDONLY);

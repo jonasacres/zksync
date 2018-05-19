@@ -134,7 +134,7 @@ public class BackedFSTest extends FSTestBase {
 		public void setMtime(String path, long mtime) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public void setCtime(String path, long ctime) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public void setAtime(String path, long atime) throws IOException { throw new RuntimeException("attempted to write to backup"); }
-		public void write(String path, byte[] contents) throws IOException { throw new RuntimeException("attempted to write to backup"); }
+		public void write(String path, byte[] contents, int offset, int length) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public File open(String path, int mode) throws IOException {  throw new RuntimeException("attempted to open file handle from backup");  }
 		public void truncate(String path, long size) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 	}

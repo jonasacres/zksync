@@ -132,11 +132,11 @@ public class ZKFS extends FS {
 	}
 	
 	@Override
-	public void write(String path, byte[] contents) throws IOException {
+	public void write(String path, byte[] contents, int offset, int length) throws IOException {
 		mkdirp(dirname(path));
 		
 		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT|ZKFile.O_TRUNC);
-		file.write(contents);
+		file.write(contents, offset, length);
 		file.close();
 	}
 

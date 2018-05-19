@@ -126,6 +126,29 @@ public class ZKFileTest extends FileTestBase {
 		wholeThing.put("split".getBytes());
 		assertTrue(Arrays.equals(wholeThing.array(), zkscratch.read("random-write-test")));
 	}
+	
+	@Test
+	public void testWriteBlank() throws IOException {
+		ZKFile file = zkscratch.open("blank", ZKFile.O_CREAT|ZKFile.O_WRONLY);
+		file.write(new byte[0]);
+		file.flush();
+		file.close();
+		assertEquals(0, zkscratch.read("blank").length);
+	}
+	
+	@Test
+	public void testGraduateSizes() throws IOException {
+		// what happens when we grow past the threshold to need multiple chunks in our pagemerkle?
+		String path = "graduate-sizes";
+		ZKFile file = zkscratch.open(path, ZKFile.O_CREAT|ZKFile.O_WRONLY|ZKFile.O_TRUNC);
+		int pagesPerChunk = zkscratch.archive.config.pageSize / (2*master.crypto.hashLength());
+		
+		byte[] onePage = new byte[zkscratch.archive.config.pageSize];
+		for(int i = 0; i < pagesPerChunk+1; i++) {
+			file.write(onePage);
+		}
+		file.close();
+	}
 
 	// TODO: test squashing of page merkle chunk timestamps
 }

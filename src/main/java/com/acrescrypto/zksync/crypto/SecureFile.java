@@ -39,8 +39,12 @@ public class SecureFile {
 	}
 	
 	public void write(byte[] plaintext, int padSize) throws IOException {
+		write(plaintext, 0, plaintext.length, padSize);
+	}
+	
+	public void write(byte[] plaintext, int offset, int length, int padSize) throws IOException {
 		try {
-			byte[] ciphertext = key.encrypt(iv, plaintext, padSize);
+			byte[] ciphertext = key.encrypt(iv, plaintext, offset, length, padSize);
 			fs.write(path, ciphertext);
 			fs.squash(path);
 		} catch(IOException exc) {

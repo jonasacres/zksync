@@ -261,7 +261,7 @@ public class SSHFS extends FS {
 	}
 
 	@Override
-	public void write(String path, byte[] contents) throws IOException {		
+	public void write(String path, byte[] contents, int offset, int length) throws IOException {		
 		try {
 			stat(dirname(path));
 		} catch(ENOENTException exc) {
@@ -269,7 +269,9 @@ public class SSHFS extends FS {
 		}
 		
 		SSHMemFile memfile = new SSHMemFile(); // TODO: right constructor?
-		memfile.setContents(contents);
+		byte[] memfileContents = new byte[length];
+		System.arraycopy(contents, offset, memfileContents, 0, length);
+		memfile.setContents(memfileContents);
 		ssh.newSCPFileTransfer().upload(memfile, qualifiedPath(path));
 		setMtime(path, 1000l*1000l*System.currentTimeMillis());
 		setAtime(path, 1000l*1000l*System.currentTimeMillis());

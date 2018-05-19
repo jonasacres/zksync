@@ -20,7 +20,7 @@ public class Benchmarks {
 		void run(int iteration) throws Exception;
 	}
 	
-	public final static int DEFAULT_TEST_INTERVAL_MS = 1000;
+	public final static int DEFAULT_TEST_INTERVAL_MS = 3000;
 	
 	public static void beginBenchmarkSuite(String description) {
 		String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
@@ -53,8 +53,10 @@ public class Benchmarks {
 		double rate = 1000.0 * ((double) numUnits) / duration;
 		output(String.format("\t%40s: %.03f %s/s (%d %s in %d ms)", caller, rate, unit, numUnits, unit, duration));
 	}
+	
 	public static void finishBenchmarkSuite() {
 		output("=====");
+		output("");
 	}
 	
 	public static void output(String message) {

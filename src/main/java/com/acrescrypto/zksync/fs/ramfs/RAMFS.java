@@ -176,12 +176,13 @@ public class RAMFS extends FS {
 	}
 
 	@Override
-	public void write(String path, byte[] contents) throws IOException {
+	public void write(String path, byte[] contents, int offset, int length) throws IOException {
 		mkdirp(dirname(path));
 		try {
 			Inode inode = lookup(path);
-			inode.data = contents.clone();
-			inode.stat.setSize(inode.data.length);
+			inode.data = new byte[length];
+			System.arraycopy(contents, offset, inode.data, 0, length);
+			inode.stat.setSize(length);
 		} catch(ENOENTException exc) {
 			makeInode(path, (inode)->{ inode.data = contents.clone(); });
 		}

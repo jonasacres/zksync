@@ -139,7 +139,7 @@ public class SwarmFS extends FS {
 	}
 
 	@Override
-	public void write(String path, byte[] contents) throws IOException {
+	public void write(String path, byte[] contents, int offset, int length) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 

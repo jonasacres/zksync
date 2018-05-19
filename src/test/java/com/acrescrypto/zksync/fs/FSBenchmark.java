@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
 
+import org.junit.AfterClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.Benchmarks;
@@ -9,6 +10,11 @@ import com.acrescrypto.zksync.Benchmarks;
 public abstract class FSBenchmark {
 	
 	protected FS storage;
+	
+	@AfterClass
+	public static void finishSuite() {
+		Benchmarks.finishBenchmarkSuite();
+	}
 	
 	@Test
 	public void benchmarkFileCreationThroughput() throws IOException {
@@ -21,10 +27,10 @@ public abstract class FSBenchmark {
 	
 	@Test
 	public void benchmarkFileWriteThroughput() throws IOException {
-		byte[] oneKiB = new byte[1024];
+		byte[] oneMiB = new byte[1024*1024];
 		File file = storage.open("write-throughput", File.O_CREAT|File.O_TRUNC|File.O_WRONLY);
-		Benchmarks.run("KiB", (i)->{
-			file.write(oneKiB);
+		Benchmarks.run("MiB", (i)->{
+			file.write(oneMiB);
 			file.flush();
 		});
 		

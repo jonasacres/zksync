@@ -129,7 +129,8 @@ public class CryptoSupport {
 	public byte[] encrypt(byte[] key, byte[] iv, byte[] plaintext, byte[] associatedData, int padSize)
 	{
 		try {
-			return processAEADCipher(true, 8*symTagLength(), key, iv, padToSize(plaintext, padSize), associatedData);
+			if(plaintext == null) plaintext = new byte[0];
+			return processAEADCipher(true, 8*symTagLength(), key, iv, padToSize(plaintext, 0, plaintext.length, padSize), associatedData);
 		} catch (Exception exc) {
 			logger.error("Encountered exception encrypting data", exc);
 			System.exit(1);
@@ -140,7 +141,7 @@ public class CryptoSupport {
 	public byte[] encrypt(byte[] key, byte[] iv, byte[] plaintext, int offset, int length, byte[] associatedData, int adOffset, int adLen, int padSize)
 	{
 		try {
-			return processAEADCipher(true, 8*symTagLength(), key, iv, padToSize(plaintext, padSize), associatedData);
+			return processAEADCipher(true, 8*symTagLength(), key, iv, padToSize(plaintext, offset, length, padSize), associatedData);
 		} catch (Exception exc) {
 			logger.error("Encountered exception encrypting data", exc);
 			System.exit(1);
@@ -222,17 +223,17 @@ public class CryptoSupport {
         return out;
 	}
 	
-	private byte[] padToSize(byte[] raw, int padSize) {
+	private byte[] padToSize(byte[] raw, int offset, int length, int padSize) {
 		if(raw == null) return null;
-		if(padSize < 0) return raw.clone();
-		if(padSize == 0) padSize = raw.length + 4;
-		if(raw.length > padSize) {
+		if(padSize < 0) return ByteBuffer.allocate(length).put(raw, offset, length).array();
+		if(padSize == 0) padSize = length + 4;
+		if(length > padSize) {
 			throw new IllegalArgumentException("attempted to pad data beyond maximum size (" + raw.length + " > " + padSize + ")");
 		}
 		
 		ByteBuffer padded = ByteBuffer.allocate(padSize+4);
-		padded.putInt(raw.length);
-		padded.put(raw);
+		padded.putInt(length);
+		padded.put(raw, offset, length);
 		return padded.array();
 	}
 	

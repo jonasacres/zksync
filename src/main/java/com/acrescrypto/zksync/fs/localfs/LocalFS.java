@@ -291,10 +291,10 @@ public class LocalFS extends FS {
 	}
 
 	@Override
-	public void write(String path, byte[] contents) throws IOException {
+	public void write(String path, byte[] contents, int offset, int length) throws IOException {
 		if(!exists(dirname(path))) mkdirp(dirname(path));
 		LocalFile file = open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
-		file.write(contents);
+		file.write(contents, offset, length);
 		file.close();
 	}
 

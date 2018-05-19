@@ -324,6 +324,8 @@ public class FSTestBase {
 		assertTrue(scratch.exists("O_CREAT_nonpreexisting"));
 	}
 	
+	// TODO: need a test on write(String, byte[], int, int);
 	// TODO: really need some good tests on scoped filesystems
 	// TODO: also need a test on purge, rmrf("/")
+	// TODO: and a test on writing blank files
 }

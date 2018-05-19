@@ -168,9 +168,9 @@ public class BackedFS extends FS {
 	}
 
 	@Override
-	public void write(String path, byte[] contents) throws IOException {
+	public void write(String path, byte[] contents, int offset, int length) throws IOException {
 		ensureParentPresent(path);
-		cacheFS.write(path, contents);
+		cacheFS.write(path, contents, offset, length);
 	}
 
 	@Override
