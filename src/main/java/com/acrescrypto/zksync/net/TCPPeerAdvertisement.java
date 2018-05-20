@@ -70,4 +70,9 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	public int hashCode() {
 		return ByteBuffer.wrap(pubKey).getInt();
 	}
+
+	@Override
+	public int getType() {
+		return PeerAdvertisement.TYPE_TCP_PEER;
+	}
 }

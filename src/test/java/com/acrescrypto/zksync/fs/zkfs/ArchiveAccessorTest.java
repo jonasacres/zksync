@@ -47,7 +47,7 @@ public class ArchiveAccessorTest {
 	
 	@Test
 	public void testTimeslice() {
-		int interval = ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS;
+		long interval = ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS;
 		int currentOffset = (int) (System.currentTimeMillis() / interval);
 		long nowTimeslice = currentOffset * interval;
 		assertEquals(currentOffset, accessor.timeSliceIndex());

@@ -586,6 +586,7 @@ public class PageQueueTest {
 	
 	@Test
 	public void testAddRevisionTagHonorsPriority() throws IOException {
+		// TODO: encountered intermittent failure on OS X, 5/20/18 161725b036f9069c98c9bf31ceb7e4f52defa560
 		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
 		queue.addRevisionTag(0, revTag);
 		queue.addPageTag(1, pageTag);

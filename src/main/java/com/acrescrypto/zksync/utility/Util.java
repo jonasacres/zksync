@@ -76,14 +76,14 @@ public class Util {
 	}
 
 	public static boolean isLinux() {
-		return true;
+		return System.getProperty("os.name").equals("Linux");
 	}
 
 	public static boolean isWindows() {
-		return false;
+		return false; // TODO: implement
 	}
 
 	public static boolean isOSX() {
-		return false;
+		return System.getProperty("os.name").equals("Mac OS X");
 	}
 }
