@@ -30,6 +30,6 @@ public abstract class PeerAdvertisement {
 
 	public abstract boolean isBlacklisted(Blacklist blacklist) throws IOException;
 	public abstract byte[] serialize();
-
 	public abstract boolean matchesAddress(String address);
+	public abstract int getType();
 }

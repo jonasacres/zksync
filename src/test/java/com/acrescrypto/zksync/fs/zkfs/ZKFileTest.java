@@ -9,7 +9,7 @@ import java.security.Security;
 import java.util.Arrays;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -21,23 +21,23 @@ public class ZKFileTest extends FileTestBase {
 	ZKFS zkscratch;
 	ZKMaster master;
 	
-	@Before
-	public void beforeEach() throws IOException {
-		master = ZKMaster.openBlankTestVolume();
-		ZKFSTest.cheapenArgon2Costs();
-		scratch = zkscratch = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
-	}
-	
-	@After
-	public void afterEach() throws IOException {
-		ZKFSTest.restoreArgon2Costs();
-	}
-
 	@BeforeClass
 	public static void beforeClass() {
+		ZKFSTest.cheapenArgon2Costs();
 		Security.addProvider(new BouncyCastleProvider());
 	}
 	
+	@Before
+	public void beforeEach() throws IOException {
+		master = ZKMaster.openBlankTestVolume();
+		scratch = zkscratch = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
+	}
+	
+	@AfterClass
+	public static void afterClass() throws IOException {
+		ZKFSTest.restoreArgon2Costs();
+	}
+
 	@Test
 	public void testImmedateWrite() throws IOException {
 		byte[] contents = new byte[zkscratch.archive.crypto.hashLength()-1];

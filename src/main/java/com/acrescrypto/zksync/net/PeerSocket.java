@@ -28,7 +28,7 @@ public abstract class PeerSocket {
 	public final static String EXT_FULL_PEER = "EXT_FULL_PEER";
 	
 	public static boolean adSupported(PeerAdvertisement ad) {
-		return ad instanceof TCPPeerAdvertisement;
+		return ad.getType() == PeerAdvertisement.TYPE_TCP_PEER;
 	}
 
 	public static PeerSocket connectToAd(PeerSwarm swarm, PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
