@@ -41,7 +41,7 @@ public abstract class File implements Closeable {
 		return buf;
 	}
 		
-	public final byte[] read() throws IOException {
+	public byte[] read() throws IOException {
 		long sizeNeeded = getStat().getSize() - pos();
 		if(sizeNeeded > Integer.MAX_VALUE) throw new IndexOutOfBoundsException();
 		return read((int) sizeNeeded);

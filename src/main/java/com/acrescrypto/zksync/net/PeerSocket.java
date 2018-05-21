@@ -32,9 +32,10 @@ public abstract class PeerSocket {
 	}
 
 	public static PeerSocket connectToAd(PeerSwarm swarm, PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
-		if(ad instanceof TCPPeerAdvertisement) {
+		switch(ad.getType()) {
+		case PeerAdvertisement.TYPE_TCP_PEER:
 			return new TCPPeerSocket(swarm, (TCPPeerAdvertisement) ad);
-		} else {
+		default:
 			throw new UnsupportedProtocolException();
 		}
 	}
