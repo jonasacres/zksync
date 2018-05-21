@@ -6,6 +6,7 @@ import org.junit.AfterClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.Benchmarks;
+import com.acrescrypto.zksync.exceptions.BenchmarkFinishedException;
 
 public abstract class FSBenchmark {
 	
@@ -30,8 +31,9 @@ public abstract class FSBenchmark {
 		byte[] oneMiB = new byte[1024*1024];
 		File file = storage.open("write-throughput", File.O_CREAT|File.O_TRUNC|File.O_WRONLY);
 		Benchmarks.run("MiB", (i)->{
+			if(oneMiB.length * i > storage.maxFileSize()) throw new BenchmarkFinishedException();
 			file.write(oneMiB);
-			file.flush();
+			// file.flush();
 		});
 		
 		file.close();

@@ -19,7 +19,7 @@ public class RAMFile extends File {
 	int mode;
 	
 	class DataBacking {
-		int pageSize = 65536;
+		int pageSize = 1024*512;
 		ArrayList<byte[]> pages;
 		long size, pos;
 		

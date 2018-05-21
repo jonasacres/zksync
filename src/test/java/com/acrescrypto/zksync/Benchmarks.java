@@ -8,6 +8,7 @@ import java.time.format.DateTimeFormatter;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
+import com.acrescrypto.zksync.exceptions.BenchmarkFinishedException;
 import com.acrescrypto.zksync.fs.FSBenchmarks;
 
 @RunWith(Suite.class)
@@ -33,6 +34,8 @@ public class Benchmarks {
 		while(System.currentTimeMillis() < endTs) {
 			try {
 				test.run(numUnits);
+			} catch(BenchmarkFinishedException exc) {
+				break;
 			} catch(Exception exc) {
 				exc.printStackTrace();
 				fail();

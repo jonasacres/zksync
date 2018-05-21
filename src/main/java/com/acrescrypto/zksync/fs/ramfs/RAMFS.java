@@ -20,6 +20,10 @@ public class RAMFS extends FS {
 	HashMap<String,Inode> inodesByPath = new HashMap<String,Inode>();
 	long nextInodeId = 0;
 	
+	public long maxFileSize() {
+		return 1024*1024*1024*1;
+	}
+	
 	public static RAMFS volumeWithName(String name) {
 		volumes.putIfAbsent(name, new RAMFS());
 		return volumes.get(name);
@@ -173,6 +177,11 @@ public class RAMFS extends FS {
 	@Override
 	public void setAtime(String path, long atime) throws IOException {
 		lookup(path).stat.setAtime(atime);
+	}
+	
+	@Override
+	public byte[] read(String path) throws IOException {
+		return lookup(path).data.clone();
 	}
 
 	@Override

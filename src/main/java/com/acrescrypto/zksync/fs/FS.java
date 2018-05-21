@@ -40,6 +40,10 @@ public abstract class FS {
 	
 	private Logger logger = LoggerFactory.getLogger(FS.class);
 	
+	public long maxFileSize() {
+		return Long.MAX_VALUE;
+	}
+	
 	public void write(String path, byte[] contents) throws IOException {
 		write(path, contents, 0, contents.length);
 	}
