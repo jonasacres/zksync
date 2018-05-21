@@ -225,7 +225,10 @@ public class CryptoSupport {
 	
 	private byte[] padToSize(byte[] raw, int offset, int length, int padSize) {
 		if(raw == null) return null;
-		if(padSize < 0) return ByteBuffer.allocate(length).put(raw, offset, length).array();
+		if(padSize < 0) {
+			if(offset == 0 && length == raw.length) return raw;
+			return ByteBuffer.allocate(length).put(raw, offset, length).array();
+		}
 		if(padSize == 0) padSize = length + 4;
 		if(length > padSize) {
 			throw new IllegalArgumentException("attempted to pad data beyond maximum size (" + raw.length + " > " + padSize + ")");
@@ -257,6 +260,10 @@ public class CryptoSupport {
 	
 	public byte[] rng(int numBytes) {
 		return defaultPrng.getBytes(numBytes);
+	}
+	
+	public PrivateKey makePrivateKey() {
+		return new PrivateKey(this, new byte[asymPrivateKeySize()]);
 	}
 	
 	public PrivateKey makePrivateKey(byte[] privateKeyMaterial) {

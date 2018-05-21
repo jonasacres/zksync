@@ -33,7 +33,6 @@ public abstract class FSBenchmark {
 		Benchmarks.run("MiB", (i)->{
 			if(oneMiB.length * i > storage.maxFileSize()) throw new BenchmarkFinishedException();
 			file.write(oneMiB);
-			// file.flush();
 		});
 		
 		file.close();

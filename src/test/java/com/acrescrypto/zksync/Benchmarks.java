@@ -8,12 +8,14 @@ import java.time.format.DateTimeFormatter;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
+import com.acrescrypto.zksync.crypto.CryptoBenchmark;
 import com.acrescrypto.zksync.exceptions.BenchmarkFinishedException;
 import com.acrescrypto.zksync.fs.FSBenchmarks;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-	FSBenchmarks.class
+	FSBenchmarks.class,
+	CryptoBenchmark.class
 })
 
 public class Benchmarks {
@@ -54,7 +56,7 @@ public class Benchmarks {
 	public static void outputResult(String unit, int numUnits, int duration) {
 		String caller = Thread.currentThread().getStackTrace()[4].getMethodName();
 		double rate = 1000.0 * ((double) numUnits) / duration;
-		output(String.format("\t%40s: %.03f %s/s (%d %s in %d ms)", caller, rate, unit, numUnits, unit, duration));
+		output(String.format("\t%50s: %.03f %s/s (%d %s in %d ms)", caller, rate, unit, numUnits, unit, duration));
 	}
 	
 	public static void finishBenchmarkSuite() {
