@@ -322,6 +322,10 @@ public class ZKFSTest extends FSTestBase {
 		zkscratch.assertDirectoryIsEmpty("nonemptydir");
 	}
 	
+	@Override @Test @Ignore public void testScopedFS() { }
+	@Override @Test @Ignore public void testScopedMakesDirectory() { }
+	@Override @Test @Ignore public void testScopedPurge() { }
+	
 	// TODO: modes, directories, hardlinks, symlinks, fifos, sockets, chardevs, blockdevs
 	// TODO: open default revision
 	// TODO: open non-default revision

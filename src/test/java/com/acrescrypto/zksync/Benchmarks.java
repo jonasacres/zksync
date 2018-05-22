@@ -5,13 +5,16 @@ import static org.junit.Assert.fail;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
+import org.junit.FixMethodOrder;
 import org.junit.runner.RunWith;
+import org.junit.runners.MethodSorters;
 import org.junit.runners.Suite;
 
 import com.acrescrypto.zksync.crypto.CryptoBenchmark;
 import com.acrescrypto.zksync.exceptions.BenchmarkFinishedException;
 import com.acrescrypto.zksync.fs.FSBenchmarks;
 
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
 	FSBenchmarks.class,

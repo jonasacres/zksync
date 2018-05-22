@@ -15,6 +15,9 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.fs.DirectoryTraverser;
+import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
@@ -35,9 +38,11 @@ public class PeerSwarm implements BlacklistCallback {
 	int maxSocketCount = 128;
 	int maxPeerListSize = 1024;
 	
-	public PeerSwarm(ZKArchiveConfig config) {
+	public PeerSwarm(ZKArchiveConfig config) throws IOException {
 		this.config = config;
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
+		buildCurrentTags();
+		connectionThread();
 	}
 	
 	public synchronized void close() {
@@ -48,7 +53,7 @@ public class PeerSwarm implements BlacklistCallback {
 		
 		pageWaitLock.lock();
 		for(Condition cond : pageWaits.values()) {
-			cond.notifyAll();
+			cond.signalAll();
 		}
 		pageWaitLock.unlock();
 		
@@ -57,6 +62,15 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	public ZKArchiveConfig getConfig() {
 		return config;
+	}
+	
+	public void buildCurrentTags() throws IOException {
+		FS fs = config.getAccessor().getMaster().storageFsForArchiveId(config.getArchiveId());
+		DirectoryTraverser traverser = new DirectoryTraverser(fs, fs.opendir("/"));
+		while(traverser.hasNext()) {
+			byte[] tag = Page.tagForPath(traverser.next());
+			currentTags.add(Util.shortTag(tag));
+		}
 	}
 	
 	@Override
@@ -123,7 +137,8 @@ public class PeerSwarm implements BlacklistCallback {
 				} catch(UnsupportedProtocolException exc) {
 					logger.info("Skipping unsupported address: " + ad);
 				} catch(Exception exc) {
-					logger.error("Connection thread caught exception handling address {}", ad, exc);
+					// TODO P2P: (refactor) should be an error, but don't want the output in tests...
+					logger.warn("Connection thread caught exception handling address {}", ad, exc);
 				}
 			}
 		}).start();
@@ -142,10 +157,11 @@ public class PeerSwarm implements BlacklistCallback {
 	protected synchronized void openConnection(PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
 		// TODO P2P: (refactor) too many exceptions. How do we get a ProtocolViolation just on instantiation?
 		if(closed) return;
-		connections.add(new PeerConnection(this, ad));
+		connections.add(ad.connect(this));
+		connectedAds.add(ad);
 	}
 	
-	public synchronized void waitForPage(byte[] tag) {
+	public void waitForPage(byte[] tag) {
 		long shortTag = Util.shortTag(tag);
 		if(currentTags.contains(shortTag)) return;
 		
@@ -176,7 +192,7 @@ public class PeerSwarm implements BlacklistCallback {
 		currentTags.add(shortTag);
 		pageWaitLock.lock();
 		if(pageWaits.containsKey(shortTag)) {
-			pageWaits.get(shortTag).notifyAll();
+			pageWaits.get(shortTag).signalAll();
 		}
 		pageWaitLock.unlock();
 		

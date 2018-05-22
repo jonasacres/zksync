@@ -3,11 +3,14 @@ package com.acrescrypto.zksync.fs;
 import java.io.IOException;
 
 import org.junit.AfterClass;
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import com.acrescrypto.zksync.Benchmarks;
 import com.acrescrypto.zksync.exceptions.BenchmarkFinishedException;
 
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public abstract class FSBenchmark {
 	
 	protected FS storage;

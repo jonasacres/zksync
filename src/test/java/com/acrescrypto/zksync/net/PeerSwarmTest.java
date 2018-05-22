@@ -1,10 +1,15 @@
 package com.acrescrypto.zksync.net;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 import org.junit.After;
 import org.junit.AfterClass;
@@ -12,19 +17,42 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
+import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PeerSwarmTest {
 	class DummyAdvertisement extends PeerAdvertisement {
 		String address;
 		boolean blacklisted;
 		int type = -1;
+		public DummyAdvertisement() { address = "localhost"; }
+		public DummyAdvertisement(String address) {
+			this.address = address;
+			this.type = TYPE_TCP_PEER;
+		}
 		@Override public boolean isBlacklisted(Blacklist blacklist) throws IOException { return blacklisted; }
 		@Override public byte[] serialize() { return null; }
 		@Override public boolean matchesAddress(String address) { return this.address.equals(address); }
 		@Override public int getType() { return type; }
+		@Override public DummyConnection connect(PeerSwarm swarm)  { return new DummyConnection(new DummySocket(address, swarm)); }
+		@Override public int hashCode() { return address.hashCode(); }
+		@Override public boolean equals(Object other) {
+			if(!(other instanceof DummyAdvertisement)) return false;
+			return address.equals(((DummyAdvertisement) other).address);
+		}
+	}
+	
+	class ExplodingDummyAdvertisement extends DummyAdvertisement {
+		public ExplodingDummyAdvertisement() { super("kaboom"); }
+		@Override public DummyConnection connect(PeerSwarm swarm) {
+			exploded = true;
+			throw new RuntimeException();
+		}
 	}
 	
 	class DummySocket extends PeerSocket {
@@ -33,6 +61,7 @@ public class PeerSwarmTest {
 		public DummySocket(String address, PeerSwarm swarm) {
 			this.address = address;
 			this.swarm = swarm;
+			connectedAddresses.add(address);
 		}
 		
 		@Override public DummyAdvertisement getAd() { return ad; }
@@ -49,6 +78,7 @@ public class PeerSwarmTest {
 		DummySocket socket;
 		PeerAdvertisement seenAd;
 		boolean closed;
+		long requestedTag;
 		
 		public DummyConnection(DummySocket socket) {
 			super(socket);
@@ -58,23 +88,35 @@ public class PeerSwarmTest {
 		@Override public DummySocket getSocket() { return socket; }
 		@Override public void close() { this.closed = true; }
 		@Override public void announceSelf(PeerAdvertisement ad) { this.seenAd = ad; }
+		@Override public void requestPageTag(long tag) { this.requestedTag = tag; }
 	}
 	
+	static byte[] pageTag;
 	static ZKMaster master;
 	static ZKArchive archive;
+	
 	PeerSwarm swarm;
 	DummyConnection connection;
+	ArrayList<String> connectedAddresses = new ArrayList<String>();
+	boolean exploded;
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
+		
+		ZKFS fs = archive.openBlank();
+		fs.write("file", new byte[archive.getConfig().getPageSize()]);
+		PageMerkle merkle = new PageMerkle(fs.inodeForPath("file").getRefTag());
+		pageTag = merkle.getPageTag(0);
 	}
 	
 	@Before
-	public void before() {
+	public void before() throws IOException {
+		connectedAddresses.clear();
 		swarm = new PeerSwarm(archive.getConfig());
+		exploded = false;
 		connection = new DummyConnection(new DummySocket("127.0.0.1", swarm));
 		connection.socket.ad = new DummyAdvertisement();
 	}
@@ -226,17 +268,181 @@ public class PeerSwarmTest {
 		}
 	}
 	
-	// automatically connects to advertised peers
-	// stops connecting to advertised peers when maxSocketCount reached
-	// connection thread does not die from exceptions
-	// connection thread stops when closed
+	@Test
+	public void testAutomaticallyConnectsToAdvertisedPeers() throws InterruptedException {
+		DummyAdvertisement ad = new DummyAdvertisement("some-ad");
+		assertFalse(connectedAddresses.contains(ad.address));
+		swarm.addPeerAdvertisement(ad);
+		long breakTime = System.currentTimeMillis() + 200;
+		while(!connectedAddresses.contains(ad.address) && System.currentTimeMillis() < breakTime) {
+			Thread.sleep(1);
+		}
+		assertTrue(connectedAddresses.contains(ad.address));
+	}
 	
-	// waitForPage does not block if we already have the page
-	// waitForPage blocks until a page is announced via receivedPage
+	@Test
+	public void testStopsConnectingToAdsWhenMaxSocketCountReached() throws InterruptedException {
+		int initial = connectedAddresses.size();
+		for(int i = 0; i < 2*swarm.maxSocketCount; i++) {
+			swarm.addPeerAdvertisement(new DummyAdvertisement("ad-"+i));
+		}
+		
+		long breakTime = System.currentTimeMillis() + 200;
+		while(connectedAddresses.size() - initial < swarm.maxSocketCount && System.currentTimeMillis() < breakTime) {
+			Thread.sleep(1);
+		}
+		
+		Thread.sleep(100);
+		assertEquals(swarm.maxSocketCount, connectedAddresses.size() - initial);
+	}
 	
-	// accumulatorForTag creates an accumulator for new tags
-	// accumulatorForTag returns an existing accumulator for active tags
-	// accumulatorForTag no longer considers a tag active after receivedPage has been called for that tag
+	@Test
+	public void testDoesNotDuplicateConnectionsToAds() throws InterruptedException {
+		int initial = connectedAddresses.size();
+		for(int i = 0; i < swarm.maxSocketCount; i++) {
+			swarm.addPeerAdvertisement(new DummyAdvertisement("ad-1"));
+		}
+		
+		long breakTime = System.currentTimeMillis() + 200;
+		while(connectedAddresses.size() < 1 + initial && System.currentTimeMillis() < breakTime) {
+			Thread.sleep(1);
+		}
+		
+		Thread.sleep(100);
+		assertEquals(1 + initial, connectedAddresses.size());
+	}
 	
-	// receivedPage announces tag to peers
+	@Test
+	public void testConnectionThreadDoesNotDieFromExceptions() throws InterruptedException {
+		ExplodingDummyAdvertisement exploding = new ExplodingDummyAdvertisement();
+		assertFalse(exploded);
+		swarm.addPeerAdvertisement(exploding);
+		
+		long breakTime = System.currentTimeMillis() + 200;
+		while(!exploded && System.currentTimeMillis() < breakTime) {
+			Thread.sleep(1);
+		}
+		
+		assertTrue(exploded);
+		
+		DummyAdvertisement ad = new DummyAdvertisement("some-ad");
+		assertFalse(connectedAddresses.contains(ad.address));
+		swarm.addPeerAdvertisement(ad);
+		breakTime = System.currentTimeMillis() + 200;
+		while(!connectedAddresses.contains(ad.address) && System.currentTimeMillis() < breakTime) {
+			Thread.sleep(1);
+		}
+		
+		assertTrue(connectedAddresses.contains(ad.address));
+	}
+	
+	@Test
+	public void testConnectionThreadStopsWhenClosed() throws InterruptedException {
+		swarm.close();
+		DummyAdvertisement ad = new DummyAdvertisement("some-ad");
+		swarm.addPeerAdvertisement(ad);
+		Thread.sleep(100);
+		assertFalse(connectedAddresses.contains(ad.address));
+	}
+	
+	@Test
+	public void testWaitForPageDoesNotBlockIfWeAlreadyHaveThePage() throws IOException, InterruptedException {
+		class Holder { boolean waited; }
+		Holder holder = new Holder();
+		
+		Thread thread = new Thread(()->{
+			swarm.waitForPage(pageTag);
+			holder.waited = true;
+		});
+		assertFalse(holder.waited);
+		thread.start();
+		
+		long endTime = System.currentTimeMillis() + 10;
+		while(!holder.waited && System.currentTimeMillis() < endTime) Thread.sleep(1);
+		assertTrue(holder.waited);
+	}
+	
+	@Test
+	public void testWaitForPageBlocksUntilPageReceived() throws IOException, InterruptedException {
+		class Holder { boolean waited; }
+		Holder holder = new Holder();
+		
+		ZKFS fs = swarm.config.getArchive().openBlank();
+		fs.write("newfile", new byte[swarm.config.getPageSize()]);
+		PageMerkle merkle = new PageMerkle(fs.inodeForPath("newfile").getRefTag());
+		byte[] tag = merkle.getPageTag(0);
+		
+		Thread thread = new Thread(()->{
+			swarm.waitForPage(tag);
+			holder.waited = true;
+		});
+		assertFalse(holder.waited);
+		thread.start();
+		
+		long endTime = System.currentTimeMillis() + 100;
+		while(!holder.waited && System.currentTimeMillis() < endTime) Thread.sleep(1);
+		assertFalse(holder.waited);
+		swarm.receivedPage(tag);
+		endTime = System.currentTimeMillis() + 100;
+		while(!holder.waited && System.currentTimeMillis() < endTime) Thread.sleep(1);
+		assertTrue(holder.waited);
+	}
+	
+	@Test
+	public void testAccumulatorForTagCreatesAnAccumulatorForNewTags() throws IOException {
+		RefTag tag = RefTag.blank(archive);
+		ChunkAccumulator accumulator = swarm.accumulatorForTag(tag);
+		assertNotNull(accumulator);
+		assertTrue(Arrays.equals(tag.getHash(), accumulator.tag));
+	}
+	
+	@Test
+	public void testAccumulatorForTagReturnsExistingAccumulatorForNewTags() throws IOException {
+		ChunkAccumulator accumulator1 = swarm.accumulatorForTag(RefTag.blank(archive));
+		ChunkAccumulator accumulator2 = swarm.accumulatorForTag(RefTag.blank(archive));
+		assertTrue(accumulator1 == accumulator2);
+	}
+	
+	@Test
+	public void testAccumulatorForTagResetsWhenReceivePageCalled() throws IOException {
+		ChunkAccumulator accumulator1 = swarm.accumulatorForTag(RefTag.blank(archive));
+		swarm.receivedPage(RefTag.blank(archive).getHash());
+		ChunkAccumulator accumulator2 = swarm.accumulatorForTag(RefTag.blank(archive));
+		assertTrue(accumulator1 != accumulator2);
+		assertTrue(Arrays.equals(RefTag.blank(archive).getHash(), accumulator2.tag));
+	}
+	
+	@Test
+	public void testRequestShortTagSendsRequestToAllPeers() throws IOException {
+		DummyConnection[] conns = new DummyConnection[16];
+		long shortTag = 1234;
+		for(int i = 0; i < conns.length; i++) {
+			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
+			swarm.openedConnection(conns[i]);
+			assertNotEquals(shortTag, conns[i].requestedTag);
+		}
+		
+		swarm.requestTag(shortTag);
+		for(DummyConnection conn : conns) {
+			assertEquals(shortTag, conn.requestedTag);
+		}
+	}
+	
+	@Test
+	public void testRequestTagLongSendsRequestToAllPeers() throws IOException {
+		DummyConnection[] conns = new DummyConnection[16];
+		byte[] tag = archive.getCrypto().rng(archive.getCrypto().hashLength());
+		long shortTag = Util.shortTag(tag);
+		
+		for(int i = 0; i < conns.length; i++) {
+			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
+			swarm.openedConnection(conns[i]);
+			assertNotEquals(shortTag, conns[i].requestedTag);
+		}
+		
+		swarm.requestTag(tag);
+		for(DummyConnection conn : conns) {
+			assertEquals(shortTag, conn.requestedTag);
+		}
+	}
 }

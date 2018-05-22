@@ -11,7 +11,7 @@ import org.junit.Test;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 
-public class FSTestBase {
+public abstract class FSTestBase {
 	protected FS scratch;
 	protected boolean examplesPrepared = false;
 	
@@ -324,8 +324,87 @@ public class FSTestBase {
 		assertTrue(scratch.exists("O_CREAT_nonpreexisting"));
 	}
 	
-	// TODO: need a test on write(String, byte[], int, int);
-	// TODO: really need some good tests on scoped filesystems
-	// TODO: also need a test on purge, rmrf("/")
-	// TODO: and a test on writing blank files
+	@Test
+	public void testOpenRootDir() throws IOException {
+		scratch.opendir("/");
+	}
+	
+	@Test
+	public void testScopedFS() throws IOException {
+		scratch.mkdir("scoped");
+		scratch.write("basefile", "data".getBytes());
+		scratch.write("scoped/file", "data".getBytes());
+		
+		FS scoped = scratch.scopedFS("scoped");
+		assertFalse(scoped.exists("scoped/file"));
+		assertFalse(scoped.exists("basefile"));
+		assertTrue(scoped.exists("file"));
+		
+		scoped.write("file2", "data".getBytes());
+		assertFalse(scoped.exists("scoped/file2"));
+		assertTrue(scoped.exists("file2"));
+		assertFalse(scratch.exists("file2"));
+		assertTrue(scratch.exists("scoped/file2"));
+		
+		assertTrue(scoped.opendir("/").contains("file2"));
+	}
+	
+	@Test
+	public void testPurge() throws IOException {
+		scratch.write("a/b/c/d", "test data".getBytes());
+		scratch.write("a/b/e", "test data".getBytes());
+		scratch.write("a/b/g", "test data".getBytes());
+		scratch.mkfifo("special");
+		scratch.purge();
+		
+		assertTrue(scratch.exists("/"));
+		assertFalse(scratch.exists("a/b/c/d"));
+		assertFalse(scratch.exists("a/b/e"));
+		assertFalse(scratch.exists("a/b/g"));
+		assertFalse(scratch.exists("a/b"));
+		assertFalse(scratch.exists("a"));
+		assertFalse(scratch.exists("special"));
+	}
+	
+	@Test
+	public void testScopedPurge() throws IOException {
+		scratch.mkdir("scoepd");
+		FS scoped = scratch.scopedFS("scoped");
+		
+		scoped.write("a/b/c/d", "test data".getBytes());
+		scoped.write("a/b/e", "test data".getBytes());
+		scoped.write("a/b/g", "test data".getBytes());
+		scoped.mkfifo("fifo");
+		scoped.purge();
+		
+		assertTrue(scoped.exists("/"));
+		assertFalse(scoped.exists("a/b/c/d"));
+		assertFalse(scoped.exists("a/b/e"));
+		assertFalse(scoped.exists("a/b/g"));
+		assertFalse(scoped.exists("a/b"));
+		assertFalse(scoped.exists("a"));
+		assertFalse(scoped.exists("fifo"));
+	}
+	
+	@Test
+	public void testScopedMakesDirectory() throws IOException {
+		assertFalse(scratch.exists("a/b/c/d"));
+		FS scoped = scratch.scopedFS("a/b/c/d");
+		assertTrue(scoped.exists("/"));
+		assertTrue(scratch.exists("a/b/c/d"));
+	}
+	
+	@Test
+	public void testWriteBlankFiles() throws IOException {
+		scratch.write("blank", new byte[0]);
+		assertTrue(scratch.exists("blank"));
+		assertEquals(0, scratch.read("blank").length);
+	}
+	
+	@Test
+	public void testWriteWithOffset() throws IOException {
+		byte[] buf = "hello world".getBytes();
+		scratch.write("test", buf, 1, 9);
+		assertTrue(Arrays.equals("ello worl".getBytes(), scratch.read("test")));
+	}
 }

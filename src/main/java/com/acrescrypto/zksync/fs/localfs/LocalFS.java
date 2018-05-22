@@ -333,7 +333,8 @@ public class LocalFS extends FS {
 	}
 	
 	@Override
-	public LocalFS scopedFS(String subpath) {
+	public LocalFS scopedFS(String subpath) throws IOException {
+		if(!exists(subpath)) mkdirp(subpath);
 		return new LocalFS(Paths.get(root, subpath).toString());
 	}
 	

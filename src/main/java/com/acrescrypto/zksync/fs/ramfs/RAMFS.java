@@ -186,14 +186,16 @@ public class RAMFS extends FS {
 
 	@Override
 	public void write(String path, byte[] contents, int offset, int length) throws IOException {
+		byte[] data = new byte[length];
+		System.arraycopy(contents, offset, data, 0, length);
 		mkdirp(dirname(path));
+		
 		try {
 			Inode inode = lookup(path);
-			inode.data = new byte[length];
-			System.arraycopy(contents, offset, inode.data, 0, length);
+			inode.data = data;
 			inode.stat.setSize(length);
 		} catch(ENOENTException exc) {
-			makeInode(path, (inode)->{ inode.data = contents.clone(); });
+			makeInode(path, (inode)->{ inode.data = data; });
 		}
 	}
 
@@ -212,6 +214,7 @@ public class RAMFS extends FS {
 
 	@Override
 	public FS scopedFS(String path) throws IOException {
+		if(!exists(path)) mkdirp(path);
 		return new RAMFS(Paths.get(scope, path).toString(), this);
 	}
 	

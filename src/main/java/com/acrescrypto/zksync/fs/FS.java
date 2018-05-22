@@ -61,7 +61,7 @@ public abstract class FS {
 			for(String entry : dir.list()) {
 				String subpath = Paths.get(path, entry).toString();
 				Stat lstat = lstat(subpath);
-
+				
 				if(lstat.isDirectory()) {
 					rmrf(subpath);
 				} else {
@@ -174,6 +174,10 @@ public abstract class FS {
 	public void purge() throws IOException {
 		if(exists("/")) {
 			rmrf("/");
+			
+			if(!exists("/")) {
+				mkdir("/");
+			}
 		}
 	}
 }

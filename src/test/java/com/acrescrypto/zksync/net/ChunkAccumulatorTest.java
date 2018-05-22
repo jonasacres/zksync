@@ -33,7 +33,7 @@ public class ChunkAccumulatorTest {
 		boolean receivedPage;
 		byte[] expectedTag;
 		
-		public DummySwarm(byte[] expectedTag, ZKArchiveConfig config) {
+		public DummySwarm(byte[] expectedTag, ZKArchiveConfig config) throws IOException {
 			super(config);
 			this.expectedTag = expectedTag;
 		}

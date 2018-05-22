@@ -202,7 +202,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void unlink(String path) throws IOException {
-		if(inodeForPath(path).getStat().isDirectory()) throw new EISDIRException(path);
+		if(inodeForPath(path, false).getStat().isDirectory()) throw new EISDIRException(path);
 		
 		ZKDirectory dir = opendir(dirname(path));
 		dir.unlink(basename(path));
