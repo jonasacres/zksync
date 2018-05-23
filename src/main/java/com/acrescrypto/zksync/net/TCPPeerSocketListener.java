@@ -21,6 +21,7 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.utility.Util;
@@ -63,7 +64,7 @@ public class TCPPeerSocketListener {
 			return curve25519.calculateAgreement(remotePubKey, privateKey);
 		}
 		
-		public TCPPeerAdvertisement localAd() {
+		public TCPPeerAdvertisement localAd() throws UnconnectableAdvertisementException {
 			return new TCPPeerAdvertisement(publicKey, "localhost", port);
 		}
 		

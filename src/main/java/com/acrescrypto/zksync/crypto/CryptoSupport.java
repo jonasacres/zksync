@@ -262,6 +262,14 @@ public class CryptoSupport {
 		return defaultPrng.getBytes(numBytes);
 	}
 	
+	public byte[] makeSymmetricKey() {
+		return rng(symKeyLength());
+	}
+	
+	public byte[] makeSymmetricIv() {
+		return rng(symIvLength());
+	}
+	
 	public PrivateKey makePrivateKey() {
 		return new PrivateKey(this, new byte[asymPrivateKeySize()]);
 	}

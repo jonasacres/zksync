@@ -81,7 +81,7 @@ public class ObfuscatedRefTagTest {
 		}
 		
 		int deviation = Math.abs(matchedBits - (int) (0.5*8*refTag.getBytes().length));
-		assertTrue(deviation < 32);
+		assertTrue(deviation < 48);
 	}
 	
 	@Test

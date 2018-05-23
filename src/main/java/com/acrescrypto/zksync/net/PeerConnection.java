@@ -13,6 +13,7 @@ import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
+import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
@@ -243,11 +244,11 @@ public class PeerConnection {
 			int adLen = Util.unsignShort(msg.rxBuf.getShort());
 			byte[] adRaw = new byte[adLen];
 			msg.rxBuf.get(adRaw);
-			PeerAdvertisement ad = PeerAdvertisement.deserialize(adRaw);
 			try {
+				PeerAdvertisement ad = PeerAdvertisement.deserialize(adRaw);
 				if(ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) continue;
 				socket.swarm.addPeerAdvertisement(ad);
-			} catch (IOException e) {
+			} catch (IOException | UnconnectableAdvertisementException e) {
 			}
 		}
 	}
@@ -257,11 +258,11 @@ public class PeerConnection {
 			int adLen = Util.unsignShort(msg.rxBuf.getShort());
 			byte[] adRaw = new byte[adLen];
 			msg.rxBuf.get(adRaw);
-			PeerAdvertisement ad = PeerAdvertisement.deserializeWithPeer(adRaw, msg.connection);
 			try {
+				PeerAdvertisement ad = PeerAdvertisement.deserializeWithPeer(adRaw, msg.connection);
 				if(ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) continue;
 				socket.swarm.addPeerAdvertisement(ad);
-			} catch (IOException e) {
+			} catch (IOException | UnconnectableAdvertisementException e) {
 			}
 		}
 	}

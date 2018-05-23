@@ -5,12 +5,13 @@ import java.nio.ByteBuffer;
 
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 
 public abstract class PeerAdvertisement {
 	public final static int TYPE_TCP_PEER = 0;
 	
-	public static PeerAdvertisement deserialize(byte[] serialized) {
+	public static PeerAdvertisement deserialize(byte[] serialized) throws UnconnectableAdvertisementException {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		int type = buf.getInt();
 		switch(type) {
@@ -21,7 +22,7 @@ public abstract class PeerAdvertisement {
 		return null;
 	}
 	
-	public static PeerAdvertisement deserializeWithPeer(byte[] serialized, PeerConnection connection) {
+	public static PeerAdvertisement deserializeWithPeer(byte[] serialized, PeerConnection connection) throws UnconnectableAdvertisementException {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		int type = buf.getInt();
 		switch(type) {
