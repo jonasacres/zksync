@@ -61,7 +61,7 @@ public class PeerSwarmTest {
 		public DummySocket(String address, PeerSwarm swarm) {
 			this.address = address;
 			this.swarm = swarm;
-			connectedAddresses.add(address);
+			synchronized(connectedAddresses) { connectedAddresses.add(address); }
 		}
 		
 		@Override public DummyAdvertisement getAd() { return ad; }
@@ -81,7 +81,7 @@ public class PeerSwarmTest {
 		long requestedTag;
 		
 		public DummyConnection(DummySocket socket) {
-			super(socket);
+			super(socket, PEER_TYPE_FULL);
 			this.socket = socket;
 		}
 		
@@ -287,12 +287,7 @@ public class PeerSwarmTest {
 			swarm.addPeerAdvertisement(new DummyAdvertisement("ad-"+i));
 		}
 		
-		long breakTime = System.currentTimeMillis() + 200;
-		while(connectedAddresses.size() - initial < swarm.maxSocketCount && System.currentTimeMillis() < breakTime) {
-			Thread.sleep(1);
-		}
-		
-		Thread.sleep(100);
+		Util.waitUntil(2000, ()->connectedAddresses.size() - initial >= swarm.maxSocketCount);
 		assertEquals(swarm.maxSocketCount, connectedAddresses.size() - initial);
 	}
 	

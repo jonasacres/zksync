@@ -13,7 +13,6 @@ public class ZKFS extends FS {
 	ZKArchive archive;
 	protected RefTag baseRevision;
 	protected String root;
-	protected long fixedTime = -1;
 		
 	public final static int MAX_PATH_LEN = 65535;
 	
@@ -33,16 +32,7 @@ public class ZKFS extends FS {
 	public ZKFS(RefTag revision) throws IOException {
 		this(revision, "/");
 	}
-	
-	public long currentTime() {
-		if(fixedTime < 0) return 1000l*1000l*System.currentTimeMillis();
-		return fixedTime;
-	}
-	
-	public void setCurrentTime(long time) {
-		fixedTime = time;
-	}
-	
+		
 	public RefTag commit(RefTag[] additionalParents) throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) {
 			dir.commit();

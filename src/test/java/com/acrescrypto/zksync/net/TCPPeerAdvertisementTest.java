@@ -14,6 +14,7 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
@@ -30,7 +31,7 @@ public class TCPPeerAdvertisementTest {
 	@BeforeClass
 	public static void beforeAll() {
 		crypto = new CryptoSupport();
-		pubKey = crypto.rng(crypto.asymPublicKeySize());
+		pubKey = crypto.rng(crypto.asymPublicSigningKeySize());
 		host = "localhost";
 		port = 12345;
 	}
@@ -38,7 +39,7 @@ public class TCPPeerAdvertisementTest {
 	@Before
 	public void beforeEach() throws UnconnectableAdvertisementException, IOException, InvalidBlacklistException {
 		blacklist = new Blacklist(new RAMFS(), "blacklist", new Key(crypto, crypto.makeSymmetricKey()));
-		ad = new TCPPeerAdvertisement(pubKey, host, port);
+		ad = new TCPPeerAdvertisement(crypto.makePublicDHKey(pubKey), host, port);
 	}
 	
 	@Test
@@ -46,19 +47,19 @@ public class TCPPeerAdvertisementTest {
 		TCPPeerAdvertisement deserialized = new TCPPeerAdvertisement(ad.serialize());
 		assertEquals(ad.host, deserialized.host);
 		assertEquals(ad.port, deserialized.port);
-		assertTrue(Arrays.equals(ad.pubKey, deserialized.pubKey));
+		assertTrue(Arrays.equals(ad.pubKey.getBytes(), deserialized.pubKey.getBytes()));
 	}
 	
 	@Test
 	public void testIsBlacklistedReturnsTrueIfIPIsBlacklisted() throws UnconnectableAdvertisementException, IOException, InvalidBlacklistException {
-		ad = new TCPPeerAdvertisement(pubKey, "127.0.0.1", port);
+		ad = new TCPPeerAdvertisement(crypto.makePublicDHKey(pubKey), "127.0.0.1", port);
 		blacklist.add(ad.ipAddress, 1000);
 		assertTrue(ad.isBlacklisted(blacklist));
 	}
 	
 	@Test
 	public void testIsBlacklistedReturnsFalseIfIpIsNotBlacklisted() throws IOException, UnconnectableAdvertisementException {
-		ad = new TCPPeerAdvertisement(pubKey, "127.0.0.1", port);
+		ad = new TCPPeerAdvertisement(crypto.makePublicDHKey(pubKey), "127.0.0.1", port);
 		assertFalse(ad.isBlacklisted(blacklist));
 	}
 	
@@ -71,7 +72,7 @@ public class TCPPeerAdvertisementTest {
 	
 	@Test
 	public void testHashCodeIsBasedOnPublicKey() throws UnconnectableAdvertisementException {
-		byte[] modifiedPubKey = crypto.rng(pubKey.length);
+		PublicDHKey modifiedPubKey = crypto.makePrivateDHKey().publicKey();
 		assertNotEquals(ad.hashCode(), new TCPPeerAdvertisement(modifiedPubKey, ad.host, ad.port).hashCode());
 	}
 	

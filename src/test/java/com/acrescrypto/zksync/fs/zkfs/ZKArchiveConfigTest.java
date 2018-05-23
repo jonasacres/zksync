@@ -223,7 +223,7 @@ public class ZKArchiveConfigTest {
 		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
 			@Override
 			protected byte[] serializeSeedPortion() {
-				byte[] fakePubKey = accessor.master.crypto.makePrivateKey(new byte[32]).publicKey().getBytes();
+				byte[] fakePubKey = accessor.master.crypto.makePrivateSigningKey(new byte[32]).publicKey().getBytes();
 				return ByteBuffer.wrap(super.serializeSeedPortion()).put(fakePubKey).array();
 			}
 		};
@@ -344,7 +344,7 @@ public class ZKArchiveConfigTest {
 	@Test
 	public void testGetPrivKey() {
 		assertNull(seedConfig.getPrivKey());
-		assertTrue(Arrays.equals(master.crypto.makePrivateKey(config.writeRoot.getRaw()).getBytes(), config.getPrivKey().getBytes()));
+		assertTrue(Arrays.equals(master.crypto.makePrivateSigningKey(config.writeRoot.getRaw()).getBytes(), config.getPrivKey().getBytes()));
 	}
 	
 	@Test

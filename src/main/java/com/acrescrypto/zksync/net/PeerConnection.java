@@ -62,12 +62,14 @@ public class PeerConnection {
 		this.socket = PeerSocket.connectToAd(swarm, ad);
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
+		// TODO P2P: (refactor) How to get peerType?
 	}
 	
-	public PeerConnection(PeerSocket socket) {
+	public PeerConnection(PeerSocket socket, int peerType) {
 		this.socket = socket;
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
+		this.peerType = peerType;
 	}
 	
 	protected PeerConnection() {}
@@ -434,6 +436,8 @@ public class PeerConnection {
 			socket.close();
 		} catch(IOException exc) {
 			logger.warn("Caught exception closing socket to address {}", socket.getAddress(), exc);
+		} finally {
+			socket.swarm.closedConnection(this);
 		}
 	}
 }

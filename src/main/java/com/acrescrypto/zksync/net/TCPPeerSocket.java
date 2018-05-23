@@ -8,11 +8,10 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import org.whispersystems.curve25519.Curve25519;
-import org.whispersystems.curve25519.Curve25519KeyPair;
-
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.crypto.PrivateDHKey;
+import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
@@ -26,8 +25,7 @@ public class TCPPeerSocket extends PeerSocket {
 	protected boolean isClient;
 	protected CryptoSupport crypto;
 	protected Key localChainKey, remoteChainKey;
-	protected Curve25519 curve25519;
-	protected Curve25519KeyPair keyPair;
+	protected PrivateDHKey dhPrivateKey;
 	protected byte[] sharedSecret;
 	protected ByteBuffer remainingReadData;
 	protected TCPPeerAdvertisement ad;
@@ -39,15 +37,14 @@ public class TCPPeerSocket extends PeerSocket {
 		this.sharedSecret = sharedSecret;
 		makeStreams();
 		initKeys();
-		swarm.openedConnection(new PeerConnection(this));
+		swarm.openedConnection(new PeerConnection(this, peerType));
 	}
 	
 	public TCPPeerSocket(PeerSwarm swarm, TCPPeerAdvertisement ad) throws IOException, ProtocolViolationException, BlacklistedException {
 		this(swarm);
 		this.swarm = swarm;
 		this.crypto = swarm.config.getAccessor().getMaster().getCrypto();
-		this.curve25519 = Curve25519.getInstance(Curve25519.BEST);
-		this.keyPair = curve25519.generateKeyPair();
+		this.dhPrivateKey = crypto.makePrivateDHKey();
 		this.isClient = true;
 		if(ad.isBlacklisted(swarm.config.getAccessor().getMaster().getBlacklist())) throw new BlacklistedException(ad.host);
 		this.socket = new Socket(ad.host, ad.port);
@@ -63,8 +60,7 @@ public class TCPPeerSocket extends PeerSocket {
 	protected TCPPeerSocket(PeerSwarm swarm) throws IOException {
 		this.swarm = swarm;
 		this.crypto = swarm.config.getAccessor().getMaster().getCrypto();
-		this.curve25519 = Curve25519.getInstance(Curve25519.BEST);
-		this.keyPair = curve25519.generateKeyPair();
+		this.dhPrivateKey = crypto.makePrivateDHKey();
 	}
 	
 	protected void makeStreams() throws IOException {
@@ -166,24 +162,24 @@ public class TCPPeerSocket extends PeerSocket {
 		}
 	}
 	
-	protected void sendHandshake(byte[] remotePubKey) throws IOException, ProtocolViolationException {
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*keyPair.getPublicKey().length);
-		keyHashInput.put(keyPair.getPublicKey());
-		keyHashInput.put(remotePubKey);
+	protected void sendHandshake(PublicDHKey remotePubKey) throws IOException, ProtocolViolationException {
+		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize());
+		keyHashInput.put(dhPrivateKey.publicKey().getBytes());
+		keyHashInput.put(remotePubKey.getBytes());
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		
 		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
-		byte[] tempSharedSecret = curve25519.calculateAgreement(remotePubKey, keyPair.getPrivateKey());
+		byte[] tempSharedSecret = dhPrivateKey.sharedSecret(remotePubKey);
 		byte[] proof = swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
 		byte[] keyHash = keyHashKey.authenticate(keyHashInput.array());
 		
-		out.write(keyPair.getPublicKey());
+		out.write(dhPrivateKey.publicKey().getBytes());
 		out.write(keyHash);
 		out.write(ByteBuffer.allocate(4).putInt(timeIndex).array());
 		out.write(proof);
 		
-		byte[] remoteEphemeralPubKey = readRaw(remotePubKey.length);
-		this.sharedSecret = curve25519.calculateAgreement(remoteEphemeralPubKey, keyPair.getPrivateKey());
+		PublicDHKey remoteEphemeralPubKey = new PublicDHKey(readRaw(crypto.asymPublicDHKeySize()));
+		this.sharedSecret = dhPrivateKey.sharedSecret(remoteEphemeralPubKey);
 		byte[] remoteAuth = readRaw(crypto.hashLength());
 		byte[] expectedAuth = crypto.authenticate(this.sharedSecret, tempSharedSecret);
 		assertState(Arrays.equals(remoteAuth, expectedAuth));

@@ -16,7 +16,8 @@ import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.params.ParametersWithIV;
 
 import org.slf4j.LoggerFactory;
-
+import org.whispersystems.curve25519.Curve25519;
+import org.whispersystems.curve25519.Curve25519KeyPair;
 import org.slf4j.Logger;
 
 import de.mkammerer.argon2.Argon2Factory;
@@ -27,6 +28,8 @@ import de.mkammerer.argon2.jna.Uint32_t;
 public class CryptoSupport {
 	private PRNG defaultPrng;
 	private Logger logger = LoggerFactory.getLogger(CryptoSupport.class);
+	
+	protected Curve25519 curve25519;
 	public static boolean cheapArgon2; // set to true for tests, false otherwise
 	
 	public final static int ARGON2_TIME_COST = 4;
@@ -37,6 +40,7 @@ public class CryptoSupport {
 	
 	public CryptoSupport() {
 		defaultPrng = new PRNG();
+		curve25519 = Curve25519.getInstance(Curve25519.BEST);
 	}
 	
 	public byte[] deriveKeyFromPassphrase(byte[] passphrase, byte[] salt) {
@@ -270,20 +274,29 @@ public class CryptoSupport {
 		return rng(symIvLength());
 	}
 	
-	public PrivateKey makePrivateKey() {
-		return new PrivateKey(this, new byte[asymPrivateKeySize()]);
+	public PrivateSigningKey makePrivateSigningKey() {
+		return new PrivateSigningKey(this, rng(asymPrivateSigningKeySize()));
 	}
 	
-	public PrivateKey makePrivateKey(byte[] privateKeyMaterial) {
-		if(privateKeyMaterial.length != asymPrivateKeySize()) {
-			privateKeyMaterial = this.expand(privateKeyMaterial, asymPrivateKeySize(), "zksync-salt".getBytes(), new byte[0]);
+	public PrivateSigningKey makePrivateSigningKey(byte[] privateKeyMaterial) {
+		if(privateKeyMaterial.length != asymPrivateSigningKeySize()) {
+			privateKeyMaterial = this.expand(privateKeyMaterial, asymPrivateSigningKeySize(), "zksync-salt".getBytes(), new byte[0]);
 		}
 		
-		return new PrivateKey(this, privateKeyMaterial);
+		return new PrivateSigningKey(this, privateKeyMaterial);
 	}
 	
-	public PublicKey makePublicKey(byte[] publicKeyMaterial) {
-		return new PublicKey(this, publicKeyMaterial);
+	public PublicSigningKey makePublicSigningKey(byte[] publicKeyMaterial) {
+		return new PublicSigningKey(this, publicKeyMaterial);
+	}
+	
+	public PrivateDHKey makePrivateDHKey() {
+		Curve25519KeyPair keyPair = curve25519.generateKeyPair();
+		return new PrivateDHKey(keyPair.getPrivateKey(), keyPair.getPublicKey());
+	}
+	
+	public PublicDHKey makePublicDHKey(byte[] publicKeyMaterial) {
+		return new PublicDHKey(publicKeyMaterial);
 	}
 	
 	public int symKeyLength() {
@@ -306,11 +319,19 @@ public class CryptoSupport {
 		return 128/8; // AES has 128-bit blocks
 	}
 	
-	public int asymPrivateKeySize() {
+	public int asymPrivateSigningKeySize() {
 		return 256/8;
 	}
 	
-	public int asymPublicKeySize() {
+	public int asymPublicSigningKeySize() {
+		return 256/8;
+	}
+	
+	public int asymPrivateDHKeySize() {
+		return 256/8;
+	}
+	
+	public int asymPublicDHKeySize() {
 		return 256/8;
 	}
 	

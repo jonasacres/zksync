@@ -220,7 +220,7 @@ public class ZKFile extends File {
 	@Override
 	public void flush() throws IOException {
 		if(!dirty) return;
-		long now = zkfs.currentTime();
+		long now = zkfs.archive.master.currentTimeNanos();
 		inode.getStat().setMtime(now);
 		inode.setChangedFrom(zkfs.baseRevision);
 		inode.setModifiedTime(now);

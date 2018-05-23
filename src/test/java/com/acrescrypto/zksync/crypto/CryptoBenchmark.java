@@ -128,7 +128,7 @@ public class CryptoBenchmark {
 	
 	@Test
 	public void testAsymmetricSignThroughput() {
-		PrivateKey key = crypto.makePrivateKey();
+		PrivateSigningKey key = crypto.makePrivateSigningKey();
 		byte[] oneMiB = new byte[1024*1024];
 		
 		Benchmarks.run("MiB", (i)->{
@@ -138,13 +138,23 @@ public class CryptoBenchmark {
 	
 	@Test
 	public void testAsymmetricVerifyThroughput() {
-		PrivateKey key = crypto.makePrivateKey();
-		PublicKey pubKey = key.publicKey();
+		PrivateSigningKey key = crypto.makePrivateSigningKey();
+		PublicSigningKey pubKey = key.publicKey();
 		byte[] oneMiB = new byte[1024*1024];
 		byte[] signature = key.sign(oneMiB);
 		
 		Benchmarks.run("MiB", (i)->{
 			pubKey.verify(oneMiB, signature);
+		});
+	}
+	
+	@Test
+	public void testAsymmetricSecretDerivationPerformance() {
+		PrivateDHKey privKey = crypto.makePrivateDHKey();
+		PublicDHKey pubKey = crypto.makePrivateDHKey().publicKey();
+		
+		Benchmarks.run("secrets", (i)->{
+			privKey.sharedSecret(pubKey);
 		});
 	}
 }

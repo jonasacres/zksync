@@ -167,7 +167,7 @@ public class InodeTable extends ZKFile {
 	/** issue a new inode with blank content and default metadata */
 	public Inode issueInode(long inodeId) throws IOException {
 		Inode inode = inodeWithId(inodeId);
-		long now = zkfs.currentTime();
+		long now = zkfs.archive.master.currentTimeNanos();
 		inode.setIdentity(ByteBuffer.wrap(zkfs.archive.crypto.rng(8)).getLong()); // TODO: the new last gasp of non-determinism...
 		inode.getStat().setInodeId(inodeId);
 		inode.getStat().setCtime(now);
@@ -232,7 +232,7 @@ public class InodeTable extends ZKFile {
 	/** initialize an empty root directory */
 	private void makeRootDir() throws IOException {
 		Inode rootDir = new Inode(zkfs);
-		long now = zkfs.currentTime();
+		long now = zkfs.archive.master.currentTimeNanos();
 		rootDir.setIdentity(0);
 		rootDir.getStat().setCtime(now);
 		rootDir.getStat().setAtime(now);

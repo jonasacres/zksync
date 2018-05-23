@@ -13,21 +13,21 @@ import com.acrescrypto.zksync.fs.zkfs.Page;
 
 public class SignedSecureFile {
 	protected FS fs;
-	protected PrivateKey privKey;
-	protected PublicKey pubKey;
+	protected PrivateSigningKey privKey;
+	protected PublicSigningKey pubKey;
 	protected Key textKey, authKey;
 	protected byte[] tag;
 	protected final Logger logger = LoggerFactory.getLogger(SignedSecureFile.class);
 	
-	public static SignedSecureFile withParams(FS storage, Key textKey, Key authKey, PrivateKey privKey) {
+	public static SignedSecureFile withParams(FS storage, Key textKey, Key authKey, PrivateSigningKey privKey) {
 		return new SignedSecureFile(storage, textKey, authKey, privKey);
 	}
 
-	public static SignedSecureFile withTag(byte[] pageTag, FS storage, Key textKey, Key authKey, PublicKey pubKey) {
+	public static SignedSecureFile withTag(byte[] pageTag, FS storage, Key textKey, Key authKey, PublicSigningKey pubKey) {
 		return new SignedSecureFile(pageTag, storage, textKey, authKey, pubKey);
 	}
 	
-	public static boolean verifySignature(byte[] contents, byte[] associatedData, PublicKey pubKey) {
+	public static boolean verifySignature(byte[] contents, byte[] associatedData, PublicSigningKey pubKey) {
 		int sigOffset = contents.length-pubKey.crypto.asymSignatureSize();
 		int signableLen = sigOffset;
 		byte[] signable = contents;
@@ -41,7 +41,7 @@ public class SignedSecureFile {
 		return pubKey.verify(signable, 0, signableLen, contents, sigOffset, pubKey.crypto.asymSignatureSize());
 	}
 
-	public SignedSecureFile(FS fs, Key textKey, Key authKey, PrivateKey privKey) {
+	public SignedSecureFile(FS fs, Key textKey, Key authKey, PrivateSigningKey privKey) {
 		this.fs = fs;
 		this.textKey = textKey;
 		this.authKey = authKey;
@@ -49,7 +49,7 @@ public class SignedSecureFile {
 		this.pubKey = privKey.publicKey();
 	}
 	
-	public SignedSecureFile(byte[] tag, FS fs, Key textKey, Key authKey, PublicKey pubKey) {
+	public SignedSecureFile(byte[] tag, FS fs, Key textKey, Key authKey, PublicSigningKey pubKey) {
 		this.tag = tag;
 		this.fs = fs;
 		this.textKey = textKey;

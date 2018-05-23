@@ -44,7 +44,7 @@ public class MutableSecureFile extends SecureFile {
 	protected byte[] makeContents(byte[] plaintext, int padSize) {
 		Key randKey = new Key(key.crypto, key.crypto.rng(key.crypto.symKeyLength()));
 		byte[] randIv = key.crypto.rng(key.crypto.symIvLength());
-		byte[] ciphertext = randKey.encrypt(new byte[key.crypto.symIvLength()], plaintext, padSize-headerLength());
+		byte[] ciphertext = randKey.encrypt(new byte[key.crypto.symIvLength()], plaintext, padSize == 0 ? 0 : padSize-headerLength());
 		ByteBuffer output = ByteBuffer.allocate(headerLength() + ciphertext.length);
 		output.put(randIv);
 		output.put(key.encrypt(randIv, randKey.getRaw(), 0));

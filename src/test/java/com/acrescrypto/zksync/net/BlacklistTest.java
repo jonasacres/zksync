@@ -133,4 +133,17 @@ public class BlacklistTest {
 		blacklist.add(address, durationMs);
 		assertTrue(holder.passed);
 	}
+	
+	@Test
+	public void testClearRemovesAllEntries() throws IOException {
+		for(int i = 0; i < 16; i++) {
+			blacklist.add("127.0.0." + i, 10000);
+		}
+		
+		blacklist.clear();
+		
+		for(int i = 1; i < 16; i++) {
+			assertFalse(blacklist.contains("127.0.0." + i));
+		}
+	}
 }

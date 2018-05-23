@@ -209,11 +209,10 @@ public class ArchiveAccessor {
 	}
 	
 	public int timeSliceIndex() {
-		return (int) (System.currentTimeMillis()/TEMPORAL_SEED_KEY_INTERVAL_MS);
+		return (int) (master.currentTimeNanos()/(1000l*1000l*TEMPORAL_SEED_KEY_INTERVAL_MS));
 	}
 	
 	public long timeSlice(int index) {
-		// TODO: (refactor) Eliminate all references to System.currentTimeMillis() and replace with something we can more easily control in tests.
 		return (long) TEMPORAL_SEED_KEY_INTERVAL_MS * (long) index;
 	}
 

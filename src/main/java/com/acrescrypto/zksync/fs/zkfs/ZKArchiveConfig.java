@@ -5,8 +5,8 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.PrivateKey;
-import com.acrescrypto.zksync.crypto.PublicKey;
+import com.acrescrypto.zksync.crypto.PrivateSigningKey;
+import com.acrescrypto.zksync.crypto.PublicSigningKey;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
@@ -26,8 +26,8 @@ public class ZKArchiveConfig {
 
 	protected Key archiveRoot; // randomly generated and stored encrypted in config file; derives most other keys
 	protected Key writeRoot; // derives private key
-	protected PrivateKey privKey; // derived from the write key root
-	protected PublicKey pubKey; // matches privKey
+	protected PrivateSigningKey privKey; // derived from the write key root
+	protected PublicSigningKey pubKey; // matches privKey
 	protected byte[] configFileIv; // rng
 	protected BackedFS storage;
 	protected FS localStorage;
@@ -161,11 +161,11 @@ public class ZKArchiveConfig {
 		return deriveKey(root, type, index, new byte[0]);
 	}
 	
-	public PrivateKey getPrivKey() {
+	public PrivateSigningKey getPrivKey() {
 		return privKey;
 	}
 	
-	public PublicKey getPubKey() {
+	public PublicSigningKey getPubKey() {
 		return pubKey;
 	}
 	
@@ -200,14 +200,14 @@ public class ZKArchiveConfig {
 	
 	protected void deserializeSeedPortion(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		byte[] pubKeyBytes = new byte[accessor.master.crypto.asymPublicKeySize()];
+		byte[] pubKeyBytes = new byte[accessor.master.crypto.asymPublicSigningKeySize()];
 		byte[] fingerprintBytes = new byte[accessor.master.crypto.hashLength()];
 		assertState(buf.remaining() == pubKeyBytes.length + fingerprintBytes.length);
 		buf.get(pubKeyBytes);
 		buf.get(fingerprintBytes);
 		
 		try {
-			this.pubKey = accessor.master.crypto.makePublicKey(pubKeyBytes);
+			this.pubKey = accessor.master.crypto.makePublicSigningKey(pubKeyBytes);
 		} catch(IllegalArgumentException exc) {
 			throw new InvalidArchiveConfigException();
 		}
@@ -277,7 +277,7 @@ public class ZKArchiveConfig {
 	
 	protected void deriveKeypair() {
 		this.writeRoot = accessor.passphraseRoot; // TODO: allow some means of supplying a separate write passphrase
-		privKey = accessor.master.crypto.makePrivateKey(writeRoot.getRaw());
+		privKey = accessor.master.crypto.makePrivateSigningKey(writeRoot.getRaw());
 		if(pubKey != null) {
 			assertState(Arrays.equals(pubKey.getBytes(), privKey.publicKey().getBytes()));
 		}

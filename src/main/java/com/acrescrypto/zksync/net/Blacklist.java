@@ -34,6 +34,10 @@ public class Blacklist {
 		read();
 	}
 	
+	public void clear() throws IOException {
+		blockedAddresses.clear();
+		write();
+	}
 	
 	public void write() throws IOException {
 		byte[] serialized = serialize();

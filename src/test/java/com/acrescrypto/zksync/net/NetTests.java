@@ -12,6 +12,9 @@ import org.junit.runners.Suite;
 	PeerMessageIncomingTest.class,
 	PeerMessageOutgoingTest.class,
 	PeerSwarmTest.class,
+	TCPPeerAdvertisementTest.class,
+	TCPPeerAdvertisementListenerTest.class,
+	TCPPeerSocketListenerTest.class
 })
 
 public class NetTests {

@@ -13,13 +13,13 @@ import net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable;
 import net.i2p.crypto.eddsa.spec.EdDSAParameterSpec;
 import net.i2p.crypto.eddsa.spec.EdDSAPrivateKeySpec;
 
-public class PrivateKey {
-	protected PublicKey publicKey;
+public class PrivateSigningKey {
+	protected PublicSigningKey publicKey;
 	protected EdDSAPrivateKey privKey;
 	protected CryptoSupport crypto;
-	protected static Logger logger = LoggerFactory.getLogger(PrivateKey.class);
+	protected static Logger logger = LoggerFactory.getLogger(PrivateSigningKey.class);
 	
-	protected PrivateKey(CryptoSupport crypto, byte[] raw) {
+	protected PrivateSigningKey(CryptoSupport crypto, byte[] raw) {
 		EdDSAParameterSpec edSpec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
 		EdDSAPrivateKeySpec privKeySpec = new EdDSAPrivateKeySpec(raw, edSpec);
 		this.crypto = crypto;
@@ -52,9 +52,9 @@ public class PrivateKey {
 		return publicKey().verify(message, msgOffset, msgLen, signature, sigOffset, sigLen);
 	}
 	
-	public PublicKey publicKey() {
+	public PublicSigningKey publicKey() {
 		if(publicKey == null) {
-			publicKey = new PublicKey(this);
+			publicKey = new PublicSigningKey(this);
 		}
 		
 		return publicKey;

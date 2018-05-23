@@ -31,9 +31,12 @@ public class PeerSwarm implements BlacklistCallback {
 	protected HashSet<Long> currentTags = new HashSet<Long>();
 	protected HashMap<Long,ChunkAccumulator> activeFiles = new HashMap<Long,ChunkAccumulator>();
 	protected HashMap<Long,Condition> pageWaits = new HashMap<Long,Condition>();
+	
 	protected Lock pageWaitLock = new ReentrantLock();
 	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
+	
 	protected boolean closed;
+	protected int activeSockets;
 	
 	int maxSocketCount = 128;
 	int maxPeerListSize = 1024;
@@ -90,19 +93,25 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public synchronized void openedConnection(PeerConnection connection) {
+		activeSockets++;
 		if(closed) {
 			connection.close();
 			return;
 		}
 		
 		PeerAdvertisement ad = connection.socket.getAd();
-		if(ad != null) {
+		if(ad != null) { // should be in both of these already but let's make sure
 			connectedAds.remove(ad);
 			connectedAds.add(connection.socket.getAd());
 			knownAds.remove(ad);
 			knownAds.add(connection.socket.getAd());
 		}
 		connections.add(connection);
+	}
+	
+	public synchronized void closedConnection(PeerConnection connection) {
+		activeSockets--;
+		connections.remove(connection);
 	}
 	
 	public synchronized void addPeerAdvertisement(PeerAdvertisement ad) {
@@ -124,7 +133,7 @@ public class PeerSwarm implements BlacklistCallback {
 		new Thread(() -> {
 			while(!closed) {
 				PeerAdvertisement ad = selectConnectionAd();
-				if(ad == null || connections.size() >= maxSocketCount) {
+				if(ad == null || activeSockets >= maxSocketCount) {
 					try {
 						TimeUnit.MILLISECONDS.sleep(100);
 					} catch(InterruptedException exc) {}
@@ -134,8 +143,6 @@ public class PeerSwarm implements BlacklistCallback {
 				try {
 					logger.trace("Connecting to address ", ad);
 					openConnection(ad);
-				} catch(UnsupportedProtocolException exc) {
-					logger.info("Skipping unsupported address: " + ad);
 				} catch(Exception exc) {
 					// TODO P2P: (refactor) should be an error, but don't want the output in tests...
 					logger.warn("Connection thread caught exception handling address {}", ad, exc);
@@ -154,11 +161,38 @@ public class PeerSwarm implements BlacklistCallback {
 		return null;
 	}
 	
-	protected synchronized void openConnection(PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
-		// TODO P2P: (refactor) too many exceptions. How do we get a ProtocolViolation just on instantiation?
+	protected void openConnection(PeerAdvertisement ad) {
 		if(closed) return;
-		connections.add(ad.connect(this));
-		connectedAds.add(ad);
+		synchronized(this) {
+			activeSockets++;
+			connectedAds.add(ad);
+		}
+		
+		new Thread(()-> {
+			// TODO P2P: (refactor) Need to get address from ad for blacklisting/logging
+			PeerConnection conn = null;
+			try {
+				conn = ad.connect(this);
+				synchronized(this) { connections.add(conn); }
+			} catch (UnsupportedProtocolException exc) {
+				logger.info("Ignoring unsupported ad type " + ad.getType());
+			} catch (ProtocolViolationException exc) {
+				logger.warn("Encountered protocol violation connecting to peer: " + exc);
+				// TODO P2P: (refactor) get access to address for blacklist here
+			} catch (BlacklistedException exc) {
+				logger.debug("Ignoring ad for blacklisted peer");
+			} catch(Exception exc) {
+				// TODO P2P: (redesign) Should be error in production, but squelched in junit.
+				logger.warn("Caught exception connecting to peer: " + exc);
+			} finally {
+				if(conn == null) {
+					synchronized(this) {
+						activeSockets--;
+						connectedAds.remove(ad); // TODO P2P: (review) the definition of insanity, etc., etc. Won't we just draw this same ad again?
+					}
+				}
+			}
+		}).start();
 	}
 	
 	public void waitForPage(byte[] tag) {

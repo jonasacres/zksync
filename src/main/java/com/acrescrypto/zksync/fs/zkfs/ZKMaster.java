@@ -34,6 +34,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected Blacklist blacklist;
 	protected Logger logger = LoggerFactory.getLogger(ZKMaster.class);
 	protected TCPPeerSocketListener listener;
+	protected long debugTime = -1;
 	
 	public static ZKMaster openTestVolume() throws IOException {
 		return openTestVolume((String reason) -> { return "zksync".getBytes(); }, TEST_VOLUME);
@@ -74,7 +75,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	// Expect this to be deprecated someday.
 	public void listenOnTCP() throws IOException {
-		listener = new TCPPeerSocketListener(blacklist, 0);
+		listener = new TCPPeerSocketListener(this, 0);
 	}
 	
 	public void loadStoredAccessors() {
@@ -213,5 +214,14 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public Collection<ZKArchive> allArchives() {
 		return allArchives;
+	}
+
+	public long currentTimeNanos() {
+		if(debugTime < 0) return 1000l*1000l*System.currentTimeMillis();
+		return debugTime;
+	}
+	
+	public void setCurrentTime(long time) {
+		debugTime = time;
 	}
 }

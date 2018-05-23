@@ -5,6 +5,10 @@ import java.nio.ByteBuffer;
 import com.acrescrypto.zksync.crypto.HashContext;
 
 public class Util {
+	public interface WaitTest {
+		boolean test();
+	}
+	
 	public static void hexdump(String caption, byte[] data) {
 		System.out.printf("%s (%d bytes, fingerprint %s)\n", caption, data.length, fingerprint(data));
 		for(int i = 0; i <= 16 * (int) Math.ceil((double) data.length/16); i++) {
@@ -85,5 +89,16 @@ public class Util {
 
 	public static boolean isOSX() {
 		return System.getProperty("os.name").equals("Mac OS X");
+	}
+	
+	public static boolean waitUntil(int maxDelay, WaitTest test) {
+		long endTime = maxDelay <= 0 ? Long.MAX_VALUE : System.currentTimeMillis() + maxDelay;
+		while(System.currentTimeMillis() < endTime && !test.test()) {
+			try {
+				Thread.sleep(1);
+			} catch(InterruptedException exc) {}
+		}
+		
+		return System.currentTimeMillis() < endTime;
 	}
 }

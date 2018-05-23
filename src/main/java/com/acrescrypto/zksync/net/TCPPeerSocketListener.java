@@ -13,116 +13,32 @@ import java.util.LinkedList;
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.whispersystems.curve25519.Curve25519;
-import org.whispersystems.curve25519.Curve25519KeyPair;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
-import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
-import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.crypto.PrivateDHKey;
+import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
-import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
-import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
-import com.acrescrypto.zksync.utility.Util;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 
 public class TCPPeerSocketListener {
 	protected int port, requestedPort;
+	protected CryptoSupport crypto;
 	protected Blacklist blacklist;
 	protected ServerSocket listenSocket;
+	protected ZKMaster master;
 	protected Thread thread;
 	protected Logger logger = LoggerFactory.getLogger(TCPPeerSocketListener.class);
-	protected Curve25519 curve25519;
 	protected LinkedList<TCPPeerAdvertisementListener> adListeners;
 	protected boolean closed;
 	
-	protected class TCPPeerAdvertisementListener {
-		protected Curve25519 curve25519;
-		protected PeerSwarm swarm;
-		protected CryptoSupport crypto;
-		protected byte[] publicKey, privateKey;
-		
-		public TCPPeerAdvertisementListener(Curve25519 curve25519, PeerSwarm swarm, int port) {
-			this.curve25519 = curve25519;
-			this.swarm = swarm;
-			this.crypto = swarm.config.getAccessor().getMaster().getCrypto();
-			initKeys();
-			announce(port);
-		}
-		
-		public boolean matchesKeyHash(byte[] remotePubKey, byte[] keyHash) {
-			ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.symKeyLength());
-			keyHashInput.put(remotePubKey);
-			keyHashInput.put(publicKey);
-			Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
-			
-			byte[] expectedKeyHash = keyHashKey.authenticate(keyHashInput.array());
-			return Arrays.equals(expectedKeyHash, keyHash);
-		}
-		
-		public byte[] sharedSecret(byte[] remotePubKey) {
-			return curve25519.calculateAgreement(remotePubKey, privateKey);
-		}
-		
-		public TCPPeerAdvertisement localAd() throws UnconnectableAdvertisementException {
-			return new TCPPeerAdvertisement(publicKey, "localhost", port);
-		}
-		
-		public void announce(int port) {
-			new Thread(() -> {
-				try {
-					TCPPeerAdvertisement ad = localAd();
-					swarm.advertiseSelf(ad);
-				} catch(Exception exc) {
-					logger.error("Announce thread caught exception", exc);
-				}
-			});
-		}
-		
-		protected MutableSecureFile storedFile() throws IOException {
-			FS fs = swarm.config.getArchive().getMaster().localStorageFsForArchiveId(swarm.config.getArchiveId());
-			return MutableSecureFile.atPath(fs, "tcp-identity", swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_AD_IDENTITY));
-		}
-		
-		protected void initKeys() {
-			try {
-				deserialize(storedFile().read());
-			} catch(ENOENTException exc) {
-				try {
-					Curve25519KeyPair keyPair = curve25519.generateKeyPair();
-					this.privateKey = keyPair.getPrivateKey();
-					this.publicKey = keyPair.getPublicKey();
-					storedFile().write(serialize(), 0);
-				} catch (IOException e) {
-					logger.error("Caught exception writing advertisement for archive {}", Util.bytesToHex(swarm.config.getArchiveId()), exc);
-				}
-			} catch (IOException exc) {
-				logger.error("Caught exception opening stored advertisement for archive {}", Util.bytesToHex(swarm.config.getArchiveId()), exc);
-			}
-		}
-		
-		protected byte[] serialize() {
-			ByteBuffer buf = ByteBuffer.allocate(privateKey.length + publicKey.length);
-			buf.put(privateKey);
-			buf.put(publicKey);
-			assert(!buf.hasRemaining());
-			return buf.array();
-		}
-		
-		protected void deserialize(byte[] serialized) {
-			ByteBuffer buf = ByteBuffer.wrap(serialized);
-			this.privateKey = new byte[buf.getShort()];
-			buf.get(privateKey);
-			this.publicKey = new byte[buf.getShort()];
-			buf.get(publicKey);
-			assert(!buf.hasRemaining());
-		}
-	}
-
-	public TCPPeerSocketListener(Blacklist blacklist, int port) throws IOException {
-		this.blacklist = blacklist;
-		this.requestedPort = port == 0 ? cachedPort() : port;
-		this.curve25519 = Curve25519.getInstance(Curve25519.BEST);
+	public TCPPeerSocketListener(ZKMaster master, int port) throws IOException {
+		this.crypto = master.getCrypto();
+		this.blacklist = master.getBlacklist();
+		this.requestedPort = port;
+		this.master = master;
+		this.port = port == 0 ? cachedPort() : port;
 		this.adListeners = new LinkedList<TCPPeerAdvertisementListener>();
 		this.thread = new Thread( ()->listenThread() );
 		this.thread.start();
@@ -133,12 +49,13 @@ public class TCPPeerSocketListener {
 	}
 	
 	public void close() throws IOException {
+		if(closed) return;
 		closed = true;
 		listenSocket.close();
 	}
 	
 	public void advertise(PeerSwarm swarm) {
-		adListeners.add(new TCPPeerAdvertisementListener(curve25519, swarm, port));
+		adListeners.add(new TCPPeerAdvertisementListener(swarm, port));
 	}
 	
 	public TCPPeerAdvertisementListener listenerForSwarm(PeerSwarm swarm) {
@@ -173,36 +90,10 @@ public class TCPPeerSocketListener {
 	protected void listenThread() {
 		while(true) {
 			try {
-				if(listenSocket == null || listenSocket.isClosed()) {
-					try {
-						listenSocket = new ServerSocket(port);
-					} catch(IOException exc) {
-						if(requestedPort != 0 || port == 0) {
-							logger.warn("Caught exception requesting port {}; waiting to retry...", port, exc);
-							Thread.sleep(1000);
-						} else {
-							logger.warn("Unable to re-acquire TCP port {}, requesting new port number...", port, exc);
-							port = 0;
-						}
-					}
-					
-					if(listenSocket.getLocalPort() != port) {
-						this.port = listenSocket.getLocalPort();
-						cachePort();
-						logger.info("Listening for peers on TCP port {}", port);
-						for(TCPPeerAdvertisementListener listener : adListeners) {
-							listener.announce(port);
-						}
-					}
-				}
-				
-				Socket peerSocket = listenSocket.accept();
-				if(blacklist.contains(peerSocket.getInetAddress().toString())) {
-					logger.info("Rejected connection from blacklisted peer {}", peerSocket.getInetAddress().toString());
-					peerSocket.close();
-				} else {
-					logger.info("Accepted TCP connection from peer {}", peerSocket.getInetAddress().toString());
-					new Thread( ()->peerThread(peerSocket) ).start();;
+				checkSocketOpen();
+				if(listenSocket != null) {
+					Socket socket = listenSocket.accept();
+					processIncomingPeer(socket);
 				}
 			} catch(Exception exc) {
 				if(closed) {
@@ -215,57 +106,124 @@ public class TCPPeerSocketListener {
 		}
 	}
 	
+	protected void checkSocketOpen() {
+		if(listenSocket == null || listenSocket.isClosed()) {
+			openSocket();
+			if(listenSocket != null && listenSocket.getLocalPort() != port) {
+				updatePortCache();
+			}
+		}
+	}
+	
+	protected void processIncomingPeer(Socket socket) throws IOException {
+		if(blacklist.contains(socket.getInetAddress().getHostAddress())) {
+			logger.info("Rejected connection from blacklisted peer {}", socket.getInetAddress().getHostAddress());
+			socket.close();
+			return;
+		}
+		
+		logger.info("Accepted TCP connection from peer {}", socket.getInetAddress().toString());
+		new Thread( ()->peerThread(socket) ).start();
+	}
+	
+	protected void openSocket() {
+		try {
+			listenSocket = new ServerSocket(port);
+		} catch(IOException exc) {
+			if(requestedPort != 0 || port == 0) {
+				logger.warn("Caught exception requesting port {}; waiting to retry...", port, exc);
+				try { Thread.sleep(1000); } catch(InterruptedException exc2) {}
+				return;
+			}
+			
+			logger.warn("Unable to re-acquire TCP port {}, requesting new port number...", port, exc);
+			port = 0;
+		}
+	}
+	
+	protected void updatePortCache() {
+		this.port = listenSocket.getLocalPort();
+		cachePort();
+		logger.info("Listening for peers on TCP port {}", port);
+		for(TCPPeerAdvertisementListener listener : adListeners) {
+			listener.announce();
+		}
+	}
+	
 	protected void peerThread(Socket peerSocketRaw) {
 		try {
 			performServerHandshake(peerSocketRaw);
 		} catch(EOFException | ProtocolViolationException exc) {
 			logger.info("Peer {} sent illegal handshake", peerSocketRaw.getInetAddress().toString(), exc);
+			try { peerSocketRaw.close(); } catch(IOException exc2) {}
 		} catch(IOException exc) {
 			logger.info("Caught IOException on connection to peer {}", peerSocketRaw.getInetAddress().toString(), exc);
+			try { peerSocketRaw.close(); } catch(IOException exc2) {}
 		} catch(Exception exc) {
 			logger.error("Caught unexpected exception on connection to peer {}", peerSocketRaw.getInetAddress().toString(), exc);
+			try { peerSocketRaw.close(); } catch(IOException exc2) {}
 		}
 	}
 	
 	protected TCPPeerSocket performServerHandshake(Socket peerSocketRaw) throws IOException, ProtocolViolationException {
-		if(adListeners.isEmpty()) throw new ProtocolViolationException(); // not ready to accept peers
+		if(adListeners.isEmpty()) {
+			throw new ProtocolViolationException(); // not ready to accept peers
+		}
+		
 		InputStream in = peerSocketRaw.getInputStream();
 		OutputStream out = peerSocketRaw.getOutputStream();
 		
 		// This will need to be rethought if we ever have different crypto configurations between archives
-		byte[] pubKey = new byte[adListeners.getFirst().crypto.asymPublicKeySize()];
+		byte[] pubKeyRaw = new byte[adListeners.getFirst().crypto.asymPublicSigningKeySize()];
 		byte[] keyHash = new byte[adListeners.getFirst().crypto.hashLength()];
-		byte[] proof = new byte[adListeners.getFirst().crypto.hashLength()];
+		byte[] proof = new byte[adListeners.getFirst().crypto.symKeyLength()];
 		byte[] timeIndexBytes = new byte[4];
 		
-		IOUtils.readFully(in, pubKey);
+		IOUtils.readFully(in, pubKeyRaw);
 		IOUtils.readFully(in, keyHash);
 		IOUtils.readFully(in, timeIndexBytes);
 		IOUtils.readFully(in, proof);
 		
+		PublicDHKey pubKey = crypto.makePublicDHKey(pubKeyRaw);
 		TCPPeerAdvertisementListener ad = findMatchingAdvertisement(pubKey, keyHash);
 		int timeIndex = ByteBuffer.wrap(timeIndexBytes).getInt();
-		int timeDiff = (int) Math.abs(System.currentTimeMillis() - ad.swarm.config.getAccessor().timeSlice(timeIndex));
-		assertState(timeDiff <= ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS + 1000);
-		byte[] tempSharedSecret = curve25519.calculateAgreement(pubKey, ad.privateKey);
+		int diff = timeIndex - ad.swarm.config.getAccessor().timeSliceIndex();
+		assertState(Math.abs(diff) <= 1);
+		if(diff < 0) {
+			// stated index is in past
+			long expiration = ad.swarm.config.getAccessor().timeSlice(timeIndex) + ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS;
+			long expiredFor = master.currentTimeNanos()/(1000l*1000l) - expiration;
+			assertState(0 <= expiredFor && expiredFor <= 10000);
+		} else if(diff > 0) {
+			// stated index is in future
+			long startTime = ad.swarm.config.getAccessor().timeSlice(timeIndex);
+			long startsIn = startTime - master.currentTimeNanos()/(1000l*1000l);
+			assertState(0 <= startsIn && startsIn <= 10000);
+		}
+		
+		byte[] tempSharedSecret = ad.dhPrivateKey.sharedSecret(new PublicDHKey(pubKeyRaw));
 		byte[] expectedProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
+		byte[] responseProof;
+		PrivateDHKey ephemeralKey = crypto.makePrivateDHKey();
+		byte[] sharedSecret = ephemeralKey.sharedSecret(pubKey);
 		
 		int peerType;
 		if(Arrays.equals(expectedProof, proof)) {
 			peerType = PeerConnection.PEER_TYPE_FULL;
+			responseProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 1, sharedSecret);
 		} else {
 			peerType = PeerConnection.PEER_TYPE_BLIND;
+			responseProof = crypto.rng(crypto.symKeyLength());
 		}
 		
-		Curve25519KeyPair ephemeralKeyPair = curve25519.generateKeyPair();
-		byte[] sharedSecret = curve25519.calculateAgreement(pubKey, ephemeralKeyPair.getPrivateKey());
-		out.write(ephemeralKeyPair.getPublicKey());
+		out.write(ephemeralKey.publicKey().getBytes());
 		out.write(ad.crypto.authenticate(sharedSecret, tempSharedSecret));
+		out.write(responseProof);
 		
 		return new TCPPeerSocket(ad.swarm, peerSocketRaw, sharedSecret, peerType);
 	}
 	
-	protected TCPPeerAdvertisementListener findMatchingAdvertisement(byte[] pubKey, byte[] keyHash) throws ProtocolViolationException {
+	protected TCPPeerAdvertisementListener findMatchingAdvertisement(PublicDHKey pubKey, byte[] keyHash) throws ProtocolViolationException {
 		for(TCPPeerAdvertisementListener ad : adListeners) {
 			if(ad.matchesKeyHash(pubKey, keyHash)) return ad;
 		}

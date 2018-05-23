@@ -5,17 +5,18 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 
+import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerAdvertisement extends PeerAdvertisement {
-	protected byte[] pubKey;
+	protected PublicDHKey pubKey;
 	protected String host;
 	protected int port;
 	protected String ipAddress;
 	
 	// TODO P2P: (refactor) Not happy with the exceptions thrown from the constructor. Rethink this.
-	public TCPPeerAdvertisement(byte[] pubKey, String host, int port) throws UnconnectableAdvertisementException {
+	public TCPPeerAdvertisement(PublicDHKey pubKey, String host, int port) throws UnconnectableAdvertisementException {
 		this.pubKey = pubKey;
 		this.host = host;
 		this.port = port;
@@ -35,8 +36,9 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		
 		int pubKeyLen = Util.unsignShort(buf.getShort());
-		pubKey = new byte[pubKeyLen];
-		buf.get(pubKey);
+		byte[] pubKeyBytes = new byte[pubKeyLen];
+		buf.get(pubKeyBytes);
+		pubKey = new PublicDHKey(pubKeyBytes);
 		
 		int hostLen = Util.unsignShort(buf.getShort());
 		byte[] hostBytes = new byte[hostLen];
@@ -54,9 +56,9 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 
 	@Override
 	public byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(2 + pubKey.length + 2 + host.length() + 2);
-		buf.putShort((short) pubKey.length);
-		buf.put(pubKey);
+		ByteBuffer buf = ByteBuffer.allocate(2 + pubKey.getBytes().length + 2 + host.length() + 2);
+		buf.putShort((short) pubKey.getBytes().length);
+		buf.put(pubKey.getBytes());
 		buf.putShort((short) host.length());
 		buf.put(host.getBytes());
 		buf.putShort((short) port);
@@ -78,8 +80,8 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	@Override
 	public int hashCode() {
 		String portStr = ""+port;
-		ByteBuffer buf = ByteBuffer.allocate(pubKey.length + host.length() + portStr.length());
-		buf.put(pubKey);
+		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length + host.length() + portStr.length());
+		buf.put(pubKey.getBytes());
 		buf.put(host.getBytes());
 		buf.put(portStr.getBytes());
 		return new String(buf.array()).hashCode();
