@@ -17,6 +17,7 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PRNG;
+import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.net.PeerMessageOutgoing.MessageSegment;
 
 public class PeerMessageOutgoingTest {
@@ -29,11 +30,13 @@ public class PeerMessageOutgoingTest {
 		@Override public PeerAdvertisement getAd() { return null; }
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }
-		@Override public boolean isClient() { return false; }
+		@Override public boolean isLocalRoleClient() { return false; }
 		@Override public void close() {}
 		@Override public boolean isClosed() { return false; }
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public String getAddress() { return "dummy"; }
+		@Override public void handshake() throws ProtocolViolationException, IOException {}
+		@Override public int getPeerType() throws UnsupportedOperationException { return -1; }
 		@Override public synchronized void dataReady(MessageSegment segment) {
 			received = segment;
 			segment.delivered();

@@ -338,4 +338,8 @@ public class CryptoSupport {
 	public int asymSignatureSize() {
 		return 512/8;
 	}
+
+	public int asymDHSecretSize() {
+		return 256/8; // TODO P2P: (review) verify size
+	}
 }

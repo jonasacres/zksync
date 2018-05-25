@@ -22,32 +22,39 @@ public class TCPPeerSocket extends PeerSocket {
 	protected Socket socket;
 	protected OutputStream out;
 	protected InputStream in;
-	protected boolean isClient;
+	protected boolean isLocalRoleClient;
 	protected CryptoSupport crypto;
 	protected Key localChainKey, remoteChainKey;
 	protected PrivateDHKey dhPrivateKey;
 	protected byte[] sharedSecret;
 	protected ByteBuffer remainingReadData;
 	protected TCPPeerAdvertisement ad;
+	protected int peerType = -1;
 	
 	public TCPPeerSocket(PeerSwarm swarm, Socket socket, byte[] sharedSecret, int peerType) throws IOException {
 		this(swarm);
+		this.address = socket.getInetAddress().getHostAddress();
 		this.socket = socket;
-		this.isClient = false;
+		this.isLocalRoleClient = false;
 		this.sharedSecret = sharedSecret;
 		makeStreams();
 		initKeys();
 		swarm.openedConnection(new PeerConnection(this, peerType));
 	}
 	
-	public TCPPeerSocket(PeerSwarm swarm, TCPPeerAdvertisement ad) throws IOException, ProtocolViolationException, BlacklistedException {
+	public TCPPeerSocket(PeerSwarm swarm, TCPPeerAdvertisement ad) throws IOException, BlacklistedException {
 		this(swarm);
+		this.ad = ad;
 		this.swarm = swarm;
 		this.crypto = swarm.config.getAccessor().getMaster().getCrypto();
 		this.dhPrivateKey = crypto.makePrivateDHKey();
-		this.isClient = true;
+		this.isLocalRoleClient = true;
 		if(ad.isBlacklisted(swarm.config.getAccessor().getMaster().getBlacklist())) throw new BlacklistedException(ad.host);
+	}
+	
+	public void handshake() throws ProtocolViolationException, IOException {
 		this.socket = new Socket(ad.host, ad.port);
+		this.address = socket.getInetAddress().getHostAddress();
 		makeStreams();
 		try {
 			sendHandshake(ad.pubKey);
@@ -69,7 +76,7 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	protected void initKeys() {
-		if(isClient) {
+		if(isLocalRoleClient) {
 			localChainKey = makeChainRoot(0);
 			remoteChainKey = makeChainRoot(1);
 		} else {
@@ -83,7 +90,7 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	@Override
-	public synchronized void write(byte[] data, int offset, int length) throws IOException, ProtocolViolationException {
+	public synchronized void write(byte[] data, int offset, int length) throws IOException {
 		ByteBuffer buf = ByteBuffer.wrap(data, offset, length);
 		byte[] msgIv = new byte[crypto.symIvLength()];
 		
@@ -110,7 +117,7 @@ public class TCPPeerSocket extends PeerSocket {
 		ByteBuffer lenBuf = ByteBuffer.allocate(4);
 		in.read(lenBuf.array(), 0, lenBuf.remaining());
 		int msgLen = lenBuf.getInt();
-		assertState(0 < msgLen && msgLen <= MAX_MSG_LEN + crypto.symBlockSize());
+		assertState(0 < msgLen && msgLen <= MAX_MSG_LEN + 2*crypto.symBlockSize()); // add some grace in for padding + built-in overhead in ciphertext
 		
 		byte[] ciphertext = new byte[msgLen];
 		int numRead = 0;
@@ -127,8 +134,8 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	@Override
-	public boolean isClient() {
-		return isClient;
+	public boolean isLocalRoleClient() {
+		return isLocalRoleClient;
 	}
 
 	@Override
@@ -149,6 +156,11 @@ public class TCPPeerSocket extends PeerSocket {
 	@Override
 	public TCPPeerAdvertisement getAd() {
 		return ad;
+	}
+	
+	@Override
+	public int getPeerType() {
+		return peerType;
 	}
 	
 	@Override
@@ -183,6 +195,16 @@ public class TCPPeerSocket extends PeerSocket {
 		byte[] remoteAuth = readRaw(crypto.hashLength());
 		byte[] expectedAuth = crypto.authenticate(this.sharedSecret, tempSharedSecret);
 		assertState(Arrays.equals(remoteAuth, expectedAuth));
+		
+		byte[] expectedRemoteProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, sharedSecret);
+		byte[] remoteProof = readRaw(crypto.symKeyLength());
+		if(Arrays.equals(expectedRemoteProof, remoteProof)) {
+			peerType = PeerConnection.PEER_TYPE_FULL;
+		} else {
+			peerType = PeerConnection.PEER_TYPE_BLIND;
+		}
+
+		// TODO P2P: (implement) timeout. peer should not be able to stay idle forever
 		
 		initKeys();
 	}

@@ -60,6 +60,7 @@ public class PeerConnection {
 	
 	public PeerConnection(PeerSwarm swarm, PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
 		this.socket = PeerSocket.connectToAd(swarm, ad);
+		this.socket.handshake();
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
 		// TODO P2P: (refactor) How to get peerType?
@@ -183,7 +184,7 @@ public class PeerConnection {
 	}
 	
 	protected void assertClientStatus(boolean mustBeClient) throws PeerRoleException {
-		if(this.socket.isClient() != mustBeClient) throw new PeerRoleException();
+		if(this.socket.isLocalRoleClient() != mustBeClient) throw new PeerRoleException();
 	}
 	
 	protected void assertState(boolean state) throws ProtocolViolationException {

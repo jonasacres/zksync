@@ -23,7 +23,7 @@ public abstract class PeerSocket {
 	protected int nextMessageId;
 	protected final Logger logger = LoggerFactory.getLogger(PeerSocket.class);
 	
-	private String address;
+	protected String address;
 	
 	public final static String EXT_FULL_PEER = "EXT_FULL_PEER";
 	
@@ -52,9 +52,11 @@ public abstract class PeerSocket {
 
 	public abstract void write(byte[] data, int offset, int length) throws IOException, ProtocolViolationException;
 	public abstract int read(byte[] data, int offset, int length) throws IOException, ProtocolViolationException;
-	public abstract boolean isClient();
+	public abstract boolean isLocalRoleClient();
 	public abstract void close() throws IOException;
 	public abstract boolean isClosed();
+	public abstract void handshake() throws ProtocolViolationException, IOException;
+	public abstract int getPeerType() throws UnsupportedOperationException;
 	
 	public abstract byte[] getSharedSecret();
 	

@@ -129,6 +129,7 @@ public class TCPPeerSocketListener {
 	protected void openSocket() {
 		try {
 			listenSocket = new ServerSocket(port);
+			listenSocket.setReuseAddress(true);
 		} catch(IOException exc) {
 			if(requestedPort != 0 || port == 0) {
 				logger.warn("Caught exception requesting port {}; waiting to retry...", port, exc);
@@ -179,6 +180,7 @@ public class TCPPeerSocketListener {
 		byte[] proof = new byte[adListeners.getFirst().crypto.symKeyLength()];
 		byte[] timeIndexBytes = new byte[4];
 		
+		// TODO P2P: (redesign) Peers should get timed out if not authenticated within a certain period of time
 		IOUtils.readFully(in, pubKeyRaw);
 		IOUtils.readFully(in, keyHash);
 		IOUtils.readFully(in, timeIndexBytes);

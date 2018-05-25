@@ -16,6 +16,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.exceptions.EINVALException;
+import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.zkfs.Page;
@@ -70,7 +71,7 @@ public class ChunkAccumulatorTest {
 		public int read(byte[] data, int offset, int length) { return -1; }
 
 		@Override
-		public boolean isClient() { return false; }
+		public boolean isLocalRoleClient() { return false; }
 
 		@Override
 		public void close() {}
@@ -86,6 +87,12 @@ public class ChunkAccumulatorTest {
 			super.violation();
 			violated = true;
 		}
+
+		@Override
+		public void handshake() throws ProtocolViolationException, IOException { }
+
+		@Override
+		public int getPeerType() throws UnsupportedOperationException { return -1; }
 	}
 	
 	public class DummyPeerConnection extends PeerConnection {

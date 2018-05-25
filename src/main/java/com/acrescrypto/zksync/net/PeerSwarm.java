@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -78,17 +79,28 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	@Override
 	public synchronized void disconnectAddress(String address, int durationMs) {
+		LinkedList<PeerConnection> toRemoveConnections = new LinkedList<PeerConnection>();
+		LinkedList<PeerAdvertisement> toRemoveAds = new LinkedList<PeerAdvertisement>();
+		
 		for(PeerConnection connection : connections) {
 			PeerAdvertisement ad = connection.socket.getAd();
 			if(connection.socket.matchesAddress(address) || (ad != null && ad.matchesAddress(address))) {
-				connection.close();
+				toRemoveConnections.add(connection);
 			}
+		}
+		
+		for(PeerConnection connection : toRemoveConnections) {
+			connection.close();
 		}
 		
 		for(PeerAdvertisement ad : knownAds) {
 			if(ad.matchesAddress(address)) {
-				knownAds.remove(ad);
+				toRemoveAds.add(ad);
 			}
+		}
+		
+		for(PeerAdvertisement ad : toRemoveAds) {
+			knownAds.remove(ad);
 		}
 	}
 	

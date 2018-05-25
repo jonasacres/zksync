@@ -67,11 +67,13 @@ public class PeerSwarmTest {
 		@Override public DummyAdvertisement getAd() { return ad; }
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }
-		@Override public boolean isClient() { return false; }
+		@Override public boolean isLocalRoleClient() { return false; }
 		@Override public void close() {}
 		@Override public boolean isClosed() { return false; }
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public String getAddress() { return address; }
+		@Override public void handshake() {}
+		@Override public int getPeerType() { return -1; }
 	}
 	
 	class DummyConnection extends PeerConnection {
