@@ -34,7 +34,7 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	
 	public TCPPeerAdvertisement(byte[] serialized) throws UnconnectableAdvertisementException {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		
+		assert(TYPE_TCP_PEER == buf.get());
 		int pubKeyLen = Util.unsignShort(buf.getShort());
 		byte[] pubKeyBytes = new byte[pubKeyLen];
 		buf.get(pubKeyBytes);
@@ -48,7 +48,7 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 		port = Util.unsignShort(buf.getShort());
 		
 		try {
-			this.ipAddress = InetAddress.getByName(host).toString();
+			this.ipAddress = InetAddress.getByName(host).getHostAddress();
 		} catch (UnknownHostException e) {
 			throw new UnconnectableAdvertisementException();
 		}
@@ -56,7 +56,8 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 
 	@Override
 	public byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(2 + pubKey.getBytes().length + 2 + host.length() + 2);
+		ByteBuffer buf = ByteBuffer.allocate(1 + 2 + pubKey.getBytes().length + 2 + host.length() + 2);
+		buf.put(getType());
 		buf.putShort((short) pubKey.getBytes().length);
 		buf.put(pubKey.getBytes());
 		buf.putShort((short) host.length());
@@ -88,7 +89,7 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	}
 
 	@Override
-	public int getType() {
+	public byte getType() {
 		return PeerAdvertisement.TYPE_TCP_PEER;
 	}
 }

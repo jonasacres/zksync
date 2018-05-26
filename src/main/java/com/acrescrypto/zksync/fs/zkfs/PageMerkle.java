@@ -6,7 +6,9 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SecureFile;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.utility.Util;
 
 /** Merkle tree of page tags for a file. Each page tag is a signed hash of the page contents, and is needed to locate
  * a page in storage. */
@@ -46,6 +48,28 @@ public class PageMerkle {
 		case RefTag.REF_TYPE_2INDIRECT:
 			read();
 			break;
+		}
+	}
+	
+	public void assertExists() throws ENOENTException, IOException {
+		if(!exists()) {
+			throw new ENOENTException("pagemerkle for " + Util.bytesToHex(tag.getBytes()));
+		}
+	}
+	
+	public boolean exists() throws IOException { // TODO P2P: (implement) Test
+		switch(tag.getRefType()) {
+		case RefTag.REF_TYPE_IMMEDIATE: return true;
+		case RefTag.REF_TYPE_INDIRECT:
+			return archive.storage.exists(Page.pathForTag(nodes[0].tag));
+		case RefTag.REF_TYPE_2INDIRECT:
+			for(int i = 0; i < numChunks(); i++) {
+				if(!archive.storage.exists(Page.pathForTag(tagForChunk(tag, i)))) return false;
+			}
+			
+			return true;
+		default:
+			return false;
 		}
 	}
 	

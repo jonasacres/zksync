@@ -29,6 +29,7 @@ public class ZKArchive {
 	protected ZKArchiveConfig config;
 	protected ZKMaster master;
 	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
+	protected RevisionTree revisionTree;
 	
 	protected ZKArchive(ZKArchiveConfig config) throws IOException {
 		this.master = config.accessor.master;
@@ -43,6 +44,9 @@ public class ZKArchive {
 		}, (RefTag tag, ZKFS fs) -> {});
 		
 		this.config.accessor.discoveredArchive(this);
+		if(!config.accessor.isSeedOnly()) {
+			this.revisionTree = new RevisionTree(this);
+		}
 	}
 	
 	public ZKArchive cacheOnlyArchive() throws IOException {
@@ -84,7 +88,7 @@ public class ZKArchive {
 	}
 	
 	public RevisionTree getRevisionTree() throws IOException {
-		return new RevisionTree(this);
+		return revisionTree;
 	}
 	
 	public int refTagSize() {

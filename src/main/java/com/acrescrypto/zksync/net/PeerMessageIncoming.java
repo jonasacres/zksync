@@ -29,13 +29,17 @@ public class PeerMessageIncoming extends PeerMessage {
 		}
 		
 		public synchronized void write(byte[] data) {
-			if(buf.remaining() < data.length) {
+			if(buf.capacity() - buf.position() < data.length) {
 				resizeBuffer(data.length);
 			}
 			
 			buf.put(data);
 			readBuf.limit(buf.position());
 			this.notifyAll();
+		}
+		
+		public boolean hasRemaining() {
+			return !eof || readBuf.hasRemaining(); // TODO P2P: (test) Test this
 		}
 		
 		public boolean isEOF() {
@@ -56,9 +60,9 @@ public class PeerMessageIncoming extends PeerMessage {
 		}
 		
 		public synchronized void requireEOF() throws ProtocolViolationException {
-			if(buf.remaining() > 0) throw new ProtocolViolationException();
+			if(readBuf.remaining() > 0) throw new ProtocolViolationException();
 			waitForEOF();
-			if(buf.remaining() > 0) throw new ProtocolViolationException();
+			if(readBuf.remaining() > 0) throw new ProtocolViolationException();
 		}
 		
 		public byte get() throws EOFException {

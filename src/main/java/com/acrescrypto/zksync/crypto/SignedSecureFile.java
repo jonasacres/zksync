@@ -27,6 +27,10 @@ public class SignedSecureFile {
 		return new SignedSecureFile(pageTag, storage, textKey, authKey, pubKey);
 	}
 	
+	public static int fileSize(CryptoSupport crypto, int padSize) {
+		return crypto.asymSignatureSize() + crypto.symPaddedCiphertextSize(padSize);
+	}
+	
 	public static boolean verifySignature(byte[] contents, byte[] associatedData, PublicSigningKey pubKey) {
 		int sigOffset = contents.length-pubKey.crypto.asymSignatureSize();
 		int signableLen = sigOffset;

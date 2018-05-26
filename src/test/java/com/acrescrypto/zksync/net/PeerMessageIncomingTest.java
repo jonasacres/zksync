@@ -36,7 +36,7 @@ public class PeerMessageIncomingTest {
 	class DummyPeerConnection extends PeerConnection {
 		boolean messageReceived;
 		public DummyPeerConnection() { socket = new DummySocket(); }
-		@Override public void handle(PeerMessageIncoming incoming) throws ProtocolViolationException { messageReceived = true; }
+		@Override public boolean handle(PeerMessageIncoming incoming) throws ProtocolViolationException { return messageReceived = true; }
 	}
 	
 	final static byte CMD = 1;
@@ -63,11 +63,13 @@ public class PeerMessageIncomingTest {
 		Holder holder = new Holder();
 
 		PeerConnection conn = new DummyPeerConnection() { 
-			public void handle(PeerMessageIncoming msg) {
+			public boolean handle(PeerMessageIncoming msg) {
 				synchronized(holder) {
 					holder.thread = Thread.currentThread();
 					holder.notifyAll();
 				}
+				
+				return true;
 			};
 		};
 		
@@ -84,7 +86,7 @@ public class PeerMessageIncomingTest {
 	@Test
 	public void testLogsSocketViolationOnProtocolViolationExceptionFromHandler() {
 		PeerConnection conn = new DummyPeerConnection() { 
-			public void handle(PeerMessageIncoming msg) throws ProtocolViolationException { throw new ProtocolViolationException(); }
+			@Override public boolean handle(PeerMessageIncoming msg) throws ProtocolViolationException { throw new ProtocolViolationException(); }
 		};
 		
 		(new PeerMessageIncoming(conn, (byte) 0, (byte) 0, 0)).waitForFinish();

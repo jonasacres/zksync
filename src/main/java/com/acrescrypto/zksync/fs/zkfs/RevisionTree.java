@@ -39,12 +39,12 @@ public class RevisionTree {
 		return plainBranchTips;
 	}
 	
-	public void addBranchTip(RefTag newBranch) {
+	public synchronized void addBranchTip(RefTag newBranch) {
 		plainBranchTips.add(newBranch);
 		branchTips.add(newBranch.obfuscate());
 	}
 	
-	public void addBranchTip(ObfuscatedRefTag newBranch) throws InvalidSignatureException {
+	public synchronized void addBranchTip(ObfuscatedRefTag newBranch) throws InvalidSignatureException {
 		newBranch.assertValid();
 		branchTips.add(newBranch);
 		if(!archive.config.accessor.isSeedOnly()) {
@@ -52,12 +52,12 @@ public class RevisionTree {
 		}
 	}
 	
-	public void removeBranchTip(RefTag oldBranch) {
+	public synchronized void removeBranchTip(RefTag oldBranch) {
 		plainBranchTips.remove(oldBranch);
 		branchTips.remove(oldBranch.obfuscate());
 	}
 	
-	public void removeBranchTip(ObfuscatedRefTag oldBranch) {
+	public synchronized void removeBranchTip(ObfuscatedRefTag oldBranch) {
 		branchTips.remove(oldBranch);
 		if(!archive.config.accessor.isSeedOnly()) {
 			try {
@@ -74,7 +74,7 @@ public class RevisionTree {
 		return set;
 	}
 	
-	protected void addAncestorsOf(RefTag revision, HashSet<RefTag> set) throws IOException {
+	protected synchronized void addAncestorsOf(RefTag revision, HashSet<RefTag> set) throws IOException {
 		if(revision == null) return;
 		set.add(revision);
 		
@@ -84,7 +84,7 @@ public class RevisionTree {
 		}
 	}
 	
-	public RefTag commonAncestorOf(RefTag[] revisions) throws IOException {
+	public synchronized RefTag commonAncestorOf(RefTag[] revisions) throws IOException {
 		HashSet<RefTag> allAncestors = null;
 		for(RefTag rev : revisions) {
 			Collection<RefTag> ancestors = ancestorsOf(rev);
@@ -104,19 +104,19 @@ public class RevisionTree {
 		return Paths.get(ZKArchive.REVISION_DIR, "branch-tips").toString();
 	}
 	
-	public void write() throws IOException {
+	public synchronized void write() throws IOException {
 		MutableSecureFile
 		  .atPath(archive.config.localStorage, getPath(), branchTipKey())
 		  .write(serialize(), 65536);
 	}
 	
-	protected void read() throws IOException {
+	public synchronized void read() throws IOException {
 		deserialize(MutableSecureFile
 		  .atPath(archive.config.localStorage, getPath(), branchTipKey())
 		  .read());
 	}
 	
-	protected void deserialize(byte[] serialized) {
+	protected synchronized void deserialize(byte[] serialized) {
 		branchTips.clear();
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		byte[] tag = new byte[ObfuscatedRefTag.sizeForArchive(archive)];
@@ -135,7 +135,7 @@ public class RevisionTree {
 		if(buf.hasRemaining()) throw new InvalidArchiveException("branch tip file appears corrupt: " + getPath());
 	}
 	
-	protected byte[] serialize() {
+	protected synchronized byte[] serialize() {
 		ByteBuffer buf = ByteBuffer.allocate(ObfuscatedRefTag.sizeForArchive(archive)*branchTips.size());
 		for(ObfuscatedRefTag tag : branchTips) {
 			try {

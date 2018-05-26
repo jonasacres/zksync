@@ -19,7 +19,6 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.Page;
-import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
 import com.acrescrypto.zksync.utility.Util;
@@ -220,11 +219,11 @@ public class PeerSwarm implements BlacklistCallback {
 		pageWaitLock.unlock();
 	}
 	
-	public ChunkAccumulator accumulatorForTag(RefTag tag) throws IOException {
-		long shortTag = tag.getShortHash();
+	public ChunkAccumulator accumulatorForTag(byte[] tag) throws IOException {
+		long shortTag = Util.shortTag(tag);
 		if(!activeFiles.containsKey(shortTag)) {
 			int numChunksExpected = (int) Math.ceil((double) config.getPageSize() / PeerMessage.FILE_CHUNK_SIZE);
-			ChunkAccumulator fileHandle = new ChunkAccumulator(this, tag.getHash(), numChunksExpected);
+			ChunkAccumulator fileHandle = new ChunkAccumulator(this, tag, numChunksExpected);
 			activeFiles.put(shortTag, fileHandle);
 			return fileHandle;
 		}

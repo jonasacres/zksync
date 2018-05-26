@@ -407,4 +407,11 @@ public abstract class FSTestBase {
 		scratch.write("test", buf, 1, 9);
 		assertTrue(Arrays.equals("ello worl".getBytes(), scratch.read("test")));
 	}
+	
+	// TODO P2P: (implement) Test can't escape scoped FS using ..
+	// TODO P2P: (implement) Test can't escape scoped FS using /
+	// TODO P2P: (implement) Test can't create file/directory called ..
+	// TODO P2P: (implement) Test can't create file/directory called .
+	// TODO P2P: (implement) Test can't create file/directory called / in directory
+	// TODO P2P: (implement) Test can't create file/directory with blank filename
 }

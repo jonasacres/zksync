@@ -342,4 +342,8 @@ public class CryptoSupport {
 	public int asymDHSecretSize() {
 		return 256/8; // TODO P2P: (review) verify size
 	}
+	
+	public int symPaddedCiphertextSize(int textLen) {
+		return 4 + textLen + symTagLength();
+	}
 }

@@ -18,7 +18,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
-import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
@@ -29,7 +28,7 @@ public class PeerSwarmTest {
 	class DummyAdvertisement extends PeerAdvertisement {
 		String address;
 		boolean blacklisted;
-		int type = -1;
+		byte type = -1;
 		public DummyAdvertisement() { address = "localhost"; }
 		public DummyAdvertisement(String address) {
 			this.address = address;
@@ -38,7 +37,7 @@ public class PeerSwarmTest {
 		@Override public boolean isBlacklisted(Blacklist blacklist) throws IOException { return blacklisted; }
 		@Override public byte[] serialize() { return null; }
 		@Override public boolean matchesAddress(String address) { return this.address.equals(address); }
-		@Override public int getType() { return type; }
+		@Override public byte getType() { return type; }
 		@Override public DummyConnection connect(PeerSwarm swarm)  { return new DummyConnection(new DummySocket(address, swarm)); }
 		@Override public int hashCode() { return address.hashCode(); }
 		@Override public boolean equals(Object other) {
@@ -387,26 +386,28 @@ public class PeerSwarmTest {
 	
 	@Test
 	public void testAccumulatorForTagCreatesAnAccumulatorForNewTags() throws IOException {
-		RefTag tag = RefTag.blank(archive);
+		byte[] tag = master.getCrypto().rng(master.getCrypto().hashLength());
 		ChunkAccumulator accumulator = swarm.accumulatorForTag(tag);
 		assertNotNull(accumulator);
-		assertTrue(Arrays.equals(tag.getHash(), accumulator.tag));
+		assertTrue(Arrays.equals(tag, accumulator.tag));
 	}
 	
 	@Test
 	public void testAccumulatorForTagReturnsExistingAccumulatorForNewTags() throws IOException {
-		ChunkAccumulator accumulator1 = swarm.accumulatorForTag(RefTag.blank(archive));
-		ChunkAccumulator accumulator2 = swarm.accumulatorForTag(RefTag.blank(archive));
+		byte[] tag = master.getCrypto().rng(master.getCrypto().hashLength());
+		ChunkAccumulator accumulator1 = swarm.accumulatorForTag(tag);
+		ChunkAccumulator accumulator2 = swarm.accumulatorForTag(tag);
 		assertTrue(accumulator1 == accumulator2);
 	}
 	
 	@Test
 	public void testAccumulatorForTagResetsWhenReceivePageCalled() throws IOException {
-		ChunkAccumulator accumulator1 = swarm.accumulatorForTag(RefTag.blank(archive));
-		swarm.receivedPage(RefTag.blank(archive).getHash());
-		ChunkAccumulator accumulator2 = swarm.accumulatorForTag(RefTag.blank(archive));
+		byte[] tag = master.getCrypto().rng(master.getCrypto().hashLength());
+		ChunkAccumulator accumulator1 = swarm.accumulatorForTag(tag);
+		swarm.receivedPage(tag);
+		ChunkAccumulator accumulator2 = swarm.accumulatorForTag(tag);
 		assertTrue(accumulator1 != accumulator2);
-		assertTrue(Arrays.equals(RefTag.blank(archive).getHash(), accumulator2.tag));
+		assertTrue(Arrays.equals(tag, accumulator2.tag));
 	}
 	
 	@Test

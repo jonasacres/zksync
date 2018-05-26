@@ -21,17 +21,19 @@ import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerConnection {
-	public final static int CMD_ACCESS_PROOF = 0x00;
-	public final static int CMD_ANNOUNCE_PEERS = 0x01;
-	public final static int CMD_ANNOUNCE_SELF_AD = 0x02;
-	public final static int CMD_ANNOUNCE_TAGS = 0x03;
-	public final static int CMD_ANNOUNCE_TIPS = 0x04;
-	public final static int CMD_REQUEST_ALL = 0x05;
-	public final static int CMD_REQUEST_REF_TAGS = 0x06;
-	public final static int CMD_REQUEST_REVISION_CONTENTS = 0x07;
-	public final static int CMD_REQUEST_PAGE_TAGS = 0x08;
-	public final static int CMD_SEND_PAGE = 0x09;
-	public final static int CMD_SET_PAUSED = 0x0a;
+	public final static byte CMD_ACCESS_PROOF = 0x00;
+	public final static byte CMD_ANNOUNCE_PEERS = 0x01;
+	public final static byte CMD_ANNOUNCE_SELF_AD = 0x02;
+	public final static byte CMD_ANNOUNCE_TAGS = 0x03;
+	public final static byte CMD_ANNOUNCE_TIPS = 0x04;
+	public final static byte CMD_REQUEST_ALL = 0x05;
+	public final static byte CMD_REQUEST_REF_TAGS = 0x06;
+	public final static byte CMD_REQUEST_REVISION_CONTENTS = 0x07;
+	public final static byte CMD_REQUEST_PAGE_TAGS = 0x08;
+	public final static byte CMD_SEND_PAGE = 0x09;
+	public final static byte CMD_SET_PAUSED = 0x0a;
+	
+	public final static int MAX_SUPPORTED_CMD = CMD_SET_PAUSED; // update to largest acceptable command code
 	
 	public final static int PEER_TYPE_STATIC = 0; // static fileserver; needs subclass to handle
 	public final static int PEER_TYPE_BLIND = 1; // has knowledge of seed key, but not archive passphrase; can't decipher data
@@ -50,8 +52,7 @@ public class PeerConnection {
 
 	protected PeerSocket socket;
 	protected int peerType;
-	protected byte[] sharedSalt;
-	protected HashSet<Long> announcedTags;
+	protected HashSet<Long> announcedTags = new HashSet<Long>();
 	protected boolean remotePaused;
 	protected PageQueue queue;
 	protected boolean receivedTags, receivedProof;
@@ -63,10 +64,11 @@ public class PeerConnection {
 		this.socket.handshake();
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
-		// TODO P2P: (refactor) How to get peerType?
+		this.peerType = this.socket.getPeerType(); // TODO P2P: (refactor) does this need its own copy at this point?
 	}
 	
 	public PeerConnection(PeerSocket socket, int peerType) {
+		// TODO P2P: (refactor) if socket has a peer type, why supply it here?
 		this.socket = socket;
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
@@ -87,7 +89,7 @@ public class PeerConnection {
 	
 	public void announceSelf(PeerAdvertisement ad) {
 		byte[] serializedAd = ad.serialize();
-		ByteBuffer serialized = ByteBuffer.allocate(serializedAd.length);
+		ByteBuffer serialized = ByteBuffer.allocate(2+serializedAd.length);
 		assert(serializedAd.length <= Short.MAX_VALUE);
 		serialized.putShort((short) serializedAd.length);
 		serialized.put(serializedAd);
@@ -96,7 +98,7 @@ public class PeerConnection {
 	
 	public void announcePeer(PeerAdvertisement ad) {
 		byte[] serializedAd = ad.serialize();
-		ByteBuffer serialized = ByteBuffer.allocate(serializedAd.length);
+		ByteBuffer serialized = ByteBuffer.allocate(2+serializedAd.length);
 		assert(serializedAd.length <= Short.MAX_VALUE);
 		serialized.putShort((short) serializedAd.length);
 		serialized.put(serializedAd);
@@ -152,7 +154,7 @@ public class PeerConnection {
 	public void requestPageTags(byte[][] pageTags) {
 		ByteBuffer pageTagsMerged = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE*pageTags.length);
 		for(byte[] tag : pageTags) {
-			pageTagsMerged.put(tag);
+			pageTagsMerged.put(tag, 0, 8);
 		}
 		
 		send(CMD_REQUEST_PAGE_TAGS, pageTagsMerged.array());
@@ -191,7 +193,7 @@ public class PeerConnection {
 		if(!state) throw new ProtocolViolationException();
 	}
 	
-	public void handle(PeerMessageIncoming msg) throws ProtocolViolationException {
+	public boolean handle(PeerMessageIncoming msg) throws ProtocolViolationException {
 		try {
 			switch(msg.cmd) {
 			case CMD_ANNOUNCE_PEERS:
@@ -216,7 +218,7 @@ public class PeerConnection {
 				handleRequestRevisionContents(msg);
 				break;
 			case CMD_REQUEST_PAGE_TAGS:
-				handleRequestTags(msg);
+				handleRequestPageTags(msg);
 				break;
 			case CMD_SEND_PAGE:
 				handleSendPage(msg);
@@ -226,8 +228,10 @@ public class PeerConnection {
 				break;
 			default:
 				logger.info("Ignoring unknown request command {} from {}", msg.cmd, socket.getAddress());
-				break;
+				return false;
 			}
+		} catch(EOFException exc) {
+			// ignore these
 		} catch(PeerCapabilityException | IOException | InvalidSignatureException exc) {
 			/* Arguably, blacklisting people because we had a local IOException is unfair. But, there are two real
 			 * possibilities here:
@@ -240,15 +244,20 @@ public class PeerConnection {
 			logger.warn("Blacklisting peer " + socket.getAddress() + " due to exception", exc);
 			throw new ProtocolViolationException();
 		}
+		
+		return true;
 	}
 	
 	protected void handleAnnouncePeers(PeerMessageIncoming msg) throws EOFException, ProtocolViolationException {
-		while(!msg.rxBuf.isEOF()) {
+		while(msg.rxBuf.hasRemaining()) {
 			int adLen = Util.unsignShort(msg.rxBuf.getShort());
+			assertState(0 < adLen && adLen <= PeerMessage.MESSAGE_SIZE);
 			byte[] adRaw = new byte[adLen];
 			msg.rxBuf.get(adRaw);
+			
 			try {
 				PeerAdvertisement ad = PeerAdvertisement.deserialize(adRaw);
+				if(ad == null) continue;
 				if(ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) continue;
 				socket.swarm.addPeerAdvertisement(ad);
 			} catch (IOException | UnconnectableAdvertisementException e) {
@@ -257,22 +266,25 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceSelfAd(PeerMessageIncoming msg) throws ProtocolViolationException, EOFException {
-		while(!msg.rxBuf.isEOF()) {
-			int adLen = Util.unsignShort(msg.rxBuf.getShort());
-			byte[] adRaw = new byte[adLen];
-			msg.rxBuf.get(adRaw);
-			try {
-				PeerAdvertisement ad = PeerAdvertisement.deserializeWithPeer(adRaw, msg.connection);
-				if(ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) continue;
+		int adLen = Util.unsignShort(msg.rxBuf.getShort());
+		assertState(0 < adLen && adLen <= PeerMessage.MESSAGE_SIZE);
+		byte[] adRaw = new byte[adLen];
+		msg.rxBuf.get(adRaw);
+		try {
+			PeerAdvertisement ad = PeerAdvertisement.deserializeWithPeer(adRaw, msg.connection);
+			if(ad != null && !ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) {
 				socket.swarm.addPeerAdvertisement(ad);
-			} catch (IOException | UnconnectableAdvertisementException e) {
 			}
+		} catch (IOException | UnconnectableAdvertisementException e) {
 		}
+		
+		msg.rxBuf.requireEOF();
 	}
 	
 	protected void handleAnnounceTags(PeerMessageIncoming msg) throws EOFException {
 		assert(RefTag.REFTAG_SHORT_SIZE == 8); // This code depends on tags being sent as 64-bit values.
-		while(!msg.rxBuf.isEOF()) {
+		while(msg.rxBuf.hasRemaining()) {
+			// TODO P2P: (refactor) Reorganize this loop so we're not spending so much time locking/unlocking 
 			Long shortTag = msg.rxBuf.getLong();
 			synchronized(this) {
 				announcedTags.add(shortTag);
@@ -285,11 +297,14 @@ public class PeerConnection {
 	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
 		ZKArchive archive = socket.swarm.config.getArchive();
 		byte[] obfTagRaw = new byte[ObfuscatedRefTag.sizeForArchive(archive)];
-		while(!msg.rxBuf.isEOF()) {
+		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(obfTagRaw);
 			ObfuscatedRefTag obfTag = new ObfuscatedRefTag(archive, obfTagRaw);
 			archive.getRevisionTree().addBranchTip(obfTag);
 		}
+		
+		// there's an unmitigated danger here that there's a separate zkarchive open with parallel revision tree changes
+		archive.getRevisionTree().write();
 	}
 	
 	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException, IOException {
@@ -303,7 +318,7 @@ public class PeerConnection {
 		byte[] refTagBytes = new byte[archive.refTagSize()];
 		int priority = msg.rxBuf.getInt();
 		
-		while(!msg.rxBuf.isEOF()) {
+		while(msg.rxBuf.hasRemaining()) {
 			RefTag tag = new RefTag(archive, msg.rxBuf.read(refTagBytes));
 			sendTagContents(priority, tag);
 		}
@@ -315,16 +330,16 @@ public class PeerConnection {
 		byte[] refTagBytes = new byte[archive.refTagSize()];
 		int priority = msg.rxBuf.getInt();
 		
-		while(!msg.rxBuf.isEOF()) {
+		while(msg.rxBuf.hasRemaining()) {
 			RefTag tag = new RefTag(archive, msg.rxBuf.read(refTagBytes));
 			sendRevisionContents(priority, tag);
 		}
 	}
 	
-	protected void handleRequestTags(PeerMessageIncoming msg) throws IOException {
+	protected void handleRequestPageTags(PeerMessageIncoming msg) throws IOException {
 		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
 		int priority = msg.rxBuf.getInt();
-		while(!msg.rxBuf.isEOF()) {
+		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(shortTag);
 			sendPageTag(priority, ByteBuffer.wrap(shortTag).getLong());
 		}
@@ -332,15 +347,18 @@ public class PeerConnection {
 	
 	protected void handleSendPage(PeerMessageIncoming msg) throws IOException, ProtocolViolationException {
 		ZKArchive archive = socket.swarm.config.getArchive();
-		byte[] tagData = msg.rxBuf.read(archive.refTagSize());
-		int expectedChunks = (int) Math.ceil(((double) archive.getConfig().getPageSize())/PeerMessage.FILE_CHUNK_SIZE);
-		ChunkAccumulator accumulator = socket.swarm.accumulatorForTag(new RefTag(archive, tagData));
+		byte[] tagData = msg.rxBuf.read(archive.getCrypto().hashLength());
+		int actualPageSize = archive.getConfig().getSerializedPageSize();
+		int expectedChunks = (int) Math.ceil(((double) actualPageSize)/PeerMessage.FILE_CHUNK_SIZE);
+		int finalChunkSize = PeerMessage.FILE_CHUNK_SIZE - PeerMessage.FILE_CHUNK_SIZE*expectedChunks + actualPageSize;
+		ChunkAccumulator accumulator = socket.swarm.accumulatorForTag(tagData);
 		
 		try {
-			while(!msg.rxBuf.isEOF()) {
+			while(msg.rxBuf.hasRemaining()) {
 				long offset = Util.unsignInt(msg.rxBuf.getInt());
 				assertState(0 <= offset && offset < expectedChunks && offset <= Integer.MAX_VALUE);
-				byte[] chunkData = msg.rxBuf.read(PeerMessage.FILE_CHUNK_SIZE);
+				int readLen = offset == expectedChunks - 1 ? finalChunkSize : PeerMessage.FILE_CHUNK_SIZE;
+				byte[] chunkData = msg.rxBuf.read(readLen);
 				accumulator.addChunk((int) offset, chunkData, this);
 			}
 		} catch(EOFException exc) {} // we're allowed to cancel these transfers at any time, causing EOF; just ignore it
@@ -363,25 +381,16 @@ public class PeerConnection {
 	}
 	
 	public boolean wantsFile(byte[] tag) {
-		return !announcedTags.contains(ByteBuffer.wrap(tag).getLong());
-	}
-
-	public boolean wantsFile(RefTag tag) {
-		return !announcedTags.contains(tag.getShortHash());
+		return !announcedTags.contains(Util.shortTag(tag));
 	}
 	
-	public boolean wantsChunk(RefTag tag, int chunkIndex) {
-		/* Right now, this is really just equivalent to wantsFile. Eventually we can add some support to decide if we
-		 * need to send an individual file chunk down. This would be useful in cases where a page takes a long time to
-		 * send to a client, and multiple peers might be sending it simultaneously.
-		 */
-		if(!wantsFile(tag)) return false;
-		return true;
-	}
-	
-	public synchronized void setRemotePaused(boolean paused) {
+	protected synchronized void setRemotePaused(boolean paused) {
 		this.remotePaused = paused;
 		this.notifyAll();
+	}
+	
+	public boolean isPaused() {
+		return remotePaused;
 	}
 
 	public synchronized void waitForUnpause() throws SocketClosedException {
@@ -441,4 +450,6 @@ public class PeerConnection {
 			socket.swarm.closedConnection(this);
 		}
 	}
+	
+	// TODO P2P: (implement) Thread to send pagequeue. (keep tests in mind, too -- don't want queue auto-draining)
 }

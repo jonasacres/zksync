@@ -9,7 +9,7 @@ public class Util {
 		boolean test();
 	}
 	
-	public static void hexdump(String caption, byte[] data) {
+	public static synchronized void hexdump(String caption, byte[] data) {
 		System.out.printf("%s (%d bytes, fingerprint %s)\n", caption, data.length, fingerprint(data));
 		for(int i = 0; i <= 16 * (int) Math.ceil((double) data.length/16); i++) {
 			if((i % 16) == 0) {

@@ -7,6 +7,7 @@ import java.util.Arrays;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateSigningKey;
 import com.acrescrypto.zksync.crypto.PublicSigningKey;
+import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
@@ -290,6 +291,10 @@ public class ZKArchiveConfig {
 
 	public int getPageSize() {
 		return pageSize;
+	}
+	
+	public int getSerializedPageSize() {
+		return SignedSecureFile.fileSize(accessor.master.crypto, pageSize);
 	}
 	
 	public String getDescription() {

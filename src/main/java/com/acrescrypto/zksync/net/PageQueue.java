@@ -103,7 +103,9 @@ public class PageQueue {
 				shuffler = Shuffler.fixedShuffler(0);
 			} else {
 				try {
+					// TODO P2P: (review) ensure this fails for fake reftags
 					this.merkle = new PageMerkle(refTag.cacheOnlyTag());
+					this.merkle.assertExists();
 					shuffler = Shuffler.fixedShuffler(merkle.numPages());
 				} catch(IOException exc) {
 					shuffler = Shuffler.fixedShuffler(0);
@@ -129,6 +131,11 @@ public class PageQueue {
 		RevisionQueueItem(int priority, RefTag revTag) {
 			super(priority);
 			this.revTag = revTag;
+			if(revTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) {
+				this.shuffler = Shuffler.fixedShuffler(0);
+				return;
+			}
+			
 			try {
 				this.inodeTable = revTag.cacheOnlyTag().readOnlyFS().getInodeTable();
 				assert(inodeTable.nextInodeId <= Integer.MAX_VALUE);

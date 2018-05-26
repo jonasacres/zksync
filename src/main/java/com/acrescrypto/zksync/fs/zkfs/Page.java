@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Paths;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SignedSecureFile;
@@ -41,7 +42,7 @@ public class Page {
 			Directory dir = storage.opendir(parent);
 			for(String subpath : dir.list()) {
 				if(storage.basename(subpath).startsWith(basename)) {
-					return tagForPath(subpath);
+					return tagForPath(Paths.get(parent, subpath).toString());
 				}
 			}
 		} catch(ENOENTException exc) {}
