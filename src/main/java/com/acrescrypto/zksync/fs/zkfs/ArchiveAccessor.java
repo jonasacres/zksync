@@ -50,7 +50,7 @@ public class ArchiveAccessor {
 	
 	protected Key configFileKey; // derived from passphrase root; used to encrypt secure portion of configuration file
 	protected Key configFileSeedKey; // derived from passphrase root; used to encrypt seed portion of configuration file
-	protected byte[] configFileTag; // derived from passphrase root; used to set location in filesystem of config file
+	protected Key configFileTagKey; // derived from passphrase root; used to set location in filesystem of config file
 	
 	protected int type; // KEY_ROOT_PASSPHRASE or KEY_ROOT_SEED
 
@@ -190,7 +190,7 @@ public class ArchiveAccessor {
 		seedId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED, new byte[0]);
 		seedRegId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED_REG, new byte[0]);
 		localRoot = deriveKey(KEY_ROOT_SEED, KEY_TYPE_ROOT, KEY_INDEX_LOCAL, master.localKey.getRaw());
-		configFileTag = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_CONFIG_FILE, new byte[0]).getRaw();
+		configFileTagKey = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_CONFIG_FILE, new byte[0]);
 		configFileSeedKey = deriveKey(KEY_ROOT_SEED, KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_FILE, new byte[0]);
 	}
 	

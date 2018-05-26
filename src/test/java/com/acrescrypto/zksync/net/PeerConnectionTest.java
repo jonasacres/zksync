@@ -8,12 +8,15 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 
+import org.apache.commons.io.IOUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -25,6 +28,9 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.fs.Directory;
+import com.acrescrypto.zksync.fs.backedfs.BackedFS;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.Page;
@@ -41,16 +47,21 @@ import com.acrescrypto.zksync.net.PageQueue.QueueItem;
 import com.acrescrypto.zksync.net.PageQueue.RefTagContentsQueueItem;
 import com.acrescrypto.zksync.net.PageQueue.RevisionQueueItem;
 import com.acrescrypto.zksync.net.PeerConnection.PeerCapabilityException;
-import com.acrescrypto.zksync.net.PeerMessageOutgoing.MessageSegment;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerConnectionTest {
 	class DummySwarm extends PeerSwarm {
 		LinkedList<PeerAdvertisement> receivedAds = new LinkedList<PeerAdvertisement>();
 		PeerConnection closedConnection;
+		byte[] announcedTag;
 		
 		public DummySwarm(ZKArchiveConfig config) throws IOException {
 			super(config);
+		}
+		
+		@Override
+		public void announceTag(byte[] tag) {
+			announcedTag = tag;
 		}
 		
 		@Override
@@ -70,9 +81,17 @@ public class PeerConnectionTest {
 		}
 	}
 	
+	class DummyPeerMessageOutgoing extends PeerMessageOutgoing {
+		public DummyPeerMessageOutgoing(PeerConnection connection, byte cmd, InputStream txPayload) {
+			super(connection, cmd, txPayload);
+		}
+		
+		@Override protected void runTxThread() {}
+	}
+	
 	class DummySocket extends PeerSocket {
 		int peerType = PeerConnection.PEER_TYPE_FULL;
-		MessageSegment segment;
+		LinkedList<DummyPeerMessageOutgoing> messages = new LinkedList<DummyPeerMessageOutgoing>();
 		boolean closed;
 		
 		public DummySocket(DummySwarm swarm) { this.swarm = swarm; }
@@ -85,8 +104,23 @@ public class PeerConnectionTest {
 		@Override public void handshake() {}
 		@Override public int getPeerType() { return peerType; }
 		@Override public byte[] getSharedSecret() { return null; }
-		@Override public void dataReady(MessageSegment msg) { segment = msg; }
 		@Override public String getAddress() { return "127.0.0.1"; }
+		@Override public synchronized DummyPeerMessageOutgoing makeOutgoingMessage(byte cmd, InputStream stream) {
+			DummyPeerMessageOutgoing msg = new DummyPeerMessageOutgoing(conn, cmd, stream);
+			messages.add(msg);
+			this.notifyAll();
+			return msg;
+		}
+		
+		public synchronized DummyPeerMessageOutgoing popMessage() {
+			while(messages.isEmpty()) {
+				try {
+					this.wait();
+				} catch (InterruptedException e) {}
+			}
+			
+			return messages.poll();
+		}
 	}
 	
 	class DummyTCPPeerSocketListener extends TCPPeerSocketListener {
@@ -132,25 +166,27 @@ public class PeerConnectionTest {
 	DummySocket socket;
 	PeerConnection conn;
 	
-	void assertReceivedCmd(int cmd) {
-		assertTrue(Util.waitUntil(100, ()->socket.segment != null));
-		socket.segment.content.position(8);
-		assertEquals(cmd, socket.segment.content.get());
-		socket.segment.content.position(PeerMessage.HEADER_LENGTH);
+	@SuppressWarnings("deprecation")
+	void blindSwarmCache() {
+		swarm.config.setStorage(new BackedFS(new RAMFS(), new RAMFS()));
 	}
 	
-	void assertReceivedPayload(byte[] payload) {
-		assertTrue(Util.waitUntil(100, ()->socket.segment != null));
-		socket.segment.content.position(PeerMessage.HEADER_LENGTH);
-		byte[] withoutHeader = new byte[socket.segment.content.limit() - PeerMessage.HEADER_LENGTH];
-		socket.segment.content.get(withoutHeader);
-		assertTrue(Arrays.equals(payload, withoutHeader));
+	void assertReceivedCmd(byte cmd) {
+		assertTrue(Util.waitUntil(100, ()->!socket.messages.isEmpty()));
+		assertEquals(cmd, socket.messages.getFirst().cmd);
 	}
 	
-	void assertReceivedBytes(byte[] expectedNextBytes) {
-		byte[] nextBytes = new byte[expectedNextBytes.length];
-		socket.segment.content.get(nextBytes);
-		assertTrue(Arrays.equals(expectedNextBytes, nextBytes));
+	void assertReceivedPayload(byte[] payload) throws IOException {
+		assertTrue(Util.waitUntil(100, ()->!socket.messages.isEmpty()));
+		byte[] received = new byte[payload.length];
+		socket.messages.getFirst().txPayload.read(received);
+		assertTrue(Arrays.equals(payload, received));
+	}
+	
+	void assertReceivedBytes(byte[] expectedNextBytes) throws IOException {
+		byte[] received = new byte[expectedNextBytes.length];
+		socket.messages.getFirst().txPayload.read(received);
+		assertTrue(Arrays.equals(expectedNextBytes, received));
 	}
 	
 	void assertReceivedAd(PeerAdvertisement ad) {
@@ -161,12 +197,12 @@ public class PeerConnectionTest {
 		assertFalse(swarm.receivedAds.contains(ad));
 	}
 
-	void assertFinished() {
-		assertFalse(socket.segment.content.hasRemaining());
+	void assertFinished() throws IOException {
+		assertTrue(socket.messages.getLast().txPayload.available() <= 0);
 	}
 	
 	void assertNoMessage() {
-		assertFalse(Util.waitUntil(100, ()->socket.segment != null));
+		assertFalse(Util.waitUntil(100, ()->!socket.messages.isEmpty()));
 	}
 	
 	void assertNoQueuedItemLike(QueueItemTest test) {
@@ -203,6 +239,8 @@ public class PeerConnectionTest {
 		swarm = new DummySwarm(archive.getConfig());
 		socket = new DummySocket(swarm);
 		conn = new PeerConnection(socket, PeerConnection.PEER_TYPE_FULL);
+		
+		conn.setLocalPaused(true);
 	}
 	
 	@AfterClass
@@ -277,7 +315,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testAnnounceTag() {
+	public void testAnnounceTag() throws IOException {
 		conn.announceTag(1234);
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TAGS);
 		assertReceivedPayload(ByteBuffer.allocate(8).putLong(1234).array());
@@ -285,7 +323,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testAnnounceTags() {
+	public void testAnnounceTags() throws IOException {
 		int numTags = 16;
 		LinkedList<RefTag> tags = new LinkedList<RefTag>();
 		ByteBuffer payload = ByteBuffer.allocate(numTags * 8);
@@ -304,7 +342,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testAnnounceSelf() throws UnconnectableAdvertisementException {
+	public void testAnnounceSelf() throws UnconnectableAdvertisementException, IOException {
 		PeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234);
 		conn.announceSelf(ad);
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_SELF_AD);
@@ -314,7 +352,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testAnnouncePeer() throws UnconnectableAdvertisementException {
+	public void testAnnouncePeer() throws UnconnectableAdvertisementException, IOException {
 		PeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234);
 		conn.announcePeer(ad);
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_PEERS);
@@ -324,7 +362,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testAnnouncePeers() throws UnconnectableAdvertisementException {
+	public void testAnnouncePeers() throws UnconnectableAdvertisementException, IOException {
 		int numPeers = 16;
 		LinkedList<PeerAdvertisement> ads = new LinkedList<PeerAdvertisement>();
 		
@@ -366,14 +404,14 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testRequestAll() {
+	public void testRequestAll() throws IOException {
 		conn.requestAll();
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_ALL);
 		assertFinished();
 	}
 	
 	@Test
-	public void testRequestPageTag() {
+	public void testRequestPageTag() throws IOException {
 		conn.requestPageTag(1234);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_PAGE_TAGS);
 		assertReceivedBytes(ByteBuffer.allocate(8).putLong(1234).array());
@@ -381,7 +419,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testRequestPageTags() {
+	public void testRequestPageTags() throws IOException {
 		byte[][] pageTags = new byte[16][];
 		for(int i = 0; i < pageTags.length; i++) {
 			// page tags of various lengths; prove that we only use the first 8 bytes (short tag)
@@ -399,7 +437,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testRequestRefTags() throws PeerCapabilityException {
+	public void testRequestRefTags() throws PeerCapabilityException, IOException {
 		RefTag[] tags = new RefTag[16];
 		
 		for(int i = 0; i < tags.length; i++) {
@@ -424,7 +462,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testRequestRevisionContents() throws PeerCapabilityException {
+	public void testRequestRevisionContents() throws PeerCapabilityException, IOException {
 		RefTag[] tags = new RefTag[16];
 		
 		for(int i = 0; i < tags.length; i++) {
@@ -449,7 +487,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testSetPausedEnabled() {
+	public void testSetPausedEnabled() throws IOException {
 		conn.setPaused(true);
 		assertReceivedCmd(PeerConnection.CMD_SET_PAUSED);
 		assertReceivedBytes(new byte[] {0x01});
@@ -457,7 +495,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testSetPausedDisabled() {
+	public void testSetPausedDisabled() throws IOException {
 		conn.setPaused(false);
 		assertReceivedCmd(PeerConnection.CMD_SET_PAUSED);
 		assertReceivedBytes(new byte[] {0x00});
@@ -865,6 +903,7 @@ public class PeerConnectionTest {
 		}
 		
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		// TODO P2P: (review) Intermittent failures on this test, PageMerkle.hasTag throws ArrayIndexOutOfBoundsException
 		conn.handle(msg);
 		
 		for(RefTag tag : tags) {
@@ -939,6 +978,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleSendPageAddsChunksToChunkAccumulator() throws IOException, ProtocolViolationException {
+		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
 		byte[] tag = new PageMerkle(fs.inodeForPath("file").getRefTag()).getPageTag(0);
@@ -974,11 +1014,13 @@ public class PeerConnectionTest {
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 		
 		conn.handle(msg);
-		assertTrue(accumulator.finished);
+		assertTrue(accumulator.isFinished());
+		assertTrue(Arrays.equals(tag, swarm.announcedTag));
 	}
 	
 	@Test(expected=ProtocolViolationException.class)
 	public void testHandleSendPageTriggersViolationIfChunkHasNegativeOffset() throws IOException, ProtocolViolationException {
+		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
 		byte[] tag = new PageMerkle(fs.inodeForPath("file").getRefTag()).getPageTag(0);
@@ -996,6 +1038,7 @@ public class PeerConnectionTest {
 	
 	@Test(expected=ProtocolViolationException.class)
 	public void testHandleSendPageTriggersViolationIfChunkHasExcessiveOffset() throws IOException, ProtocolViolationException {
+		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
 		byte[] tag = new PageMerkle(fs.inodeForPath("file").getRefTag()).getPageTag(0);
@@ -1013,6 +1056,27 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
+	public void testHandleSendPageCountersExistingPagesWithAnnounce() throws IOException, ProtocolViolationException {
+		ZKFS fs = archive.openBlank();
+		fs.write("file", new byte[archive.getConfig().getPageSize()]);
+		byte[] tag = new PageMerkle(fs.inodeForPath("file").getRefTag()).getPageTag(0);
+		
+		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
+		byte[] chunk = new byte[PeerMessage.MESSAGE_SIZE];
+		buf.get(chunk);
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_SEND_PAGE);
+		
+		msg.receivedData((byte) 0, tag);
+		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
+		msg.receivedData(PeerMessage.FLAG_FINAL, chunk);
+		conn.handle(msg);
+		
+		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TAGS);
+		assertReceivedPayload(ByteBuffer.allocate(8).putLong(Util.shortTag(tag)).array());
+		assertFinished();
+	}
+	
+	@Test
 	public void testHandleSendPageWorksForSeedPeers() throws IOException, ProtocolViolationException {
 		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
 		testHandleSendPageAddsChunksToChunkAccumulator();
@@ -1022,6 +1086,7 @@ public class PeerConnectionTest {
 	public void testHandleSetPausedSetsPausedToFalseIfPausedByteIsZero() throws ProtocolViolationException {
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_SET_PAUSED);
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[] { 0x01 });
+		conn.setLocalPaused(false);
 		conn.handle(msg);
 		assertTrue(conn.isPaused());
 		
@@ -1035,6 +1100,7 @@ public class PeerConnectionTest {
 	@Test
 	public void testHandleSetPausedSetsPausedToTrueIfPausedByteIsOne() throws ProtocolViolationException {
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_SET_PAUSED);
+		conn.setLocalPaused(false);
 		assertFalse(conn.isPaused());
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[] { 0x01 });
 		conn.handle(msg);
@@ -1064,6 +1130,7 @@ public class PeerConnectionTest {
 	@Test
 	public void testHandleSetPausedWorksForSeedPeers() throws ProtocolViolationException {
 		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
+		conn.setLocalPaused(false);
 		testHandleSetPausedSetsPausedToFalseIfPausedByteIsZero();
 		testHandleSetPausedSetsPausedToTrueIfPausedByteIsOne();
 	}
@@ -1175,11 +1242,12 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testWaitForUnpauseDoesNotBlockIfNotPaused() throws SocketClosedException {
+		conn.setLocalPaused(false);
 		conn.waitForUnpause();
 	}
 	
 	@Test
-	public void testWaitForUnpauseBlocksUntilUnpaused() throws ProtocolViolationException {
+	public void testWaitForUnpauseBlocksUntilRemoteUnpaused() throws ProtocolViolationException {
 		class Holder { boolean waited; }
 		Holder holder = new Holder();
 		
@@ -1192,17 +1260,186 @@ public class PeerConnectionTest {
 			}
 		});
 		
+		conn.setLocalPaused(false);
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_SET_PAUSED);
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[] {0x01});
 		conn.handle(msg);
 		
 		thread.start();
 		try { Thread.sleep(10); } catch (InterruptedException e) {}
+		assertFalse(holder.waited);
 		
 		msg = new DummyPeerMessageIncoming(PeerConnection.CMD_SET_PAUSED);
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[] {0x00});
 		conn.handle(msg);
 		
 		assertTrue(Util.waitUntil(100, ()->holder.waited));
+	}
+	
+	@Test
+	public void testWaitForUnpauseBlocksUntilLocalUnpaused() {
+		class Holder { boolean waited; }
+		Holder holder = new Holder();
+		
+		Thread thread = new Thread(()->{
+			try {
+				conn.waitForUnpause();
+				holder.waited = true;
+			} catch (SocketClosedException e) {
+				e.printStackTrace();
+			}
+		});
+		
+		conn.setLocalPaused(true);
+		thread.start();
+		try { Thread.sleep(10); } catch (InterruptedException e) {}
+		assertFalse(holder.waited);
+		conn.setLocalPaused(false);
+		assertTrue(Util.waitUntil(100, ()->holder.waited));
+	}
+	
+	@Test
+	public void testWaitForReadyDoesntBlockIfTagsReceived() throws ProtocolViolationException, SocketClosedException {
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TAGS);
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		conn.handle(msg);
+		conn.waitForReady();
+	}
+	
+	@Test
+	public void testWaitForReadyBlocksUntilTagsReceived() throws SocketClosedException, ProtocolViolationException {
+		class Holder { boolean waited; }
+		Holder holder = new Holder();
+		
+		Thread thread = new Thread(()->{
+			try {
+				conn.waitForReady();
+				holder.waited = true;
+			} catch (SocketClosedException e) {
+				e.printStackTrace();
+			}
+		});
+		
+		thread.start();
+		try { Thread.sleep(10); } catch (InterruptedException e) {}
+		assertFalse(holder.waited);
+		
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_ANNOUNCE_TAGS);
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		conn.handle(msg);
+		assertTrue(Util.waitUntil(100, ()->holder.waited));
+	}
+	
+	@Test
+	public void testPageQueueThreadSendsIfUnpaused() throws ProtocolViolationException, IOException {
+		ZKFS fs = archive.openBlank();
+		fs.write("file", new byte[archive.getConfig().getPageSize()]);
+		fs.commit();
+		
+		int pagesExpected = archive.getStorage().opendir("/").listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES).length;
+		
+		conn.setLocalPaused(false);
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_REQUEST_ALL);
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		conn.handle(msg);
+		
+		HashSet<Long> pagesSeen = new HashSet<Long>();
+		int pagesReceived = 0;
+		int pageSize = archive.getConfig().getSerializedPageSize();
+		int numChunks = (int) Math.ceil(((double) pageSize)/PeerMessage.FILE_CHUNK_SIZE);
+		int finalChunkSize = pageSize % PeerMessage.FILE_CHUNK_SIZE;
+		
+		while(pagesReceived < pagesExpected) {
+			byte[] pageData = new byte[pageSize];
+			DummyPeerMessageOutgoing out = socket.popMessage();
+			byte[] tag = new byte[crypto.hashLength()];
+			IOUtils.read(out.txPayload, tag);
+			
+			assertFalse(pagesSeen.contains(Util.shortTag(tag)));
+			pagesSeen.add(Util.shortTag(tag));
+			
+			while(out.txPayload.available() >= 0) {
+				byte[] indexRaw = new byte[4];
+				int r = IOUtils.read(out.txPayload, indexRaw);
+				if(r == 0) {
+					try { Thread.sleep(1); } catch(InterruptedException exc) {}
+					continue;
+				}
+				
+				int index = ByteBuffer.wrap(indexRaw).getInt();
+				int length = (index == numChunks - 1) ? finalChunkSize : PeerMessage.FILE_CHUNK_SIZE;
+				int offset = index * PeerMessage.FILE_CHUNK_SIZE;
+				
+				int readLen = IOUtils.read(out.txPayload, pageData, offset, length);
+				assertEquals(readLen, length);
+			}
+			
+			byte[] expectedPageData = archive.getStorage().read(Page.pathForTag(tag));
+			assertTrue(Arrays.equals(expectedPageData, pageData));
+			pagesReceived++;
+		}
+	}
+	
+	@Test
+	public void testPageQueueThreadDoesNotSendIfLocalPaused() throws IOException, ProtocolViolationException {
+		ZKFS fs = archive.openBlank();
+		fs.write("file", new byte[archive.getConfig().getPageSize()]);
+		fs.commit();
+		
+		conn.setLocalPaused(true);
+		
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_REQUEST_ALL);
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		conn.handle(msg);
+		
+		assertNoMessage();
+	}
+	
+	@Test
+	public void testPageQueueThreadDoesNotSendIfRemotePaused() throws IOException, ProtocolViolationException {
+		ZKFS fs = archive.openBlank();
+		fs.write("file", new byte[archive.getConfig().getPageSize()]);
+		fs.commit();
+		
+		conn.setLocalPaused(false);
+		
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_SET_PAUSED);
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[] { 0x01 });
+		conn.handle(msg);
+		
+		msg = new DummyPeerMessageIncoming(PeerConnection.CMD_REQUEST_ALL);
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		conn.handle(msg);
+		
+		assertNoMessage();
+	}
+	
+	@Test
+	public void testPageQueueThreadSkipsTagsThatHaveBeenAnnounced() throws IOException, ProtocolViolationException {
+		ZKFS fs = archive.openBlank();
+		fs.write("file", new byte[archive.getConfig().getPageSize()]);
+		fs.commit();
+		
+		conn.setLocalPaused(false);
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_ANNOUNCE_TAGS);
+		msg.receivedData(PeerMessage.FLAG_FINAL, archive.getConfig().tag()); // extra tag bytes are harmless here
+		conn.handle(msg);
+		
+		msg = new DummyPeerMessageIncoming(PeerConnection.CMD_REQUEST_ALL);
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		conn.handle(msg);
+		
+		while(Util.waitUntil(100, ()->!socket.messages.isEmpty())) {
+			DummyPeerMessageOutgoing out = socket.popMessage();
+			byte[] tag = new byte[crypto.hashLength()];
+			IOUtils.read(out.txPayload, tag);
+			assertFalse(Arrays.equals(archive.getConfig().tag(), tag));
+			while(out.txPayload.available() >= 0) {
+				byte[] skipBuf = new byte[4 + PeerMessage.FILE_CHUNK_SIZE];
+				if(IOUtils.read(out.txPayload, skipBuf) == 0) {
+					try { Thread.sleep(1); } catch(InterruptedException exc) {}
+				}
+			}
+		}
 	}
 }

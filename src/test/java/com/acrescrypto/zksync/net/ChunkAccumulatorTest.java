@@ -61,38 +61,20 @@ public class ChunkAccumulatorTest {
 			return "127.0.0." + index;
 		}
 		
-		@Override
-		public PeerAdvertisement getAd() { return null; }
-
-		@Override
-		public void write(byte[] data, int offset, int length) {}
-
-		@Override
-		public int read(byte[] data, int offset, int length) { return -1; }
-
-		@Override
-		public boolean isLocalRoleClient() { return false; }
-
-		@Override
-		public void close() {}
-
-		@Override
-		public boolean isClosed() { return false; }
-
-		@Override
-		public byte[] getSharedSecret() { return null; }
-		
+		@Override public PeerAdvertisement getAd() { return null; }
+		@Override public void write(byte[] data, int offset, int length) {}
+		@Override public int read(byte[] data, int offset, int length) { return -1; }
+		@Override public boolean isLocalRoleClient() { return false; }
+		@Override public void close() {}
+		@Override public boolean isClosed() { return false; }
+		@Override public byte[] getSharedSecret() { return null; }
+		@Override public void handshake() throws ProtocolViolationException, IOException { }
+		@Override public int getPeerType() throws UnsupportedOperationException { return -1; }
 		@Override
 		public void violation() {
 			super.violation();
 			violated = true;
 		}
-
-		@Override
-		public void handshake() throws ProtocolViolationException, IOException { }
-
-		@Override
-		public int getPeerType() throws UnsupportedOperationException { return -1; }
 	}
 	
 	public class DummyPeerConnection extends PeerConnection {
@@ -346,4 +328,6 @@ public class ChunkAccumulatorTest {
 		
 		assertNotReceived();
 	}
+	
+	// TODO P2P: (implement) test isFinished
 }

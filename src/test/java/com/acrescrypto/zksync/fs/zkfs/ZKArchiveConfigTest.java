@@ -255,9 +255,9 @@ public class ZKArchiveConfigTest {
 				super.write();
 				configFileIv[0] ^= 0x01;
 				
-				ByteBuffer buf = ByteBuffer.wrap(storage.read(Page.pathForTag(accessor.configFileTag)));
+				ByteBuffer buf = ByteBuffer.wrap(storage.read(Page.pathForTag(tag())));
 				buf.put(configFileIv);
-				storage.write(Page.pathForTag(accessor.configFileTag), buf.array());
+				storage.write(Page.pathForTag(tag()), buf.array());
 			}
 		};
 		
@@ -273,9 +273,9 @@ public class ZKArchiveConfigTest {
 				super.write();
 				configFileIv[0] ^= 0x01;
 				
-				ByteBuffer buf = ByteBuffer.wrap(storage.read(Page.pathForTag(accessor.configFileTag)));
+				ByteBuffer buf = ByteBuffer.wrap(storage.read(Page.pathForTag(tag())));
 				buf.put(configFileIv);
-				storage.write(Page.pathForTag(accessor.configFileTag), buf.array());
+				storage.write(Page.pathForTag(tag()), buf.array());
 			}
 		};
 		
@@ -311,7 +311,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testRefuseModified() throws IOException {
-		byte[] raw = config.archive.storage.read(Page.pathForTag(accessor.configFileTag));		
+		byte[] raw = config.archive.storage.read(Page.pathForTag(config.tag()));		
 		int[] steps = {0, config.archive.crypto.symIvLength(), config.seedPortionPadSize(), -1};
 		int offset = 0;
 		for(int step : steps) {
@@ -319,7 +319,7 @@ public class ZKArchiveConfigTest {
 			else offset += step;
 			
 			raw[offset] ^= 0x01;
-			config.archive.storage.write(Page.pathForTag(accessor.configFileTag), raw);
+			config.archive.storage.write(Page.pathForTag(config.tag()), raw);
 			raw[offset] ^= 0x01;
 			assertUnreadable(config);
 		}
@@ -491,4 +491,6 @@ public class ZKArchiveConfigTest {
 		assertTrue(config.validatePage(tag, fakePage.array()));
 		assertTrue(seedConfig.validatePage(tag, fakePage.array()));
 	}
+	
+	// TODO P2P: (implement) Test serialized page matches getSerializedPageSize()
 }

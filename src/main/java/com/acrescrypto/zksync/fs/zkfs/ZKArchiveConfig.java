@@ -112,9 +112,13 @@ public class ZKArchiveConfig {
 		return 256;
 	}
 	
+	public byte[] tag() {
+		return accessor.configFileTagKey.authenticate(new byte[0]); // TODO P2P: (redesign) any way to make this archive-specific?
+	}
+	
 	public void write() throws IOException {
 		// TODO P2P: (refactor) consider futureproofing this. what if we actually want to use the reserved bytes someday?
-		ByteBuffer writeBuf = ByteBuffer.allocate(pageSize+accessor.master.crypto.asymSignatureSize());
+		ByteBuffer writeBuf = ByteBuffer.allocate(getSerializedPageSize());
 		byte[] seedPortion = serializeSeedPortion();
 		byte[] securePortion = serializeSecurePortion();
 		byte[] seedCiphertext = accessor.configFileSeedKey.encrypt(configFileIv, seedPortion, seedPortionPadSize());
@@ -126,12 +130,12 @@ public class ZKArchiveConfig {
 		writeBuf.put(privKey.sign(writeBuf.array(), 0, writeBuf.position()));
 		assertState(!writeBuf.hasRemaining());
 		
-		storage.write(Page.pathForTag(accessor.configFileTag), writeBuf.array());
+		storage.write(Page.pathForTag(tag()), writeBuf.array());
 	}
 	
 	public void read() throws IOException {
 		try {
-			ByteBuffer contents = ByteBuffer.wrap(storage.read(Page.pathForTag(accessor.configFileTag)));
+			ByteBuffer contents = ByteBuffer.wrap(storage.read(Page.pathForTag(tag())));
 			byte[] seedCiphertext = new byte[256 + accessor.master.crypto.symTagLength() + 4];
 			assertState(contents.remaining() >= seedCiphertext.length);
 			configFileIv = new byte[accessor.master.crypto.symIvLength()];
@@ -323,6 +327,11 @@ public class ZKArchiveConfig {
 	
 	public FS getCacheStorage() {
 		return storage.getCacheFS();
+	}
+	
+	@Deprecated // Use for testing only!!
+	public void setStorage(BackedFS storage) {
+		this.storage = storage;
 	}
 
 	public boolean validatePage(byte[] tag, byte[] allegedPage) {		

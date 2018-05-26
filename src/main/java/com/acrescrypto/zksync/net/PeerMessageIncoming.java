@@ -158,6 +158,12 @@ public class PeerMessageIncoming extends PeerMessage {
 		}
 	}
 	
+	protected synchronized void markFinished() {
+		finished = true;
+		connection.socket.finishedMessage(this);
+		this.notifyAll();
+	}
+	
 	protected void processThread() {
 		new Thread(() -> {
 			try {
@@ -168,8 +174,8 @@ public class PeerMessageIncoming extends PeerMessage {
 			} catch(Exception exc) {
 				logger.error("Peer message handler thread for {} encountered exception", connection.socket.getAddress(), exc);
 			}
-			finished = true;
-			synchronized(this) { this.notifyAll(); }
+			
+			markFinished();
 		}).start();
 	}
 }

@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -20,12 +21,25 @@ public abstract class PeerSocket {
 	protected LinkedList<MessageSegment> ready = new LinkedList<MessageSegment>();	
 	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
 	
-	protected int nextMessageId;
+	protected int nextSendMessageId, maxReceivedMessageId;
 	protected final Logger logger = LoggerFactory.getLogger(PeerSocket.class);
 	
 	protected String address;
 	
 	public final static String EXT_FULL_PEER = "EXT_FULL_PEER";
+
+	public abstract PeerAdvertisement getAd();
+
+	public abstract void write(byte[] data, int offset, int length) throws IOException, ProtocolViolationException;
+	public abstract int read(byte[] data, int offset, int length) throws IOException, ProtocolViolationException;
+	public abstract boolean isLocalRoleClient();
+	public abstract void close() throws IOException;
+	public abstract boolean isClosed();
+	public abstract void handshake() throws ProtocolViolationException, IOException;
+	public abstract int getPeerType() throws UnsupportedOperationException;
+	
+	public abstract byte[] getSharedSecret();
+	
 	
 	public static boolean adSupported(PeerAdvertisement ad) {
 		return ad.getType() == PeerAdvertisement.TYPE_TCP_PEER;
@@ -48,18 +62,6 @@ public abstract class PeerSocket {
 		return null;
 	}
 	
-	public abstract PeerAdvertisement getAd();
-
-	public abstract void write(byte[] data, int offset, int length) throws IOException, ProtocolViolationException;
-	public abstract int read(byte[] data, int offset, int length) throws IOException, ProtocolViolationException;
-	public abstract boolean isLocalRoleClient();
-	public abstract void close() throws IOException;
-	public abstract boolean isClosed();
-	public abstract void handshake() throws ProtocolViolationException, IOException;
-	public abstract int getPeerType() throws UnsupportedOperationException;
-	
-	public abstract byte[] getSharedSecret();
-	
 	public PeerSwarm getSwarm() {
 		return swarm;
 	}
@@ -70,6 +72,10 @@ public abstract class PeerSocket {
 
 	public int maxPayloadSize() {
 		return 64*1024;
+	}
+	
+	public PeerMessageOutgoing makeOutgoingMessage(byte cmd, InputStream txPayload) {
+		return new PeerMessageOutgoing(connection, cmd, txPayload);
 	}
 	
 	/** Immediately close socket and blacklist due to a clear protocol violation. 
@@ -84,6 +90,14 @@ public abstract class PeerSocket {
 		}
 	}
 	
+	public synchronized int issueMessageId() {
+		return nextSendMessageId++;
+	}
+
+	public boolean matchesAddress(String address) {
+		return getAddress().equals(address);
+	}
+
 	/** Handle some sort of I/O exception */
 	public void ioexception(IOException exc) {
 		/* These are probably our fault. There is the possibility that they are caused by malicious actors. */
@@ -93,6 +107,10 @@ public abstract class PeerSocket {
 		} catch (IOException e) {
 			logger.warn("Caught exception closing socket to peer {}", getAddress(), exc);
 		}
+	}
+	
+	public void finishedMessage(PeerMessageIncoming message) {
+		incoming.remove(message.msgId);
 	}
 	
 	protected void sendMessage(MessageSegment segment) throws IOException, ProtocolViolationException {
@@ -142,17 +160,20 @@ public abstract class PeerSocket {
 					PeerMessageIncoming msg;
 					
 					// TODO P2P: (redesign) Stop adversaries from opening a huge number of simultaneous incoming messages
-					if(!incoming.containsKey(msgId)) {
+					if(msgId > maxReceivedMessageId) {
 						msg = new PeerMessageIncoming(connection, cmd, flags, msgId);
-						incoming.put(msgId, msg);
-					} else {
+						synchronized(this) {
+							incoming.put(msgId, msg);
+							maxReceivedMessageId = msgId;
+						}
+					} else if(incoming.containsKey(msgId)) {
 						msg = incoming.get(msgId);
+					} else {
+						// TODO P2P: (redesign) send response advising peer we don't want this message anymore
+						continue;
 					}
 					
 					msg.receivedData(flags, payload);
-					if(msg.rxBuf.isEOF()) {
-						incoming.remove(msgId);
-					}
 				}
 			} catch(ProtocolViolationException exc) {
 				violation();
@@ -168,15 +189,7 @@ public abstract class PeerSocket {
 		outgoing.notifyAll();
 	}
 	
-	public synchronized int issueMessageId() {
-		return nextMessageId++;
-	}
-	
 	protected void assertState(boolean test) throws ProtocolViolationException {
 		if(!test) throw new ProtocolViolationException();
-	}
-
-	public boolean matchesAddress(String address) {
-		return getAddress().equals(address);
 	}
 }

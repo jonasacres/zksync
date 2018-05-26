@@ -3,6 +3,7 @@ import java.io.ByteArrayInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 
@@ -16,8 +17,11 @@ import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
+import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
+import com.acrescrypto.zksync.net.PageQueue.ChunkReference;
+import com.acrescrypto.zksync.utility.AppendableInputStream;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerConnection {
@@ -53,9 +57,9 @@ public class PeerConnection {
 	protected PeerSocket socket;
 	protected int peerType;
 	protected HashSet<Long> announcedTags = new HashSet<Long>();
-	protected boolean remotePaused;
+	protected boolean remotePaused, localPaused;
 	protected PageQueue queue;
-	protected boolean receivedTags, receivedProof;
+	protected boolean receivedTags;
 	protected final Logger logger = LoggerFactory.getLogger(PeerConnection.class);
 	boolean sentProof;
 	
@@ -65,6 +69,7 @@ public class PeerConnection {
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
 		this.peerType = this.socket.getPeerType(); // TODO P2P: (refactor) does this need its own copy at this point?
+		new Thread(()->pageQueueThread()).start();
 	}
 	
 	public PeerConnection(PeerSocket socket, int peerType) {
@@ -73,6 +78,7 @@ public class PeerConnection {
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
 		this.peerType = peerType;
+		new Thread(()->pageQueueThread()).start();
 	}
 	
 	protected PeerConnection() {}
@@ -291,7 +297,10 @@ public class PeerConnection {
 			}
 		}
 		
-		receivedTags = true;
+		synchronized(this) {
+			receivedTags = true;
+			this.notifyAll();
+		}
 	}
 	
 	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
@@ -347,21 +356,24 @@ public class PeerConnection {
 	
 	protected void handleSendPage(PeerMessageIncoming msg) throws IOException, ProtocolViolationException {
 		ZKArchive archive = socket.swarm.config.getArchive();
-		byte[] tagData = msg.rxBuf.read(archive.getCrypto().hashLength());
+		byte[] tag = msg.rxBuf.read(archive.getCrypto().hashLength());
+		if(socket.swarm.getConfig().getCacheStorage().exists(Page.pathForTag(tag))) {
+			announceTag(Util.shortTag(tag));
+			return;
+		}
+		
 		int actualPageSize = archive.getConfig().getSerializedPageSize();
 		int expectedChunks = (int) Math.ceil(((double) actualPageSize)/PeerMessage.FILE_CHUNK_SIZE);
-		int finalChunkSize = PeerMessage.FILE_CHUNK_SIZE - PeerMessage.FILE_CHUNK_SIZE*expectedChunks + actualPageSize;
-		ChunkAccumulator accumulator = socket.swarm.accumulatorForTag(tagData);
+		int finalChunkSize = actualPageSize % PeerMessage.FILE_CHUNK_SIZE;
+		ChunkAccumulator accumulator = socket.swarm.accumulatorForTag(tag);
 		
-		try {
-			while(msg.rxBuf.hasRemaining()) {
-				long offset = Util.unsignInt(msg.rxBuf.getInt());
-				assertState(0 <= offset && offset < expectedChunks && offset <= Integer.MAX_VALUE);
-				int readLen = offset == expectedChunks - 1 ? finalChunkSize : PeerMessage.FILE_CHUNK_SIZE;
-				byte[] chunkData = msg.rxBuf.read(readLen);
-				accumulator.addChunk((int) offset, chunkData, this);
-			}
-		} catch(EOFException exc) {} // we're allowed to cancel these transfers at any time, causing EOF; just ignore it
+		while(!accumulator.isFinished() && msg.rxBuf.hasRemaining()) {
+			long offset = Util.unsignInt(msg.rxBuf.getInt());
+			assertState(0 <= offset && offset < expectedChunks && offset <= Integer.MAX_VALUE);
+			int readLen = offset == expectedChunks - 1 ? finalChunkSize : PeerMessage.FILE_CHUNK_SIZE;
+			byte[] chunkData = msg.rxBuf.read(readLen);
+			accumulator.addChunk((int) offset, chunkData, this);
+		}
 	}
 	
 	protected void handleSetPaused(PeerMessageIncoming msg) throws ProtocolViolationException, EOFException {
@@ -371,9 +383,9 @@ public class PeerConnection {
 		setRemotePaused(pausedByte == 0x01);
 	}
 	
-	protected void send(int cmd, byte[] payload) {
-		assert(cmd > 0 && cmd <= Byte.MAX_VALUE);
-		new PeerMessageOutgoing(this, (byte) cmd, new ByteArrayInputStream(payload));
+	protected void send(byte cmd, byte[] payload) {
+		assert(0 <= cmd && cmd <= Byte.MAX_VALUE);
+		socket.makeOutgoingMessage(cmd, new ByteArrayInputStream(payload));
 	}
 	
 	public boolean isPausable(byte cmd) {
@@ -389,14 +401,19 @@ public class PeerConnection {
 		this.notifyAll();
 	}
 	
+	public synchronized void setLocalPaused(boolean localPaused) {
+		this.localPaused = localPaused;
+		this.notifyAll();
+	}
+	
 	public boolean isPaused() {
-		return remotePaused;
+		return remotePaused || localPaused;
 	}
 
 	public synchronized void waitForUnpause() throws SocketClosedException {
-		while(remotePaused) {
+		while(isPaused()) {
 			try {
-				this.wait(50);
+				this.wait();
 			} catch(InterruptedException e) {}
 			assertConnected();
 		}
@@ -419,9 +436,9 @@ public class PeerConnection {
 	}
 	
 	public synchronized void waitForReady() throws SocketClosedException {
-		while(!(receivedProof && receivedTags)) {
+		while(!receivedTags) {
 			try {
-				this.wait(50);
+				this.wait();
 			} catch (InterruptedException e) {}
 			assertConnected();
 		}
@@ -448,8 +465,44 @@ public class PeerConnection {
 			logger.warn("Caught exception closing socket to address {}", socket.getAddress(), exc);
 		} finally {
 			socket.swarm.closedConnection(this);
+			synchronized(this) {
+				this.notifyAll();
+			}
 		}
 	}
 	
-	// TODO P2P: (implement) Thread to send pagequeue. (keep tests in mind, too -- don't want queue auto-draining)
+	protected void pageQueueThread() {
+		byte[] lastTag = new byte[0];
+		AppendableInputStream lastStream = null;
+		
+		while(!socket.isClosed()) {
+			try {
+				ChunkReference chunk = queue.nextChunk();
+				if(!wantsFile(chunk.tag)) continue;
+				waitForUnpause();
+				
+				if(lastStream == null || !Arrays.equals(lastTag, chunk.tag)) {
+					if(lastStream != null) {
+						lastStream.eof();
+					}
+					
+					lastStream = new AppendableInputStream();
+					socket.makeOutgoingMessage(CMD_SEND_PAGE, lastStream);
+					lastStream.write(chunk.tag);
+					lastTag = chunk.tag;
+				}
+
+				
+				lastStream.write(ByteBuffer.allocate(4).putInt(chunk.index).array());
+				lastStream.write(chunk.getData());
+				if(!queue.expectTagNext(chunk.tag)) {
+					lastStream.eof();
+					lastStream = null;
+				}
+			} catch(Exception exc) {
+				logger.error("Caught exception in PeerConnection page queue thread", exc);
+				try { Thread.sleep(500); } catch(InterruptedException exc2) {}
+			}
+		}
+	}
 }

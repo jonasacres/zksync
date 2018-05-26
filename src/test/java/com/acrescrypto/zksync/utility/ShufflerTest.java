@@ -24,7 +24,7 @@ public class ShufflerTest {
 				if(orderings[0].order[j] == orderings[1].order[j]) matches++;
 			}
 			
-			assertFalse(matches > 4);
+			assertFalse(matches >= 8);
 		}
 	}
 	

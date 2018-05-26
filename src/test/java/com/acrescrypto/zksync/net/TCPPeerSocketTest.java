@@ -667,4 +667,7 @@ public class TCPPeerSocketTest {
 		new DummyConnection(socket).handshake();
 		assertFalse(socket.matchesAddress("10.1.2.3"));
 	}
+	
+	// TODO P2P: (implement) Test ignores closed message IDs
+	// TODO P2P: (implement) Test ignores skipped message IDs
 }

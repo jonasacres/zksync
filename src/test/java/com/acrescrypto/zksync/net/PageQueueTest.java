@@ -706,4 +706,51 @@ public class PageQueueTest {
 		queue.stopAll();
 		assertFalse(queue.hasNextChunk());
 	}
+	
+	@Test
+	public void testExpectTagNextReturnsTrueIfPageTagIsNextItem() {
+		queue.addPageTag(0, pageTag);
+		assertTrue(queue.expectTagNext(pageTag));
+		
+		queue.nextChunk();
+		assertTrue(queue.expectTagNext(pageTag));
+		
+		queue.nextChunk();
+		assertTrue(queue.expectTagNext(pageTag));
+	}
+	
+	@Test
+	public void testExpectTagNextReturnsFalseIfPageTagIsNotNextItem() {
+		queue.addPageTag(0, pageTag);
+		queue.addRevisionTag(1, revTag);
+		
+		assertFalse(queue.expectTagNext(pageTag));
+		queue.nextChunk();
+		assertFalse(queue.expectTagNext(pageTag));
+	}
+	
+	@Test
+	public void testExpectTagNextReturnsFalseIfQueueIsEmpty() {
+		assertFalse(queue.hasNextChunk());
+		assertFalse(queue.expectTagNext(pageTag));
+	}
+	
+	@Test
+	public void testExpectChunksIncludeCorrectData() throws IOException {
+		queue.addPageTag(0, pageTag);
+		byte[] pageData = archive.getStorage().read(Page.pathForTag(pageTag));
+		int numChunks = (int) Math.ceil(((double) pageData.length)/PeerMessage.FILE_CHUNK_SIZE);
+		int lastPageSize = pageData.length % PeerMessage.FILE_CHUNK_SIZE;
+		
+		while(queue.hasNextChunk()) {
+			ChunkReference chunk = queue.nextChunk();
+			assertTrue(Arrays.equals(pageTag, chunk.tag));
+			
+			int len = chunk.index == (numChunks - 1) ? lastPageSize : PeerMessage.FILE_CHUNK_SIZE; 
+			byte[] expectedData = new byte[len];
+			System.arraycopy(pageData, chunk.index*PeerMessage.FILE_CHUNK_SIZE, expectedData, 0, len);
+			
+			assertTrue(Arrays.equals(expectedData, chunk.getData()));
+		}
+	}
 }

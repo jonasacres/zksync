@@ -280,4 +280,6 @@ public class PageMerkle {
 	public ZKArchive getArchive() {
 		return archive;
 	}
+	
+	// TODO P2P: (implement) Test serialized chunk matches config getSerializedPageSize()
 }

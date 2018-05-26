@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.PriorityQueue;
 
 import org.slf4j.Logger;
@@ -8,12 +9,14 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.utility.Shuffler;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PageQueue {
 	public final static int DEFAULT_EVERYTHING_PRIORITY = -10;
@@ -29,8 +32,16 @@ public class PageQueue {
 			this.index = index;
 		}
 		
-		public byte[] getData() {
-			return null;
+		public byte[] getData() throws IOException {
+			File file = fs.open(Page.pathForTag(tag), File.O_RDONLY);
+			long offset = index * PeerMessage.FILE_CHUNK_SIZE;
+			int len = Math.min((int) (file.getStat().getSize() - offset), PeerMessage.FILE_CHUNK_SIZE);
+			if(len < 0) throw new RuntimeException("attempted to read offset " + offset + " beyond end of file for page " + Util.bytesToHex(tag));
+			
+			byte[] data = new byte[len];
+			file.seek(offset, File.SEEK_SET);
+			file.read(data, 0, len);
+			return data;
 		}
 	}
 	
@@ -255,6 +266,13 @@ public class PageQueue {
 		return !itemsByPriority.isEmpty();
 	}
 	
+	public boolean expectTagNext(byte[] tag) {
+		unpackNextReference();
+		if(itemsByPriority.isEmpty()) return false;
+		QueueItem head = itemsByPriority.peek();
+		return head.reference() != null && Arrays.equals(tag, head.reference().tag);
+	}
+	
 	public synchronized ChunkReference nextChunk() {
 		while(!hasNextChunk()) {
 			try {
@@ -262,7 +280,7 @@ public class PageQueue {
 			} catch(InterruptedException exc) {}
 		}
 		
-		return itemsByPriority.poll().reference();
+		return itemsByPriority.remove().reference();
 	}
 	
 	protected synchronized void addItem(QueueItem item) {

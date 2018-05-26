@@ -183,4 +183,6 @@ public class Page {
 		size = 0;
 		dirty = true;
 	}
+	
+	// TODO P2P: (implement) Test serialized page matches config getSerializedPageSize()
 }

@@ -90,7 +90,7 @@ public class RAMFile extends File {
 		this.fs = fs;
 		this.path = path;
 		this.mode = mode;
-
+		
 		try {
 			if((mode & O_NOFOLLOW) != 0 && fs.lstat(path).isSymlink()) throw new EMLINKException(path);
 			if((mode & O_NOFOLLOW) == 0) {

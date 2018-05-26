@@ -65,7 +65,7 @@ public class ArchiveAccessorTest {
 		assertNotNull(seedAccessor.seedId);
 		assertNotNull(seedAccessor.seedRegId);
 		assertNotNull(seedAccessor.localRoot);
-		assertNotNull(seedAccessor.configFileTag);
+		assertNotNull(seedAccessor.configFileTagKey);
 		assertNotNull(seedAccessor.configFileSeedKey);
 	}
 	
@@ -76,7 +76,7 @@ public class ArchiveAccessorTest {
 		assertNotNull(seedAccessor.seedId);
 		assertNotNull(seedAccessor.seedRegId);
 		assertNotNull(seedAccessor.localRoot);
-		assertNotNull(seedAccessor.configFileTag);
+		assertNotNull(seedAccessor.configFileTagKey);
 		assertNotNull(seedAccessor.configFileSeedKey);
 	}
 	

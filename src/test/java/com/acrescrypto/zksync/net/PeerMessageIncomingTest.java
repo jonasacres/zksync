@@ -340,5 +340,8 @@ public class PeerMessageIncomingTest {
 		try { thread.join(1000); } catch (InterruptedException e) { e.printStackTrace(); };
 		assertTrue(holder.finished);
 	}
+	
+	// TODO P2P: (implement) tests marked finished when handler exits
+	// TODO P2P: (implement) tests notifies socket when finished
 }
 

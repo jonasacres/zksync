@@ -5,7 +5,8 @@ import org.junit.runners.Suite;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-	ShufflerTest.class
+	ShufflerTest.class,
+	AppendableInputStreamTest.class
 })
 
 public class UtilityTests {

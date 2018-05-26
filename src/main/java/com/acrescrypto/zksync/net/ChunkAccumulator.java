@@ -100,6 +100,10 @@ public class ChunkAccumulator {
 		return hasCandidatesForAllChunks() && trySolutions(new ArrayList<ChunkVersion>());
 	}
 	
+	public boolean isFinished() {
+		return finished;
+	}
+	
 	protected boolean hasCandidatesForAllChunks() {
 		for(int i = 0; i < numChunksExpected; i++) {
 			if(chunksByIndex.get(i).size() == 0) return false;
