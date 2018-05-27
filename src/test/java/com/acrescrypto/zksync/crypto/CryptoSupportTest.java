@@ -189,6 +189,94 @@ public class CryptoSupportTest  {
 		assertTrue(Arrays.equals(derived, expected));
 	}
 	
+	@Test
+	public void testSymLengths() {
+		byte[] pt = new byte[crypto.symBlockSize()], iv = crypto.makeSymmetricIv();
+		byte[] key = crypto.makeSymmetricKey();
+		
+		assertEquals(key.length, crypto.symKeyLength());
+		assertEquals(iv.length, crypto.symIvLength());
+		
+		byte[] ct = crypto.encrypt(key, iv, pt, new byte[0], -1);
+		byte[] pt2 = crypto.decrypt(key, iv, ct, new byte[0], false);
+		
+		assertEquals(crypto.symBlockSize() + crypto.symTagLength(), ct.length);
+		assertTrue(Arrays.equals(pt, pt2));
+	}
+	
+	@Test
+	public void testHashLength() {
+		assertEquals(crypto.hashLength(), crypto.hash(new byte[0]).length);
+	}
+	
+	@Test
+	public void testAsymSigningKeySizes() {
+		PrivateSigningKey key = crypto.makePrivateSigningKey();
+		assertEquals(crypto.asymPrivateSigningKeySize(), key.getBytes().length);
+		assertEquals(crypto.asymPublicSigningKeySize(), key.publicKey().getBytes().length);
+		assertEquals(crypto.asymSignatureSize(), key.sign(new byte[0]).length);
+	}
+	
+	@Test
+	public void testAsymDHKeySizes() {
+		PrivateDHKey key = crypto.makePrivateDHKey(), key2 = crypto.makePrivateDHKey();
+		assertEquals(crypto.asymPrivateDHKeySize(), key.getBytes().length);
+		assertEquals(crypto.asymPublicDHKeySize(), key.publicKey().getBytes().length);
+		assertEquals(crypto.asymDHSecretSize(), key.sharedSecret(key2.publicKey()).length);
+	}
+	
+	@Test
+	public void testSymPaddedCiphertextSize() {
+		byte[] key = crypto.makeSymmetricKey(), iv = crypto.makeSymmetricIv();
+		byte[] plaintext = new byte[1];
+		for(int len = plaintext.length; len < 2*crypto.symBlockSize(); len++) {
+			int actualCtLen = crypto.encrypt(key, iv, plaintext, new byte[0], len).length;
+			assertEquals(crypto.symPaddedCiphertextSize(len), actualCtLen);			
+		}
+	}
+	
+	@Test
+	public void testAsymSignature() {
+		byte[] msg = "genuine article".getBytes();
+		PrivateSigningKey key = crypto.makePrivateSigningKey(), key2 = crypto.makePrivateSigningKey();
+		
+		byte[] signature = key.sign(msg);
+		
+		assertTrue(key.publicKey().verify(msg, signature));
+		assertTrue(key.verify(msg, signature));
+		
+		assertFalse(key2.publicKey().verify(msg, signature));
+		assertFalse(key2.verify(msg, signature));
+		
+		signature[1] ^= 0x01;
+
+		assertFalse(key.publicKey().verify(msg, signature));
+		assertFalse(key.verify(msg, signature));
+	}
+	
+	@Test
+	public void testAsymDH() {
+		PrivateDHKey[] keys = new PrivateDHKey[3];
+		for(int i = 0; i < keys.length; i++) {
+			keys[i] = crypto.makePrivateDHKey();
+		}
+		
+		byte[] secret01 = keys[0].sharedSecret(keys[1].pubKey);
+		byte[] secret10 = keys[1].sharedSecret(keys[0].pubKey);
+		byte[] secret02 = keys[0].sharedSecret(keys[2].pubKey);
+		byte[] secret20 = keys[2].sharedSecret(keys[0].pubKey);
+		byte[] secret12 = keys[1].sharedSecret(keys[2].pubKey);
+		byte[] secret21 = keys[2].sharedSecret(keys[1].pubKey);
+		
+		assertTrue(Arrays.equals(secret01, secret10));
+		assertTrue(Arrays.equals(secret02, secret20));
+		assertTrue(Arrays.equals(secret21, secret12));
+		
+		assertFalse(Arrays.equals(secret01, secret02));
+		assertFalse(Arrays.equals(secret01, secret12));
+		assertFalse(Arrays.equals(secret02, secret12));
+	}
+	
 	private byte[][][] aes128OCBTestVectors() {
 		// Taken from RFC 7253 https://tools.ietf.org/html/rfc7253
 		return new byte[][][] { // key, nonce, ad, plaintext, ciphertext

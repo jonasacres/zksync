@@ -21,7 +21,7 @@ public class PrivateSigningKey {
 	
 	protected PrivateSigningKey(CryptoSupport crypto, byte[] raw) {
 		EdDSAParameterSpec edSpec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
-		EdDSAPrivateKeySpec privKeySpec = new EdDSAPrivateKeySpec(raw, edSpec);
+		EdDSAPrivateKeySpec privKeySpec = new EdDSAPrivateKeySpec(edSpec, raw);
 		this.crypto = crypto;
 		this.privKey = new EdDSAPrivateKey(privKeySpec);
 	}

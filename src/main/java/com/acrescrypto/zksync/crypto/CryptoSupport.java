@@ -311,22 +311,26 @@ public class CryptoSupport {
 		return 128/8;
 	}
 	
-	public int hashLength() {
-		return 512/8; // 512-bit hashes
-	}
-
 	public int symBlockSize() {
 		return 128/8; // AES has 128-bit blocks
 	}
 	
+	public int hashLength() {
+		return 512/8; // 512-bit hashes
+	}
+	
 	public int asymPrivateSigningKeySize() {
-		return 256/8;
+		return 512/8;
 	}
 	
 	public int asymPublicSigningKeySize() {
 		return 256/8;
 	}
 	
+	public int asymSignatureSize() {
+		return 512/8;
+	}
+
 	public int asymPrivateDHKeySize() {
 		return 256/8;
 	}
@@ -335,10 +339,6 @@ public class CryptoSupport {
 		return 256/8;
 	}
 	
-	public int asymSignatureSize() {
-		return 512/8;
-	}
-
 	public int asymDHSecretSize() {
 		return 256/8; // TODO P2P: (review) verify size
 	}
