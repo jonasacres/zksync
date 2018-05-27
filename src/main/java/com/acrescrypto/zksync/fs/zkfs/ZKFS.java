@@ -83,9 +83,18 @@ public class ZKFS extends FS {
 	}
 	
 	protected Inode create(String path, ZKDirectory parent) throws IOException {
+		assertPathLegal(path);
 		Inode inode = inodeTable.issueInode();
 		parent.link(inode, basename(path));
 		return inode;
+	}
+	
+	public void assertPathLegal(String path) throws EINVALException {
+		String bn = basename(path);
+		if(bn.equals("")) throw new EINVALException(path);
+		if(bn.equals(".")) throw new EINVALException(path);
+		if(bn.equals("..")) throw new EINVALException(path);
+		if(bn.equals("/")) throw new EINVALException(path);
 	}
 	
 	public void assertPathExists(String path) throws IOException {

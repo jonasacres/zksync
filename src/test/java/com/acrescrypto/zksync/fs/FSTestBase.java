@@ -27,6 +27,15 @@ public abstract class FSTestBase {
 		catch(FileTypeNotSupportedException exc) {}
 	}
 	
+	void expectIOException(LambdaOp op) throws IOException {
+		try {
+			op.op();
+			fail();
+		}
+		catch(IOException exc) {}
+		catch(UnsupportedOperationException exc) {}
+	}
+	
 	void expectInScope(FS scoped, String path, LambdaOp op) throws IOException {
 		assertFalse(scoped.exists(path));
 		assertFalse(scratch.exists(path));
@@ -42,6 +51,18 @@ public abstract class FSTestBase {
 		} else {
 			scoped.unlink(path);
 		}
+	}
+	
+	void expectCantCreate(String path) throws IOException {
+		expectIOException(()->scratch.write(path, "test".getBytes()));
+		expectIOException(()->scratch.open(path, File.O_RDONLY));
+		expectIOException(()->scratch.open(path, File.O_WRONLY|File.O_CREAT));
+		expectIOException(()->scratch.mkdir(path));
+		expectIOException(()->scratch.mkfifo(path));
+		expectIOException(()->scratch.mknod(path, Stat.TYPE_BLOCK_DEVICE, 0, 0));
+		expectIOException(()->scratch.mknod(path, Stat.TYPE_CHARACTER_DEVICE, 0, 0));
+		expectIOException(()->scratch.link("test", path));
+		expectIOException(()->scratch.symlink("test", path));
 	}
 
 	public void prepareExamples() throws IOException {
@@ -397,7 +418,7 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testScopedPurge() throws IOException {
-		scratch.mkdir("scoepd");
+		scratch.mkdir("scoped");
 		FS scoped = scratch.scopedFS("scoped");
 		
 		scoped.write("a/b/c/d", "test data".getBytes());
@@ -525,9 +546,25 @@ public abstract class FSTestBase {
 		expectInScope(scoped, "mustbescoped", ()->scoped.truncate("/mustbescoped", 0));
 		expectInScope(scoped, "mustbescoped", ()->scoped.scopedFS("/mustbescoped"));
 	}
-
-	// TODO P2P: (implement) Test can't create file/directory called ..
-	// TODO P2P: (implement) Test can't create file/directory called .
-	// TODO P2P: (implement) Test can't create file/directory called / in directory
-	// TODO P2P: (implement) Test can't create file/directory with blank filename
+	
+	@Test
+	public void testCantCreateFileNamedDotDot() throws IOException {
+		expectCantCreate("..");
+	}
+	
+	@Test
+	public void testCantCreateFileNamedDot() throws IOException {
+		expectCantCreate(".");
+	}
+	
+	@Test
+	public void testCantCreateFileWithBlankName() throws IOException {
+		expectCantCreate("");
+	}
+	
+	@Test
+	public void testCantCreateFileNamedSlash() throws IOException {
+		expectCantCreate("/");
+		expectCantCreate("directory/");
+	}
 }

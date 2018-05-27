@@ -86,7 +86,8 @@ public abstract class FS {
 	}
 	
 	public String basename(String path) {
-		if(path == "/") return "/";
+		if(path.equals("/")) return "/";
+		if(path.equals("")) return "";
 		String[] comps = path.split("/");
 		return comps[comps.length-1];
 	}

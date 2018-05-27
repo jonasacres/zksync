@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.backedfs;
 import java.io.IOException;
 import java.util.HashSet;
 
+import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
@@ -32,6 +33,12 @@ public class BackedFS extends FS {
 	public BackedFS(FS cacheFS, FS backupFS) {
 		this.cacheFS = cacheFS;
 		this.backupFS = backupFS;
+	}
+	
+	@Override
+	public boolean exists(String path) {
+		if(path.equals("/")) return cacheFS.exists(path);
+		return super.exists(path);
 	}
 
 	@Override
@@ -67,8 +74,13 @@ public class BackedFS extends FS {
 
 	@Override
 	public void mkdir(String path) throws IOException {
-		ensureParentPresent(path);
-		cacheFS.mkdir(path);
+		if(dirname(path).equals(path)) {
+			if(exists(path)) throw new EEXISTSException(path);
+			cacheFS.mkdir(path);
+		} else {
+			ensureParentPresent(path);
+			cacheFS.mkdir(path);
+		}
 	}
 
 	@Override
@@ -190,7 +202,8 @@ public class BackedFS extends FS {
 		}
 		
 		if((mode & File.O_CREAT) != 0)  {
-			mkdirp(dirname(path));
+			String dn = dirname(path);
+			if(!cacheFS.exists(dn)) mkdirp(dn);
 		}
 		return cacheFS.open(path, mode);
 	}

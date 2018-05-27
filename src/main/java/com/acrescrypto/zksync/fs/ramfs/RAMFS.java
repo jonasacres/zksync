@@ -61,7 +61,7 @@ public class RAMFS extends FS {
 		this.scope = "/";
 		try {
 			mkdir("/");
-		} catch(ENOENTException exc) {
+		} catch(IOException exc) {
 			throw new RuntimeException("unexpected failure to create RAMFS");
 		}
 	}
@@ -88,7 +88,8 @@ public class RAMFS extends FS {
 	}
 
 	@Override
-	public void mkdir(String path) throws ENOENTException {
+	public void mkdir(String path) throws IOException {
+		if(exists(path)) throw new EEXISTSException(path);
 		makeInode(path, (inode)->inode.stat.makeDirectory());
 	}
 
@@ -122,6 +123,7 @@ public class RAMFS extends FS {
 	@Override
 	public void symlink(String target, String link) throws IOException {
 		unscopedPath(target); // trigger exception if outside scope
+		if(exists(link)) throw new EEXISTSException(link);
 		makeInode(link, (inode)->{
 			inode.stat.makeSymlink();
 			inode.data = new String(target).getBytes();
@@ -135,6 +137,7 @@ public class RAMFS extends FS {
 
 	@Override
 	public void mknod(String path, int type, int major, int minor) throws IOException {
+		if(exists(path)) throw new EEXISTSException(path);
 		makeInode(path, (inode)->{
 			if(type == Stat.TYPE_BLOCK_DEVICE) inode.stat.makeBlockDevice(major, minor);
 			else if(type == Stat.TYPE_CHARACTER_DEVICE) inode.stat.makeCharacterDevice(major, minor);
@@ -143,6 +146,7 @@ public class RAMFS extends FS {
 
 	@Override
 	public void mkfifo(String path) throws IOException {
+		if(exists(path)) throw new EEXISTSException(path);
 		makeInode(path, (inode)->{
 			inode.stat.makeFifo();
 		});
@@ -197,10 +201,11 @@ public class RAMFS extends FS {
 	public void write(String path, byte[] contents, int offset, int length) throws IOException {
 		byte[] data = new byte[length];
 		System.arraycopy(contents, offset, data, 0, length);
-		mkdirp(dirname(path));
+		if(!exists(dirname(path))) mkdirp(dirname(path));
 		
 		try {
 			Inode inode = lookup(path);
+			if(inode.stat.isDirectory()) throw new EISDIRException(path);
 			inode.data = data;
 			inode.stat.setSize(length);
 		} catch(ENOENTException exc) {

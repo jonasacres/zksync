@@ -580,7 +580,9 @@ public class BackedFSTest extends FSTestBase {
 	public void testOpenAllowsModificationOfCached() throws IOException {
 		byte[] data = { 1,2,3,4 };
 		assertFalse(Arrays.equals(data, cacheFS.read(CACHED_FILE)));
-		backedFS.mkdirp(backedFS.dirname(CACHED_FILE));
+		if(!backedFS.exists(backedFS.dirname(CACHED_FILE))) {
+			backedFS.mkdirp(backedFS.dirname(CACHED_FILE));
+		}
 		File file = backedFS.open(CACHED_FILE, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
 		file.write(data);
 		file.close();
