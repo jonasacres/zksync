@@ -57,7 +57,7 @@ public class PageMerkle {
 		}
 	}
 	
-	public boolean exists() throws IOException { // TODO P2P: (implement) Test
+	public boolean exists() throws IOException {
 		switch(tag.getRefType()) {
 		case RefTag.REF_TYPE_IMMEDIATE: return true;
 		case RefTag.REF_TYPE_INDIRECT:
@@ -139,7 +139,7 @@ public class PageMerkle {
 			
 			SecureFile
 			  .atPath(archive.storage, pathForChunk(tag, i), cipherKey(tag), tag.getBytes(), (""+i).getBytes())
-			  .write(plaintext.array(), offset, len, (int) archive.config.pageSize);
+			  .write(plaintext.array(), offset, len, archive.config.getSerializedPageSize());
 		}
 		
 		return tag;
