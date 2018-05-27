@@ -6,6 +6,7 @@ import org.junit.runners.Suite;
 import com.acrescrypto.zksync.fs.backedfs.BackedFSTest;
 import com.acrescrypto.zksync.fs.localfs.LocalFSTests;
 import com.acrescrypto.zksync.fs.ramfs.RAMFSTests;
+import com.acrescrypto.zksync.fs.swarmfs.SwarmFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTests;
 
 @RunWith(Suite.class)
@@ -14,6 +15,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFSTests;
 	ZKFSTests.class,
 	RAMFSTests.class,
 	BackedFSTest.class,
+	SwarmFSTest.class
 	// SSHFS omitted due to speed issues
 })
 

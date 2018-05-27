@@ -37,7 +37,7 @@ public class SwarmFS extends FS {
 		stat.setAtime(0);
 		stat.setMtime(0);
 		stat.setCtime(0);
-		stat.setSize(swarm.getConfig().getPageSize());
+		stat.setSize(swarm.getConfig().getSerializedPageSize());
 		stat.setInodeId(Util.shortTag(tag));
 		
 		return stat;
@@ -148,14 +148,15 @@ public class SwarmFS extends FS {
 		byte[] pageTag = Page.tagForPath(path);
 		swarm.requestTag(pageTag);
 		swarm.waitForPage(pageTag);
-		return swarm.getConfig().getStorage().read(path);
+		return swarm.getConfig().getCacheStorage().read(path);
 	}
 
 	@Override
 	public File open(String path, int mode) throws IOException {
 		byte[] pageTag = Page.tagForPath(path);
+		swarm.requestTag(pageTag);
 		swarm.waitForPage(pageTag);
-		return swarm.getConfig().getStorage().open(path, mode);
+		return swarm.getConfig().getCacheStorage().open(path, mode);
 	}
 
 	@Override
@@ -165,7 +166,7 @@ public class SwarmFS extends FS {
 	
 	@Override
 	public SwarmFS scopedFS(String subpath) {
-		throw new UnsupportedOperationException(); // no concept of scoping a PeerConnectionFS
+		throw new UnsupportedOperationException(); // no concept of scoping here
 	}
 	
 	public PeerSwarm getSwarm() {
