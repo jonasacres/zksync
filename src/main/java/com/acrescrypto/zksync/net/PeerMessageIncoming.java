@@ -39,7 +39,7 @@ public class PeerMessageIncoming extends PeerMessage {
 		}
 		
 		public boolean hasRemaining() {
-			return !eof || readBuf.hasRemaining(); // TODO P2P: (test) Test this
+			return !eof || readBuf.hasRemaining();
 		}
 		
 		public boolean isEOF() {

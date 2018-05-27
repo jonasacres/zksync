@@ -16,10 +16,11 @@ import org.junit.Test;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PeerMessageIncomingTest {
 	class DummySocket extends PeerSocket {
-		boolean violated;
+		boolean violated, finished;
 		@Override public PeerAdvertisement getAd() { return null; }
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }
@@ -31,23 +32,39 @@ public class PeerMessageIncomingTest {
 		@Override public String getAddress() { return "dummy"; }
 		@Override public void handshake() {}
 		@Override public int getPeerType() { return -1; }
+		@Override public void finishedMessage(PeerMessageIncoming msg) {
+			finished = true;
+		}
 	}
 	
 	class DummyPeerConnection extends PeerConnection {
 		boolean messageReceived;
-		public DummyPeerConnection() { socket = new DummySocket(); }
-		@Override public boolean handle(PeerMessageIncoming incoming) throws ProtocolViolationException { return messageReceived = true; }
+		boolean blocking = true;
+		DummySocket socket;
+		public DummyPeerConnection() { super.socket = this.socket = new DummySocket(); }
+		@Override public synchronized boolean handle(PeerMessageIncoming incoming) throws ProtocolViolationException {
+			messageReceived = true;
+			while(blocking) { try { this.wait(); } catch(InterruptedException exc) {} }
+			return true;
+		}
+		
+		public synchronized void unblock() {
+			blocking = false;
+			this.notifyAll();
+		}
 	}
 	
 	final static byte CMD = 1;
 	final static byte FLAGS = 2;
 	final static int MSG_ID = 1234;
 	
+	DummyPeerConnection conn;
 	PeerMessageIncoming msg;
 	
 	@Before
 	public void beforeEach() {
-		msg = new PeerMessageIncoming(new DummyPeerConnection(), CMD, FLAGS, MSG_ID);
+		conn = new DummyPeerConnection();
+		msg = new PeerMessageIncoming(conn, CMD, FLAGS, MSG_ID);
 	}
 	
 	@Test
@@ -341,7 +358,18 @@ public class PeerMessageIncomingTest {
 		assertTrue(holder.finished);
 	}
 	
-	// TODO P2P: (implement) tests marked finished when handler exits
-	// TODO P2P: (implement) tests notifies socket when finished
+	@Test
+	public void testMarksFinishedWhenHandlerExists() {
+		assertFalse(msg.isFinished());
+		conn.unblock();
+		assertTrue(Util.waitUntil(100, ()->msg.isFinished()));
+	}
+	
+	@Test
+	public void testNotifiedSocketWhenFinished() {
+		assertFalse(conn.socket.finished);
+		conn.unblock();
+		assertTrue(Util.waitUntil(100, ()->conn.socket.finished));
+	}
 }
 

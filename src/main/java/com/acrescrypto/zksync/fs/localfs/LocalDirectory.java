@@ -7,6 +7,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.File;
 
@@ -78,8 +79,13 @@ public class LocalDirectory implements Directory {
 	
 	@Override
 	public boolean contains(String entry) {
-		java.io.File file = new java.io.File(fs.expandPath(Paths.get(path, entry).toString()));
-		return file.exists();
+		java.io.File file;
+		try {
+			file = new java.io.File(fs.expandPath(Paths.get(path, entry).toString()));
+			return file.exists();
+		} catch (ENOENTException e) {
+			return false;
+		}
 	}
 	
 	@Override

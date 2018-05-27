@@ -9,10 +9,12 @@ import java.nio.file.attribute.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import com.acrescrypto.zksync.exceptions.CommandFailedException;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.FileTypeNotSupportedException;
 import com.acrescrypto.zksync.fs.*;
+import com.acrescrypto.zksync.utility.Util;
 
 public class LocalFS extends FS {
 	protected String root;
@@ -23,7 +25,7 @@ public class LocalFS extends FS {
 
 	private Stat statWithLinkOption(String pathStr, LinkOption... linkOpt) throws IOException {
 		Stat stat = new Stat();
-		Path path = Paths.get(root, pathStr);
+		Path path = qualifiedPath(pathStr);
 		
 		try {
 			stat.setAtime(decodeTime(Files.getAttribute(path, "lastAccessTime", linkOpt)));
@@ -112,7 +114,7 @@ public class LocalFS extends FS {
 	}
 
 	private boolean isWindows() {
-		return System.getProperty("os.name").toLowerCase().indexOf("win") >= 0;
+		return Util.isWindows();
 	}
 	
 	private String runCommand(String[] args) throws IOException {
@@ -125,6 +127,9 @@ public class LocalFS extends FS {
 	    try {
 			process.waitFor();
 			process.getInputStream().read(buf);
+			if(process.exitValue() != 0) {
+				throw new CommandFailedException();
+			}
 			return new String(buf);
 		} catch (InterruptedException e) {
 			throw new IOException();
@@ -148,17 +153,18 @@ public class LocalFS extends FS {
 
 	@Override
 	public void mkdir(String path) throws IOException {
-		Files.createDirectory(Paths.get(root, path));
+		Files.createDirectory(qualifiedPath(path));
 	}
 	
 	@Override
 	public void mkdirp(String path) throws IOException {
-		Files.createDirectories(Paths.get(root, path));
+		Files.createDirectories(qualifiedPath(path));
 	}
 
 	@Override
 	public void rmdir(String path) throws IOException {
-		Path p = Paths.get(root, path);
+		Path p = qualifiedPath(path);
+		if(!Files.exists(p)) throw new ENOENTException(path);
 		if(!Files.isDirectory(p)) throw new IOException(path + ": not a directory");
 		Files.delete(p);
 	}
@@ -166,7 +172,7 @@ public class LocalFS extends FS {
 	@Override
 	public void unlink(String path) throws IOException {
 		try {
-			Files.delete(Paths.get(root, path));
+			Files.delete(qualifiedPath(path));
 		} catch(NoSuchFileException exc) {
 			throw new ENOENTException(path);
 		}
@@ -175,25 +181,31 @@ public class LocalFS extends FS {
 	@Override
 	public void link(String source, String dest) throws IOException {
 		try {
-			Files.createLink(Paths.get(root, dest), Paths.get(root, source));
+			Files.createLink(qualifiedPath(dest), qualifiedPath(source));
 		} catch(FileAlreadyExistsException exc) {
-			throw new EEXISTSException(Paths.get(root, source).toString());
+			throw new EEXISTSException(qualifiedPath(source).toString());
+		} catch(NoSuchFileException exc) {
+			throw new ENOENTException(source);
 		}
 	}
 
 	@Override
 	public void symlink(String source, String dest) throws IOException {
-		Files.createSymbolicLink(Paths.get(root, dest), Paths.get(root, source));
+		Files.createSymbolicLink(qualifiedPath(dest), qualifiedPath(source));
 	}
 	
 	@Override
 	public String readlink(String link) throws IOException {
-		String target = Files.readSymbolicLink(Paths.get(root, link)).toString();
-		if(target.startsWith(root)) {
-			return target.substring(root.length()+1, target.length());
+		try {
+			String target = Files.readSymbolicLink(qualifiedPath(link)).toString();
+			if(target.startsWith(root)) {
+				return target.substring(root.length()+1, target.length());
+			}
+			
+			return target;
+		} catch(NoSuchFileException exc) {
+			throw new ENOENTException(link);
 		}
-		
-		return target;
 	}
 
 	@Override
@@ -211,13 +223,22 @@ public class LocalFS extends FS {
 			throw new IllegalArgumentException(String.format("Illegal node type: %d", type));
 		}
 		
-		runCommand(new String[] { "mknod", typeStr, expandPath(path), String.format("%d", major), String.format("%d", minor) });
+		try {
+			runCommand(new String[] { "mknod", typeStr, expandPath(path), String.format("%d", major), String.format("%d", minor) });
+		} catch(CommandFailedException exc) {
+			// ugly how we're doing this, but communicate that we can't do this on this system/user
+			throw new UnsupportedOperationException();
+		}
 	}
 
 	@Override
 	public void mkfifo(String path) throws IOException {
 		if(isWindows()) throw new FileTypeNotSupportedException(path + ": Windows does not support named pipes");
-		runCommand(new String[] { "mkfifo", Paths.get(root, path).toString() });
+		try {
+			runCommand(new String[] { "mkfifo", expandPath(path) });
+		} catch(CommandFailedException exc) {
+			throw new UnsupportedOperationException();
+		}
 	}
 
 	@Override
@@ -238,7 +259,11 @@ public class LocalFS extends FS {
 		
 		// TODO: wtf to do about sticky, setuid, setgid?
 		
-		Files.setPosixFilePermissions(Paths.get(root, path), modeSet);
+		try {
+			Files.setPosixFilePermissions(qualifiedPath(path), modeSet);
+		} catch(NoSuchFileException exc) {
+			throw new ENOENTException(path);
+		}
 	}
 
 	@Override
@@ -276,7 +301,11 @@ public class LocalFS extends FS {
 	@Override
 	public void setMtime(String path, long mtime) throws IOException {
 		FileTime fileTime = FileTime.from(mtime, TimeUnit.NANOSECONDS);
-		Files.setAttribute(Paths.get(root, path), "lastModifiedTime", fileTime);
+		try {
+			Files.setAttribute(qualifiedPath(path), "lastModifiedTime", fileTime);
+		} catch(NoSuchFileException exc) {
+			throw new ENOENTException(path);
+		}
 	}
 
 	@Override
@@ -287,7 +316,11 @@ public class LocalFS extends FS {
 	@Override
 	public void setAtime(String path, long atime) throws IOException {
 		FileTime fileTime = FileTime.from(atime, TimeUnit.NANOSECONDS);
-		Files.setAttribute(Paths.get(root, path), "lastAccessTime", fileTime);
+		try {
+			Files.setAttribute(qualifiedPath(path), "lastAccessTime", fileTime);
+		} catch(NoSuchFileException exc) {
+			throw new ENOENTException(path);
+		}
 	}
 
 	@Override
@@ -309,7 +342,7 @@ public class LocalFS extends FS {
 		FileChannel chan = null;
 		
 		try {
-			stream = new FileOutputStream(Paths.get(root, path).toString(), true);
+			stream = new FileOutputStream(expandPath(path), true);
 			chan = stream.getChannel();
 			long oldSize = chan.size();
 			if(size > oldSize) {
@@ -329,20 +362,30 @@ public class LocalFS extends FS {
 		LinkOption[] linkOpt;
 		if(followLinks) linkOpt = new LinkOption[] {};
 		else linkOpt = new LinkOption[] { LinkOption.NOFOLLOW_LINKS };
-		return Files.exists(Paths.get(root, path), linkOpt);
+		try {
+			return Files.exists(qualifiedPath(path), linkOpt);
+		} catch(ENOENTException exc) {
+			return false;
+		}
 	}
 	
 	@Override
 	public LocalFS scopedFS(String subpath) throws IOException {
 		if(!exists(subpath)) mkdirp(subpath);
-		return new LocalFS(Paths.get(root, subpath).toString());
+		return new LocalFS(expandPath(subpath));
 	}
 	
 	public String getRoot() {
 		return root;
 	}
 	
-	protected String expandPath(String path) {
-		return Paths.get(root, path).toString();
+	protected String expandPath(String path) throws ENOENTException {
+		return qualifiedPath(path).toString();
+	}
+	
+	protected Path qualifiedPath(String path) throws ENOENTException {
+		Path p = Paths.get(root, path).normalize();
+		if(!p.startsWith(root)) throw new ENOENTException(path);
+		return p;
 	}
 }

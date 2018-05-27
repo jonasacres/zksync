@@ -10,11 +10,40 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.FileTypeNotSupportedException;
 
 public abstract class FSTestBase {
 	protected FS scratch;
 	protected boolean examplesPrepared = false;
+
+	interface LambdaOp { void op() throws IOException; }
+	void expectENOENT(LambdaOp op) throws IOException {
+		try {
+			op.op();
+			fail();
+		}
+		catch(ENOENTException exc) {}
+		catch(UnsupportedOperationException exc) {}
+		catch(FileTypeNotSupportedException exc) {}
+	}
 	
+	void expectInScope(FS scoped, String path, LambdaOp op) throws IOException {
+		assertFalse(scoped.exists(path));
+		assertFalse(scratch.exists(path));
+		try {
+			op.op();
+		} catch(UnsupportedOperationException exc) {
+			return;
+		}
+		assertTrue(scoped.exists(path, false));
+		assertFalse(scratch.exists(path));
+		if(scoped.lstat(path).isDirectory()) {
+			scoped.rmdir(path);
+		} else {
+			scoped.unlink(path);
+		}
+	}
+
 	public void prepareExamples() throws IOException {
 		if(examplesPrepared) return;
 		
@@ -408,8 +437,95 @@ public abstract class FSTestBase {
 		assertTrue(Arrays.equals("ello worl".getBytes(), scratch.read("test")));
 	}
 	
-	// TODO P2P: (implement) Test can't escape scoped FS using ..
-	// TODO P2P: (implement) Test can't escape scoped FS using /
+	@Test
+	public void testCantEscapeScopedFSUsingDotDot() throws IOException {
+		FS scoped;
+		try {
+			scoped = scratch.scopedFS("scoped");
+		} catch(UnsupportedOperationException exc) {
+			return;
+		}
+		
+		scratch.write("shouldntexist", "".getBytes());
+		scratch.mkdir("empty");
+		scoped.write("exists", "exists".getBytes());
+		
+		
+		assertFalse(scoped.exists("../shouldntexist"));
+		expectENOENT(()->scoped.stat("../shouldntexist"));
+		expectENOENT(()->scoped.lstat("../shouldntexist"));
+		expectENOENT(()->scoped.open("../shouldntexist", File.O_RDONLY));
+		expectENOENT(()->scoped.open("../cantexist", File.O_WRONLY|File.O_CREAT));
+		expectENOENT(()->scoped.opendir("../empty"));
+		expectENOENT(()->scoped.write("../cantexist", "test".getBytes()));
+		expectENOENT(()->scoped.mkdir("../cantexist"));
+		expectENOENT(()->scoped.mkdirp("../cantexist"));
+		expectENOENT(()->scoped.rmdir("../empty"));
+		expectENOENT(()->scoped.unlink("../shouldntexist"));
+		expectENOENT(()->scoped.link("exists", "../cantexist"));
+		expectENOENT(()->scoped.link("../shouldntexist", "cantexist2"));
+		expectENOENT(()->scoped.symlink("../shouldntexist", "cantexist2"));
+		expectENOENT(()->scoped.symlink("exists", "../cantexist"));
+		expectENOENT(()->scoped.readlink("../symlink"));
+		expectENOENT(()->scoped.mknod("../cantexist", Stat.TYPE_BLOCK_DEVICE, 0, 0));
+		expectENOENT(()->scoped.mknod("../cantexist", Stat.TYPE_CHARACTER_DEVICE, 0, 0));
+		expectENOENT(()->scoped.mkfifo("../cantexist"));
+		expectENOENT(()->scoped.chmod("../shouldntexist", 0777));
+		expectENOENT(()->scoped.chown("../shouldntexist", 0));
+		expectENOENT(()->scoped.chown("../shouldntexist", "root"));
+		expectENOENT(()->scoped.chgrp("../shouldntexist", 0));
+		expectENOENT(()->scoped.chgrp("../shouldntexist", "root"));
+		expectENOENT(()->scoped.setMtime("../shouldntexist", 12345));
+		expectENOENT(()->scoped.setCtime("../shouldntexist", 12345));
+		expectENOENT(()->scoped.setAtime("../shouldntexist", 12345));
+		expectENOENT(()->scoped.truncate("../shouldntexist", 0));
+		expectENOENT(()->scoped.scopedFS("../empty"));
+	}
+
+	@Test
+	public void testCantEscapeScopedFSUsingSlash() throws IOException {
+		FS scoped;
+		try {
+			scoped = scratch.scopedFS("scoped");
+		} catch(UnsupportedOperationException exc) {
+			return;
+		}
+		
+		scratch.write("shouldntexist", "".getBytes());
+		
+		assertFalse(scoped.exists("/shouldntexist"));
+		expectENOENT(()->scoped.stat("/shouldntexist"));
+		expectENOENT(()->scoped.lstat("/shouldntexist"));
+		expectENOENT(()->scoped.open("/shouldntexist", File.O_RDONLY));
+		expectENOENT(()->scoped.opendir("/empty"));
+		expectENOENT(()->scoped.rmdir("/empty"));
+		expectENOENT(()->scoped.unlink("/shouldntexist"));
+		expectENOENT(()->scoped.link("exists", "/cantexist"));
+		expectENOENT(()->scoped.link("/shouldntexist", "cantexist2"));
+		expectENOENT(()->scoped.readlink("/symlink"));
+		expectENOENT(()->scoped.chmod("/shouldntexist", 0777));
+		expectENOENT(()->scoped.chown("/shouldntexist", 0));
+		expectENOENT(()->scoped.chown("/shouldntexist", "root"));
+		expectENOENT(()->scoped.chgrp("/shouldntexist", 0));
+		expectENOENT(()->scoped.chgrp("/shouldntexist", "root"));
+		expectENOENT(()->scoped.setMtime("/shouldntexist", 12345));
+		expectENOENT(()->scoped.setCtime("/shouldntexist", 12345));
+		expectENOENT(()->scoped.setAtime("/shouldntexist", 12345));
+		
+		expectInScope(scoped, "mustbescoped", ()->scoped.open("/mustbescoped", File.O_WRONLY|File.O_CREAT));
+		expectInScope(scoped, "mustbescoped", ()->scoped.open("/mustbescoped", File.O_WRONLY|File.O_CREAT));
+		expectInScope(scoped, "mustbescoped", ()->scoped.write("/mustbescoped", "test".getBytes()));
+		expectInScope(scoped, "mustbescoped", ()->scoped.mkdir("/mustbescoped"));
+		expectInScope(scoped, "mustbescoped", ()->scoped.mkdirp("/mustbescoped"));
+		expectInScope(scoped, "mustbescoped", ()->scoped.symlink("/shouldntexist", "mustbescoped"));
+		expectInScope(scoped, "mustbescoped", ()->scoped.symlink("exists", "/mustbescoped"));
+		expectInScope(scoped, "mustbescoped", ()->scoped.mknod("/mustbescoped", Stat.TYPE_BLOCK_DEVICE, 0, 0));
+		expectInScope(scoped, "mustbescoped", ()->scoped.mknod("/mustbescoped", Stat.TYPE_CHARACTER_DEVICE, 0, 0));
+		expectInScope(scoped, "mustbescoped", ()->scoped.mkfifo("/mustbescoped"));
+		expectInScope(scoped, "mustbescoped", ()->scoped.truncate("/mustbescoped", 0));
+		expectInScope(scoped, "mustbescoped", ()->scoped.scopedFS("/mustbescoped"));
+	}
+
 	// TODO P2P: (implement) Test can't create file/directory called ..
 	// TODO P2P: (implement) Test can't create file/directory called .
 	// TODO P2P: (implement) Test can't create file/directory called / in directory

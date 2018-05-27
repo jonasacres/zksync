@@ -178,6 +178,14 @@ public class BackedFSTest extends FSTestBase {
 		assertTrue(backupFS.readPaths.getOrDefault(path, 0) > 0);
 	}
 	
+	public void expectNoRead(String path, Operation op) throws IOException {
+		assertFalse(backupFS.stattedPaths.getOrDefault(path, 0) > 0);
+		assertFalse(backupFS.readPaths.getOrDefault(path, 0) > 0);
+		op.operation();
+		assertFalse(backupFS.stattedPaths.getOrDefault(path,	0) > 0);
+		assertFalse(backupFS.readPaths.getOrDefault(path, 0) > 0);
+	}
+	
 	public void expectENOENT(Operation op) throws IOException {
 		try {
 			op.operation();
@@ -647,23 +655,9 @@ public class BackedFSTest extends FSTestBase {
 	
 	@Test
 	public void testTruncateSkipsReadOnZero() throws IOException {
-		expectPathStat(UNCACHED_FILE, ()->{
+		expectNoRead(UNCACHED_FILE, ()->{
 			backedFS.truncate(UNCACHED_FILE, 0);
 			assertEquals(0, cacheFS.stat(UNCACHED_FILE).getSize());
-		});
-	}
-	
-	@Test
-	public void testTruncateZeroThrowsENOENT() throws IOException {
-		expectENOENT(()->{
-			backedFS.truncate(NONEXISTENT_FILE, 0);
-		});
-	}
-
-	@Test
-	public void testTruncateNonzeroThrowsENOENT() throws IOException {
-		expectENOENT(()->{
-			backedFS.truncate(NONEXISTENT_FILE, 1);
 		});
 	}
 	

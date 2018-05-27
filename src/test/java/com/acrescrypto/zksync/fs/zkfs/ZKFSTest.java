@@ -18,9 +18,6 @@ import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
 
 public class ZKFSTest extends FSTestBase {
-	 // TODO: this is going to break on Windows
-	public final static String SCRATCH_DIR = "/tmp/zksync-test/zkfs";
-	
 	int oldDefaultTimeCost, oldDefaultParallelism, oldDefaultMemoryCost;
 	ZKFS zkscratch;
 	static ZKMaster master;

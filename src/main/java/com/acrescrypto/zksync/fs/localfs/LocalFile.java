@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.file.Paths;
 
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.File;
@@ -20,30 +19,37 @@ public class LocalFile extends File {
 	LocalFile(LocalFS fs, String path, int mode) throws IOException {
 		super(fs);
 		String modeStr = null;
-		if((mode & O_RDWR) != 0) modeStr = "rw";
-		if((mode & O_RDONLY) != 0) modeStr = "r";
-		if((mode & O_WRONLY) != 0) modeStr = "rw"; // "w" is not supported apparently
-		
-		if(!fs.exists(path, (mode & O_NOFOLLOW) == 0)) {
-			if((mode & O_CREAT) == 0 || (mode & O_WRONLY) == 0) throw new ENOENTException(path);
+		if ((mode & O_RDWR) != 0)
+			modeStr = "rw";
+		if ((mode & O_RDONLY) != 0)
+			modeStr = "r";
+		if ((mode & O_WRONLY) != 0)
+			modeStr = "rw"; // "w" is not supported apparently
+
+		if (!fs.exists(path, (mode & O_NOFOLLOW) == 0)) {
+			if ((mode & O_CREAT) == 0 || (mode & O_WRONLY) == 0)
+				throw new ENOENTException(path);
 		}
-		
+
 		try {
-			if((mode & O_NOFOLLOW) != 0 && fs.lstat(path).isSymlink()) throw new EMLINKException(path);
-			if(fs.stat(path).isDirectory()) {
+			if ((mode & O_NOFOLLOW) != 0 && fs.lstat(path).isSymlink())
+				throw new EMLINKException(path);
+			if (fs.stat(path).isDirectory()) {
 				throw new EISDIRException(path);
 			}
-		} catch(ENOENTException e) {
+		} catch (ENOENTException e) {
 		}
-		
-		String fullPath = Paths.get(fs.getRoot(), path).toString();
+
+		String fullPath = fs.expandPath(path);
 		this.fileHandle = new RandomAccessFile(fullPath, modeStr);
 		this.channel = this.fileHandle.getChannel();
 		this.path = path;
 		this.mode = mode;
-		
-		if((mode & O_APPEND) != 0) this.channel.position(this.fileHandle.length());
-		else if((mode & (O_TRUNC|O_WRONLY)) == (O_TRUNC|O_WRONLY)) truncate(0);
+
+		if ((mode & O_APPEND) != 0)
+			this.channel.position(this.fileHandle.length());
+		else if ((mode & (O_TRUNC | O_WRONLY)) == (O_TRUNC | O_WRONLY))
+			truncate(0);
 	}
 
 	@Override
@@ -74,7 +80,7 @@ public class LocalFile extends File {
 		channel.write(ByteBuffer.wrap(data, offset, length));
 		size = Math.max(size, channel.position());
 	}
-	
+
 	@Override
 	public void flush() throws IOException {
 		channel.force(true);
@@ -84,8 +90,8 @@ public class LocalFile extends File {
 	@Override
 	public long seek(long pos, int mode) throws IOException {
 		long newOffset = -1;
-		
-		switch(mode) {
+
+		switch (mode) {
 		case SEEK_SET:
 			newOffset = pos;
 			break;
@@ -96,8 +102,9 @@ public class LocalFile extends File {
 			newOffset = getStat().getSize();
 			break;
 		}
-		
-		if(newOffset < 0) throw new IllegalArgumentException();
+
+		if (newOffset < 0)
+			throw new IllegalArgumentException();
 		channel.position(newOffset);
 		return channel.position();
 	}
@@ -112,25 +119,45 @@ public class LocalFile extends File {
 	public void copy(File file) throws IOException {
 		assertWritable();
 		file.rewind();
-		while(file.hasData()) write(file.read(1024*64));
+		while (file.hasData())
+			write(file.read(1024 * 64));
 		flush();
-		
-		// zksync records both numeric and string IDs, but local FS may not map the same numeric ID to the same string
+
+		// zksync records both numeric and string IDs, but local FS may not map the same
+		// numeric ID to the same string
 		// therefore, just use the string name, since that's more portable
-		
-		try { fs.chgrp(path, file.getStat().getGroup()); } catch(UnsupportedOperationException exc) {}
-		try { fs.chown(path, file.getStat().getUser()); } catch(UnsupportedOperationException exc) {}
-		try { fs.chmod(path, file.getStat().getMode()); } catch(UnsupportedOperationException exc) {}
-		try { fs.setAtime(path, file.getStat().getAtime()); } catch(UnsupportedOperationException exc) {}
-		try { fs.setCtime(path, file.getStat().getCtime()); } catch(UnsupportedOperationException exc) {}
-		try { fs.setMtime(path, file.getStat().getMtime()); } catch(UnsupportedOperationException exc) {}
+
+		try {
+			fs.chgrp(path, file.getStat().getGroup());
+		} catch (UnsupportedOperationException exc) {
+		}
+		try {
+			fs.chown(path, file.getStat().getUser());
+		} catch (UnsupportedOperationException exc) {
+		}
+		try {
+			fs.chmod(path, file.getStat().getMode());
+		} catch (UnsupportedOperationException exc) {
+		}
+		try {
+			fs.setAtime(path, file.getStat().getAtime());
+		} catch (UnsupportedOperationException exc) {
+		}
+		try {
+			fs.setCtime(path, file.getStat().getCtime());
+		} catch (UnsupportedOperationException exc) {
+		}
+		try {
+			fs.setMtime(path, file.getStat().getMtime());
+		} catch (UnsupportedOperationException exc) {
+		}
 	}
 
 	@Override
 	public void rewind() throws IOException {
 		channel.position(0);
 	}
-	
+
 	@Override
 	public int available() throws IOException {
 		return (int) (channel.size() - channel.position());
@@ -140,12 +167,14 @@ public class LocalFile extends File {
 	public boolean hasData() throws IOException {
 		return channel.position() < channel.size();
 	}
-	
+
 	protected void assertWritable() throws EACCESException {
-		if((mode & File.O_WRONLY) == 0) throw new EACCESException(path);
+		if ((mode & File.O_WRONLY) == 0)
+			throw new EACCESException(path);
 	}
-	
+
 	protected void assertReadable() throws EACCESException {
-		if((mode & File.O_RDONLY) == 0) throw new EACCESException(path);
+		if ((mode & File.O_RDONLY) == 0)
+			throw new EACCESException(path);
 	}
 }

@@ -200,8 +200,6 @@ public class BackedFS extends FS {
 		if(size != 0) {
 			ensurePresent(path);
 		} else {
-			// stat is a potentially expensive call to the backup, but lets us preserve ENOENT behavior
-			stat(path);
 			cacheFS.write(path, new byte[0]);
 			return;
 		}

@@ -329,5 +329,19 @@ public class ChunkAccumulatorTest {
 		assertNotReceived();
 	}
 	
-	// TODO P2P: (implement) test isFinished
+	@Test
+	public void testIsFinishedReturnsFalseIfFileHasNotBeenCompleted() {
+		assertFalse(accumulator.isFinished());
+	}
+	
+	@Test
+	public void testIsFinishedReturnsTrueIfFileHasBeenCompleted() throws IOException {
+		for(int i = 0; i < chunks.length; i++) {
+			boolean last = i == chunks.length - 1;
+			assertFalse(accumulator.isFinished());
+			assertEquals(last, accumulator.addChunk(i, chunks[i], connections[0]));
+		}
+		
+		assertTrue(accumulator.isFinished());
+	}
 }

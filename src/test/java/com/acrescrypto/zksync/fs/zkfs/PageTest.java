@@ -9,9 +9,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.fs.File;
-import com.acrescrypto.zksync.utility.Util;
 
 public class PageTest {
 	ZKMaster master;

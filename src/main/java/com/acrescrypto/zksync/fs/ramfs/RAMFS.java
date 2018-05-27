@@ -2,10 +2,12 @@ package com.acrescrypto.zksync.fs.ramfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
+import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.FS;
@@ -56,8 +58,12 @@ public class RAMFS extends FS {
 	}
 
 	public RAMFS() {
-		this.scope = "";
-		mkdir("/");
+		this.scope = "/";
+		try {
+			mkdir("/");
+		} catch(ENOENTException exc) {
+			throw new RuntimeException("unexpected failure to create RAMFS");
+		}
 	}
 	
 	public RAMFS(String scope, RAMFS parent) {
@@ -82,7 +88,7 @@ public class RAMFS extends FS {
 	}
 
 	@Override
-	public void mkdir(String path) {
+	public void mkdir(String path) throws ENOENTException {
 		makeInode(path, (inode)->inode.stat.makeDirectory());
 	}
 
@@ -97,11 +103,13 @@ public class RAMFS extends FS {
 
 	@Override
 	public void rmdir(String path) throws IOException {
+		if(!stat(path).isDirectory()) throw new EISNOTDIRException(path);
 		clearInode(path);
 	}
 
 	@Override
 	public void unlink(String path) throws IOException {
+		if(lstat(path).isDirectory()) throw new EISDIRException(path);
 		clearInode(path);
 	}
 
@@ -113,6 +121,7 @@ public class RAMFS extends FS {
 
 	@Override
 	public void symlink(String target, String link) throws IOException {
+		unscopedPath(target); // trigger exception if outside scope
 		makeInode(link, (inode)->{
 			inode.stat.makeSymlink();
 			inode.data = new String(target).getBytes();
@@ -207,7 +216,13 @@ public class RAMFS extends FS {
 	@Override
 	public void truncate(String path, long size) throws IOException {
 		ByteBuffer newData = ByteBuffer.allocate((int) size);
-		Inode inode = lookup(path);
+		Inode inode;
+		try {
+			inode = lookup(path);
+		} catch(ENOENTException exc) {
+			inode = makeInode(path, (inode_)->{});
+		}
+		
 		inode.data = newData.put(inode.data, 0, Math.min(inode.data.length,	(int) size)).array();
 		inode.stat.setSize(inode.data.length);
 	}
@@ -215,7 +230,7 @@ public class RAMFS extends FS {
 	@Override
 	public FS scopedFS(String path) throws IOException {
 		if(!exists(path)) mkdirp(path);
-		return new RAMFS(Paths.get(scope, path).toString(), this);
+		return new RAMFS(unscopedPath(path), this);
 	}
 	
 	protected Inode lookup(String path) throws ENOENTException {
@@ -234,16 +249,18 @@ public class RAMFS extends FS {
 		return inode;
 	}
 	
-	protected void setInode(String path, Inode inode) {
+	protected void setInode(String path, Inode inode) throws ENOENTException {
 		inodesByPath.put(unscopedPath(path), inode);
 	}
 	
 	protected void clearInode(String path) {
-		if(unscopedPath(path).equals("/")) return;
-		inodesByPath.remove(unscopedPath(path));
+		try {
+			if(unscopedPath(path).equals("/")) return;
+			inodesByPath.remove(unscopedPath(path));
+		} catch(ENOENTException exc) {}
 	}
 	
-	protected Inode makeInode(String path, InodeMaker lambda) {
+	protected Inode makeInode(String path, InodeMaker lambda) throws ENOENTException {
 		Inode inode = new Inode();
 		lambda.make(inode);
 		inode.stat.setSize(inode.data.length);
@@ -251,7 +268,9 @@ public class RAMFS extends FS {
 		return inode;
 	}
 	
-	protected String scopedPath(String path) {
+	protected String scopedPath(String path) throws ENOENTException {
+		Path p = Paths.get(path).normalize();
+		if(!p.startsWith(scope)) throw new ENOENTException(path);
 		String suffix = scope;
 		if(!scope.endsWith("/")) suffix += "/";
 		String scoped = path.substring(suffix.length());
@@ -259,9 +278,11 @@ public class RAMFS extends FS {
 		return scoped;
 	}
 	
-	protected String unscopedPath(String path) {
+	protected String unscopedPath(String path) throws ENOENTException {
 		if(path.equals(".")) path = "/";
-		return Paths.get("/", scope, path).toString();
+		Path p = Paths.get("/", scope, path).normalize();
+		if(!p.startsWith(scope)) throw new ENOENTException(path);
+		return p.toString();
 	}
 	
 	public String getRoot() {
