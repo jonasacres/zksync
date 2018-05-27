@@ -63,6 +63,7 @@ public class PageMerkle {
 		case RefTag.REF_TYPE_INDIRECT:
 			return archive.storage.exists(Page.pathForTag(nodes[0].tag));
 		case RefTag.REF_TYPE_2INDIRECT:
+			if(numChunks() <= 0) return false;
 			for(int i = 0; i < numChunks(); i++) {
 				if(!archive.storage.exists(Page.pathForTag(tagForChunk(tag, i)))) return false;
 			}
@@ -270,7 +271,11 @@ public class PageMerkle {
 	/** test if a given page has a tag set yet or not. */
 	public boolean hasTag(int pageNum) {
 		if(pageNum >= numPagesUsed) return false;
-		return !nodes[maxPages - 1 + pageNum].isBlank();
+		try {
+			return !nodes[maxPages - 1 + pageNum].isBlank();
+		} catch(ArrayIndexOutOfBoundsException exc) {
+			return false;
+		}
 	}
 
 	public byte[] tagForChunk(int index) {

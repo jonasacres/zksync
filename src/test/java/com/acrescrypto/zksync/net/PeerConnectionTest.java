@@ -904,7 +904,6 @@ public class PeerConnectionTest {
 		}
 		
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
-		// TODO P2P: (review) Intermittent failures on this test, PageMerkle.hasTag throws ArrayIndexOutOfBoundsException
 		conn.handle(msg);
 		
 		for(RefTag tag : tags) {
