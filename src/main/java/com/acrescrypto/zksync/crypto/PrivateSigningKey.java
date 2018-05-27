@@ -18,10 +18,12 @@ public class PrivateSigningKey {
 	protected EdDSAPrivateKey privKey;
 	protected CryptoSupport crypto;
 	protected static Logger logger = LoggerFactory.getLogger(PrivateSigningKey.class);
+	protected byte[] raw;
 	
 	protected PrivateSigningKey(CryptoSupport crypto, byte[] raw) {
 		EdDSAParameterSpec edSpec = EdDSANamedCurveTable.getByName(EdDSANamedCurveTable.ED_25519);
-		EdDSAPrivateKeySpec privKeySpec = new EdDSAPrivateKeySpec(edSpec, raw);
+		EdDSAPrivateKeySpec privKeySpec = new EdDSAPrivateKeySpec(raw, edSpec);
+		this.raw = raw;
 		this.crypto = crypto;
 		this.privKey = new EdDSAPrivateKey(privKeySpec);
 	}
@@ -61,6 +63,6 @@ public class PrivateSigningKey {
 	}
 
 	public byte[] getBytes() {
-		return privKey.getH();
+		return raw;
 	}
 }

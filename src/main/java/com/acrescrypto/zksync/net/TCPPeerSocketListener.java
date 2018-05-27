@@ -7,7 +7,6 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.LinkedList;
 
 import org.apache.commons.io.IOUtils;
@@ -21,6 +20,7 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocketListener {
 	protected int port, requestedPort;
@@ -210,7 +210,7 @@ public class TCPPeerSocketListener {
 		byte[] sharedSecret = ephemeralKey.sharedSecret(pubKey);
 		
 		int peerType;
-		if(Arrays.equals(expectedProof, proof)) {
+		if(Util.safeEquals(expectedProof, proof)) {
 			peerType = PeerConnection.PEER_TYPE_FULL;
 			responseProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 1, sharedSecret);
 		} else {

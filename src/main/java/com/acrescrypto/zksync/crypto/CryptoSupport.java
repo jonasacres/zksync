@@ -295,6 +295,10 @@ public class CryptoSupport {
 		return new PrivateDHKey(keyPair.getPrivateKey(), keyPair.getPublicKey());
 	}
 	
+	public PrivateDHKey makePrivateDHKeyPair(byte[] privKey, byte[] pubKey) {
+		return new PrivateDHKey(privKey, pubKey);
+	}
+	
 	public PublicDHKey makePublicDHKey(byte[] publicKeyMaterial) {
 		return new PublicDHKey(publicKeyMaterial);
 	}
@@ -320,7 +324,7 @@ public class CryptoSupport {
 	}
 	
 	public int asymPrivateSigningKeySize() {
-		return 512/8;
+		return 256/8;
 	}
 	
 	public int asymPublicSigningKeySize() {

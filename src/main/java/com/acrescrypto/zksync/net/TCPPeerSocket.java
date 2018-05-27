@@ -6,7 +6,6 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
@@ -15,6 +14,7 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
+import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocket extends PeerSocket {
 	public final static int MAX_MSG_LEN = 65536; // maximum ciphertext length; largest buffer a peer needs to hold in memory at once
@@ -194,11 +194,11 @@ public class TCPPeerSocket extends PeerSocket {
 		this.sharedSecret = dhPrivateKey.sharedSecret(remoteEphemeralPubKey);
 		byte[] remoteAuth = readRaw(crypto.hashLength());
 		byte[] expectedAuth = crypto.authenticate(this.sharedSecret, tempSharedSecret);
-		assertState(Arrays.equals(remoteAuth, expectedAuth));
+		assertState(Util.safeEquals(remoteAuth, expectedAuth));
 		
 		byte[] expectedRemoteProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, sharedSecret);
 		byte[] remoteProof = readRaw(crypto.symKeyLength());
-		if(Arrays.equals(expectedRemoteProof, remoteProof)) {
+		if(Util.safeEquals(expectedRemoteProof, remoteProof)) {
 			peerType = PeerConnection.PEER_TYPE_FULL;
 		} else {
 			peerType = PeerConnection.PEER_TYPE_BLIND;
