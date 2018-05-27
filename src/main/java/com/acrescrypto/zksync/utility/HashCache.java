@@ -38,6 +38,8 @@ public class HashCache<K,V> {
 		
 	protected synchronized V add(K key) throws IOException {
 		V result = lookup.getValue(key);
+		if(result == null) return null;
+		
 		cache.put(key, result);
 		enforceCapacityLimit();
 		return result;

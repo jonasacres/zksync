@@ -93,6 +93,10 @@ public class PeerMessageIncoming extends PeerMessage {
 			return read(new byte[length]);
 		}
 		
+		public int available() {
+			return readBuf.remaining();
+		}
+		
 		public synchronized byte[] read(byte[] data) throws EOFException {
 			while(readBuf.remaining() < data.length && !eof) {
 				try {

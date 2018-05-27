@@ -290,10 +290,14 @@ public class PeerConnection {
 	protected void handleAnnounceTags(PeerMessageIncoming msg) throws EOFException {
 		assert(RefTag.REFTAG_SHORT_SIZE == 8); // This code depends on tags being sent as 64-bit values.
 		while(msg.rxBuf.hasRemaining()) {
-			// TODO P2P: (refactor) Reorganize this loop so we're not spending so much time locking/unlocking 
-			Long shortTag = msg.rxBuf.getLong();
+			// lots of tags to go through, and locks are expensive; accumulate into a buffer so we can minimize lock/release cycling
+			int len = Math.min(64*1024, msg.rxBuf.available());
+			ByteBuffer buf = ByteBuffer.allocate(len - len % 8); // round to 8-byte long boundary
+			msg.rxBuf.get(buf.array());
 			synchronized(this) {
-				announcedTags.add(shortTag);
+				while(buf.hasRemaining()) {
+					announcedTags.add(buf.getLong());
+				}
 			}
 		}
 		
