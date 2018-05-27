@@ -82,7 +82,7 @@ public class PeerSwarmTest {
 		long requestedTag;
 		
 		public DummyConnection(DummySocket socket) {
-			super(socket, PEER_TYPE_FULL);
+			super(socket);
 			this.socket = socket;
 		}
 		

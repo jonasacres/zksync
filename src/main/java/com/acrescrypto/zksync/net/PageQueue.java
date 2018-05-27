@@ -114,7 +114,6 @@ public class PageQueue {
 				shuffler = Shuffler.fixedShuffler(0);
 			} else {
 				try {
-					// TODO P2P: (review) ensure this fails for fake reftags
 					this.merkle = new PageMerkle(refTag.cacheOnlyTag());
 					this.merkle.assertExists();
 					shuffler = Shuffler.fixedShuffler(merkle.numPages());

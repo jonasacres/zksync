@@ -37,9 +37,10 @@ public class TCPPeerSocket extends PeerSocket {
 		this.socket = socket;
 		this.isLocalRoleClient = false;
 		this.sharedSecret = sharedSecret;
+		this.peerType = peerType;
 		makeStreams();
 		initKeys();
-		swarm.openedConnection(new PeerConnection(this, peerType));
+		swarm.openedConnection(new PeerConnection(this));
 	}
 	
 	public TCPPeerSocket(PeerSwarm swarm, TCPPeerAdvertisement ad) throws IOException, BlacklistedException {

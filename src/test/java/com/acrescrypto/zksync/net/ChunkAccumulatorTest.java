@@ -79,7 +79,7 @@ public class ChunkAccumulatorTest {
 	
 	public class DummyPeerConnection extends PeerConnection {
 		public DummyPeerConnection(int index) {
-			super(new DummySocket(index, swarm), PEER_TYPE_FULL);
+			super(new DummySocket(index, swarm));
 		}
 		
 		public DummySocket getSocket() {

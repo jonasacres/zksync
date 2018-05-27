@@ -171,6 +171,10 @@ public class PeerConnectionTest {
 		swarm.config.setStorage(new BackedFS(new RAMFS(), new RAMFS()));
 	}
 	
+	void blindPeer() {
+		socket.peerType = PeerConnection.PEER_TYPE_BLIND;
+	}
+	
 	void assertReceivedCmd(byte cmd) {
 		assertTrue(Util.waitUntil(100, ()->!socket.messages.isEmpty()));
 		assertEquals(cmd, socket.messages.getFirst().cmd);
@@ -238,7 +242,7 @@ public class PeerConnectionTest {
 		
 		swarm = new DummySwarm(archive.getConfig());
 		socket = new DummySocket(swarm);
-		conn = new PeerConnection(socket, PeerConnection.PEER_TYPE_FULL);
+		conn = new PeerConnection(socket);
 		
 		conn.setLocalPaused(true);
 	}
@@ -259,7 +263,7 @@ public class PeerConnectionTest {
 		
 		assertNotNull(listener.connectedPeer);
 		assertNotNull(conn.queue);
-		assertEquals(PeerConnection.PEER_TYPE_FULL, conn.peerType);
+		assertEquals(PeerConnection.PEER_TYPE_FULL, conn.getPeerType());
 	}
 	
 	@Test
@@ -277,7 +281,7 @@ public class PeerConnectionTest {
 		
 		assertNotNull(listener.connectedPeer);
 		assertNotNull(conn.queue);
-		assertEquals(PeerConnection.PEER_TYPE_BLIND, conn.peerType);
+		assertEquals(PeerConnection.PEER_TYPE_BLIND, conn.getPeerType());
 	}
 	
 	@Test
@@ -295,18 +299,7 @@ public class PeerConnectionTest {
 		
 		assertNotNull(listener.connectedPeer);
 		assertNotNull(conn.queue);
-		assertEquals(PeerConnection.PEER_TYPE_BLIND, conn.peerType);
-	}
-	
-	@Test
-	public void testConstructWithSocketSetsPeerType() {
-		PeerConnection blind = new PeerConnection(socket, PeerConnection.PEER_TYPE_BLIND);
-		PeerConnection full = new PeerConnection(socket, PeerConnection.PEER_TYPE_FULL);
-		
-		assertEquals(PeerConnection.PEER_TYPE_BLIND, blind.peerType);
-		assertEquals(PeerConnection.PEER_TYPE_FULL, full.peerType);
-		
-		assertEquals(socket, blind.getSocket());
+		assertEquals(PeerConnection.PEER_TYPE_BLIND, conn.getPeerType());
 	}
 	
 	@Test
@@ -452,7 +445,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testRequestRefTagsThrowsExceptionIfNotFullPeer() throws PeerCapabilityException {
-		conn = new PeerConnection(socket, PeerConnection.PEER_TYPE_BLIND);
+		blindPeer();
 		try {
 			conn.requestRefTags(new RefTag[] { new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1) } );
 			fail();
@@ -477,7 +470,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testRequestRevisionContentsThrowsExceptionIfNotFullPeer() {
-		conn = new PeerConnection(socket, PeerConnection.PEER_TYPE_BLIND);
+		blindPeer();
 		try {
 			conn.requestRevisionContents(new RefTag[] { new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1) } );
 			fail();
@@ -560,7 +553,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleAnnouncePeersWorksForSeedOnly() throws ProtocolViolationException, IOException, UnconnectableAdvertisementException {
-		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
+		blindPeer();
 		testHandleAnnouncePeersCallSwarmAddPeerAdvertisement();
 	}
 	
@@ -650,7 +643,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleAnnounceSelfAdWorksForSeedOnly() throws ProtocolViolationException, IOException, UnconnectableAdvertisementException {
-		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
+		blindPeer();
 		testHandleAnnounceSelfAdCallSwarmAddPeerAdvertisement();
 	}
 	
@@ -725,7 +718,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleAnnounceTagsWorksForSeedOnly() throws ProtocolViolationException, IOException, UnconnectableAdvertisementException {
-		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
+		blindPeer();
 		testHandleAnnounceTagsUpdatesAnnouncedTagsList();
 	}
 	
@@ -772,7 +765,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleAnnounceTipsWorksForSeedOnly() throws ProtocolViolationException, IOException, UnconnectableAdvertisementException {
-		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
+		blindPeer();
 		testHandleAnnounceTipsAddsBranchTipsToRevisionTree();
 	}
 	
@@ -787,7 +780,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleRequestAllWorksForSeedOnly() throws ProtocolViolationException, IOException, UnconnectableAdvertisementException {
-		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
+		blindPeer();
 		testHandleRequestAllCausesPageQueueToSendEverything();
 	}
 	
@@ -819,7 +812,7 @@ public class PeerConnectionTest {
 	
 	@Test(expected=ProtocolViolationException.class)
 	public void testRequestRefTagsTriggersViolationIfNotFullPeer() throws ProtocolViolationException, IOException {
-		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
+		blindPeer();
 		testRequestRefTagsAddsRequestedRefTagsToPageQueue();
 	}
 	
@@ -885,7 +878,7 @@ public class PeerConnectionTest {
 	
 	@Test(expected=ProtocolViolationException.class)
 	public void testHandleRequestRevisionContentsTriggersViolationIfNotFullPeer() throws IOException, ProtocolViolationException {
-		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
+		blindPeer();
 		testHandleRequestRevisionContentsAddsRequestedRevTagToPageQueue();
 	}
 	
@@ -972,7 +965,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleRequestTagsWorksForSeedOnly() throws ProtocolViolationException, IOException {
-		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
+		blindPeer();
 		testHandleRequestTagsToleratesNonexistentTags();
 	}
 	
@@ -1078,7 +1071,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleSendPageWorksForSeedPeers() throws IOException, ProtocolViolationException {
-		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
+		blindPeer();
 		testHandleSendPageAddsChunksToChunkAccumulator();
 	}
 	
@@ -1129,7 +1122,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleSetPausedWorksForSeedPeers() throws ProtocolViolationException {
-		conn.peerType = PeerConnection.PEER_TYPE_BLIND;
+		blindPeer();
 		conn.setLocalPaused(false);
 		testHandleSetPausedSetsPausedToFalseIfPausedByteIsZero();
 		testHandleSetPausedSetsPausedToTrueIfPausedByteIsOne();

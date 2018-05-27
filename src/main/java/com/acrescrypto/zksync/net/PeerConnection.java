@@ -55,7 +55,6 @@ public class PeerConnection {
 	}
 
 	protected PeerSocket socket;
-	protected int peerType;
 	protected HashSet<Long> announcedTags = new HashSet<Long>();
 	protected boolean remotePaused, localPaused;
 	protected PageQueue queue;
@@ -68,16 +67,13 @@ public class PeerConnection {
 		this.socket.handshake();
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
-		this.peerType = this.socket.getPeerType(); // TODO P2P: (refactor) does this need its own copy at this point?
 		new Thread(()->pageQueueThread()).start();
 	}
 	
-	public PeerConnection(PeerSocket socket, int peerType) {
-		// TODO P2P: (refactor) if socket has a peer type, why supply it here?
+	public PeerConnection(PeerSocket socket) {
 		this.socket = socket;
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
-		this.peerType = peerType;
 		new Thread(()->pageQueueThread()).start();
 	}
 	
@@ -85,6 +81,10 @@ public class PeerConnection {
 	
 	public PeerSocket getSocket() {
 		return socket;
+	}
+	
+	public int getPeerType() {
+		return socket.getPeerType();
 	}
 	
 	public void announceTag(long shortTag) {
@@ -188,7 +188,7 @@ public class PeerConnection {
 	}
 	
 	protected void assertPeerCapability(int capability) throws PeerCapabilityException {
-		if(peerType < capability) throw new PeerCapabilityException();
+		if(socket.getPeerType() < capability) throw new PeerCapabilityException();
 	}
 	
 	protected void assertClientStatus(boolean mustBeClient) throws PeerRoleException {

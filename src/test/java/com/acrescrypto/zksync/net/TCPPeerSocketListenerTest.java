@@ -322,7 +322,7 @@ public class TCPPeerSocketListenerTest {
 		Socket socket = connect();
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, null);
 		Util.waitUntil(100, ()->swarm.opened != null);
-		assertEquals(PeerConnection.PEER_TYPE_BLIND, swarm.opened.peerType);
+		assertEquals(PeerConnection.PEER_TYPE_BLIND, swarm.opened.getPeerType());
 	}
 	
 	@Test
@@ -335,7 +335,7 @@ public class TCPPeerSocketListenerTest {
 		Socket socket = connect();
 		sendHandshake(listener.listenerForSwarm(roSwarm).localAd().pubKey, socket, 0, swarm.config);
 		Util.waitUntil(100, ()->swarm.opened != null);
-		assertEquals(PeerConnection.PEER_TYPE_BLIND, roSwarm.opened.peerType);
+		assertEquals(PeerConnection.PEER_TYPE_BLIND, roSwarm.opened.getPeerType());
 	}
 	
 	@Test
@@ -343,8 +343,8 @@ public class TCPPeerSocketListenerTest {
 		listener.advertise(swarm);
 		Socket socket = connect();
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
-		Util.waitUntil(100, ()->swarm.opened != null);
-		assertEquals(PeerConnection.PEER_TYPE_FULL, swarm.opened.peerType);
+		assertTrue(Util.waitUntil(100, ()->swarm.opened != null));
+		assertEquals(PeerConnection.PEER_TYPE_FULL, swarm.opened.getPeerType());
 	}
 	
 	@Test
