@@ -6,6 +6,11 @@ public class Key {
 	private byte[] raw;
 	protected CryptoSupport crypto;
 	
+	public Key(CryptoSupport crypto) {
+		this.crypto = crypto;
+		this.raw = crypto.makeSymmetricKey();
+	}
+	
 	public Key(CryptoSupport crypto, byte[] raw) {
 		this.crypto = crypto;
 		this.raw = raw;

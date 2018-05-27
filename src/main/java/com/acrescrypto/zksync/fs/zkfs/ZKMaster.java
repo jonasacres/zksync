@@ -74,17 +74,8 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 	
 	// Expect this to be deprecated someday.
-	public void listenOnTCP() throws IOException {
-		listener = new TCPPeerSocketListener(this, 0);
-	}
-	
-	public void loadStoredAccessors() {
-		try {
-			storedAccess.read();
-		} catch (SecurityException exc) {
-			logger.warn("Security error reading stored accessors; initializing as blank", exc);
-		} catch (IOException e) {
-		}
+	public void listenOnTCP(int port) throws IOException {
+		listener = new TCPPeerSocketListener(this, port);
 	}
 	
 	public void getLocalKey() throws IOException {
@@ -93,27 +84,6 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 			byte[] passphrase = passphraseProvider.requestPassphrase("ZKSync storage passphrase");
 			ppKey = new Key(crypto, crypto.deriveKeyFromPassphrase(passphrase));
 		} while(!attemptPassphraseKey(ppKey));
-	}
-	
-	protected boolean attemptPassphraseKey(Key ppKey) throws IOException {
-		MutableSecureFile keyFile = MutableSecureFile.atPath(storage, KEYFILE, ppKey);
-		if(storage.exists(KEYFILE)) {
-			try {
-				localKey = new Key(crypto, keyFile.read());
-				assert(localKey.getRaw().length == crypto.symKeyLength());
-				logger.info("Successfully decrypted key file with passphrase");
-				return true;
-			} catch(SecurityException exc) {
-				logger.warn("Supplied passphrase did not match key file");
-				return false;
-			}
-		} else {
-			// TODO: it'd be nice to ask for a passphrase confirmation here...
-			logger.info("No keyfile found; creating...");
-			localKey = new Key(crypto, crypto.rng(crypto.symKeyLength()));
-			keyFile.write(localKey.getRaw(), 512);
-			return true;
-		}
 	}
 	
 	public Blacklist getBlacklist() {
@@ -193,16 +163,14 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	public void discoveredArchive(ZKArchive archive) {
 		for(ZKArchive existing : allArchives) {
 			if(Arrays.equals(existing.config.archiveId, archive.config.archiveId)) {
-				if(archive.config.accessor.isSeedOnly()) {
-					// don't need a read-only copy of something we already have
-					return;
+				if(!existing.config.accessor.isSeedOnly()) {
+					return; // already have full access to this archive
+				} else if(archive.config.accessor.isSeedOnly()) {
+					return; // no point in replacing one seed-only version with another
 				}
 				
-				if(existing.config.accessor.isSeedOnly()) {
-					// replace an existing read-only if this one is writable
-					allArchives.remove(existing);
-					break;
-				}
+				// replace seed-only with full access
+				allArchives.remove(existing);
 			}
 		}
 		allArchives.add(archive);
@@ -223,5 +191,35 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public void setCurrentTime(long time) {
 		debugTime = time;
+	}
+
+	protected void loadStoredAccessors() {
+		try {
+			storedAccess.read();
+		} catch (SecurityException exc) {
+			logger.warn("Security error reading stored accessors; initializing as blank", exc);
+		} catch (IOException e) {
+		}
+	}
+
+	protected boolean attemptPassphraseKey(Key ppKey) throws IOException {
+		MutableSecureFile keyFile = MutableSecureFile.atPath(storage, KEYFILE, ppKey);
+		if(storage.exists(KEYFILE)) {
+			try {
+				localKey = new Key(crypto, keyFile.read());
+				assert(localKey.getRaw().length == crypto.symKeyLength());
+				logger.info("Successfully decrypted key file with passphrase");
+				return true;
+			} catch(SecurityException exc) {
+				logger.warn("Supplied passphrase did not match key file");
+				return false;
+			}
+		} else {
+			// TODO: it'd be nice to ask for a passphrase confirmation here...
+			logger.info("No keyfile found; creating...");
+			localKey = new Key(crypto, crypto.rng(crypto.symKeyLength()));
+			keyFile.write(localKey.getRaw(), 512);
+			return true;
+		}
 	}
 }

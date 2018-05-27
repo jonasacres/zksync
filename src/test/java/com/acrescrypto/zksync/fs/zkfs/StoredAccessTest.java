@@ -53,11 +53,15 @@ public class StoredAccessTest {
 	@Test
 	public void testStoreSeedOnly() throws IOException {
 		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
+		ArchiveAccessor roAccessor = archive.config.accessor.makeSeedOnly();
+		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.config.archiveId);
+		ZKArchive roArchive = roConfig.getArchive();
+
 		master.storedAccess.storeArchiveAccess(archive, true);
 		assertTrue(master.allArchives().contains(archive));
 		
 		ZKMaster clone = ZKMaster.openTestVolume();
-		assertTrue(clone.allArchives().contains(archive));
+		assertTrue(clone.allArchives().contains(roArchive));
 		assertEquals(1, clone.allArchives.size());
 		assertTrue(clone.allArchives.getLast().config.accessor.isSeedOnly());
 	}

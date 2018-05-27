@@ -121,6 +121,10 @@ public class ZKArchive {
 			return false;
 		}
 		
-		return Arrays.equals(config.archiveId, ((ZKArchive) other).config.archiveId);
+		if(Arrays.equals(config.archiveId, ((ZKArchive) other).config.archiveId)) {
+			return config.accessor.isSeedOnly() == ((ZKArchive) other).config.accessor.isSeedOnly();
+		}
+		
+		return false;
 	}
 }

@@ -825,6 +825,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleRequestRefTagsToleratesNonexistentRefTags() throws IOException, ProtocolViolationException {
+		// TODO P2P: (review) Observed hang 5/26/18 on dcffcba78ade5b2a413c8a1d338bce2d15c360be
 		ZKFS fs = archive.openBlank();
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REF_TAGS);
 		RefTag[] tags = new RefTag[16];
