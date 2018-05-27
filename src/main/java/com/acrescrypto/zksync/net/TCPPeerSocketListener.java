@@ -51,11 +51,13 @@ public class TCPPeerSocketListener {
 	public void close() throws IOException {
 		if(closed) return;
 		closed = true;
-		listenSocket.close();
+		if(listenSocket != null) {
+			listenSocket.close();
+		}
 	}
 	
 	public void advertise(PeerSwarm swarm) {
-		adListeners.add(new TCPPeerAdvertisementListener(swarm, port));
+		adListeners.add(new TCPPeerAdvertisementListener(swarm, this));
 	}
 	
 	public TCPPeerAdvertisementListener listenerForSwarm(PeerSwarm swarm) {

@@ -254,11 +254,11 @@ public class RAMFS extends FS {
 		return inode;
 	}
 	
-	protected void setInode(String path, Inode inode) throws ENOENTException {
+	protected synchronized void setInode(String path, Inode inode) throws ENOENTException {
 		inodesByPath.put(unscopedPath(path), inode);
 	}
 	
-	protected void clearInode(String path) {
+	protected synchronized void clearInode(String path) {
 		try {
 			if(unscopedPath(path).equals("/")) return;
 			inodesByPath.remove(unscopedPath(path));

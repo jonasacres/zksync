@@ -19,6 +19,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.net.PeerMessageOutgoing.MessageSegment;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PeerMessageOutgoingTest {
 	class DummySocket extends PeerSocket {
@@ -246,7 +247,6 @@ public class PeerMessageOutgoingTest {
 	public void testSetsTxClosed() throws IOException {
 		assertFalse(msg.txClosed());
 		writeEnd.close();
-		try { Thread.sleep(1); } catch(InterruptedException exc) {}
-		assertTrue(msg.txClosed());
+		assertTrue(Util.waitUntil(100, ()->msg.txClosed()));
 	}
 }

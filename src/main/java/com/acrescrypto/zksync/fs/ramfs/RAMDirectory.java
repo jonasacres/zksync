@@ -35,11 +35,13 @@ public class RAMDirectory implements Directory {
 			matches.add("..");
 		}
 		
-		for(String path : fs.inodesByPath.keySet()) {
-			if(path.equals("/")) continue;
-			if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(path).isDirectory()) continue;
-			if(path.startsWith(prefix) && path.substring(prefix.length()).indexOf("/") == -1) {
-				matches.add(path.substring(prefix.length()));
+		synchronized(fs) {
+			for(String path : fs.inodesByPath.keySet()) {
+				if(path.equals("/")) continue;
+				if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(path).isDirectory()) continue;
+				if(path.startsWith(prefix) && path.substring(prefix.length()).indexOf("/") == -1) {
+					matches.add(path.substring(prefix.length()));
+				}
 			}
 		}
 		

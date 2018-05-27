@@ -21,14 +21,14 @@ import com.acrescrypto.zksync.utility.Util;
 public class TCPPeerAdvertisementListener {
 	protected PeerSwarm swarm;
 	protected CryptoSupport crypto;
-	protected Logger logger = LoggerFactory.getLogger(TCPPeerSocketListener.class);
-	protected int port;
+	protected Logger logger = LoggerFactory.getLogger(TCPPeerAdvertisementListener.class);
+	protected TCPPeerSocketListener listener;
 	protected PrivateDHKey dhPrivateKey;
 	
-	public TCPPeerAdvertisementListener(PeerSwarm swarm, int port) {
+	public TCPPeerAdvertisementListener(PeerSwarm swarm, TCPPeerSocketListener listener) {
 		this.swarm = swarm;
 		this.crypto = swarm.config.getAccessor().getMaster().getCrypto();
-		this.port = port;
+		this.listener = listener;
 		initKeys();
 		announce();
 	}
@@ -44,7 +44,7 @@ public class TCPPeerAdvertisementListener {
 	}
 	
 	public TCPPeerAdvertisement localAd() throws UnconnectableAdvertisementException {
-		return new TCPPeerAdvertisement(dhPrivateKey.publicKey(), "localhost", port); // real hostname filled in by peers; use localhost as safe stand-in
+		return new TCPPeerAdvertisement(dhPrivateKey.publicKey(), "localhost", listener.getPort()); // real hostname filled in by peers; use localhost as safe stand-in
 	}
 	
 	public void announce() {

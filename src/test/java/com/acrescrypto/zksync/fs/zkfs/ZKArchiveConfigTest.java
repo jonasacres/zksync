@@ -492,5 +492,11 @@ public class ZKArchiveConfigTest {
 		assertTrue(seedConfig.validatePage(tag, fakePage.array()));
 	}
 	
-	// TODO P2P: (implement) Test serialized page matches getSerializedPageSize()
+	@Test
+	public void testSerializedPageMatchesExpectedLength() throws IOException {
+		config.write();
+		long expectedSize = config.getSerializedPageSize();
+		long actualSize = config.getCacheStorage().stat(Page.pathForTag(config.tag())).getSize();
+		assertEquals(expectedSize, actualSize);
+	}
 }

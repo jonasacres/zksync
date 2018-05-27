@@ -244,12 +244,14 @@ public class TCPPeerSocketListenerTest {
 	}
 	
 	@Test
-	public void testListenerForSwarmReturnsListenerIfSwarmAdvertised() {
+	public void testListenerForSwarmReturnsListenerIfSwarmAdvertised() throws IOException, InvalidBlacklistException, UnconnectableAdvertisementException {
+		beforeEach();
 		listener.advertise(swarm);
 		TCPPeerAdvertisementListener adListener = listener.listenerForSwarm(swarm);
 		assertNotNull(adListener);
-		assertEquals(listener.getPort(), adListener.port);
+		assertEquals(listener.getPort(), adListener.localAd().port);
 		assertEquals(swarm, adListener.swarm);
+		afterEach();
 	}
 	
 	@Test
