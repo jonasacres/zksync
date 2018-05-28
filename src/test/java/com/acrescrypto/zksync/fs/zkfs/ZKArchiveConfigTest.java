@@ -499,4 +499,10 @@ public class ZKArchiveConfigTest {
 		long actualSize = config.getCacheStorage().stat(Page.pathForTag(config.tag())).getSize();
 		assertEquals(expectedSize, actualSize);
 	}
+	
+	@Test
+	public void testArchivesHaveUniqueConfigFilePathTags() throws IOException {
+		ZKArchiveConfig config2 = new ZKArchiveConfig(accessor, TEST_DESCRIPTION, PAGE_SIZE);
+		assertFalse(Arrays.equals(config.tag(), config2.tag()));
+	}
 }

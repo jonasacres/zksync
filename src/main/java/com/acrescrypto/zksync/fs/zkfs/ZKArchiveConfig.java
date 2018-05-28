@@ -113,7 +113,7 @@ public class ZKArchiveConfig {
 	}
 	
 	public byte[] tag() {
-		return accessor.configFileTagKey.authenticate(new byte[0]); // TODO P2P: (redesign) any way to make this archive-specific?
+		return accessor.configFileTagKey.authenticate(archiveId);
 	}
 	
 	public void write() throws IOException {
