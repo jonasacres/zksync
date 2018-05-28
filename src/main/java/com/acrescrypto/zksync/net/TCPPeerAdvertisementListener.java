@@ -24,19 +24,22 @@ public class TCPPeerAdvertisementListener {
 	protected Logger logger = LoggerFactory.getLogger(TCPPeerAdvertisementListener.class);
 	protected TCPPeerSocketListener listener;
 	protected PrivateDHKey dhPrivateKey;
+	protected int version;
 	
 	public TCPPeerAdvertisementListener(PeerSwarm swarm, TCPPeerSocketListener listener) {
 		this.swarm = swarm;
 		this.crypto = swarm.config.getAccessor().getMaster().getCrypto();
 		this.listener = listener;
+		this.version = 0;
 		initKeys();
 		announce();
 	}
 	
 	public boolean matchesKeyHash(PublicDHKey remotePubKey, byte[] keyHash) {
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize());
+		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize()+4);
 		keyHashInput.put(remotePubKey.getBytes());
 		keyHashInput.put(dhPrivateKey.publicKey().getBytes());
+		keyHashInput.putInt(version);
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		
 		byte[] expectedKeyHash = keyHashKey.authenticate(keyHashInput.array());
@@ -44,7 +47,7 @@ public class TCPPeerAdvertisementListener {
 	}
 	
 	public TCPPeerAdvertisement localAd() throws UnconnectableAdvertisementException {
-		return new TCPPeerAdvertisement(dhPrivateKey.publicKey(), "localhost", listener.getPort()).resolve(); // real hostname filled in by peers; use localhost as safe stand-in
+		return new TCPPeerAdvertisement(dhPrivateKey.publicKey(), "localhost", listener.getPort(), version).resolve(); // real hostname filled in by peers; use localhost as safe stand-in
 	}
 	
 	public void announce() {

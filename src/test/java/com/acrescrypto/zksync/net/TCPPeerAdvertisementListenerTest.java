@@ -66,9 +66,10 @@ public class TCPPeerAdvertisementListenerTest {
 	@Test
 	public void testMatchesKeyHashReturnsTrueIfKeyHashIsValid() {
 		PrivateDHKey privKey = master.getCrypto().makePrivateDHKey();
-		ByteBuffer buf = ByteBuffer.allocate(2*master.getCrypto().asymPublicDHKeySize());
+		ByteBuffer buf = ByteBuffer.allocate(2*master.getCrypto().asymPublicDHKeySize()+4);
 		buf.put(privKey.publicKey().getBytes());
 		buf.put(listener.dhPrivateKey.publicKey().getBytes());
+		buf.putInt(0);
 		
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		byte[] keyHash = keyHashKey.authenticate(buf.array());

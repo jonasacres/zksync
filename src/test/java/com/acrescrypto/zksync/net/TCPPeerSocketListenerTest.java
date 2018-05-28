@@ -18,6 +18,7 @@ import java.net.ConnectException;
 
 import org.apache.commons.io.IOUtils;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -31,6 +32,7 @@ import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -107,9 +109,10 @@ public class TCPPeerSocketListenerTest {
 	protected void sendHandshake(PublicDHKey adKey, Socket socket, int timeSliceOffset, ZKArchiveConfig proofConfig) throws IOException {
 		int timeSlice = swarm.config.getAccessor().timeSliceIndex() + timeSliceOffset;
 		
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize());
+		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize()+4);
 		keyHashInput.put(peerKey.publicKey().getBytes());
 		keyHashInput.put(adKey.getBytes());
+		keyHashInput.putInt(0);
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		
 		byte[] keyHash = keyHashKey.authenticate(keyHashInput.array());
@@ -126,9 +129,11 @@ public class TCPPeerSocketListenerTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
+		ZKFSTest.cheapenArgon2Costs();
 		crypto = new CryptoSupport();
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
+		TCPPeerSocket.disableMakeThreads = true;
 	}
 	
 	@Before
@@ -143,6 +148,12 @@ public class TCPPeerSocketListenerTest {
 	public void afterEach() throws IOException {
 		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
 		listener.close();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TCPPeerSocket.disableMakeThreads = false;
+		ZKFSTest.restoreArgon2Costs();
 	}
 	
 	@Test
@@ -296,7 +307,7 @@ public class TCPPeerSocketListenerTest {
 	}
 	
 	@Test
-	public void testDisconnectsPeersExceedingDeadlingToHandshake() throws UnknownHostException, IOException {
+	public void testDisconnectsPeersExceedingDeadlineToHandshake() throws UnknownHostException, IOException {
 		TCPPeerSocket.maxHandshakeTimeMillis = 5;
 		listener.advertise(swarm);
 		Socket socket = connect();
@@ -391,7 +402,7 @@ public class TCPPeerSocketListenerTest {
 	}
 	
 	@Test
-	public void testSendsBogusProofWhenArchiveIsSeedOnly() throws UnconnectableAdvertisementException, IOException {
+	public void testSendsBogusProofWhenArchiveIsSeedOnly() throws UnconnectableAdvertisementException, IOException, InvalidBlacklistException {
 		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
 		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
 		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.getConfig().getArchiveId());

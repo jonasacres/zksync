@@ -117,11 +117,12 @@ public class ZKArchiveConfig {
 	}
 	
 	public void write() throws IOException {
-		// TODO P2P: (refactor) consider futureproofing this. what if we actually want to use the reserved bytes someday?
 		ByteBuffer writeBuf = ByteBuffer.allocate(getSerializedPageSize());
+		byte[] versionPortion = serializeVersionPortion();
 		byte[] seedPortion = serializeSeedPortion();
 		byte[] securePortion = serializeSecurePortion();
 		byte[] seedCiphertext = accessor.configFileSeedKey.encrypt(configFileIv, seedPortion, seedPortionPadSize());
+		writeBuf.put(versionPortion);
 		writeBuf.put(configFileIv);
 		writeBuf.put(seedCiphertext);
 		int padLen = writeBuf.remaining()-accessor.master.crypto.asymSignatureSize()-4-accessor.master.crypto.symTagLength();
@@ -136,6 +137,12 @@ public class ZKArchiveConfig {
 	public void read() throws IOException {
 		try {
 			ByteBuffer contents = ByteBuffer.wrap(storage.read(Page.pathForTag(tag())));
+			
+			byte[] versionHash = new byte[accessor.master.crypto.hashLength()];
+			assertState(contents.remaining() >= versionHash.length);
+			contents.get(versionHash);
+			deserializeVersionPortion(versionHash);
+
 			byte[] seedCiphertext = new byte[256 + accessor.master.crypto.symTagLength() + 4];
 			assertState(contents.remaining() >= seedCiphertext.length);
 			configFileIv = new byte[accessor.master.crypto.symIvLength()];
@@ -174,6 +181,13 @@ public class ZKArchiveConfig {
 		return pubKey;
 	}
 	
+	protected byte[] serializeVersionPortion() {
+		ByteBuffer versionInput = ByteBuffer.allocate(4+archiveId.length);
+		versionInput.putInt(0);
+		versionInput.put(archiveId);
+		return accessor.configFileTagKey.authenticate(versionInput.array()); 
+	}
+	
 	protected byte[] serializeSeedPortion() {
 		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length + accessor.master.crypto.hashLength());
 		buf.put(pubKey.getBytes());
@@ -201,6 +215,10 @@ public class ZKArchiveConfig {
 		assertState(!buf.hasRemaining());
 		
 		return buf.array();
+	}
+	
+	protected void deserializeVersionPortion(byte[] serialized) {
+		assertState(Arrays.equals(serializeVersionPortion(), serialized));
 	}
 	
 	protected void deserializeSeedPortion(byte[] serialized) {

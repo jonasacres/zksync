@@ -13,22 +13,28 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	protected PublicDHKey pubKey;
 	protected String host;
 	protected int port;
+	protected int version;
 	protected String ipAddress;
 	
 	public TCPPeerAdvertisement(PublicDHKey pubKey, String host, int port) {
+		this(pubKey, host, port, 0);
+	}
+	
+	public TCPPeerAdvertisement(PublicDHKey pubKey, String host, int port, int version) {
 		this.pubKey = pubKey;
 		this.host = host;
 		this.port = port;
+		this.version = version;
 	}
 	
-	public TCPPeerAdvertisement(byte[] serialized, PeerConnection connection) {
+	public TCPPeerAdvertisement(byte[] serialized, PeerConnection connection) throws UnconnectableAdvertisementException {
 		this(serialized);
 		this.ipAddress = this.host = connection.getSocket().getAddress();
 	}
 	
-	public TCPPeerAdvertisement(byte[] serialized) {
+	public TCPPeerAdvertisement(byte[] serialized) throws UnconnectableAdvertisementException {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		assert(TYPE_TCP_PEER == buf.get());
+		if(TYPE_TCP_PEER != buf.get() || 0 != buf.getInt()) throw new UnconnectableAdvertisementException();
 		int pubKeyLen = Util.unsignShort(buf.getShort());
 		byte[] pubKeyBytes = new byte[pubKeyLen];
 		buf.get(pubKeyBytes);
@@ -54,8 +60,9 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 
 	@Override
 	public byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(1 + 2 + pubKey.getBytes().length + 2 + host.length() + 2);
+		ByteBuffer buf = ByteBuffer.allocate(1 + 4 + 2 + pubKey.getBytes().length + 2 + host.length() + 2);
 		buf.put(getType());
+		buf.putInt(version);
 		buf.putShort((short) pubKey.getBytes().length);
 		buf.put(pubKey.getBytes());
 		buf.putShort((short) host.length());
@@ -94,6 +101,10 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	@Override
 	public byte getType() {
 		return PeerAdvertisement.TYPE_TCP_PEER;
+	}
+	
+	public int getVersion() {
+		return version;
 	}
 	
 	public String toString() {

@@ -110,4 +110,16 @@ public class TCPPeerAdvertisementTest {
 	public void testGetTypeReturnsTypeTCPPeer() {
 		assertEquals(PeerAdvertisement.TYPE_TCP_PEER, ad.getType());
 	}
+	
+	@Test
+	public void testGetVersionReturnsVersion() {
+		assertEquals(0, ad.getVersion());
+	}
+	
+	@Test(expected=UnconnectableAdvertisementException.class)
+	public void testConstructorThrowsExceptionIfUnsupportedVersion() throws UnconnectableAdvertisementException {
+		ad.version = 1;
+		byte[] serialized = ad.serialize();
+		new TCPPeerAdvertisement(serialized);
+	}
 }
