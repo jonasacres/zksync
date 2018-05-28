@@ -16,6 +16,7 @@ public abstract class PeerMessage {
 	 */
 	public final static int FILE_CHUNK_SIZE = MESSAGE_SIZE - HEADER_LENGTH - 4; // leave 4 bytes for a chunk index
 	public final static byte FLAG_FINAL = 0x01; // no further messages should be sent/expected in this message ID
+	public final static byte FLAG_CANCEL = 0x02; // please do not send us any more data for message with indicated ID
 
 	protected int msgId;
 	protected byte cmd;

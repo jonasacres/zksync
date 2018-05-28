@@ -12,19 +12,28 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 
 public class PeerMessageOutgoing extends PeerMessage {
-	protected boolean txEOF;
+	protected boolean txEOF, aborted;
 	protected InputStream txPayload;
 	protected RefTag refTag;
 	protected Queue<Integer> chunkList = new LinkedList<Integer>();
 	protected MessageSegment queuedSegment;
 	private Logger logger = LoggerFactory.getLogger(PeerMessageOutgoing.class);
 	
-	public PeerMessageOutgoing(PeerConnection connection, byte cmd, InputStream txPayload) {
+	public PeerMessageOutgoing(PeerConnection connection, int msgId, byte cmd, byte flags, InputStream txPayload) {
 		this.connection = connection;
 		this.cmd = cmd;
+		this.flags = flags;
 		this.txPayload = txPayload;
-		this.msgId = connection.socket.issueMessageId();
+		this.msgId = msgId;
 		runTxThread();
+	}
+	
+	public PeerMessageOutgoing(PeerConnection connection, byte cmd, InputStream txPayload) {
+		this(connection, connection.socket.issueMessageId(), cmd, (byte) 0, txPayload);
+	}
+	
+	public void abort() {
+		aborted = true;
 	}
 
 	public boolean txClosed() {
@@ -42,7 +51,7 @@ public class PeerMessageOutgoing extends PeerMessage {
 	protected void runTxThread() {
 		new Thread(() -> {
 			try {
-				while(!txClosed()) {
+				while(!txClosed() && !aborted) {
 					if(queuedSegment != null) queuedSegment.waitForDelivery();
 					accumulateNext();
 					
@@ -50,7 +59,7 @@ public class PeerMessageOutgoing extends PeerMessage {
 						connection.waitForUnpause();
 					}
 					
-					if(queuedSegment != null) {
+					if(queuedSegment != null && !aborted) {
 						sendNext();
 					}
 				}

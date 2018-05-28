@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.net;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketException;
@@ -75,7 +76,9 @@ public abstract class PeerSocket {
 	}
 	
 	public PeerMessageOutgoing makeOutgoingMessage(byte cmd, InputStream txPayload) {
-		return new PeerMessageOutgoing(connection, cmd, txPayload);
+		PeerMessageOutgoing msg = new PeerMessageOutgoing(connection, cmd, txPayload);
+		outgoing.add(msg);
+		return msg;
 	}
 	
 	/** Immediately close socket and blacklist due to a clear protocol violation. 
@@ -101,7 +104,7 @@ public abstract class PeerSocket {
 	/** Handle some sort of I/O exception */
 	protected void ioexception(IOException exc) {
 		/* These are probably our fault. There is the possibility that they are caused by malicious actors. */
-		logger.error("Socket for peer {} caught IOException", getAddress(), exc);
+		logger.warn("Socket for peer {} caught IOException", getAddress(), exc);
 		try {
 			close();
 		} catch (IOException e) {
@@ -117,12 +120,13 @@ public abstract class PeerSocket {
 		return incoming.getOrDefault(msgId, null);
 	}
 	
+	@SuppressWarnings("unlikely-arg-type")
 	protected void sendMessage(MessageSegment segment) throws IOException, ProtocolViolationException {
 		write(segment.content.array(), 0, segment.content.limit());
 		segment.delivered();
 		
 		if((segment.flags & PeerMessage.FLAG_FINAL) != 0) {
-			outgoing.remove(segment.msgId);
+			outgoing.remove((Integer) segment.msgId);
 		}
 	}
 	
@@ -180,21 +184,30 @@ public abstract class PeerSocket {
 	
 	protected void processMessage(int msgId, byte cmd, byte flags, byte[] payload) throws IOException {
 		PeerMessageIncoming msg;
-		if(msgId > maxReceivedMessageId) {
+		if((flags & PeerMessage.FLAG_CANCEL) != 0) {
+			cancelMessage(msgId);
+			return;
+		}
+		
+		if(msgId > maxReceivedMessageId) { // new message
 			msg = new PeerMessageIncoming(connection, cmd, flags, msgId);
 			synchronized(this) {
 				incoming.put(msgId, msg);
 				maxReceivedMessageId = msgId;
 			}
 			pruneMessages();
-		} else if(incoming.containsKey(msgId)) {
+		} else if(incoming.containsKey(msgId)) { // existing message
 			msg = incoming.get(msgId);
-		} else {
+		} else { // pruned message
 			if(maxReceivedMessageId == Integer.MAX_VALUE) {
 				// we can accept no new messages since we've exceeded the limits of the 32-bit ID field; close and force a reconnect
 				close();
 			}
-			rejectMessage(msgId);
+			
+			if((flags & PeerMessage.FLAG_FINAL) == 0) {
+				// tell peer we don't want to hear more about this if they intend to send more
+				rejectMessage(msgId, cmd);
+			}
 			return;
 		}
 		
@@ -217,8 +230,16 @@ public abstract class PeerSocket {
 		}
 	}
 	
-	protected void rejectMessage(int msgId) {
-		// TODO P2P: (implement) send response advising peer we don't want this message anymore
+	protected void cancelMessage(int msgId) {
+		for(PeerMessageOutgoing msg : outgoing) {
+			if(msg.msgId == msgId) {
+				msg.abort();
+			}
+		}
+	}
+	
+	protected void rejectMessage(int msgId, byte cmd) {
+		new PeerMessageOutgoing(connection, msgId, cmd, PeerMessage.FLAG_CANCEL, new ByteArrayInputStream(new byte[0]));
 	}
 	
 	protected synchronized void dataReady(MessageSegment segment) {

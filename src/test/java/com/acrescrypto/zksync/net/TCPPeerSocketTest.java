@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.input.InfiniteCircularInputStream;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -212,6 +213,15 @@ public class TCPPeerSocketTest {
 		void initKeys(boolean localRoleIsClient) {
 			readChainKey = new Key(crypto, crypto.expand(secret, crypto.symKeyLength(), new byte[] { (byte) (localRoleIsClient ? 1 : 0) }, "zksync".getBytes()));
 			writeChainKey = new Key(crypto, crypto.expand(secret, crypto.symKeyLength(), new byte[] { (byte) (localRoleIsClient ? 0 : 1) }, "zksync".getBytes()));
+		}
+
+		public boolean hasAvailable() {
+			try {
+				return serverSock.getInputStream().available() > 0;
+			} catch(IOException exc) {
+				exc.printStackTrace();
+				return false;
+			}
 		}
 	}
 	
@@ -907,5 +917,91 @@ public class TCPPeerSocketTest {
 		conn.serverWrite(segment1.content.array());
 		assertTrue(Util.waitUntil(100, ()->socket.isClosed()));
 		assertFalse(socket.swarm.getConfig().getAccessor().getMaster().getBlacklist().contains(socket.getAddress()));
+	}
+	
+	@Test
+	public void testSendsCancelMessagesWhenReceivingSegmentsForClosedMessageIDs() throws IOException {
+		int msgId = 1234;
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+
+		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment1 = new MessageSegment(msgId-1, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		
+		conn.serverWrite(segment0.content.array());
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
+
+		conn.serverWrite(segment1.content.array());
+		ByteBuffer buf = ByteBuffer.wrap(conn.serverReadNext());
+		assertEquals(segment1.msgId, buf.getInt());
+		assertEquals(0, buf.getInt()); // length
+		assertEquals(segment1.cmd, buf.get());
+		assertEquals(PeerMessage.FLAG_CANCEL | PeerMessage.FLAG_FINAL, buf.get());
+		assertEquals(0, buf.getShort());
+		assertFalse(buf.hasRemaining());
+	}
+	
+	@Test
+	public void testDoesntSendCancelMessagesForSegmentsMarkedFinal() throws IOException {
+		int msgId = 1234;
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+
+		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment1 = new MessageSegment(msgId-1, PeerConnection.CMD_ANNOUNCE_TAGS, PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		
+		conn.serverWrite(segment0.content.array());
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
+
+		conn.serverWrite(segment1.content.array());
+		assertFalse(Util.waitUntil(100, ()->conn.hasAvailable()));
+	}
+	
+	@Test
+	public void testDoesntSendCancelMessagesForNewMessageIDs() throws IOException {
+		int msgId = 1234;
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+
+		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment1 = new MessageSegment(msgId+1, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		
+		conn.serverWrite(segment0.content.array());
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
+
+		conn.serverWrite(segment1.content.array());
+		assertFalse(Util.waitUntil(100, ()->conn.hasAvailable()));
+	}
+	
+	@Test
+	public void testDoesntSendCancelMessagesForExistingMessageIDs() throws IOException {
+		int msgId = 1234;
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+
+		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		
+		conn.serverWrite(segment0.content.array());
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
+
+		conn.serverWrite(segment0.content.array());
+		assertFalse(Util.waitUntil(100, ()->conn.hasAvailable()));
+	}
+	
+	@Test
+	public void testStopsSendingMessagesWhenCancelReceived() throws IOException {
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+		InfiniteCircularInputStream stream = new InfiniteCircularInputStream(new byte[] { 4, 8, 15, 16, 23, 42 });
+		PeerMessageOutgoing msg = socket.makeOutgoingMessage(PeerConnection.CMD_ANNOUNCE_TAGS, stream);
+		assertTrue(Util.waitUntil(100, ()->conn.hasAvailable()));
+		
+		MessageSegment cancel = new MessageSegment(msg.msgId, msg.cmd, (byte) (PeerMessage.FLAG_CANCEL | PeerMessage.FLAG_FINAL), ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		conn.serverWrite(cancel.content.array());
+		assertTrue(Util.waitUntil(100, ()->{
+			if(!conn.hasAvailable()) return true;
+			try { conn.serverReadNext(); } catch(IOException exc) {}
+			return false;
+		}));
 	}
 }
