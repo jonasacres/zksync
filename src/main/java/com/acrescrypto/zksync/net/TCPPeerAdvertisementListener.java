@@ -36,9 +36,10 @@ public class TCPPeerAdvertisementListener {
 	}
 	
 	public boolean matchesKeyHash(PublicDHKey remotePubKey, byte[] keyHash) {
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize()+4);
+		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize()+crypto.hashLength()+4);
 		keyHashInput.put(remotePubKey.getBytes());
 		keyHashInput.put(dhPrivateKey.publicKey().getBytes());
+		keyHashInput.put(swarm.config.getArchiveId());
 		keyHashInput.putInt(version);
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		

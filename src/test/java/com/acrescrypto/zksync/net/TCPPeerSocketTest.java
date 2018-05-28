@@ -348,9 +348,10 @@ public class TCPPeerSocketTest {
 		int timeIndex = ByteBuffer.wrap(readBytes(server.getClient(0), 4)).getInt();
 		
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+4);
+		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+crypto.hashLength()+4);
 		keyHashInput.put(pubKey);
 		keyHashInput.put(ad.pubKey.getBytes());
+		keyHashInput.put(swarm.config.getArchiveId());
 		keyHashInput.putInt(0);
 		byte[] expectedKeyHash = keyHashKey.authenticate(keyHashInput.array());
 		
@@ -391,9 +392,10 @@ public class TCPPeerSocketTest {
 		byte[] proof = readBytes(crypto.symKeyLength());
 		
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+4);
+		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+crypto.hashLength()+4);
 		keyHashInput.put(clientKey.getBytes());
 		keyHashInput.put(ad.pubKey.getBytes());
+		keyHashInput.put(swarm.config.getArchiveId());
 		keyHashInput.putInt(0);
 
 		byte[] expectedKeyHash = keyHashKey.authenticate(keyHashInput.array());

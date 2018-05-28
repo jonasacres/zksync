@@ -109,9 +109,10 @@ public class TCPPeerSocketListenerTest {
 	protected void sendHandshake(PublicDHKey adKey, Socket socket, int timeSliceOffset, ZKArchiveConfig proofConfig) throws IOException {
 		int timeSlice = swarm.config.getAccessor().timeSliceIndex() + timeSliceOffset;
 		
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize()+4);
+		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize()+crypto.hashLength()+4);
 		keyHashInput.put(peerKey.publicKey().getBytes());
 		keyHashInput.put(adKey.getBytes());
+		keyHashInput.put(swarm.config.getArchiveId());
 		keyHashInput.putInt(0);
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		

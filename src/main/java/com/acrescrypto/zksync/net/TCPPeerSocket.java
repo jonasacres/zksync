@@ -189,9 +189,10 @@ public class TCPPeerSocket extends PeerSocket {
 	
 	protected void sendHandshake(PublicDHKey remotePubKey) throws IOException, ProtocolViolationException {
 		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, ()->peerType >= 0, ()->close());
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+4);
+		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+crypto.hashLength()+4);
 		keyHashInput.put(dhPrivateKey.publicKey().getBytes());
 		keyHashInput.put(remotePubKey.getBytes());
+		keyHashInput.put(swarm.config.getArchiveId());
 		keyHashInput.putInt(0); 
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		
