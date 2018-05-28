@@ -210,23 +210,27 @@ public class PeerConnectionTest {
 	}
 	
 	void assertNoQueuedItemLike(QueueItemTest test) {
-		Iterator<QueueItem> itr = conn.queue.itemsByPriority.iterator();
-		boolean found = false;
-		while(!found && itr.hasNext()) {
-			found = test.test(itr.next());
+		synchronized(conn.queue) {
+			Iterator<QueueItem> itr = conn.queue.itemsByPriority.iterator();
+			boolean found = false;
+			while(!found && itr.hasNext()) {
+				found = test.test(itr.next());
+			}
+			
+			assertFalse(found);
 		}
-		
-		assertFalse(found);
 	}
 	
 	void assertQueuedItemLike(QueueItemTest test) {
-		Iterator<QueueItem> itr = conn.queue.itemsByPriority.iterator();
-		boolean found = false;
-		while(!found && itr.hasNext()) {
-			found = test.test(itr.next());
+		synchronized(conn.queue) {
+			Iterator<QueueItem> itr = conn.queue.itemsByPriority.iterator();
+			boolean found = false;
+			while(!found && itr.hasNext()) {
+				found = test.test(itr.next());
+			}
+			
+			assertTrue(found);
 		}
-		
-		assertTrue(found);
 	}
 	
 	@BeforeClass
