@@ -16,6 +16,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
@@ -24,21 +25,27 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.Util;
 
+import ch.qos.logback.classic.Level;
+
 public class PeerSwarmTest {
 	class DummyAdvertisement extends PeerAdvertisement {
 		String address;
-		boolean blacklisted;
+		boolean blacklisted, explode;
 		byte type = -1;
 		public DummyAdvertisement() { address = "localhost"; }
 		public DummyAdvertisement(String address) {
 			this.address = address;
 			this.type = TYPE_TCP_PEER;
 		}
+		@Override public void blacklist(Blacklist blacklist) throws IOException {}
 		@Override public boolean isBlacklisted(Blacklist blacklist) throws IOException { return blacklisted; }
 		@Override public byte[] serialize() { return null; }
 		@Override public boolean matchesAddress(String address) { return this.address.equals(address); }
 		@Override public byte getType() { return type; }
-		@Override public DummyConnection connect(PeerSwarm swarm)  { return new DummyConnection(new DummySocket(address, swarm)); }
+		@Override public DummyConnection connect(PeerSwarm swarm)  {
+			if(explode) throw new RuntimeException("kerblooie");
+			return new DummyConnection(new DummySocket(address, swarm));
+		}
 		@Override public int hashCode() { return address.hashCode(); }
 		@Override public boolean equals(Object other) {
 			if(!(other instanceof DummyAdvertisement)) return false;
@@ -46,7 +53,7 @@ public class PeerSwarmTest {
 		}
 	}
 	
-	class ExplodingDummyAdvertisement extends DummyAdvertisement {
+	class ExplodingDummyAdvertisement extends DummyAdvertisement { // could replace with DummyAdvertisement.explode
 		public ExplodingDummyAdvertisement() { super("kaboom"); }
 		@Override public DummyConnection connect(PeerSwarm swarm) {
 			exploded = true;
@@ -125,6 +132,9 @@ public class PeerSwarmTest {
 	@After
 	public void after() {
 		swarm.close();
+		try { Thread.sleep(1); } catch(InterruptedException exc) {} // give exploding ads a chance to percolate through before turning logging back on
+		((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(PeerSwarm.class)).setLevel(Level.WARN);
+		master.setCurrentTime(-1);
 	}
 	
 	@AfterClass
@@ -282,6 +292,20 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
+	public void testEmbaroesUnconnectablePeers() throws InterruptedException {
+		((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(PeerSwarm.class)).setLevel(Level.OFF);
+		DummyAdvertisement ad = new DummyAdvertisement("some-ad");
+		master.setCurrentTime(0);
+		ad.explode = true;
+		assertFalse(connectedAddresses.contains(ad.address));
+		swarm.addPeerAdvertisement(ad);
+		assertFalse(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
+		ad.explode = false;
+		master.setCurrentTime(1000l*1000l*PeerSwarm.EMBARGO_EXPIRE_TIME_MILLIS);
+		assertTrue(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
+	}
+	
+	@Test
 	public void testStopsConnectingToAdsWhenMaxSocketCountReached() throws InterruptedException {
 		int initial = connectedAddresses.size();
 		for(int i = 0; i < 2*swarm.maxSocketCount; i++) {
@@ -310,6 +334,7 @@ public class PeerSwarmTest {
 	
 	@Test
 	public void testConnectionThreadDoesNotDieFromExceptions() throws InterruptedException {
+		((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(PeerSwarm.class)).setLevel(Level.OFF);
 		ExplodingDummyAdvertisement exploding = new ExplodingDummyAdvertisement();
 		assertFalse(exploded);
 		swarm.addPeerAdvertisement(exploding);

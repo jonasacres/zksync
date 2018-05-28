@@ -24,6 +24,8 @@ import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerSwarm implements BlacklistCallback {
+	public final static int EMBARGO_EXPIRE_TIME_MILLIS = 1000*60*10; // wait 10 minutes before retrying unconnectable ads
+	
 	protected ArrayList<PeerConnection> connections = new ArrayList<PeerConnection>();
 	protected HashSet<PeerAdvertisement> knownAds = new HashSet<PeerAdvertisement>();
 	protected HashSet<PeerAdvertisement> connectedAds = new HashSet<PeerAdvertisement>();
@@ -31,6 +33,7 @@ public class PeerSwarm implements BlacklistCallback {
 	protected HashSet<Long> currentTags = new HashSet<Long>();
 	protected HashMap<Long,ChunkAccumulator> activeFiles = new HashMap<Long,ChunkAccumulator>();
 	protected HashMap<Long,Condition> pageWaits = new HashMap<Long,Condition>();
+	protected HashMap<PeerAdvertisement,Long> adEmbargoes = new HashMap<PeerAdvertisement,Long>();
 	
 	protected Lock pageWaitLock = new ReentrantLock();
 	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
@@ -152,20 +155,26 @@ public class PeerSwarm implements BlacklistCallback {
 				}
 				
 				try {
-					logger.trace("Connecting to address ", ad);
+					logger.trace("Connecting to ad {}", ad);
 					openConnection(ad);
 				} catch(Exception exc) {
-					// TODO P2P: (refactor) should be an error, but don't want the output in tests...
-					logger.warn("Connection thread caught exception handling address {}", ad, exc);
+					logger.error("Connection thread caught exception handling ad {}", ad, exc);
 				}
 			}
 		}).start();
 	}
 	
 	protected synchronized PeerAdvertisement selectConnectionAd() {
-		// TODO P2P: (refactor) maybe keep an unconnectedAds list to make this faster?
 		for(PeerAdvertisement ad : knownAds) {
 			if(connectedAds.contains(ad)) continue;
+			if(adEmbargoes.containsKey(ad)) {
+				long expireTime = config.getAccessor().getMaster().currentTimeMillis() - EMBARGO_EXPIRE_TIME_MILLIS;
+				if(adEmbargoes.get(ad) <= expireTime) {
+					adEmbargoes.remove(ad);
+				} else {
+					continue;
+				}
+			}
 			return ad;
 		}
 		
@@ -180,7 +189,6 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 		
 		new Thread(()-> {
-			// TODO P2P: (refactor) Need to get address from ad for blacklisting/logging
 			PeerConnection conn = null;
 			try {
 				conn = ad.connect(this);
@@ -188,18 +196,22 @@ public class PeerSwarm implements BlacklistCallback {
 			} catch (UnsupportedProtocolException exc) {
 				logger.info("Ignoring unsupported ad type " + ad.getType());
 			} catch (ProtocolViolationException exc) {
-				logger.warn("Encountered protocol violation connecting to peer: " + exc);
-				// TODO P2P: (refactor) get access to address for blacklist here
+				logger.warn("Encountered protocol violation connecting to peer ad: {}", ad, exc);
+				try {
+					ad.blacklist(config.getAccessor().getMaster().getBlacklist());
+				} catch(IOException exc2) {
+					logger.error("Encountered IOException blacklisting peer ad: {}", ad, exc);
+				}
 			} catch (BlacklistedException exc) {
-				logger.debug("Ignoring ad for blacklisted peer");
+				logger.debug("Ignoring ad for blacklisted peer {}", ad);
 			} catch(Exception exc) {
-				// TODO P2P: (redesign) Should be error in production, but squelched in junit.
-				logger.warn("Caught exception connecting to peer: " + exc);
+				logger.error("Caught exception connecting to peer {}", ad, exc);
 			} finally {
 				if(conn == null) {
 					synchronized(this) {
 						activeSockets--;
-						connectedAds.remove(ad); // TODO P2P: (review) the definition of insanity, etc., etc. Won't we just draw this same ad again?
+						adEmbargoes.put(ad, config.getAccessor().getMaster().currentTimeMillis());
+						connectedAds.remove(ad);
 					}
 				}
 			}

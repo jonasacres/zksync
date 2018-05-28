@@ -65,6 +65,11 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 		buf.putShort((short) port);
 		return buf.array();
 	}
+	
+	@Override
+	public void blacklist(Blacklist blacklist) throws IOException {
+		blacklist.add(ipAddress.toString(), Integer.MAX_VALUE);
+	}
 
 	@Override
 	public boolean isBlacklisted(Blacklist blacklist) throws IOException {
@@ -91,5 +96,9 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	@Override
 	public byte getType() {
 		return PeerAdvertisement.TYPE_TCP_PEER;
+	}
+	
+	public String toString() {
+		return "TCPPeerAdvertisement: " + host + ":" + port;
 	}
 }

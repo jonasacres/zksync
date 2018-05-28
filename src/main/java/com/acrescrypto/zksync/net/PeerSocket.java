@@ -157,23 +157,7 @@ public abstract class PeerSocket {
 					byte[] payload = new byte[len];
 					read(payload, 0, payload.length);
 					
-					PeerMessageIncoming msg;
-					
-					// TODO P2P: (redesign) Stop adversaries from opening a huge number of simultaneous incoming messages
-					if(msgId > maxReceivedMessageId) {
-						msg = new PeerMessageIncoming(connection, cmd, flags, msgId);
-						synchronized(this) {
-							incoming.put(msgId, msg);
-							maxReceivedMessageId = msgId;
-						}
-					} else if(incoming.containsKey(msgId)) {
-						msg = incoming.get(msgId);
-					} else {
-						// TODO P2P: (redesign) send response advising peer we don't want this message anymore
-						continue;
-					}
-					
-					msg.receivedData(flags, payload);
+					processMessage(msgId, cmd, flags, payload);
 				}
 			} catch(ProtocolViolationException exc) {
 				violation();
@@ -182,6 +166,45 @@ public abstract class PeerSocket {
 				violation();
 			}
 		}).start();
+	}
+	
+	protected void processMessage(int msgId, byte cmd, byte flags, byte[] payload) {
+		PeerMessageIncoming msg;
+		if(msgId > maxReceivedMessageId) {
+			msg = new PeerMessageIncoming(connection, cmd, flags, msgId);
+			synchronized(this) {
+				incoming.put(msgId, msg);
+				maxReceivedMessageId = msgId;
+			}
+			pruneMessages();
+		} else if(incoming.containsKey(msgId)) {
+			msg = incoming.get(msgId);
+		} else {
+			rejectMessage(msgId);
+			return;
+		}
+		
+		msg.receivedData(flags, payload);
+	}
+	
+	protected void pruneMessages() {
+		while(incoming.size() > PeerMessage.MAX_OPEN_MESSAGES) {
+			int pruneMsgId = -1;
+			long oldestTimestamp = Long.MAX_VALUE;
+			
+			for(PeerMessageIncoming msg : incoming.values()) {
+				if(msg.lastSeen < oldestTimestamp) {
+					pruneMsgId = msg.msgId;
+					oldestTimestamp = msg.lastSeen;
+				}
+			}
+			
+			incoming.remove(pruneMsgId);
+		}
+	}
+	
+	protected void rejectMessage(int msgId) {
+		// TODO: (someday) send response advising peer we don't want this message anymore
 	}
 	
 	protected synchronized void dataReady(MessageSegment segment) {

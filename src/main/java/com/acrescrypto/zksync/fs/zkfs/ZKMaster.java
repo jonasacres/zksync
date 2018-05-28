@@ -189,6 +189,10 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		return debugTime;
 	}
 	
+	public long currentTimeMillis() {
+		return currentTimeNanos()/(1000l*1000l);
+	}
+	
 	public void setCurrentTime(long time) {
 		debugTime = time;
 	}

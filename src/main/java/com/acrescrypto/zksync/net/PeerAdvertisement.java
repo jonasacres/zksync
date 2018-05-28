@@ -34,6 +34,7 @@ public abstract class PeerAdvertisement {
 		return null;
 	}
 
+	public abstract void blacklist(Blacklist blacklist) throws IOException;
 	public abstract boolean isBlacklisted(Blacklist blacklist) throws IOException;
 	public abstract byte[] serialize();
 	public abstract boolean matchesAddress(String address);

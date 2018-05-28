@@ -13,6 +13,7 @@ public class PeerMessageIncoming extends PeerMessage {
 	protected PeerMessageHandler handler;
 	protected final Logger logger = LoggerFactory.getLogger(PeerMessageIncoming.class);
 	protected boolean finished;
+	protected long lastSeen;
 	
 	/** Limit on how much data a message can accumulate in its read buffer. When this limit is reached,
 	 * calls to receivedData will block until the buffer is cleared via read operations.
@@ -137,10 +138,12 @@ public class PeerMessageIncoming extends PeerMessage {
 		this.cmd = cmd;
 		this.flags = flags;
 		this.msgId = msgId;
+		this.lastSeen = connection.socket.swarm.config.getAccessor().getMaster().currentTimeMillis();
 		processThread();
 	}
 	
 	public void receivedData(byte flags, byte[] data) {
+		this.lastSeen = connection.socket.swarm.config.getAccessor().getMaster().currentTimeMillis();
 		flags |= this.flags;
 		boolean isFinal = (flags & FLAG_FINAL) != 0;
 		rxBuf.write(data);

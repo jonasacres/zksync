@@ -7,20 +7,27 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.EOFException;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
+import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerMessageIncomingTest {
 	class DummySocket extends PeerSocket {
 		boolean violated, finished;
+		public DummySocket(PeerSwarm swarm) { this.swarm = swarm; }
 		@Override public PeerAdvertisement getAd() { return null; }
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }
@@ -41,7 +48,7 @@ public class PeerMessageIncomingTest {
 		boolean messageReceived;
 		boolean blocking = true;
 		DummySocket socket;
-		public DummyPeerConnection() { super.socket = this.socket = new DummySocket(); }
+		public DummyPeerConnection() { super.socket = this.socket = new DummySocket(swarm); }
 		@Override public synchronized boolean handle(PeerMessageIncoming incoming) throws ProtocolViolationException {
 			messageReceived = true;
 			while(blocking) { try { this.wait(); } catch(InterruptedException exc) {} }
@@ -58,13 +65,27 @@ public class PeerMessageIncomingTest {
 	final static byte FLAGS = 2;
 	final static int MSG_ID = 1234;
 	
+	PeerSwarm swarm;
 	DummyPeerConnection conn;
 	PeerMessageIncoming msg;
 	
+	@BeforeClass
+	public static void beforeAll() {
+		ZKFSTest.cheapenArgon2Costs();
+	}
+	
 	@Before
-	public void beforeEach() {
+	public void beforeEach() throws IOException {
+		ZKMaster master = ZKMaster.openBlankTestVolume();
+		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
+		swarm = new PeerSwarm(archive.getConfig());
 		conn = new DummyPeerConnection();
 		msg = new PeerMessageIncoming(conn, CMD, FLAGS, MSG_ID);
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		ZKFSTest.restoreArgon2Costs();
 	}
 	
 	@Test
