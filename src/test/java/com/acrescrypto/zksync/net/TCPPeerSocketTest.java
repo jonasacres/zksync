@@ -292,7 +292,7 @@ public class TCPPeerSocketTest {
 		swarm = new DummySwarm(archive.getConfig());
 		server = new DummyServer();
 		serverKey = master.getCrypto().makePrivateDHKey();
-		ad = new TCPPeerAdvertisement(serverKey.publicKey(), "localhost", server.getPort());
+		ad = new TCPPeerAdvertisement(serverKey.publicKey(), "localhost", server.getPort()).resolve();
 		socket = new TCPPeerSocket(swarm, ad);
 		TCPPeerSocket.disableMakeThreads = true;
 	}

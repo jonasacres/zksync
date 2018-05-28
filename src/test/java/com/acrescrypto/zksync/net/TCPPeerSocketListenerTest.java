@@ -427,6 +427,4 @@ public class TCPPeerSocketListenerTest {
 		byte[] expectedResponseProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, secret);
 		assertTrue(Arrays.equals(expectedResponseProof, responseProof));
 	}
-	
-	// TODO P2P: (implement) Test concurrency
 }

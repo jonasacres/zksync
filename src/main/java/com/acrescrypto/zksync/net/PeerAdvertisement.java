@@ -17,7 +17,7 @@ public abstract class PeerAdvertisement {
 		byte type = buf.get();
 		switch(type) {
 		case TYPE_TCP_PEER:
-			return new TCPPeerAdvertisement(serialized);
+			return new TCPPeerAdvertisement(serialized).resolve();
 		}
 		
 		return null;

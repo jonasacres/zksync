@@ -15,24 +15,18 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	protected int port;
 	protected String ipAddress;
 	
-	// TODO P2P: (refactor) Not happy with the exceptions thrown from the constructor. Rethink this.
-	public TCPPeerAdvertisement(PublicDHKey pubKey, String host, int port) throws UnconnectableAdvertisementException {
+	public TCPPeerAdvertisement(PublicDHKey pubKey, String host, int port) {
 		this.pubKey = pubKey;
 		this.host = host;
 		this.port = port;
-		try {
-			this.ipAddress = InetAddress.getByName(host).getHostAddress();
-		} catch (UnknownHostException e) {
-			throw new UnconnectableAdvertisementException();
-		}
 	}
 	
-	public TCPPeerAdvertisement(byte[] serialized, PeerConnection connection) throws UnconnectableAdvertisementException {
+	public TCPPeerAdvertisement(byte[] serialized, PeerConnection connection) {
 		this(serialized);
 		this.ipAddress = this.host = connection.getSocket().getAddress();
 	}
 	
-	public TCPPeerAdvertisement(byte[] serialized) throws UnconnectableAdvertisementException {
+	public TCPPeerAdvertisement(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		assert(TYPE_TCP_PEER == buf.get());
 		int pubKeyLen = Util.unsignShort(buf.getShort());
@@ -46,12 +40,16 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 		host = new String(hostBytes);
 		
 		port = Util.unsignShort(buf.getShort());
-		
+	}
+
+	public TCPPeerAdvertisement resolve() throws UnconnectableAdvertisementException {
 		try {
 			this.ipAddress = InetAddress.getByName(host).getHostAddress();
 		} catch (UnknownHostException e) {
 			throw new UnconnectableAdvertisementException();
 		}
+		
+		return this;
 	}
 
 	@Override

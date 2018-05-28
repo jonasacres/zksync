@@ -44,7 +44,7 @@ public class TCPPeerAdvertisementListener {
 	}
 	
 	public TCPPeerAdvertisement localAd() throws UnconnectableAdvertisementException {
-		return new TCPPeerAdvertisement(dhPrivateKey.publicKey(), "localhost", listener.getPort()); // real hostname filled in by peers; use localhost as safe stand-in
+		return new TCPPeerAdvertisement(dhPrivateKey.publicKey(), "localhost", listener.getPort()).resolve(); // real hostname filled in by peers; use localhost as safe stand-in
 	}
 	
 	public void announce() {

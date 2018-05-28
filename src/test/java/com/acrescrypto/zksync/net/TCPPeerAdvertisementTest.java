@@ -39,7 +39,7 @@ public class TCPPeerAdvertisementTest {
 	@Before
 	public void beforeEach() throws UnconnectableAdvertisementException, IOException, InvalidBlacklistException {
 		blacklist = new Blacklist(new RAMFS(), "blacklist", new Key(crypto, crypto.makeSymmetricKey()));
-		ad = new TCPPeerAdvertisement(crypto.makePublicDHKey(pubKey), host, port);
+		ad = new TCPPeerAdvertisement(crypto.makePublicDHKey(pubKey), host, port).resolve();
 	}
 	
 	@Test
@@ -52,14 +52,14 @@ public class TCPPeerAdvertisementTest {
 	
 	@Test
 	public void testIsBlacklistedReturnsTrueIfIPIsBlacklisted() throws UnconnectableAdvertisementException, IOException, InvalidBlacklistException {
-		ad = new TCPPeerAdvertisement(crypto.makePublicDHKey(pubKey), "127.0.0.1", port);
+		ad = new TCPPeerAdvertisement(crypto.makePublicDHKey(pubKey), "127.0.0.1", port).resolve();
 		blacklist.add(ad.ipAddress, 1000);
 		assertTrue(ad.isBlacklisted(blacklist));
 	}
 	
 	@Test
 	public void testIsBlacklistedReturnsFalseIfIpIsNotBlacklisted() throws IOException, UnconnectableAdvertisementException {
-		ad = new TCPPeerAdvertisement(crypto.makePublicDHKey(pubKey), "127.0.0.1", port);
+		ad = new TCPPeerAdvertisement(crypto.makePublicDHKey(pubKey), "127.0.0.1", port).resolve();
 		assertFalse(ad.isBlacklisted(blacklist));
 	}
 	
