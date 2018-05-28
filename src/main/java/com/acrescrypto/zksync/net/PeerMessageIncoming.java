@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.EOFException;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.slf4j.Logger;
@@ -14,6 +15,7 @@ public class PeerMessageIncoming extends PeerMessage {
 	protected final Logger logger = LoggerFactory.getLogger(PeerMessageIncoming.class);
 	protected boolean finished;
 	protected long lastSeen;
+	protected int bytesReceived;
 	
 	/** Limit on how much data a message can accumulate in its read buffer. When this limit is reached,
 	 * calls to receivedData will block until the buffer is cleared via read operations.
@@ -143,6 +145,7 @@ public class PeerMessageIncoming extends PeerMessage {
 	}
 	
 	public void receivedData(byte flags, byte[] data) {
+		bytesReceived += data.length; // used for testing so not bothering with synchronization
 		this.lastSeen = connection.socket.swarm.config.getAccessor().getMaster().currentTimeMillis();
 		flags |= this.flags;
 		boolean isFinal = (flags & FLAG_FINAL) != 0;
@@ -167,7 +170,11 @@ public class PeerMessageIncoming extends PeerMessage {
 	
 	protected synchronized void markFinished() {
 		finished = true;
-		connection.socket.finishedMessage(this);
+		try {
+			connection.socket.finishedMessage(this);
+		} catch(IOException exc) {
+			logger.warn("Caught exception marking message {} as finished", msgId, exc);
+		}
 		this.notifyAll();
 	}
 	

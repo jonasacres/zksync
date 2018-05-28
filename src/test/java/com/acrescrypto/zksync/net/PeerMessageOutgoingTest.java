@@ -18,7 +18,6 @@ import org.junit.Test;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
-import com.acrescrypto.zksync.net.PeerMessageOutgoing.MessageSegment;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerMessageOutgoingTest {
@@ -97,7 +96,7 @@ public class PeerMessageOutgoingTest {
 		expected.put(expectedPayload);
 		
 		socket.waitForDataReady();
-		assertEquals(msg, socket.received.msg);
+		assertEquals(msg.msgId, socket.received.msgId);
 		byte[] received = socket.readBufferedMessage(msg);
 		assertTrue(Arrays.equals(expected.array(), received));
 	}
@@ -129,7 +128,7 @@ public class PeerMessageOutgoingTest {
 		writeEnd.write(new byte[1]);
 		writeEnd.flush();
 		socket.waitForDataReady();
-		assertEquals(msg, socket.received.msg);
+		assertEquals(msg.msgId, socket.received.msgId);
 	}
 	
 	@Test
@@ -150,7 +149,7 @@ public class PeerMessageOutgoingTest {
 		writeEnd.flush();
 		connection.unpause();
 		socket.waitForDataReady();
-		assertEquals(msg, socket.received.msg);
+		assertEquals(msg.msgId, socket.received.msgId);
 	}
 	
 	@Test
@@ -162,7 +161,7 @@ public class PeerMessageOutgoingTest {
 		writeEnd2.write(new byte[4]);
 		writeEnd2.flush();
 		socket.waitForDataReady();
-		assertEquals(nonpausable, socket.received.msg);
+		assertEquals(nonpausable.msgId, socket.received.msgId);
 	}
 	
 	@Test

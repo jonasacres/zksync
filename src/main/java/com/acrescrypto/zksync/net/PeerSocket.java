@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -12,7 +13,6 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
-import com.acrescrypto.zksync.net.PeerMessageOutgoing.MessageSegment;
 
 public abstract class PeerSocket {
 	protected PeerSwarm swarm;
@@ -21,7 +21,7 @@ public abstract class PeerSocket {
 	protected LinkedList<MessageSegment> ready = new LinkedList<MessageSegment>();	
 	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
 	
-	protected int nextSendMessageId, maxReceivedMessageId;
+	protected int nextSendMessageId, maxReceivedMessageId = Integer.MIN_VALUE;
 	protected final Logger logger = LoggerFactory.getLogger(PeerSocket.class);
 	
 	protected String address;
@@ -90,7 +90,7 @@ public abstract class PeerSocket {
 		}
 	}
 	
-	public synchronized int issueMessageId() {
+	protected synchronized int issueMessageId() {
 		return nextSendMessageId++;
 	}
 
@@ -99,7 +99,7 @@ public abstract class PeerSocket {
 	}
 
 	/** Handle some sort of I/O exception */
-	public void ioexception(IOException exc) {
+	protected void ioexception(IOException exc) {
 		/* These are probably our fault. There is the possibility that they are caused by malicious actors. */
 		logger.error("Socket for peer {} caught IOException", getAddress(), exc);
 		try {
@@ -109,35 +109,41 @@ public abstract class PeerSocket {
 		}
 	}
 	
-	public void finishedMessage(PeerMessageIncoming message) {
+	public synchronized void finishedMessage(PeerMessageIncoming message) throws IOException {
 		incoming.remove(message.msgId);
+	}
+	
+	public PeerMessageIncoming messageWithId(int msgId) {
+		return incoming.getOrDefault(msgId, null);
 	}
 	
 	protected void sendMessage(MessageSegment segment) throws IOException, ProtocolViolationException {
 		write(segment.content.array(), 0, segment.content.limit());
 		segment.delivered();
 		
-		if(segment.msg.txClosed()) {
-			outgoing.remove(segment.msg);
+		if((segment.flags & PeerMessage.FLAG_FINAL) != 0) {
+			outgoing.remove(segment.msgId);
 		}
 	}
 	
 	protected void sendThread() {
 		new Thread(() -> {
-			try {
-				synchronized(this) {
-					while(!ready.isEmpty()) {
-						sendMessage(ready.remove());
-					}
-				}
-				
+			while(true) {
 				try {
-					outgoing.wait();
-				} catch (InterruptedException e) {}
-			} catch (IOException exc) {
-				ioexception(exc);
-			} catch(Exception exc) {
-				logger.error("Socket send thread for peer {} caught exception", getAddress(), exc);
+					synchronized(this) {
+						while(!ready.isEmpty()) {
+							sendMessage(ready.remove());
+						}
+					}
+					
+					try {
+						synchronized(outgoing) { outgoing.wait(); }
+					} catch (InterruptedException e) {}
+				} catch (IOException exc) {
+					ioexception(exc);
+				} catch(Exception exc) {
+					logger.error("Socket send thread for peer {} caught exception", getAddress(), exc);
+				}
 			}
 		}).start();
 	}
@@ -146,21 +152,25 @@ public abstract class PeerSocket {
 		new Thread(() -> {
 			try {
 				while(true) {
-					ByteBuffer buf = ByteBuffer.allocate(maxPayloadSize() + PeerMessage.HEADER_LENGTH);
+					ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
 					read(buf.array(), 0, PeerMessageIncoming.HEADER_LENGTH);
 					
 					int msgId = buf.getInt();
 					int len = buf.getInt();
-					byte cmd = buf.get(), flags = buf.get();
+					byte cmd = buf.get();
+					byte flags = buf.get();
 					assertState(0 <= len && len <= maxPayloadSize());
 					
 					byte[] payload = new byte[len];
-					read(payload, 0, payload.length);
+					if(len > 0) {
+						read(payload, 0, payload.length);
+					}
 					
 					processMessage(msgId, cmd, flags, payload);
 				}
 			} catch(ProtocolViolationException exc) {
 				violation();
+			} catch(SocketException exc) { // socket closed; just ignore it
 			} catch(Exception exc) {
 				logger.error("Socket receive thread for {} caught exception", getAddress(), exc);
 				violation();
@@ -168,7 +178,7 @@ public abstract class PeerSocket {
 		}).start();
 	}
 	
-	protected void processMessage(int msgId, byte cmd, byte flags, byte[] payload) {
+	protected void processMessage(int msgId, byte cmd, byte flags, byte[] payload) throws IOException {
 		PeerMessageIncoming msg;
 		if(msgId > maxReceivedMessageId) {
 			msg = new PeerMessageIncoming(connection, cmd, flags, msgId);
@@ -180,6 +190,10 @@ public abstract class PeerSocket {
 		} else if(incoming.containsKey(msgId)) {
 			msg = incoming.get(msgId);
 		} else {
+			if(maxReceivedMessageId == Integer.MAX_VALUE) {
+				// we can accept no new messages since we've exceeded the limits of the 32-bit ID field; close and force a reconnect
+				close();
+			}
 			rejectMessage(msgId);
 			return;
 		}
@@ -204,12 +218,12 @@ public abstract class PeerSocket {
 	}
 	
 	protected void rejectMessage(int msgId) {
-		// TODO: (someday) send response advising peer we don't want this message anymore
+		// TODO P2P: (implement) send response advising peer we don't want this message anymore
 	}
 	
 	protected synchronized void dataReady(MessageSegment segment) {
 		ready.add(segment);
-		outgoing.notifyAll();
+		synchronized(outgoing) { outgoing.notifyAll(); }
 	}
 	
 	protected void assertState(boolean test) throws ProtocolViolationException {

@@ -12,40 +12,6 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 
 public class PeerMessageOutgoing extends PeerMessage {
-	protected class MessageSegment {
-		PeerMessageOutgoing msg;
-		ByteBuffer content;
-		boolean delivered;
-		
-		public MessageSegment(PeerMessageOutgoing msg, ByteBuffer content) {
-			this.msg = msg;
-			this.content = content;
-			addHeader();
-		}
-		
-		protected void addHeader() {
-			ByteBuffer headerBuf = ByteBuffer.wrap(content.array());
-			headerBuf.putInt(msgId);
-			headerBuf.putInt(content.limit() - PeerMessage.HEADER_LENGTH);
-			headerBuf.put(cmd);
-			headerBuf.put((byte) (flags | (msg.txClosed() ? FLAG_FINAL : 0x00)));
-			headerBuf.putShort((short) 0);
-		}
-		
-		protected synchronized void delivered() {
-			delivered = true;
-			this.notifyAll();
-		}
-		
-		protected synchronized void waitForDelivery() {
-			while(!delivered) {
-				try {
-					this.wait();
-				} catch (InterruptedException e) { }
-			}
-		}
-	}
-	
 	protected boolean txEOF;
 	protected InputStream txPayload;
 	protected RefTag refTag;
@@ -146,10 +112,23 @@ public class PeerMessageOutgoing extends PeerMessage {
 		buffer.limit(buffer.position());
 		buffer.rewind();
 		
-		queuedSegment = new MessageSegment(this, buffer);
+		byte segmentFlags = (byte) (flags | (txClosed() ? FLAG_FINAL : 0x00));
+		queuedSegment = new MessageSegment(msgId, cmd, segmentFlags, buffer);
 	}
 	
 	protected void sendNext() throws IOException {
 		connection.socket.dataReady(queuedSegment);
+	}
+	
+	public boolean equals(Object other) {
+		if(other instanceof Integer) {
+			return other.equals(msgId);
+		}
+		
+		if(other instanceof PeerMessageOutgoing) {
+			return ((PeerMessageOutgoing) other).msgId == msgId;
+		}
+		
+		return false;
 	}
 }

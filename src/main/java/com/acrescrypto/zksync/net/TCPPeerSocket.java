@@ -20,6 +20,7 @@ public class TCPPeerSocket extends PeerSocket {
 	public final static int MAX_MSG_LEN = 65536; // maximum ciphertext length; largest buffer a peer needs to hold in memory at once
 	public final static int DEFAULT_MAX_HANDSHAKE_TIME_MILLIS = 60*1000; // 1 minute
 	public static int maxHandshakeTimeMillis = DEFAULT_MAX_HANDSHAKE_TIME_MILLIS; // maximum time to handshake before automatic disconnect
+	protected static boolean disableMakeThreads; // test purposes
 
 	protected Socket socket;
 	protected OutputStream out;
@@ -43,6 +44,7 @@ public class TCPPeerSocket extends PeerSocket {
 		makeStreams();
 		initKeys();
 		swarm.openedConnection(new PeerConnection(this));
+		makeThreads();
 	}
 	
 	public TCPPeerSocket(PeerSwarm swarm, TCPPeerAdvertisement ad) throws IOException, BlacklistedException {
@@ -76,6 +78,12 @@ public class TCPPeerSocket extends PeerSocket {
 	protected void makeStreams() throws IOException {
 		this.out = socket.getOutputStream();
 		this.in = socket.getInputStream();
+	}
+	
+	protected void makeThreads() {
+		if(disableMakeThreads) return;
+		sendThread();
+		recvThread();
 	}
 	
 	protected void initKeys() {
@@ -143,7 +151,9 @@ public class TCPPeerSocket extends PeerSocket {
 
 	@Override
 	public void close() throws IOException {
-		socket.close();
+		if(socket != null) {
+			socket.close();
+		}
 	}
 
 	@Override
@@ -209,6 +219,8 @@ public class TCPPeerSocket extends PeerSocket {
 		}
 		
 		initKeys();
+		makeThreads();
+		this.connection = new PeerConnection(this);
 	}
 	
 	protected Key nextLocalMessageKey() {

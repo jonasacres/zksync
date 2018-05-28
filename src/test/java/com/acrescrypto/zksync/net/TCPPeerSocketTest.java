@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -283,6 +284,7 @@ public class TCPPeerSocketTest {
 		serverKey = master.getCrypto().makePrivateDHKey();
 		ad = new TCPPeerAdvertisement(serverKey.publicKey(), "localhost", server.getPort());
 		socket = new TCPPeerSocket(swarm, ad);
+		TCPPeerSocket.disableMakeThreads = true;
 	}
 	
 	@After
@@ -294,6 +296,7 @@ public class TCPPeerSocketTest {
 
 	@Test
 	public void testInitializeWithClientSocket() throws Exception {
+		TCPPeerSocket.disableMakeThreads = true;
 		setupServerSocket((serverSocket, clientSocket, secret)->{
 			assertEquals(clientSocket, swarm.opened.socket);
 			DummyConnection conn = new DummyConnection(serverSocket, clientSocket, secret);
@@ -677,6 +680,232 @@ public class TCPPeerSocketTest {
 		assertFalse(socket.matchesAddress("10.1.2.3"));
 	}
 	
-	// TODO P2P: (implement) Test ignores closed message IDs
-	// TODO P2P: (implement) Test ignores skipped message IDs
+	// The following might get split into a PeerSocketTestBase later on... but they'd need to be rewritten!
+	
+	@Test
+	public void testViolationBlacklistsPeer() throws IOException {
+		new DummyConnection(socket).handshake();
+		assertFalse(master.getBlacklist().contains(socket.getAddress()));
+		socket.violation();
+		assertTrue(master.getBlacklist().contains(socket.getAddress()));
+	}
+	
+	@Test
+	public void testViolationClosesSocket() throws IOException {
+		new DummyConnection(socket).handshake();
+		assertFalse(socket.isClosed());
+		socket.violation();
+		assertTrue(socket.isClosed());
+	}
+	
+	@Test
+	public void testSendsMessageSegmentsWhenReady() throws IOException {
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+		byte[] payload = crypto.rng(128);
+		ByteBuffer msgBuf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH + payload.length);
+		msgBuf.position(PeerMessage.HEADER_LENGTH);
+		msgBuf.put(payload);
+		MessageSegment segment = new MessageSegment(1234, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, msgBuf);
+		
+		socket.dataReady(segment);
+		ByteBuffer received = ByteBuffer.wrap(conn.serverReadNext());
+		assertEquals(segment.msgId, received.getInt());
+		assertEquals(payload.length, received.getInt());
+		assertEquals(segment.cmd, received.get());
+		assertEquals(segment.flags, received.get());
+		assertEquals(0, received.getShort());
+		
+		byte[] readPayload = new byte[payload.length];
+		received.get(readPayload);
+		assertTrue(Arrays.equals(payload, readPayload));
+		assertFalse(received.hasRemaining());
+	}
+	
+	@Test
+	public void testProcessesNewMessages() throws IOException {
+		int msgId = 1234;
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		conn.serverWrite(segment.content.array());
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
+		assertEquals(msgId, socket.messageWithId(msgId).msgId);
+	}
+	
+	@Test
+	public void testProcessesContinuationsOfExistingMessages() throws IOException {
+		int msgId = 1234;
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH+1));
+		conn.serverWrite(segment.content.array());
+		
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
+		PeerMessageIncoming msg = socket.messageWithId(msgId);
+		assertTrue(Util.waitUntil(100, ()->msg.bytesReceived == 1));
+
+		conn.serverWrite(segment.content.array());
+		assertTrue(Util.waitUntil(100, ()->msg.bytesReceived == 2));
+	}
+	
+	@Test
+	public void testTriggersViolationIfLengthIsNegative() throws IOException {
+		ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
+		buf.putInt(1234);
+		buf.putInt(-1);
+		buf.put(PeerConnection.CMD_ANNOUNCE_TAGS);
+		buf.put((byte) 0);
+		buf.putShort((short) 0);
+		
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+		conn.serverWrite(buf.array());
+		assertTrue(Util.waitUntil(100, ()->socket.isClosed()));
+	}
+	
+	@Test
+	public void testTriggersViolationIfLengthExceedsLimit() throws IOException {
+		ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
+		buf.putInt(1234);
+		buf.putInt(socket.maxPayloadSize()+1);
+		buf.put(PeerConnection.CMD_ANNOUNCE_TAGS);
+		buf.put((byte) 0);
+		buf.putShort((short) 0);
+		
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+		conn.serverWrite(buf.array());
+		assertTrue(Util.waitUntil(100, ()->socket.isClosed()));
+	}
+	
+	@Test
+	public void testDoesntTriggerViolationIfLengthWithinLimit() throws IOException {
+		ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
+		buf.putInt(1234);
+		buf.putInt(socket.maxPayloadSize());
+		buf.put(PeerConnection.CMD_ANNOUNCE_TAGS);
+		buf.put((byte) 0);
+		buf.putShort((short) 0);
+		
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+		conn.serverWrite(buf.array());
+		assertFalse(Util.waitUntil(100, ()->socket.isClosed()));
+	}
+	
+	@Test
+	public void testIgnoresClosedMessageIDs() throws IOException {
+		int msgId = 1234;
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		conn.serverWrite(segment.content.array());
+		
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
+		PeerMessageIncoming msg = socket.messageWithId(msgId);
+		
+		segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		conn.serverWrite(segment.content.array());
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) == null));
+		assertEquals(0, msg.bytesReceived);
+		
+		segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH+8));
+		conn.serverWrite(segment.content.array());
+		assertFalse(Util.waitUntil(100, ()->msg.bytesReceived > 0));
+		assertNull(socket.messageWithId(msgId));
+	}
+	
+	@Test
+	public void testIgnoresSkippedMessageIDs() throws IOException {
+		int msgId = 1234;
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+
+		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment1 = new MessageSegment(msgId-1, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		
+		conn.serverWrite(segment0.content.array());
+		conn.serverWrite(segment1.content.array());
+		
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
+		assertFalse(Util.waitUntil(100, ()->socket.messageWithId(msgId-1) != null));
+	}
+	
+	@Test
+	public void testDiscardsMessagesOnceSegmentMarkedFinal() throws IOException {
+		int msgId = 1234;
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		
+		conn.serverWrite(segment.content.array());
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
+		
+		segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		conn.serverWrite(segment.content.array());
+		
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) == null));
+	}
+	
+	@Test
+	public void testDiscardsMessagesOnceFinishedMessageCalled() throws IOException {
+		int msgId = 1234;
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		conn.serverWrite(segment.content.array());
+		
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
+		PeerMessageIncoming msg = socket.messageWithId(msgId);
+		socket.finishedMessage(msg);
+		assertNull(socket.messageWithId(msgId));
+		
+		segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH+8));
+		conn.serverWrite(segment.content.array());
+		assertFalse(Util.waitUntil(100, ()->msg.bytesReceived > 0));
+	}
+	
+	@Test
+	public void testDiscardsOldestMessageWhenMaximumMessageCountIsReached() throws IOException {
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+		
+		MessageSegment[] segments = new MessageSegment[PeerMessage.MAX_OPEN_MESSAGES];
+		for(int i = 0; i < segments.length; i++) {
+			segments[i] = new MessageSegment(i, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+			conn.serverWrite(segments[i].content.array());
+			Util.sleep(1); // make sure we get differing timestamps on everything
+		}
+		
+		for(int i = 0; i < segments.length; i++) {
+			final int iFixed = i;
+			assertTrue(Util.waitUntil(100, ()->socket.messageWithId(iFixed) != null));
+		}
+		
+		MessageSegment oneMore = new MessageSegment(segments.length, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		conn.serverWrite(oneMore.content.array());
+		
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(0) == null));
+		for(int i = 1; i < segments.length; i++) {
+			assertTrue(socket.messageWithId(i) != null);
+		}
+	}
+	
+	@Test
+	public void testClosesSocketWhenMissingMessagesBecauseMaxReceivedIdMaxedOut() throws IOException {
+		TCPPeerSocket.disableMakeThreads = false;
+		DummyConnection conn = new DummyConnection(socket).handshake();
+
+		MessageSegment segment0 = new MessageSegment(Integer.MAX_VALUE, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment1 = new MessageSegment(Integer.MIN_VALUE, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		
+		conn.serverWrite(segment0.content.array());
+		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(Integer.MAX_VALUE) != null));
+		assertFalse(socket.isClosed());
+
+		conn.serverWrite(segment1.content.array());
+		assertTrue(Util.waitUntil(100, ()->socket.isClosed()));
+		assertFalse(socket.swarm.getConfig().getAccessor().getMaster().getBlacklist().contains(socket.getAddress()));
+	}
 }
