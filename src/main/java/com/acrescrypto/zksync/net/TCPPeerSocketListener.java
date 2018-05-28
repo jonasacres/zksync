@@ -10,6 +10,7 @@ import java.nio.ByteBuffer;
 import java.util.LinkedList;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -169,6 +170,9 @@ public class TCPPeerSocketListener {
 	}
 	
 	protected TCPPeerSocket performServerHandshake(Socket peerSocketRaw) throws IOException, ProtocolViolationException {
+		MutableBoolean finished = new MutableBoolean();
+		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, ()->finished.booleanValue(), ()->peerSocketRaw.close());
+		
 		if(adListeners.isEmpty()) {
 			throw new ProtocolViolationException(); // not ready to accept peers
 		}
@@ -182,7 +186,6 @@ public class TCPPeerSocketListener {
 		byte[] proof = new byte[adListeners.getFirst().crypto.symKeyLength()];
 		byte[] timeIndexBytes = new byte[4];
 		
-		// TODO P2P: (redesign) Peers should get timed out if not authenticated within a certain period of time
 		IOUtils.readFully(in, pubKeyRaw);
 		IOUtils.readFully(in, keyHash);
 		IOUtils.readFully(in, timeIndexBytes);
@@ -224,6 +227,7 @@ public class TCPPeerSocketListener {
 		out.write(ad.crypto.authenticate(sharedSecret, tempSharedSecret));
 		out.write(responseProof);
 		
+		finished.setTrue();
 		return new TCPPeerSocket(ad.swarm, peerSocketRaw, sharedSecret, peerType);
 	}
 	

@@ -141,6 +141,7 @@ public class TCPPeerSocketListenerTest {
 	
 	@After
 	public void afterEach() throws IOException {
+		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
 		listener.close();
 	}
 	
@@ -291,6 +292,15 @@ public class TCPPeerSocketListenerTest {
 		listener.advertise(swarm);
 		Socket socket = connect();
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 1, swarm.config);
+		assertSocketClosed(socket);
+	}
+	
+	@Test
+	public void testDisconnectsPeersExceedingDeadlingToHandshake() throws UnknownHostException, IOException {
+		TCPPeerSocket.maxHandshakeTimeMillis = 5;
+		listener.advertise(swarm);
+		Socket socket = connect();
+		Util.sleep(TCPPeerSocket.maxHandshakeTimeMillis+1);
 		assertSocketClosed(socket);
 	}
 	

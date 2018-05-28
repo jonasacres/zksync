@@ -9,6 +9,10 @@ public class Util {
 		boolean test();
 	}
 	
+	public interface AnonymousCallback {
+		void cb() throws Exception;
+	}
+	
 	public static synchronized void hexdump(String caption, byte[] data) {
 		System.out.printf("%s (%d bytes, fingerprint %s)\n", caption, data.length, fingerprint(data));
 		for(int i = 0; i <= 16 * (int) Math.ceil((double) data.length/16); i++) {
@@ -100,6 +104,19 @@ public class Util {
 		}
 		
 		return System.currentTimeMillis() < endTime;
+	}
+	
+	public static void sleep(int durationMs) {
+		try {
+			Thread.sleep(durationMs);
+		} catch(InterruptedException exc) {}
+	}
+	
+	public static void ensure(int maxDelay, WaitTest test, AnonymousCallback action) {
+		new Thread(()-> {
+			if(waitUntil(maxDelay, test)) return;
+			try { action.cb(); } catch(Exception exc) {}
+		}).start();
 	}
 	
 	/** Side-channel-attack resistant comparison of byte arrays. */

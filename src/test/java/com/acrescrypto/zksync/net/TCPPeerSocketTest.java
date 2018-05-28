@@ -31,6 +31,7 @@ import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocketTest {
 	interface ServerSocketCallback {
@@ -228,7 +229,6 @@ public class TCPPeerSocketTest {
 			try {
 				socket.handshake();
 			} catch (ProtocolViolationException | IOException e) {
-				e.printStackTrace();
 			}
 		}).start();
 	}
@@ -287,6 +287,7 @@ public class TCPPeerSocketTest {
 	
 	@After
 	public void afterEach() throws IOException {
+		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
 		master.getBlacklist().clear();
 		server.close();
 	}
@@ -438,6 +439,14 @@ public class TCPPeerSocketTest {
 		assertNotEquals(PeerConnection.PEER_TYPE_FULL, socket.getPeerType());
 		new DummyConnection(socket).handshake(true, true);
 		assertEquals(PeerConnection.PEER_TYPE_FULL, socket.getPeerType());
+	}
+	
+	@Test
+	public void testHandshakeClosesSocketIfPeerDoesNotCompleteInTime() {
+		TCPPeerSocket.maxHandshakeTimeMillis = 10;
+		blindHandshake(socket);
+		assertFalse(Util.waitUntil(TCPPeerSocket.maxHandshakeTimeMillis-1, ()->socket.isClosed()));
+		assertTrue(Util.waitUntil(5, ()->socket.isClosed()));
 	}
 	
 	@Test

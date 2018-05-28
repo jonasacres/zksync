@@ -18,6 +18,8 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocket extends PeerSocket {
 	public final static int MAX_MSG_LEN = 65536; // maximum ciphertext length; largest buffer a peer needs to hold in memory at once
+	public final static int DEFAULT_MAX_HANDSHAKE_TIME_MILLIS = 60*1000; // 1 minute
+	public static int maxHandshakeTimeMillis = DEFAULT_MAX_HANDSHAKE_TIME_MILLIS; // maximum time to handshake before automatic disconnect
 
 	protected Socket socket;
 	protected OutputStream out;
@@ -146,7 +148,7 @@ public class TCPPeerSocket extends PeerSocket {
 
 	@Override
 	public boolean isClosed() {
-		return socket.isClosed();
+		return socket != null && socket.isClosed();
 	}
 
 	@Override
@@ -176,6 +178,7 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	protected void sendHandshake(PublicDHKey remotePubKey) throws IOException, ProtocolViolationException {
+		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, ()->peerType >= 0, ()->close());
 		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize());
 		keyHashInput.put(dhPrivateKey.publicKey().getBytes());
 		keyHashInput.put(remotePubKey.getBytes());
@@ -204,8 +207,6 @@ public class TCPPeerSocket extends PeerSocket {
 		} else {
 			peerType = PeerConnection.PEER_TYPE_BLIND;
 		}
-
-		// TODO P2P: (implement) timeout. peer should not be able to stay idle forever
 		
 		initKeys();
 	}
