@@ -1,25 +1,26 @@
 package com.acrescrypto.zksync.net.dht;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTBucket {
 	public final static int MAX_BUCKET_CAPACITY = 8;
+	public final static int BUCKET_FRESHEN_INTERVAL_MS = 1000*60*15;
 	
 	DHTClient client;
-	DHTID min, max;
+	int order;
 	ArrayList<DHTPeer> peers = new ArrayList<DHTPeer>(MAX_BUCKET_CAPACITY);
 	long lastChanged;
 	
-	public DHTBucket(DHTClient client, DHTID min, DHTID max) {
+	public DHTBucket(DHTClient client, int order) {
 		this.client = client;
-		this.min = min;
-		this.max = max;
+		this.order = order;
 	}
 	
 	public boolean hasCapacity() {
-		if(peers.size() < MAX_BUCKET_CAPACITY || canSplit());
+		if(peers.size() < MAX_BUCKET_CAPACITY) return true;
 		for(DHTPeer peer: peers) {
 			if(peer.isBad()) return true;
 		}
@@ -27,12 +28,8 @@ public class DHTBucket {
 		return false;
 	}
 	
-	public boolean canSplit() {
-		return includes(client.id);
-	}
-	
 	public boolean includes(DHTID id) {
-		return min.compareTo(id) <= 0 && id.compareTo(max) <= 0;
+		return order == client.id.xor(id).order();
 	}
 	
 	public void add(DHTPeer peer) {
@@ -43,44 +40,43 @@ public class DHTBucket {
 		}
 		
 		peers.add(peer);
-		refresh();
+		markFresh();
 	}
 	
-	public boolean needSplit() {
-		return peers.size() >= MAX_BUCKET_CAPACITY;
-	}
-	
+	// returns a random ID whose distance from the client ID is of the order of this bucket
 	public DHTID randomIdInRange() {
-		// TODO DHT: (implement) get a random id greater than min and less than max
-		return null;
+		byte[] random = client.id.serialize();
+		int pivotByteIndex = order/8;
+		int pivotBitOffset = order % 8;
+		
+		byte pivotBitMask = (byte) (1 << pivotBitOffset);
+		byte pivotLowerMask = (byte) (pivotBitMask-1);
+		byte pivotUpperMask = (byte) ~(pivotBitMask | pivotLowerMask);
+		
+		byte randomBits = (byte) (client.crypto.rng(1)[0] & pivotLowerMask);
+		byte flippedBit = (byte) ((pivotBitMask ^ random[pivotByteIndex]) & pivotBitMask);
+		byte preservedBits = (byte) (random[pivotByteIndex] & pivotUpperMask);
+		byte pivotByte = (byte) (preservedBits | flippedBit | randomBits);
+		
+		random[pivotByteIndex] = pivotByte;
+		ByteBuffer.wrap(random).put(client.crypto.rng(pivotByteIndex));
+		
+		return new DHTID(random);
 	}
 	
-	public void refresh() {
+	public void markFresh() {
 		lastChanged = Util.currentTimeMillis();
 	}
 	
-	public DHTBucket split() {
-		DHTID mid = max.calculateMidpoint(min);
-		DHTBucket bucket = new DHTBucket(client, min, mid);
-		min = mid;
-		
-		ArrayList<DHTPeer> newPeers = new ArrayList<DHTPeer>(MAX_BUCKET_CAPACITY);
-		for(DHTPeer peer : peers) {
-			if(bucket.includes(peer.id)) {
-				bucket.add(peer);;
-			} else {
-				newPeers.add(peer);
-			}
-		}
-		
-		this.peers = newPeers;
-		return bucket;
+	public boolean needsFreshening() {
+		return System.currentTimeMillis() - lastChanged >= BUCKET_FRESHEN_INTERVAL_MS;
 	}
 	
 	protected void prune() {
 		for(DHTPeer peer : peers) {
 			if(peer.isBad()) {
 				peers.remove(peer);
+				client.routingTable.removedPeer(peer);
 				return;
 			}
 		}

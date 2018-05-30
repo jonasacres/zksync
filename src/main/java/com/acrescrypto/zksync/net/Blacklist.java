@@ -35,18 +35,18 @@ public class Blacklist {
 		read();
 	}
 	
-	public void clear() throws IOException {
+	public synchronized void clear() throws IOException {
 		blockedAddresses.clear();
 		write();
 	}
 	
-	public void write() throws IOException {
+	public synchronized void write() throws IOException {
 		byte[] serialized = serialize();
 		int blockSize = 65536, padLen = (int) (blockSize*Math.ceil(((double) serialized.length)/blockSize));
 		MutableSecureFile.atPath(fs, path, key).write(serialize(), padLen);
 	}
 	
-	public void add(String address, int durationMs) throws IOException {
+	public synchronized void add(String address, int durationMs) throws IOException {
 		BlacklistEntry entry = blockedAddresses.getOrDefault(address, null);
 		if(entry != null) {
 			logger.warn("Renewing blacklist entry for {} for {}ms", address, durationMs);
@@ -63,11 +63,11 @@ public class Blacklist {
 		}
 	}
 	
-	public void addCallback(BlacklistCallback callback) {
+	public synchronized void addCallback(BlacklistCallback callback) {
 		callbacks.add(callback);
 	}
 	
-	public void removeCallback(BlacklistCallback callback) {
+	public synchronized void removeCallback(BlacklistCallback callback) {
 		callbacks.remove(callback);
 	}
 	
@@ -80,7 +80,7 @@ public class Blacklist {
 		}
 	}
 	
-	public boolean contains(String address) {
+	public synchronized boolean contains(String address) {
 		BlacklistEntry entry = blockedAddresses.getOrDefault(address, null);
 		if(entry == null) return false;
 		if(!entry.isExpired()) return true;
@@ -89,15 +89,20 @@ public class Blacklist {
 		return false;
 	}
 	
-	public void prune() {
+	public synchronized void prune() {
+		LinkedList<String> toRemove = new LinkedList<>();
 		for(String address : blockedAddresses.keySet()) {
 			if(blockedAddresses.get(address).isExpired()) {
-				blockedAddresses.remove(address);
+				toRemove.add(address);
 			}
+		}
+		
+		for(String address : toRemove) {
+			blockedAddresses.remove(address);
 		}
 	}
 	
-	public byte[] serialize() {
+	public synchronized byte[] serialize() {
 		int len = 0;
 		prune();
 		for(BlacklistEntry entry : blockedAddresses.values()) {
@@ -132,5 +137,9 @@ public class Blacklist {
 	
 	public void assertState(boolean state) throws InvalidBlacklistException {
 		if(!state) throw new InvalidBlacklistException();
+	}
+	
+	public FS getFS() {
+		return fs;
 	}
 }

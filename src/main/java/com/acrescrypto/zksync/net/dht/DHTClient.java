@@ -1,7 +1,12 @@
 package com.acrescrypto.zksync.net.dht;
 
 import java.io.IOException;
+import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketException;
+import java.net.UnknownHostException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -12,14 +17,29 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
+import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.net.Blacklist;
-import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageStub;
+import com.acrescrypto.zksync.utility.SnoozeThread;
+import com.acrescrypto.zksync.utility.Util;
 
 public class DHTClient {
 	public final static int MAX_DATAGRAM_SIZE = 508; // 576 byte (guaranteed by RFC 791) - 60 byte IP header - 8 byte UDP header
+	public final static int LOOKUP_RESULT_MAX_WAIT_TIME_MS = 500; // consider a lookup finished if we've received nothing in this many milliseconds
+	
+	public final static int KEY_INDEX_CLIENT_INFO = 0;
+	public final static int KEY_INDEX_ROUTING_TABLE = 1;
+	public final static int KEY_INDEX_RECORD_STORE = 2;
+	
+	public final static int STATUS_OFFLINE = 0; // we are clearly unable to reach the DHT network
+	public final static int STATUS_ESTABLISHING = 1; // attempting to establish connection to DHT network
+	public final static int STATUS_QUESTIONABLE = 2; // strong possibility we are not connected to network
+	public final static int STATUS_CAN_SEND = 3; // able to send DHT traffic and receive replies
+	public final static int STATUS_GOOD = 4; // able to send and receive DHT traffic
 	
 	interface PeerForReferenceCallback {
 		void receivedPeerForReference(DHTPeer peer);
@@ -27,6 +47,10 @@ public class DHTClient {
 	
 	interface LookupCallback {
 		void receivedRecord(DHTRecord ad);
+	}
+	
+	interface DHTStatusCallback {
+		void dhtStatusUpdate(int status);
 	}
 	
 	private Logger logger = LoggerFactory.getLogger(DHTClient.class);
@@ -38,25 +62,57 @@ public class DHTClient {
 	DHTID id;
 	DHTRoutingTable routingTable;
 	PrivateDHKey key;
-	Key tagKey;
+	Key storageKey, tagKey;
+	String bindAddress;
+	DHTStatusCallback statusCallback;
+	int bindPort;
+	int lastStatus = STATUS_OFFLINE;
+	FS storage;
 	
 	ArrayList<DHTMessageStub> pendingRequests;
 	
-	// TODO DHT: (implement) constructor
-	// TODO DHT: (implement) socket listener (be sure to add every peer we meet to routing table)
+	public DHTClient(Key storageKey, Blacklist blacklist) {
+		this.blacklist = blacklist;
+		this.storageKey = storageKey;
+		this.storage = blacklist.getFS();
+		this.crypto = storageKey.getCrypto();
+		this.store = new DHTRecordStore(this);
+		read();
+	}
+	
+	public DHTClient listen(String address, int port) throws SocketException {
+		this.bindAddress = address == null ? "0.0.0.0" : address;
+		this.bindPort = port;
+		openSocket();
+		return this;
+	}
+	
+	public DHTClient setStatusCallback(DHTStatusCallback statusCallback) {
+		this.statusCallback = statusCallback;
+		return this;
+	}
 	
 	public void findPeers() {
 		new DHTSearchOperation(this, id, (peers)->{
-			// nodes automatically added to table as we go
+			// no need to do anything; just doing the search populates the routing table
+			if(peers == null || peers.isEmpty()) {
+				updateStatus(STATUS_QUESTIONABLE);
+			}
 		});
 	}
 	
 	public void lookup(DHTID searchId, LookupCallback callback) {
 		new DHTSearchOperation(this, searchId, (peers)->{
+			SnoozeThread progressMonitor = new SnoozeThread(LOOKUP_RESULT_MAX_WAIT_TIME_MS, true, ()->{
+				callback.receivedRecord(null);
+			});
+			
 			MutableInt pending = new MutableInt();
 			pending.setValue(peers.size());
 			for(DHTPeer peer : peers) {
 				peer.getRecords(searchId, (records, isFinal)->{
+					if(!progressMonitor.snooze()) return;
+					
 					if(records != null) {
 						for(DHTRecord record : records) {
 							callback.receivedRecord(record);
@@ -64,11 +120,10 @@ public class DHTClient {
 					}
 					
 					if(isFinal) {
-						// TODO DHT: (implement) Needs to be a timeout on this so we still signal "done" if packets are lost
 						boolean last;
 						synchronized(pending) { last = pending.decrementAndGet() == 0; }
 						if(last) {
-							callback.receivedRecord(null);
+							progressMonitor.cancel();
 						}
 					}
 				});
@@ -84,7 +139,86 @@ public class DHTClient {
 		return crypto.hashLength();
 	}
 	
-	protected void processMessage(String senderAddress, int senderPort, byte[] data) throws ProtocolViolationException {
+	protected void openSocket() throws SocketException {
+		InetAddress addr;
+		try {
+			addr = InetAddress.getByName(bindAddress);
+		} catch(UnknownHostException exc) {
+			throw new RuntimeException("Unable to bind to address " + bindAddress + ":" + bindPort + ": unable to resolve address");
+		}
+		
+		updateStatus(STATUS_ESTABLISHING);
+		if(socket != null && !socket.isClosed()) {
+			socket.close();
+		}
+		
+		try {
+			socket = new DatagramSocket(bindPort, addr);
+			socket.setReuseAddress(true);
+			updateStatus(STATUS_QUESTIONABLE);
+		} catch(SocketException exc) {
+			updateStatus(STATUS_OFFLINE);
+			throw exc;
+		}
+	}
+	
+	protected void socketListener() {
+		while(true) {
+			try {
+				byte[] receiveData = new byte[MAX_DATAGRAM_SIZE];
+				DatagramPacket packet = new DatagramPacket(receiveData, receiveData.length);
+				socket.receive(packet);
+				ByteBuffer buf = ByteBuffer.wrap(packet.getData(), 0, packet.getLength());
+				processMessage(packet.getAddress().getHostAddress(), packet.getPort(), buf);
+			} catch(IOException exc) {
+				logger.error("DHT socket listener thread encountered IOException", exc);
+				Util.sleep(1000); // add in a delay to prevent a fail loop from gobbling CPU / spamming log
+				try {
+					openSocket();
+				} catch (SocketException e) {
+					logger.error("DHT socket listener thread encountered IOException rebinding socket", exc);
+					Util.sleep(9000); // wait another 9 seconds if we know the socket is dead and the OS isn't giving it back
+				}
+			} catch(Exception exc) {
+				logger.error("DHT socket listener thread encountered exception", exc);
+			}
+		}
+	}
+	
+	protected void watchForResponse(DHTMessage message) {
+		pendingRequests.add(new DHTMessageStub(message));
+	}
+	
+	protected void missedResponse(DHTMessageStub stub) {
+		stub.peer.missedMessage();
+		stopWatchingForResponse(stub);
+	}
+	
+	protected void stopWatchingForResponse(DHTMessageStub stub) {
+		pendingRequests.remove(stub);
+	}
+	
+	protected void sendDatagram(DatagramPacket packet) {
+		for(int i = 0; i < 2; i++) {
+			try {
+				socket.send(packet);
+			} catch (IOException exc) {
+				if(i == 0) {
+					logger.warn("Encountered exception sending on DHT socket; retrying", exc);
+					try {
+						openSocket();
+					} catch (SocketException exc2) {
+						logger.error("Encountered exception rebinding DHT socket; giving up on sending message", exc2);
+						return;
+					}
+				} else {
+					logger.error("Encountered exception sending on DHT socket; giving up", exc);
+				}
+			}
+		}
+	}
+	
+	protected void processMessage(String senderAddress, int senderPort, ByteBuffer data) {
 		try {
 			DHTMessage message = new DHTMessage(this, senderAddress, senderPort, data);
 			
@@ -92,11 +226,20 @@ public class DHTClient {
 				logger.info("Ignoring message from blacklisted peer " + senderAddress);
 				return;
 			}
+
+			routingTable.suggestPeer(message.peer);
 			
 			if(message.isResponse()) {
 				processResponse(message);
 			} else {	
 				processRequest(message);
+			}
+		} catch(ProtocolViolationException exc) {
+			logger.warn("Received illegal message from " + senderAddress + "; blacklisting.");
+			try {
+				blacklist.add(senderAddress, Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
+			} catch(IOException exc2) {
+				logger.error("Encountered exception while blacklisting peer {}", senderAddress, exc2);
 			}
 		} catch(SecurityException exc) {
 			logger.warn("Received indecipherable message from " + senderAddress + "; ignoring.");
@@ -104,15 +247,19 @@ public class DHTClient {
 	}
 	
 	protected void processResponse(DHTMessage message) throws ProtocolViolationException {
+		if(lastStatus < STATUS_CAN_SEND) updateStatus(STATUS_CAN_SEND);
+		
+		message.peer.acknowledgedMessage();
 		for(DHTMessageStub request : pendingRequests) {
 			if(request.dispatchResponseIfMatches(message)) {
-				routingTable.freshen(message.peer);
+				routingTable.markFresh(message.peer);
 				break;
 			}
 		}
 	}
 
-	protected void processRequest(DHTMessage message) {
+	protected void processRequest(DHTMessage message) throws ProtocolViolationException {
+		updateStatus(STATUS_GOOD);
 		try {
 			switch(message.cmd) {
 			case DHTMessage.CMD_PING:
@@ -129,14 +276,6 @@ public class DHTClient {
 				break;
 			default:
 				throw new UnsupportedProtocolException();
-			}
-		} catch(ProtocolViolationException exc) {
-			// TODO DHT: (refactor) move to socket listener
-			logger.warn("Received illegal message from " + message.peer.address + "; blacklisting.");
-			try {
-				blacklist.add(message.peer.address, Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
-			} catch(IOException exc2) {
-				logger.error("Encountered exception blacklisting peer {}", message.peer.address, exc2);
 			}
 		} catch (UnsupportedProtocolException e) {
 			logger.warn("Received unsupported message from " + message.peer.address + "; ignoring.");
@@ -196,18 +335,96 @@ public class DHTClient {
 		DHTID id = new DHTID(idRaw);
 		
 		assertRequiredState(buf.remaining() > 0);
-		byte[] recordRaw = new byte[buf.remaining()];
-		buf.get(recordRaw);
-		DHTRecord record = DHTRecord.recordForSerialization(recordRaw);
+		DHTRecord record = DHTRecord.deserializeRecord(crypto, buf);
 		assertSupportedState(record != null);
-		assertRequiredState(record.validate());
-		assertRequiredState(record.comesFrom(message.peer));
+		assertRequiredState(record.isValid());
 		
-		store.addRecordForId(id, record);
+		try {
+			store.addRecordForId(id, record);
+		} catch(IOException exc) {
+			logger.error("Encountered exception adding record from {}", message.peer.address, exc);
+		}
 	}
 	
 	protected boolean validAuthTag(DHTPeer peer, byte[] tag) {
 		return Arrays.equals(peer.localAuthTag(), tag);
+	}
+	
+	protected Key clientInfoKey() {
+		return storageKey.derive(KEY_INDEX_CLIENT_INFO, new byte[0]);
+	}
+	
+	protected Key recordStoreKey() {
+		return storageKey.derive(KEY_INDEX_RECORD_STORE, new byte[0]);
+	}
+	
+	protected Key routingTableKey() {
+		return storageKey.derive(KEY_INDEX_ROUTING_TABLE, new byte[0]);
+	}
+	
+	protected String path() {
+		return "dht-client-info";
+	}
+	
+	protected void initNew() {
+		key = crypto.makePrivateDHKey();
+		tagKey = new Key(crypto, crypto.makeSymmetricKey());
+		id = new DHTID(key.publicKey());
+		assert(id.rawId.length == idLength());
+		
+		try {
+			write();
+		} catch (IOException exc) {
+			logger.error("Encountered exception writing DHT client info", exc);
+		}
+	}
+	
+	protected void read() {
+		MutableSecureFile file = MutableSecureFile.atPath(storage, path(), clientInfoKey());
+		try {
+			deserialize(ByteBuffer.wrap(file.read()));
+		} catch(IOException exc) {
+			initNew();
+		}
+	}
+	
+	protected void write() throws IOException {
+		MutableSecureFile file = MutableSecureFile.atPath(storage, path(), clientInfoKey());
+		file.write(serialize(), 0);
+	}
+	
+	protected byte[] serialize() {
+		ByteBuffer buf = ByteBuffer.allocate(key.getBytes().length + key.publicKey().getBytes().length + tagKey.getRaw().length);
+		buf.put(key.getBytes());
+		buf.put(key.publicKey().getBytes());
+		buf.put(tagKey.getRaw());
+		assert(buf.remaining() == 0);
+		return buf.array();
+	}
+	
+	protected void deserialize(ByteBuffer serialized) throws EINVALException {
+		try {
+			byte[] privKeyRaw = new byte[crypto.asymPrivateDHKeySize()];
+			byte[] pubKeyRaw = new byte[crypto.asymPublicDHKeySize()];
+			byte[] tagKeyRaw = new byte[crypto.symKeyLength()];
+			
+			serialized.get(privKeyRaw);
+			serialized.get(pubKeyRaw);
+			serialized.get(tagKeyRaw);
+			
+			key = crypto.makePrivateDHKeyPair(privKeyRaw, pubKeyRaw);
+			tagKey = new Key(crypto, tagKeyRaw);
+		} catch(BufferUnderflowException exc) {
+			throw new EINVALException(path());
+		}
+	}
+	
+	protected synchronized void updateStatus(int newStatus) {
+		if(lastStatus == newStatus) return;
+		lastStatus = newStatus;
+		if(statusCallback != null) {
+			statusCallback.dhtStatusUpdate(newStatus);
+		}
 	}
 	
 	protected void assertSupportedState(boolean state) throws UnsupportedProtocolException {

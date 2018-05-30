@@ -376,7 +376,7 @@ public class TCPPeerSocketListenerTest {
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
 		Util.waitUntil(100, ()->swarm.opened != null);
 		
-		PublicDHKey ephemeral = new PublicDHKey(readData(socket, crypto.asymPrivateDHKeySize()));
+		PublicDHKey ephemeral = crypto.makePublicDHKey(readData(socket, crypto.asymPrivateDHKeySize()));
 		byte[] authHash = readData(socket, crypto.hashLength());
 		byte[] tempSecret = peerKey.sharedSecret(listener.listenerForSwarm(swarm).localAd().pubKey);
 		byte[] secret = peerKey.sharedSecret(ephemeral);
@@ -393,7 +393,7 @@ public class TCPPeerSocketListenerTest {
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, null);
 		Util.waitUntil(100, ()->swarm.opened != null);
 		
-		PublicDHKey ephemeral = new PublicDHKey(readData(socket, crypto.asymPrivateDHKeySize()));
+		PublicDHKey ephemeral = crypto.makePublicDHKey(readData(socket, crypto.asymPrivateDHKeySize()));
 		readData(socket, crypto.hashLength());
 		byte[] secret = peerKey.sharedSecret(ephemeral);
 		
@@ -414,7 +414,7 @@ public class TCPPeerSocketListenerTest {
 		sendHandshake(listener.listenerForSwarm(roSwarm).localAd().pubKey, socket, 0, swarm.config);
 		Util.waitUntil(100, ()->roSwarm.opened != null);
 		
-		PublicDHKey ephemeral = new PublicDHKey(readData(socket, crypto.asymPrivateDHKeySize()));
+		PublicDHKey ephemeral = crypto.makePublicDHKey(readData(socket, crypto.asymPrivateDHKeySize()));
 		readData(socket, crypto.hashLength());
 		byte[] secret = peerKey.sharedSecret(ephemeral);
 		
@@ -431,7 +431,7 @@ public class TCPPeerSocketListenerTest {
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
 		Util.waitUntil(100, ()->swarm.opened != null);
 		
-		PublicDHKey ephemeral = new PublicDHKey(readData(socket, crypto.asymPrivateDHKeySize()));
+		PublicDHKey ephemeral = crypto.makePublicDHKey(readData(socket, crypto.asymPrivateDHKeySize()));
 		readData(socket, crypto.hashLength());
 		byte[] secret = peerKey.sharedSecret(ephemeral);
 		

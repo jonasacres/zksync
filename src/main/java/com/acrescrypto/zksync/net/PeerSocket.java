@@ -38,8 +38,11 @@ public abstract class PeerSocket {
 	public abstract boolean isClosed();
 	public abstract void handshake() throws ProtocolViolationException, IOException;
 	public abstract int getPeerType() throws UnsupportedOperationException;
-	
 	public abstract byte[] getSharedSecret();
+	
+	public int getPort() {
+		return -1;
+	}
 	
 	
 	public static boolean adSupported(PeerAdvertisement ad) {

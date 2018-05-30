@@ -42,6 +42,7 @@ public class PeerSwarmTest {
 		@Override public byte[] serialize() { return null; }
 		@Override public boolean matchesAddress(String address) { return this.address.equals(address); }
 		@Override public byte getType() { return type; }
+		@Override public boolean isReachable() { return true; }
 		@Override public DummyConnection connect(PeerSwarm swarm)  {
 			if(explode) throw new RuntimeException("kerblooie");
 			return new DummyConnection(new DummySocket(address, swarm));

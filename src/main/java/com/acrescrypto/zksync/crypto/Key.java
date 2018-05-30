@@ -46,4 +46,8 @@ public class Key {
 	public byte[] getRaw() {
 		return raw;
 	}
+
+	public CryptoSupport getCrypto() {
+		return crypto;
+	}
 }

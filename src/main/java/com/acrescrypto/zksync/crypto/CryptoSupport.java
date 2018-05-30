@@ -296,15 +296,15 @@ public class CryptoSupport {
 	
 	public PrivateDHKey makePrivateDHKey() {
 		Curve25519KeyPair keyPair = curve25519.generateKeyPair();
-		return new PrivateDHKey(keyPair.getPrivateKey(), keyPair.getPublicKey());
+		return new PrivateDHKey(this, keyPair.getPrivateKey(), keyPair.getPublicKey());
 	}
 	
 	public PrivateDHKey makePrivateDHKeyPair(byte[] privKey, byte[] pubKey) {
-		return new PrivateDHKey(privKey, pubKey);
+		return new PrivateDHKey(this, privKey, pubKey);
 	}
 	
 	public PublicDHKey makePublicDHKey(byte[] publicKeyMaterial) {
-		return new PublicDHKey(publicKeyMaterial);
+		return new PublicDHKey(this, publicKeyMaterial);
 	}
 	
 	public int symKeyLength() {

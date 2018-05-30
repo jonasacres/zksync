@@ -10,6 +10,7 @@ import java.util.HashSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
@@ -260,9 +261,10 @@ public class PeerConnection {
 			assertState(0 < adLen && adLen <= PeerMessage.MESSAGE_SIZE);
 			byte[] adRaw = new byte[adLen];
 			msg.rxBuf.get(adRaw);
+			CryptoSupport crypto = socket.swarm.config.getAccessor().getMaster().getCrypto();
 			
 			try {
-				PeerAdvertisement ad = PeerAdvertisement.deserialize(adRaw);
+				PeerAdvertisement ad = PeerAdvertisement.deserializeRecord(crypto, ByteBuffer.wrap(adRaw));
 				if(ad == null) continue;
 				if(ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) continue;
 				socket.swarm.addPeerAdvertisement(ad);
@@ -277,7 +279,7 @@ public class PeerConnection {
 		byte[] adRaw = new byte[adLen];
 		msg.rxBuf.get(adRaw);
 		try {
-			PeerAdvertisement ad = PeerAdvertisement.deserializeWithPeer(adRaw, msg.connection);
+			PeerAdvertisement ad = PeerAdvertisement.deserializeRecordWithAddress(msg.connection.getCrypto(), ByteBuffer.wrap(adRaw), msg.connection.socket.getAddress(), msg.connection.socket.getPort());
 			if(ad != null && !ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) {
 				socket.swarm.addPeerAdvertisement(ad);
 			}
@@ -508,5 +510,9 @@ public class PeerConnection {
 				try { Thread.sleep(500); } catch(InterruptedException exc2) {}
 			}
 		}
+	}
+	
+	protected CryptoSupport getCrypto() {
+		return socket.swarm.config.getAccessor().getMaster().getCrypto();
 	}
 }

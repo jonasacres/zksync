@@ -1,11 +1,14 @@
 package com.acrescrypto.zksync.net.dht;
 
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 
 import com.acrescrypto.zksync.crypto.PublicDHKey;
+import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTPeer implements Sendable {
@@ -21,6 +24,7 @@ public class DHTPeer implements Sendable {
 	protected DHTID id;
 	protected String address;
 	protected int port;
+	int missedMessages;
 	protected PublicDHKey key;
 	protected byte[] remoteAuthTag;
 	
@@ -30,17 +34,24 @@ public class DHTPeer implements Sendable {
 		this.port = port;
 
 		this.key = client.crypto.makePublicDHKey(pubKey);
-		this.id = new DHTID(client.crypto.hash(pubKey));
+		this.id = new DHTID(pubKey);
 	}
 	
-	public DHTPeer(DHTClient client, byte[] serialized) {
+	public DHTPeer(DHTClient client, ByteBuffer serialized) throws EINVALException {
 		this.client = client;
 		deserialize(serialized);
 	}
 	
 	public boolean isBad() {
-		// TODO DHT: (implement) return true if peer connection is bad
-		return false;
+		return missedMessages > 1;
+	}
+	
+	public synchronized void missedMessage() {
+		missedMessages++;
+	}
+	
+	public synchronized void acknowledgedMessage() {
+		missedMessages = 0;
 	}
 	
 	public void ping() {
@@ -54,11 +65,17 @@ public class DHTPeer implements Sendable {
 			while(buf.hasRemaining()) {
 				int nextLen = buf.getShort();
 				if(nextLen < 0 || nextLen > buf.remaining()) throw new ProtocolViolationException();
+				int expectedPos = buf.position() + nextLen;
+				DHTPeer peer;
 				
-				byte[] serialized = new byte[nextLen];
-				buf.get(serialized);
+				try {
+					peer = new DHTPeer(client, buf);
+				} catch(EINVALException exc) {
+					throw new ProtocolViolationException();
+				}
 				
-				DHTPeer peer = new DHTPeer(client, serialized);
+				if(expectedPos != buf.position()) throw new ProtocolViolationException();
+				
 				receivedPeers.add(peer);
 				client.routingTable.suggestPeer(peer);
 			}
@@ -74,10 +91,14 @@ public class DHTPeer implements Sendable {
 			while(buf.hasRemaining()) {
 				int nextLen = buf.getShort();
 				if(nextLen < 0 || nextLen > buf.remaining()) throw new ProtocolViolationException();
+				int expectedPos = buf.position() + nextLen;
 				
-				byte[] serialized = new byte[nextLen];
-				buf.get(serialized);
-				receivedRecords.add(DHTRecord.recordForSerialization(serialized));
+				try {
+					receivedRecords.add(DHTRecord.deserializeRecord(client.crypto, buf));
+					if(expectedPos != buf.position()) throw new ProtocolViolationException();
+				} catch (UnsupportedProtocolException e) {
+					buf.position(expectedPos);
+				}
 			}
 			
 			callback.response(receivedRecords, resp.isFinal);
@@ -104,11 +125,27 @@ public class DHTPeer implements Sendable {
 
 	@Override
 	public byte[] serialize() {
-		// TODO DHT: (implement) serialize peer
-		return null;
+		ByteBuffer buf = ByteBuffer.allocate(2 + address.length() + 2 + 2 + key.getBytes().length);
+		buf.putShort((short) address.length());
+		buf.put(address.getBytes());
+		buf.putShort((short) port);
+		buf.putShort((short) key.getBytes().length);
+		buf.put(key.getBytes());
+		return buf.array();
 	}
 	
-	protected void deserialize(byte[] serialized) {
-		// TODO DHT: (implement) deserialize peer
+	protected void deserialize(ByteBuffer serialized) throws EINVALException {
+		try {
+			int addrLen = Util.unsignShort(serialized.getShort());
+			this.address = new String(serialized.array(), serialized.position(), addrLen);
+			serialized.position(serialized.position() + addrLen);
+			this.port = Util.unsignShort(serialized.getShort());
+			int keyLen = Util.unsignShort(serialized.getShort());
+			byte[] keyBytes = new byte[keyLen];
+			serialized.get(keyBytes);
+			this.key = client.crypto.makePublicDHKey(keyBytes);
+		} catch(BufferUnderflowException exc) {
+			throw new EINVALException("(dht peer)");
+		}
 	}
 }

@@ -3,16 +3,30 @@ package com.acrescrypto.zksync.net.dht;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import com.acrescrypto.zksync.crypto.PublicDHKey;
+
 public class DHTID implements Comparable<DHTID>, Sendable {
 	protected byte[] rawId;
 	
+	public DHTID(PublicDHKey key) {
+		this(key.getCrypto().hash(key.getBytes()));
+	}
 	public DHTID(byte[] id) {
 		this.rawId = id;
 	}
 
-	public DHTID calculateMidpoint(DHTID base) {
-		// TODO DHT: (implement) (id - base)/2
-		return null;
+	public int order() { // position of MSB
+		int biggestSeen = -1;
+		for(int i = 0; i < rawId.length; i++) {
+			byte b = this.rawId[i];
+			for(int j = 0; j < 8; j++) {
+				if(((b >> j) & 1) != 0) {
+					biggestSeen = 8*i+j;
+				}
+			}
+		}
+		
+		return biggestSeen;
 	}
 	
 	public DHTID xor(DHTID other) {

@@ -208,7 +208,7 @@ public class TCPPeerSocketListener {
 			assertState(0 <= startsIn && startsIn <= 10000);
 		}
 		
-		byte[] tempSharedSecret = ad.dhPrivateKey.sharedSecret(new PublicDHKey(pubKeyRaw));
+		byte[] tempSharedSecret = ad.dhPrivateKey.sharedSecret(crypto.makePublicDHKey(pubKeyRaw));
 		byte[] expectedProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
 		byte[] responseProof;
 		PrivateDHKey ephemeralKey = crypto.makePrivateDHKey();

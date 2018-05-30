@@ -6,10 +6,12 @@ public class PrivateDHKey {
 	protected byte[] privKey;
 	protected Curve25519 curve25519 = Curve25519.getInstance(Curve25519.BEST);
 	protected PublicDHKey pubKey;
+	protected CryptoSupport crypto;
 	
-	public PrivateDHKey(byte[] privKey, byte[] pubKey) {
+	public PrivateDHKey(CryptoSupport crypto, byte[] privKey, byte[] pubKey) {
 		this.privKey = privKey;
-		this.pubKey = new PublicDHKey(pubKey);
+		this.crypto = crypto;
+		this.pubKey = new PublicDHKey(crypto, pubKey);
 	}
 	
 	public byte[] sharedSecret(PublicDHKey otherKey) {
@@ -22,5 +24,9 @@ public class PrivateDHKey {
 	
 	public byte[] getBytes() {
 		return privKey;
+	}
+	
+	public CryptoSupport getCrypto() {
+		return crypto;
 	}
 }

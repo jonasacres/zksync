@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import org.junit.Before;
@@ -44,7 +45,7 @@ public class TCPPeerAdvertisementTest {
 	
 	@Test
 	public void testSerialization() throws UnconnectableAdvertisementException {
-		TCPPeerAdvertisement deserialized = new TCPPeerAdvertisement(ad.serialize());
+		TCPPeerAdvertisement deserialized = new TCPPeerAdvertisement(crypto, ByteBuffer.wrap(ad.serialize()));
 		assertEquals(ad.host, deserialized.host);
 		assertEquals(ad.port, deserialized.port);
 		assertTrue(Arrays.equals(ad.pubKey.getBytes(), deserialized.pubKey.getBytes()));
@@ -120,6 +121,6 @@ public class TCPPeerAdvertisementTest {
 	public void testConstructorThrowsExceptionIfUnsupportedVersion() throws UnconnectableAdvertisementException {
 		ad.version = 1;
 		byte[] serialized = ad.serialize();
-		new TCPPeerAdvertisement(serialized);
+		new TCPPeerAdvertisement(crypto, ByteBuffer.wrap(serialized));
 	}
 }

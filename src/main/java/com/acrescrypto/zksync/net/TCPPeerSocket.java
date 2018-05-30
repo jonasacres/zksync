@@ -177,6 +177,11 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	@Override
+	public int getPort() {
+		return socket.getPort();
+	}
+	
+	@Override
 	public boolean matchesAddress(String address) {
 		if(socket.getInetAddress().toString().equals(address)) return true;
 		try {
@@ -206,7 +211,7 @@ public class TCPPeerSocket extends PeerSocket {
 		out.write(ByteBuffer.allocate(4).putInt(timeIndex).array());
 		out.write(proof);
 		
-		PublicDHKey remoteEphemeralPubKey = new PublicDHKey(readRaw(crypto.asymPublicDHKeySize()));
+		PublicDHKey remoteEphemeralPubKey = crypto.makePublicDHKey(readRaw(crypto.asymPublicDHKeySize()));
 		this.sharedSecret = dhPrivateKey.sharedSecret(remoteEphemeralPubKey);
 		byte[] remoteAuth = readRaw(crypto.hashLength());
 		byte[] expectedAuth = crypto.authenticate(this.sharedSecret, tempSharedSecret);

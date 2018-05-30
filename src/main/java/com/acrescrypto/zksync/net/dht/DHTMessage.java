@@ -1,6 +1,5 @@
 package com.acrescrypto.zksync.net.dht;
 
-import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -11,7 +10,6 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
-import com.acrescrypto.zksync.utility.Util;
 
 public class DHTMessage {
 	public final static byte CMD_PING = 0;
@@ -23,35 +21,6 @@ public class DHTMessage {
 	
 	public interface DHTMessageCallback {
 		void responseReceived(DHTMessage response) throws ProtocolViolationException;
-	}
-	
-	public class DHTMessageStub {
-		DHTPeer peer;
-		DHTMessageCallback callback;
-		byte cmd;
-		int msgId;
-		int responsesReceived;
-		long timestamp;
-		
-		public DHTMessageStub(DHTMessage msg) {
-			this.peer = msg.peer;
-			this.cmd = msg.cmd;
-			this.msgId = msg.msgId;
-			this.timestamp = Util.currentTimeMillis();
-			this.callback = msg.callback;
-		}
-		
-		public boolean dispatchResponseIfMatches(DHTMessage msg) throws ProtocolViolationException {
-			if(!(msgId == msg.msgId && cmd == msg.cmd && peer.equals(msg.peer))) return false;
-			
-			responsesReceived++;
-			if(responsesReceived >= numExpected) {
-				msg.isFinal = true;
-			}
-			
-			callback.responseReceived(msg);
-			return true;
-		}
 	}
 	
 	DHTMessageCallback callback;
@@ -84,14 +53,19 @@ public class DHTMessage {
 	}
 	
 	public DHTMessage(DHTPeer recipient, byte cmd, byte[] payload, DHTMessageCallback callback) {
+		this(recipient, cmd, ByteBuffer.wrap(payload), callback);
+	}
+	
+	public DHTMessage(DHTPeer recipient, byte cmd, ByteBuffer payloadBuf, DHTMessageCallback callback) {
 		this.peer = recipient;
 		this.cmd = cmd;
 		this.flags = 0;
-		this.payload = payload;
+		this.payload = new byte[payloadBuf.remaining()];
+		payloadBuf.get(payload);
 		this.msgId = recipient.client.crypto.defaultPrng().getInt();
 	}
 	
-	public DHTMessage(DHTClient client, String senderAddress, int senderPort, byte[] serialized) throws ProtocolViolationException {
+	public DHTMessage(DHTClient client, String senderAddress, int senderPort, ByteBuffer serialized) throws ProtocolViolationException {
 		deserialize(client, senderAddress, senderPort, serialized);
 	}
 	
@@ -114,6 +88,7 @@ public class DHTMessage {
 	public void send() {
 		ByteBuffer sendBuf = ByteBuffer.allocate(maxPayloadSize());
 		int numPackets = 0;
+		peer.client.watchForResponse(this);
 		
 		if(items != null) {
 			int totalLen = 0;
@@ -151,11 +126,7 @@ public class DHTMessage {
 		}
 		byte[] serialized = serialize(numPackets, sendBuf);
 		DatagramPacket packet = new DatagramPacket(serialized, serialized.length, address, peer.port);
-		try {
-			peer.client.socket.send(packet);
-		} catch(IOException exc) {
-			// TODO DHT: (implement) log this; reopen socket?
-		}
+		peer.client.sendDatagram(packet);
 	}
 	
 	protected byte[] serialize(int numPackets, ByteBuffer sendBuf) {
@@ -179,31 +150,30 @@ public class DHTMessage {
 		return serialized.array();
 	}
 	
-	protected void deserialize(DHTClient client, String senderAddress, int senderPort, byte[] serialized) throws ProtocolViolationException {
-		ByteBuffer buf = ByteBuffer.wrap(serialized);
+	protected void deserialize(DHTClient client, String senderAddress, int senderPort, ByteBuffer serialized) throws ProtocolViolationException {
 		byte[] keyBytes = new byte[client.crypto.asymPublicDHKeySize()];
 
-		assertState(buf.remaining() > keyBytes.length);
-		buf.get(keyBytes);
+		assertState(serialized.remaining() > keyBytes.length);
+		serialized.get(keyBytes);
 		
-		PublicDHKey pubKey = new PublicDHKey(keyBytes);
+		PublicDHKey pubKey = new PublicDHKey(client.crypto, keyBytes);
 		byte[] keyMaterial = client.key.sharedSecret(pubKey);
 		Key key = new Key(client.crypto, client.crypto.makeSymmetricKey(keyMaterial));
 		
-		byte[] ciphertext = new byte[buf.remaining()];
+		byte[] ciphertext = new byte[serialized.remaining()];
 		byte[] plaintext = key.decrypt(new byte[client.crypto.symIvLength()], ciphertext);
-		buf = ByteBuffer.wrap(plaintext);
+		serialized = ByteBuffer.wrap(plaintext);
 		
-		assertState(buf.remaining() >= keyBytes.length + 4 + 1 + 1);
-		buf.get(keyBytes);
+		assertState(serialized.remaining() >= keyBytes.length + 4 + 1 + 1);
+		serialized.get(keyBytes);
 		
 		this.peer = new DHTPeer(client, senderAddress, senderPort, keyBytes);
-		this.msgId = buf.getInt();
-		this.cmd = buf.get();
-		this.flags = buf.get();
-		this.numExpected = buf.get();
-		this.payload = new byte[buf.remaining()];
-		buf.get(payload);
+		this.msgId = serialized.getInt();
+		this.cmd = serialized.get();
+		this.flags = serialized.get();
+		this.numExpected = serialized.get();
+		this.payload = new byte[serialized.remaining()];
+		serialized.get(payload);
 	}
 	
 	protected int headerSize() {

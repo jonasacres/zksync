@@ -2,9 +2,11 @@ package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.utility.Util;
@@ -27,25 +29,25 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 		this.version = version;
 	}
 	
-	public TCPPeerAdvertisement(byte[] serialized, PeerConnection connection) throws UnconnectableAdvertisementException {
-		this(serialized);
-		this.ipAddress = this.host = connection.getSocket().getAddress();
+	public TCPPeerAdvertisement(CryptoSupport crypto, ByteBuffer serialized, String address, int port) throws UnconnectableAdvertisementException {
+		this(crypto, serialized);
+		this.ipAddress = this.host = address;
+		this.port = port;
 	}
 	
-	public TCPPeerAdvertisement(byte[] serialized) throws UnconnectableAdvertisementException {
-		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		if(TYPE_TCP_PEER != buf.get() || 0 != buf.getInt()) throw new UnconnectableAdvertisementException();
-		int pubKeyLen = Util.unsignShort(buf.getShort());
+	public TCPPeerAdvertisement(CryptoSupport crypto, ByteBuffer serialized) throws UnconnectableAdvertisementException {
+		if(TYPE_TCP_PEER != serialized.get() || 0 != serialized.getInt()) throw new UnconnectableAdvertisementException();
+		int pubKeyLen = Util.unsignShort(serialized.getShort());
 		byte[] pubKeyBytes = new byte[pubKeyLen];
-		buf.get(pubKeyBytes);
-		pubKey = new PublicDHKey(pubKeyBytes);
+		serialized.get(pubKeyBytes);
+		pubKey = crypto.makePublicDHKey(pubKeyBytes);
 		
-		int hostLen = Util.unsignShort(buf.getShort());
+		int hostLen = Util.unsignShort(serialized.getShort());
 		byte[] hostBytes = new byte[hostLen];
-		buf.get(hostBytes);
+		serialized.get(hostBytes);
 		host = new String(hostBytes);
 		
-		port = Util.unsignShort(buf.getShort());
+		port = Util.unsignShort(serialized.getShort());
 	}
 
 	public TCPPeerAdvertisement resolve() throws UnconnectableAdvertisementException {
@@ -79,6 +81,18 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	@Override
 	public boolean isBlacklisted(Blacklist blacklist) throws IOException {
 		return blacklist.contains(ipAddress.toString());
+	}
+	
+	@Override
+	public boolean isReachable() {
+		try {
+			Socket socket = new Socket(host, port);
+			socket.close();
+		} catch (IOException e) {
+			return false;
+		}
+		
+		return true;
 	}
 
 	@Override

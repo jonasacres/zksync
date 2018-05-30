@@ -99,6 +99,6 @@ public class TCPPeerAdvertisementListener {
 		buf.get(publicKeyRaw);
 		assert(!buf.hasRemaining());
 		
-		dhPrivateKey = new PrivateDHKey(privateKeyRaw, publicKeyRaw);
+		dhPrivateKey = crypto.makePrivateDHKeyPair(privateKeyRaw, publicKeyRaw);
 	}
 }
