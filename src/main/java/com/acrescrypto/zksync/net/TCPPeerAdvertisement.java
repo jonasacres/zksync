@@ -73,7 +73,7 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	
 	@Override
 	public void blacklist(Blacklist blacklist) throws IOException {
-		blacklist.add(ipAddress.toString(), Integer.MAX_VALUE);
+		blacklist.add(ipAddress.toString(), Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
 	}
 
 	@Override

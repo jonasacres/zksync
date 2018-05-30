@@ -199,12 +199,12 @@ public class TCPPeerSocketListener {
 		if(diff < 0) {
 			// stated index is in past
 			long expiration = ad.swarm.config.getAccessor().timeSlice(timeIndex) + ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS;
-			long expiredFor = master.currentTimeNanos()/(1000l*1000l) - expiration;
+			long expiredFor = Util.currentTimeMillis() - expiration;
 			assertState(0 <= expiredFor && expiredFor <= 10000);
 		} else if(diff > 0) {
 			// stated index is in future
 			long startTime = ad.swarm.config.getAccessor().timeSlice(timeIndex);
-			long startsIn = startTime - master.currentTimeNanos()/(1000l*1000l);
+			long startsIn = startTime - Util.currentTimeMillis();
 			assertState(0 <= startsIn && startsIn <= 10000);
 		}
 		

@@ -134,7 +134,7 @@ public class PeerSwarmTest {
 		swarm.close();
 		try { Thread.sleep(1); } catch(InterruptedException exc) {} // give exploding ads a chance to percolate through before turning logging back on
 		((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(PeerSwarm.class)).setLevel(Level.WARN);
-		master.setCurrentTime(-1);
+		Util.setCurrentTime(-1);
 	}
 	
 	@AfterClass
@@ -295,13 +295,13 @@ public class PeerSwarmTest {
 	public void testEmbaroesUnconnectablePeers() throws InterruptedException {
 		((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(PeerSwarm.class)).setLevel(Level.OFF);
 		DummyAdvertisement ad = new DummyAdvertisement("some-ad");
-		master.setCurrentTime(0);
+		Util.setCurrentTime(0);
 		ad.explode = true;
 		assertFalse(connectedAddresses.contains(ad.address));
 		swarm.addPeerAdvertisement(ad);
 		assertFalse(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
 		ad.explode = false;
-		master.setCurrentTime(1000l*1000l*PeerSwarm.EMBARGO_EXPIRE_TIME_MILLIS);
+		Util.setCurrentTime(1000l*1000l*PeerSwarm.EMBARGO_EXPIRE_TIME_MILLIS);
 		assertTrue(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
 	}
 	

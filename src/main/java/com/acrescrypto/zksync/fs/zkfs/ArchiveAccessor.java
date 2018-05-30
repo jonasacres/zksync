@@ -6,7 +6,7 @@ import java.util.Collection;
 import java.util.HashSet;
 
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.net.dht.DHTClient;
+import com.acrescrypto.zksync.utility.Util;
 
 /** TODO Signing: Add the concept of a write passphrase, which derives the private signing key for the archive. 
  */
@@ -83,9 +83,7 @@ public class ArchiveAccessor {
 	}
 	
 	public ArchiveAccessor addDefaultDiscoveries() {
-		this.addDiscovery(DHTClient.defaultDHT());
-		// TODO DHT: (design) direct peer discovery
-		// TODO DHT: (design) mdns/udp multicast/other lan discovery?
+		// TODO DHT: (implement) add discovery for DHT
 		return this;
 	}
 	
@@ -209,7 +207,7 @@ public class ArchiveAccessor {
 	}
 	
 	public int timeSliceIndex() {
-		return (int) (master.currentTimeNanos()/(1000l*1000l*TEMPORAL_SEED_KEY_INTERVAL_MS));
+		return (int) (Util.currentTimeMillis()/TEMPORAL_SEED_KEY_INTERVAL_MS);
 	}
 	
 	public long timeSlice(int index) {

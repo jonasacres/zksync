@@ -5,6 +5,8 @@ import java.nio.ByteBuffer;
 import com.acrescrypto.zksync.crypto.HashContext;
 
 public class Util {
+	static long debugTime = -1;
+	
 	public interface WaitTest {
 		boolean test();
 	}
@@ -129,4 +131,18 @@ public class Util {
 		
 		return d == 0;
 	}
+
+	public static long currentTimeNanos() {
+		if(debugTime < 0) return 1000l*1000l*System.currentTimeMillis();
+		return debugTime;
+	}
+	
+	public static long currentTimeMillis() {
+		return currentTimeNanos()/(1000l*1000l);
+	}
+	
+	public static void setCurrentTime(long time) {
+		debugTime = time;
+	}
+
 }

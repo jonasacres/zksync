@@ -27,7 +27,7 @@ public class Inode implements Comparable<Inode> {
 	public static Inode defaultRootInode(ZKFS fs) {
 		Inode blank = new Inode(fs);
 		Stat stat = new Stat();
-		long now = fs.archive.master.currentTimeNanos();
+		long now = Util.currentTimeNanos();
 		stat.setAtime(now);
 		stat.setMtime(now);
 		stat.setCtime(now);

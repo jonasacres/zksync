@@ -16,6 +16,7 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.utility.Util;
 
 public class Blacklist {
+	public final static int DEFAULT_BLACKLIST_DURATION_MS = 1000*60*3; // peers are blocked for 3 hours for suspicious traffic
 	protected HashMap<String,BlacklistEntry> blockedAddresses = new HashMap<String,BlacklistEntry>();
 	protected FS fs;
 	protected String path;

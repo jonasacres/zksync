@@ -15,6 +15,7 @@ import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.fs.zkfs.*;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.PathDiffResolver;
+import com.acrescrypto.zksync.utility.Util;
 
 public class DiffSetResolverTest {
 	ZKFS fs;
@@ -41,7 +42,7 @@ public class DiffSetResolverTest {
 	@Before
 	public void before() throws IOException {
 		master.purge();
-		master.setCurrentTime(-1);
+		Util.setCurrentTime(-1);
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "unit test");
 		fs = archive.openBlank();
 		base = fs.commit();
@@ -179,7 +180,7 @@ public class DiffSetResolverTest {
 		for(int i = 0; i < numChildren; i++) {
 			int n = (i + r) % numChildren;
 			ZKFS child = base.getFS();
-			master.setCurrentTime(n);
+			Util.setCurrentTime(n);
 			child.write("file", ("version " + n).getBytes());
 			child.commit();
 		}
@@ -193,7 +194,7 @@ public class DiffSetResolverTest {
 		int numChildren = 50, r = (int) (numChildren*Math.random());
 		
 		for(int i = 0; i < numChildren; i++) {
-			master.setCurrentTime(i);
+			Util.setCurrentTime(i);
 			fs.write("file"+i, ("file"+i).getBytes());
 		}
 		
@@ -306,14 +307,14 @@ public class DiffSetResolverTest {
 	public void testChangedFromIsFirstTiebreaker() throws IOException, DiffResolutionException {
 		for(int i = 0; i < 8; i++) {
 			before();
-			master.setCurrentTime(0);
+			Util.setCurrentTime(0);
 			fs.write("file", "foo".getBytes());
 			base = fs.commit();
 			RefTag[] revs = new RefTag[4];
 			
 			for(int j = 0; j < 4; j++) {
 				if(j == 2) fs = base.getFS();
-				master.setCurrentTime(1+j%2);
+				Util.setCurrentTime(1+j%2);
 				fs.write("file", (""+j).getBytes());
 				revs[j] = fs.commit();
 			}
@@ -331,14 +332,14 @@ public class DiffSetResolverTest {
 	public void testSerializedInodeIsSecondTiebraker() throws IOException, DiffResolutionException {
 		for(int i = 0; i < 8; i++) {
 			before();
-			master.setCurrentTime(0);
+			Util.setCurrentTime(0);
 			fs.write("file", "foo".getBytes());
 			base = fs.commit();
 			byte[][] serializations = new byte[2][];
 			
 			for(int j = 0; j < 2; j++) {
 				fs = base.getFS();
-				master.setCurrentTime(1);
+				Util.setCurrentTime(1);
 				fs.write("file", (""+j).getBytes());
 				fs.commit();
 				serializations[j] = fs.inodeForPath("file").serialize();

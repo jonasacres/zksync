@@ -168,7 +168,7 @@ public class PeerSwarm implements BlacklistCallback {
 		for(PeerAdvertisement ad : knownAds) {
 			if(connectedAds.contains(ad)) continue;
 			if(adEmbargoes.containsKey(ad)) {
-				long expireTime = config.getAccessor().getMaster().currentTimeMillis() - EMBARGO_EXPIRE_TIME_MILLIS;
+				long expireTime = Util.currentTimeMillis() - EMBARGO_EXPIRE_TIME_MILLIS;
 				if(adEmbargoes.get(ad) <= expireTime) {
 					adEmbargoes.remove(ad);
 				} else {
@@ -210,7 +210,7 @@ public class PeerSwarm implements BlacklistCallback {
 				if(conn == null) {
 					synchronized(this) {
 						activeSockets--;
-						adEmbargoes.put(ad, config.getAccessor().getMaster().currentTimeMillis());
+						adEmbargoes.put(ad, Util.currentTimeMillis());
 						connectedAds.remove(ad);
 					}
 				}

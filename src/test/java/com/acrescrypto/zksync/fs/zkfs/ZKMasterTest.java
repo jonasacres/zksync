@@ -230,30 +230,6 @@ public class ZKMasterTest {
 	}
 	
 	@Test
-	public void testCurrentTimeNanosReturnsCurrentTimeInNanosecondsByDefault() {
-		long delta = Math.abs(System.currentTimeMillis() - master.currentTimeNanos()/(1000l*1000l));
-		assertTrue(delta <= 1);
-	}
-	
-	@Test
-	public void testCurrentTimeNanosReturnsOverrideTimeIfSupplied() {
-		master.setCurrentTime(1234567890);
-		assertEquals(1234567890, master.currentTimeNanos());
-	}
-	
-	@Test
-	public void testCurrentTimeMillisReturnsCurrentTimeInMillisecondsByDefault() {
-		long delta = Math.abs(System.currentTimeMillis() - master.currentTimeMillis());
-		assertTrue(delta <= 1);
-	}
-	
-	@Test
-	public void testCurrentTimeMillisReturnsOverrideTimeIfSupplied() {
-		master.setCurrentTime(1234567890000000l);
-		assertEquals(1234567890, master.currentTimeMillis());
-	}
-	
-	@Test
 	public void testPurgeErasesStorage() throws IOException {
 		for(int i = 0; i < 32; i++) {
 			String path = "" + (i % 2) + "/" + (i % 3) + "/" + (i % 5) + "/" + i;

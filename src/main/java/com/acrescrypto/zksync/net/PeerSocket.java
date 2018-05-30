@@ -87,7 +87,7 @@ public abstract class PeerSocket {
 		logger.warn("Logging violation for peer {}", getAddress());
 		try {
 			close();
-			swarm.config.getArchive().getMaster().getBlacklist().add(getAddress(), Integer.MAX_VALUE);
+			swarm.config.getArchive().getMaster().getBlacklist().add(getAddress(), Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
 		} catch (IOException exc) {
 			logger.warn("Caught exception closing socket to peer {}", getAddress(), exc);
 		}

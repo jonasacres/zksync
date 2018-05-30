@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PeerMessageIncoming extends PeerMessage {
 	protected DataBuffer rxBuf = new DataBuffer();
@@ -140,13 +141,13 @@ public class PeerMessageIncoming extends PeerMessage {
 		this.cmd = cmd;
 		this.flags = flags;
 		this.msgId = msgId;
-		this.lastSeen = connection.socket.swarm.config.getAccessor().getMaster().currentTimeMillis();
+		this.lastSeen = Util.currentTimeMillis();
 		processThread();
 	}
 	
 	public void receivedData(byte flags, byte[] data) {
 		bytesReceived += data.length; // used for testing so not bothering with synchronization
-		this.lastSeen = connection.socket.swarm.config.getAccessor().getMaster().currentTimeMillis();
+		this.lastSeen = Util.currentTimeMillis();
 		flags |= this.flags;
 		boolean isFinal = (flags & FLAG_FINAL) != 0;
 		rxBuf.write(data);

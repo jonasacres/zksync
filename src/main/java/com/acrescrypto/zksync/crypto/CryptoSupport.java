@@ -270,6 +270,10 @@ public class CryptoSupport {
 		return rng(symKeyLength());
 	}
 	
+	public byte[] makeSymmetricKey(byte[] material) {
+		return expand(material, symKeyLength(), new byte[0], new byte[0]);
+	}
+	
 	public byte[] makeSymmetricIv() {
 		return rng(symIvLength());
 	}

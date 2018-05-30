@@ -9,6 +9,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.utility.Util;
 
 /** Represents a file handle within a zkfs. */
 public class ZKFile extends File {
@@ -220,7 +221,7 @@ public class ZKFile extends File {
 	@Override
 	public void flush() throws IOException {
 		if(!dirty) return;
-		long now = zkfs.archive.master.currentTimeNanos();
+		long now = Util.currentTimeNanos();
 		inode.getStat().setMtime(now);
 		inode.setChangedFrom(zkfs.baseRevision);
 		inode.setModifiedTime(now);

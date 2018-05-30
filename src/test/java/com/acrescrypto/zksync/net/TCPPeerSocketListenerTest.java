@@ -291,7 +291,7 @@ public class TCPPeerSocketListenerTest {
 	
 	@Test
 	public void testDisconnectsPeersSendingBackdatedTimeDiffs() throws IOException, UnconnectableAdvertisementException {
-		master.setCurrentTime(1000l*1000l*1000l*24l*10000l);
+		Util.setCurrentTime(1000l*1000l*1000l*24l*10000l);
 		listener.advertise(swarm);
 		Socket socket = connect();
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, -1, swarm.config);
@@ -300,7 +300,7 @@ public class TCPPeerSocketListenerTest {
 	
 	@Test
 	public void testDisconnectsPeersSendingPostdatedTimeDiffs() throws IOException, UnconnectableAdvertisementException {
-		master.setCurrentTime(1000l*1000l*1000l*24l*10000l);
+		Util.setCurrentTime(1000l*1000l*1000l*24l*10000l);
 		listener.advertise(swarm);
 		Socket socket = connect();
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 1, swarm.config);
@@ -319,7 +319,7 @@ public class TCPPeerSocketListenerTest {
 	@Test
 	public void testToleratesPeersSendingBackdatedTimeDiffsWithinGrace() throws IOException, UnconnectableAdvertisementException {
 		ArchiveAccessor accessor = archive.getConfig().getAccessor();
-		master.setCurrentTime((accessor.timeSlice(10000) + 10)*1000l*1000l);
+		Util.setCurrentTime((accessor.timeSlice(10000) + 10)*1000l*1000l);
 		
 		listener.advertise(swarm);
 		Socket socket = connect();
@@ -330,7 +330,7 @@ public class TCPPeerSocketListenerTest {
 	@Test
 	public void testToleratesPeersSendingPostdatedTimeDiffsWithinGrace() throws IOException, UnconnectableAdvertisementException {
 		ArchiveAccessor accessor = archive.getConfig().getAccessor();
-		master.setCurrentTime((accessor.timeSlice(10001) - 10)*1000l*1000l);
+		Util.setCurrentTime((accessor.timeSlice(10001) - 10)*1000l*1000l);
 		
 		listener.advertise(swarm);
 		Socket socket = connect();

@@ -20,6 +20,7 @@ import org.junit.Test;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveAccessorDiscoveryCallback;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveDiscovery;
+import com.acrescrypto.zksync.utility.Util;
 
 public class ArchiveAccessorTest {
 	static ZKMaster master;
@@ -48,7 +49,7 @@ public class ArchiveAccessorTest {
 	@Test
 	public void testTimeslice() {
 		long interval = ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS;
-		int currentOffset = (int) (System.currentTimeMillis() / interval);
+		int currentOffset = (int) (Util.currentTimeMillis() / interval);
 		long nowTimeslice = currentOffset * interval;
 		assertEquals(currentOffset, accessor.timeSliceIndex());
 		assertEquals(nowTimeslice, accessor.timeSlice(currentOffset));
