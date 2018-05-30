@@ -725,6 +725,7 @@ public class PageQueueTest {
 	
 	@Test
 	public void testExpectTagNextReturnsFalseIfPageTagIsNotNextItem() {
+		// TODO DHT: (review) Intermittent failure. 5/30/18 Linux 982ab3b85d2d045ee606bd8bfcf043da8b29b0d0
 		queue.addPageTag(0, pageTag);
 		queue.addRevisionTag(1, revTag);
 		

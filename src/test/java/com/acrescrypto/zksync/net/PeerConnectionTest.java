@@ -105,6 +105,7 @@ public class PeerConnectionTest {
 		@Override public int getPeerType() { return peerType; }
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public String getAddress() { return "127.0.0.1"; }
+		@Override public int getPort() { return 1234; }
 		@Override public synchronized DummyPeerMessageOutgoing makeOutgoingMessage(byte cmd, InputStream stream) {
 			DummyPeerMessageOutgoing msg = new DummyPeerMessageOutgoing(conn, cmd, stream);
 			messages.add(msg);
@@ -619,7 +620,7 @@ public class PeerConnectionTest {
 		assertEquals(0, swarm.receivedAds.size());
 		conn.handle(msg);
 		assertEquals(1, swarm.receivedAds.size());
-		assertEquals(ad.port, ((TCPPeerAdvertisement) swarm.receivedAds.getFirst()).port);
+		assertEquals(socket.getPort(), ((TCPPeerAdvertisement) swarm.receivedAds.getFirst()).port);
 		assertEquals(socket.getAddress(), ((TCPPeerAdvertisement) swarm.receivedAds.getFirst()).host);
 		assertTrue(Arrays.equals(ad.pubKey.getBytes(), ((TCPPeerAdvertisement) swarm.receivedAds.getFirst()).pubKey.getBytes()));
 	}
