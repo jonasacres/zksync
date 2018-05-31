@@ -31,27 +31,6 @@ public class DHTMessage {
 	boolean isFinal;
 	Collection<? extends Sendable> items;
 	
-	static DHTMessage pingMessage(DHTPeer recipient, DHTMessageCallback callback) {
-		return new DHTMessage(recipient, CMD_PING, new byte[0], callback);
-	}
-	
-	static DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, DHTMessageCallback callback) {
-		return new DHTMessage(recipient, CMD_FIND_NODE, id.rawId, callback);
-	}
-	
-	static DHTMessage getRecordsMessage(DHTPeer recipient, DHTID id, DHTMessageCallback callback) {
-		return new DHTMessage(recipient, CMD_GET_RECORDS, id.rawId, callback);
-	}
-	
-	static DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, DHTRecord record, DHTMessageCallback callback) {
-		byte[] serializedRecord = record.serialize();
-		ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + serializedRecord.length + recipient.remoteAuthTag.length);
-		buf.put(recipient.remoteAuthTag);
-		buf.put(id.rawId);
-		buf.put(record.serialize());
-		return new DHTMessage(recipient, CMD_ADD_RECORD, buf.array(), callback);
-	}
-	
 	public DHTMessage(DHTPeer recipient, byte cmd, byte[] payload, DHTMessageCallback callback) {
 		this(recipient, cmd, ByteBuffer.wrap(payload), callback);
 	}
@@ -60,6 +39,7 @@ public class DHTMessage {
 		this.peer = recipient;
 		this.cmd = cmd;
 		this.flags = 0;
+		this.callback = callback;
 		this.payload = new byte[payloadBuf.remaining()];
 		payloadBuf.get(payload);
 		this.msgId = recipient.client.crypto.defaultPrng().getInt();

@@ -6,6 +6,8 @@ import org.junit.runners.Suite;
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
 	DHTIDTest.class,
+	DHTBucketTest.class,
+	DHTPeerTest.class
 })
 
 public class DHTTests {

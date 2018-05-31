@@ -34,7 +34,7 @@ public class DHTPeer implements Sendable {
 		this.port = port;
 
 		this.key = client.crypto.makePublicDHKey(pubKey);
-		this.id = new DHTID(pubKey);
+		this.id = new DHTID(key);
 	}
 	
 	public DHTPeer(DHTClient client, ByteBuffer serialized) throws EINVALException {
@@ -55,16 +55,18 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public void ping() {
-		DHTMessage.pingMessage(this, null);
+		client.pingMessage(this, null).send();
 	}
 	
 	public void findNode(DHTID nodeId, DHTFindNodeCallback callback) {
-		DHTMessage.findNodeMessage(this, nodeId, (resp)->{
+		client.findNodeMessage(this, nodeId, (resp)->{
 			ArrayList<DHTPeer> receivedPeers = new ArrayList<>();
 			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
 			while(buf.hasRemaining()) {
-				int nextLen = buf.getShort();
-				if(nextLen < 0 || nextLen > buf.remaining()) throw new ProtocolViolationException();
+				if(buf.remaining() < 2) throw new ProtocolViolationException();
+				
+				int nextLen = Util.unsignShort(buf.getShort());
+				if(nextLen <= 0 || nextLen > buf.remaining()) throw new ProtocolViolationException();
 				int expectedPos = buf.position() + nextLen;
 				DHTPeer peer;
 				
@@ -81,11 +83,11 @@ public class DHTPeer implements Sendable {
 			}
 			
 			callback.response(receivedPeers, resp.isFinal);
-		});
+		}).send();
 	}
 	
 	public void getRecords(DHTID recordId, DHTGetRecordsCallback callback) {
-		DHTMessage.getRecordsMessage(this, recordId, (resp)->{
+		client.getRecordsMessage(this, recordId, (resp)->{
 			ArrayList<DHTRecord> receivedRecords = new ArrayList<>();
 			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
 			while(buf.hasRemaining()) {
@@ -94,7 +96,7 @@ public class DHTPeer implements Sendable {
 				int expectedPos = buf.position() + nextLen;
 				
 				try {
-					receivedRecords.add(DHTRecord.deserializeRecord(client.crypto, buf));
+					receivedRecords.add(client.deserializeRecord(buf));
 					if(expectedPos != buf.position()) throw new ProtocolViolationException();
 				} catch (UnsupportedProtocolException e) {
 					buf.position(expectedPos);
@@ -102,11 +104,11 @@ public class DHTPeer implements Sendable {
 			}
 			
 			callback.response(receivedRecords, resp.isFinal);
-		});
+		}).send();
 	}
 	
 	public void addRecord(DHTID recordId, DHTRecord record) {
-		DHTMessage.addRecordMessage(this, recordId, record, null).send();
+		client.addRecordMessage(this, recordId, record, null).send();
 	}
 	
 	public boolean equals(Object o) {
@@ -144,6 +146,7 @@ public class DHTPeer implements Sendable {
 			byte[] keyBytes = new byte[keyLen];
 			serialized.get(keyBytes);
 			this.key = client.crypto.makePublicDHKey(keyBytes);
+			this.id = new DHTID(this.key);
 		} catch(BufferUnderflowException exc) {
 			throw new EINVALException("(dht peer)");
 		}

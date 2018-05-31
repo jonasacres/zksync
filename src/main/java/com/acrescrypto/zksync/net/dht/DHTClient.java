@@ -24,6 +24,7 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.net.Blacklist;
+import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -368,6 +369,31 @@ public class DHTClient {
 	
 	protected String path() {
 		return "dht-client-info";
+	}
+	
+	protected DHTMessage pingMessage(DHTPeer recipient, DHTMessageCallback callback) {
+		return new DHTMessage(recipient, DHTMessage.CMD_PING, new byte[0], callback);
+	}
+	
+	protected DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, DHTMessageCallback callback) {
+		return new DHTMessage(recipient, DHTMessage.CMD_FIND_NODE, id.rawId, callback);
+	}
+	
+	protected DHTMessage getRecordsMessage(DHTPeer recipient, DHTID id, DHTMessageCallback callback) {
+		return new DHTMessage(recipient, DHTMessage.CMD_GET_RECORDS, id.rawId, callback);
+	}
+	
+	protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, DHTRecord record, DHTMessageCallback callback) {
+		byte[] serializedRecord = record.serialize();
+		ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + serializedRecord.length + recipient.remoteAuthTag.length);
+		buf.put(recipient.remoteAuthTag);
+		buf.put(id.rawId);
+		buf.put(record.serialize());
+		return new DHTMessage(recipient, DHTMessage.CMD_ADD_RECORD, buf.array(), callback);
+	}
+	
+	protected DHTRecord deserializeRecord(ByteBuffer serialized) throws UnsupportedProtocolException {
+		return DHTRecord.deserializeRecord(crypto, serialized);
 	}
 	
 	protected void initNew() {

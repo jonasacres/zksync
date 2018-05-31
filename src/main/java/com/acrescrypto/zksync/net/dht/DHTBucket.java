@@ -70,7 +70,12 @@ public class DHTBucket {
 		lastChanged = Util.currentTimeMillis();
 	}
 	
+	// TODO DHT: (design) Need to actually ping stale peers...
+	
 	public boolean needsFreshening() {
+		// TODO DHT: (review) Consider only returning true if we've ever had contents in this bucket.
+		// otherwise, we'll be doing 512 searches right out the gate at initialization!
+		
 		return Util.currentTimeMillis() - lastChanged >= BUCKET_FRESHEN_INTERVAL_MS;
 	}
 	
