@@ -15,7 +15,7 @@ public abstract class DHTRecord implements Sendable {
 		
 		switch(type) {
 		case RECORD_TYPE_ADVERTISEMENT:
-			new DHTAdvertisementRecord(peer.client.crypto, serialized, peer.address, peer.port);
+			return new DHTAdvertisementRecord(peer.client.crypto, serialized, peer.address, peer.port);
 		default:
 			throw new UnsupportedProtocolException();
 		}
@@ -27,6 +27,7 @@ public abstract class DHTRecord implements Sendable {
 		
 		switch(type) {
 		case RECORD_TYPE_ADVERTISEMENT:
+			return new DHTAdvertisementRecord(crypto, serialized);
 		default:
 			throw new UnsupportedProtocolException();
 		}

@@ -91,6 +91,11 @@ public class TCPPeerAdvertisementTest {
 	}
 	
 	@Test
+	public void testHashCodeIsBasedOnVersion() throws UnconnectableAdvertisementException {
+		assertNotEquals(ad.hashCode(), new TCPPeerAdvertisement(ad.pubKey, ad.host, ad.port+1, encryptedArchiveId).hashCode(), 1);
+	}
+	
+	@Test
 	public void testHashCodeIsBasedOnEncryptedArchiveId() throws UnconnectableAdvertisementException {
 		byte[] modifiedEncryptedArchiveId = encryptedArchiveId.clone();
 		modifiedEncryptedArchiveId[3] ^= 0x04;

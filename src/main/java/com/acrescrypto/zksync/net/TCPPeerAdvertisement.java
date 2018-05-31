@@ -121,10 +121,11 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	@Override
 	public int hashCode() {
 		String portStr = ""+port;
-		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length + host.length() + portStr.length() + encryptedArchiveId.length);
+		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length + host.length() + portStr.length() + encryptedArchiveId.length + 4);
 		buf.put(pubKey.getBytes());
 		buf.put(host.getBytes());
 		buf.put(portStr.getBytes());
+		buf.putInt(version);
 		buf.put(encryptedArchiveId);
 		return new String(Util.bytesToHex(buf.array())).hashCode();
 	}
