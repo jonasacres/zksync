@@ -46,7 +46,7 @@ public class DHTBucket {
 	// returns a random ID whose distance from the client ID is of the order of this bucket
 	public DHTID randomIdInRange() {
 		byte[] random = client.id.serialize();
-		int pivotByteIndex = order/8;
+		int pivotByteIndex = random.length - order/8 - 1;
 		int pivotBitOffset = order % 8;
 		
 		byte pivotBitMask = (byte) (1 << pivotBitOffset);
@@ -58,8 +58,10 @@ public class DHTBucket {
 		byte preservedBits = (byte) (random[pivotByteIndex] & pivotUpperMask);
 		byte pivotByte = (byte) (preservedBits | flippedBit | randomBits);
 		
-		random[pivotByteIndex] = pivotByte;
-		ByteBuffer.wrap(random).put(client.crypto.rng(pivotByteIndex));
+		ByteBuffer buf = ByteBuffer.wrap(random);
+		buf.position(pivotByteIndex);
+		buf.put(pivotByte);
+		buf.put(client.crypto.rng(buf.remaining()));
 		
 		return new DHTID(random);
 	}
@@ -69,7 +71,7 @@ public class DHTBucket {
 	}
 	
 	public boolean needsFreshening() {
-		return System.currentTimeMillis() - lastChanged >= BUCKET_FRESHEN_INTERVAL_MS;
+		return Util.currentTimeMillis() - lastChanged >= BUCKET_FRESHEN_INTERVAL_MS;
 	}
 	
 	protected void prune() {

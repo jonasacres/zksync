@@ -6,6 +6,7 @@ import org.junit.runners.Suite;
 import com.acrescrypto.zksync.crypto.CryptoTests;
 import com.acrescrypto.zksync.fs.FSTests;
 import com.acrescrypto.zksync.net.NetTests;
+import com.acrescrypto.zksync.net.dht.DHTTests;
 import com.acrescrypto.zksync.utility.UtilityTests;
 
 @RunWith(Suite.class)
@@ -13,6 +14,7 @@ import com.acrescrypto.zksync.utility.UtilityTests;
 	FSTests.class,
 	CryptoTests.class,
 	NetTests.class,
+	DHTTests.class,
 	UtilityTests.class,
 })
 

@@ -42,7 +42,7 @@ public class DiffSetResolverTest {
 	@Before
 	public void before() throws IOException {
 		master.purge();
-		Util.setCurrentTime(-1);
+		Util.setCurrentTimeNanos(-1);
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "unit test");
 		fs = archive.openBlank();
 		base = fs.commit();
@@ -180,7 +180,7 @@ public class DiffSetResolverTest {
 		for(int i = 0; i < numChildren; i++) {
 			int n = (i + r) % numChildren;
 			ZKFS child = base.getFS();
-			Util.setCurrentTime(n);
+			Util.setCurrentTimeNanos(n);
 			child.write("file", ("version " + n).getBytes());
 			child.commit();
 		}
@@ -194,7 +194,7 @@ public class DiffSetResolverTest {
 		int numChildren = 50, r = (int) (numChildren*Math.random());
 		
 		for(int i = 0; i < numChildren; i++) {
-			Util.setCurrentTime(i);
+			Util.setCurrentTimeNanos(i);
 			fs.write("file"+i, ("file"+i).getBytes());
 		}
 		
@@ -307,14 +307,14 @@ public class DiffSetResolverTest {
 	public void testChangedFromIsFirstTiebreaker() throws IOException, DiffResolutionException {
 		for(int i = 0; i < 8; i++) {
 			before();
-			Util.setCurrentTime(0);
+			Util.setCurrentTimeNanos(0);
 			fs.write("file", "foo".getBytes());
 			base = fs.commit();
 			RefTag[] revs = new RefTag[4];
 			
 			for(int j = 0; j < 4; j++) {
 				if(j == 2) fs = base.getFS();
-				Util.setCurrentTime(1+j%2);
+				Util.setCurrentTimeNanos(1+j%2);
 				fs.write("file", (""+j).getBytes());
 				revs[j] = fs.commit();
 			}
@@ -332,14 +332,14 @@ public class DiffSetResolverTest {
 	public void testSerializedInodeIsSecondTiebraker() throws IOException, DiffResolutionException {
 		for(int i = 0; i < 8; i++) {
 			before();
-			Util.setCurrentTime(0);
+			Util.setCurrentTimeNanos(0);
 			fs.write("file", "foo".getBytes());
 			base = fs.commit();
 			byte[][] serializations = new byte[2][];
 			
 			for(int j = 0; j < 2; j++) {
 				fs = base.getFS();
-				Util.setCurrentTime(1);
+				Util.setCurrentTimeNanos(1);
 				fs.write("file", (""+j).getBytes());
 				fs.commit();
 				serializations[j] = fs.inodeForPath("file").serialize();

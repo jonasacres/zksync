@@ -141,7 +141,7 @@ public class Util {
 		return currentTimeNanos()/(1000l*1000l);
 	}
 	
-	public static void setCurrentTime(long time) {
+	public static void setCurrentTimeNanos(long time) {
 		debugTime = time;
 	}
 

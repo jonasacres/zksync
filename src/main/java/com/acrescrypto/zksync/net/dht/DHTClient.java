@@ -77,9 +77,12 @@ public class DHTClient {
 		this.storage = blacklist.getFS();
 		this.crypto = storageKey.getCrypto();
 		this.store = new DHTRecordStore(this);
+		this.routingTable = new DHTRoutingTable(this);
 		// TODO DHT: (design) What about the bootstrap peer? Test vs. reality
 		read();
 	}
+	
+	protected DHTClient() {}
 	
 	public DHTClient listen(String address, int port) throws SocketException {
 		this.bindAddress = address == null ? "0.0.0.0" : address;

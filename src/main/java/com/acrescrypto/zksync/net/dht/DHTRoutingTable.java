@@ -26,6 +26,8 @@ public class DHTRoutingTable {
 		new Thread(()->freshenThread()).start();
 	}
 	
+	protected DHTRoutingTable() {}
+	
 	public void markFresh(DHTPeer peer) {
 		for(DHTBucket bucket : buckets) {
 			if(bucket.peers.contains(peer)) {

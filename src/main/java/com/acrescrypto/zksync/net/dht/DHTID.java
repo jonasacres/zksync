@@ -16,17 +16,16 @@ public class DHTID implements Comparable<DHTID>, Sendable {
 	}
 
 	public int order() { // position of MSB
-		int biggestSeen = -1;
 		for(int i = 0; i < rawId.length; i++) {
 			byte b = this.rawId[i];
-			for(int j = 0; j < 8; j++) {
+			for(int j = 7; j >= 0; j--) {
 				if(((b >> j) & 1) != 0) {
-					biggestSeen = 8*i+j;
+					return 8*(rawId.length-i-1) + j;
 				}
 			}
 		}
 		
-		return biggestSeen;
+		return -1;
 	}
 	
 	public DHTID xor(DHTID other) {
