@@ -77,6 +77,7 @@ public class DHTClient {
 		this.storage = blacklist.getFS();
 		this.crypto = storageKey.getCrypto();
 		this.store = new DHTRecordStore(this);
+		// TODO DHT: (design) What about the bootstrap peer? Test vs. reality
 		read();
 	}
 	
@@ -92,7 +93,7 @@ public class DHTClient {
 		return this;
 	}
 	
-	public void findPeers() {
+	public void findPeers() { // TODO DHT: (design) When does this get called?
 		new DHTSearchOperation(this, id, (peers)->{
 			// no need to do anything; just doing the search populates the routing table
 			if(peers == null || peers.isEmpty()) {
