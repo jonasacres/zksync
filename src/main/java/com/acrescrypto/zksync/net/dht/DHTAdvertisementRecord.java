@@ -19,7 +19,7 @@ public class DHTAdvertisementRecord extends DHTRecord {
 	
 	public DHTAdvertisementRecord(CryptoSupport crypto, ByteBuffer serialized, String address, int port) throws UnsupportedProtocolException {
 		this.crypto = crypto;
-		deserialize(serialized);
+		deserialize(serialized, address, port);
 	}
 	
 	public DHTAdvertisementRecord(CryptoSupport crypto, PeerAdvertisement ad) {
@@ -45,7 +45,9 @@ public class DHTAdvertisementRecord extends DHTRecord {
 	public void deserialize(ByteBuffer serialized, String address, int port) throws UnsupportedProtocolException {
 		byte type = serialized.get();
 		if(type != RECORD_TYPE_ADVERTISEMENT) throw new UnsupportedProtocolException();
+		if(serialized.remaining() < 2) throw new UnsupportedProtocolException();
 		int expectedLen = Util.unsignShort(serialized.getShort());
+		if(expectedLen > serialized.remaining()) throw new UnsupportedProtocolException();
 		int expectedPos = serialized.position() + expectedLen;
 		
 		try {
@@ -54,6 +56,11 @@ public class DHTAdvertisementRecord extends DHTRecord {
 			} else {
 				this.ad = PeerAdvertisement.deserializeRecordWithAddress(crypto, serialized, address, port);
 			}
+			
+			if(ad == null) {
+				throw new UnsupportedProtocolException();
+			}
+			
 			if(serialized.position() != expectedPos) {
 				serialized.position(expectedPos);
 				throw new UnsupportedProtocolException();

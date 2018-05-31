@@ -7,7 +7,8 @@ import org.junit.runners.Suite;
 @Suite.SuiteClasses({
 	DHTIDTest.class,
 	DHTBucketTest.class,
-	DHTPeerTest.class
+	DHTPeerTest.class,
+	DHTAdvertisementRecordTest.class
 })
 
 public class DHTTests {

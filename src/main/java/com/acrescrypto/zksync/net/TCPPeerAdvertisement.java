@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
@@ -127,14 +128,44 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 		buf.put(encryptedArchiveId);
 		return new String(Util.bytesToHex(buf.array())).hashCode();
 	}
+	
+	@Override
+	public boolean equals(Object o) {
+		if(!(o instanceof TCPPeerAdvertisement)) return false;
+		TCPPeerAdvertisement other = (TCPPeerAdvertisement) o;
+		
+		if(!host.equals(other.host)) return false;
+		if(port != other.port) return false;
+		if(version != other.version) return false;
+		if(!Arrays.equals(pubKey.getBytes(), other.pubKey.getBytes())) return false;
+		if(!Arrays.equals(encryptedArchiveId, other.encryptedArchiveId)) return false;
+		
+		return true;
+	}
 
 	@Override
 	public byte getType() {
 		return PeerAdvertisement.TYPE_TCP_PEER;
 	}
 	
+	public String getHost() {
+		return host;
+	}
+	
+	public int getPort() {
+		return port;
+	}
+	
 	public int getVersion() {
 		return version;
+	}
+	
+	public PublicDHKey getPubKey() {
+		return pubKey;
+	}
+	
+	public byte[] getEncryptedArchiveId() {
+		return encryptedArchiveId;
 	}
 	
 	public String toString() {
