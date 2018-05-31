@@ -23,6 +23,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
@@ -234,6 +235,12 @@ public class PeerConnectionTest {
 		}
 	}
 	
+	TCPPeerAdvertisement makeTCPPeer(int index) {
+		PublicDHKey pubKey = crypto.makePrivateDHKey().publicKey();
+		byte[] encryptedArchiveId = archive.getConfig().getEncryptedArchiveId(pubKey.getBytes());
+		return new TCPPeerAdvertisement(pubKey, "10.0.0."+index, 1000+index, encryptedArchiveId);
+	}
+	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
@@ -341,7 +348,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testAnnounceSelf() throws UnconnectableAdvertisementException, IOException {
-		PeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234);
+		PeerAdvertisement ad = makeTCPPeer(0);
 		conn.announceSelf(ad);
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_SELF_AD);
 		assertReceivedBytes(ByteBuffer.allocate(2).putShort((short) ad.serialize().length).array());
@@ -351,7 +358,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testAnnouncePeer() throws UnconnectableAdvertisementException, IOException {
-		PeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234);
+		PeerAdvertisement ad = makeTCPPeer(0);
 		conn.announcePeer(ad);
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_PEERS);
 		assertReceivedBytes(ByteBuffer.allocate(2).putShort((short) ad.serialize().length).array());
@@ -365,7 +372,7 @@ public class PeerConnectionTest {
 		LinkedList<PeerAdvertisement> ads = new LinkedList<PeerAdvertisement>();
 		
 		for(int i = 0; i < numPeers; i++) {
-			PeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "10.0.0."+i, 1000+i);
+			PeerAdvertisement ad = makeTCPPeer(i);
 			ads.add(ad);
 		}
 		
@@ -518,7 +525,7 @@ public class PeerConnectionTest {
 	public void testHandleAnnouncePeersCallSwarmAddPeerAdvertisement() throws UnconnectableAdvertisementException, ProtocolViolationException {
 		PeerAdvertisement[] ads = new PeerAdvertisement[16];
 		for(int i = 0; i < ads.length; i++) {
-			ads[i] = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "10.0.0."+i, 1000+i);
+			ads[i] = makeTCPPeer(i);
 		}
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_PEERS);
@@ -565,8 +572,8 @@ public class PeerConnectionTest {
 	@Test
 	public void testHandleAnnouncePeersToleratesIndecipherableAds() throws ProtocolViolationException, UnconnectableAdvertisementException {
 		PeerAdvertisement[] ads = new PeerAdvertisement[2];
-		ads[0] = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "10.0.0.0", 1000);
-		ads[1] = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "10.0.0.1", 1001);
+		ads[0] = makeTCPPeer(0);
+		ads[1] = makeTCPPeer(1);
 		
 		ByteBuffer buf = ByteBuffer.allocate(2);
 		buf.put((byte) -1);
@@ -589,7 +596,7 @@ public class PeerConnectionTest {
 	public void testHandleAnnouncePeersSkipsAdsForBlacklistedPeers() throws ProtocolViolationException, UnconnectableAdvertisementException, IOException {
 		TCPPeerAdvertisement[] ads = new TCPPeerAdvertisement[3];
 		for(int i = 0; i < ads.length; i++) {
-			ads[i] = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "10.0.0."+i, 1000+i).resolve();
+			ads[i] = makeTCPPeer(i).resolve();
 		}
 		
 		master.getBlacklist().add(ads[1].ipAddress, 60000);
@@ -610,7 +617,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleAnnounceSelfAdCallSwarmAddPeerAdvertisement() throws UnconnectableAdvertisementException, ProtocolViolationException {
-		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "10.0.0.1", 1000);
+		TCPPeerAdvertisement ad = makeTCPPeer(0);
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_SELF_AD);
 		msg.receivedData((byte) 0, ByteBuffer.allocate(2).putShort((short) ad.serialize().length).array());
@@ -668,7 +675,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleAnnounceSelfAdSkipsAdsForBlacklistedPeers() throws ProtocolViolationException, UnconnectableAdvertisementException, IOException {
-		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "10.0.0.1", 1000);
+		TCPPeerAdvertisement ad = makeTCPPeer(0);
 		master.getBlacklist().add("127.0.0.1", 60000);
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_SELF_AD);
@@ -682,7 +689,7 @@ public class PeerConnectionTest {
 	
 	@Test(expected=ProtocolViolationException.class)
 	public void testHandleAnnounceSelfAdDoesntAllowMultipleAds() throws UnconnectableAdvertisementException, ProtocolViolationException {
-		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "10.0.0.1", 1000);
+		TCPPeerAdvertisement ad = makeTCPPeer(0);
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_SELF_AD);
 		msg.receivedData((byte) 0, ByteBuffer.allocate(2).putShort((short) ad.serialize().length).array());

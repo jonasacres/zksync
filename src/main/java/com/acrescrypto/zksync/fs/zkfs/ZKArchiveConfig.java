@@ -310,6 +310,18 @@ public class ZKArchiveConfig {
 	public byte[] getArchiveId() {
 		return archiveId;
 	}
+	
+	public byte[] getEncryptedArchiveId(byte[] iv) {
+		Key key = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_AD_ARCHIVE_ID);
+
+		if(iv.length != key.getCrypto().symBlockSize()) {
+			ByteBuffer truncated = ByteBuffer.allocate(key.getCrypto().symBlockSize());
+			truncated.put(iv, 0, Math.min(iv.length, truncated.capacity()));
+			iv = truncated.array();
+		}
+		
+		return key.encryptCBC(iv, archiveId);
+	}
 
 	public int getPageSize() {
 		return pageSize;

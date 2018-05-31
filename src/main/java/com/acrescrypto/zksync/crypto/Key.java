@@ -23,6 +23,14 @@ public class Key {
 		return new Key(crypto, crypto.expand(raw, crypto.symKeyLength(), saltBuf.array(), "zksync".getBytes()));
 	}
 	
+	public byte[] encryptCBC(byte[] iv, byte[] plaintext) {
+		return crypto.encryptCBC(raw, iv, plaintext);
+	}
+	
+	public byte[] decryptCBC(byte[] iv, byte[] ciphertext) {
+		return crypto.decryptCBC(raw, iv, ciphertext);
+	}
+	
 	public byte[] encrypt(byte[] iv, byte[] plaintext, int padSize) {
 		return encrypt(iv, plaintext, 0, plaintext.length, padSize);
 	}

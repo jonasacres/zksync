@@ -48,7 +48,8 @@ public class TCPPeerAdvertisementListener {
 	}
 	
 	public TCPPeerAdvertisement localAd() throws UnconnectableAdvertisementException {
-		return new TCPPeerAdvertisement(dhPrivateKey.publicKey(), "localhost", listener.getPort(), version).resolve(); // real hostname filled in by peers; use localhost as safe stand-in
+		byte[] encryptedArchiveId = swarm.config.getEncryptedArchiveId(dhPrivateKey.publicKey().getBytes());
+		return new TCPPeerAdvertisement(dhPrivateKey.publicKey(), "localhost", listener.getPort(), encryptedArchiveId, version).resolve(); // real hostname filled in by peers; use localhost as safe stand-in
 	}
 	
 	public void announce() {
