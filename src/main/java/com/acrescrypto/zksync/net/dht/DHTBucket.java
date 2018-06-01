@@ -45,6 +45,7 @@ public class DHTBucket {
 	
 	// returns a random ID whose distance from the client ID is of the order of this bucket
 	public DHTID randomIdInRange() {
+		if(order == -1) return client.id;
 		byte[] random = client.id.serialize();
 		int pivotByteIndex = random.length - order/8 - 1;
 		int pivotBitOffset = order % 8;

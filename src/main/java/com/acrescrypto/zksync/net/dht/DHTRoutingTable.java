@@ -15,8 +15,12 @@ import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTRoutingTable {
+	public final static int DEFAULT_FRESHEN_INTERVAL_MS = 1000*60;
+	public static int FRESHEN_INTERVAL_MS = DEFAULT_FRESHEN_INTERVAL_MS;
+	
 	protected DHTClient client;
 	protected ArrayList<DHTBucket> buckets = new ArrayList<>();
+	protected boolean closed;
 	private ArrayList<DHTPeer> allPeers = new ArrayList<>();
 	private Logger logger = LoggerFactory.getLogger(DHTRoutingTable.class);
 
@@ -37,10 +41,14 @@ public class DHTRoutingTable {
 		}
 	}
 	
+	public void close() {
+		closed = true;
+	}
+	
 	public void reset() {
 		buckets.clear();
-		for(int i = 0; i <= client.idLength(); i++) {
-			buckets.add(new DHTBucket(client, i));
+		for(int i = 0; i <= 8*client.idLength(); i++) {
+			buckets.add(new DHTBucket(client, i-1));
 		}
 	}
 	
@@ -61,6 +69,11 @@ public class DHTRoutingTable {
 		if(bucket.hasCapacity()) {
 			bucket.add(peer);
 			allPeers.add(peer);
+			try {
+				write();
+			} catch (IOException exc) {
+				logger.error("Encountered exception writing routing table after receiving new peer", exc);
+			}
 		}
 	}
 	
@@ -69,9 +82,9 @@ public class DHTRoutingTable {
 	}
 	
 	protected void freshenThread() {
-		while(true) {
+		while(!closed) {
 			try {
-				Util.sleep(1000*60);
+				Util.sleep(FRESHEN_INTERVAL_MS);
 				freshen();
 			} catch(Exception exc) {
 				logger.error("DHT routing table freshen thread encountered exception", exc);
@@ -94,7 +107,7 @@ public class DHTRoutingTable {
 		MutableSecureFile file = MutableSecureFile.atPath(client.storage, path(), client.routingTableKey());
 		try {
 			deserialize(ByteBuffer.wrap(file.read()));
-		} catch(IOException exc) {
+		} catch(IOException|SecurityException exc) {
 		}
 	}
 	
