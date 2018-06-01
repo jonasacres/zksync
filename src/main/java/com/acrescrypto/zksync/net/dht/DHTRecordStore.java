@@ -42,16 +42,21 @@ public class DHTRecordStore {
 			byte[] recordSer = record.serialize();
 			ByteBuffer buf = ByteBuffer.allocate(8+2+recordSer.length);
 			buf.putLong(expirationTime);
+			buf.putShort((short) recordSer.length);
 			buf.put(recordSer);
 			return buf.array();
 		}
 		
 		public void deserialize(ByteBuffer serialized) throws UnsupportedProtocolException {
 			this.expirationTime = serialized.getLong();
+			int expectedPos = serialized.getShort() + serialized.position();
+			
 			try {
-				record = DHTRecord.deserializeRecord(client.crypto, serialized);
+				record = client.deserializeRecord(serialized);
+				if(serialized.position() != expectedPos) throw new UnsupportedProtocolException();
 			} catch (UnsupportedProtocolException exc) {
 				logger.error("Record store contained unsupported record", record);
+				serialized.position(expectedPos);
 				throw exc;
 			}
 		}
@@ -70,7 +75,7 @@ public class DHTRecordStore {
 	}
 	
 	protected DHTClient client;
-	protected HashMap<DHTID,ArrayList<StoreEntry>> entriesById;
+	protected HashMap<DHTID,ArrayList<StoreEntry>> entriesById = new HashMap<>();
 	private Logger logger = LoggerFactory.getLogger(DHTRecordStore.class);
 
 	public DHTRecordStore(DHTClient client) {
@@ -83,8 +88,19 @@ public class DHTRecordStore {
 		new Thread(()->addRecordIfReachable(id, record)).start();
 	}
 	
+	public Collection<DHTRecord> recordsForId(DHTID id) {
+		LinkedList<DHTRecord> records = new LinkedList<>();
+		Collection<StoreEntry> entries = entriesById.getOrDefault(id, new ArrayList<>(0));
+		
+		for(StoreEntry entry : entries) {
+			records.add(entry.record);
+		}
+		
+		return records;
+	}
+
 	@SuppressWarnings("unlikely-arg-type")
-	protected boolean hasRoomForRecord(DHTID id, DHTRecord record) throws IOException {
+	protected synchronized boolean hasRoomForRecord(DHTID id, DHTRecord record) throws IOException {
 		if(!entriesById.containsKey(id)) {
 			if(entriesById.size() >= MAX_IDS) prune();
 			if(entriesById.size() >= MAX_IDS) return false;
@@ -92,7 +108,9 @@ public class DHTRecordStore {
 		}
 		
 		ArrayList<StoreEntry> entriesForId = entriesById.get(id);
-		if(entriesForId.contains(record)) return false;
+		for(StoreEntry entry : entriesForId) {
+			if(entry.equals(record)) return false;
+		}
 		if(entriesForId.size() >= MAX_RECORDS_PER_ID) prune();
 		if(entriesForId.size() >= MAX_RECORDS_PER_ID) return false;
 		return true;
@@ -101,38 +119,30 @@ public class DHTRecordStore {
 	protected void addRecordIfReachable(DHTID id, DHTRecord record) {
 		try {
 			if(!record.isReachable()) return;
-			if(!entriesById.containsKey(id)) {
-				if(entriesById.size() >= MAX_IDS) prune();
-				if(entriesById.size() >= MAX_IDS) return;
-				entriesById.put(id, new ArrayList<StoreEntry>(MAX_RECORDS_PER_ID));
-			}
 			
-			ArrayList<StoreEntry> entriesForId = entriesById.get(id);
-			if(entriesForId.size() >= MAX_RECORDS_PER_ID) prune();
-			if(entriesForId.size() >= MAX_RECORDS_PER_ID) return;
-			entriesForId.add(new StoreEntry(record));
-			write();
+			synchronized(this) {
+				if(!entriesById.containsKey(id)) {
+					if(entriesById.size() >= MAX_IDS) prune();
+					if(entriesById.size() >= MAX_IDS) return;
+					entriesById.put(id, new ArrayList<StoreEntry>(MAX_RECORDS_PER_ID));
+				}
+				
+				ArrayList<StoreEntry> entriesForId = entriesById.get(id);
+				if(entriesForId.size() >= MAX_RECORDS_PER_ID) prune();
+				if(entriesForId.size() >= MAX_RECORDS_PER_ID) return;
+				entriesForId.add(new StoreEntry(record));
+				write();
+			}
 		} catch(IOException exc) {
 			logger.error("Caught exception adding record to record store", exc);
 		}
-	}
-	
-	public Collection<DHTRecord> recordsForId(DHTID id) {
-		LinkedList<DHTRecord> records = new LinkedList<>();
-		Collection<StoreEntry> entries = entriesById.getOrDefault(id, null);
-		
-		for(StoreEntry entry : entries) {
-			records.add(entry.record);
-		}
-		
-		return records;
 	}
 	
 	protected String path() {
 		return "dht-record-store";
 	}
 	
-	protected void write() throws IOException {
+	protected synchronized void write() throws IOException {
 		MutableSecureFile file = MutableSecureFile.atPath(client.storage, path(), client.recordStoreKey());
 		file.write(serialize(), 0);
 	}
@@ -141,7 +151,7 @@ public class DHTRecordStore {
 		MutableSecureFile file = MutableSecureFile.atPath(client.storage, path(), client.recordStoreKey());
 		try {
 			deserialize(ByteBuffer.wrap(file.read()));
-		} catch(IOException exc) {
+		} catch(IOException|SecurityException exc) {
 			entriesById.clear();
 		}
 		
@@ -151,7 +161,7 @@ public class DHTRecordStore {
 		}
 	}
 	
-	protected byte[] serialize() {
+	protected synchronized byte[] serialize() {
 		LinkedList<byte[]> serializedPieces = new LinkedList<>();
 		int totalLen = 0;
 		
@@ -176,7 +186,7 @@ public class DHTRecordStore {
 		return buf.array();
 	}
 	
-	protected void deserialize(ByteBuffer serialized) throws EINVALException {
+	protected synchronized void deserialize(ByteBuffer serialized) throws EINVALException {
 		entriesById.clear();
 		try {
 			int numIds = serialized.getInt();
@@ -201,7 +211,7 @@ public class DHTRecordStore {
 		}
 	}
 	
-	protected void prune() throws IOException {
+	protected synchronized void prune() throws IOException {
 		boolean dirty = false;
 		LinkedList<DHTID> removeLists = new LinkedList<DHTID>();
 		for(DHTID id : entriesById.keySet()) {
