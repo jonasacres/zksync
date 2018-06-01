@@ -8,6 +8,7 @@ public class DHTMessageStub {
 	DHTPeer peer;
 	DHTMessageCallback callback;
 	SnoozeThread expirationMonitor;
+	
 	byte cmd;
 	int msgId;
 	int responsesReceived;
@@ -16,7 +17,7 @@ public class DHTMessageStub {
 		this.peer = msg.peer;
 		this.cmd = msg.cmd;
 		this.msgId = msg.msgId;
-		this.expirationMonitor = new SnoozeThread(5000, false, ()->{peer.client.missedResponse(this);});
+		this.expirationMonitor = new SnoozeThread(DHTClient.MESSAGE_EXPIRATION_TIME_MS, false, ()->{peer.client.missedResponse(this);});
 		this.callback = msg.callback;
 	}
 	

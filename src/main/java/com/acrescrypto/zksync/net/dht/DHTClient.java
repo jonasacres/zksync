@@ -32,6 +32,9 @@ public class DHTClient {
 	public final static int MAX_DATAGRAM_SIZE = 508; // 576 byte (guaranteed by RFC 791) - 60 byte IP header - 8 byte UDP header
 	public final static int LOOKUP_RESULT_MAX_WAIT_TIME_MS = 500; // consider a lookup finished if we've received nothing in this many milliseconds
 	
+	public final static int DEFAULT_MESSAGE_EXPIRATION_TIME_MS = 5000;
+	public static int MESSAGE_EXPIRATION_TIME_MS = DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
+	
 	public final static int KEY_INDEX_CLIENT_INFO = 0;
 	public final static int KEY_INDEX_ROUTING_TABLE = 1;
 	public final static int KEY_INDEX_RECORD_STORE = 2;

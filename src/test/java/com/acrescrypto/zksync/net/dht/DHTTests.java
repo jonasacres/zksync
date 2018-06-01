@@ -10,7 +10,8 @@ import org.junit.runners.Suite;
 	DHTPeerTest.class,
 	DHTAdvertisementRecordTest.class,
 	DHTRecordStoreTest.class,
-	DHTMessageTest.class
+	DHTMessageTest.class,
+	DHTMessageStubTest.class
 })
 
 public class DHTTests {
