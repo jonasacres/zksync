@@ -4,12 +4,14 @@ import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.utility.Util;
 
 public class DHTMessage {
 	public final static byte CMD_PING = 0;
@@ -53,7 +55,7 @@ public class DHTMessage {
 		this.peer = recipient;
 		this.cmd = cmd;
 		this.flags = FLAG_RESPONSE;
-		this.items = items;
+		this.items = items != null ? new ArrayList<>(items) : new ArrayList<>(0);
 		this.msgId = msgId;
 	}
 	
@@ -66,13 +68,20 @@ public class DHTMessage {
 	}
 	
 	public void send() {
-		ByteBuffer sendBuf = ByteBuffer.allocate(maxPayloadSize());
-		int numPackets = 0;
 		peer.client.watchForResponse(this);
 		
-		if(items != null) {
-			int totalLen = 0;
-			
+		if(isResponse()) {
+			sendItems();
+		} else {
+			sendPayload();
+		}
+	}
+	
+	protected void sendItems() {
+		int totalLen = 0, numPackets = 1;
+		ByteBuffer sendBuf = ByteBuffer.allocate(maxPayloadSize());
+
+		if(items != null && !items.isEmpty()) {
 			for(Sendable item : items) {
 				totalLen += item.serialize().length + 2;
 			}
@@ -84,6 +93,8 @@ public class DHTMessage {
 				int itemLen = 2 + serialized.length;
 				if(sendBuf.capacity() < itemLen) continue;
 				if(sendBuf.remaining() < itemLen) {
+					sendBuf.limit(sendBuf.position());
+					sendBuf.position(0);
 					sendDatagram(numPackets, sendBuf);
 					sendBuf.clear();
 				}
@@ -92,8 +103,14 @@ public class DHTMessage {
 				sendBuf.put(serialized);
 			}
 		}
-		
+
+		sendBuf.limit(sendBuf.position());
+		sendBuf.position(0);
 		sendDatagram(numPackets, sendBuf);
+	}
+	
+	protected void sendPayload() {
+		sendDatagram(1, ByteBuffer.wrap(payload));
 	}
 	
 	protected void sendDatagram(int numPackets, ByteBuffer sendBuf) {
@@ -114,7 +131,7 @@ public class DHTMessage {
 		byte[] symKeyRaw = peer.client.crypto.makeSymmetricKey(ephKey.sharedSecret(peer.key));
 		Key symKey = new Key(peer.client.crypto, symKeyRaw);
 
-		ByteBuffer plaintext = ByteBuffer.allocate(headerSize() + payload.length);
+		ByteBuffer plaintext = ByteBuffer.allocate(headerSize() + sendBuf.remaining());
 		plaintext.put(peer.client.key.publicKey().getBytes());
 		plaintext.putInt(msgId);
 		plaintext.put(cmd);
@@ -125,7 +142,7 @@ public class DHTMessage {
 		byte[] ciphertext = symKey.encrypt(new byte[peer.client.crypto.symIvLength()], plaintext.array(), 0);
 		
 		ByteBuffer serialized = ByteBuffer.allocate(ephKey.getBytes().length + ciphertext.length);
-		serialized.put(ephKey.getBytes());
+		serialized.put(ephKey.publicKey().getBytes());
 		serialized.put(ciphertext);
 		return serialized.array();
 	}
@@ -140,11 +157,14 @@ public class DHTMessage {
 		byte[] keyMaterial = client.key.sharedSecret(pubKey);
 		Key key = new Key(client.crypto, client.crypto.makeSymmetricKey(keyMaterial));
 		
-		byte[] ciphertext = new byte[serialized.remaining()];
-		byte[] plaintext = key.decrypt(new byte[client.crypto.symIvLength()], ciphertext);
-		serialized = ByteBuffer.wrap(plaintext);
+		try {
+			byte[] plaintext = key.decrypt(new byte[client.crypto.symIvLength()], serialized.array(), serialized.position(), serialized.remaining());
+			serialized = ByteBuffer.wrap(plaintext);
+		} catch(SecurityException exc) {
+			throw new ProtocolViolationException();
+		}
 		
-		assertState(serialized.remaining() >= keyBytes.length + 4 + 1 + 1);
+		assertState(serialized.remaining() >= keyBytes.length + 4 + 1 + 1 + 1);
 		serialized.get(keyBytes);
 		
 		this.peer = new DHTPeer(client, senderAddress, senderPort, keyBytes);
