@@ -421,6 +421,7 @@ public class PageQueueTest {
 		/* TODO: Need to do some math to figure out what an acceptable test should be here and on similar tests.
 		   This gets intermittent failures. Does that mean it's broken? Without statistical context, no idea.
 		   */
+		// TODO DHT: (intermittent failure) 6/1/18 Linux 82f4d047ec6e6be8889faeab774d48497da986ae, AssertionError on following line
 		assertTrue(matches < numChunks/2);
 	}
 	
@@ -729,6 +730,7 @@ public class PageQueueTest {
 		queue.addPageTag(0, pageTag);
 		queue.addRevisionTag(1, revTag);
 		
+		// TODO DHT: (intermittent failure) 6/1/18 Linux 82f4d047ec6e6be8889faeab774d48497da986ae, AssertionError on following line
 		assertFalse(queue.expectTagNext(pageTag));
 		queue.nextChunk();
 		assertFalse(queue.expectTagNext(pageTag));

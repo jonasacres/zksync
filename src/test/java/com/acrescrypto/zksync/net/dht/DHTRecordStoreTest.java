@@ -269,6 +269,7 @@ public class DHTRecordStoreTest {
 		store.addRecordForId(id, new DummyRecord(0));
 		Util.sleep(5);
 		
+		// TODO DHT: (intermittent failure) 6/1/18 Linux 82f4d047ec6e6be8889faeab774d48497da986ae, ENOENTException dht-record-store on following line 
 		byte[] data = client.storage.read(store.path());
 		data[9] ^= 0x20;
 		client.storage.write(store.path(), data);
