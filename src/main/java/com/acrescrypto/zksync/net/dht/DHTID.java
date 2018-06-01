@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.PublicDHKey;
+import com.acrescrypto.zksync.utility.Util;
 
 public class DHTID implements Comparable<DHTID>, Sendable {
 	protected byte[] rawId;
@@ -47,8 +48,9 @@ public class DHTID implements Comparable<DHTID>, Sendable {
 	public int compareTo(DHTID other) {
 		assert(other.rawId.length == this.rawId.length);
 		for(int i = 0; i < rawId.length; i++) {
-			if(rawId[i] < other.rawId[i]) return -1;
-			if(rawId[i] > other.rawId[i]) return 1;
+			int a = Util.unsignByte(rawId[i]), b = Util.unsignByte(other.rawId[i]);
+			if(a < b) return -1;
+			if(a > b) return 1;
 		}
 		
 		return 0;

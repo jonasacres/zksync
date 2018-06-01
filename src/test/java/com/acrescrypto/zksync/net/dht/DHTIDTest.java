@@ -58,10 +58,11 @@ public class DHTIDTest {
 	public void testCompareTo() {
 		String[][] cases = {
 				{ "0001", "0000" },
+				{ "00ff", "0000" },
 				{ "0010", "000f" },
 				{ "0100", "00ff" },
 				
-				{ "0001", "0000" },
+				{ "ff00", "0000" },
 				{ "001f", "0000" },
 				{ "01ff", "0000" },
 
