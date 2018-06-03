@@ -77,15 +77,11 @@ public class DHTMessage {
 	}
 	
 	protected void sendItems() {
-		int totalLen = 0, numPackets = 1;
+		int numPackets = 1;
 		ByteBuffer sendBuf = ByteBuffer.allocate(maxPayloadSize());
 
 		if(items != null && !items.isEmpty()) {
-			for(Sendable item : items) {
-				totalLen += item.serialize().length + 2;
-			}
-			
-			numPackets = (int) Math.ceil(((double) totalLen)/maxPayloadSize());
+			numPackets = numPacketsNeeded();
 			
 			for(Sendable item : items) {
 				byte[] serialized = item.serialize();
@@ -102,10 +98,24 @@ public class DHTMessage {
 				sendBuf.put(serialized);
 			}
 		}
-
+		
 		sendBuf.limit(sendBuf.position());
 		sendBuf.position(0);
 		sendDatagram(numPackets, sendBuf);
+	}
+	
+	protected int numPacketsNeeded() {
+		int numNeeded = 0, bytesRemaining = 0;
+		for(Sendable item : items) {
+			int len = item.serialize().length + 2;
+			if(len > bytesRemaining) {
+				numNeeded++;
+				bytesRemaining = maxPayloadSize();
+			}
+			bytesRemaining -= len;
+		}
+		
+		return numNeeded;
 	}
 	
 	protected void sendPayload() {

@@ -30,7 +30,10 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class DHTClient {
 	public final static int MAX_DATAGRAM_SIZE = 508; // 576 byte (guaranteed by RFC 791) - 60 byte IP header - 8 byte UDP header
-	public final static int LOOKUP_RESULT_MAX_WAIT_TIME_MS = 500; // consider a lookup finished if we've received nothing in this many milliseconds
+	
+	public final static int DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS = 500;
+	public static int LOOKUP_RESULT_MAX_WAIT_TIME_MS = DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS; // consider a lookup finished if we've received nothing in this many milliseconds
+	
 	
 	public final static int DEFAULT_MESSAGE_EXPIRATION_TIME_MS = 5000;
 	public static int MESSAGE_EXPIRATION_TIME_MS = DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
@@ -68,6 +71,8 @@ public class DHTClient {
 	PrivateDHKey key;
 	Key storageKey, tagKey;
 	String bindAddress;
+	Thread socketListenerThread;
+	boolean closed;
 	DHTStatusCallback statusCallback;
 	int bindPort;
 	int lastStatus = STATUS_OFFLINE;
@@ -80,10 +85,13 @@ public class DHTClient {
 		this.storageKey = storageKey;
 		this.storage = blacklist.getFS();
 		this.crypto = storageKey.getCrypto();
+		this.pendingRequests = new ArrayList<>();
+		
+		read();
+
 		this.store = new DHTRecordStore(this);
 		this.routingTable = new DHTRoutingTable(this);
 		// TODO DHT: (design) What about the bootstrap peer? Test vs. reality
-		read();
 	}
 	
 	protected DHTClient() {}
@@ -92,6 +100,12 @@ public class DHTClient {
 		this.bindAddress = address == null ? "0.0.0.0" : address;
 		this.bindPort = port;
 		openSocket();
+
+		if(socketListenerThread == null || !socketListenerThread.isAlive()) {
+			socketListenerThread = new Thread(()->socketListener());
+			socketListenerThread.start();
+		}
+		
 		return this;
 	}
 	
@@ -106,11 +120,15 @@ public class DHTClient {
 			if(peers == null || peers.isEmpty()) {
 				updateStatus(STATUS_QUESTIONABLE);
 			}
-		});
+		}).run();
 	}
 	
 	public void lookup(DHTID searchId, LookupCallback callback) {
 		new DHTSearchOperation(this, searchId, (peers)->{
+			if(peers == null || peers.isEmpty()) {
+				updateStatus(STATUS_QUESTIONABLE);
+			}
+			
 			SnoozeThread progressMonitor = new SnoozeThread(LOOKUP_RESULT_MAX_WAIT_TIME_MS, true, ()->{
 				callback.receivedRecord(null);
 			});
@@ -136,7 +154,23 @@ public class DHTClient {
 					}
 				});
 			}
-		});
+		}).run();
+	}
+	
+	public void addPeer(DHTPeer peer) {
+		routingTable.suggestPeer(peer);
+	}
+	
+	public void addRecord(DHTID searchId, DHTRecord record) {
+		new DHTSearchOperation(this, searchId, (peers)->{
+			if(peers == null || peers.isEmpty()) {
+				updateStatus(STATUS_QUESTIONABLE);
+			}
+			
+			for(DHTPeer peer : peers) {
+				peer.addRecord(searchId, record);
+			}
+		}).run();
 	}
 	
 	public int authTagLength() {
@@ -147,7 +181,15 @@ public class DHTClient {
 		return crypto.hashLength();
 	}
 	
+	public void close() {
+		closed = true;
+		if(socket != null) {
+			socket.close();
+		}
+	}
+	
 	protected void openSocket() throws SocketException {
+		if(closed) return;
 		InetAddress addr;
 		try {
 			addr = InetAddress.getByName(bindAddress);
@@ -171,14 +213,20 @@ public class DHTClient {
 	}
 	
 	protected void socketListener() {
-		while(true) {
+		while(!closed) {
 			try {
+				if(socket == null) {
+					Util.sleep(10);
+					continue;
+				}
+				
 				byte[] receiveData = new byte[MAX_DATAGRAM_SIZE];
 				DatagramPacket packet = new DatagramPacket(receiveData, receiveData.length);
 				socket.receive(packet);
 				ByteBuffer buf = ByteBuffer.wrap(packet.getData(), 0, packet.getLength());
 				processMessage(packet.getAddress().getHostAddress(), packet.getPort(), buf);
 			} catch(IOException exc) {
+				if(closed) return;
 				logger.error("DHT socket listener thread encountered IOException", exc);
 				Util.sleep(1000); // add in a delay to prevent a fail loop from gobbling CPU / spamming log
 				try {
@@ -210,6 +258,7 @@ public class DHTClient {
 		for(int i = 0; i < 2; i++) {
 			try {
 				socket.send(packet);
+				break;
 			} catch (IOException exc) {
 				if(i == 0) {
 					logger.warn("Encountered exception sending on DHT socket; retrying", exc);
@@ -234,12 +283,12 @@ public class DHTClient {
 				logger.info("Ignoring message from blacklisted peer " + senderAddress);
 				return;
 			}
-
+			
 			routingTable.suggestPeer(message.peer);
 			
 			if(message.isResponse()) {
 				processResponse(message);
-			} else {	
+			} else {
 				processRequest(message);
 			}
 		} catch(ProtocolViolationException exc) {
@@ -257,7 +306,7 @@ public class DHTClient {
 	protected void processResponse(DHTMessage message) throws ProtocolViolationException {
 		if(lastStatus < STATUS_CAN_SEND) updateStatus(STATUS_CAN_SEND);
 		
-		message.peer.acknowledgedMessage();
+		message.peer.acknowledgedMessage(); // TODO DHT: (review) How can we be sure this is the same instance of peer as in the routing table?
 		for(DHTMessageStub request : pendingRequests) {
 			if(request.dispatchResponseIfMatches(message)) {
 				routingTable.markFresh(message.peer);
@@ -297,36 +346,14 @@ public class DHTClient {
 	protected void processRequestFindNode(DHTMessage message) throws ProtocolViolationException {
 		assertRequiredState(message.payload.length == idLength());
 		DHTID id = new DHTID(message.payload);
-		DHTID greatestDistance = null;
-		DHTPeer mostDistantPeer = null;
-		ArrayList<DHTPeer> closest = new ArrayList<>(DHTBucket.MAX_BUCKET_CAPACITY);
 		
-		for(DHTPeer peer : routingTable.allPeers()) {
-			DHTID distance = peer.id.xor(id);
-			if(greatestDistance == null || distance.compareTo(greatestDistance) < 0) {
-				if(mostDistantPeer != null) {
-					closest.remove(mostDistantPeer);
-				}
-				
-				closest.add(peer);
-				greatestDistance = distance;
-				for(DHTPeer listed : closest) {
-					DHTID listedDistance = listed.id.xor(id);
-					if(listedDistance.compareTo(greatestDistance) > 0) {
-						greatestDistance = listedDistance;
-						mostDistantPeer = listed;
-					}
-				}
-			}
-		}
-		
-		message.makeResponse(closest);
+		message.makeResponse(routingTable.closestPeers(id, DHTSearchOperation.MAX_RESULTS)).send();
 	}
 	
 	protected void processRequestGetRecords(DHTMessage message) throws ProtocolViolationException {
 		assertRequiredState(message.payload.length == idLength());
 		DHTID id = new DHTID(message.payload);
-		message.makeResponse(store.recordsForId(id));
+		message.makeResponse(store.recordsForId(id)).send();
 	}
 	
 	protected void processRequestAddRecord(DHTMessage message) throws ProtocolViolationException, UnsupportedProtocolException {
@@ -447,6 +474,7 @@ public class DHTClient {
 			
 			key = crypto.makePrivateDHKeyPair(privKeyRaw, pubKeyRaw);
 			tagKey = new Key(crypto, tagKeyRaw);
+			id = new DHTID(key.publicKey());
 		} catch(BufferUnderflowException exc) {
 			throw new EINVALException(path());
 		}

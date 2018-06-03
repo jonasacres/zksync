@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 
-import com.acrescrypto.zksync.utility.Util;
-
 public class DHTSearchOperation {
 	interface SearchOperationCallback {
 		void searchOperationFinished(Collection<DHTPeer> closestPeers);
@@ -42,6 +40,7 @@ public class DHTSearchOperation {
 	}
 	
 	protected void addIfBetter(DHTPeer peer) {
+		if(closestPeers.contains(peer)) return;
 		DHTID distance = peer.id.xor(searchId);
 		
 		if(closestPeers.size() >= MAX_RESULTS) {
@@ -73,18 +72,19 @@ public class DHTSearchOperation {
 	}
 	
 	protected synchronized void handleFindNodeResults(Collection<DHTPeer> peers, boolean isFinal) {
-		if(isFinal) finishedQuery();
-		if(peers == null) return;
-		
-		for(DHTPeer peer : peers) {
-			addIfBetter(peer);
-		}
-		
-		for(DHTPeer peer : closestPeers) {
-			if(!queried.contains(peer)) {
-				requestNodes(peer);
+		if(peers != null) {
+			for(DHTPeer peer : peers) {
+				addIfBetter(peer);
+			}
+			
+			for(DHTPeer peer : closestPeers) {
+				if(!queried.contains(peer)) {
+					requestNodes(peer);
+				}
 			}
 		}
+		
+		if(isFinal) finishedQuery();
 	}
 	
 	protected synchronized void finishedQuery() {

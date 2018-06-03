@@ -30,7 +30,7 @@ public class SnoozeThread {
 	
 	public synchronized boolean snooze() {
 		if(cancelled) return false;
-		this.expiration = System.currentTimeMillis() + expiration;
+		this.expiration = System.currentTimeMillis() + delayMs;
 		return true;
 	}
 	

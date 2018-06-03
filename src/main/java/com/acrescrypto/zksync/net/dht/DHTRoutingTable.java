@@ -47,6 +47,7 @@ public class DHTRoutingTable {
 	
 	public void reset() {
 		buckets.clear();
+		allPeers.clear();
 		for(int i = 0; i <= 8*client.idLength(); i++) {
 			buckets.add(new DHTBucket(client, i-1));
 		}
@@ -57,6 +58,33 @@ public class DHTRoutingTable {
 			if(!bucket.needsFreshening()) continue;
 			client.lookup(bucket.randomIdInRange(), (results)->{}); // can ignore results; just doing search freshens routing table
 		}
+	}
+	
+	public Collection<DHTPeer> closestPeers(DHTID id, int numPeers) {
+		DHTID greatestDistance = null;
+		DHTPeer mostDistantPeer = null;
+		ArrayList<DHTPeer> closest = new ArrayList<>(numPeers);
+		
+		for(DHTPeer peer : allPeers()) {
+			DHTID distance = peer.id.xor(id);
+			if(closest.size() < numPeers || distance.compareTo(greatestDistance) <= 0) {
+				if(closest.size() >= numPeers) {
+					closest.remove(mostDistantPeer);
+				}
+				
+				closest.add(peer);
+				greatestDistance = null;
+				for(DHTPeer listed : closest) {
+					DHTID listedDistance = listed.id.xor(id);
+					if(greatestDistance == null || listedDistance.compareTo(greatestDistance) > 0) {
+						greatestDistance = listedDistance;
+						mostDistantPeer = listed;
+					}
+				}
+			}
+		}
+		
+		return closest;
 	}
 	
 	public Collection<DHTPeer> allPeers() {

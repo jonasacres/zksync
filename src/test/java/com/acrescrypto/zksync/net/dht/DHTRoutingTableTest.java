@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedList;
 
 import org.junit.After;
@@ -151,6 +152,50 @@ public class DHTRoutingTableTest {
 		for(int i = 0; i <= 8*client.idLength(); i++) {
 			assertTrue(table.buckets.get(i).peers.isEmpty());
 		}
+	}
+	
+	@Test
+	public void testClosestPeersReturnsPeersClosestToId() {
+		for(int i = 0; i < 1000; i++) {
+			table.suggestPeer(makeTestPeer(i));
+		}
+		
+		int numPeers = DHTSearchOperation.MAX_RESULTS;
+		DHTID id = new DHTID(client.crypto.rng(client.idLength()));
+		Collection<DHTPeer> closest = table.closestPeers(id, numPeers);
+		
+		assertEquals(numPeers, closest.size());
+		
+		DHTID mostDistant = null;
+		for(DHTPeer peer : closest) {
+			DHTID distance = peer.id.xor(id);
+			if(mostDistant == null || distance.compareTo(mostDistant) > 0) {
+				mostDistant = distance;
+			}
+		}
+		
+		for(DHTPeer peer : table.allPeers()) {
+			if(closest.contains(peer)) continue;
+			DHTID distance = peer.id.xor(id);
+			assertTrue(distance.compareTo(mostDistant) >= 0);
+		}
+	}
+	
+	@Test
+	public void testClosestPeersReturnsEmptyListIfTableEmpty() {
+		DHTID id = new DHTID(client.crypto.rng(client.idLength()));
+		assertEquals(0, table.closestPeers(id, 1).size());
+	}
+	
+	@Test
+	public void testClosestPeersReturnsPartialListIfTableIsSmallerThanRequestedSize() {
+		int numPeers = 16;
+		for(int i = 0; i < numPeers-1; i++) {
+			table.suggestPeer(makeTestPeer(table.buckets.get(i).randomIdInRange()));
+		}
+		
+		DHTID id = new DHTID(client.crypto.rng(client.idLength()));
+		assertEquals(numPeers-1, table.closestPeers(id, numPeers).size());
 	}
 	
 	@Test

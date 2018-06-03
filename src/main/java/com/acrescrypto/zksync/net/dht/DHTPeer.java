@@ -98,7 +98,8 @@ public class DHTPeer implements Sendable {
 				try {
 					receivedRecords.add(client.deserializeRecord(buf));
 					if(expectedPos != buf.position()) throw new ProtocolViolationException();
-				} catch (UnsupportedProtocolException e) {
+				} catch (UnsupportedProtocolException exc) {
+					exc.printStackTrace();
 					buf.position(expectedPos);
 				}
 			}

@@ -12,7 +12,8 @@ import org.junit.runners.Suite;
 	DHTRecordStoreTest.class,
 	DHTMessageTest.class,
 	DHTMessageStubTest.class,
-	DHTSearchOperationTest.class
+	DHTSearchOperationTest.class,
+	DHTClientTest.class
 })
 
 public class DHTTests {
