@@ -29,6 +29,7 @@ import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTClient {
+	public final static int AUTH_TAG_SIZE = 4;
 	public final static int MAX_DATAGRAM_SIZE = 508; // 576 byte (guaranteed by RFC 791) - 60 byte IP header - 8 byte UDP header
 	
 	public final static int DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS = 500;
@@ -173,10 +174,6 @@ public class DHTClient {
 		}).run();
 	}
 	
-	public int authTagLength() {
-		return crypto.hashLength();
-	}
-	
 	public int idLength() {
 		return crypto.hashLength();
 	}
@@ -213,12 +210,16 @@ public class DHTClient {
 	}
 	
 	protected void socketListener() {
+		int lastPort = -1;
+		
 		while(!closed) {
 			try {
 				if(socket == null) {
 					Util.sleep(10);
 					continue;
 				}
+				
+				lastPort = socket.getLocalPort();
 				
 				byte[] receiveData = new byte[MAX_DATAGRAM_SIZE];
 				DatagramPacket packet = new DatagramPacket(receiveData, receiveData.length);
@@ -227,7 +228,12 @@ public class DHTClient {
 				processMessage(packet.getAddress().getHostAddress(), packet.getPort(), buf);
 			} catch(IOException exc) {
 				if(closed) return;
-				logger.error("DHT socket listener thread encountered IOException", exc);
+				if(socket.getLocalPort() == lastPort && !socket.isClosed()) {
+					logger.error("DHT socket listener thread encountered IOException", exc);
+				} else {
+					logger.warn("DHT socket listener thread encountered IOException", exc);
+				}
+				
 				Util.sleep(1000); // add in a delay to prevent a fail loop from gobbling CPU / spamming log
 				try {
 					openSocket();
@@ -284,8 +290,6 @@ public class DHTClient {
 				return;
 			}
 			
-			routingTable.suggestPeer(message.peer);
-			
 			if(message.isResponse()) {
 				processResponse(message);
 			} else {
@@ -307,6 +311,8 @@ public class DHTClient {
 		if(lastStatus < STATUS_CAN_SEND) updateStatus(STATUS_CAN_SEND);
 		
 		message.peer.acknowledgedMessage(); // TODO DHT: (review) How can we be sure this is the same instance of peer as in the routing table?
+		message.peer.remoteAuthTag = message.authTag;
+		
 		for(DHTMessageStub request : pendingRequests) {
 			if(request.dispatchResponseIfMatches(message)) {
 				routingTable.markFresh(message.peer);
@@ -359,10 +365,7 @@ public class DHTClient {
 	protected void processRequestAddRecord(DHTMessage message) throws ProtocolViolationException, UnsupportedProtocolException {
 		ByteBuffer buf = ByteBuffer.wrap(message.payload);
 		
-		byte[] authTag = new byte[authTagLength()];
-		assertRequiredState(buf.remaining() > authTag.length);
-		buf.get(authTag);
-		assertRequiredState(validAuthTag(message.peer, authTag));
+		assertRequiredState(validAuthTag(message.peer, message.authTag));
 		
 		byte[] idRaw = new byte[idLength()];
 		assertRequiredState(buf.remaining() > idRaw.length);
@@ -415,8 +418,7 @@ public class DHTClient {
 	
 	protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, DHTRecord record, DHTMessageCallback callback) {
 		byte[] serializedRecord = record.serialize();
-		ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + serializedRecord.length + recipient.remoteAuthTag.length);
-		buf.put(recipient.remoteAuthTag);
+		ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + serializedRecord.length);
 		buf.put(id.rawId);
 		buf.put(record.serialize());
 		return new DHTMessage(recipient, DHTMessage.CMD_ADD_RECORD, buf.array(), callback);

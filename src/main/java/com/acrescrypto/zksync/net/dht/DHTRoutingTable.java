@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
+import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -103,6 +104,16 @@ public class DHTRoutingTable {
 				logger.error("Encountered exception writing routing table after receiving new peer", exc);
 			}
 		}
+	}
+	
+	public DHTPeer peerForMessage(String address, int port, PublicDHKey pubKey) {
+		for(DHTPeer peer : allPeers) {
+			if(peer.matches(address, port, pubKey)) return peer;
+		}
+		
+		DHTPeer newPeer = new DHTPeer(client, address, port, pubKey.getBytes());
+		suggestPeer(newPeer);
+		return newPeer;
 	}
 	
 	protected void removedPeer(DHTPeer peer) {

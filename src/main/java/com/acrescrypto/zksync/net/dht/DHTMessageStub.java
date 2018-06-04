@@ -30,7 +30,10 @@ public class DHTMessageStub {
 			msg.isFinal = true;
 		}
 		
-		callback.responseReceived(msg);
+		if(callback != null) {
+			callback.responseReceived(msg);
+		}
+		
 		return true;
 	}
 }

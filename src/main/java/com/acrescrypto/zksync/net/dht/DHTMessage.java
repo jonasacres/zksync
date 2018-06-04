@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 
 import com.acrescrypto.zksync.crypto.Key;
@@ -28,7 +29,7 @@ public class DHTMessage {
 	DHTPeer peer;
 	int msgId;
 	byte cmd, flags, numExpected;
-	byte[] payload;
+	byte[] payload, authTag;
 	boolean isFinal;
 	Collection<? extends Sendable> items;
 	
@@ -40,6 +41,7 @@ public class DHTMessage {
 		this.peer = recipient;
 		this.cmd = cmd;
 		this.flags = 0;
+		this.authTag = recipient.remoteAuthTag;
 		this.callback = callback;
 		this.payload = new byte[payloadBuf.remaining()];
 		payloadBuf.get(payload);
@@ -54,6 +56,7 @@ public class DHTMessage {
 		this.peer = recipient;
 		this.cmd = cmd;
 		this.flags = FLAG_RESPONSE;
+		this.authTag = recipient.localAuthTag();
 		this.items = items != null ? new ArrayList<>(items) : new ArrayList<>(0);
 		this.msgId = msgId;
 	}
@@ -142,6 +145,7 @@ public class DHTMessage {
 
 		ByteBuffer plaintext = ByteBuffer.allocate(headerSize() + sendBuf.remaining());
 		plaintext.put(peer.client.key.publicKey().getBytes());
+		plaintext.put(authTag);
 		plaintext.putInt(msgId);
 		plaintext.put(cmd);
 		plaintext.put(flags);
@@ -173,10 +177,13 @@ public class DHTMessage {
 			throw new ProtocolViolationException();
 		}
 		
-		assertState(serialized.remaining() >= keyBytes.length + 4 + 1 + 1 + 1);
+		assertState(serialized.remaining() >= keyBytes.length + DHTClient.AUTH_TAG_SIZE + 4 + 1 + 1 + 1);
 		serialized.get(keyBytes);
-		
-		this.peer = new DHTPeer(client, senderAddress, senderPort, keyBytes);
+
+		this.authTag = new byte[DHTClient.AUTH_TAG_SIZE];
+		serialized.get(authTag);
+
+		this.peer = client.routingTable.peerForMessage(senderAddress, senderPort, client.crypto.makePublicDHKey(keyBytes));
 		this.msgId = serialized.getInt();
 		this.cmd = serialized.get();
 		this.flags = serialized.get();
@@ -186,11 +193,15 @@ public class DHTMessage {
 	}
 	
 	protected int headerSize() {
-		return peer.client.crypto.asymPublicDHKeySize() + 4 + 1 + 1 + 1;
+		return peer.client.crypto.asymPublicDHKeySize() + DHTClient.AUTH_TAG_SIZE + 4 + 1 + 1 + 1;
 	}
 	
 	protected int maxPayloadSize() {
 		return DHTClient.MAX_DATAGRAM_SIZE - headerSize();
+	}
+	
+	protected void assertValidAuthTag() throws ProtocolViolationException {
+		if(!Arrays.equals(peer.localAuthTag(), authTag)) throw new ProtocolViolationException();
 	}
 	
 	protected void assertState(boolean state) throws ProtocolViolationException {

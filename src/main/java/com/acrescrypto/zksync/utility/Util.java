@@ -145,4 +145,8 @@ public class Util {
 		debugTime = time;
 	}
 
+	public static void setCurrentTimeMillis(long time) {
+		setCurrentTimeNanos(time*1000l*1000l);		
+	}
+
 }

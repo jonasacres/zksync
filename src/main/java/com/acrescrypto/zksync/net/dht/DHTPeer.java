@@ -26,14 +26,18 @@ public class DHTPeer implements Sendable {
 	protected int port;
 	int missedMessages;
 	protected PublicDHKey key;
-	protected byte[] remoteAuthTag;
+	protected byte[] remoteAuthTag = new byte[DHTClient.AUTH_TAG_SIZE];
 	
-	public DHTPeer(DHTClient client, String address, int port, byte[] pubKey) {
+	public DHTPeer(DHTClient client, String address, int port, byte[] key) {
+		this(client, address, port, client.crypto.makePublicDHKey(key));
+	}
+	
+	public DHTPeer(DHTClient client, String address, int port, PublicDHKey key) {
 		this.client = client;
 		this.address = address;
 		this.port = port;
 
-		this.key = client.crypto.makePublicDHKey(pubKey);
+		this.key = key;
 		this.id = new DHTID(key);
 	}
 	
@@ -61,6 +65,7 @@ public class DHTPeer implements Sendable {
 	public void findNode(DHTID nodeId, DHTFindNodeCallback callback) {
 		client.findNodeMessage(this, nodeId, (resp)->{
 			ArrayList<DHTPeer> receivedPeers = new ArrayList<>();
+			this.remoteAuthTag = resp.authTag;
 			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
 			while(buf.hasRemaining()) {
 				if(buf.remaining() < 2) throw new ProtocolViolationException();
@@ -89,6 +94,7 @@ public class DHTPeer implements Sendable {
 	public void getRecords(DHTID recordId, DHTGetRecordsCallback callback) {
 		client.getRecordsMessage(this, recordId, (resp)->{
 			ArrayList<DHTRecord> receivedRecords = new ArrayList<>();
+			this.remoteAuthTag = resp.authTag;
 			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
 			while(buf.hasRemaining()) {
 				int nextLen = buf.getShort();
@@ -117,8 +123,10 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public byte[] localAuthTag() {
+		byte[] tag = new byte[DHTClient.AUTH_TAG_SIZE];
 		String authStr = address + ":" + port + ":" + Util.bytesToHex(key.getBytes());
-		return client.tagKey.authenticate(authStr.getBytes());
+		System.arraycopy(client.tagKey.authenticate(authStr.getBytes()), 0, tag, 0, tag.length);
+		return tag;
 	}
 
 	@Override
@@ -135,6 +143,10 @@ public class DHTPeer implements Sendable {
 		buf.putShort((short) key.getBytes().length);
 		buf.put(key.getBytes());
 		return buf.array();
+	}
+	
+	public boolean matches(String address, int port, PublicDHKey key) {
+		return this.port == port && this.address.equals(address) && this.key.equals(key);
 	}
 	
 	protected void deserialize(ByteBuffer serialized) throws EINVALException {

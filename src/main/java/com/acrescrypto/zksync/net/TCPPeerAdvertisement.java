@@ -13,6 +13,8 @@ import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerAdvertisement extends PeerAdvertisement {
+	public static boolean disableReachabilityTest = false; // set to true to make isReachable always return true; helpful for testing
+	
 	protected PublicDHKey pubKey;
 	protected String host;
 	protected byte[] encryptedArchiveId;
@@ -101,6 +103,8 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	
 	@Override
 	public boolean isReachable() {
+		if(disableReachabilityTest) return true;
+		
 		try {
 			Socket socket = new Socket(host, port);
 			socket.close();

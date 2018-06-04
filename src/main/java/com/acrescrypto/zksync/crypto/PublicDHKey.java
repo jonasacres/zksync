@@ -1,5 +1,7 @@
 package com.acrescrypto.zksync.crypto;
 
+import java.util.Arrays;
+
 import org.whispersystems.curve25519.Curve25519;
 
 public class PublicDHKey {
@@ -18,5 +20,11 @@ public class PublicDHKey {
 	
 	public CryptoSupport getCrypto() {
 		return crypto;
+	}
+	
+	public boolean equals(Object other) {
+		if(!(other instanceof PublicDHKey)) return false;
+		
+		return Arrays.equals(pubKey, ((PublicDHKey) other).pubKey);
 	}
 }

@@ -35,6 +35,7 @@ public class DHTMessageTest {
 		protected DummyClient() {
 			this.crypto = new CryptoSupport();
 			this.key = this.crypto.makePrivateDHKey();
+			this.tagKey = new Key(crypto);
 		}
 		
 		@Override
@@ -124,8 +125,13 @@ public class DHTMessageTest {
 		ByteBuffer ptBuf = ByteBuffer.wrap(plaintext);
 		
 		byte[] senderKey = new byte[crypto.asymPublicDHKeySize()];
+		byte[] authTag = new byte[DHTClient.AUTH_TAG_SIZE];
+		
 		ptBuf.get(senderKey);
+		ptBuf.get(authTag);
+		
 		assertArrayEquals(client.key.publicKey().getBytes(), senderKey);
+		assertArrayEquals(msg.authTag, authTag);
 		assertEquals(msg.msgId, ptBuf.getInt());
 		assertEquals(msg.cmd, ptBuf.get());
 		assertEquals(msg.flags, ptBuf.get());
@@ -305,6 +311,7 @@ public class DHTMessageTest {
 		
 		byte[] serialized = client.packets.get(0).getData();
 		DHTMessage deserialized = new DHTMessage(client, "127.0.0.1", 54321, ByteBuffer.wrap(serialized));
+		assertArrayEquals(req.authTag, deserialized.authTag);
 		assertEquals(req.msgId, deserialized.msgId);
 		assertEquals(req.cmd, deserialized.cmd);
 		assertEquals(req.flags, deserialized.flags);
@@ -378,5 +385,33 @@ public class DHTMessageTest {
 		serialized.rewind();
 		
 		new DHTMessage(client, "127.0.0.1", 54321, serialized);
+	}
+	
+	@Test
+	public void testSendsRemoteAuthTagIfRequest() {
+		peer.remoteAuthTag = crypto.rng(DHTClient.AUTH_TAG_SIZE);
+		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_ADD_RECORD, new byte[0], (resp)->{});
+		assertArrayEquals(req.authTag, peer.remoteAuthTag);
+	}
+	
+	@Test
+	public void testSendsLocalAuthTagIfResponse() {
+		peer.remoteAuthTag = crypto.rng(DHTClient.AUTH_TAG_SIZE);
+		DHTMessage resp = new DHTMessage(peer, DHTMessage.CMD_ADD_RECORD, 0, new ArrayList<DHTRecord>(0));
+		assertArrayEquals(resp.authTag, peer.localAuthTag());
+	}
+	
+	@Test(expected=ProtocolViolationException.class)
+	public void testAssertValidAuthTagThrowsProtocolViolationExceptionIfAuthTagNotValid() throws ProtocolViolationException {
+		peer.remoteAuthTag = crypto.rng(DHTClient.AUTH_TAG_SIZE);
+		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_ADD_RECORD, new byte[0], (resp)->{});
+		req.assertValidAuthTag();
+	}
+
+	@Test
+	public void testAssertValidAuthTagReturnsCleanIfAuthTagValid() throws ProtocolViolationException {
+		peer.remoteAuthTag = peer.localAuthTag();
+		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_ADD_RECORD, new byte[0], (resp)->{});
+		req.assertValidAuthTag();
 	}
 }
