@@ -5,6 +5,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.net.DatagramPacket;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,6 +28,7 @@ public class DHTRoutingTableTest {
 			this.storage = new RAMFS();
 			this.crypto = new CryptoSupport();
 			this.storageKey = new Key(this.crypto);
+			this.key = crypto.makePrivateDHKey();
 			this.id = new DHTID(crypto.rng(crypto.hashLength()));
 			this.lookupIds = new LinkedList<>();
 		}
@@ -35,6 +37,9 @@ public class DHTRoutingTableTest {
 		public void lookup(DHTID id, LookupCallback callback) {
 			lookupIds.add(id);
 		}
+		
+		@Override public void watchForResponse(DHTMessage msg) {}
+		@Override public void sendDatagram(DatagramPacket msg) {}
 	}
 	
 	DummyClient client;
@@ -103,13 +108,13 @@ public class DHTRoutingTableTest {
 	
 	@Test
 	public void testMarkFreshMarksBucketContainingPeerAsFresh() {
-		Util.setCurrentTimeNanos(0);
+		Util.setCurrentTimeMillis(0);
 		DHTPeer peer = makeTestPeer(0);
 
 		DHTBucket bucket = table.buckets.get(peer.id.xor(client.id).order()+1);
 		table.suggestPeer(peer);
 
-		Util.setCurrentTimeNanos(1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeMillis(DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
 		assertTrue(bucket.needsFreshening());
 		table.markFresh(peer);
 		assertFalse(bucket.needsFreshening());
@@ -117,12 +122,15 @@ public class DHTRoutingTableTest {
 	
 	@Test
 	public void testMarkFreshDoesNotMarkIrrelevantBucketsAsFresh() {
-		Util.setCurrentTimeNanos(0);
+		Util.setCurrentTimeMillis(1);
 		DHTPeer peer = makeTestPeer(0);
 		int bucketIndex = peer.id.xor(client.id).order()+1;
+		for(int i = 0; i <= 8*client.idLength(); i++) {
+			table.buckets.get(i).markFresh();
+		}
 
 		table.suggestPeer(peer);
-		Util.setCurrentTimeNanos(1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeMillis(DHTBucket.BUCKET_FRESHEN_INTERVAL_MS+1);
 		table.markFresh(peer);
 
 		for(int i = 0; i <= 8*client.idLength(); i++) {
@@ -215,6 +223,25 @@ public class DHTRoutingTableTest {
 	}
 	
 	@Test
+	public void testFreshenCallsPruneForAllBuckets() {
+		Util.setCurrentTimeMillis(0);
+		for(int i = 0; i < client.idLength(); i++) {
+			DHTBucket bucket = table.buckets.get(i);
+			for(int j = 0; i < i % DHTBucket.MAX_BUCKET_CAPACITY; i++) {
+				DHTPeer peer = makeTestPeer(i*DHTBucket.MAX_BUCKET_CAPACITY + j);
+				bucket.add(peer);
+				peer.missedMessage();
+				peer.missedMessage();
+			}
+		}
+		
+		table.freshen();
+		for(DHTBucket bucket : table.buckets) {
+			assertTrue(bucket.peers.isEmpty());
+		}
+	}
+	
+	@Test
 	public void testSuggestPeerAddsPeerToBucketIfBucketHasCapacity() {
 		DHTPeer peer = makeTestPeer(0);
 		table.suggestPeer(peer);
@@ -253,7 +280,11 @@ public class DHTRoutingTableTest {
 	@Test
 	public void testFreshenThreadCallsFreshenPeriodically() {
 		DHTRoutingTable.FRESHEN_INTERVAL_MS = 5;
+		Util.setCurrentTimeMillis(0);
+		table.suggestPeer(makeTestPeer(0));
 		table.close();
+		
+		Util.setCurrentTimeMillis(DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
 		assert(client.lookupIds.isEmpty());
 		table = new DHTRoutingTable(client);
 		assertTrue(Util.waitUntil(2*DHTRoutingTable.FRESHEN_INTERVAL_MS, ()->!client.lookupIds.isEmpty()));

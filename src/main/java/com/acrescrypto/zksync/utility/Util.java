@@ -1,6 +1,8 @@
 package com.acrescrypto.zksync.utility;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
+import java.util.Comparator;
 
 import com.acrescrypto.zksync.crypto.HashContext;
 
@@ -148,5 +150,38 @@ public class Util {
 	public static void setCurrentTimeMillis(long time) {
 		setCurrentTimeNanos(time*1000l*1000l);		
 	}
+	
+	public static <T> T min(Collection<T> collection, Comparator<T> comp) {
+		T result = null;
+		for(T item : collection) {
+			if(result == null || comp.compare(item, result) < 0) {
+				result = item;
+			}
+		}
+		
+		return result;
+	}
+	
+	public static <T> T max(Collection<T> collection, Comparator<T> comp) {
+		T result = null;
+		for(T item : collection) {
+			if(result == null || comp.compare(item, result) > 0) {
+				result = item;
+			}
+		}
+		
+		return result;
+	}
+	
+	public static byte[] serializeShort(short x) {
+		return ByteBuffer.allocate(2).putShort(x).array();
+	}
 
+	public static byte[] serializeInt(int x) {
+		return ByteBuffer.allocate(4).putInt(x).array();
+	}
+	
+	public static byte[] serializeLong(long x) {
+		return ByteBuffer.allocate(8).putLong(x).array();
+	}
 }

@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 
 import org.junit.After;
 import org.junit.Before;
@@ -34,11 +35,21 @@ public class DHTBucketTest {
 		@Override public void freshenThread() {}
 	}
 	
+	class DummyPeer extends DHTPeer {
+		boolean pinged;
+		
+		public DummyPeer(DHTClient client, String address, int port, byte[] keyBytes) {
+			super(client, address, port, keyBytes);
+		}
+		
+		@Override public void ping() { pinged = true; }
+	}
+	
 	static CryptoSupport crypto;
 	DummyClient client;
 	
-	DHTPeer makePeer(int i) {
-		return new DHTPeer(client, "10.0.0."+i, 1000+i, crypto.makePrivateDHKey().publicKey().getBytes());
+	DummyPeer makePeer(int i) {
+		return new DummyPeer(client, "10.0.0."+i, 1000+i, crypto.makePrivateDHKey().publicKey().getBytes());
 	}
 	
 	void makePeerBad(DHTPeer peer) {
@@ -185,10 +196,13 @@ public class DHTBucketTest {
 	
 	@Test
 	public void testAddMarksBucketFresh() {
-		Util.setCurrentTimeNanos(10*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(1*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
 		DHTBucket bucket = new DHTBucket(client, 16);
+		bucket.add(makePeer(0));
 		
+		Util.setCurrentTimeNanos(2*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
 		assertTrue(bucket.needsFreshening());
+
 		bucket.add(makePeer(0));
 		assertFalse(bucket.needsFreshening());
 	}
@@ -205,14 +219,16 @@ public class DHTBucketTest {
 	
 	@Test
 	public void testMarkFreshClearsNeedsFreshening() {
-		Util.setCurrentTimeNanos(10*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(1*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
 		DHTBucket bucket = new DHTBucket(client, 16);
-		
+		bucket.markFresh();
+
+		Util.setCurrentTimeNanos(2*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
 		assertTrue(bucket.needsFreshening());
 		bucket.markFresh();
 		assertFalse(bucket.needsFreshening());
 		
-		Util.setCurrentTimeNanos(11*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(3*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
 		assertTrue(bucket.needsFreshening());
 		bucket.markFresh();
 		assertFalse(bucket.needsFreshening());
@@ -236,5 +252,53 @@ public class DHTBucketTest {
 		
 		Util.setCurrentTimeNanos(2*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
 		assertTrue(bucket.needsFreshening());
+	}
+	
+	@Test
+	public void testNeedsFresheningReturnsFalseIfBucketHasNeverHadContents() {
+		Util.setCurrentTimeNanos(1*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		DHTBucket bucket = new DHTBucket(client, 16);
+		Util.setCurrentTimeNanos(2*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		assertFalse(bucket.needsFreshening());
+	}
+	
+	@Test
+	public void testPrunePingsStalestPeer() {
+		DHTBucket bucket = new DHTBucket(client, 16);
+		ArrayList<DummyPeer> peers = new ArrayList<>();
+		
+		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY; i++) {
+			Util.setCurrentTimeNanos(i*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+			DummyPeer peer = makePeer(i);
+			peers.add(peer);
+			peer.acknowledgedMessage();
+			bucket.add(peer);
+		}
+		
+		Util.setCurrentTimeNanos(DHTBucket.MAX_BUCKET_CAPACITY*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		bucket.prune();
+		for(int i = 0; i < peers.size(); i++) {
+			assertEquals(i == 0, peers.get(i).pinged);
+		}
+	}
+	
+	@Test
+	public void testPruneDoesNotPingNonquestionablePeers() {
+		DHTBucket bucket = new DHTBucket(client, 16);
+		ArrayList<DummyPeer> peers = new ArrayList<>();
+		Util.setCurrentTimeMillis(0);
+		
+		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY; i++) {
+			DummyPeer peer = makePeer(i);
+			peers.add(peer);
+			peer.acknowledgedMessage();
+			bucket.add(peer);
+		}
+		
+		Util.setCurrentTimeMillis(DHTBucket.BUCKET_FRESHEN_INTERVAL_MS-1);
+		bucket.prune();
+		for(int i = 0; i < peers.size(); i++) {
+			assertFalse(peers.get(i).pinged);
+		}
 	}
 }

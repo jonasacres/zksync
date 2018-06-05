@@ -12,7 +12,7 @@ public class DHTBucket {
 	DHTClient client;
 	int order;
 	ArrayList<DHTPeer> peers = new ArrayList<DHTPeer>(MAX_BUCKET_CAPACITY);
-	long lastChanged;
+	long lastChanged = -1;
 	
 	public DHTBucket(DHTClient client, int order) {
 		this.client = client;
@@ -33,6 +33,10 @@ public class DHTBucket {
 	}
 	
 	public void add(DHTPeer peer) {
+		add(peer, Util.currentTimeMillis());
+	}
+	
+	public void add(DHTPeer peer, long lastSeen) {
 		assert(hasCapacity());
 		
 		if(peers.size() >= MAX_BUCKET_CAPACITY) {
@@ -40,7 +44,7 @@ public class DHTBucket {
 		}
 		
 		peers.add(peer);
-		markFresh();
+		markFresh(lastSeen);
 	}
 	
 	// returns a random ID whose distance from the client ID is of the order of this bucket
@@ -68,16 +72,15 @@ public class DHTBucket {
 	}
 	
 	public void markFresh() {
-		lastChanged = Util.currentTimeMillis();
+		markFresh(Util.currentTimeMillis());
 	}
 	
-	// TODO DHT: (design) Need to actually ping stale peers...
+	public void markFresh(long timestamp) {
+		lastChanged = Math.max(lastChanged, timestamp);
+	}
 	
 	public boolean needsFreshening() {
-		// TODO DHT: (review) Consider only returning true if we've ever had contents in this bucket.
-		// otherwise, we'll be doing 512 searches right out the gate at initialization!
-		
-		return Util.currentTimeMillis() - lastChanged >= BUCKET_FRESHEN_INTERVAL_MS;
+		return lastChanged >= 0 && Util.currentTimeMillis() - lastChanged >= BUCKET_FRESHEN_INTERVAL_MS;
 	}
 	
 	protected void prune() {
@@ -87,6 +90,11 @@ public class DHTBucket {
 				client.routingTable.removedPeer(peer);
 				return;
 			}
+		}
+		
+		DHTPeer stalest = Util.min(peers, (a,b)->Long.compare(a.lastSeen, b.lastSeen));
+		if(stalest != null && stalest.isQuestionable()) {
+			stalest.ping();
 		}
 	}
 }

@@ -240,6 +240,16 @@ public class DHTPeerTest {
 		peer.acknowledgedMessage();
 		assertFalse(peer.isBad());
 	}
+	
+	@Test
+	public void testAcknowledgedMessageUpdatesLastSeen() {
+		DHTPeer peer = makeTestPeer();
+		assertEquals(0, peer.lastSeen);
+		
+		Util.setCurrentTimeMillis(12345);
+		peer.acknowledgedMessage();
+		assertEquals(Util.currentTimeMillis(), peer.lastSeen);
+	}
 
 	@Test
 	public void testPingSendsPingRequestToPeer() {

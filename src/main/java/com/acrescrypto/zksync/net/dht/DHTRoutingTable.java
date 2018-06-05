@@ -56,6 +56,7 @@ public class DHTRoutingTable {
 	
 	public void freshen() {
 		for(DHTBucket bucket : buckets) {
+			bucket.prune();
 			if(!bucket.needsFreshening()) continue;
 			client.lookup(bucket.randomIdInRange(), (results)->{}); // can ignore results; just doing search freshens routing table
 		}
@@ -93,10 +94,14 @@ public class DHTRoutingTable {
 	}
 	
 	public void suggestPeer(DHTPeer peer) {
+		suggestPeer(peer, Util.currentTimeMillis());
+	}
+	
+	public void suggestPeer(DHTPeer peer, long lastSeen) {
 		int order = peer.id.xor(client.id).order();
 		DHTBucket bucket = buckets.get(order+1); // add 1 since an exact match has order -1
 		if(bucket.hasCapacity()) {
-			bucket.add(peer);
+			bucket.add(peer, lastSeen);
 			allPeers.add(peer);
 			try {
 				write();
@@ -157,9 +162,9 @@ public class DHTRoutingTable {
 		for(DHTPeer peer : allPeers) {
 			byte[] piece = peer.serialize();
 			pieces.add(piece);
-			totalLength += piece.length;
+			pieces.add(Util.serializeLong(peer.lastSeen));
+			totalLength += piece.length + 8;
 		}
-		
 		
 		ByteBuffer buf = ByteBuffer.allocate(4+totalLength);
 		buf.putInt((short) pieces.size());
@@ -176,7 +181,8 @@ public class DHTRoutingTable {
 			int numPeers = serialized.getInt();
 			for(int i = 0; i < numPeers; i++) {
 				DHTPeer peer = new DHTPeer(client, serialized);
-				suggestPeer(peer);
+				long lastSeen = serialized.getLong();
+				suggestPeer(peer, lastSeen);
 			}
 		} catch(BufferUnderflowException exc) {
 			throw new EINVALException(path());
