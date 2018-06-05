@@ -126,7 +126,10 @@ public class DHTMessageTest {
 		byte[] ephPubKeyRaw = new byte[crypto.asymPublicDHKeySize()];
 		sent.get(ephPubKeyRaw);		
 		PublicDHKey ephPubKey = crypto.makePublicDHKey(ephPubKeyRaw);
-		byte[] symKey = peer.client.crypto.makeSymmetricKey(recvKey.sharedSecret(ephPubKey));
+		ByteBuffer keyMaterial = ByteBuffer.allocate(8+crypto.asymDHSecretSize());
+		keyMaterial.putLong(0);
+		keyMaterial.put(recvKey.sharedSecret(ephPubKey));
+		byte[] symKey = peer.client.crypto.makeSymmetricKey(keyMaterial.array());
 		Key key = new Key(crypto, symKey);
 		
 		byte[] plaintext = key.decrypt(new byte[crypto.symIvLength()], sent.array(), sent.position(), sent.remaining());

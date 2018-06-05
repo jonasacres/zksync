@@ -139,7 +139,10 @@ public class DHTMessage {
 	
 	protected byte[] serialize(int numPackets, ByteBuffer sendBuf) {
 		PrivateDHKey ephKey = peer.client.crypto.makePrivateDHKey();
-		byte[] symKeyRaw = peer.client.crypto.makeSymmetricKey(ephKey.sharedSecret(peer.key));
+		ByteBuffer keyMaterial = ByteBuffer.allocate(8+peer.client.crypto.asymDHSecretSize());
+		keyMaterial.putLong(peer.client.networkId);
+		keyMaterial.put(ephKey.sharedSecret(peer.key));
+		byte[] symKeyRaw = peer.client.crypto.makeSymmetricKey(keyMaterial.array());
 		Key symKey = new Key(peer.client.crypto, symKeyRaw);
 
 		ByteBuffer plaintext = ByteBuffer.allocate(headerSize() + sendBuf.remaining());
@@ -166,8 +169,10 @@ public class DHTMessage {
 		serialized.get(keyBytes);
 		
 		PublicDHKey pubKey = new PublicDHKey(client.crypto, keyBytes);
-		byte[] keyMaterial = client.key.sharedSecret(pubKey);
-		Key key = new Key(client.crypto, client.crypto.makeSymmetricKey(keyMaterial));
+		ByteBuffer keyMaterial = ByteBuffer.allocate(8+client.crypto.asymDHSecretSize());
+		keyMaterial.putLong(client.networkId);
+		keyMaterial.put(client.key.sharedSecret(pubKey));
+		Key key = new Key(client.crypto, client.crypto.makeSymmetricKey(keyMaterial.array()));
 		
 		try {
 			byte[] plaintext = key.decrypt(new byte[client.crypto.symIvLength()], serialized.array(), serialized.position(), serialized.remaining());

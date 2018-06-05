@@ -79,22 +79,28 @@ public class DHTClient {
 	DHTStatusCallback statusCallback;
 	int bindPort;
 	int lastStatus = STATUS_OFFLINE;
+	long networkId;
 	FS storage;
 	
 	ArrayList<DHTMessageStub> pendingRequests;
 	
 	public DHTClient(Key storageKey, Blacklist blacklist) {
+		this(storageKey, blacklist, 0);
+		// TODO DHT: (design) What about the bootstrap peer? Test vs. reality
+	}
+	
+	public DHTClient(Key storageKey, Blacklist blacklist, long networkId) {
 		this.blacklist = blacklist;
 		this.storageKey = storageKey;
 		this.storage = blacklist.getFS();
 		this.crypto = storageKey.getCrypto();
 		this.pendingRequests = new ArrayList<>();
+		this.networkId = networkId;
 		
 		read();
 
 		this.store = new DHTRecordStore(this);
 		this.routingTable = new DHTRoutingTable(this);
-		// TODO DHT: (design) What about the bootstrap peer? Test vs. reality
 	}
 	
 	protected DHTClient() {}
@@ -416,12 +422,7 @@ public class DHTClient {
 	}
 	
 	protected String path() {
-		return "dht-client-info";
-	}
-	
-	// having these trivial message builders here might seem a little odd, but it makes it easy to stub these for test classes
-	protected DHTMessage pingMessage(DHTPeer recipient, DHTMessageCallback callback) {
-		return new DHTMessage(recipient, DHTMessage.CMD_PING, new byte[0], callback);
+		return "dht-client-info-"+networkId;
 	}
 	
 	protected DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, DHTMessageCallback callback) {
@@ -458,6 +459,11 @@ public class DHTClient {
 		}
 	}
 	
+	// having these trivial message builders here might seem a little odd, but it makes it easy to stub these for test classes
+	protected DHTMessage pingMessage(DHTPeer recipient, DHTMessageCallback callback) {
+		return new DHTMessage(recipient, DHTMessage.CMD_PING, new byte[0], callback);
+	}
+
 	protected void read() {
 		MutableSecureFile file = MutableSecureFile.atPath(storage, path(), clientInfoKey());
 		try {
