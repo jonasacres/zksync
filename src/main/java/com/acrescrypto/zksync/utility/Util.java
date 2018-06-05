@@ -110,7 +110,15 @@ public class Util {
 		return System.currentTimeMillis() < endTime;
 	}
 	
-	public static void sleep(int durationMs) {
+	public static void delay(long delay, AnonymousCallback action) {
+		new Thread(()->{
+			sleep(delay);
+			try { action.cb(); } catch (Exception e) {}
+		}).start();
+	}
+	
+	public static void sleep(long durationMs) {
+		if(durationMs <= 0) return;
 		try {
 			Thread.sleep(durationMs);
 		} catch(InterruptedException exc) {}

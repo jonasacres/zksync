@@ -19,7 +19,9 @@ import com.acrescrypto.zksync.utility.Util;
 public class TCPPeerSocket extends PeerSocket {
 	public final static int MAX_MSG_LEN = 65536; // maximum ciphertext length; largest buffer a peer needs to hold in memory at once
 	public final static int DEFAULT_MAX_HANDSHAKE_TIME_MILLIS = 60*1000; // 1 minute
+	public final static int DEFAULT_SOCKET_CLOSE_DELAY = 5*1000; // 5 seconds
 	public static int maxHandshakeTimeMillis = DEFAULT_MAX_HANDSHAKE_TIME_MILLIS; // maximum time to handshake before automatic disconnect
+	public static int socketCloseDelay = DEFAULT_SOCKET_CLOSE_DELAY;
 	protected static boolean disableMakeThreads; // test purposes
 
 	protected Socket socket;

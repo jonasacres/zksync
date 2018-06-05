@@ -66,7 +66,7 @@ public class TCPPeerSocketListenerTest {
 		return new Socket("localhost", theListener.port);
 	}
 	
-	protected void assertSocketClosed(Socket socket) {
+	protected void assertSocketClosed(Socket socket, boolean immediate) {
 		class Holder { boolean closed; }
 		Holder holder = new Holder();
 		
@@ -78,10 +78,16 @@ public class TCPPeerSocketListenerTest {
 			}
 		});
 		
+		long startTime = System.currentTimeMillis();
 		thread.start();
 		try {
-			thread.join(100);
+			thread.join(TCPPeerSocket.socketCloseDelay+50);
 		} catch (InterruptedException exc) {}
+		
+		if(!immediate) {
+			// we should have waited about as long as the close delay, with a couple seconds knocked off to account for the time to get here
+			assertTrue(System.currentTimeMillis() - startTime >= TCPPeerSocket.socketCloseDelay-2);
+		}
 		assertTrue(holder.closed);
 	}
 	
@@ -135,6 +141,7 @@ public class TCPPeerSocketListenerTest {
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		TCPPeerSocket.disableMakeThreads = true;
+		TCPPeerSocket.socketCloseDelay = 50;
 	}
 	
 	@Before
@@ -154,6 +161,7 @@ public class TCPPeerSocketListenerTest {
 	@AfterClass
 	public static void afterAll() {
 		TCPPeerSocket.disableMakeThreads = false;
+		TCPPeerSocket.socketCloseDelay = TCPPeerSocket.DEFAULT_SOCKET_CLOSE_DELAY;
 		ZKFSTest.restoreArgon2Costs();
 	}
 	
@@ -272,13 +280,13 @@ public class TCPPeerSocketListenerTest {
 		listener.advertise(swarm);
 		master.getBlacklist().add("127.0.0.1", 60000);
 		Socket socket = connect();
-		assertSocketClosed(socket);
+		assertSocketClosed(socket, true);
 	}
 	
 	@Test
 	public void testDisconnectsPeersBeforeAdvertisedSwarms() throws UnknownHostException, IOException {
 		Socket socket = connect();
-		assertSocketClosed(socket);
+		assertSocketClosed(socket, false);
 	}
 	
 	@Test
@@ -286,7 +294,7 @@ public class TCPPeerSocketListenerTest {
 		listener.advertise(swarm);
 		Socket socket = connect();
 		sendHandshake(crypto.makePrivateDHKey().publicKey(), socket, 0, swarm.config);
-		assertSocketClosed(socket);
+		assertSocketClosed(socket, false);
 	}
 	
 	@Test
@@ -295,7 +303,7 @@ public class TCPPeerSocketListenerTest {
 		listener.advertise(swarm);
 		Socket socket = connect();
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, -1, swarm.config);
-		assertSocketClosed(socket);
+		assertSocketClosed(socket, false);
 	}
 	
 	@Test
@@ -304,7 +312,7 @@ public class TCPPeerSocketListenerTest {
 		listener.advertise(swarm);
 		Socket socket = connect();
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 1, swarm.config);
-		assertSocketClosed(socket);
+		assertSocketClosed(socket, false);
 	}
 	
 	@Test
@@ -313,7 +321,7 @@ public class TCPPeerSocketListenerTest {
 		listener.advertise(swarm);
 		Socket socket = connect();
 		Util.sleep(TCPPeerSocket.maxHandshakeTimeMillis+1);
-		assertSocketClosed(socket);
+		assertSocketClosed(socket, true);
 	}
 	
 	@Test

@@ -155,23 +155,25 @@ public class TCPPeerSocketListener {
 	}
 	
 	protected void peerThread(Socket peerSocketRaw) {
+		long startTime = Util.currentTimeMillis();
 		try {
 			performServerHandshake(peerSocketRaw);
 		} catch(EOFException | ProtocolViolationException exc) {
 			logger.info("Peer {} sent illegal handshake", peerSocketRaw.getInetAddress().toString(), exc);
-			try { peerSocketRaw.close(); } catch(IOException exc2) {}
+			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
+			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(IOException exc) {
 			logger.info("Caught IOException on connection to peer {}", peerSocketRaw.getInetAddress().toString(), exc);
-			try { peerSocketRaw.close(); } catch(IOException exc2) {}
+			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
+			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(Exception exc) {
 			logger.error("Caught unexpected exception on connection to peer {}", peerSocketRaw.getInetAddress().toString(), exc);
-			try { peerSocketRaw.close(); } catch(IOException exc2) {}
+			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
+			Util.delay(delay, ()->peerSocketRaw.close());
 		}
 	}
 	
 	protected TCPPeerSocket performServerHandshake(Socket peerSocketRaw) throws IOException, ProtocolViolationException {
-		// TODO DHT: (implement) Ensure that we do not leak timing information in handshaking (close socket at fixed time)
-		
 		MutableBoolean finished = new MutableBoolean();
 		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, ()->finished.booleanValue(), ()->peerSocketRaw.close());
 		
