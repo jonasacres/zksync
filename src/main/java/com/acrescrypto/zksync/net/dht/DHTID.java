@@ -12,8 +12,18 @@ public class DHTID implements Comparable<DHTID>, Sendable {
 	public DHTID(PublicDHKey key) {
 		this(key.getCrypto().hash(key.getBytes()));
 	}
+	
 	public DHTID(byte[] id) {
 		this.rawId = id;
+	}
+	
+	public DHTID flip() {
+		byte[] ones = new byte[rawId.length];
+		for(int i = 0; i < ones.length; i++) {
+			ones[i] = (byte) 0xff;
+		}
+		
+		return xor(new DHTID(ones));
 	}
 
 	public int order() { // position of MSB
@@ -72,5 +82,10 @@ public class DHTID implements Comparable<DHTID>, Sendable {
 		}
 		
 		return false;
+	}
+	
+	@Override
+	public String toString() {
+		return Util.bytesToHex(this.rawId) + " (" + order() + ")";
 	}
 }

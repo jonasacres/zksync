@@ -193,6 +193,7 @@ public class DHTClientTest {
 				}
 			}
 			
+			close();
 			assertFalse(failed.booleanValue());
 		}
 		
@@ -508,13 +509,12 @@ public class DHTClientTest {
 	public void testAddRecordCallsAddRecordOnClosestPeersForID() throws IOException, InvalidBlacklistException {
 		{
 			beforeEach();
-			DHTID searchId = new DHTID(crypto.rng(client.idLength()));
+			DHTID searchId = client.id.flip(); // ensure that the client is NOT one of the closest results
 			try(TestNetwork network = new TestNetwork(16)) {
 				MutableInt numFindNode = new MutableInt();
 				MutableInt numReceived = new MutableInt();
 				
 				network.setHandlerForClosest(searchId, DHTSearchOperation.MAX_RESULTS, (remote)->{
-					// TODO DHT: (fix) Test fails intermittently. Only 7 of 8 peers received findNode. Linux 6/4/18 bfff57983cbff19455e4545cb53cdefe079ea265
 					DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
 					assertArrayEquals(searchId.rawId, findNodeMsg.payload);
 					synchronized(numFindNode) { numFindNode.increment();  }
@@ -541,12 +541,8 @@ public class DHTClientTest {
 				
 				client.addRecord(searchId, makeBogusAd(0));
 				network.run();
-				
-				// expect one fewer if the client added the record to its own store
-				int expected = DHTSearchOperation.MAX_RESULTS;
-				if(client.store.recordsForId(searchId).size() > 0) expected--;
-				
-				assertEquals(expected, numReceived.intValue());
+								
+				assertEquals(DHTSearchOperation.MAX_RESULTS, numReceived.intValue());
 			}
 			afterEach();
 		}

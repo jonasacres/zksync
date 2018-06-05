@@ -725,12 +725,15 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testExpectTagNextReturnsFalseIfPageTagIsNotNextItem() {
-		// TODO DHT: (review) Intermittent failure. 5/30/18 Linux 982ab3b85d2d045ee606bd8bfcf043da8b29b0d0
+	public void testExpectTagNextReturnsFalseIfPageTagIsNotNextItem() throws IOException {
 		queue.addPageTag(0, pageTag);
 		queue.addRevisionTag(1, revTag);
 		
 		// TODO DHT: (intermittent failure) 6/1/18 Linux 82f4d047ec6e6be8889faeab774d48497da986ae, AssertionError on following line
+		/* 6/4 linux 2ea644526949bb16c2c73e68b9984853f9263113, saw this when running from FastTests
+		 * can't reproduce with a while loop, even with 1024 iterations including before/after each/all
+		 * DID get to see it once manually re-running, but then unable to reproduce...
+		 */
 		assertFalse(queue.expectTagNext(pageTag));
 		queue.nextChunk();
 		assertFalse(queue.expectTagNext(pageTag));

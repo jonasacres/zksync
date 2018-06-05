@@ -131,7 +131,9 @@ public class DHTClient {
 			}
 			
 			SnoozeThread progressMonitor = new SnoozeThread(LOOKUP_RESULT_MAX_WAIT_TIME_MS, true, ()->{
-				callback.receivedRecord(null);
+				if(callback != null) {
+					callback.receivedRecord(null);
+				}
 			});
 			
 			MutableInt pending = new MutableInt();
