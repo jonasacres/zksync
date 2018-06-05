@@ -177,7 +177,6 @@ public class DHTClientTest {
 					try {
 						handlers.get(remote).handle(remote);
 					} catch(Exception exc) {
-						exc.printStackTrace();
 						if(closed) return;
 						exc.printStackTrace();
 						failed.setTrue();
@@ -522,8 +521,7 @@ public class DHTClientTest {
 					findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, DHTSearchOperation.MAX_RESULTS)).send();
 					
 					DHTMessage addRecordMsg = remote.receivePacket(DHTMessage.CMD_ADD_RECORD);
-					synchronized(numReceived) { numReceived.increment();
-					}
+					synchronized(numReceived) { numReceived.increment(); }
 					addRecordMsg.assertValidAuthTag();
 					
 					ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);

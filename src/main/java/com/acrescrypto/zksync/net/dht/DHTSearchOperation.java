@@ -1,8 +1,8 @@
 package com.acrescrypto.zksync.net.dht;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.TreeSet;
 
 public class DHTSearchOperation {
 	interface SearchOperationCallback {
@@ -17,11 +17,8 @@ public class DHTSearchOperation {
 	DHTID searchId;
 	DHTClient client;
 	HashSet<DHTPeer> queried = new HashSet<DHTPeer>();
-	ArrayList<DHTPeer> closestPeers = new ArrayList<DHTPeer>(MAX_RESULTS);
+	TreeSet<DHTPeer> closestPeers = new TreeSet<>((a,b)->a.id.xor(searchId).compareTo(b.id.xor(searchId)));
 	SearchOperationCallback callback;
-	
-	DHTPeer weakestPeer;
-	DHTID weakestDistance;
 	
 	public DHTSearchOperation(DHTClient client, DHTID searchId, SearchOperationCallback callback) {
 		this.client = client;
@@ -44,29 +41,12 @@ public class DHTSearchOperation {
 		}
 	}
 	
-	protected void addIfBetter(DHTPeer peer) {
+	protected synchronized void addIfBetter(DHTPeer peer) {
 		if(closestPeers.contains(peer)) return;
-		DHTID distance = peer.id.xor(searchId);
-		
-		if(closestPeers.size() >= MAX_RESULTS) {
-			if(distance.compareTo(weakestDistance) >= 0) return;
-			closestPeers.remove(weakestPeer);
-		}
-		
 		closestPeers.add(peer);
-		recalculateWeakest();
-	}
-	
-	protected void recalculateWeakest() {
-		weakestDistance = null;
-		weakestPeer = null;
 		
-		for(DHTPeer peer : closestPeers) {
-			DHTID dist = peer.id.xor(searchId);
-			if(weakestDistance == null || dist.compareTo(weakestDistance) > 0) {
-				weakestDistance = dist;
-				weakestPeer = peer;
-			}
+		while(closestPeers.size() > MAX_RESULTS) {
+			closestPeers.pollLast();
 		}
 	}
 	

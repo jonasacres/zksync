@@ -63,7 +63,7 @@ public class DHTSearchOperationTest {
 		@Override
 		public void findNode(DHTID id, DHTFindNodeCallback callback) {
 			if(knownPeers == null) {
-				knownPeers = client.peerSample(128);
+				knownPeers = client.peerSample(512);
 			}
 			
 			requestsReceived++;
@@ -113,34 +113,11 @@ public class DHTSearchOperationTest {
 	
 	public ArrayList<DHTPeer> closestInList(DHTID id, Collection<DHTPeer> peers, int numResults) {
 		ArrayList<DHTPeer> closest = new ArrayList<>(numResults);
-		DHTID worstDistance = null;
-		DHTPeer worstPeer = null;
+		ArrayList<DHTPeer> sorted = new ArrayList<>(peers);
+		sorted.sort((a,b)->a.id.xor(id).compareTo(b.id.xor(id)));
 		
-		for(DHTPeer peer : peers) {
-			DHTID distance = peer.id.xor(id);
-			if(closest.size() >= numResults && distance.compareTo(worstDistance) < 0) {
-				closest.remove(worstPeer);
-				
-				worstDistance = distance;
-				worstPeer = peer;
-				
-				for(DHTPeer existing : closest) {
-					DHTID existingDistance = existing.id.xor(id);
-					if(existingDistance.compareTo(worstDistance) > 0) {
-						worstDistance = existingDistance;
-						worstPeer = existing;
-					}
-				}
-				
-				closest.add(peer);
-			} else if(closest.size() < numResults) {
-				if(worstDistance == null || distance.compareTo(worstDistance) > 0) {
-					worstDistance = distance;
-					worstPeer = peer;
-				}
-				
-				closest.add(peer);
-			}
+		for(int i = 0; i < numResults; i++) {
+			closest.add(sorted.get(i));
 		}
 		
 		return closest;
