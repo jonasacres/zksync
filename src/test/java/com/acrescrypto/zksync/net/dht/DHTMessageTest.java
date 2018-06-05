@@ -36,6 +36,8 @@ public class DHTMessageTest {
 			this.crypto = new CryptoSupport();
 			this.key = this.crypto.makePrivateDHKey();
 			this.tagKey = new Key(crypto);
+			this.routingTable = new DummyRoutingTable();
+			routingTable.client = this;
 		}
 		
 		@Override
@@ -46,6 +48,12 @@ public class DHTMessageTest {
 		@Override
 		protected void sendDatagram(DatagramPacket packet) {
 			packets.add(packet);
+		}
+	}
+	
+	class DummyRoutingTable extends DHTRoutingTable {
+		@Override public DHTPeer peerForMessage(String address, int port, PublicDHKey pubKey) {
+			return new DHTPeer(client, address, port, pubKey.getBytes());
 		}
 	}
 	

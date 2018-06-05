@@ -169,7 +169,15 @@ public class DHTClient {
 			}
 			
 			for(DHTPeer peer : peers) {
-				peer.addRecord(searchId, record);
+				if(Arrays.equals(key.publicKey().getBytes(), peer.key.getBytes())) {
+					try {
+						store.addRecordForId(searchId, record);
+					} catch (IOException exc) {
+						logger.error("Encountered exception adding record", exc);
+					}
+				} else {
+					peer.addRecord(searchId, record);
+				}
 			}
 		}).run();
 	}
@@ -266,6 +274,7 @@ public class DHTClient {
 				socket.send(packet);
 				break;
 			} catch (IOException exc) {
+				if(closed) return;
 				if(i == 0) {
 					logger.warn("Encountered exception sending on DHT socket; retrying", exc);
 					try {

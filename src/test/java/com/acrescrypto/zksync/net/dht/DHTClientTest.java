@@ -47,7 +47,9 @@ import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTClientTest {
-	final static int MAX_TEST_TIME_MS = 1000;
+	final static int MAX_TEST_TIME_MS = 2000;
+	final static int MAX_MSG_WAIT_TIME_MS = 200;
+	
 	class RemotePeer implements AutoCloseable {
 		DHTClient listenClient;
 		DHTPeer peer;
@@ -89,6 +91,12 @@ public class DHTClientTest {
 			}
 		}
 		
+		public void addAllPeers(ArrayList<RemotePeer> remotes) {
+			for(RemotePeer remote : remotes) {
+				listenClient.addPeer(remote.peer);
+			}
+		}
+		
 		void listenThread() {
 			byte[] receiveData = new byte[65536];
 			DatagramPacket packet = new DatagramPacket(receiveData, receiveData.length);
@@ -100,7 +108,10 @@ public class DHTClientTest {
 					DHTMessage msg;
 					try {
 						msg = new DHTMessage(listenClient, packet.getAddress().getHostAddress(), packet.getPort(), ByteBuffer.wrap(packet.getData(), 0, packet.getLength()));
-						incoming.add(msg);
+						synchronized(incoming) {
+							incoming.add(msg);
+							incoming.notifyAll();
+						}
 					} catch (ProtocolViolationException exc) {
 						exc.printStackTrace();
 					}
@@ -113,14 +124,23 @@ public class DHTClientTest {
 		}
 		
 		DHTMessage receivePacket(byte cmd) throws ProtocolViolationException {
-			Util.waitUntil(MAX_TEST_TIME_MS, ()->!incoming.isEmpty());
-			if(strict) assertFalse(incoming.isEmpty());
-			else if(incoming.isEmpty()) return null;
-			
-			DHTMessage msg = incoming.remove();
-			if(cmd >= 0) assertEquals(cmd, msg.cmd);
-			
-			return msg;
+			synchronized(incoming) {
+				if(incoming.isEmpty()) {
+					try {
+						incoming.wait(MAX_MSG_WAIT_TIME_MS);
+					} catch (InterruptedException exc) {
+						exc.printStackTrace();
+					}
+				}
+				
+				if(strict) assertFalse(incoming.isEmpty());
+				else if(incoming.isEmpty()) return null;
+				
+				DHTMessage msg = incoming.remove();
+				if(cmd >= 0) assertEquals(cmd, msg.cmd);
+				
+				return msg;
+			}
 		}
 		
 		public void close() {
@@ -144,7 +164,7 @@ public class DHTClientTest {
 			}
 			
 			for(RemotePeer remote : remotes) {
-				remote.addSubsetOfPeers(remotes, Math.max(Math.min(64, size/4), 1));
+				remote.addAllPeers(remotes);
 			}
 		}
 		
@@ -157,6 +177,7 @@ public class DHTClientTest {
 					try {
 						handlers.get(remote).handle(remote);
 					} catch(Exception exc) {
+						exc.printStackTrace();
 						if(closed) return;
 						exc.printStackTrace();
 						failed.setTrue();
@@ -169,8 +190,8 @@ public class DHTClientTest {
 			for(Thread t : threads) {
 				try {
 					t.join(MAX_TEST_TIME_MS);
-					// assertFalse(t.isAlive());
-				} catch(InterruptedException exc) {}
+				} catch(InterruptedException exc) {
+				}
 			}
 			
 			assertFalse(failed.booleanValue());
@@ -485,39 +506,64 @@ public class DHTClientTest {
 	}
 	
 	@Test
-	public void testAddRecordCallsAddRecordOnClosestPeersForID() throws SocketException, UnknownHostException {
-		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
-		try(TestNetwork network = new TestNetwork(128)) {
-			MutableInt numReceived = new MutableInt();
-			
-			network.setHandlerForClosest(searchId, DHTSearchOperation.MAX_RESULTS, (remote)->{
-				// TODO DHT: (fix) Test fails intermittently. Only 7 of 8 peers received findNode. Linux 6/4/18 bfff57983cbff19455e4545cb53cdefe079ea265
-				DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
-				assertArrayEquals(searchId.rawId, findNodeMsg.payload);
-				findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, DHTSearchOperation.MAX_RESULTS)).send();
+	public void testAddRecordCallsAddRecordOnClosestPeersForID() throws IOException, InvalidBlacklistException {
+		{
+			beforeEach();
+			DHTID searchId = new DHTID(crypto.rng(client.idLength()));
+			try(TestNetwork network = new TestNetwork(16)) {
+				MutableInt numFindNode = new MutableInt();
+				MutableInt numReceived = new MutableInt();
 				
-				DHTMessage addRecordMsg = remote.receivePacket(DHTMessage.CMD_ADD_RECORD);
-				synchronized(this) { numReceived.increment();  }
-				addRecordMsg.assertValidAuthTag();
+				network.setHandlerForClosest(searchId, DHTSearchOperation.MAX_RESULTS, (remote)->{
+					// TODO DHT: (fix) Test fails intermittently. Only 7 of 8 peers received findNode. Linux 6/4/18 bfff57983cbff19455e4545cb53cdefe079ea265
+					DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
+					assertArrayEquals(searchId.rawId, findNodeMsg.payload);
+					synchronized(numFindNode) { numFindNode.increment();  }
+					findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, DHTSearchOperation.MAX_RESULTS)).send();
+					
+					DHTMessage addRecordMsg = remote.receivePacket(DHTMessage.CMD_ADD_RECORD);
+					synchronized(numReceived) { numReceived.increment();
+					}
+					addRecordMsg.assertValidAuthTag();
+					
+					ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);
+					byte[] id = new byte[client.idLength()];
+					payload.get(id);
+					assertArrayEquals(searchId.rawId, id);
+					
+					byte[] recordBytes = new byte[payload.remaining()];
+					payload.get(recordBytes);
+					assertArrayEquals(makeBogusAd(0).serialize(), recordBytes);
+				});
 				
-				ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);
-				byte[] id = new byte[client.idLength()];
-				payload.get(id);
-				assertArrayEquals(searchId.rawId, id);
+				client.routingTable.reset();
+				for(RemotePeer remote : network.remotes) {
+					client.addPeer(remote.peer);
+				}
 				
-				byte[] recordBytes = new byte[payload.remaining()];
-				payload.get(recordBytes);
-				assertArrayEquals(makeBogusAd(0).serialize(), recordBytes);
-			});
-			
-			client.routingTable.reset();
-			client.addPeer(network.remotes.get(0).peer);
-			client.addRecord(searchId, makeBogusAd(0));
-			network.run();
-			assertEquals(DHTSearchOperation.MAX_RESULTS, numReceived.intValue());
+				client.addRecord(searchId, makeBogusAd(0));
+				network.run();
+				
+				// expect one fewer if the client added the record to its own store
+				int expected = DHTSearchOperation.MAX_RESULTS;
+				if(client.store.recordsForId(searchId).size() > 0) expected--;
+				
+				assertEquals(expected, numReceived.intValue());
+			}
+			afterEach();
 		}
 	}
 	
+	@Test
+	public void testAddsRecordToSelfWhenOwnIdIsInResultSet() throws IOException, ProtocolViolationException {
+		ArrayList<DHTPeer> list = new ArrayList<>(1);
+		list.add(clientPeer);
+		
+		client.addRecord(client.id, makeBogusAd(0));
+		remote.receivePacket().makeResponse(list).send();
+		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->client.store.recordsForId(client.id).size() > 0));
+	}
+
 	@Test
 	public void testIdLengthIsHashLength() {
 		assertEquals(crypto.hashLength(), client.idLength());

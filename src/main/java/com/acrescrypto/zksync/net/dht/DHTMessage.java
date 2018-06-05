@@ -25,6 +25,9 @@ public class DHTMessage {
 		void responseReceived(DHTMessage response) throws ProtocolViolationException;
 	}
 	
+	
+	// TODO DHT: (implement) Need retries on messages that expect responses.
+	
 	DHTMessageCallback callback;
 	DHTPeer peer;
 	int msgId;

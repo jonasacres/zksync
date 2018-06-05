@@ -12,6 +12,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -21,6 +22,7 @@ public class DHTMessageStubTest {
 		
 		public DummyClient() {
 			this.crypto = new CryptoSupport();
+			this.tagKey = new Key(crypto);
 		}
 		
 		@Override
