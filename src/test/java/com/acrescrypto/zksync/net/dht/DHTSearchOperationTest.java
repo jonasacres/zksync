@@ -46,6 +46,7 @@ public class DHTSearchOperationTest {
 		}
 
 		@Override public Collection<DHTPeer> allPeers() { return allPeers; }
+		@Override public void reset() { this.allPeers = new ArrayList<>(0); }
 	}
 	
 	class DummyPeer extends DHTPeer {
@@ -213,5 +214,13 @@ public class DHTSearchOperationTest {
 		
 		assertEquals(expectedResults.size(), results.size());
 		assertTrue(expectedResults.containsAll(results));
+	}
+	
+	@Test
+	public void testRunMakesImmediateEmptyCallbackIfNoPeers() {
+		client.routingTable.reset();
+		op.run();
+		waitForResult();
+		assertEquals(0, results.size());
 	}
 }

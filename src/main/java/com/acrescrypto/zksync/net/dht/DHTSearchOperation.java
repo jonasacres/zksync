@@ -34,6 +34,11 @@ public class DHTSearchOperation {
 			addIfBetter(peer);
 		}
 		
+		if(closestPeers.isEmpty()) {
+			callback.searchOperationFinished(closestPeers);
+			return;
+		}
+		
 		for(DHTPeer peer : closestPeers) {
 			requestNodes(peer);
 		}

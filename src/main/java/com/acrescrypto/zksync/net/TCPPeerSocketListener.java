@@ -170,6 +170,8 @@ public class TCPPeerSocketListener {
 	}
 	
 	protected TCPPeerSocket performServerHandshake(Socket peerSocketRaw) throws IOException, ProtocolViolationException {
+		// TODO DHT: (implement) Ensure that we do not leak timing information in handshaking (close socket at fixed time)
+		
 		MutableBoolean finished = new MutableBoolean();
 		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, ()->finished.booleanValue(), ()->peerSocketRaw.close());
 		

@@ -349,15 +349,15 @@ public class DHTClient {
 		message.makeResponse(null).send();
 	}
 	
-	protected void processRequestFindNode(DHTMessage message) throws ProtocolViolationException {
-		assertRequiredState(message.payload.length == idLength());
+	protected void processRequestFindNode(DHTMessage message) throws ProtocolViolationException, UnsupportedProtocolException {
+		assertSupportedState(message.payload.length == idLength());
 		DHTID id = new DHTID(message.payload);
 		
 		message.makeResponse(routingTable.closestPeers(id, DHTSearchOperation.MAX_RESULTS)).send();
 	}
 	
-	protected void processRequestGetRecords(DHTMessage message) throws ProtocolViolationException {
-		assertRequiredState(message.payload.length == idLength());
+	protected void processRequestGetRecords(DHTMessage message) throws ProtocolViolationException, UnsupportedProtocolException {
+		assertSupportedState(message.payload.length == idLength());
 		DHTID id = new DHTID(message.payload);
 		message.makeResponse(store.recordsForId(id)).send();
 	}
@@ -365,17 +365,17 @@ public class DHTClient {
 	protected void processRequestAddRecord(DHTMessage message) throws ProtocolViolationException, UnsupportedProtocolException {
 		ByteBuffer buf = ByteBuffer.wrap(message.payload);
 		
-		assertRequiredState(validAuthTag(message.peer, message.authTag));
+		assertSupportedState(validAuthTag(message.peer, message.authTag));
 		
 		byte[] idRaw = new byte[idLength()];
-		assertRequiredState(buf.remaining() > idRaw.length);
+		assertSupportedState(buf.remaining() > idRaw.length);
 		buf.get(idRaw);
 		DHTID id = new DHTID(idRaw);
 		
-		assertRequiredState(buf.remaining() > 0);
+		assertSupportedState(buf.remaining() > 0);
 		DHTRecord record = DHTRecord.deserializeRecord(crypto, buf);
 		assertSupportedState(record != null);
-		assertRequiredState(record.isValid());
+		assertSupportedState(record.isValid());
 		
 		try {
 			store.addRecordForId(id, record);
@@ -404,6 +404,7 @@ public class DHTClient {
 		return "dht-client-info";
 	}
 	
+	// having these trivial message builders here might seem a little odd, but it makes it easy to stub these for test classes
 	protected DHTMessage pingMessage(DHTPeer recipient, DHTMessageCallback callback) {
 		return new DHTMessage(recipient, DHTMessage.CMD_PING, new byte[0], callback);
 	}
@@ -424,6 +425,7 @@ public class DHTClient {
 		return new DHTMessage(recipient, DHTMessage.CMD_ADD_RECORD, buf.array(), callback);
 	}
 	
+	// having the call happen here instead of directly accessing DHTRecord is convenient for stubbing out test classes
 	protected DHTRecord deserializeRecord(ByteBuffer serialized) throws UnsupportedProtocolException {
 		return DHTRecord.deserializeRecord(crypto, serialized);
 	}
@@ -492,9 +494,5 @@ public class DHTClient {
 	
 	protected void assertSupportedState(boolean state) throws UnsupportedProtocolException {
 		if(!state) throw new UnsupportedProtocolException();
-	}
-	
-	protected void assertRequiredState(boolean state) throws ProtocolViolationException {
-		if(!state) throw new ProtocolViolationException();
 	}
 }
