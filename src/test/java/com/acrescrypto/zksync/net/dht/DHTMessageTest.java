@@ -41,7 +41,7 @@ public class DHTMessageTest {
 		}
 		
 		@Override
-		protected void watchForResponse(DHTMessage message) {
+		protected void watchForResponse(DHTMessage message, DatagramPacket packet) {
 			watch = message;
 		}
 		
@@ -257,14 +257,6 @@ public class DHTMessageTest {
 		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, new byte[0], (resp)->{});
 		req.send();
 		assertEquals(req, client.watch);
-
-		req = req.makeResponse(new ArrayList<DummyRecord>());
-		req.send();
-		assertEquals(req, client.watch);
-
-		req = req.makeResponse(null);
-		req.send();
-		assertEquals(req, client.watch);
 	}
 	
 	@Test
@@ -340,7 +332,9 @@ public class DHTMessageTest {
 		
 		byte[] serialized = client.packets.get(0).getData();
 		for(int i = 0; i < 8*serialized.length; i++) {
-			if(i == 8*crypto.asymPublicDHKeySize()-1) continue; // TODO DHT: (research) least significant bit of public key can be modified and produce same shared secret?
+			// Curve25519 keys are actually 255 bits, so the little endian MSB can be modified with no effect
+			if(i == 8*crypto.asymPublicDHKeySize()-1) continue;
+			
 			serialized[i/8] ^= (1 << (i%8));
 			try {
 				new DHTMessage(client, "127.0.0.1", 54321, ByteBuffer.wrap(serialized));

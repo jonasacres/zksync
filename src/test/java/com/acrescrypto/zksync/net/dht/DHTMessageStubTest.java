@@ -6,6 +6,11 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -19,16 +24,16 @@ import com.acrescrypto.zksync.utility.Util;
 public class DHTMessageStubTest {
 	class DummyClient extends DHTClient {
 		DHTMessageStub missed;
+		DatagramPacket sent;
 		
 		public DummyClient() {
 			this.crypto = new CryptoSupport();
 			this.tagKey = new Key(crypto);
+			this.key = crypto.makePrivateDHKey();
 		}
 		
-		@Override
-		public void missedResponse(DHTMessageStub stub) {
-			this.missed = stub;
-		}
+		@Override public void missedResponse(DHTMessageStub stub) { this.missed = stub; }
+		@Override public void sendDatagram(DatagramPacket packet) { this.sent = packet; }
 	}
 	
 	CryptoSupport crypto;
@@ -47,20 +52,27 @@ public class DHTMessageStubTest {
 	@BeforeClass
 	public static void beforeAll() {
 		DHTClient.MESSAGE_EXPIRATION_TIME_MS = 100;
+		DHTClient.MESSAGE_RETRY_TIME_MS = 50;
 	}
 	
 	@Before
-	public void beforeEach() {
+	public void beforeEach() throws UnknownHostException {
 		crypto = new CryptoSupport();
 		client = new DummyClient();
 		peer = new DHTPeer(client, "127.0.0.1", 12345, crypto.rng(crypto.asymPublicDHKeySize()));
 		req = new DHTMessage(peer, DHTMessage.CMD_GET_RECORDS, new byte[0], (response)->{resp = response;});
-		stub = new DHTMessageStub(req);
+		
+		byte[] serialized = req.serialize(1, ByteBuffer.allocate(0));
+		
+		InetAddress address = InetAddress.getByName(peer.address);
+		DatagramPacket packet = new DatagramPacket(serialized, serialized.length, address, peer.port);
+		stub = new DHTMessageStub(req, packet);
 	}
 	
 	@AfterClass
 	public static void afterAll() {
 		DHTClient.MESSAGE_EXPIRATION_TIME_MS = DHTClient.DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
+		DHTClient.MESSAGE_RETRY_TIME_MS = DHTClient.DEFAULT_MESSAGE_RETRY_TIME_MS;
 	}
 	
 	@Test
@@ -68,7 +80,14 @@ public class DHTMessageStubTest {
 		assertEquals(peer, stub.peer);
 		assertEquals(req.cmd, stub.cmd);
 		assertEquals(req.msgId, stub.msgId);
+		assertNotNull(stub.packet);
 		assertNotNull(stub.callback);
+	}
+	
+	@Test
+	public void testConstructorSetsRetryTimerToResendMessage() {
+		assertNull(client.sent);
+		assertTrue(Util.waitUntil(DHTClient.MESSAGE_RETRY_TIME_MS+5, ()->stub.packet.equals(client.sent)));
 	}
 	
 	@Test

@@ -856,12 +856,13 @@ public class DHTClientTest {
 	}
 	
 	@Test
-	public void testAddRecordAddsValidRecordsToStore() {
+	public void testAddRecordAddsValidRecordsToStore() throws ProtocolViolationException {
 		DHTID id = new DHTID(crypto.rng(client.idLength()));
 		DHTMessage msg = remote.listenClient.addRecordMessage(clientPeer, id, makeBogusAd(0), null);
 		msg.authTag = remote.peer.localAuthTag();
 		msg.send();
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->client.store.recordsForId(id).size() > 0));
+		remote.receivePacket(DHTMessage.CMD_ADD_RECORD);
 	}
 	
 	@Test

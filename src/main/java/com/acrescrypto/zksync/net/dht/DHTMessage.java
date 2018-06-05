@@ -25,9 +25,6 @@ public class DHTMessage {
 		void responseReceived(DHTMessage response) throws ProtocolViolationException;
 	}
 	
-	
-	// TODO DHT: (implement) Need retries on messages that expect responses.
-	
 	DHTMessageCallback callback;
 	DHTPeer peer;
 	int msgId;
@@ -73,16 +70,14 @@ public class DHTMessage {
 	}
 	
 	public void send() {
-		peer.client.watchForResponse(this);
-		
 		if(isResponse()) {
 			sendItems();
 		} else {
-			sendPayload();
+			peer.client.watchForResponse(this, sendPayload());
 		}
 	}
 	
-	protected void sendItems() {
+	protected DatagramPacket sendItems() {
 		int numPackets = 1;
 		ByteBuffer sendBuf = ByteBuffer.allocate(maxPayloadSize());
 
@@ -107,7 +102,7 @@ public class DHTMessage {
 		
 		sendBuf.limit(sendBuf.position());
 		sendBuf.position(0);
-		sendDatagram(numPackets, sendBuf);
+		return sendDatagram(numPackets, sendBuf);
 	}
 	
 	protected int numPacketsNeeded() {
@@ -124,21 +119,22 @@ public class DHTMessage {
 		return numNeeded;
 	}
 	
-	protected void sendPayload() {
-		sendDatagram(1, ByteBuffer.wrap(payload));
+	protected DatagramPacket sendPayload() {
+		return sendDatagram(1, ByteBuffer.wrap(payload));
 	}
 	
-	protected void sendDatagram(int numPackets, ByteBuffer sendBuf) {
+	protected DatagramPacket sendDatagram(int numPackets, ByteBuffer sendBuf) {
 		sendBuf.position(0);
 		InetAddress address;
 		try {
 			address = InetAddress.getByName(peer.address);
 		} catch (UnknownHostException exc) {
-			return;
+			return null;
 		}
 		byte[] serialized = serialize(numPackets, sendBuf);
 		DatagramPacket packet = new DatagramPacket(serialized, serialized.length, address, peer.port);
 		peer.client.sendDatagram(packet);
+		return packet;
 	}
 	
 	protected byte[] serialize(int numPackets, ByteBuffer sendBuf) {

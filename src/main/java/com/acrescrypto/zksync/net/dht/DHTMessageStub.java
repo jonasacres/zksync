@@ -1,5 +1,7 @@
 package com.acrescrypto.zksync.net.dht;
 
+import java.net.DatagramPacket;
+
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.SnoozeThread;
@@ -8,16 +10,18 @@ public class DHTMessageStub {
 	DHTPeer peer;
 	DHTMessageCallback callback;
 	SnoozeThread expirationMonitor;
+	DatagramPacket packet;
 	
 	byte cmd;
 	int msgId;
 	int responsesReceived;
 	
-	public DHTMessageStub(DHTMessage msg) {
+	public DHTMessageStub(DHTMessage msg, DatagramPacket packet) {
 		this.peer = msg.peer;
 		this.cmd = msg.cmd;
 		this.msgId = msg.msgId;
-		this.expirationMonitor = new SnoozeThread(DHTClient.MESSAGE_EXPIRATION_TIME_MS, false, ()->peer.client.missedResponse(this));
+		this.packet = packet;
+		this.expirationMonitor = new SnoozeThread(DHTClient.MESSAGE_RETRY_TIME_MS, false, ()->retry());
 		this.callback = msg.callback;
 	}
 	
@@ -35,5 +39,14 @@ public class DHTMessageStub {
 		}
 		
 		return true;
+	}
+	
+	public void retry() {
+		peer.client.sendDatagram(packet);
+		expirationMonitor = new SnoozeThread(DHTClient.MESSAGE_EXPIRATION_TIME_MS - DHTClient.MESSAGE_RETRY_TIME_MS, false, ()->fail());
+	}
+	
+	public void fail() {
+		peer.client.missedResponse(this);
 	}
 }

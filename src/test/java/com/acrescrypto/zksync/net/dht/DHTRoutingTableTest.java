@@ -38,7 +38,7 @@ public class DHTRoutingTableTest {
 			lookupIds.add(id);
 		}
 		
-		@Override public void watchForResponse(DHTMessage msg) {}
+		@Override public void watchForResponse(DHTMessage msg, DatagramPacket packet) {}
 		@Override public void sendDatagram(DatagramPacket msg) {}
 	}
 	

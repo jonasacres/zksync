@@ -34,10 +34,12 @@ public class DHTClient {
 	
 	public final static int DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS = 500;
 	public static int LOOKUP_RESULT_MAX_WAIT_TIME_MS = DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS; // consider a lookup finished if we've received nothing in this many milliseconds
-	
-	
-	public final static int DEFAULT_MESSAGE_EXPIRATION_TIME_MS = 5000;
+		
+	public final static int DEFAULT_MESSAGE_EXPIRATION_TIME_MS = 5000; // how long after first send attempt before we count a message as expired if no response received
 	public static int MESSAGE_EXPIRATION_TIME_MS = DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
+	
+	public final static int DEFAULT_MESSAGE_RETRY_TIME_MS = 2000;
+	public static int MESSAGE_RETRY_TIME_MS = DEFAULT_MESSAGE_RETRY_TIME_MS;
 	
 	public final static int KEY_INDEX_CLIENT_INFO = 0;
 	public final static int KEY_INDEX_ROUTING_TABLE = 1;
@@ -257,8 +259,8 @@ public class DHTClient {
 		}
 	}
 	
-	protected void watchForResponse(DHTMessage message) {
-		pendingRequests.add(new DHTMessageStub(message));
+	protected void watchForResponse(DHTMessage message, DatagramPacket packet) {
+		pendingRequests.add(new DHTMessageStub(message, packet));
 	}
 	
 	protected void missedResponse(DHTMessageStub stub) {
@@ -321,7 +323,7 @@ public class DHTClient {
 	protected void processResponse(DHTMessage message) throws ProtocolViolationException {
 		if(lastStatus < STATUS_CAN_SEND) updateStatus(STATUS_CAN_SEND);
 		
-		message.peer.acknowledgedMessage(); // TODO DHT: (review) How can we be sure this is the same instance of peer as in the routing table?
+		message.peer.acknowledgedMessage();
 		message.peer.remoteAuthTag = message.authTag;
 		
 		for(DHTMessageStub request : pendingRequests) {
@@ -393,6 +395,8 @@ public class DHTClient {
 		} catch(IOException exc) {
 			logger.error("Encountered exception adding record from {}", message.peer.address, exc);
 		}
+		
+		message.makeResponse(new ArrayList<>(0)).send();
 	}
 	
 	protected boolean validAuthTag(DHTPeer peer, byte[] tag) {
