@@ -37,6 +37,7 @@ public class DHTMessageTest {
 			this.key = this.crypto.makePrivateDHKey();
 			this.tagKey = new Key(crypto);
 			this.routingTable = new DummyRoutingTable();
+			this.networkId = new byte[crypto.hashLength()];
 			routingTable.client = this;
 		}
 		
@@ -126,8 +127,8 @@ public class DHTMessageTest {
 		byte[] ephPubKeyRaw = new byte[crypto.asymPublicDHKeySize()];
 		sent.get(ephPubKeyRaw);		
 		PublicDHKey ephPubKey = crypto.makePublicDHKey(ephPubKeyRaw);
-		ByteBuffer keyMaterial = ByteBuffer.allocate(8+crypto.asymDHSecretSize());
-		keyMaterial.putLong(0);
+		ByteBuffer keyMaterial = ByteBuffer.allocate(crypto.hashLength()+crypto.asymDHSecretSize());
+		keyMaterial.put(new byte[crypto.hashLength()]);
 		keyMaterial.put(recvKey.sharedSecret(ephPubKey));
 		byte[] symKey = peer.client.crypto.makeSymmetricKey(keyMaterial.array());
 		Key key = new Key(crypto, symKey);

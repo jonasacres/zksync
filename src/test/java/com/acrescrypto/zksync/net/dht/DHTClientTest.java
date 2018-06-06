@@ -332,7 +332,7 @@ public class DHTClientTest {
 		assertEquals(crypto, client1.crypto);
 		assertNotNull(client1.routingTable);
 		assertNotNull(client1.store);
-
+		
 		assertArrayEquals(client.key.getBytes(), client1.key.getBytes());
 		assertArrayEquals(client.key.publicKey().getBytes(), client1.key.publicKey().getBytes());
 		assertArrayEquals(client.tagKey.getRaw(), client1.tagKey.getRaw());

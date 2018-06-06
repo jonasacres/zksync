@@ -30,6 +30,7 @@ public class DHTMessageStubTest {
 			this.crypto = new CryptoSupport();
 			this.tagKey = new Key(crypto);
 			this.key = crypto.makePrivateDHKey();
+			this.networkId = new byte[crypto.hashLength()];
 		}
 		
 		@Override public void missedResponse(DHTMessageStub stub) { this.missed = stub; }

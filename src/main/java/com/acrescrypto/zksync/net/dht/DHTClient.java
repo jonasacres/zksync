@@ -79,17 +79,17 @@ public class DHTClient {
 	DHTStatusCallback statusCallback;
 	int bindPort;
 	int lastStatus = STATUS_OFFLINE;
-	long networkId;
+	byte[] networkId;
 	FS storage;
 	
 	ArrayList<DHTMessageStub> pendingRequests;
 	
 	public DHTClient(Key storageKey, Blacklist blacklist) {
-		this(storageKey, blacklist, 0);
+		this(storageKey, blacklist, new byte[storageKey.getCrypto().hashLength()]);
 		// TODO DHT: (design) What about the bootstrap peer? Test vs. reality
 	}
 	
-	public DHTClient(Key storageKey, Blacklist blacklist, long networkId) {
+	public DHTClient(Key storageKey, Blacklist blacklist, byte[] networkId) {
 		this.blacklist = blacklist;
 		this.storageKey = storageKey;
 		this.storage = blacklist.getFS();
@@ -422,7 +422,10 @@ public class DHTClient {
 	}
 	
 	protected String path() {
-		return "dht-client-info-"+networkId;
+		ByteBuffer truncated = ByteBuffer.allocate(8);
+		truncated.get(crypto.hash(networkId), 0, truncated.remaining());
+		
+		return "dht-client-info-"+Util.bytesToHex(truncated.array());
 	}
 	
 	protected DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, DHTMessageCallback callback) {
