@@ -651,6 +651,16 @@ public class DHTClientTest {
 	}
 	
 	@Test
+	public void testIgnoresMessagesFromAlternateNetworkIds() throws ProtocolViolationException {
+		remote.listenClient.networkId = crypto.rng(crypto.hashLength());
+		DHTMessage req = remote.listenClient.pingMessage(clientPeer, null);
+		req.send();
+		
+		remote.strict = false;
+		assertNull(remote.receivePacket(DHTMessage.CMD_PING));
+	}
+	
+	@Test
 	public void testFindNodeIgnoresTruncatedID() throws IOException, ProtocolViolationException {
 		DHTMessage req = remote.listenClient.findNodeMessage(clientPeer, clientPeer.id, null);
 		req.payload = crypto.rng(req.payload.length-1);
