@@ -75,7 +75,7 @@ public class DHTClient {
 	Key storageKey, tagKey;
 	String bindAddress;
 	Thread socketListenerThread;
-	boolean closed;
+	boolean closed, initialized;
 	DHTStatusCallback statusCallback;
 	int bindPort;
 	int lastStatus = STATUS_OFFLINE;
@@ -118,6 +118,10 @@ public class DHTClient {
 		return this;
 	}
 	
+	public int getPort() {
+		return socket.getLocalPort();
+	}
+	
 	public DHTClient setStatusCallback(DHTStatusCallback statusCallback) {
 		this.statusCallback = statusCallback;
 		return this;
@@ -129,6 +133,8 @@ public class DHTClient {
 			if(peers == null || peers.isEmpty()) {
 				updateStatus(STATUS_QUESTIONABLE);
 			}
+			
+			initialized = true;
 		}).run();
 	}
 	
@@ -146,6 +152,7 @@ public class DHTClient {
 			
 			MutableInt pending = new MutableInt();
 			pending.setValue(peers.size());
+			
 			for(DHTPeer peer : peers) {
 				peer.getRecords(searchId, (records, isFinal)->{
 					if(!progressMonitor.snooze()) return;
@@ -201,6 +208,10 @@ public class DHTClient {
 		if(socket != null) {
 			socket.close();
 		}
+	}
+	
+	public boolean isInitialized() {
+		return initialized;
 	}
 	
 	protected void openSocket() throws SocketException {
@@ -265,7 +276,7 @@ public class DHTClient {
 		}
 	}
 	
-	protected void watchForResponse(DHTMessage message, DatagramPacket packet) {
+	protected synchronized void watchForResponse(DHTMessage message, DatagramPacket packet) {
 		pendingRequests.add(new DHTMessageStub(message, packet));
 	}
 	
@@ -274,7 +285,7 @@ public class DHTClient {
 		stopWatchingForResponse(stub);
 	}
 	
-	protected void stopWatchingForResponse(DHTMessageStub stub) {
+	protected synchronized void stopWatchingForResponse(DHTMessageStub stub) {
 		pendingRequests.remove(stub);
 	}
 	
@@ -332,12 +343,18 @@ public class DHTClient {
 		message.peer.acknowledgedMessage();
 		message.peer.remoteAuthTag = message.authTag;
 		
-		for(DHTMessageStub request : pendingRequests) {
-			if(request.dispatchResponseIfMatches(message)) {
-				routingTable.markFresh(message.peer);
-				break;
+		DHTMessageStub stub = null;
+		synchronized(this) {
+			for(DHTMessageStub request : pendingRequests) {
+				if(request.matchesMessage(message)) {
+					stub = request;
+				}
 			}
 		}
+		
+		if(stub == null) return; // ignore responses for stubs we don't have anymore
+		stub.dispatchResponse(message);
+		routingTable.markFresh(message.peer);
 	}
 
 	protected void processRequest(DHTMessage message) throws ProtocolViolationException {

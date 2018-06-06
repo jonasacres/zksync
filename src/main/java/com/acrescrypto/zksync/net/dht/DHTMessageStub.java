@@ -25,8 +25,11 @@ public class DHTMessageStub {
 		this.callback = msg.callback;
 	}
 	
-	public boolean dispatchResponseIfMatches(DHTMessage msg) throws ProtocolViolationException {
-		if(!(msgId == msg.msgId && cmd == msg.cmd && peer.equals(msg.peer))) return false;
+	public boolean matchesMessage(DHTMessage msg) {
+		return msgId == msg.msgId && cmd == msg.cmd && peer.equals(msg.peer);
+	}
+	
+	public void dispatchResponse(DHTMessage msg) throws ProtocolViolationException {
 		this.expirationMonitor.cancel();
 		
 		responsesReceived++;
@@ -37,8 +40,6 @@ public class DHTMessageStub {
 		if(callback != null) {
 			callback.responseReceived(msg);
 		}
-		
-		return true;
 	}
 	
 	public void retry() {

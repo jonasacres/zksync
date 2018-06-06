@@ -564,6 +564,23 @@ public class DHTClientTest {
 	}
 	
 	@Test
+	public void testIsInitializedReturnsFalseIfFindPeersNotCalled() {
+		assertFalse(client.initialized);
+	}
+	
+	@Test
+	public void testIsInitializedReturnsTrueIfFindPeersComplete() throws IOException, ProtocolViolationException {
+		client.findPeers();
+		remote.receivePacket().makeResponse(new ArrayList<>()).send();
+		assertTrue(Util.waitUntil(100, ()->client.isInitialized()));
+	}
+	
+	@Test
+	public void testGetPortReturnsBoundPortNumber() {
+		assertEquals(client.socket.getLocalPort(), client.getPort());
+	}
+	
+	@Test
 	public void testToleratesIndecipherableMessages() throws UnknownHostException {
 		/* send an corrupted one, and then a valid one and make sure we get a reply.
 		 * (in other words, did we blow up the listen thread or get blacklisted?)

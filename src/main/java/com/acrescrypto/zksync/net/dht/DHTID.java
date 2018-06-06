@@ -88,4 +88,8 @@ public class DHTID implements Comparable<DHTID>, Sendable {
 	public String toString() {
 		return Util.bytesToHex(this.rawId) + " (" + order() + ")";
 	}
+	
+	public String toShortString() {
+		return toString().substring(0, 7);
+	}
 }

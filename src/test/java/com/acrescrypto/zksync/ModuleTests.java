@@ -3,12 +3,13 @@ package com.acrescrypto.zksync;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
+import com.acrescrypto.zksync.net.dht.DHTModuleTest;
+
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-	FastTests.class,
-	ModuleTests.class,
+	DHTModuleTest.class,
 })
 
-public class AllTests {
+public class ModuleTests {
 
 }

@@ -98,38 +98,35 @@ public class DHTMessageStubTest {
 	}
 	
 	@Test
-	public void testDispatchResponseIfMatchesIgnoresMessageIfNoMsgIdMatch() throws ProtocolViolationException {
+	public void testMatchesMessageRetursnFalseIfNoMsgIdMatch() throws ProtocolViolationException {
 		DHTMessage fakeResponse = makeResponse();
 		fakeResponse.msgId++;
-		stub.dispatchResponseIfMatches(fakeResponse);
-		assertNull(resp);
+		assertFalse(stub.matchesMessage(fakeResponse));
 	}
 	
 	@Test
-	public void testDispatchResponseIfMatchesIgnoresMessageIfNoCmdMatch() throws ProtocolViolationException {
+	public void testMatchesMessageRetursnFalseIfNoCmdMatch() throws ProtocolViolationException {
 		DHTMessage fakeResponse = makeResponse();
 		fakeResponse.cmd++;
-		stub.dispatchResponseIfMatches(fakeResponse);
-		assertNull(resp);
+		assertFalse(stub.matchesMessage(fakeResponse));
 	}
 	
 	@Test
-	public void testDispatchResponseIfMatchesIgnoresMessageIfNoPeerMatch() throws ProtocolViolationException {
+	public void testMatchesMessageRetursnFalseIfNoPeerMatch() throws ProtocolViolationException {
 		DHTMessage fakeResponse = makeResponse();
 		fakeResponse.peer = new DHTPeer(client, "10.0.0.1", 12345, crypto.rng(crypto.asymPublicDHKeySize()));
-		stub.dispatchResponseIfMatches(fakeResponse);
-		assertNull(resp);
+		assertFalse(stub.matchesMessage(fakeResponse));
 	}
 	
 	@Test
 	public void testDispatchResponseIfMatchesCancelsExpirationMonitorIfMatch() throws ProtocolViolationException {
-		stub.dispatchResponseIfMatches(makeResponse());
+		stub.dispatchResponse(makeResponse());
 		assertFalse(Util.waitUntil(DHTClient.MESSAGE_EXPIRATION_TIME_MS+5, ()->stub.equals(client.missed)));
 	}
 	
 	@Test
 	public void testDispatchResponseIfMatchesDoesNotMarkMessageFinalIfNotLastExpected() throws ProtocolViolationException {
-		stub.dispatchResponseIfMatches(makeResponse());
+		stub.dispatchResponse(makeResponse());
 		assertFalse(resp.isFinal);
 	}
 	
@@ -138,7 +135,7 @@ public class DHTMessageStubTest {
 		DHTMessage response = makeResponse();
 		for(int i = 0; i < response.numExpected; i++) {
 			assertTrue(resp == null || !resp.isFinal);
-			stub.dispatchResponseIfMatches(response);
+			stub.dispatchResponse(response);
 		}
 		
 		assertTrue(resp.isFinal);
@@ -147,7 +144,7 @@ public class DHTMessageStubTest {
 	@Test
 	public void testDispatchResponseIfMatchesInvokesCallback() throws ProtocolViolationException {
 		DHTMessage response = makeResponse();
-		stub.dispatchResponseIfMatches(response);
+		stub.dispatchResponse(response);
 		assertEquals(resp, response);
 	}
 }
