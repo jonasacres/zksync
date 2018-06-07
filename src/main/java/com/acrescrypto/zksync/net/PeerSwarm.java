@@ -19,6 +19,7 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.Page;
+import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
 import com.acrescrypto.zksync.utility.Util;
@@ -271,5 +272,24 @@ public class PeerSwarm implements BlacklistCallback {
 		for(PeerConnection connection : connections) {
 			connection.requestPageTag(shortTag);
 		}
+	}
+	
+	public void requestRefTag(RefTag refTag) {
+		// TODO DHT: (implement) requestRefTag
+	}
+	
+	public void requestRevision(RefTag revTag) {
+		// TODO DHT: (implement) requestRevision
+	}
+	
+	public void requestAll() {
+		// TODO DHT: (implement) automatically request all from new connections
+		for(PeerConnection connection : connections) {
+			connection.requestAll();
+		}
+	}
+	
+	public void stopRequestingAll() {
+		// TODO DHT: (implement) stopRequestingAll
 	}
 }

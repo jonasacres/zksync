@@ -54,6 +54,7 @@ public class StoredAccessRecord {
 		Key key = new Key(master.crypto, keyMaterial);
 		
 		ArchiveAccessor accessor = master.makeAccessorForRoot(key, seedOnly);
+		// TODO: This is a blocking P2P network operation if we don't have the config on hand. Refactor?
 		ZKArchiveConfig config = new ZKArchiveConfig(accessor, archiveId);
 		archive = config.getArchive();
 	}

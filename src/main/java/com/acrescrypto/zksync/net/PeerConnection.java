@@ -148,6 +148,7 @@ public class PeerConnection {
 		send(CMD_ANNOUNCE_TIPS, buf.array());
 	}
 	
+	// TODO DHT: (implement) add a cancel for requestAll
 	public void requestAll() {
 		send(CMD_REQUEST_ALL, new byte[0]);
 	}
@@ -158,22 +159,22 @@ public class PeerConnection {
 		send(CMD_REQUEST_PAGE_TAGS, buf.array());
 	}
 
-	public void requestPageTags(byte[][] pageTags) {
-		ByteBuffer pageTagsMerged = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE*pageTags.length);
-		for(byte[] tag : pageTags) {
-			pageTagsMerged.put(tag, 0, 8);
+	public void requestPageTags(Collection<Long> pageTags) {
+		ByteBuffer pageTagsMerged = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE*pageTags.size());
+		for(Long shortTag : pageTags) {
+			pageTagsMerged.putLong(shortTag);
 		}
 		
 		send(CMD_REQUEST_PAGE_TAGS, pageTagsMerged.array());
 	}
 	
 	/** Request all pages pertaining to a given reftag (including merkle tree chunks). */
-	public void requestRefTags(RefTag[] refTags) throws PeerCapabilityException {
+	public void requestRefTags(Collection<RefTag> refTags) throws PeerCapabilityException {
 		assertPeerCapability(PEER_TYPE_FULL);
 		send(CMD_REQUEST_REF_TAGS, serializeRefTags(refTags));
 	}
 	
-	public void requestRevisionContents(RefTag[] tips) throws PeerCapabilityException {
+	public void requestRevisionContents(Collection<RefTag> tips) throws PeerCapabilityException {
 		assertPeerCapability(PEER_TYPE_FULL);
 		send(CMD_REQUEST_REVISION_CONTENTS, serializeRefTags(tips));
 	}
@@ -182,8 +183,8 @@ public class PeerConnection {
 		send(CMD_SET_PAUSED, new byte[] { (byte) (paused ? 0x01 : 0x00) });
 	}
 	
-	protected byte[] serializeRefTags(RefTag[] tags) {
-		ByteBuffer buf = ByteBuffer.allocate(tags.length * socket.swarm.config.getArchive().refTagSize());
+	protected byte[] serializeRefTags(Collection<RefTag> tags) {
+		ByteBuffer buf = ByteBuffer.allocate(tags.size() * socket.swarm.config.getArchive().refTagSize());
 		for(RefTag tag : tags) buf.put(tag.getBytes());
 		return buf.array();
 	}

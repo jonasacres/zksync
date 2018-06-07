@@ -6,6 +6,7 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
 import com.acrescrypto.zksync.utility.HashCache;
@@ -105,6 +106,41 @@ public class ZKArchive {
 
 	public ZKArchiveConfig getConfig() {
 		return config;
+	}
+	
+	/** Test if we have a given page cached locally. */
+	public boolean hasPageTag(byte[] pageTag) {
+		return config.getCacheStorage().exists(Page.pathForTag(pageTag));
+	}
+	
+	/** Test if we have every page of a given reftag cached locally. */
+	public boolean hasRefTag(RefTag refTag) throws IOException {
+		if(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) return true;
+		try {
+			PageMerkle merkle = new PageMerkle(refTag.cacheOnlyTag());
+			if(!merkle.exists()) return false;
+			for(int i = 0; i < merkle.numPages(); i++) {
+				if(!config.getCacheStorage().exists(Page.pathForTag(merkle.getPageTag(i)))) return false;
+			}
+			
+			return true;
+		} catch(InaccessibleStorageException exc) {
+			return false;
+		}
+	}
+	
+	/** Test if we have every page of a given revision cached locally. 
+	 * @throws IOException */
+	public boolean hasRevision(RefTag revTag) throws IOException {
+		if(!hasRefTag(revTag)) return false; // check if we have the inode table
+		ZKFS fs = openRevision(revTag);
+		for(int i = 0; i < fs.inodeTable.nextInodeId; i++) {
+			Inode inode = fs.inodeTable.inodeWithId(i);
+			if(inode.isDeleted()) continue;
+			if(!hasRefTag(inode.refTag)) return false;
+		}
+		
+		return true;
 	}
 	
 	@Override

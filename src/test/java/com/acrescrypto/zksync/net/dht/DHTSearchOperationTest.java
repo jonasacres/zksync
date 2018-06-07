@@ -185,6 +185,7 @@ public class DHTSearchOperationTest {
 	
 	@Test
 	public void testRunInvokesCallbackWithBestResults() {
+		// TODO DHT: (test) Intermittent test failure 5/6/18 baeb73c6a2ebf82df5f1f7ac902e2c89b2beb917 Linux
 		ArrayList<DHTPeer> expectedResults = closestInList(searchId, client.simPeers, DHTSearchOperation.MAX_RESULTS);
 		op.run();
 		waitForResult();

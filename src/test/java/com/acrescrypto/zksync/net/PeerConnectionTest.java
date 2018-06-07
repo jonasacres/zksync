@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -425,28 +426,30 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testRequestPageTags() throws IOException {
-		byte[][] pageTags = new byte[16][];
-		for(int i = 0; i < pageTags.length; i++) {
+		int numTags = 16;
+		ArrayList<Long> pageTags = new ArrayList<>(numTags);
+		for(int i = 0; i < numTags; i++) {
 			// page tags of various lengths; prove that we only use the first 8 bytes (short tag)
-			pageTags[i] = crypto.rng(RefTag.REFTAG_SHORT_SIZE + (int) (Math.random()*16.0));
+			pageTags.add(Util.shortTag(crypto.rng(RefTag.REFTAG_SHORT_SIZE)));
 		}
 		
 		conn.requestPageTags(pageTags);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_PAGE_TAGS);
-		for(byte[] tag : pageTags) {
-			byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
-			System.arraycopy(tag, 0, shortTag, 0, shortTag.length);
-			assertReceivedBytes(shortTag);
+		for(Long shortTag : pageTags) {
+			ByteBuffer shortTagBytes = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
+			shortTagBytes.putLong(shortTag);
+			assertReceivedBytes(shortTagBytes.array());
 		}
 		assertFinished();
 	}
 	
 	@Test
 	public void testRequestRefTags() throws PeerCapabilityException, IOException {
-		RefTag[] tags = new RefTag[16];
+		int numTags = 16;
+		ArrayList<RefTag> tags = new ArrayList<>(numTags);
 		
-		for(int i = 0; i < tags.length; i++) {
-			tags[i] = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+		for(int i = 0; i < numTags; i++) {
+			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
 		}
 		
 		conn.requestRefTags(tags);
@@ -459,7 +462,9 @@ public class PeerConnectionTest {
 	public void testRequestRefTagsThrowsExceptionIfNotFullPeer() throws PeerCapabilityException {
 		blindPeer();
 		try {
-			conn.requestRefTags(new RefTag[] { new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1) } );
+			ArrayList<RefTag> tags = new ArrayList<>(1);
+			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
+			conn.requestRefTags(tags);
 			fail();
 		} catch(PeerCapabilityException exc) {
 			assertNoMessage();
@@ -468,10 +473,11 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testRequestRevisionContents() throws PeerCapabilityException, IOException {
-		RefTag[] tags = new RefTag[16];
+		int numTags = 16;
+		ArrayList<RefTag> tags = new ArrayList<>(numTags);
 		
-		for(int i = 0; i < tags.length; i++) {
-			tags[i] = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+		for(int i = 0; i < numTags; i++) {
+			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
 		}
 		
 		conn.requestRevisionContents(tags);
@@ -484,7 +490,9 @@ public class PeerConnectionTest {
 	public void testRequestRevisionContentsThrowsExceptionIfNotFullPeer() {
 		blindPeer();
 		try {
-			conn.requestRevisionContents(new RefTag[] { new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1) } );
+			ArrayList<RefTag> tags = new ArrayList<>(1);
+			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
+			conn.requestRevisionContents(tags);
 			fail();
 		} catch(PeerCapabilityException exc) {
 			assertNoMessage();

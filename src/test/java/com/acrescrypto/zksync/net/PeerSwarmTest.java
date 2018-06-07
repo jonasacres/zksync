@@ -86,7 +86,7 @@ public class PeerSwarmTest {
 	class DummyConnection extends PeerConnection {
 		DummySocket socket;
 		PeerAdvertisement seenAd;
-		boolean closed;
+		boolean closed, requestedAll;
 		long requestedTag;
 		
 		public DummyConnection(DummySocket socket) {
@@ -98,6 +98,7 @@ public class PeerSwarmTest {
 		@Override public void close() { this.closed = true; }
 		@Override public void announceSelf(PeerAdvertisement ad) { this.seenAd = ad; }
 		@Override public void requestPageTag(long tag) { this.requestedTag = tag; }
+		@Override public void requestAll() { this.requestedAll = true; }
 	}
 	
 	static byte[] pageTag;
@@ -467,6 +468,22 @@ public class PeerSwarmTest {
 		swarm.requestTag(tag);
 		for(DummyConnection conn : conns) {
 			assertEquals(shortTag, conn.requestedTag);
+		}
+	}
+	
+	@Test
+	public void testRequestAllSendsRequestToAllPeers() throws IOException {
+		DummyConnection[] conns = new DummyConnection[16];
+		
+		for(int i = 0; i < conns.length; i++) {
+			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
+			swarm.openedConnection(conns[i]);
+			assertFalse(conns[i].requestedAll);
+		}
+		
+		swarm.requestAll();
+		for(DummyConnection conn : conns) {
+			assertTrue(conn.requestedAll);
 		}
 	}
 }

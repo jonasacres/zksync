@@ -41,14 +41,18 @@ public class ZKArchiveConfig {
 	/** Read an existing archive. 
 	 * @throws IOException */
 	public ZKArchiveConfig(ArchiveAccessor accessor, byte[] archiveId) throws IOException {
+		this(accessor, archiveId, true);
+	}
+	
+	public ZKArchiveConfig(ArchiveAccessor accessor, byte[] archiveId, boolean finish) throws IOException {
 		this.accessor = accessor;
 		this.pageSize = -1;
 		this.archiveId = archiveId;
 
 		initStorage();
-		
-		read();
-		this.archive = new ZKArchive(this);
+		if(finish) {
+			finishOpening();
+		}
 	}
 	
 	/** Create a new archive. 
@@ -65,6 +69,12 @@ public class ZKArchiveConfig {
 		initStorage();
 		this.archive = new ZKArchive(this);
 		write();
+	}
+	
+	public ZKArchiveConfig finishOpening() throws IOException {
+		read();
+		this.archive = new ZKArchive(this);
+		return this;
 	}
 	
 	protected void initStorage() throws IOException {

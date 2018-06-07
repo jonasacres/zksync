@@ -20,6 +20,7 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetTest;
 	StoredAccessTest.class,
 	ArchiveAccessorTest.class,
 	ZKArchiveConfigTest.class,
+	ZKArchiveTest.class,
 	ZKMasterTest.class,
 	PageTest.class,
 	PageMerkleTest.class
