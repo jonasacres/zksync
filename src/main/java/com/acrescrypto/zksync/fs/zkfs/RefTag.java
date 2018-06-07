@@ -73,6 +73,7 @@ public class RefTag implements Comparable<RefTag> {
 	public byte[] unpadHash(byte[] hash) {
 		if(refType != RefTag.REF_TYPE_IMMEDIATE) return hash;
 		int len = archive.crypto.hashLength() - hash[hash.length-1];
+		if(len <= 0) return new byte[0];
 		ByteBuffer buf = ByteBuffer.allocate(len);
 		buf.put(hash, 0, len);
 		return buf.array();

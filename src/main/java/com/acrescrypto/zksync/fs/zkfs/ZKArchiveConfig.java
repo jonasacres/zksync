@@ -15,7 +15,6 @@ import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKArchiveConfig {
-	
 	public class InvalidArchiveConfigException extends RuntimeException {
 		private static final long serialVersionUID = 1L;
 	}
@@ -44,6 +43,8 @@ public class ZKArchiveConfig {
 		this(accessor, archiveId, true);
 	}
 	
+	/* Bootstrapping the archive is a mess of chicken-and-egg problems, especially where PeerSwarm is concerned. */
+	
 	public ZKArchiveConfig(ArchiveAccessor accessor, byte[] archiveId, boolean finish) throws IOException {
 		this.accessor = accessor;
 		this.pageSize = -1;
@@ -68,12 +69,14 @@ public class ZKArchiveConfig {
 		initArchiveSpecific();
 		initStorage();
 		this.archive = new ZKArchive(this);
+		swarm.finalizeInit();
 		write();
 	}
 	
 	public ZKArchiveConfig finishOpening() throws IOException {
 		read();
 		this.archive = new ZKArchive(this);
+		swarm.finalizeInit();
 		return this;
 	}
 	

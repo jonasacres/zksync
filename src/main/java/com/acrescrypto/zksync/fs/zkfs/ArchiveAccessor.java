@@ -39,6 +39,7 @@ public class ArchiveAccessor {
 	public final static int KEY_INDEX_ACCUMULATOR = 13;
 	public final static int KEY_INDEX_AD_IDENTITY = 14;
 	public final static int KEY_INDEX_AD_ARCHIVE_ID = 15;
+	public final static int KEY_INDEX_REQUEST_POOL = 16;
 	
 	protected ZKMaster master;
 

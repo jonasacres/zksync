@@ -50,14 +50,18 @@ public class PeerSwarm implements BlacklistCallback {
 	public PeerSwarm(ZKArchiveConfig config) throws IOException {
 		this.config = config;
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
-		pool = new RequestPool(config.getArchive());
 		buildCurrentTags();
 		connectionThread();
 	}
 	
+	public void finalizeInit() throws IOException {
+		pool = new RequestPool(config.getArchive());
+		pool.read();
+	}
+	
 	public synchronized void close() {
 		closed = true;
-		pool.stop();
+		if(pool != null) pool.stop();
 		for(PeerConnection connection : connections) {
 			connection.close();
 		}
@@ -270,37 +274,35 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void requestTag(byte[] pageTag) {
-		pool.addPageTag(pageTag);
-		requestTag(Util.shortTag(pageTag));
+	public void requestTag(int priority, byte[] pageTag) {
+		requestTag(priority, Util.shortTag(pageTag));
 	}
 	
-	public void requestTag(long shortTag) {
-		pool.addPageTag(shortTag);
+	public void requestTag(int priority, long shortTag) {
+		pool.addPageTag(priority, shortTag);
 		for(PeerConnection connection : connections) {
-			connection.requestPageTag(shortTag);
+			connection.requestPageTag(priority, shortTag);
 		}
 	}
 	
-	public void requestRefTag(RefTag refTag) {
-		pool.addRefTag(refTag);
+	public void requestRefTag(int priority, RefTag refTag) {
+		pool.addRefTag(priority, refTag);
 		for(PeerConnection connection : connections) {
 			ArrayList<RefTag> list = new ArrayList<>(1);
 			list.add(refTag);
 			try {
-				connection.requestRefTags(list);
+				connection.requestRefTags(priority, list);
 			} catch (PeerCapabilityException e) {}
 		}
 	}
 	
-	public void requestRevision(RefTag revTag) {
-		pool.addRevision(revTag);
-		pool.addRefTag(revTag);
+	public void requestRevision(int priority, RefTag revTag) {
+		pool.addRevision(priority, revTag);
 		for(PeerConnection connection : connections) {
 			ArrayList<RefTag> list = new ArrayList<>(1);
 			list.add(revTag);
 			try {
-				connection.requestRevisionContents(list);
+				connection.requestRevisionContents(priority, list);
 			} catch(PeerCapabilityException exc) {}
 		}
 	}

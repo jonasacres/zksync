@@ -12,6 +12,7 @@ import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.utility.Util;
 
 public class SwarmFS extends FS {
+	public final static int REQUEST_PRIORITY = 100;
 	PeerSwarm swarm;
 
 	public SwarmFS(PeerSwarm swarm) {
@@ -146,7 +147,7 @@ public class SwarmFS extends FS {
 	@Override
 	public byte[] read(String path) throws IOException {
 		byte[] pageTag = Page.tagForPath(path);
-		swarm.requestTag(pageTag);
+		swarm.requestTag(REQUEST_PRIORITY, pageTag);
 		swarm.waitForPage(pageTag);
 		return swarm.getConfig().getCacheStorage().read(path);
 	}
@@ -154,7 +155,7 @@ public class SwarmFS extends FS {
 	@Override
 	public File open(String path, int mode) throws IOException {
 		byte[] pageTag = Page.tagForPath(path);
-		swarm.requestTag(pageTag);
+		swarm.requestTag(REQUEST_PRIORITY, pageTag);
 		swarm.waitForPage(pageTag);
 		return swarm.getConfig().getCacheStorage().open(path, mode);
 	}

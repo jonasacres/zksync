@@ -88,6 +88,7 @@ public class PeerSwarmTest {
 	class DummyConnection extends PeerConnection {
 		DummySocket socket;
 		PeerAdvertisement seenAd;
+		int requestedPriority;
 		boolean closed, requestedAll, requestedAllCancel;
 		long requestedTag;
 		RefTag requestedRefTag, requestedRevTag;
@@ -100,20 +101,26 @@ public class PeerSwarmTest {
 		@Override public DummySocket getSocket() { return socket; }
 		@Override public void close() { this.closed = true; }
 		@Override public void announceSelf(PeerAdvertisement ad) { this.seenAd = ad; }
-		@Override public void requestPageTag(long tag) { this.requestedTag = tag; }
-		@Override public void requestPageTags(Collection<Long> tags) {
+		@Override public void requestPageTag(int priority, long tag) {
+			requestedPriority = priority;
+			this.requestedTag = tag;
+		}
+		@Override public void requestPageTags(int priority, Collection<Long> tags) {
+			requestedPriority = priority;
 			for(Long tag : tags) {
 				this.requestedTag = tag;
 				break;
 			}
 		}
-		@Override public void requestRefTags(Collection<RefTag> tags) {
+		@Override public void requestRefTags(int priority, Collection<RefTag> tags) {
+			requestedPriority = priority;
 			for(RefTag tag : tags) {
 				this.requestedRefTag = tag;
 				break;
 			}
 		}
-		@Override public void requestRevisionContents(Collection<RefTag> tips) {
+		@Override public void requestRevisionContents(int priority, Collection<RefTag> tips) {
+			requestedPriority = priority;
 			for(RefTag tip : tips) {
 				this.requestedRevTag = tip;
 				break;
@@ -148,6 +155,7 @@ public class PeerSwarmTest {
 	public void before() throws IOException {
 		connectedAddresses.clear();
 		swarm = new PeerSwarm(archive.getConfig());
+		swarm.finalizeInit();
 		exploded = false;
 		connection = new DummyConnection(new DummySocket("127.0.0.1", swarm));
 		connection.socket.ad = new DummyAdvertisement();
@@ -469,9 +477,10 @@ public class PeerSwarmTest {
 			assertNotEquals(shortTag, conns[i].requestedTag);
 		}
 		
-		swarm.requestTag(shortTag);
+		swarm.requestTag(4321, shortTag);
 		for(DummyConnection conn : conns) {
 			assertEquals(shortTag, conn.requestedTag);
+			assertEquals(4321, conn.requestedPriority);
 		}
 	}
 	
@@ -479,9 +488,10 @@ public class PeerSwarmTest {
 	public void testRequestShortTagSendsRequestToAllNewPeers() {
 		long shortTag = 1234;
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
-		swarm.requestTag(shortTag);
+		swarm.requestTag(42, shortTag);
 		swarm.openedConnection(conn);
 		assertEquals(shortTag, conn.requestedTag);
+		assertEquals(42, conn.requestedPriority);
 	}
 	
 	@Test
@@ -496,7 +506,7 @@ public class PeerSwarmTest {
 			assertNotEquals(shortTag, conns[i].requestedTag);
 		}
 		
-		swarm.requestTag(tag);
+		swarm.requestTag(0, tag);
 		for(DummyConnection conn : conns) {
 			assertEquals(shortTag, conn.requestedTag);
 		}
@@ -507,7 +517,7 @@ public class PeerSwarmTest {
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		byte[] tag = archive.getCrypto().rng(archive.getCrypto().hashLength());
 		long shortTag = Util.shortTag(tag);
-		swarm.requestTag(tag);
+		swarm.requestTag(0, tag);
 		swarm.openedConnection(conn);
 		assertEquals(shortTag, conn.requestedTag);
 	}
@@ -573,9 +583,10 @@ public class PeerSwarmTest {
 			assertFalse(conns[i].requestedAll);
 		}
 		
-		swarm.requestRefTag(tag);
+		swarm.requestRefTag(-44332211, tag);
 		for(DummyConnection conn : conns) {
 			assertEquals(tag, conn.requestedRefTag);
+			assertEquals(-44332211, conn.requestedPriority);
 		}
 	}
 	
@@ -583,9 +594,10 @@ public class PeerSwarmTest {
 	public void testRequestRefTagSendsRequestRefTagToAllNewPeers() {
 		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
-		swarm.requestRefTag(tag);
+		swarm.requestRefTag(Integer.MAX_VALUE, tag);
 		swarm.openedConnection(conn);
 		assertEquals(tag, conn.requestedRefTag);
+		assertEquals(Integer.MAX_VALUE, conn.requestedPriority);
 	}
 	
 	@Test
@@ -599,9 +611,10 @@ public class PeerSwarmTest {
 			assertFalse(conns[i].requestedAll);
 		}
 		
-		swarm.requestRevision(tag);
+		swarm.requestRevision(Integer.MIN_VALUE, tag);
 		for(DummyConnection conn : conns) {
 			assertEquals(tag, conn.requestedRevTag);
+			assertEquals(Integer.MIN_VALUE, conn.requestedPriority);
 		}
 	}
 
@@ -609,13 +622,9 @@ public class PeerSwarmTest {
 	public void testRequestRevisionSendsRequestRevisionContentsToAllNewPeers() {
 		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
-		swarm.requestRevision(tag);
+		swarm.requestRevision(11235813, tag);
 		swarm.openedConnection(conn);
 		assertEquals(tag, conn.requestedRevTag);
+		assertEquals(11235813, conn.requestedPriority);
 	}
-	
-	// request reftag sends to current peers
-	// request reftag sends to new peers
-	// request revision tag sends to current peers
-	// request revision tag sends to new peers
 }

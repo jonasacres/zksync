@@ -29,12 +29,14 @@ public class SwarmFSTest {
 	class DummyPeerSwarm extends PeerSwarm {
 		boolean blocking;
 		byte[] requestedTag;
+		int requestedPriority;
 		
 		public DummyPeerSwarm(ZKArchiveConfig config) throws IOException {
 			super(config);
 		}
 		
-		@Override public void requestTag(byte[] tag) {
+		@Override public void requestTag(int priority, byte[] tag) {
+			requestedPriority = priority;
 			requestedTag = tag;
 		}
 		
@@ -86,6 +88,7 @@ public class SwarmFSTest {
 	public void testReadRequestsTagFromSwarm() throws IOException {
 		swarmFs.read(Page.pathForTag(tag));
 		assertTrue(Arrays.equals(tag, swarm.requestedTag));
+		assertEquals(SwarmFS.REQUEST_PRIORITY, swarm.requestedPriority);
 	}
 	
 	@Test
@@ -124,6 +127,7 @@ public class SwarmFSTest {
 	public void testOpenRequestsTagFromSwarm() throws IOException {
 		swarmFs.open(Page.pathForTag(tag), File.O_RDONLY);
 		assertTrue(Arrays.equals(tag, swarm.requestedTag));
+		assertEquals(SwarmFS.REQUEST_PRIORITY, swarm.requestedPriority);
 	}
 
 	@Test

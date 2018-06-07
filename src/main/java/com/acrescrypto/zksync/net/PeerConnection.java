@@ -157,14 +157,17 @@ public class PeerConnection {
 		send(CMD_REQUEST_ALL_CANCEL, new byte[0]);
 	}
 	
-	public void requestPageTag(long shortTag) {
-		ByteBuffer buf = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
+	public void requestPageTag(int priority, long shortTag) {
+		ByteBuffer buf = ByteBuffer.allocate(4+RefTag.REFTAG_SHORT_SIZE);
+		buf.putInt(priority);
 		buf.putLong(shortTag);
 		send(CMD_REQUEST_PAGE_TAGS, buf.array());
 	}
 
-	public void requestPageTags(Collection<Long> pageTags) {
-		ByteBuffer pageTagsMerged = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE*pageTags.size());
+	public void requestPageTags(int priority, Collection<Long> pageTags) {
+		if(pageTags.isEmpty()) return;
+		ByteBuffer pageTagsMerged = ByteBuffer.allocate(4+RefTag.REFTAG_SHORT_SIZE*pageTags.size());
+		pageTagsMerged.putInt(priority);
 		for(Long shortTag : pageTags) {
 			pageTagsMerged.putLong(shortTag);
 		}
@@ -173,22 +176,25 @@ public class PeerConnection {
 	}
 	
 	/** Request all pages pertaining to a given reftag (including merkle tree chunks). */
-	public void requestRefTags(Collection<RefTag> refTags) throws PeerCapabilityException {
+	public void requestRefTags(int priority, Collection<RefTag> refTags) throws PeerCapabilityException {
+		if(refTags.isEmpty()) return;
 		assertPeerCapability(PEER_TYPE_FULL);
-		send(CMD_REQUEST_REF_TAGS, serializeRefTags(refTags));
+		send(CMD_REQUEST_REF_TAGS, serializeRefTags(priority, refTags));
 	}
 	
-	public void requestRevisionContents(Collection<RefTag> tips) throws PeerCapabilityException {
+	public void requestRevisionContents(int priority, Collection<RefTag> tips) throws PeerCapabilityException {
+		if(tips.isEmpty()) return;
 		assertPeerCapability(PEER_TYPE_FULL);
-		send(CMD_REQUEST_REVISION_CONTENTS, serializeRefTags(tips));
+		send(CMD_REQUEST_REVISION_CONTENTS, serializeRefTags(priority, tips));
 	}
 	
 	public void setPaused(boolean paused) {
 		send(CMD_SET_PAUSED, new byte[] { (byte) (paused ? 0x01 : 0x00) });
 	}
 	
-	protected byte[] serializeRefTags(Collection<RefTag> tags) {
-		ByteBuffer buf = ByteBuffer.allocate(tags.size() * socket.swarm.config.getArchive().refTagSize());
+	protected byte[] serializeRefTags(int priority, Collection<RefTag> tags) {
+		ByteBuffer buf = ByteBuffer.allocate(4 + tags.size() * socket.swarm.config.getArchive().refTagSize());
+		buf.putInt(priority);
 		for(RefTag tag : tags) buf.put(tag.getBytes());
 		return buf.array();
 	}

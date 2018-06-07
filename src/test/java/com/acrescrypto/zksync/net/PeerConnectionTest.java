@@ -59,6 +59,7 @@ public class PeerConnectionTest {
 		
 		public DummySwarm(ZKArchiveConfig config) throws IOException {
 			super(config);
+			finalizeInit();
 		}
 		
 		@Override
@@ -425,9 +426,10 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testRequestPageTag() throws IOException {
-		conn.requestPageTag(1234);
+		conn.requestPageTag(4321, 1234);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_PAGE_TAGS);
-		assertReceivedBytes(ByteBuffer.allocate(8).putLong(1234).array());
+		assertReceivedBytes(Util.serializeInt(4321));
+		assertReceivedBytes(Util.serializeLong(1234));
 		assertFinished();
 	}
 	
@@ -440,8 +442,9 @@ public class PeerConnectionTest {
 			pageTags.add(Util.shortTag(crypto.rng(RefTag.REFTAG_SHORT_SIZE)));
 		}
 		
-		conn.requestPageTags(pageTags);
+		conn.requestPageTags(Integer.MAX_VALUE, pageTags);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_PAGE_TAGS);
+		assertReceivedBytes(Util.serializeInt(Integer.MAX_VALUE));
 		for(Long shortTag : pageTags) {
 			ByteBuffer shortTagBytes = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
 			shortTagBytes.putLong(shortTag);
@@ -459,8 +462,9 @@ public class PeerConnectionTest {
 			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
 		}
 		
-		conn.requestRefTags(tags);
+		conn.requestRefTags(Integer.MIN_VALUE, tags);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_REF_TAGS);
+		assertReceivedBytes(Util.serializeInt(Integer.MIN_VALUE));
 		for(RefTag tag : tags) assertReceivedBytes(tag.getBytes());
 		assertFinished();
 	}
@@ -471,7 +475,7 @@ public class PeerConnectionTest {
 		try {
 			ArrayList<RefTag> tags = new ArrayList<>(1);
 			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
-			conn.requestRefTags(tags);
+			conn.requestRefTags(0, tags);
 			fail();
 		} catch(PeerCapabilityException exc) {
 			assertNoMessage();
@@ -487,8 +491,9 @@ public class PeerConnectionTest {
 			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
 		}
 		
-		conn.requestRevisionContents(tags);
+		conn.requestRevisionContents(-1, tags);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_REVISION_CONTENTS);
+		assertReceivedBytes(Util.serializeInt(-1));
 		for(RefTag tag : tags) assertReceivedBytes(tag.getBytes());
 		assertFinished();
 	}
@@ -499,7 +504,7 @@ public class PeerConnectionTest {
 		try {
 			ArrayList<RefTag> tags = new ArrayList<>(1);
 			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
-			conn.requestRevisionContents(tags);
+			conn.requestRevisionContents(0, tags);
 			fail();
 		} catch(PeerCapabilityException exc) {
 			assertNoMessage();

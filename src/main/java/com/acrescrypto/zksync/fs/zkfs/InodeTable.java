@@ -191,7 +191,7 @@ public class InodeTable extends ZKFile {
 		byte[] serialized = new byte[inodeSize()];
 		int i = 0;
 		
-		while(buf.remaining() >= serialized.length) {
+		while(buf.remaining() >= serialized.length && buf.hasRemaining()) {
 			buf.get(serialized);
 			list[i++] = new Inode(zkfs, serialized);
 		}
