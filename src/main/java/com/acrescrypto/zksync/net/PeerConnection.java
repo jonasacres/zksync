@@ -32,11 +32,12 @@ public class PeerConnection {
 	public final static byte CMD_ANNOUNCE_TAGS = 0x03;
 	public final static byte CMD_ANNOUNCE_TIPS = 0x04;
 	public final static byte CMD_REQUEST_ALL = 0x05;
-	public final static byte CMD_REQUEST_REF_TAGS = 0x06;
-	public final static byte CMD_REQUEST_REVISION_CONTENTS = 0x07;
-	public final static byte CMD_REQUEST_PAGE_TAGS = 0x08;
-	public final static byte CMD_SEND_PAGE = 0x09;
-	public final static byte CMD_SET_PAUSED = 0x0a;
+	public final static byte CMD_REQUEST_ALL_CANCEL = 0x06;
+	public final static byte CMD_REQUEST_REF_TAGS = 0x07;
+	public final static byte CMD_REQUEST_REVISION_CONTENTS = 0x08;
+	public final static byte CMD_REQUEST_PAGE_TAGS = 0x09;
+	public final static byte CMD_SEND_PAGE = 0x0a;
+	public final static byte CMD_SET_PAUSED = 0x0b;
 	
 	public final static int MAX_SUPPORTED_CMD = CMD_SET_PAUSED; // update to largest acceptable command code
 	
@@ -148,9 +149,12 @@ public class PeerConnection {
 		send(CMD_ANNOUNCE_TIPS, buf.array());
 	}
 	
-	// TODO DHT: (implement) add a cancel for requestAll
 	public void requestAll() {
 		send(CMD_REQUEST_ALL, new byte[0]);
+	}
+	
+	public void requestAllCancel() {
+		send(CMD_REQUEST_ALL_CANCEL, new byte[0]);
 	}
 	
 	public void requestPageTag(long shortTag) {
@@ -218,6 +222,9 @@ public class PeerConnection {
 				break;
 			case CMD_REQUEST_ALL:
 				handleRequestAll(msg);
+				break;
+			case CMD_REQUEST_ALL_CANCEL:
+				handleRequestAllCancel(msg);
 				break;
 			case CMD_REQUEST_REF_TAGS:
 				handleRequestRefTags(msg);
@@ -327,7 +334,12 @@ public class PeerConnection {
 		msg.rxBuf.requireEOF();
 		sendEverything();
 	}
-	
+
+	protected void handleRequestAllCancel(PeerMessageIncoming msg) throws ProtocolViolationException, IOException {
+		msg.rxBuf.requireEOF();
+		stopSendingEverything();
+	}
+
 	protected void handleRequestRefTags(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
 		ZKArchive archive = socket.swarm.config.getArchive();
 		assertPeerCapability(PEER_TYPE_FULL);
@@ -429,7 +441,11 @@ public class PeerConnection {
 	protected void sendEverything() throws IOException {
 		queue.startSendingEverything();
 	}
-	
+
+	protected void stopSendingEverything() throws IOException {
+		queue.stopSendingEverything();
+	}
+
 	protected void sendRevisionContents(int priority, RefTag refTag) throws IOException {
 		queue.addRevisionTag(priority, refTag);
 	}

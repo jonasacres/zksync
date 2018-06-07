@@ -16,7 +16,8 @@ import org.junit.runners.Suite;
 	TCPPeerAdvertisementListenerTest.class,
 	TCPPeerSocketListenerTest.class,
 	TCPPeerSocketTest.class,
-	PeerConnectionTest.class
+	PeerConnectionTest.class,
+	RequestPoolTest.class
 })
 
 public class NetTests {

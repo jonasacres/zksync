@@ -10,6 +10,7 @@ import static org.junit.Assert.assertTrue;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 
 import org.junit.After;
 import org.junit.AfterClass;
@@ -19,6 +20,7 @@ import org.junit.Test;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
+import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
@@ -86,8 +88,9 @@ public class PeerSwarmTest {
 	class DummyConnection extends PeerConnection {
 		DummySocket socket;
 		PeerAdvertisement seenAd;
-		boolean closed, requestedAll;
+		boolean closed, requestedAll, requestedAllCancel;
 		long requestedTag;
+		RefTag requestedRefTag, requestedRevTag;
 		
 		public DummyConnection(DummySocket socket) {
 			super(socket);
@@ -98,7 +101,26 @@ public class PeerSwarmTest {
 		@Override public void close() { this.closed = true; }
 		@Override public void announceSelf(PeerAdvertisement ad) { this.seenAd = ad; }
 		@Override public void requestPageTag(long tag) { this.requestedTag = tag; }
+		@Override public void requestPageTags(Collection<Long> tags) {
+			for(Long tag : tags) {
+				this.requestedTag = tag;
+				break;
+			}
+		}
+		@Override public void requestRefTags(Collection<RefTag> tags) {
+			for(RefTag tag : tags) {
+				this.requestedRefTag = tag;
+				break;
+			}
+		}
+		@Override public void requestRevisionContents(Collection<RefTag> tips) {
+			for(RefTag tip : tips) {
+				this.requestedRevTag = tip;
+				break;
+			}
+		}
 		@Override public void requestAll() { this.requestedAll = true; }
+		@Override public void requestAllCancel() { this.requestedAllCancel = true; }
 	}
 	
 	static byte[] pageTag;
@@ -438,7 +460,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testRequestShortTagSendsRequestToAllPeers() throws IOException {
+	public void testRequestShortTagSendsRequestToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		long shortTag = 1234;
 		for(int i = 0; i < conns.length; i++) {
@@ -454,7 +476,16 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testRequestTagLongSendsRequestToAllPeers() throws IOException {
+	public void testRequestShortTagSendsRequestToAllNewPeers() {
+		long shortTag = 1234;
+		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
+		swarm.requestTag(shortTag);
+		swarm.openedConnection(conn);
+		assertEquals(shortTag, conn.requestedTag);
+	}
+	
+	@Test
+	public void testRequestTagLongSendsRequestToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		byte[] tag = archive.getCrypto().rng(archive.getCrypto().hashLength());
 		long shortTag = Util.shortTag(tag);
@@ -472,7 +503,17 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testRequestAllSendsRequestToAllPeers() throws IOException {
+	public void testRequestTagLongSendsRequestToAllNewPeers() {
+		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
+		byte[] tag = archive.getCrypto().rng(archive.getCrypto().hashLength());
+		long shortTag = Util.shortTag(tag);
+		swarm.requestTag(tag);
+		swarm.openedConnection(conn);
+		assertEquals(shortTag, conn.requestedTag);
+	}
+	
+	@Test
+	public void testRequestAllSendsRequestToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		
 		for(int i = 0; i < conns.length; i++) {
@@ -486,4 +527,95 @@ public class PeerSwarmTest {
 			assertTrue(conn.requestedAll);
 		}
 	}
+	
+	@Test
+	public void testRequestAllSendsRequestToAllNewPeers() throws IOException {
+		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
+		swarm.requestAll();
+		assertFalse(conn.requestedAll);
+		swarm.openedConnection(conn);
+		assertTrue(conn.requestedAll);
+	}
+	
+	@Test
+	public void testStopRequestingAllSendsRequestAllCancelToCurrentPeers() {
+		DummyConnection[] conns = new DummyConnection[16];
+		
+		for(int i = 0; i < conns.length; i++) {
+			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
+			swarm.openedConnection(conns[i]);
+			assertFalse(conns[i].requestedAll);
+		}
+		
+		swarm.stopRequestingAll();
+		for(DummyConnection conn : conns) {
+			assertTrue(conn.requestedAllCancel);
+		}
+	}
+	
+	@Test
+	public void testStopRequestingAllAvoidsSendAllRequestToNewPeers() throws IOException {
+		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
+		swarm.requestAll();
+		swarm.stopRequestingAll();
+		swarm.openedConnection(conn);
+		assertFalse(conn.requestedAll);
+	}
+	
+	@Test
+	public void testRequestRefTagSendsRequestRefTagToAllCurrentPeers() {
+		DummyConnection[] conns = new DummyConnection[16];
+		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
+		
+		for(int i = 0; i < conns.length; i++) {
+			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
+			swarm.openedConnection(conns[i]);
+			assertFalse(conns[i].requestedAll);
+		}
+		
+		swarm.requestRefTag(tag);
+		for(DummyConnection conn : conns) {
+			assertEquals(tag, conn.requestedRefTag);
+		}
+	}
+	
+	@Test
+	public void testRequestRefTagSendsRequestRefTagToAllNewPeers() {
+		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
+		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
+		swarm.requestRefTag(tag);
+		swarm.openedConnection(conn);
+		assertEquals(tag, conn.requestedRefTag);
+	}
+	
+	@Test
+	public void testRequestRevisionSendsRequestRevisionContentsToAllCurrentPeers() {
+		DummyConnection[] conns = new DummyConnection[16];
+		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
+		
+		for(int i = 0; i < conns.length; i++) {
+			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
+			swarm.openedConnection(conns[i]);
+			assertFalse(conns[i].requestedAll);
+		}
+		
+		swarm.requestRevision(tag);
+		for(DummyConnection conn : conns) {
+			assertEquals(tag, conn.requestedRevTag);
+		}
+	}
+
+	@Test
+	public void testRequestRevisionSendsRequestRevisionContentsToAllNewPeers() {
+		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
+		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
+		swarm.requestRevision(tag);
+		swarm.openedConnection(conn);
+		assertEquals(tag, conn.requestedRevTag);
+	}
+	
+	// request reftag sends to current peers
+	// request reftag sends to new peers
+	// request revision tag sends to current peers
+	// request revision tag sends to new peers
 }

@@ -22,6 +22,7 @@ import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
+import com.acrescrypto.zksync.net.PeerConnection.PeerCapabilityException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerSwarm implements BlacklistCallback {
@@ -35,6 +36,7 @@ public class PeerSwarm implements BlacklistCallback {
 	protected HashMap<Long,ChunkAccumulator> activeFiles = new HashMap<Long,ChunkAccumulator>();
 	protected HashMap<Long,Condition> pageWaits = new HashMap<Long,Condition>();
 	protected HashMap<PeerAdvertisement,Long> adEmbargoes = new HashMap<PeerAdvertisement,Long>();
+	protected RequestPool pool;
 	
 	protected Lock pageWaitLock = new ReentrantLock();
 	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
@@ -48,12 +50,14 @@ public class PeerSwarm implements BlacklistCallback {
 	public PeerSwarm(ZKArchiveConfig config) throws IOException {
 		this.config = config;
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
+		pool = new RequestPool(config.getArchive());
 		buildCurrentTags();
 		connectionThread();
 	}
 	
 	public synchronized void close() {
 		closed = true;
+		pool.stop();
 		for(PeerConnection connection : connections) {
 			connection.close();
 		}
@@ -121,6 +125,8 @@ public class PeerSwarm implements BlacklistCallback {
 			knownAds.remove(ad);
 			knownAds.add(connection.socket.getAd());
 		}
+		
+		pool.addRequestsToConnection(connection);
 		connections.add(connection);
 	}
 	
@@ -265,31 +271,51 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public void requestTag(byte[] pageTag) {
+		pool.addPageTag(pageTag);
 		requestTag(Util.shortTag(pageTag));
 	}
 	
 	public void requestTag(long shortTag) {
+		pool.addPageTag(shortTag);
 		for(PeerConnection connection : connections) {
 			connection.requestPageTag(shortTag);
 		}
 	}
 	
 	public void requestRefTag(RefTag refTag) {
-		// TODO DHT: (implement) requestRefTag
+		pool.addRefTag(refTag);
+		for(PeerConnection connection : connections) {
+			ArrayList<RefTag> list = new ArrayList<>(1);
+			list.add(refTag);
+			try {
+				connection.requestRefTags(list);
+			} catch (PeerCapabilityException e) {}
+		}
 	}
 	
 	public void requestRevision(RefTag revTag) {
-		// TODO DHT: (implement) requestRevision
+		pool.addRevision(revTag);
+		pool.addRefTag(revTag);
+		for(PeerConnection connection : connections) {
+			ArrayList<RefTag> list = new ArrayList<>(1);
+			list.add(revTag);
+			try {
+				connection.requestRevisionContents(list);
+			} catch(PeerCapabilityException exc) {}
+		}
 	}
 	
 	public void requestAll() {
-		// TODO DHT: (implement) automatically request all from new connections
+		pool.setRequestingEverything(true);
 		for(PeerConnection connection : connections) {
 			connection.requestAll();
 		}
 	}
 	
 	public void stopRequestingAll() {
-		// TODO DHT: (implement) stopRequestingAll
+		pool.setRequestingEverything(false);
+		for(PeerConnection connection : connections) {
+			connection.requestAllCancel();
+		}
 	}
 }

@@ -417,6 +417,13 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
+	public void testRequestAllCancel() throws IOException {
+		conn.requestAllCancel();
+		assertReceivedCmd(PeerConnection.CMD_REQUEST_ALL_CANCEL);
+		assertFinished();
+	}
+	
+	@Test
 	public void testRequestPageTag() throws IOException {
 		conn.requestPageTag(1234);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_PAGE_TAGS);
@@ -802,6 +809,22 @@ public class PeerConnectionTest {
 	public void testHandleRequestAllWorksForSeedOnly() throws ProtocolViolationException, IOException, UnconnectableAdvertisementException {
 		blindPeer();
 		testHandleRequestAllCausesPageQueueToSendEverything();
+	}
+	
+	@Test
+	public void testHandleRequestAllCancelCausesPageQueueToStopSendingEverything() throws ProtocolViolationException, IOException {
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_ALL_CANCEL);
+		conn.sendEverything();
+		assertQueuedItemLike((item) -> (item instanceof EverythingQueueItem));
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		conn.handle(msg);
+		assertNoQueuedItemLike((item) -> (item instanceof EverythingQueueItem));
+	}
+	
+	@Test
+	public void testHandleRequestAllCancelWorksForSeedOnly() throws ProtocolViolationException, IOException, UnconnectableAdvertisementException {
+		blindPeer();
+		testHandleRequestAllCancelCausesPageQueueToStopSendingEverything();
 	}
 	
 	@Test
