@@ -3,10 +3,13 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.LinkedList;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
+import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
@@ -33,12 +36,13 @@ public class ZKArchive {
 	protected ZKMaster master;
 	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
 	protected RevisionTree revisionTree;
+	protected LinkedList<byte[]> allPageTags;
 	
 	protected ZKArchive(ZKArchiveConfig config) throws IOException {
 		this.master = config.accessor.master;
 		this.storage = config.storage;
 		this.crypto = config.accessor.master.crypto;
-		
+		this.allPageTags = new LinkedList<>();
 		this.config = config;
 		Key localKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_CONFIG_FILE);
 		this.localConfig = new LocalConfig(config.localStorage, localKey);
@@ -46,10 +50,12 @@ public class ZKArchive {
 			return tag.getFS();
 		}, (RefTag tag, ZKFS fs) -> {});
 		
-		this.config.accessor.discoveredArchive(this);
-		if(!config.accessor.isSeedOnly()) {
-			this.revisionTree = new RevisionTree(this);
+		if(!isCacheOnly()) { // only need the list for non-networked archives, which are not cache-only
+			buildAllPageTagsList();
 		}
+		
+		this.revisionTree = new RevisionTree(this);
+		this.config.accessor.discoveredArchive(this);
 	}
 	
 	public ZKArchive cacheOnlyArchive() throws IOException {
@@ -170,5 +176,22 @@ public class ZKArchive {
 		}
 		
 		return false;
+	}
+
+	public Collection<byte[]> allPageTags() {
+		return allPageTags;
+	}
+	
+	public void addPageTag(byte[] tag) {
+		if(allPageTags != null) {
+			allPageTags.add(tag);
+		}
+	}
+	
+	protected void buildAllPageTagsList() throws IOException {
+		DirectoryTraverser traverser = new DirectoryTraverser(storage, storage.opendir("/"));
+		while(traverser.hasNext()) {
+			allPageTags.add(Page.tagForPath(traverser.next()));
+		}
 	}
 }

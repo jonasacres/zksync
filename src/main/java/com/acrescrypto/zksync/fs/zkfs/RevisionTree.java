@@ -149,6 +149,6 @@ public class RevisionTree {
 	}
 	
 	protected Key branchTipKey() {
-		return archive.config.deriveKey(ArchiveAccessor.KEY_INDEX_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REVISION_TREE);
+		return archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REVISION_TREE);
 	}
 }

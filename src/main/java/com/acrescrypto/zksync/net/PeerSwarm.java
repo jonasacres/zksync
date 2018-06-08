@@ -52,9 +52,6 @@ public class PeerSwarm implements BlacklistCallback {
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
 		buildCurrentTags();
 		connectionThread();
-	}
-	
-	public void finalizeInit() throws IOException {
 		pool = new RequestPool(config);
 		pool.read();
 	}
@@ -263,6 +260,7 @@ public class PeerSwarm implements BlacklistCallback {
 			pageWaits.get(shortTag).signalAll();
 		}
 		pageWaitLock.unlock();
+		config.getArchive().addPageTag(tag);
 		
 		announceTag(tag);
 	}

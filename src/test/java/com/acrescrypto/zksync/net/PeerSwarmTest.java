@@ -45,7 +45,7 @@ public class PeerSwarmTest {
 		@Override public boolean matchesAddress(String address) { return this.address.equals(address); }
 		@Override public byte getType() { return type; }
 		@Override public boolean isReachable() { return true; }
-		@Override public DummyConnection connect(PeerSwarm swarm)  {
+		@Override public DummyConnection connect(PeerSwarm swarm) throws IOException  {
 			if(explode) throw new RuntimeException("kerblooie");
 			return new DummyConnection(new DummySocket(address, swarm));
 		}
@@ -93,7 +93,7 @@ public class PeerSwarmTest {
 		long requestedTag;
 		RefTag requestedRefTag, requestedRevTag;
 		
-		public DummyConnection(DummySocket socket) {
+		public DummyConnection(DummySocket socket) throws IOException {
 			super(socket);
 			this.socket = socket;
 		}
@@ -155,7 +155,6 @@ public class PeerSwarmTest {
 	public void before() throws IOException {
 		connectedAddresses.clear();
 		swarm = new PeerSwarm(archive.getConfig());
-		swarm.finalizeInit();
 		exploded = false;
 		connection = new DummyConnection(new DummySocket("127.0.0.1", swarm));
 		connection.socket.ad = new DummyAdvertisement();
@@ -246,7 +245,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testDisconnectAddressClosesAllConnectionsFromAddress() {
+	public void testDisconnectAddressClosesAllConnectionsFromAddress() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("192.168.0.1", swarm));
@@ -261,7 +260,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testDisconnectAddressDoesntCloseOtherAddresses() {
+	public void testDisconnectAddressDoesntCloseOtherAddresses() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket(i % 2 == 0 ? "192.168.0.1" : "10.0.1." + i, swarm));
@@ -281,7 +280,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testCloseDisconnectsAllPeerConnections() {
+	public void testCloseDisconnectsAllPeerConnections() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
@@ -296,7 +295,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testAdvertiseSelfRelaysAdToAllConnections() {
+	public void testAdvertiseSelfRelaysAdToAllConnections() throws IOException {
 		DummyAdvertisement ad = new DummyAdvertisement();
 		DummyConnection[] conns = new DummyConnection[16];
 		for(int i = 0; i < conns.length; i++) {
@@ -485,7 +484,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testRequestShortTagSendsRequestToAllNewPeers() {
+	public void testRequestShortTagSendsRequestToAllNewPeers() throws IOException {
 		long shortTag = 1234;
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestTag(42, shortTag);
@@ -513,7 +512,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testRequestTagLongSendsRequestToAllNewPeers() {
+	public void testRequestTagLongSendsRequestToAllNewPeers() throws IOException {
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		byte[] tag = archive.getCrypto().rng(archive.getCrypto().hashLength());
 		long shortTag = Util.shortTag(tag);
@@ -548,7 +547,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testStopRequestingAllSendsRequestAllCancelToCurrentPeers() {
+	public void testStopRequestingAllSendsRequestAllCancelToCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		
 		for(int i = 0; i < conns.length; i++) {
@@ -573,7 +572,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testRequestRefTagSendsRequestRefTagToAllCurrentPeers() {
+	public void testRequestRefTagSendsRequestRefTagToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
 		
@@ -591,7 +590,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testRequestRefTagSendsRequestRefTagToAllNewPeers() {
+	public void testRequestRefTagSendsRequestRefTagToAllNewPeers() throws IOException {
 		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestRefTag(Integer.MAX_VALUE, tag);
@@ -601,7 +600,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testRequestRevisionSendsRequestRevisionContentsToAllCurrentPeers() {
+	public void testRequestRevisionSendsRequestRevisionContentsToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
 		
@@ -619,7 +618,7 @@ public class PeerSwarmTest {
 	}
 
 	@Test
-	public void testRequestRevisionSendsRequestRevisionContentsToAllNewPeers() {
+	public void testRequestRevisionSendsRequestRevisionContentsToAllNewPeers() throws IOException {
 		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestRevision(11235813, tag);

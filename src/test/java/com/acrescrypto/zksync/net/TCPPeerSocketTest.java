@@ -207,6 +207,12 @@ public class TCPPeerSocketTest {
 				try { this.wait(); } catch (InterruptedException e) {}
 			}
 			
+			// fast forward past initial tips and tags listings
+			if(!TCPPeerSocket.disableMakeThreads) {
+				serverReadNext();
+				serverReadNext();
+			}
+			
 			return this;
 		}
 		
@@ -464,7 +470,7 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.maxHandshakeTimeMillis = 10;
 		blindHandshake(socket);
 		assertFalse(Util.waitUntil(TCPPeerSocket.maxHandshakeTimeMillis-1, ()->socket.isClosed()));
-		assertTrue(Util.waitUntil(5, ()->socket.isClosed()));
+		assertTrue(Util.waitUntil(10, ()->socket.isClosed()));
 	}
 	
 	@Test
@@ -739,6 +745,7 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testProcessesNewMessages() throws IOException {
+		// TODO DHT: (itf) Stalls intermittently. 6/8/18 linux f84957e39a634bb12bf1f21d507adbc462a947b7
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
@@ -833,6 +840,7 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testIgnoresSkippedMessageIDs() throws IOException {
+		// TODO DHT: (itf) Intermittent test failure. Stalls. Linux 6/8/18 f84957e39a634bb12bf1f21d507adbc462a947b7
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();

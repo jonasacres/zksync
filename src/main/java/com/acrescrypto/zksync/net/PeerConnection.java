@@ -67,16 +67,20 @@ public class PeerConnection {
 	public PeerConnection(PeerSwarm swarm, PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
 		this.socket = PeerSocket.connectToAd(swarm, ad);
 		this.socket.handshake();
-		socket.connection = this;
-		this.queue = new PageQueue(socket.swarm.config.getArchive());
-		new Thread(()->pageQueueThread()).start();
+		initialize();
 	}
 	
-	public PeerConnection(PeerSocket socket) {
+	public PeerConnection(PeerSocket socket) throws IOException {
 		this.socket = socket;
+		initialize();
+	}
+	
+	protected void initialize() throws IOException {
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
 		new Thread(()->pageQueueThread()).start();
+		announceTips();
+		announceTags(socket.swarm.getConfig().getArchive().allPageTags());
 	}
 	
 	protected PeerConnection() {}
@@ -132,10 +136,18 @@ public class PeerConnection {
 		send(CMD_ANNOUNCE_PEERS, allSerialization.array());
 	}
 	
-	public void announceTags(Collection<RefTag> tags) {
+	public void announceShortTags(Collection<Long> tags) {
 		ByteBuffer serialized = ByteBuffer.allocate(tags.size() * RefTag.REFTAG_SHORT_SIZE);
-		for(RefTag tag : tags) {
-			serialized.putLong(tag.getShortHash());
+		for(Long shortTag : tags) {
+			serialized.putLong(shortTag);
+		}
+		send(CMD_ANNOUNCE_TAGS, serialized.array());
+	}
+	
+	public void announceTags(Collection<byte[]> tags) {
+		ByteBuffer serialized = ByteBuffer.allocate(tags.size() * RefTag.REFTAG_SHORT_SIZE);
+		for(byte[] tag : tags) {
+			serialized.putLong(Util.shortTag(tag));
 		}
 		send(CMD_ANNOUNCE_TAGS, serialized.array());
 	}

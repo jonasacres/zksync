@@ -122,6 +122,31 @@ public class RequestPool {
 					}
 				}
 			} catch(Exception exc) {
+				/** TODO DHT: (itf) Log spam happens, probably on DHTModuleTest::testPeerDiscovery
+				 * 
+				 * 16:51:07.675 [Thread-2843] ERROR c.acrescrypto.zksync.net.RequestPool - Prune thread caught exception
+					java.lang.NegativeArraySizeException: null
+					at com.acrescrypto.zksync.fs.File.read(File.java:34)
+					at com.acrescrypto.zksync.fs.zkfs.InodeTable.inodesForPage(InodeTable.java:190)
+					at com.acrescrypto.zksync.fs.zkfs.InodeTable.lambda$0(InodeTable.java:57)
+					at com.acrescrypto.zksync.utility.HashCache.add(HashCache.java:40)
+					at com.acrescrypto.zksync.utility.HashCache.get(HashCache.java:34)
+					at com.acrescrypto.zksync.fs.zkfs.InodeTable.inodeWithId(InodeTable.java:145)
+					at com.acrescrypto.zksync.fs.zkfs.InodeTable.readExisting(InodeTable.java:285)
+					at com.acrescrypto.zksync.fs.zkfs.InodeTable.<init>(InodeTable.java:63)
+					at com.acrescrypto.zksync.fs.zkfs.ZKFS.<init>(ZKFS.java:29)
+					at com.acrescrypto.zksync.fs.zkfs.ZKFS.<init>(ZKFS.java:33)
+					at com.acrescrypto.zksync.fs.zkfs.ZKArchive.openRevision(ZKArchive.java:68)
+					at com.acrescrypto.zksync.fs.zkfs.ZKArchive.openRevision(ZKArchive.java:72)
+					at com.acrescrypto.zksync.fs.zkfs.ZKArchive.hasRevision(ZKArchive.java:150)
+					at com.acrescrypto.zksync.net.RequestPool.lambda$3(RequestPool.java:161)
+					at java.util.Collection.removeIf(Collection.java:414)
+					at com.acrescrypto.zksync.net.RequestPool.pruneRevisionTags(RequestPool.java:159)
+					at com.acrescrypto.zksync.net.RequestPool.prune(RequestPool.java:106)
+					at com.acrescrypto.zksync.net.RequestPool.pruneThread(RequestPool.java:116)
+					at com.acrescrypto.zksync.net.RequestPool.lambda$0(RequestPool.java:35)
+					at java.lang.Thread.run(Thread.java:748)
+				 */
 				logger.error("Prune thread caught exception", exc);
 			}
 		}

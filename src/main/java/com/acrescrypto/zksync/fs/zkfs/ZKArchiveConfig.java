@@ -70,21 +70,19 @@ public class ZKArchiveConfig {
 		initArchiveSpecific();
 		initStorage();
 		this.archive = new ZKArchive(this);
-		swarm.finalizeInit();
 		write();
 	}
 	
 	public ZKArchiveConfig finishOpening() throws IOException {
 		read();
 		this.archive = new ZKArchive(this);
-		swarm.finalizeInit();
 		return this;
 	}
 	
 	protected void initStorage() throws IOException {
+		this.localStorage = accessor.master.localStorageFsForArchiveId(archiveId);
 		this.swarm = new PeerSwarm(this);
 		this.storage = new BackedFS(accessor.master.storageFsForArchiveId(archiveId), new SwarmFS(swarm));
-		this.localStorage = accessor.master.localStorageFsForArchiveId(archiveId);
 	}
 	
 	public void parseFile(ByteBuffer contents) {

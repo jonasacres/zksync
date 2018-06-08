@@ -59,7 +59,6 @@ public class PeerConnectionTest {
 		
 		public DummySwarm(ZKArchiveConfig config) throws IOException {
 			super(config);
-			finalizeInit();
 		}
 		
 		@Override
@@ -110,7 +109,7 @@ public class PeerConnectionTest {
 		@Override public String getAddress() { return "127.0.0.1"; }
 		@Override public int getPort() { return 1234; }
 		@Override public synchronized DummyPeerMessageOutgoing makeOutgoingMessage(byte cmd, InputStream stream) {
-			DummyPeerMessageOutgoing msg = new DummyPeerMessageOutgoing(conn, cmd, stream);
+			DummyPeerMessageOutgoing msg = new DummyPeerMessageOutgoing(connection, cmd, stream);
 			messages.add(msg);
 			this.notifyAll();
 			return msg;
@@ -257,8 +256,9 @@ public class PeerConnectionTest {
 		swarm = new DummySwarm(archive.getConfig());
 		socket = new DummySocket(swarm);
 		conn = new PeerConnection(socket);
-		
 		conn.setLocalPaused(true);
+		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TIPS);
+		socket.messages.clear();
 	}
 	
 	@AfterClass
@@ -330,15 +330,34 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testAnnounceTags() throws IOException {
+	public void testAnnounceShortTags() throws IOException {
 		int numTags = 16;
-		LinkedList<RefTag> tags = new LinkedList<RefTag>();
+		LinkedList<Long> tags = new LinkedList<>();
 		ByteBuffer payload = ByteBuffer.allocate(numTags * 8);
 		
 		for(int i = 0; i < numTags; i++) {
-			RefTag junkTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
-			tags.add(junkTag);
-			payload.put(junkTag.getShortHashBytes());
+			long shortTag = crypto.defaultPrng().getLong();
+			tags.add(shortTag);
+			payload.putLong(shortTag);
+		}
+		
+		assertFalse(payload.hasRemaining());
+		conn.announceShortTags(tags);
+		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TAGS);
+		assertReceivedPayload(payload.array());
+		assertFinished();
+	}
+	
+	@Test
+	public void testAnnounceTags() throws IOException {
+		int numTags = 16;
+		LinkedList<byte[]> tags = new LinkedList<byte[]>();
+		ByteBuffer payload = ByteBuffer.allocate(numTags * 8);
+		
+		for(int i = 0; i < numTags; i++) {
+			byte[] tag = crypto.rng(crypto.hashLength());
+			tags.add(tag);
+			payload.putLong(Util.shortTag(tag));
 		}
 		
 		assertFalse(payload.hasRemaining());
@@ -1485,5 +1504,8 @@ public class PeerConnectionTest {
 				}
 			}
 		}
+		
+		// TODO DHT: (test) Test sends tips at initialization
+		// TODO DHT: (test) Test sends tags at initialization
 	}
 }

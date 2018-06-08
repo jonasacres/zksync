@@ -728,7 +728,7 @@ public class PageQueueTest {
 		queue.addPageTag(0, pageTag);
 		queue.addRevisionTag(1, revTag);
 		
-		// TODO DHT: (intermittent failure) 6/1/18 Linux 82f4d047ec6e6be8889faeab774d48497da986ae, AssertionError on following line
+		// TODO DHT: (itf) 6/1/18 Linux 82f4d047ec6e6be8889faeab774d48497da986ae, AssertionError on following line
 		/* 6/4 linux 2ea644526949bb16c2c73e68b9984853f9263113, saw this when running from FastTests
 		 * can't reproduce with a while loop, even with 1024 iterations including before/after each/all
 		 * DID get to see it once manually re-running, but then unable to reproduce...

@@ -30,4 +30,8 @@ public class PRNG {
 	public int getInt() {
 		return rng.nextInt();
 	}
+	
+	public long getLong() {
+		return rng.nextLong();
+	}
 }

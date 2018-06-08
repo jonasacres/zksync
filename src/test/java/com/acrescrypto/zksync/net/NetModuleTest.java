@@ -55,5 +55,7 @@ public class NetModuleTest {
 		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
 		
 		bConfig.getSwarm().addPeerAdvertisement(ad);
+		bConfig.getSwarm().requestAll();
+		
 	}
 }
