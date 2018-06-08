@@ -660,12 +660,12 @@ public class PageQueueTest {
 		// queue it up; shouldn't generate any chunks, or problems
 		queue.addRevisionTag(0, corrupt);
 		assertFalse(queue.hasNextChunk());
-		
+
 		// try again, except add a real one after and make sure we still get data
 		queue.addRevisionTag(0, corrupt);
 		queue.addRevisionTag(0, revTag);
 		expectTagsFromQueue(expectedPageTagsForRevTag(revTag));
-		
+
 		// and again, except the legal one goes first
 		queue.addRevisionTag(0, revTag);
 		queue.addRevisionTag(0, corrupt);

@@ -13,7 +13,7 @@ import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
-import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.PeerConnection.PeerCapabilityException;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -22,7 +22,7 @@ public class RequestPool {
 	public static int pruneIntervalMs = DEFAULT_PRUNE_INTERVAL_MS;
 	
 	boolean dirty;
-	ZKArchive archive;
+	ZKArchiveConfig config;
 	HashMap<Integer,LinkedList<RefTag>> requestedRefTags = new HashMap<>();
 	HashMap<Integer,LinkedList<RefTag>> requestedRevisions = new HashMap<>();
 	HashMap<Integer,LinkedList<Long>> requestedPageTags = new HashMap<>();
@@ -30,8 +30,8 @@ public class RequestPool {
 	boolean requestingEverything, stopped;
 	Logger logger = LoggerFactory.getLogger(RequestPool.class);
 	
-	public RequestPool(ZKArchive archive) {
-		this.archive = archive;
+	public RequestPool(ZKArchiveConfig config) {
+		this.config = config;
 		new Thread(()->pruneThread()).start();
 	}
 	
@@ -132,7 +132,7 @@ public class RequestPool {
 			LinkedList<Long> existing = requestedPageTags.get(priority);
 			existing.removeIf((shortTag)->{
 				try {
-					return archive.expandShortTag(shortTag) != null;
+					return config.getArchive().expandShortTag(shortTag) != null;
 				} catch(IOException exc) {
 					return false;
 				}
@@ -145,7 +145,7 @@ public class RequestPool {
 			LinkedList<RefTag> existing = requestedRefTags.get(priority);
 			existing.removeIf((refTag)->{
 				try {
-					return archive.hasRefTag(refTag);
+					return config.getArchive().hasRefTag(refTag);
 				} catch(IOException exc) {
 					return false;
 				}
@@ -158,7 +158,7 @@ public class RequestPool {
 			LinkedList<RefTag> existing = requestedRevisions.get(priority);
 			existing.removeIf((revTag)->{
 				try {
-					return archive.hasRevision(revTag);
+					return config.getArchive().hasRevision(revTag);
 				} catch(IOException exc) {
 					return false;
 				}
@@ -167,7 +167,7 @@ public class RequestPool {
 	}
 	
 	protected Key key() {
-		return archive.getConfig().deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REQUEST_POOL);
+		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REQUEST_POOL);
 	}
 	
 	protected String path() {
@@ -176,7 +176,7 @@ public class RequestPool {
 	
 	protected void write() throws IOException {
 		MutableSecureFile
-		  .atPath(archive.getConfig().getLocalStorage(), path(), key())
+		  .atPath(config.getLocalStorage(), path(), key())
 		  .write(serialize(), 1024*512);
 		dirty = false;
 	}
@@ -184,7 +184,7 @@ public class RequestPool {
 	protected void read() throws IOException {
 		try {
 			byte[] serialized = MutableSecureFile
-			  .atPath(archive.getConfig().getLocalStorage(), path(), key())
+			  .atPath(config.getLocalStorage(), path(), key())
 			  .read();
 		
 			deserialize(ByteBuffer.wrap(serialized));
@@ -208,7 +208,7 @@ public class RequestPool {
 		pieces.add(Util.serializeInt(requestedRefTags.size()));
 		for(int priority : requestedRefTags.keySet()) {
 			LinkedList<RefTag> list = requestedRefTags.get(priority);
-			ByteBuffer buf = ByteBuffer.allocate(2*4+archive.refTagSize()*list.size());
+			ByteBuffer buf = ByteBuffer.allocate(2*4+config.refTagSize()*list.size());
 			buf.putInt(priority);
 			buf.putInt(list.size());
 			for(RefTag tag : list) buf.put(tag.getBytes());
@@ -218,7 +218,7 @@ public class RequestPool {
 		pieces.add(Util.serializeInt(requestedRevisions.size()));
 		for(int priority : requestedRevisions.keySet()) {
 			LinkedList<RefTag> list = requestedRevisions.get(priority);
-			ByteBuffer buf = ByteBuffer.allocate(2*4+archive.refTagSize()*list.size());
+			ByteBuffer buf = ByteBuffer.allocate(2*4+config.refTagSize()*list.size());
 			buf.putInt(priority);
 			buf.putInt(list.size());
 			for(RefTag tag : list) buf.put(tag.getBytes());
@@ -249,9 +249,9 @@ public class RequestPool {
 			int priority = buf.getInt();
 			int numEntries = buf.getInt();
 			for(int j = 0; j < numEntries; j++) {
-				byte[] tagBytes = new byte[archive.refTagSize()];
+				byte[] tagBytes = new byte[config.refTagSize()];
 				buf.get(tagBytes);
-				RefTag tag = new RefTag(archive, tagBytes);
+				RefTag tag = new RefTag(config, tagBytes);
 				addRefTag(priority, tag);
 			}
 		}
@@ -261,9 +261,9 @@ public class RequestPool {
 			int priority = buf.getInt();
 			int numEntries = buf.getInt();
 			for(int j = 0; j < numEntries; j++) {
-				byte[] tagBytes = new byte[archive.refTagSize()];
+				byte[] tagBytes = new byte[config.refTagSize()];
 				buf.get(tagBytes);
-				RefTag tag = new RefTag(archive, tagBytes);
+				RefTag tag = new RefTag(config, tagBytes);
 				addRevision(priority, tag);
 			}
 		}

@@ -55,7 +55,7 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public void finalizeInit() throws IOException {
-		pool = new RequestPool(config.getArchive());
+		pool = new RequestPool(config);
 		pool.read();
 	}
 	

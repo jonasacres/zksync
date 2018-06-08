@@ -8,6 +8,8 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.backedfs.BackedFS;
+import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
 import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
@@ -68,6 +70,11 @@ public class ZKArchive {
 		return new ZKFS(RefTag.blank(this));
 	}
 	
+	public boolean isCacheOnly() {
+		if(!(storage instanceof BackedFS) && !(storage instanceof SwarmFS)) return true;
+		return false;
+	}
+	
 	public ZKMaster getMaster() {
 		return master;
 	}
@@ -92,6 +99,7 @@ public class ZKArchive {
 		return revisionTree;
 	}
 	
+	// TODO DHT: (refactor) deprecate; moved to config
 	public int refTagSize() {
 		return RefTag.REFTAG_EXTRA_DATA_SIZE + crypto.hashLength();
 	}
@@ -117,7 +125,7 @@ public class ZKArchive {
 	public boolean hasRefTag(RefTag refTag) throws IOException {
 		if(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) return true;
 		try {
-			PageMerkle merkle = new PageMerkle(refTag.cacheOnlyTag());
+			PageMerkle merkle = new PageMerkle(refTag.makeCacheOnly());
 			if(!merkle.exists()) return false;
 			for(int i = 0; i < merkle.numPages(); i++) {
 				if(!config.getCacheStorage().exists(Page.pathForTag(merkle.getPageTag(i)))) return false;

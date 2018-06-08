@@ -62,6 +62,7 @@ public class RequestPoolTest {
 	
 	CryptoSupport crypto;
 	ZKMaster master;
+	ZKArchiveConfig config;
 	DummyArchive archive;
 	DummyConnection conn;
 	RequestPool pool;
@@ -77,11 +78,11 @@ public class RequestPoolTest {
 		master = ZKMaster.openBlankTestVolume();
 		
 		ArchiveAccessor accessor = master.makeAccessorForRoot(new Key(crypto), false);
-		ZKArchiveConfig config = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+		config = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
 		archive = new DummyArchive(config);
 		
 		conn = new DummyConnection();
-		pool = new RequestPool(archive);
+		pool = new RequestPool(config);
 	}
 	
 	@After
@@ -276,7 +277,7 @@ public class RequestPoolTest {
 	public void testPruneThreadCallsPrune() throws IOException {
 		RefTag revTag = archive.openBlank().commit();
 		RequestPool.pruneIntervalMs = 10;
-		RequestPool pool2 = new RequestPool(archive);
+		RequestPool pool2 = new RequestPool(config);
 		pool2.addRevision(0, revTag);
 		assertFalse(pool2.requestedRevisions.isEmpty());
 		assertTrue(Util.waitUntil(RequestPool.pruneIntervalMs+10, ()->pool2.hasRevision(0, revTag)));
@@ -286,7 +287,7 @@ public class RequestPoolTest {
 	public void testStopCancelsPruneThread() throws IOException {
 		RefTag revTag = archive.openBlank().commit();
 		RequestPool.pruneIntervalMs = 10;
-		RequestPool pool2 = new RequestPool(archive);
+		RequestPool pool2 = new RequestPool(config);
 		pool2.addRevision(0, revTag);
 		pool2.stop();
 		assertFalse(pool2.requestedRevisions.isEmpty());
@@ -305,7 +306,7 @@ public class RequestPoolTest {
 		}
 		
 		pool.write();
-		RequestPool pool2 = new RequestPool(archive);
+		RequestPool pool2 = new RequestPool(config);
 		pool2.read();
 		
 		assertEquals(pool.requestingEverything, pool2.requestingEverything);
@@ -327,7 +328,7 @@ public class RequestPoolTest {
 	@Test
 	public void testBackgroundThreadWritesData() {
 		RequestPool.pruneIntervalMs = 10;
-		RequestPool pool2 = new RequestPool(archive);
+		RequestPool pool2 = new RequestPool(config);
 		pool2.addPageTag(0, 0);
 		assertTrue(Util.waitUntil(100, ()->archive.getConfig().getLocalStorage().exists(pool2.path())));
 		pool2.stop();
@@ -336,7 +337,7 @@ public class RequestPoolTest {
 	@Test
 	public void testBackgroundThreadDoesNotWriteDataWhenStopped() {
 		RequestPool.pruneIntervalMs = 10;
-		RequestPool pool2 = new RequestPool(archive);
+		RequestPool pool2 = new RequestPool(config);
 		pool2.addPageTag(0, 0);
 		pool2.stop();
 		assertFalse(Util.waitUntil(100, ()->archive.getConfig().getLocalStorage().exists(pool2.path())));

@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -39,8 +40,8 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 		deserialize(serialized);
 	}
 	
-	public ObfuscatedRefTag(RefTag refTag) {
-		this.archive = refTag.archive;
+	public ObfuscatedRefTag(RefTag refTag) throws IOException {
+		this.archive = refTag.getArchive();
 		Key key = archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
 		this.ciphertext = archive.crypto.encryptCBC(key.getRaw(), new byte[archive.crypto.symBlockSize()], transform(refTag.getBytes()));
 		this.signature = archive.config.privKey.sign(ciphertext);

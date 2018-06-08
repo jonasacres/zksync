@@ -24,7 +24,7 @@ public class PageMerkle {
 		chunkTagSource.put(refTag.hash);
 		chunkTagSource.putInt(chunk);
 		
-		Key authKey = refTag.archive.config.deriveKey(ArchiveAccessor.KEY_INDEX_ARCHIVE, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE_MERKLE, refTag.getHash());
+		Key authKey = refTag.config.deriveKey(ArchiveAccessor.KEY_INDEX_ARCHIVE, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE_MERKLE, refTag.getHash());
 		return authKey.authenticate(chunkTagSource.array());
 	}
 	
@@ -35,7 +35,7 @@ public class PageMerkle {
 	
 	/** initialize a PageMerkle from a file contents RefTag */
 	public PageMerkle(RefTag tag) throws IOException {
-		this.archive = tag.archive;
+		this.archive = tag.getArchive();
 		this.tag = tag;
 		
 		switch(tag.getRefType()) {

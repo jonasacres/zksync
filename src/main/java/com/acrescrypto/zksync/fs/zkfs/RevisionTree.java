@@ -39,7 +39,7 @@ public class RevisionTree {
 		return plainBranchTips;
 	}
 	
-	public synchronized void addBranchTip(RefTag newBranch) {
+	public synchronized void addBranchTip(RefTag newBranch) throws IOException {
 		plainBranchTips.add(newBranch);
 		branchTips.add(newBranch.obfuscate());
 	}
@@ -52,7 +52,7 @@ public class RevisionTree {
 		}
 	}
 	
-	public synchronized void removeBranchTip(RefTag oldBranch) {
+	public synchronized void removeBranchTip(RefTag oldBranch) throws IOException {
 		plainBranchTips.remove(oldBranch);
 		branchTips.remove(oldBranch.obfuscate());
 	}

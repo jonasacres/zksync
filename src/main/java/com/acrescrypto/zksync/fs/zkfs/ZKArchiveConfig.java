@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateSigningKey;
 import com.acrescrypto.zksync.crypto.PublicSigningKey;
@@ -370,6 +371,14 @@ public class ZKArchiveConfig {
 	
 	public FS getCacheStorage() {
 		return storage.getCacheFS();
+	}
+	
+	public CryptoSupport getCrypto() {
+		return accessor.master.getCrypto();
+	}
+	
+	public int refTagSize() {
+		return RefTag.REFTAG_EXTRA_DATA_SIZE + getCrypto().hashLength();
 	}
 	
 	@Deprecated // Use for testing only!!

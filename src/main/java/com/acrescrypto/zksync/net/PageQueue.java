@@ -114,7 +114,7 @@ public class PageQueue {
 				shuffler = Shuffler.fixedShuffler(0);
 			} else {
 				try {
-					this.merkle = new PageMerkle(refTag.cacheOnlyTag());
+					this.merkle = new PageMerkle(refTag.makeCacheOnly());
 					this.merkle.assertExists();
 					shuffler = Shuffler.fixedShuffler(merkle.numPages());
 				} catch(IOException exc) {
@@ -147,7 +147,7 @@ public class PageQueue {
 			}
 			
 			try {
-				this.inodeTable = revTag.cacheOnlyTag().readOnlyFS().getInodeTable();
+				this.inodeTable = revTag.makeCacheOnly().readOnlyFS().getInodeTable();
 				assert(inodeTable.nextInodeId <= Integer.MAX_VALUE);
 				this.shuffler = Shuffler.fixedShuffler((int) inodeTable.nextInodeId);
 			} catch(IOException|SecurityException exc) {

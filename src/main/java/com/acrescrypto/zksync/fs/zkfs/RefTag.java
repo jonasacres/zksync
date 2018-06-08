@@ -11,13 +11,13 @@ import com.acrescrypto.zksync.utility.Util;
  * for the inode table itself identifies a revision in the archive. RefTags contain certain metadata to indicate
  * how the content is stored. */
 public class RefTag implements Comparable<RefTag> {
-	protected ZKArchive archive;
-	protected ZKFS readOnlyFs;
+	protected ZKArchiveConfig config;
 	protected RevisionInfo info;
 	protected byte[] tag, hash;
 	protected byte archiveType, versionMajor, versionMinor;
 	protected int refType;	
 	protected long numPages;
+	protected boolean cacheOnly;
 	
 	/** doubly-indirect storage; tag points to a merkle tree containing tags for each page of data. */
 	public static final byte REF_TYPE_2INDIRECT = 2;
@@ -41,30 +41,40 @@ public class RefTag implements Comparable<RefTag> {
 		return new RefTag(archive, new byte[0], RefTag.REF_TYPE_IMMEDIATE, 0);
 	}
 	
+	public static RefTag blank(ZKArchiveConfig config) {
+		return new RefTag(config, new byte[0], RefTag.REF_TYPE_IMMEDIATE, 0);
+	}
+	
 	public RefTag(ZKArchive archive, byte[] tag) {
-		if(tag == null) tag = blank(archive).getBytes();
-		
-		this.archive = archive;
-		deserialize(tag);
+		this(archive.config, tag);
+		cacheOnly = archive.isCacheOnly(); 
 	}
 	
 	public RefTag(ZKArchive archive, byte[] hash, int refType, long numPages) {
-		this.archive = archive;
+		this(archive.config, hash, refType, numPages);
+		cacheOnly = archive.isCacheOnly(); 
+	}
+	
+	public RefTag(ZKArchiveConfig config, byte[] hash, int refType, long numPages) {
+		this.config = config;
 		this.hash = padHash(hash);
 		this.refType = refType;
 		this.numPages = numPages;
 		this.tag = serialize();
 	}
 	
-	public RefTag cacheOnlyTag() throws IOException {
-		return new RefTag(archive.cacheOnlyArchive(), hash, refType, numPages);
+	public RefTag(ZKArchiveConfig config, byte[] tag) {
+		if(tag == null) tag = blank(config).getBytes();
+		
+		this.config = config;
+		deserialize(tag);
 	}
 	
 	public byte[] padHash(byte[] hash) {
 		// this breaks if the hash length is > 255 bytes, but honestly, who needs a hash that long?
-		byte needed = (byte) (archive.crypto.hashLength() - hash.length);
+		byte needed = (byte) (config.accessor.master.crypto.hashLength() - hash.length);
 		if(needed == 0) return hash;
-		ByteBuffer buf = ByteBuffer.allocate(archive.crypto.hashLength());
+		ByteBuffer buf = ByteBuffer.allocate(config.accessor.master.crypto.hashLength());
 		buf.put(hash);
 		while(buf.hasRemaining()) buf.put(needed);
 		return buf.array();
@@ -72,7 +82,7 @@ public class RefTag implements Comparable<RefTag> {
 	
 	public byte[] unpadHash(byte[] hash) {
 		if(refType != RefTag.REF_TYPE_IMMEDIATE) return hash;
-		int len = archive.crypto.hashLength() - hash[hash.length-1];
+		int len = config.accessor.master.crypto.hashLength() - hash[hash.length-1];
 		if(len <= 0) return new byte[0];
 		ByteBuffer buf = ByteBuffer.allocate(len);
 		buf.put(hash, 0, len);
@@ -108,7 +118,7 @@ public class RefTag implements Comparable<RefTag> {
 	public boolean isBlank() {
 		if(numPages != 0) return false;
 		if(refType != RefTag.REF_TYPE_IMMEDIATE) return false;
-		for(int i = 0; i < hash.length; i++) if(hash[i] != archive.crypto.hashLength()) return false;
+		for(int i = 0; i < hash.length; i++) if(hash[i] != config.getCrypto().hashLength()) return false;
 		return true;
 	}
 	
@@ -122,7 +132,7 @@ public class RefTag implements Comparable<RefTag> {
 	}
 	
 	protected byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(archive.refTagSize());
+		ByteBuffer buf = ByteBuffer.allocate(config.refTagSize());
 		buf.put(hash);
 		buf.put(archiveType);
 		buf.put(versionMajor);
@@ -136,10 +146,10 @@ public class RefTag implements Comparable<RefTag> {
 	}
 	
 	protected void deserialize(byte[] serialized) {
-		int expectedLen = archive.crypto.hashLength() + REFTAG_EXTRA_DATA_SIZE;
+		int expectedLen = config.accessor.master.crypto.hashLength() + REFTAG_EXTRA_DATA_SIZE;
 		assert(serialized.length == expectedLen);
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		this.hash = new byte[archive.crypto.hashLength()];
+		this.hash = new byte[config.getCrypto().hashLength()];
 		buf.get(hash);
 		this.archiveType = buf.get();
 		this.versionMajor = buf.get();
@@ -150,7 +160,17 @@ public class RefTag implements Comparable<RefTag> {
 	}
 	
 	public ZKFS readOnlyFS() throws IOException {
-		return archive.readOnlyFilesystems.get(this);
+		if(cacheOnly) {
+			return config.archive.cacheOnlyArchive().readOnlyFilesystems.get(this);
+		} else {
+			return config.archive.readOnlyFilesystems.get(this);
+		}
+	}
+	
+	public RefTag makeCacheOnly() {
+		RefTag tag = new RefTag(config, serialize());
+		tag.cacheOnly = true;
+		return tag;
 	}
 	
 	public ZKFS getFS() throws IOException {
@@ -168,8 +188,8 @@ public class RefTag implements Comparable<RefTag> {
 	
 	public int compareTo(RefTag other) {
 		try {
-			if(archive.getRevisionTree().ancestorsOf(this).contains(other)) return 1;
-			if(archive.getRevisionTree().ancestorsOf(other).contains(this)) return -1;
+			if(config.archive.getRevisionTree().ancestorsOf(this).contains(other)) return 1;
+			if(config.archive.getRevisionTree().ancestorsOf(other).contains(this)) return -1;
 		} catch(Exception exc) {
 			throw new RuntimeException("Caught exception comparing revisions");
 		}
@@ -181,15 +201,15 @@ public class RefTag implements Comparable<RefTag> {
 		return 0;
 	}
 	
-	public ZKArchive getArchive() {
-		return archive;
+	public ZKArchive getArchive() throws IOException {
+		return cacheOnly ? config.archive.cacheOnlyArchive() : config.archive;
 	}
 	
 	public String toString() {
 		return "RefTag " + Util.bytesToHex(tag);
 	}
 
-	public ObfuscatedRefTag obfuscate() {
+	public ObfuscatedRefTag obfuscate() throws IOException {
 		return new ObfuscatedRefTag(this);
 	}
 }

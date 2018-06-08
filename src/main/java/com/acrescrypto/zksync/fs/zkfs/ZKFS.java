@@ -18,7 +18,7 @@ public class ZKFS extends FS {
 	
 	public ZKFS(RefTag revision, String root) throws IOException {
 		this.root = root;
-		this.archive = revision.archive;
+		this.archive = revision.getArchive();
 		this.directoriesByPath = new HashCache<String,ZKDirectory>(128, (String path) -> {
 			assertPathIsDirectory(path);
 			return new ZKDirectory(this, path);

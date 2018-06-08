@@ -44,16 +44,16 @@ public class ObfuscatedRefTagTest {
 	}
 	
 	@Test
-	public void testSerialization() {
+	public void testSerialization() throws IOException {
 		byte[] serialized = obfTag.serialize();
-		ObfuscatedRefTag deserialized = new ObfuscatedRefTag(refTag.archive, serialized);
+		ObfuscatedRefTag deserialized = new ObfuscatedRefTag(refTag.getArchive(), serialized);
 		assertTrue(Arrays.equals(deserialized.ciphertext, obfTag.ciphertext));
 		assertTrue(Arrays.equals(deserialized.signature, obfTag.signature));
 		assertTrue(Arrays.equals(serialized, deserialized.serialize()));
 	}
 	
 	@Test
-	public void testSignatureValidation() throws InvalidSignatureException {
+	public void testSignatureValidation() throws InvalidSignatureException, IOException {
 		// test every single-bit modification (naive test to ensure signature applies to entire tag)
 		obfTag.assertValid();
 		byte[] serialized = obfTag.serialize();
@@ -62,7 +62,7 @@ public class ObfuscatedRefTagTest {
 			int mask = 1 << (i & 7);
 			int offset = i/8;
 			mangled[offset] ^= mask;
-			ObfuscatedRefTag tag = new ObfuscatedRefTag(refTag.archive, mangled);
+			ObfuscatedRefTag tag = new ObfuscatedRefTag(refTag.getArchive(), mangled);
 			assertFalse(tag.verify());
 			mangled[offset] ^= mask;
 		}
@@ -112,7 +112,7 @@ public class ObfuscatedRefTagTest {
 	}
 	
 	@Test
-	public void testEquals() {
+	public void testEquals() throws IOException {
 		ObfuscatedRefTag obfTag2 = new ObfuscatedRefTag(refTag);
 		assertTrue(obfTag.equals(obfTag2));
 		obfTag2.ciphertext[0] ^= 1;
@@ -124,7 +124,7 @@ public class ObfuscatedRefTagTest {
 	}
 	
 	@Test
-	public void testCompareTo() {
+	public void testCompareTo() throws IOException {
 		ObfuscatedRefTag obfTag2 = new ObfuscatedRefTag(refTag);
 		assertEquals(obfTag.compareTo(obfTag2), 0);
 		obfTag.ciphertext[0] = 1;
