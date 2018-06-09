@@ -100,6 +100,7 @@ public class RequestPool {
 
 	
 	public synchronized void prune() {
+		if(config.getArchive() == null) return; // archive not initialized yet yet
 		try {
 			prunePageTags();
 			pruneRefTags();

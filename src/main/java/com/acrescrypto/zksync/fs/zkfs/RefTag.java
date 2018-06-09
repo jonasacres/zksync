@@ -201,6 +201,10 @@ public class RefTag implements Comparable<RefTag> {
 		return 0;
 	}
 	
+	public ZKArchiveConfig getConfig() {
+		return config;
+	}
+	
 	public ZKArchive getArchive() throws IOException {
 		return cacheOnly ? config.archive.cacheOnlyArchive() : config.archive;
 	}

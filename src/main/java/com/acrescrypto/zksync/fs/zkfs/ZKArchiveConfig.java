@@ -15,6 +15,17 @@ import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.utility.Util;
 
+/** TODO: Refactor bigly.
+ * 
+ * I'm not thrilled with the way the ArchiveAccessor/ZKArchiveConfig/ZKArchive division has played out in
+ * real life. The process of bootstrapping an archive is painful, confusing and delicate. My deeply-help suspicion
+ * is that this will be a bottomless well of bugs.
+ * 
+ * Config should deal only with the config file. Archive should deal only with managing storage and retrieval of data.
+ * And there should probably be some parent of config and archive that provides a coherent view of the archive, regardless
+ * of whether we've obtained the config file yet.
+ */
+
 public class ZKArchiveConfig {
 	public class InvalidArchiveConfigException extends RuntimeException {
 		private static final long serialVersionUID = 1L;
@@ -37,6 +48,7 @@ public class ZKArchiveConfig {
 	protected String description;
 	protected ZKArchive archive;
 	protected PeerSwarm swarm;
+	protected RevisionTree revisionTree;
 	
 	/** Read an existing archive. 
 	 * @throws IOException */
@@ -52,6 +64,7 @@ public class ZKArchiveConfig {
 		this.archiveId = archiveId;
 
 		initStorage();
+		this.revisionTree = new RevisionTree(this);
 		if(finish) {
 			finishOpening();
 		}
@@ -69,6 +82,7 @@ public class ZKArchiveConfig {
 		
 		initArchiveSpecific();
 		initStorage();
+		this.revisionTree = new RevisionTree(this);
 		this.archive = new ZKArchive(this);
 		write();
 	}
@@ -191,6 +205,10 @@ public class ZKArchiveConfig {
 	
 	public PublicSigningKey getPubKey() {
 		return pubKey;
+	}
+	
+	public RevisionTree getRevisionTree() {
+		return revisionTree;
 	}
 	
 	protected byte[] serializeVersionPortion() {

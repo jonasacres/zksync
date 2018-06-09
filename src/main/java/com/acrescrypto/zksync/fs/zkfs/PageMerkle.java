@@ -99,6 +99,9 @@ public class PageMerkle {
 		if(pageNum >= maxPages) resize(pageNum+1);
 		nodes[maxPages - 1 + pageNum].setTag(pageTag);
 		numPagesUsed = Math.max(pageNum+1, numPagesUsed);
+		if(tag.getRefType() != RefTag.REF_TYPE_IMMEDIATE) {
+			archive.addPageTag(pageTag);
+		}
 	}
 	
 	/** get the tag for a given page number
@@ -137,6 +140,7 @@ public class PageMerkle {
 		for(int i = 0; i < chunkCount; i++) {
 			int offset = i*archive.config.pageSize;
 			int len = Math.min(archive.config.pageSize, plaintext.capacity() - offset);
+			archive.addPageTag(tag.getHash());
 			
 			SecureFile
 			  .atPath(archive.storage, pathForChunk(tag, i), cipherKey(tag), tag.getBytes(), (""+i).getBytes())

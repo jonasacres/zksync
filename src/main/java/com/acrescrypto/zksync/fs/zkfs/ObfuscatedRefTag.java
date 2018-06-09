@@ -27,28 +27,28 @@ import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
  */
 
 public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
-	protected ZKArchive archive;
+	protected ZKArchiveConfig config;
 	protected byte[] ciphertext;
 	protected byte[] signature;
 	
-	public static int sizeForArchive(ZKArchive archive) {
-		return archive.refTagSize() + archive.crypto.asymSignatureSize();
+	public static int sizeForConfig(ZKArchiveConfig config) {
+		return config.refTagSize() + config.getCrypto().asymSignatureSize();
 	}
 	
-	public ObfuscatedRefTag(ZKArchive archive, byte[] serialized) {
-		this.archive = archive;
+	public ObfuscatedRefTag(ZKArchiveConfig config, byte[] serialized) {
+		this.config = config;
 		deserialize(serialized);
 	}
 	
 	public ObfuscatedRefTag(RefTag refTag) throws IOException {
-		this.archive = refTag.getArchive();
-		Key key = archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
-		this.ciphertext = archive.crypto.encryptCBC(key.getRaw(), new byte[archive.crypto.symBlockSize()], transform(refTag.getBytes()));
-		this.signature = archive.config.privKey.sign(ciphertext);
+		this.config = refTag.getConfig();
+		Key key = config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
+		this.ciphertext = config.getCrypto().encryptCBC(key.getRaw(), new byte[config.getCrypto().symBlockSize()], transform(refTag.getBytes()));
+		this.signature = config.privKey.sign(ciphertext);
 	}
 	
 	public int ciphertextLength() {
-		return (int) Math.ceil((double) archive.refTagSize() / archive.crypto.symKeyLength()) * archive.crypto.symKeyLength();
+		return (int) Math.ceil((double) config.refTagSize() / config.getCrypto().symKeyLength()) * config.getCrypto().symKeyLength();
 	}
 	
 	public int totalLength() {
@@ -56,7 +56,7 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	}
 	
 	public boolean verify() {
-		return archive.config.pubKey.verify(ciphertext, signature);
+		return config.pubKey.verify(ciphertext, signature);
 	}
 	
 	public void assertValid() throws InvalidSignatureException {
@@ -65,10 +65,10 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	
 	public RefTag reveal() throws InvalidSignatureException {
 		assertValid();
-		Key key = archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
-		byte[] mangled = archive.crypto.decryptCBC(key.getRaw(), new byte[archive.crypto.symBlockSize()], this.ciphertext);
+		Key key = config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
+		byte[] mangled = config.getCrypto().decryptCBC(key.getRaw(), new byte[config.getCrypto().symBlockSize()], this.ciphertext);
 		byte[] plaintext = transform(mangled);
-		return new RefTag(archive, plaintext);
+		return new RefTag(config, plaintext);
 	}
 	
 	protected byte[] transform(byte[] tag) {
@@ -83,15 +83,15 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	}
 	
 	protected byte[] makeHash(byte[] tag) {
-		Key key = archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_REFTAG);
-		ByteBuffer buf = ByteBuffer.allocate(archive.refTagSize() - RefTag.REFTAG_EXTRA_DATA_SIZE);
+		Key key = config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_REFTAG);
+		ByteBuffer buf = ByteBuffer.allocate(config.refTagSize() - RefTag.REFTAG_EXTRA_DATA_SIZE);
 		buf.put(tag, 0, buf.remaining());
 		return key.authenticate(buf.array());
 	}
 	
 	protected void deserialize(byte[] serialized) {
-		assert(serialized.length == sizeForArchive(archive));
-		this.ciphertext = new byte[archive.refTagSize()];
+		assert(serialized.length == sizeForConfig(config));
+		this.ciphertext = new byte[config.refTagSize()];
 		this.signature = new byte[serialized.length - ciphertext.length];
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		buf.get(ciphertext);

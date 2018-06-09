@@ -35,7 +35,6 @@ public class ZKArchive {
 	protected ZKArchiveConfig config;
 	protected ZKMaster master;
 	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
-	protected RevisionTree revisionTree;
 	protected LinkedList<byte[]> allPageTags;
 	
 	protected ZKArchive(ZKArchiveConfig config) throws IOException {
@@ -54,7 +53,6 @@ public class ZKArchive {
 			buildAllPageTagsList();
 		}
 		
-		this.revisionTree = new RevisionTree(this);
 		this.config.accessor.discoveredArchive(this);
 	}
 	
@@ -101,8 +99,9 @@ public class ZKArchive {
 		this.localConfig = localConfig;
 	}
 	
+	// TODO DHT: (refactor) deprecate; moved to config
 	public RevisionTree getRevisionTree() throws IOException {
-		return revisionTree;
+		return config.getRevisionTree();
 	}
 	
 	// TODO DHT: (refactor) deprecate; moved to config

@@ -46,7 +46,7 @@ public class ObfuscatedRefTagTest {
 	@Test
 	public void testSerialization() throws IOException {
 		byte[] serialized = obfTag.serialize();
-		ObfuscatedRefTag deserialized = new ObfuscatedRefTag(refTag.getArchive(), serialized);
+		ObfuscatedRefTag deserialized = new ObfuscatedRefTag(refTag.getConfig(), serialized);
 		assertTrue(Arrays.equals(deserialized.ciphertext, obfTag.ciphertext));
 		assertTrue(Arrays.equals(deserialized.signature, obfTag.signature));
 		assertTrue(Arrays.equals(serialized, deserialized.serialize()));
@@ -62,7 +62,7 @@ public class ObfuscatedRefTagTest {
 			int mask = 1 << (i & 7);
 			int offset = i/8;
 			mangled[offset] ^= mask;
-			ObfuscatedRefTag tag = new ObfuscatedRefTag(refTag.getArchive(), mangled);
+			ObfuscatedRefTag tag = new ObfuscatedRefTag(refTag.getConfig(), mangled);
 			assertFalse(tag.verify());
 			mangled[offset] ^= mask;
 		}

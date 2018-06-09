@@ -89,4 +89,7 @@ public class PageMerkleTest {
 		archive.storage.unlink(PageMerkle.pathForChunk(merkle.tag, 1));
 		assertFalse(merkle.exists());
 	}
+	
+	// TODO DHT: (test) Calls archive.addPageTag for page tags
+	// TODO DHT: (test) Calls archive.addPageTag for merkle chunks
 }

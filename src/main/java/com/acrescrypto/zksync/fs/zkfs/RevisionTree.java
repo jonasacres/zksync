@@ -19,11 +19,11 @@ import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 public class RevisionTree {
 	protected ArrayList<ObfuscatedRefTag> branchTips = new ArrayList<ObfuscatedRefTag>();
 	protected ArrayList<RefTag> plainBranchTips = new ArrayList<RefTag>();
-	protected ZKArchive archive;
+	protected ZKArchiveConfig config;
 	private Logger logger = LoggerFactory.getLogger(RevisionTree.class);
 	
-	public RevisionTree(ZKArchive archive) throws IOException {
-		this.archive = archive;
+	public RevisionTree(ZKArchiveConfig config) throws IOException {
+		this.config = config;
 		try {
 			read();
 		} catch(ENOENTException exc) {
@@ -47,7 +47,7 @@ public class RevisionTree {
 	public synchronized void addBranchTip(ObfuscatedRefTag newBranch) throws InvalidSignatureException {
 		newBranch.assertValid();
 		branchTips.add(newBranch);
-		if(!archive.config.accessor.isSeedOnly()) {
+		if(!config.accessor.isSeedOnly()) {
 			plainBranchTips.add(newBranch.reveal());
 		}
 	}
@@ -59,7 +59,7 @@ public class RevisionTree {
 	
 	public synchronized void removeBranchTip(ObfuscatedRefTag oldBranch) {
 		branchTips.remove(oldBranch);
-		if(!archive.config.accessor.isSeedOnly()) {
+		if(!config.accessor.isSeedOnly()) {
 			try {
 				plainBranchTips.remove(oldBranch.reveal());
 			} catch (InvalidSignatureException exc) {
@@ -106,24 +106,24 @@ public class RevisionTree {
 	
 	public synchronized void write() throws IOException {
 		MutableSecureFile
-		  .atPath(archive.config.localStorage, getPath(), branchTipKey())
+		  .atPath(config.localStorage, getPath(), branchTipKey())
 		  .write(serialize(), 65536);
 	}
 	
 	public synchronized void read() throws IOException {
 		deserialize(MutableSecureFile
-		  .atPath(archive.config.localStorage, getPath(), branchTipKey())
+		  .atPath(config.localStorage, getPath(), branchTipKey())
 		  .read());
 	}
 	
 	protected synchronized void deserialize(byte[] serialized) {
 		branchTips.clear();
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		byte[] tag = new byte[ObfuscatedRefTag.sizeForArchive(archive)];
-		while(buf.remaining() >= archive.refTagSize()) {
+		byte[] tag = new byte[ObfuscatedRefTag.sizeForConfig(config)];
+		while(buf.remaining() >= config.refTagSize()) {
 			buf.get(tag);
 			try {
-				ObfuscatedRefTag obfTag = new ObfuscatedRefTag(archive, tag);
+				ObfuscatedRefTag obfTag = new ObfuscatedRefTag(config, tag);
 				obfTag.assertValid();
 				branchTips.add(obfTag);
 				plainBranchTips.add(obfTag.reveal());
@@ -136,7 +136,7 @@ public class RevisionTree {
 	}
 	
 	protected synchronized byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(ObfuscatedRefTag.sizeForArchive(archive)*branchTips.size());
+		ByteBuffer buf = ByteBuffer.allocate(ObfuscatedRefTag.sizeForConfig(config)*branchTips.size());
 		for(ObfuscatedRefTag tag : branchTips) {
 			try {
 				tag.assertValid();
@@ -149,6 +149,6 @@ public class RevisionTree {
 	}
 	
 	protected Key branchTipKey() {
-		return archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REVISION_TREE);
+		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REVISION_TREE);
 	}
 }

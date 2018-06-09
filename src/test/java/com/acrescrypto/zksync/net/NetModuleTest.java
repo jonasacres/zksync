@@ -1,5 +1,7 @@
 package com.acrescrypto.zksync.net;
 
+import static org.junit.Assert.assertTrue;
+
 import java.io.IOException;
 
 import org.junit.AfterClass;
@@ -15,6 +17,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.utility.Util;
 
 public class NetModuleTest {
 	static CryptoSupport crypto;
@@ -56,6 +59,9 @@ public class NetModuleTest {
 		
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.getSwarm().requestAll();
-		
+		bConfig.finishOpening();
+		System.out.println("a: " + aConfig.getArchive().allPageTags().size());
+		System.out.println("b: " + bConfig.getArchive().allPageTags().size());
+		assertTrue(Util.waitUntil(10000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size()));
 	}
 }

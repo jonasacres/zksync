@@ -797,11 +797,11 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleAnnounceTipsTriggersViolationWhenForgedRefTagSent() throws ProtocolViolationException, IOException {
-		RefTag fakeTag = new RefTag(archive, crypto.rng(crypto.hashLength()), RefTag.REF_TYPE_2INDIRECT, 2);
+		RefTag fakeTag = new RefTag(archive.getConfig(), crypto.rng(crypto.hashLength()), RefTag.REF_TYPE_2INDIRECT, 2);
 		ObfuscatedRefTag obfTag = fakeTag.obfuscate();
 		byte[] raw = obfTag.serialize();
 		raw[8] ^= 0x40;
-		obfTag = new ObfuscatedRefTag(archive, raw);
+		obfTag = new ObfuscatedRefTag(archive.getConfig(), raw);
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TIPS);
 		msg.receivedData(PeerMessage.FLAG_FINAL, obfTag.serialize());

@@ -80,7 +80,7 @@ public class PeerConnection {
 		this.queue = new PageQueue(socket.swarm.config.getArchive());
 		new Thread(()->pageQueueThread()).start();
 		announceTips();
-		announceTags(socket.swarm.getConfig().getArchive().allPageTags());
+		announceTags();
 	}
 	
 	protected PeerConnection() {}
@@ -152,9 +152,25 @@ public class PeerConnection {
 		send(CMD_ANNOUNCE_TAGS, serialized.array());
 	}
 	
+	public void announceTags() {
+		ZKArchive archive = socket.swarm.config.getArchive();
+		if(archive == null) {
+			// TODO DHT: (review) Make sure we only hit this branch when we're initializing from an archive ID and have no data yet.
+			send(CMD_ANNOUNCE_TAGS, new byte[0]);
+			return;
+		}
+		
+		announceTags(archive.allPageTags());
+	}
+	
 	public void announceTips() throws IOException {
 		ZKArchive archive = socket.swarm.config.getArchive();
-		ByteBuffer buf = ByteBuffer.allocate(archive.getRevisionTree().branchTips().size() * ObfuscatedRefTag.sizeForArchive(archive));
+		if(archive == null || archive.getRevisionTree() == null) {
+			send(CMD_ANNOUNCE_TIPS, new byte[0]);
+			return;
+		}
+		
+		ByteBuffer buf = ByteBuffer.allocate(archive.getRevisionTree().branchTips().size() * ObfuscatedRefTag.sizeForConfig(socket.swarm.config));
 		for(RefTag tag : archive.getRevisionTree().plainBranchTips()) {
 			buf.put(tag.obfuscate().serialize());
 		}
@@ -336,16 +352,15 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
-		ZKArchive archive = socket.swarm.config.getArchive();
-		byte[] obfTagRaw = new byte[ObfuscatedRefTag.sizeForArchive(archive)];
+		byte[] obfTagRaw = new byte[ObfuscatedRefTag.sizeForConfig(socket.swarm.config)];
 		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(obfTagRaw);
-			ObfuscatedRefTag obfTag = new ObfuscatedRefTag(archive, obfTagRaw);
-			archive.getRevisionTree().addBranchTip(obfTag);
+			ObfuscatedRefTag obfTag = new ObfuscatedRefTag(socket.swarm.config, obfTagRaw);
+			socket.swarm.config.getRevisionTree().addBranchTip(obfTag);
 		}
 		
-		// there's an unmitigated danger here that there's a separate zkarchive open with parallel revision tree changes
-		archive.getRevisionTree().write();
+		// TODO DHT: (review) there's an unmitigated danger here that there's a separate zkarchive open with parallel revision tree changes
+		socket.swarm.config.getRevisionTree().write();
 	}
 	
 	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException, IOException {
