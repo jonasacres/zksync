@@ -80,7 +80,9 @@ public abstract class PeerSocket {
 	
 	public PeerMessageOutgoing makeOutgoingMessage(byte cmd, InputStream txPayload) {
 		PeerMessageOutgoing msg = new PeerMessageOutgoing(connection, cmd, txPayload);
-		outgoing.add(msg);
+		synchronized(outgoing) {
+			outgoing.add(msg);
+		}
 		return msg;
 	}
 	
@@ -129,7 +131,9 @@ public abstract class PeerSocket {
 		segment.delivered();
 		
 		if((segment.flags & PeerMessage.FLAG_FINAL) != 0) {
-			outgoing.remove((Integer) segment.msgId);
+			synchronized(outgoing) {
+				outgoing.remove((Integer) segment.msgId);
+			}
 		}
 	}
 	
@@ -233,10 +237,12 @@ public abstract class PeerSocket {
 		}
 	}
 	
-	protected synchronized void cancelMessage(int msgId) {
-		for(PeerMessageOutgoing msg : outgoing) {
-			if(msg.msgId == msgId) {
-				msg.abort();
+	protected void cancelMessage(int msgId) {
+		synchronized(outgoing) {
+			for(PeerMessageOutgoing msg : outgoing) {
+				if(msg.msgId == msgId) {
+					msg.abort();
+				}
 			}
 		}
 	}

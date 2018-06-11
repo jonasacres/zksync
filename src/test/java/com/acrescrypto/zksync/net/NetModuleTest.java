@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.net;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -26,7 +27,7 @@ public class NetModuleTest {
 		ZKFS fs = archive.openBlank();
 		fs.write("file0", crypto.rng(crypto.hashLength()-1));
 		fs.write("file1", crypto.rng(archive.getConfig().getPageSize()));
-		fs.write("file2", crypto.rng(100*archive.getConfig().getPageSize()));
+		fs.write("file2", crypto.rng(10*archive.getConfig().getPageSize()));
 		fs.commit();
 	}
 	
@@ -60,5 +61,11 @@ public class NetModuleTest {
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
 		assertTrue(Util.waitUntil(2000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size()));
+		
+		ZKFS fsa = aConfig.getRevisionTree().plainBranchTips().get(0).getFS();
+		ZKFS fsb = bConfig.getRevisionTree().plainBranchTips().get(0).getFS();
+		assertArrayEquals(fsa.read("file0"), fsb.read("file0"));
+		assertArrayEquals(fsa.read("file1"), fsb.read("file1"));
+		assertArrayEquals(fsa.read("file2"), fsb.read("file2"));
 	}
 }
