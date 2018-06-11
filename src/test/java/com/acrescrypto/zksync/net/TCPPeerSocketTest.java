@@ -818,6 +818,7 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testIgnoresClosedMessageIDs() throws IOException {
+		// TODO DHT: (itf) Intermittent test failure. Stalls. Linux 6/10/18 f0ff7ba363eb042da4c88fdca2d617e8bff15a83
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();

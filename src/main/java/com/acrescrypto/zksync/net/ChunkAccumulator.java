@@ -109,7 +109,6 @@ public class ChunkAccumulator {
 			if(chunksByIndex.get(i).size() == 0) return false;
 		}
 		
-		System.out.println("All chunks acquired");
 		return true;
 	}
 	

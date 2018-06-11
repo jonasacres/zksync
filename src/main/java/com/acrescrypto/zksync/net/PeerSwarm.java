@@ -113,8 +113,6 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public synchronized void openedConnection(PeerConnection connection) {
-		System.out.println("Opened connection " + this);
-		activeSockets++;
 		if(closed) {
 			connection.close();
 			return;
@@ -200,8 +198,10 @@ public class PeerSwarm implements BlacklistCallback {
 		new Thread(()-> {
 			PeerConnection conn = null;
 			try {
-				conn = ad.connect(this);
-				openedConnection(conn);
+				synchronized(this) {
+					conn = ad.connect(this);
+					openedConnection(conn);
+				}
 			} catch (UnsupportedProtocolException exc) {
 				logger.info("Ignoring unsupported ad type " + ad.getType());
 			} catch (ProtocolViolationException exc) {
@@ -265,7 +265,9 @@ public class PeerSwarm implements BlacklistCallback {
 			pageWaits.get(shortTag).signalAll();
 		}
 		pageWaitLock.unlock();
-		config.getArchive().addPageTag(tag);
+		if(config.getArchive() != null) {
+			config.getArchive().addPageTag(tag);
+		}
 		
 		announceTag(tag);
 	}

@@ -17,6 +17,7 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
@@ -35,11 +36,16 @@ public class RequestPoolTest {
 	}
 	
 	class DummyConnection extends PeerConnection {
-		boolean requestedAll, mockSeedOnly;
+		boolean requestedAll, mockSeedOnly, setPaused, setPausedValue;
 		int requestedPriority;
 		LinkedList<RefTag> requestedRefTags = new LinkedList<>();
 		LinkedList<RefTag> requestedRevisions = new LinkedList<>();
 		LinkedList<Long> requestedPageTags = new LinkedList<>();
+		
+		@Override public void setPaused(boolean paused) {
+			this.setPaused = true;
+			this.setPausedValue = paused;
+		}
 		
 		@Override public void requestAll() { requestedAll = true; }
 		@Override public void requestPageTags(int priority, Collection<Long> pageTags) {
@@ -160,6 +166,7 @@ public class RequestPoolTest {
 			pool.addPageTag(123, tag);
 		}
 		
+		pool.receivedConfigInfo();
 		pool.addRequestsToConnection(conn);
 		assertEquals(tags, conn.requestedPageTags);
 		assertEquals(123, conn.requestedPriority);
@@ -335,11 +342,14 @@ public class RequestPoolTest {
 	}
 	
 	@Test
-	public void testBackgroundThreadDoesNotWriteDataWhenStopped() {
+	public void testBackgroundThreadDoesNotWriteDataWhenStopped() throws IOException {
+		pool.stop();
+
 		RequestPool.pruneIntervalMs = 10;
-		RequestPool pool2 = new RequestPool(config);
+		RequestPool pool2 = new RequestPool(config); // need a second pool for the faster prune interval
 		pool2.addPageTag(0, 0);
 		pool2.stop();
+		try { archive.getConfig().getLocalStorage().unlink(pool2.path()); } catch(ENOENTException exc) {}
 		assertFalse(Util.waitUntil(100, ()->archive.getConfig().getLocalStorage().exists(pool2.path())));
 	}
 }

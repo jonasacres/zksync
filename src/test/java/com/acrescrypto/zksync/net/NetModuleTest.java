@@ -26,7 +26,7 @@ public class NetModuleTest {
 		ZKFS fs = archive.openBlank();
 		fs.write("file0", crypto.rng(crypto.hashLength()-1));
 		fs.write("file1", crypto.rng(archive.getConfig().getPageSize()));
-		fs.write("file2", crypto.rng(2*archive.getConfig().getPageSize()));
+		fs.write("file2", crypto.rng(100*archive.getConfig().getPageSize()));
 		fs.commit();
 	}
 	
@@ -51,18 +51,14 @@ public class NetModuleTest {
 		addMockData(aConfig.getArchive());
 		aMaster.listenOnTCP(0);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
-		System.out.println("Seed is listening on " + aMaster.getTCPListener().getPort() + " -- " + aConfig.isInitialized());
 		TCPPeerAdvertisement ad = aMaster.getTCPListener().listenerForSwarm(aConfig.getSwarm()).localAd();
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume();
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
 		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
-		System.out.println("Instantiated");
 		bConfig.getSwarm().addPeerAdvertisement(ad);
-		System.out.println("Added ad");
 		bConfig.finishOpening();
-		System.out.println("a: " + aConfig.getArchive().allPageTags().size());
-		System.out.println("b: " + bConfig.getArchive().allPageTags().size());
-		assertTrue(Util.waitUntil(10000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size()));
+		bConfig.getSwarm().requestAll();
+		assertTrue(Util.waitUntil(2000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size()));
 	}
 }

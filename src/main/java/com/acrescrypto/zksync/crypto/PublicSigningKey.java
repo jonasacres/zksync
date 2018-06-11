@@ -13,7 +13,6 @@ import net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable;
 import net.i2p.crypto.eddsa.spec.EdDSAParameterSpec;
 import net.i2p.crypto.eddsa.spec.EdDSAPublicKeySpec;
 
-// TODO: (refactor) It's somewhat confusing with the existing JCA that we have a "PublicKey" that doesn't fit into the framework at all. Ditto for PrivateKey...
 public class PublicSigningKey {
 	protected EdDSAPublicKey pubKey;
 	protected CryptoSupport crypto;

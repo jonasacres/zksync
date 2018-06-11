@@ -204,7 +204,6 @@ public class ZKArchiveConfig {
 			
 			configFileIv = new byte[accessor.master.crypto.symIvLength()];
 			contents.get(configFileIv);
-			if(!Arrays.equals(configFileIv, calculateConfigFileIv())) return false;
 
 			byte[] seedCiphertext = new byte[256 + accessor.master.crypto.symTagLength() + 4];
 			contents.get(seedCiphertext);
@@ -213,6 +212,7 @@ public class ZKArchiveConfig {
 			ByteBuffer seedPlaintext = ByteBuffer.wrap(seedPortion);
 			byte[] pubKeyBytes = new byte[accessor.master.crypto.asymPublicSigningKeySize()];
 			seedPlaintext.get(pubKeyBytes);
+			if(!Arrays.equals(configFileIv, calculateConfigFileIv(pubKeyBytes))) return false;
 			
 			byte[] secureCiphertext = new byte[contents.remaining()-accessor.master.crypto.asymSignatureSize()];
 			contents.get(secureCiphertext);
@@ -377,7 +377,11 @@ public class ZKArchiveConfig {
 	}
 	
 	protected byte[] calculateConfigFileIv() {
-		return accessor.master.crypto.expand(accessor.seedRoot.getRaw(), accessor.master.crypto.symIvLength(), "zksync".getBytes(), pubKey.getBytes());
+		return calculateConfigFileIv(pubKey.getBytes());
+	}
+	
+	protected byte[] calculateConfigFileIv(byte[] pubKeyBytes) {
+		return accessor.master.crypto.expand(accessor.seedRoot.getRaw(), accessor.master.crypto.symIvLength(), "zksync".getBytes(), pubKeyBytes);
 	}
 	
 	protected void assertState(boolean state) {

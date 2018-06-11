@@ -41,7 +41,7 @@ public class PeerConnection {
 	public final static byte CMD_REQUEST_CONFIG_INFO = 0x0c;
 	public final static byte CMD_SEND_CONFIG_INFO = 0x0d;
 	
-	public final static int MAX_SUPPORTED_CMD = CMD_SET_PAUSED; // update to largest acceptable command code
+	public final static int MAX_SUPPORTED_CMD = CMD_SEND_CONFIG_INFO; // update to largest acceptable command code
 	
 	public final static int PEER_TYPE_STATIC = 0; // static fileserver; needs subclass to handle
 	public final static int PEER_TYPE_BLIND = 1; // has knowledge of seed key, but not archive passphrase; can't decipher data
@@ -180,7 +180,6 @@ public class PeerConnection {
 	}
 	
 	public void requestAll() {
-		System.out.println("Sending requestAll");
 		send(CMD_REQUEST_ALL, new byte[0]);
 	}
 	
@@ -386,7 +385,6 @@ public class PeerConnection {
 	
 	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException, IOException {
 		msg.rxBuf.requireEOF();
-		System.out.println("Sending all");
 		sendEverything();
 	}
 
@@ -442,7 +440,6 @@ public class PeerConnection {
 		
 		while(!accumulator.isFinished() && msg.rxBuf.hasRemaining()) {
 			long offset = Util.unsignInt(msg.rxBuf.getInt());
-			System.out.println("offset=" + offset + " expectedChunks=" + expectedChunks + " pageSize=" + actualPageSize + " chunkSize=" + PeerMessage.FILE_CHUNK_SIZE);
 			assertState(0 <= offset && offset < expectedChunks && offset <= Integer.MAX_VALUE);
 			int readLen = offset == expectedChunks - 1 ? finalChunkSize : PeerMessage.FILE_CHUNK_SIZE;
 			byte[] chunkData = msg.rxBuf.read(readLen);

@@ -32,7 +32,6 @@ public class RequestPool {
 	Logger logger = LoggerFactory.getLogger(RequestPool.class);
 	
 	public RequestPool(ZKArchiveConfig config) {
-		System.out.println("Instantiated " + this);
 		this.config = config;
 		
 		// TODO DHT: (test) automatically requests config info when canReceive is false
@@ -49,7 +48,6 @@ public class RequestPool {
 	}
 	
 	public void setRequestingEverything(boolean requestingEverything) {
-		System.out.println("Request all = " + requestingEverything + " " + this);
 		this.requestingEverything = requestingEverything;
 		dirty = true;
 	}
@@ -65,8 +63,6 @@ public class RequestPool {
 	}
 	
 	public synchronized void addRequestsToConnection(PeerConnection conn) {
-		System.out.println("Setting up requests on new connection " + this);
-		
 		conn.setPaused(paused);
 		
 		if(requestingConfigInfo) {
@@ -158,7 +154,6 @@ public class RequestPool {
 	
 	protected void addDataRequestsToConnection(PeerConnection conn) {
 		if(requestingEverything) {
-			System.out.println("Requesting all from new connection");
 			conn.requestAll();
 		}
 		
@@ -181,6 +176,7 @@ public class RequestPool {
 		while(!stopped) {
 			try {
 				Util.sleep(pruneIntervalMs);
+				if(stopped) break;
 				prune();
 				if(dirty) {
 					try {

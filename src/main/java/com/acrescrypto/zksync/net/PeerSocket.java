@@ -233,7 +233,7 @@ public abstract class PeerSocket {
 		}
 	}
 	
-	protected void cancelMessage(int msgId) {
+	protected synchronized void cancelMessage(int msgId) {
 		for(PeerMessageOutgoing msg : outgoing) {
 			if(msg.msgId == msgId) {
 				msg.abort();
