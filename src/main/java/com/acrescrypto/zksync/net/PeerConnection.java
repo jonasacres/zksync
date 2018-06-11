@@ -38,6 +38,8 @@ public class PeerConnection {
 	public final static byte CMD_REQUEST_PAGE_TAGS = 0x09;
 	public final static byte CMD_SEND_PAGE = 0x0a;
 	public final static byte CMD_SET_PAUSED = 0x0b;
+	public final static byte CMD_REQUEST_CONFIG_INFO = 0x0c;
+	public final static byte CMD_SEND_CONFIG_INFO = 0x0d;
 	
 	public final static int MAX_SUPPORTED_CMD = CMD_SET_PAUSED; // update to largest acceptable command code
 	
@@ -178,6 +180,7 @@ public class PeerConnection {
 	}
 	
 	public void requestAll() {
+		System.out.println("Sending requestAll");
 		send(CMD_REQUEST_ALL, new byte[0]);
 	}
 	
@@ -214,6 +217,14 @@ public class PeerConnection {
 		if(tips.isEmpty()) return;
 		assertPeerCapability(PEER_TYPE_FULL);
 		send(CMD_REQUEST_REVISION_CONTENTS, serializeRefTags(priority, tips));
+	}
+	
+	public void requestConfigInfo() {
+		send(CMD_REQUEST_CONFIG_INFO, new byte[0]);
+	}
+	
+	public void sendConfigInfo() {
+		send(CMD_SEND_CONFIG_INFO, Util.serializeInt(socket.swarm.config.getPageSize()));
 	}
 	
 	public void setPaused(boolean paused) {
@@ -274,6 +285,12 @@ public class PeerConnection {
 				break;
 			case CMD_SET_PAUSED:
 				handleSetPaused(msg);
+				break;
+			case CMD_REQUEST_CONFIG_INFO:
+				handleRequestConfigInfo(msg);
+				break;
+			case CMD_SEND_CONFIG_INFO:
+				handleSendConfigInfo(msg);
 				break;
 			default:
 				logger.info("Ignoring unknown request command {} from {}", msg.cmd, socket.getAddress());
@@ -352,6 +369,10 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
+		while(!socket.swarm.config.isInitialized()) {
+			Util.sleep(100);
+		}
+		
 		byte[] obfTagRaw = new byte[ObfuscatedRefTag.sizeForConfig(socket.swarm.config)];
 		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(obfTagRaw);
@@ -365,6 +386,7 @@ public class PeerConnection {
 	
 	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException, IOException {
 		msg.rxBuf.requireEOF();
+		System.out.println("Sending all");
 		sendEverything();
 	}
 
@@ -407,20 +429,20 @@ public class PeerConnection {
 	}
 	
 	protected void handleSendPage(PeerMessageIncoming msg) throws IOException, ProtocolViolationException {
-		ZKArchive archive = socket.swarm.config.getArchive();
-		byte[] tag = msg.rxBuf.read(archive.getCrypto().hashLength());
+		byte[] tag = msg.rxBuf.read(socket.swarm.config.getCrypto().hashLength());
 		if(socket.swarm.getConfig().getCacheStorage().exists(Page.pathForTag(tag))) {
 			announceTag(Util.shortTag(tag));
 			return;
 		}
 		
-		int actualPageSize = archive.getConfig().getSerializedPageSize();
+		int actualPageSize = socket.swarm.config.getSerializedPageSize();
 		int expectedChunks = (int) Math.ceil(((double) actualPageSize)/PeerMessage.FILE_CHUNK_SIZE);
 		int finalChunkSize = actualPageSize % PeerMessage.FILE_CHUNK_SIZE;
 		ChunkAccumulator accumulator = socket.swarm.accumulatorForTag(tag);
 		
 		while(!accumulator.isFinished() && msg.rxBuf.hasRemaining()) {
 			long offset = Util.unsignInt(msg.rxBuf.getInt());
+			System.out.println("offset=" + offset + " expectedChunks=" + expectedChunks + " pageSize=" + actualPageSize + " chunkSize=" + PeerMessage.FILE_CHUNK_SIZE);
 			assertState(0 <= offset && offset < expectedChunks && offset <= Integer.MAX_VALUE);
 			int readLen = offset == expectedChunks - 1 ? finalChunkSize : PeerMessage.FILE_CHUNK_SIZE;
 			byte[] chunkData = msg.rxBuf.read(readLen);
@@ -433,6 +455,25 @@ public class PeerConnection {
 		assertState(pausedByte == 0x00 || pausedByte == 0x01);
 		msg.rxBuf.requireEOF();
 		setRemotePaused(pausedByte == 0x01);
+	}
+	
+	protected void handleRequestConfigInfo(PeerMessageIncoming msg) throws ProtocolViolationException {
+		msg.rxBuf.requireEOF();
+		if(socket.swarm.config.isInitialized()) {
+			sendConfigInfo();
+		}
+	}
+	
+	protected void handleSendConfigInfo(PeerMessageIncoming msg) throws EOFException, ProtocolViolationException {
+		int pageSize = msg.rxBuf.getInt();
+		assertState(0 <= pageSize && pageSize <= Integer.MAX_VALUE);
+		
+		// TODO DHT: (review) What if a malicious peer lies about this?
+		if(!socket.swarm.config.canReceive()) {
+			socket.swarm.config.setPageSize(pageSize);
+		}
+		
+		socket.swarm.receivedConfigInfo();
 	}
 	
 	protected void send(byte cmd, byte[] payload) {

@@ -51,14 +51,15 @@ public class NetModuleTest {
 		addMockData(aConfig.getArchive());
 		aMaster.listenOnTCP(0);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
+		System.out.println("Seed is listening on " + aMaster.getTCPListener().getPort() + " -- " + aConfig.isInitialized());
 		TCPPeerAdvertisement ad = aMaster.getTCPListener().listenerForSwarm(aConfig.getSwarm()).localAd();
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume();
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
 		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
-		
+		System.out.println("Instantiated");
 		bConfig.getSwarm().addPeerAdvertisement(ad);
-		bConfig.getSwarm().requestAll();
+		System.out.println("Added ad");
 		bConfig.finishOpening();
 		System.out.println("a: " + aConfig.getArchive().allPageTags().size());
 		System.out.println("b: " + bConfig.getArchive().allPageTags().size());

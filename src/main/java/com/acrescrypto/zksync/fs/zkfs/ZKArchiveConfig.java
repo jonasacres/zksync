@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
@@ -169,7 +170,7 @@ public class ZKArchiveConfig {
 			contents.get(versionHash);
 			deserializeVersionPortion(versionHash);
 
-			byte[] seedCiphertext = new byte[256 + accessor.master.crypto.symTagLength() + 4];
+			byte[] seedCiphertext = new byte[accessor.master.crypto.symPaddedCiphertextSize(seedPortionPadSize())];
 			assertState(contents.remaining() >= seedCiphertext.length);
 			configFileIv = new byte[accessor.master.crypto.symIvLength()];
 			contents.get(configFileIv);
@@ -178,6 +179,9 @@ public class ZKArchiveConfig {
 			
 			byte[] secureCiphertext = new byte[contents.remaining()-accessor.master.crypto.asymSignatureSize()];
 			contents.get(secureCiphertext);
+			byte[] fingerprint = accessor.master.crypto.hash(secureCiphertext);
+			assertState(Arrays.equals(archiveId, calculateArchiveId(fingerprint)));
+			
 			if(!accessor.isSeedOnly()) {
 				deserializeSecurePortion(accessor.configFileKey.decrypt(configFileIv, secureCiphertext));
 				deriveKeypair();
@@ -187,6 +191,42 @@ public class ZKArchiveConfig {
 			pubKey.assertValid(contents.array(), 0, contents.capacity()-sigSize, contents.array(), contents.capacity()-sigSize, sigSize);
 		} catch(SecurityException exc) {
 			throw new InvalidArchiveConfigException();
+		}
+	}
+	
+	public boolean verify(byte[] serialized) {
+		try {
+			ByteBuffer contents = ByteBuffer.wrap(serialized);
+			
+			byte[] versionHash = new byte[accessor.master.crypto.hashLength()];
+			contents.get(versionHash);
+			if(!Arrays.equals(serializeVersionPortion(), versionHash)) return false;
+			
+			configFileIv = new byte[accessor.master.crypto.symIvLength()];
+			contents.get(configFileIv);
+			if(!Arrays.equals(configFileIv, calculateConfigFileIv())) return false;
+
+			byte[] seedCiphertext = new byte[256 + accessor.master.crypto.symTagLength() + 4];
+			contents.get(seedCiphertext);
+			byte[] seedPortion = accessor.configFileSeedKey.decrypt(configFileIv, seedCiphertext);
+			
+			ByteBuffer seedPlaintext = ByteBuffer.wrap(seedPortion);
+			byte[] pubKeyBytes = new byte[accessor.master.crypto.asymPublicSigningKeySize()];
+			seedPlaintext.get(pubKeyBytes);
+			
+			byte[] secureCiphertext = new byte[contents.remaining()-accessor.master.crypto.asymSignatureSize()];
+			contents.get(secureCiphertext);
+			byte[] fingerprint = accessor.master.crypto.hash(secureCiphertext);
+
+			PublicSigningKey allegedPubKey = accessor.master.crypto.makePublicSigningKey(pubKeyBytes);
+			if(!Arrays.equals(archiveId, calculateArchiveId(fingerprint, pubKeyBytes))) return false;
+			
+			int sigSize = accessor.master.crypto.asymSignatureSize();
+			allegedPubKey.assertValid(contents.array(), 0, contents.capacity()-sigSize, contents.array(), contents.capacity()-sigSize, sigSize);
+			
+			return true;
+		} catch(SecurityException|BufferUnderflowException|IllegalArgumentException exc) {
+			return false;
 		}
 	}
 	
@@ -211,17 +251,27 @@ public class ZKArchiveConfig {
 		return revisionTree;
 	}
 	
+	public boolean canReceive() {
+		return pageSize > 0;
+	}
+	
+	public boolean isInitialized() {
+		return archiveRoot != null;
+	}
+	
 	protected byte[] serializeVersionPortion() {
-		ByteBuffer versionInput = ByteBuffer.allocate(4+archiveId.length);
+		byte[] effectiveArchiveId = new byte[accessor.master.crypto.hashLength()];
+		if(archiveId != null) effectiveArchiveId = archiveId;
+		
+		ByteBuffer versionInput = ByteBuffer.allocate(4+effectiveArchiveId.length);
 		versionInput.putInt(0);
-		versionInput.put(archiveId);
+		versionInput.put(effectiveArchiveId);
 		return accessor.configFileTagKey.authenticate(versionInput.array()); 
 	}
 	
 	protected byte[] serializeSeedPortion() {
-		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length + accessor.master.crypto.hashLength());
+		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length);
 		buf.put(pubKey.getBytes());
-		buf.put(deriveArchiveFingerprint());
 		assertState(!buf.hasRemaining());
 		return buf.array();
 	}
@@ -254,17 +304,15 @@ public class ZKArchiveConfig {
 	protected void deserializeSeedPortion(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		byte[] pubKeyBytes = new byte[accessor.master.crypto.asymPublicSigningKeySize()];
-		byte[] fingerprintBytes = new byte[accessor.master.crypto.hashLength()];
-		assertState(buf.remaining() == pubKeyBytes.length + fingerprintBytes.length);
+		assertState(buf.remaining() == pubKeyBytes.length);
 		buf.get(pubKeyBytes);
-		buf.get(fingerprintBytes);
 		
 		try {
 			this.pubKey = accessor.master.crypto.makePublicSigningKey(pubKeyBytes);
 		} catch(IllegalArgumentException exc) {
 			throw new InvalidArchiveConfigException();
 		}
-		assertState(Arrays.equals(archiveId, calculateArchiveId(fingerprintBytes)));
+
 		assertState(Arrays.equals(configFileIv, calculateConfigFileIv()));
 	}
 	
@@ -303,25 +351,33 @@ public class ZKArchiveConfig {
 	protected void initArchiveSpecific() {
 		archiveRoot = new Key(accessor.master.crypto, accessor.master.crypto.rng(accessor.master.crypto.symKeyLength()));
 		deriveKeypair();
-		archiveId = calculateArchiveId(deriveArchiveFingerprint());
 		configFileIv = calculateConfigFileIv();
+		archiveId = calculateArchiveId(deriveArchiveFingerprint());
 	}
 	
 	protected byte[] deriveArchiveFingerprint() {
-		return accessor.seedRoot.authenticate(archiveRoot.getRaw());
+		byte[] securePortion = serializeSecurePortion();
+		int remaining = getSerializedPageSize() - serializeVersionPortion().length - accessor.master.crypto.symIvLength() - accessor.master.crypto.symPaddedCiphertextSize(seedPortionPadSize());
+		int padLen = remaining-accessor.master.crypto.asymSignatureSize()-4-accessor.master.crypto.symTagLength();
+		byte[] ciphertext = accessor.configFileKey.encrypt(configFileIv, securePortion, padLen);
+		return accessor.master.crypto.hash(ciphertext);
 	}
 	
 	protected byte[] calculateArchiveId(byte[] archiveFingerprint) {
-		ByteBuffer keyMaterialBuf = ByteBuffer.allocate(archiveFingerprint.length + pubKey.getBytes().length);
+		return calculateArchiveId(archiveFingerprint, pubKey.getBytes());
+	}
+	
+	protected byte[] calculateArchiveId(byte[] archiveFingerprint, byte[] pubKeyRaw) {
+		ByteBuffer keyMaterialBuf = ByteBuffer.allocate(archiveFingerprint.length + pubKeyRaw.length);
 		keyMaterialBuf.put(archiveFingerprint);
-		keyMaterialBuf.put(pubKey.getBytes());
+		keyMaterialBuf.put(pubKeyRaw);
 		assertState(!keyMaterialBuf.hasRemaining());
 		byte[] id = accessor.seedRoot.authenticate(keyMaterialBuf.array());
 		return id;
 	}
 	
 	protected byte[] calculateConfigFileIv() {
-		return accessor.master.crypto.expand(accessor.seedRoot.getRaw(), accessor.master.crypto.symIvLength(), "zksync".getBytes(), archiveId);
+		return accessor.master.crypto.expand(accessor.seedRoot.getRaw(), accessor.master.crypto.symIvLength(), "zksync".getBytes(), pubKey.getBytes());
 	}
 	
 	protected void assertState(boolean state) {
@@ -355,6 +411,10 @@ public class ZKArchiveConfig {
 
 	public int getPageSize() {
 		return pageSize;
+	}
+	
+	public void setPageSize(int pageSize) {
+		this.pageSize = pageSize;
 	}
 	
 	public int getSerializedPageSize() {
@@ -402,7 +462,11 @@ public class ZKArchiveConfig {
 		this.storage = storage;
 	}
 
-	public boolean validatePage(byte[] tag, byte[] allegedPage) {		
+	public boolean validatePage(byte[] tag, byte[] allegedPage) {
+		if(Arrays.equals(tag, tag())) {
+			return verify(allegedPage);
+		}
+		
 		Key authKey = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE);
 		int sigOffset = allegedPage.length - accessor.master.crypto.asymSignatureSize();
 		if(!Arrays.equals(tag, authKey.authenticate(allegedPage))) return false;

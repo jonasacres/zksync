@@ -1504,8 +1504,14 @@ public class PeerConnectionTest {
 				}
 			}
 		}
-		
-		// TODO DHT: (test) Test sends tips at initialization
-		// TODO DHT: (test) Test sends tags at initialization
 	}
+
+	// TODO DHT: (test) Test sends tips at initialization
+	// TODO DHT: (test) Test sends tags at initialization
+	// TODO DHT: (test) Test request config info
+	// TODO DHT: (test) Test handle request config info sends page size if initialized
+	// TODO DHT: (test) Test handle request config info sends nothing if not initialized
+	// TODO DHT: (test) Test handle send config info sets page size if not initialized
+	// TODO DHT: (test) Test handle send config info does not set page size if initialized
+	// TODO DHT: (test) Test handle send config info triggers violation if page size is negative
 }

@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 
@@ -27,11 +28,19 @@ public class RequestPool {
 	HashMap<Integer,LinkedList<RefTag>> requestedRevisions = new HashMap<>();
 	HashMap<Integer,LinkedList<Long>> requestedPageTags = new HashMap<>();
 	
-	boolean requestingEverything, stopped;
+	boolean requestingEverything, stopped, paused, requestingConfigInfo;
 	Logger logger = LoggerFactory.getLogger(RequestPool.class);
 	
 	public RequestPool(ZKArchiveConfig config) {
+		System.out.println("Instantiated " + this);
 		this.config = config;
+		
+		// TODO DHT: (test) automatically requests config info when canReceive is false
+		// TODO DHT: (test) does not automatically request config info when canReceive is true
+		// TODO DHT: (test) delays requests when config info not received
+		// TODO DHT: (test) sends requests when config info received
+
+		setRequestingConfigInfo(!config.canReceive());
 		new Thread(()->pruneThread()).start();
 	}
 	
@@ -40,46 +49,77 @@ public class RequestPool {
 	}
 	
 	public void setRequestingEverything(boolean requestingEverything) {
+		System.out.println("Request all = " + requestingEverything + " " + this);
 		this.requestingEverything = requestingEverything;
 		dirty = true;
 	}
 	
+	public void setRequestingConfigInfo(boolean requestingConfigInfo) {
+		this.requestingConfigInfo = requestingConfigInfo;
+		dirty = true;
+	}
+	
+	public void receivedConfigInfo() {
+		setRequestingConfigInfo(false);
+		addDataRequests();
+	}
+	
 	public synchronized void addRequestsToConnection(PeerConnection conn) {
-		if(requestingEverything) {
-			conn.requestAll();
+		System.out.println("Setting up requests on new connection " + this);
+		
+		conn.setPaused(paused);
+		
+		if(requestingConfigInfo) {
+			conn.requestConfigInfo();
 		}
 		
-		for(int priority : requestedPageTags.keySet()) {
-			conn.requestPageTags(priority, requestedPageTags.get(priority));
+		if(config.canReceive()) {
+			addDataRequestsToConnection(conn);
 		}
-		
-		try {
-			for(int priority : requestedRefTags.keySet()) {
-				conn.requestRefTags(priority, requestedRefTags.get(priority));
-			}
-			
-			for(int priority : requestedRevisions.keySet()) {
-				conn.requestRevisionContents(priority, requestedRevisions.get(priority));
-			}
-		} catch(PeerCapabilityException exc) {}
 	}
 	
 	public synchronized void addRefTag(int priority, RefTag refTag) {
 		requestedRefTags.putIfAbsent(priority, new LinkedList<>());
 		requestedRefTags.get(priority).add(refTag);
 		dirty = true;
+
+		if(config.canReceive()) {
+			for(PeerConnection connection : config.getSwarm().connections) {
+				ArrayList<RefTag> list = new ArrayList<>(1);
+				list.add(refTag);
+				try {
+					connection.requestRefTags(priority, list);
+				} catch (PeerCapabilityException e) {}
+			}
+		}
 	}
 	
 	public synchronized void addRevision(int priority, RefTag revTag) {
 		requestedRevisions.putIfAbsent(priority, new LinkedList<>());
 		requestedRevisions.get(priority).add(revTag);
 		dirty = true;
+		
+		if(config.canReceive()) {
+			for(PeerConnection connection : config.getSwarm().connections) {
+				ArrayList<RefTag> list = new ArrayList<>(1);
+				list.add(revTag);
+				try {
+					connection.requestRevisionContents(priority, list);
+				} catch(PeerCapabilityException exc) {}
+			}
+		}
 	}
 	
 	public synchronized void addPageTag(int priority, long shortTag) {
 		requestedPageTags.putIfAbsent(priority, new LinkedList<>());
 		requestedPageTags.get(priority).add(shortTag);
 		dirty = true;
+		
+		if(config.canReceive()) {
+			for(PeerConnection connection : config.getSwarm().connections) {
+				connection.requestPageTag(priority, shortTag);
+			}
+		}
 	}
 	
 	public synchronized void addPageTag(int priority, byte[] pageTag) {
@@ -108,6 +148,33 @@ public class RequestPool {
 		} catch(IOException exc) {
 			logger.error("Caught exception pruning request pool", exc);
 		}
+	}
+	
+	protected void addDataRequests() {
+		for(PeerConnection conn : config.getSwarm().connections) {
+			addDataRequestsToConnection(conn);
+		}
+	}
+	
+	protected void addDataRequestsToConnection(PeerConnection conn) {
+		if(requestingEverything) {
+			System.out.println("Requesting all from new connection");
+			conn.requestAll();
+		}
+		
+		for(int priority : requestedPageTags.keySet()) {
+			conn.requestPageTags(priority, requestedPageTags.get(priority));
+		}
+		
+		try {
+			for(int priority : requestedRefTags.keySet()) {
+				conn.requestRefTags(priority, requestedRefTags.get(priority));
+			}
+			
+			for(int priority : requestedRevisions.keySet()) {
+				conn.requestRevisionContents(priority, requestedRevisions.get(priority));
+			}
+		} catch(PeerCapabilityException exc) {}
 	}
 	
 	protected void pruneThread() {

@@ -100,7 +100,7 @@ public class ZKArchiveConfigTest {
 	}
 	
 	public void writePhonySection(int statedSize, int actualSize) throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE) {
 			@Override
 			protected byte[] serializeSecurePortion() {
 				ByteBuffer securePortion = ByteBuffer.wrap(super.serializeSecurePortion());
@@ -117,6 +117,7 @@ public class ZKArchiveConfigTest {
 		};
 		
 		modified.write();
+		config = modified;
 	}
 	
 	@BeforeClass
@@ -204,21 +205,6 @@ public class ZKArchiveConfigTest {
 	}
 	
 	@Test
-	public void testRefuseBadArchiveFingerprint() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
-			@Override
-			protected byte[] serializeSeedPortion() {
-				byte[] serialized = super.serializeSeedPortion();
-				serialized[config.pubKey.getBytes().length] ^= 0x01;
-				return serialized;
-			}
-		};
-		
-		modified.write();
-		assertUnreadable(config);
-	}
-	
-	@Test
 	public void testRefuseBadArchivePubKey() throws IOException {
 		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
 			@Override
@@ -285,7 +271,7 @@ public class ZKArchiveConfigTest {
 
 	@Test
 	public void testRefuseShortSeedPortion() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE) {
 			@Override
 			protected int seedPortionPadSize() {
 				return super.seedPortionPadSize()-1;
@@ -293,12 +279,12 @@ public class ZKArchiveConfigTest {
 		};
 		
 		modified.write();
-		assertUnreadable(config);
+		assertUnreadable(modified);
 	}
 	
 	@Test
 	public void testRefuseLongSeedPortion() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE) {
 			@Override
 			protected int seedPortionPadSize() {
 				return super.seedPortionPadSize()+1;
@@ -306,7 +292,7 @@ public class ZKArchiveConfigTest {
 		};
 		
 		modified.write();
-		assertUnreadable(config);
+		assertUnreadable(modified);
 	}
 	
 	@Test
@@ -444,6 +430,19 @@ public class ZKArchiveConfigTest {
 		byte[][] info = makeValidPageInfo();
 		assertTrue(config.validatePage(info[0], info[1]));
 		assertTrue(seedConfig.validatePage(info[0], info[1]));
+	}
+	
+	@Test
+	public void testValidatePageReturnsTrueForValidConfigPage() throws IOException {
+		byte[] serialized = config.storage.read(Page.pathForTag(config.tag()));
+		assertTrue(config.validatePage(config.tag(), serialized));
+	}
+	
+	@Test
+	public void testValidatePageReturnsFalseForTamperedConfigPage() throws IOException {
+		byte[] serialized = config.storage.read(Page.pathForTag(config.tag()));
+		serialized[19] ^= 0x04;
+		assertFalse(config.validatePage(config.tag(), serialized));
 	}
 	
 	@Test

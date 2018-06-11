@@ -113,6 +113,7 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public synchronized void openedConnection(PeerConnection connection) {
+		System.out.println("Opened connection " + this);
 		activeSockets++;
 		if(closed) {
 			connection.close();
@@ -200,7 +201,7 @@ public class PeerSwarm implements BlacklistCallback {
 			PeerConnection conn = null;
 			try {
 				conn = ad.connect(this);
-				synchronized(this) { connections.add(conn); }
+				openedConnection(conn);
 			} catch (UnsupportedProtocolException exc) {
 				logger.info("Ignoring unsupported ad type " + ad.getType());
 			} catch (ProtocolViolationException exc) {
@@ -249,6 +250,10 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 		
 		return activeFiles.get(shortTag);
+	}
+	
+	protected synchronized void receivedConfigInfo() {
+		pool.receivedConfigInfo();
 	}
 	
 	protected synchronized void receivedPage(byte[] tag) {
@@ -318,4 +323,17 @@ public class PeerSwarm implements BlacklistCallback {
 			connection.requestAllCancel();
 		}
 	}
+	
+	public void setPaused(boolean paused) {
+		// TODO DHT: (implement)
+	}
+	
+	public void requestConfigInfo() {
+		pool.setRequestingConfigInfo(true);
+		for(PeerConnection connection : connections) {
+			connection.requestConfigInfo();
+		}
+	}
+	
+	// need a way to let consumer queue up file requests, but delay sending them until we have page info...
 }
