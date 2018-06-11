@@ -139,7 +139,8 @@ public abstract class PeerSocket {
 	
 	protected void sendThread() {
 		new Thread(() -> {
-			while(true) {
+			Thread.currentThread().setName("TCPPeerSocket send thread port " + getPort());
+			while(!isClosed()) {
 				try {
 					synchronized(this) {
 						while(!ready.isEmpty()) {
@@ -148,7 +149,7 @@ public abstract class PeerSocket {
 					}
 					
 					try {
-						synchronized(outgoing) { outgoing.wait(); }
+						synchronized(outgoing) { outgoing.wait(100); }
 					} catch (InterruptedException e) {}
 				} catch (IOException exc) {
 					ioexception(exc);
@@ -161,8 +162,9 @@ public abstract class PeerSocket {
 	
 	protected void recvThread() {
 		new Thread(() -> {
+			Thread.currentThread().setName("PeerSocket receive thread " + getPort());
 			try {
-				while(true) {
+				while(!isClosed()) {
 					ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
 					read(buf.array(), 0, PeerMessageIncoming.HEADER_LENGTH);
 					
@@ -258,5 +260,12 @@ public abstract class PeerSocket {
 	
 	protected void assertState(boolean test) throws ProtocolViolationException {
 		if(!test) throw new ProtocolViolationException();
+	}
+	
+	protected void closeAllIncoming() {
+		// TODO DHT: (implement) Refactor close() so that this gets called without each subclass having to call it directly
+		for(PeerMessageIncoming msg : incoming.values()) {
+			msg.rxBuf.setEOF();
+		}
 	}
 }

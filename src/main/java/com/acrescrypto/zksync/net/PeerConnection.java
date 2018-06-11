@@ -62,7 +62,7 @@ public class PeerConnection {
 	protected HashSet<Long> announcedTags = new HashSet<Long>();
 	protected boolean remotePaused, localPaused;
 	protected PageQueue queue;
-	protected boolean receivedTags;
+	protected boolean receivedTags, closed;
 	protected final Logger logger = LoggerFactory.getLogger(PeerConnection.class);
 	boolean sentProof;
 	
@@ -552,7 +552,11 @@ public class PeerConnection {
 		socket.violation();
 	}
 
-	public void close() {
+	public synchronized void close() {
+		if(closed) return;
+		closed = true;
+		
+		queue.close();
 		try {
 			socket.close();
 		} catch(IOException exc) {
@@ -566,13 +570,14 @@ public class PeerConnection {
 	}
 	
 	protected void pageQueueThread() {
+		Thread.currentThread().setName("PageQueue thread");
 		byte[] lastTag = new byte[0];
 		AppendableInputStream lastStream = null;
 		
 		while(!socket.isClosed()) {
 			try {
 				ChunkReference chunk = queue.nextChunk();
-				if(!wantsFile(chunk.tag)) continue;
+				if(chunk == null || !wantsFile(chunk.tag)) continue;
 				waitForUnpause();
 				
 				if(lastStream == null || !Arrays.equals(lastTag, chunk.tag)) {

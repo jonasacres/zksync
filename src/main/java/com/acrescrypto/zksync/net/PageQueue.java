@@ -216,6 +216,7 @@ public class PageQueue {
 	protected PriorityQueue<QueueItem> itemsByPriority = new PriorityQueue<QueueItem>();
 	protected ZKArchive archive;
 	protected EverythingQueueItem everythingItem;
+	protected boolean closed;
 	
 	public PageQueue(ZKArchive archive) {
 		this.archive = archive;
@@ -260,6 +261,12 @@ public class PageQueue {
 		itemsByPriority.clear();
 	}
 	
+	public synchronized void close() {
+		// TODO DHT: (test) test PageQueue close()
+		closed = true;
+		this.notifyAll();
+	}
+	
 	public boolean hasNextChunk() {
 		unpackNextReference();
 		return !itemsByPriority.isEmpty();
@@ -273,11 +280,13 @@ public class PageQueue {
 	}
 	
 	public synchronized ChunkReference nextChunk() {
-		while(!hasNextChunk()) {
+		while(!hasNextChunk() && !closed) {
 			try {
 				this.wait();
 			} catch(InterruptedException exc) {}
 		}
+		
+		if(closed) return null;
 		
 		return itemsByPriority.remove().reference();
 	}

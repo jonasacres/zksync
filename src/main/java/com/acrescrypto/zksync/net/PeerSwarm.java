@@ -152,6 +152,7 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	public void connectionThread() {
 		new Thread(() -> {
+			Thread.currentThread().setName("PeerSwarm connection thread");
 			while(!closed) {
 				PeerAdvertisement ad = selectConnectionAd();
 				if(ad == null || activeSockets >= maxSocketCount) {

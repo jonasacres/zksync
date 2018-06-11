@@ -43,8 +43,9 @@ public class RequestPool {
 		new Thread(()->pruneThread()).start();
 	}
 	
-	public void stop() {
+	public synchronized void stop() {
 		stopped = true;
+		this.notifyAll();
 	}
 	
 	public void setRequestingEverything(boolean requestingEverything) {
@@ -173,9 +174,10 @@ public class RequestPool {
 	}
 	
 	protected void pruneThread() {
+		Thread.currentThread().setName("RequestPool prune thread");
 		while(!stopped) {
 			try {
-				Util.sleep(pruneIntervalMs);
+				synchronized(this) { this.wait(pruneIntervalMs); }
 				if(stopped) break;
 				prune();
 				if(dirty) {

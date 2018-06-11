@@ -62,6 +62,7 @@ public class TCPPeerSocketTest {
 		}
 		
 		void runThread() {
+			Thread.currentThread().setName("DummyServer listen thread " + server.getLocalPort());
 			try {
 				while(!server.isClosed()) {
 					Socket client = server.accept();
@@ -309,6 +310,8 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
 		master.getBlacklist().clear();
 		server.close();
+		swarm.close();
+		socket.close();
 	}
 
 	@Test
@@ -840,20 +843,20 @@ public class TCPPeerSocketTest {
 	}
 	
 	@Test
-	public void testIgnoresSkippedMessageIDs() throws IOException {
+	public void testIgnoresSkippedMessageIDs() throws IOException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
 		// TODO DHT: (itf) Intermittent test failure. Stalls. Linux 6/8/18 f84957e39a634bb12bf1f21d507adbc462a947b7
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
-
+		
 		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		MessageSegment segment1 = new MessageSegment(msgId-1, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		
 		conn.serverWrite(segment0.content.array());
 		conn.serverWrite(segment1.content.array());
 		
-		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
-		assertFalse(Util.waitUntil(100, ()->socket.messageWithId(msgId-1) != null));
+		assertTrue(Util.waitUntil(200, ()->socket.messageWithId(msgId) != null));
+		assertFalse(Util.waitUntil(200, ()->socket.messageWithId(msgId-1) != null));
 	}
 	
 	@Test

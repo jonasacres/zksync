@@ -12,7 +12,6 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class PeerMessageIncoming extends PeerMessage {
 	protected DataBuffer rxBuf = new DataBuffer();
-	protected PeerMessageHandler handler;
 	protected final Logger logger = LoggerFactory.getLogger(PeerMessageIncoming.class);
 	protected boolean finished;
 	protected long lastSeen;
@@ -132,10 +131,6 @@ public class PeerMessageIncoming extends PeerMessage {
 		}
 	}
 	
-	protected interface PeerMessageHandler {
-		public void handle(int id, DataBuffer chunk, boolean isFinal) throws ProtocolViolationException, EOFException;
-	}
-	
 	public PeerMessageIncoming(PeerConnection connection, byte cmd, byte flags, int msgId) {
 		this.connection = connection;
 		this.cmd = cmd;
@@ -181,6 +176,7 @@ public class PeerMessageIncoming extends PeerMessage {
 	
 	protected void processThread() {
 		new Thread(() -> {
+			Thread.currentThread().setName("PeerMessageIncoming process thread");
 			try {
 				connection.handle(this);
 			} catch(ProtocolViolationException exc) {
