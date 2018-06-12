@@ -112,6 +112,7 @@ public class Util {
 	
 	public static void delay(long delay, AnonymousCallback action) {
 		new Thread(()->{
+			Thread.currentThread().setName("Util.delay thread");
 			sleep(delay);
 			try { action.cb(); } catch (Exception e) {}
 		}).start();
@@ -126,6 +127,7 @@ public class Util {
 	
 	public static void ensure(int maxDelay, WaitTest test, AnonymousCallback action) {
 		new Thread(()-> {
+			Thread.currentThread().setName("Util.ensure thread");
 			if(waitUntil(maxDelay, test)) return;
 			try { action.cb(); } catch(Exception exc) {}
 		}).start();

@@ -60,6 +60,8 @@ public class NetModuleTest {
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
+		
+		// itf here... 4a7a4f6b5893c4e2752c193153d37383c27f3bf2, not gonna make a formal note of it since merkle is getting rewrite anyway 
 		assertTrue(Util.waitUntil(2000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size()));
 		
 		ZKFS fsa = aConfig.getRevisionTree().plainBranchTips().get(0).getFS();

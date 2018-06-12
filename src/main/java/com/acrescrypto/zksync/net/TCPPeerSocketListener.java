@@ -91,6 +91,7 @@ public class TCPPeerSocketListener {
 	}
 	
 	protected void listenThread() {
+		Thread.currentThread().setName("TCPPeerSocketListener listen thread");
 		while(true) {
 			try {
 				checkSocketOpen();
