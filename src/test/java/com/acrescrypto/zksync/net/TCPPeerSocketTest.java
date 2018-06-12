@@ -748,7 +748,6 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testProcessesNewMessages() throws IOException {
-		// TODO DHT: (itf) Stalls intermittently. 6/8/18 linux f84957e39a634bb12bf1f21d507adbc462a947b7
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
@@ -821,7 +820,6 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testIgnoresClosedMessageIDs() throws IOException {
-		// TODO DHT: (itf) Intermittent test failure. Stalls. Linux 6/10/18 f0ff7ba363eb042da4c88fdca2d617e8bff15a83
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
@@ -844,7 +842,6 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testIgnoresSkippedMessageIDs() throws IOException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
-		// TODO DHT: (itf) Intermittent test failure. Stalls. Linux 6/8/18 f84957e39a634bb12bf1f21d507adbc462a947b7
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();

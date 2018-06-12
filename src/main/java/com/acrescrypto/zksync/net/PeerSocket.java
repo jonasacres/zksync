@@ -262,7 +262,7 @@ public abstract class PeerSocket {
 		if(!test) throw new ProtocolViolationException();
 	}
 	
-	protected void closeAllIncoming() {
+	protected synchronized void closeAllIncoming() {
 		// TODO DHT: (implement) Refactor close() so that this gets called without each subclass having to call it directly
 		for(PeerMessageIncoming msg : incoming.values()) {
 			msg.rxBuf.setEOF();
