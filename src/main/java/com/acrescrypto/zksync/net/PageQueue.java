@@ -161,7 +161,9 @@ public class PageQueue {
 				RefTag refTag;			
 
 				do {
-					if(!shuffler.hasNext()) return null;
+					if(!shuffler.hasNext()) {
+						return null;
+					}
 					int inodeId = shuffler.next();
 					refTag = inodeTable.inodeWithId(inodeId).getRefTag();
 				} while(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);

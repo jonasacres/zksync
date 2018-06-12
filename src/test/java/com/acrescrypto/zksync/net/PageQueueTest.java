@@ -44,7 +44,7 @@ public class PageQueueTest {
 	public static RefTag addFile(ZKFS fs, LinkedList<RefTag> list, String path, byte[] contents) throws IOException {
 		fs.write(path, contents);
 		RefTag tag = fs.inodeForPath(path).getRefTag();
-		list.add(tag);
+		if(list != null) list.add(tag);
 		return tag;
 	}
 	
@@ -62,9 +62,12 @@ public class PageQueueTest {
 		refTagImmediate = addFile(fs, refTagsInRevision, "immediate", new byte[archive.getCrypto().hashLength()-1]);
 		refTagIndirect = addFile(fs, refTagsInRevision, "indirect", new byte[archive.getConfig().getPageSize()]);
 		refTag2Indirect = addFile(fs, refTagsInRevision, "2indirect", new byte[10*archive.getConfig().getPageSize()]);
-		pageTag = new PageMerkle(refTag2Indirect).getPageTag(1);
-		
 		revTag = fs.commit();
+		
+		RefTag refTag = addFile(fs, null, "sample", new byte[10*archive.getConfig().getPageSize()]);
+		pageTag = new PageMerkle(refTag).getPageTag(1);
+		fs.commit();
+		fs = archive.openRevision(revTag);		
 		
 		byte[] ones = new byte[2*archive.getConfig().getPageSize()];
 		for(int i = 0; i < ones.length; i++) ones[i] = 1;
@@ -728,11 +731,6 @@ public class PageQueueTest {
 		queue.addPageTag(0, pageTag);
 		queue.addRevisionTag(1, revTag);
 		
-		// TODO DHT: (itf) 6/1/18 Linux 82f4d047ec6e6be8889faeab774d48497da986ae, AssertionError on following line
-		/* 6/4 linux 2ea644526949bb16c2c73e68b9984853f9263113, saw this when running from FastTests
-		 * can't reproduce with a while loop, even with 1024 iterations including before/after each/all
-		 * DID get to see it once manually re-running, but then unable to reproduce...
-		 */
 		assertFalse(queue.expectTagNext(pageTag));
 		queue.nextChunk();
 		assertFalse(queue.expectTagNext(pageTag));
