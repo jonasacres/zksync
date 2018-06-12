@@ -88,7 +88,7 @@ public class DHTRecordStore {
 		new Thread(()->addRecordIfReachable(id, record)).start();
 	}
 	
-	public Collection<DHTRecord> recordsForId(DHTID id) {
+	public synchronized Collection<DHTRecord> recordsForId(DHTID id) {
 		LinkedList<DHTRecord> records = new LinkedList<>();
 		Collection<StoreEntry> entries = entriesById.getOrDefault(id, new ArrayList<>(0));
 		
