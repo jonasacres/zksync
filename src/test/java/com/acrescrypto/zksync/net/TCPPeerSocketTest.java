@@ -794,6 +794,7 @@ public class TCPPeerSocketTest {
 
 		conn.serverWrite(segment.content.array());
 		assertTrue(Util.waitUntil(100, ()->msg.bytesReceived == 2));
+		msg.rxBuf.setEOF();
 	}
 	
 	@Test
