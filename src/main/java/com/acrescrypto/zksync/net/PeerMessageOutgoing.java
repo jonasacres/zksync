@@ -32,8 +32,11 @@ public class PeerMessageOutgoing extends PeerMessage {
 		this(connection, connection.socket.issueMessageId(), cmd, (byte) 0, txPayload);
 	}
 	
-	public void abort() {
+	public synchronized void abort() {
 		aborted = true;
+		if(queuedSegment != null) {
+			queuedSegment.delivered();
+		}
 	}
 
 	public boolean txClosed() {
@@ -50,6 +53,7 @@ public class PeerMessageOutgoing extends PeerMessage {
 
 	protected void runTxThread() {
 		new Thread(() -> {
+			Thread.currentThread().setName("PeerMessageOutgoing tx thread");
 			try {
 				while(!txClosed() && !aborted) {
 					if(queuedSegment != null) queuedSegment.waitForDelivery();
@@ -69,17 +73,6 @@ public class PeerMessageOutgoing extends PeerMessage {
 		}).start();
 	}
 	
-	protected void waitForSend() {
-		if(queuedSegment == null) return;
-		while(!queuedSegment.delivered) {
-			try {
-				synchronized(queuedSegment) {
-					queuedSegment.wait();
-				}
-			} catch(InterruptedException exc) {}
-		}
-	}
-	
 	protected void accumulateNext() throws IOException {
 		int startingSize = minPayloadBufferSize();
 		try {
@@ -90,7 +83,7 @@ public class PeerMessageOutgoing extends PeerMessage {
 		
 		ByteBuffer buffer = ByteBuffer.allocate(startingSize);
 		buffer.position(HEADER_LENGTH);
-		while(true) {
+		while(!aborted) {
 			if(!buffer.hasRemaining()) {
 				if(buffer.capacity() == maxPayloadBufferSize()) break;
 				int newCapacity = Math.min(2*buffer.capacity(), maxPayloadBufferSize());
@@ -122,7 +115,10 @@ public class PeerMessageOutgoing extends PeerMessage {
 		buffer.rewind();
 		
 		byte segmentFlags = (byte) (flags | (txClosed() ? FLAG_FINAL : 0x00));
-		queuedSegment = new MessageSegment(msgId, cmd, segmentFlags, buffer);
+		synchronized(this) {
+			if(aborted) return;
+			queuedSegment = new MessageSegment(msgId, cmd, segmentFlags, buffer);
+		}
 	}
 	
 	protected void sendNext() throws IOException {

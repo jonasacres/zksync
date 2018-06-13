@@ -1,8 +1,11 @@
 package com.acrescrypto.zksync.utility;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 
 import com.acrescrypto.zksync.crypto.HashContext;
 
@@ -110,6 +113,12 @@ public class Util {
 		return System.currentTimeMillis() < endTime;
 	}
 	
+	public static void blockOn(WaitTest test) {
+		while(test.test()) {
+			sleep(1);
+		}
+	}
+	
 	public static void delay(long delay, AnonymousCallback action) {
 		new Thread(()->{
 			Thread.currentThread().setName("Util.delay thread");
@@ -127,7 +136,7 @@ public class Util {
 	
 	public static void ensure(int maxDelay, WaitTest test, AnonymousCallback action) {
 		new Thread(()-> {
-			Thread.currentThread().setName("Util.ensure thread");
+			Thread.currentThread().setName("Util.ensure thread " + action.getClass().getSimpleName());
 			if(waitUntil(maxDelay, test)) return;
 			try { action.cb(); } catch(Exception exc) {}
 		}).start();
@@ -193,5 +202,37 @@ public class Util {
 	
 	public static byte[] serializeLong(long x) {
 		return ByteBuffer.allocate(8).putLong(x).array();
+	}
+	
+	public static void threadReport(boolean includeStackTraces) {
+		Map<Thread,StackTraceElement[]> stackTraces = Thread.getAllStackTraces();
+		HashMap<String,Integer> instanceCounts = new HashMap<>();
+		
+		System.out.println("Thread count: " + stackTraces.size());
+		for(Thread t : stackTraces.keySet()) {
+			instanceCounts.put(t.getName(), instanceCounts.getOrDefault(t.getName(), 0) + 1);
+			if(includeStackTraces) {
+				System.out.println(t.getName());
+				for(StackTraceElement e : stackTraces.get(t)) {
+					System.out.println("\t"+e.getClassName() + "::" + e.getMethodName() + " line " + e.getLineNumber());
+				}
+				System.out.println("\n");
+			}
+		}
+		
+		ArrayList<String> sortedInstanceNames = new ArrayList<>();
+		sortedInstanceNames.addAll(instanceCounts.keySet());
+		sortedInstanceNames.sort((a, b)->instanceCounts.get(b).compareTo(instanceCounts.get(a)));
+		
+		for(String name : sortedInstanceNames) {
+			System.out.println(name + ": " + instanceCounts.get(name));
+		}
+		
+		System.out.println("\n");
+	}
+	
+	public static String caller(int depth) {
+		StackTraceElement e = (new Throwable()).getStackTrace()[2+depth];
+		return e.getClassName() + "." + e.getMethodName() + ":" + e.getLineNumber();
 	}
 }

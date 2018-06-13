@@ -97,6 +97,7 @@ public class PeerMessageIncoming extends PeerMessage {
 		}
 		
 		public int available() {
+			if(readBuf.remaining() == 0 && eof) return -1;
 			return readBuf.remaining();
 		}
 		

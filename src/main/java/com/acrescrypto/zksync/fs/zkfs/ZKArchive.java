@@ -56,6 +56,10 @@ public class ZKArchive {
 		this.config.accessor.discoveredArchive(this);
 	}
 	
+	public void close() {
+		config.close();
+	}
+	
 	public ZKArchive cacheOnlyArchive() throws IOException {
 		ZKArchive cacheOnly = new ZKArchive(config);
 		cacheOnly.storage = config.getCacheStorage();

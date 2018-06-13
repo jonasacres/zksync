@@ -156,7 +156,6 @@ public class PeerMessageOutgoingTest {
 	public void testSendsNonpausableCommandsWhenPaused() throws IOException, TimeoutException {
 		PipedOutputStream writeEnd2 = new PipedOutputStream();
 		PeerMessageOutgoing nonpausable = new PeerMessageOutgoing(connection, (byte) (CMD+1), new PipedInputStream(writeEnd2));
-		
 		connection.pause();
 		writeEnd2.write(new byte[4]);
 		writeEnd2.flush();

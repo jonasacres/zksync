@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.utility.Util;
 
 public abstract class PeerSocket {
 	protected PeerSwarm swarm;
@@ -118,6 +119,7 @@ public abstract class PeerSocket {
 	}
 	
 	public synchronized void finishedMessage(PeerMessageIncoming message) throws IOException {
+		message.rxBuf.setEOF();
 		incoming.remove(message.msgId);
 	}
 	
@@ -223,19 +225,19 @@ public abstract class PeerSocket {
 		msg.receivedData(flags, payload);
 	}
 	
-	protected void pruneMessages() {
+	protected void pruneMessages() throws IOException {
 		while(incoming.size() > PeerMessage.MAX_OPEN_MESSAGES) {
-			int pruneMsgId = -1;
-			long oldestTimestamp = Long.MAX_VALUE;
+			PeerMessageIncoming pruneMsg = null;
 			
 			for(PeerMessageIncoming msg : incoming.values()) {
-				if(msg.lastSeen < oldestTimestamp) {
-					pruneMsgId = msg.msgId;
-					oldestTimestamp = msg.lastSeen;
+				if(pruneMsg == null || msg.lastSeen < pruneMsg.lastSeen) {
+					pruneMsg = msg;
 				}
 			}
 			
-			incoming.remove(pruneMsgId);
+			if(pruneMsg != null) {
+				finishedMessage(pruneMsg);
+			}
 		}
 	}
 	
@@ -254,6 +256,7 @@ public abstract class PeerSocket {
 	}
 	
 	protected synchronized void dataReady(MessageSegment segment) {
+		if(isClosed()) return;
 		ready.add(segment);
 		synchronized(outgoing) { outgoing.notifyAll(); }
 	}
@@ -266,6 +269,13 @@ public abstract class PeerSocket {
 		// TODO DHT: (implement) Refactor close() so that this gets called without each subclass having to call it directly
 		for(PeerMessageIncoming msg : incoming.values()) {
 			msg.rxBuf.setEOF();
+		}
+	}
+	
+	protected synchronized void closeAllOutgoing() {
+		// TODO DHT: (implement) Refactor close() so that this gets called without each subclass having to call it directly
+		for(PeerMessageOutgoing msg : outgoing) {
+			msg.abort();
 		}
 	}
 }

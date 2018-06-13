@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.ramfs;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.LinkedList;
+import java.util.Set;
 
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.fs.Directory;
@@ -36,7 +37,8 @@ public class RAMDirectory implements Directory {
 		}
 		
 		synchronized(fs) {
-			for(String path : fs.inodesByPath.keySet()) {
+			Set<String> keys = fs.inodesByPath.keySet();
+			for(String path : keys) {
 				if(path.equals("/")) continue;
 				if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(path).isDirectory()) continue;
 				if(path.startsWith(prefix) && path.substring(prefix.length()).indexOf("/") == -1) {
@@ -74,12 +76,15 @@ public class RAMDirectory implements Directory {
 			matches.add("..");
 		}
 		
-		for(String path : fs.inodesByPath.keySet()) {
-			if(!path.startsWith(prefix) || path.equals(prefix)) continue;
-			if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(fs.scopedPath(path)).isDirectory()) continue;
-			path = path.substring(prefix.length());
-			if(path.startsWith("/")) path = path.substring(1);
-			matches.add(path);
+		synchronized(fs) {
+			Set<String> keys = fs.inodesByPath.keySet();
+			for(String path : keys) {
+				if(!path.startsWith(prefix) || path.equals(prefix)) continue;
+				if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(fs.scopedPath(path)).isDirectory()) continue;
+				path = path.substring(prefix.length());
+				if(path.startsWith("/")) path = path.substring(1);
+				matches.add(path);
+			}
 		}
 		
 		String[] array = new String[matches.size()];

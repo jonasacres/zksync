@@ -18,6 +18,7 @@ import java.util.LinkedList;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.input.InfiniteCircularInputStream;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -175,6 +176,7 @@ public class TCPPeerSocketTest {
 		
 		DummyConnection handshake(boolean sendValidAuth, boolean sendValidProof) throws IOException {
 			new Thread(()->{
+				Thread.currentThread().setName("TCPPeerSocketTest DummyConnection handshake thread");
 				try {
 					client.handshake();
 				} catch (ProtocolViolationException | IOException exc) {
@@ -244,6 +246,7 @@ public class TCPPeerSocketTest {
 	
 	void blindHandshake(TCPPeerSocket socket) {
 		new Thread(()-> {
+			Thread.currentThread().setName("TCPPeerSocketTest blindHandshake thread");
 			try {
 				socket.handshake();
 			} catch (ProtocolViolationException | IOException e) {
@@ -271,12 +274,15 @@ public class TCPPeerSocketTest {
 	
 	void setupServerSocket(ServerSocketCallback callback) throws Exception {
 		ServerSocket server = null;
+		Socket clientSocketRaw = null, serverSocket = null;
+		TCPPeerSocket clientSocket = null;
+		
 		try {
 			byte[] secret = master.getCrypto().rng(master.getCrypto().asymDHSecretSize());
 			server = new ServerSocket(0);
-			Socket clientSocketRaw = new Socket("localhost", server.getLocalPort());
-			TCPPeerSocket clientSocket = new TCPPeerSocket(swarm, clientSocketRaw, secret, PeerConnection.PEER_TYPE_BLIND);
-			Socket serverSocket = server.accept();
+			clientSocketRaw = new Socket("localhost", server.getLocalPort());
+			clientSocket = new TCPPeerSocket(swarm, clientSocketRaw, secret, PeerConnection.PEER_TYPE_BLIND);
+			serverSocket = server.accept();
 			assertEquals(clientSocketRaw, clientSocket.socket);
 			assertTrue(Arrays.equals(secret, clientSocket.getSharedSecret()));
 			callback.callback(serverSocket, clientSocket, secret);
@@ -284,6 +290,9 @@ public class TCPPeerSocketTest {
 			throw(exc);
 		} finally {
 			if(server != null) server.close();
+			if(clientSocket != null) clientSocket.close();
+			if(clientSocketRaw != null) clientSocketRaw.close();
+			if(serverSocket != null) serverSocket.close();
 		}
 	}
 	
@@ -296,22 +305,31 @@ public class TCPPeerSocketTest {
 	
 	@Before
 	public void beforeEach() throws IOException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
+		TCPPeerSocket.maxHandshakeTimeMillis = 1000;
+		TCPPeerSocket.disableMakeThreads = true;
 		swarm = new DummySwarm(archive.getConfig());
 		server = new DummyServer();
 		serverKey = master.getCrypto().makePrivateDHKey();
 		byte[] encryptedArchiveId = archive.getConfig().getEncryptedArchiveId(serverKey.publicKey().getBytes());
 		ad = new TCPPeerAdvertisement(serverKey.publicKey(), "localhost", server.getPort(), encryptedArchiveId).resolve();
 		socket = new TCPPeerSocket(swarm, ad);
-		TCPPeerSocket.disableMakeThreads = true;
 	}
 	
 	@After
 	public void afterEach() throws IOException {
-		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
 		master.getBlacklist().clear();
 		server.close();
 		swarm.close();
 		socket.close();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		archive.close();
+		master.close();
+		TCPPeerSocket.disableMakeThreads = false;
+		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
+		Util.sleep(100);
 	}
 
 	@Test
@@ -414,7 +432,10 @@ public class TCPPeerSocketTest {
 
 		assertTrue(Arrays.equals(roSocket.dhPrivateKey.publicKey().getBytes(), clientKey.getBytes()));
 		assertTrue(Arrays.equals(expectedKeyHash, keyHash));
-		assertFalse(Arrays.equals(expectedProof, proof));		
+		assertFalse(Arrays.equals(expectedProof, proof));
+		
+		roSwarm.close();
+		roConfig.getSwarm().close();
 	}
 	
 	@Test
@@ -452,6 +473,9 @@ public class TCPPeerSocketTest {
 		assertNotEquals(PeerConnection.PEER_TYPE_BLIND, roSocket.getPeerType());
 		new DummyConnection(roSocket).handshake(true, true);
 		assertEquals(PeerConnection.PEER_TYPE_BLIND, roSocket.getPeerType());
+		roSwarm.close();
+		roSocket.close();
+		roConfig.getSwarm().close();
 	}
 	
 	@Test
@@ -470,10 +494,10 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testHandshakeClosesSocketIfPeerDoesNotCompleteInTime() {
-		TCPPeerSocket.maxHandshakeTimeMillis = 10;
+		TCPPeerSocket.maxHandshakeTimeMillis = 20;
 		blindHandshake(socket);
-		assertFalse(Util.waitUntil(TCPPeerSocket.maxHandshakeTimeMillis-1, ()->socket.isClosed()));
-		assertTrue(Util.waitUntil(10, ()->socket.isClosed()));
+		assertFalse(Util.waitUntil(TCPPeerSocket.maxHandshakeTimeMillis-5, ()->socket.isClosed()));
+		assertTrue(Util.waitUntil(20, ()->socket.isClosed()));
 	}
 	
 	@Test
@@ -774,7 +798,7 @@ public class TCPPeerSocketTest {
 	}
 	
 	@Test
-	public void testTriggersViolationIfLengthIsNegative() throws IOException {
+	public void testTriggersViolationIfLengthIsNegative() throws IOException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
 		ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
 		buf.putInt(1234);
 		buf.putInt(-1);
@@ -785,7 +809,6 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
 		conn.serverWrite(buf.array());
-		assertTrue(Util.waitUntil(100, ()->socket.isClosed()));
 	}
 	
 	@Test

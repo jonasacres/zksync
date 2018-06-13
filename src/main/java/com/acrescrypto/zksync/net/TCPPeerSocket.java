@@ -35,6 +35,7 @@ public class TCPPeerSocket extends PeerSocket {
 	protected ByteBuffer remainingReadData;
 	protected TCPPeerAdvertisement ad;
 	protected int peerType = -1;
+	protected int remoteCount, localCount; // TODO DHT: (delete me)
 	
 	public TCPPeerSocket(PeerSwarm swarm, Socket socket, byte[] sharedSecret, int peerType) throws IOException {
 		this(swarm);
@@ -158,6 +159,8 @@ public class TCPPeerSocket extends PeerSocket {
 		}
 		
 		closeAllIncoming();
+		closeAllOutgoing();
+		
 		if(socket != null) {
 			socket.close();
 		}
@@ -205,7 +208,7 @@ public class TCPPeerSocket extends PeerSocket {
 		keyHashInput.put(dhPrivateKey.publicKey().getBytes());
 		keyHashInput.put(remotePubKey.getBytes());
 		keyHashInput.put(swarm.config.getArchiveId());
-		keyHashInput.putInt(0); 
+		keyHashInput.putInt(0);
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		
 		int timeIndex = swarm.config.getAccessor().timeSliceIndex();

@@ -86,6 +86,16 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		} while(!attemptPassphraseKey(ppKey));
 	}
 	
+	public void close() {
+		if(listener != null) {
+			try {
+				listener.close();
+			} catch (IOException exc) {
+				logger.error("Caught exception closing TCP listener", exc);
+			}
+		}
+	}
+	
 	public Blacklist getBlacklist() {
 		return blacklist;
 	}
