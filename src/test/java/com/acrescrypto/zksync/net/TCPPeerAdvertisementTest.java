@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -19,6 +20,7 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerAdvertisementTest {
 	static byte[] pubKey;

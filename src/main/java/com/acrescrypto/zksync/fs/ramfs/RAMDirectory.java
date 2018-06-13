@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.ramfs;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Set;
 
@@ -37,7 +38,7 @@ public class RAMDirectory implements Directory {
 		}
 		
 		synchronized(fs) {
-			Set<String> keys = fs.inodesByPath.keySet();
+			Set<String> keys = new HashSet<>(fs.inodesByPath.keySet());
 			for(String path : keys) {
 				if(path.equals("/")) continue;
 				if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(path).isDirectory()) continue;
@@ -77,7 +78,7 @@ public class RAMDirectory implements Directory {
 		}
 		
 		synchronized(fs) {
-			Set<String> keys = fs.inodesByPath.keySet();
+			Set<String> keys = new HashSet<>(fs.inodesByPath.keySet());
 			for(String path : keys) {
 				if(!path.startsWith(prefix) || path.equals(prefix)) continue;
 				if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(fs.scopedPath(path)).isDirectory()) continue;

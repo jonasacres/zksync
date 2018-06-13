@@ -10,7 +10,6 @@ import java.nio.ByteBuffer;
 import java.util.LinkedList;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,7 +31,7 @@ public class TCPPeerSocketListener {
 	protected Thread thread;
 	protected Logger logger = LoggerFactory.getLogger(TCPPeerSocketListener.class);
 	protected LinkedList<TCPPeerAdvertisementListener> adListeners;
-	protected boolean closed;
+	protected boolean closed, established;
 	
 	public TCPPeerSocketListener(ZKMaster master, int port) throws IOException {
 		this.crypto = master.getCrypto();
@@ -92,7 +91,7 @@ public class TCPPeerSocketListener {
 	
 	protected void listenThread() {
 		Thread.currentThread().setName("TCPPeerSocketListener listen thread");
-		while(true) {
+		while(!closed) {
 			try {
 				checkSocketOpen();
 				if(listenSocket != null) {
@@ -175,8 +174,7 @@ public class TCPPeerSocketListener {
 	}
 	
 	protected TCPPeerSocket performServerHandshake(Socket peerSocketRaw) throws IOException, ProtocolViolationException {
-		MutableBoolean finished = new MutableBoolean();
-		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, ()->finished.booleanValue(), ()->peerSocketRaw.close());
+		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, ()->established, ()->peerSocketRaw.close());
 		
 		if(adListeners.isEmpty()) {
 			throw new ProtocolViolationException(); // not ready to accept peers
@@ -232,7 +230,7 @@ public class TCPPeerSocketListener {
 		out.write(ad.crypto.authenticate(sharedSecret, tempSharedSecret));
 		out.write(responseProof);
 		
-		finished.setTrue();
+		established = true;
 		return new TCPPeerSocket(ad.swarm, peerSocketRaw, sharedSecret, peerType);
 	}
 	

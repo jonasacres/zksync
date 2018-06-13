@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
-import com.acrescrypto.zksync.utility.Util;
 
 public abstract class PeerSocket {
 	protected PeerSwarm swarm;

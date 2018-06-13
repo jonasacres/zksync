@@ -43,7 +43,10 @@ public class TCPPeerSocketListenerTest {
 		
 		public DummySwarm(ZKArchiveConfig config) throws IOException { super(config); }
 		@Override public void advertiseSelf(PeerAdvertisement ad) { announced = (TCPPeerAdvertisement) ad; }
-		@Override public void openedConnection(PeerConnection connection) { opened = connection; }
+		@Override public void openedConnection(PeerConnection connection) {
+			if(closed) connection.close();
+			opened = connection;
+		}
 	}
 	
 	public final static int TEST_PORT = 44583; // chosen randomly in hopes of not stepping on active local ports on test system
@@ -140,13 +143,14 @@ public class TCPPeerSocketListenerTest {
 		crypto = new CryptoSupport();
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
-		TCPPeerSocket.disableMakeThreads = true;
-		TCPPeerSocket.socketCloseDelay = 50;
 	}
 	
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
 		master.getBlacklist().clear();
+		TCPPeerSocket.disableMakeThreads = true;
+		TCPPeerSocket.socketCloseDelay = 50;
+		TCPPeerSocket.maxHandshakeTimeMillis = 250;
 		listener = new TCPPeerSocketListener(master, 0);
 		swarm = new DummySwarm(archive.getConfig());
 		peerKey = crypto.makePrivateDHKey();
@@ -154,14 +158,22 @@ public class TCPPeerSocketListenerTest {
 	
 	@After
 	public void afterEach() throws IOException {
-		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
+		Util.waitUntil(10, ()->listener.established);
+		if(swarm.opened != null) {
+			swarm.opened.close();
+		}
+		
+		swarm.close();
 		listener.close();
 	}
 	
 	@AfterClass
 	public static void afterAll() {
+		archive.close();
+		master.close();
 		TCPPeerSocket.disableMakeThreads = false;
 		TCPPeerSocket.socketCloseDelay = TCPPeerSocket.DEFAULT_SOCKET_CLOSE_DELAY;
+		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
 		ZKFSTest.restoreArgon2Costs();
 	}
 	
@@ -182,6 +194,7 @@ public class TCPPeerSocketListenerTest {
 		assertEquals(TEST_PORT, specific.port);
 		assertEquals(TEST_PORT, specific.listenSocket.getLocalPort());
 		assertEquals(TEST_PORT, socket.getPort());
+		specific.close();
 	}
 	
 	@Test
@@ -190,6 +203,7 @@ public class TCPPeerSocketListenerTest {
 		Util.waitUntil(100, ()->listener.listenSocket != null);
 		Util.waitUntil(100, ()->listener2.listenSocket != null);
 		assertNotEquals(listener.port, listener2.port);
+		listener2.close();
 	}
 	
 	@Test
@@ -203,6 +217,7 @@ public class TCPPeerSocketListenerTest {
 		TCPPeerSocketListener listener2 = new TCPPeerSocketListener(master, 0);
 		Util.waitUntil(100, ()->listener2.listenSocket != null);
 		assertEquals(port, listener2.port);
+		listener2.close();
 	}
 	
 	@Test
@@ -215,6 +230,7 @@ public class TCPPeerSocketListenerTest {
 		Util.waitUntil(100, ()->listener2.listenSocket != null);
 		assertNotNull(listener2.listenSocket);
 		assertNotEquals(listener.port, listener2.port);
+		listener2.close();
 	}
 	
 	@Test
@@ -231,6 +247,7 @@ public class TCPPeerSocketListenerTest {
 		Util.waitUntil(2000, ()->listener2.listenSocket != null);
 		assertNotNull(listener2.listenSocket);
 		assertEquals(port, listener2.port);
+		listener2.close();
 	}
 	
 	@Test
@@ -266,13 +283,11 @@ public class TCPPeerSocketListenerTest {
 	
 	@Test
 	public void testListenerForSwarmReturnsListenerIfSwarmAdvertised() throws IOException, InvalidBlacklistException, UnconnectableAdvertisementException {
-		beforeEach();
 		listener.advertise(swarm);
 		TCPPeerAdvertisementListener adListener = listener.listenerForSwarm(swarm);
 		assertNotNull(adListener);
 		assertEquals(listener.getPort(), adListener.localAd().port);
 		assertEquals(swarm, adListener.swarm);
-		afterEach();
 	}
 	
 	@Test
@@ -287,6 +302,7 @@ public class TCPPeerSocketListenerTest {
 	public void testDisconnectsPeersBeforeAdvertisedSwarms() throws UnknownHostException, IOException {
 		Socket socket = connect();
 		assertSocketClosed(socket, false);
+		socket.close();
 	}
 	
 	@Test
@@ -333,6 +349,7 @@ public class TCPPeerSocketListenerTest {
 		Socket socket = connect();
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, -1, swarm.config);
 		readData(socket, 1);
+		socket.close();
 	}
 	
 	@Test
@@ -344,6 +361,7 @@ public class TCPPeerSocketListenerTest {
 		Socket socket = connect();
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 1, swarm.config);
 		readData(socket, 1);
+		socket.close();
 	}
 
 	@Test
@@ -353,6 +371,7 @@ public class TCPPeerSocketListenerTest {
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, null);
 		Util.waitUntil(100, ()->swarm.opened != null);
 		assertEquals(PeerConnection.PEER_TYPE_BLIND, swarm.opened.getPeerType());
+		socket.close();
 	}
 	
 	@Test
@@ -366,6 +385,11 @@ public class TCPPeerSocketListenerTest {
 		sendHandshake(listener.listenerForSwarm(roSwarm).localAd().pubKey, socket, 0, swarm.config);
 		Util.waitUntil(100, ()->swarm.opened != null);
 		assertEquals(PeerConnection.PEER_TYPE_BLIND, roSwarm.opened.getPeerType());
+		
+		roConfig.close();
+		roSwarm.close();
+		roSwarm.opened.close();
+		socket.close();
 	}
 	
 	@Test
@@ -429,6 +453,11 @@ public class TCPPeerSocketListenerTest {
 		byte[] responseProof = readData(socket, crypto.symKeyLength());
 		byte[] expectedResponseProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, secret);
 		assertFalse(Arrays.equals(expectedResponseProof, responseProof));
+		
+		roConfig.close();
+		roSwarm.opened.close();
+		roSwarm.close();
+		socket.close();
 	}
 	
 	@Test
@@ -446,5 +475,7 @@ public class TCPPeerSocketListenerTest {
 		byte[] responseProof = readData(socket, crypto.symKeyLength());
 		byte[] expectedResponseProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, secret);
 		assertTrue(Arrays.equals(expectedResponseProof, responseProof));
+
+		socket.close();
 	}
 }

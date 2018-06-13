@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -61,6 +63,17 @@ public class TCPPeerAdvertisementListenerTest {
 		swarm = new DummySwarm(archive.getConfig());
 		socketListener = new DummyTCPPeerSocketListener(master, 0);
 		listener = new TCPPeerAdvertisementListener(swarm, socketListener);
+	}
+	
+	@After
+	public void afterEach() {
+		swarm.close();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		archive.close();
+		master.close();
 	}
 	
 	@Test
@@ -149,6 +162,8 @@ public class TCPPeerAdvertisementListenerTest {
 		TCPPeerAdvertisementListener listener2 = new TCPPeerAdvertisementListener(swarm2, socketListener);
 		assertFalse(Arrays.equals(listener.dhPrivateKey.getBytes(), listener2.dhPrivateKey.getBytes()));
 		assertFalse(Arrays.equals(listener.dhPrivateKey.publicKey().getBytes(), listener2.dhPrivateKey.publicKey().getBytes()));
+		archive2.close();
+		swarm2.close();
 	}
 	
 	@Test

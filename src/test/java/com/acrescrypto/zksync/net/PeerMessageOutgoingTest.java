@@ -12,6 +12,8 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.concurrent.TimeoutException;
 
+import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -114,6 +116,15 @@ public class PeerMessageOutgoingTest {
 		writePRNG = crypto.prng(new byte[] {1, 2, 4, 8});
 	}
 	
+	@After
+	public void afterEach() throws IOException {
+		connection.unpause();
+		connection.close();
+		msg.abort();
+		readEnd.close();
+		writeEnd.close();
+	}
+	
 	@Test
 	public void testConstructor() {
 		assertEquals(connection, msg.connection);
@@ -161,6 +172,7 @@ public class PeerMessageOutgoingTest {
 		writeEnd2.flush();
 		socket.waitForDataReady();
 		assertEquals(nonpausable.msgId, socket.received.msgId);
+		writeEnd2.close();
 	}
 	
 	@Test

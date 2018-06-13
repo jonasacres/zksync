@@ -329,7 +329,6 @@ public class TCPPeerSocketTest {
 		master.close();
 		TCPPeerSocket.disableMakeThreads = false;
 		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
-		Util.sleep(100);
 	}
 
 	@Test
@@ -813,6 +812,7 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testTriggersViolationIfLengthExceedsLimit() throws IOException {
+		// TODO DHT: (itf) When run from AllTests, this stalls. ca73c6f19dcf1c779e6512ecb2267ef81fcf6d69 6/13/18 linux
 		ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
 		buf.putInt(1234);
 		buf.putInt(socket.maxPayloadSize()+1);

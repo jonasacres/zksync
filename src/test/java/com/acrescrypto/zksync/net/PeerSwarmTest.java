@@ -77,7 +77,10 @@ public class PeerSwarmTest {
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }
 		@Override public boolean isLocalRoleClient() { return false; }
-		@Override public void close() {}
+		@Override public void close() {
+			closeAllIncoming();
+			closeAllOutgoing();
+		}
 		@Override public boolean isClosed() { return false; }
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public String getAddress() { return address; }
@@ -89,7 +92,7 @@ public class PeerSwarmTest {
 		DummySocket socket;
 		PeerAdvertisement seenAd;
 		int requestedPriority;
-		boolean closed, requestedAll, requestedAllCancel;
+		boolean requestedAll, requestedAllCancel;
 		long requestedTag;
 		RefTag requestedRefTag, requestedRevTag;
 		
@@ -99,7 +102,14 @@ public class PeerSwarmTest {
 		}
 		
 		@Override public DummySocket getSocket() { return socket; }
-		@Override public void close() { this.closed = true; }
+		@Override public void close() {
+			this.closed = true;
+			socket.close();
+			queue.close();
+		}
+		
+		@Override protected void pageQueueThread() {}
+		
 		@Override public void announceSelf(PeerAdvertisement ad) { this.seenAd = ad; }
 		@Override public void requestPageTag(int priority, long tag) {
 			requestedPriority = priority;
@@ -163,6 +173,7 @@ public class PeerSwarmTest {
 	@After
 	public void after() {
 		swarm.close();
+		connection.close();
 		try { Thread.sleep(1); } catch(InterruptedException exc) {} // give exploding ads a chance to percolate through before turning logging back on
 		((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(PeerSwarm.class)).setLevel(Level.WARN);
 		Util.setCurrentTimeNanos(-1);
@@ -170,8 +181,13 @@ public class PeerSwarmTest {
 	
 	@AfterClass
 	public static void afterAll() {
+		archive.close();
+		master.close();
 		ZKFSTest.restoreArgon2Costs();
 	}
+	
+	@Test
+	public void testBlank() {}
 	
 	@Test
 	public void testOpenedConnectionAddsOpenConnection() {

@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -83,6 +84,15 @@ public class PeerMessageIncomingTest {
 		msg = new PeerMessageIncoming(conn, CMD, FLAGS, MSG_ID);
 	}
 	
+	@After
+	public void afterEach() {
+		conn.unblock();
+		conn.close();
+		swarm.close();
+		swarm.getConfig().getArchive().close();
+		swarm.getConfig().getAccessor().getMaster().close();
+	}
+	
 	@AfterClass
 	public static void afterAll() {
 		ZKFSTest.restoreArgon2Costs();
@@ -112,13 +122,14 @@ public class PeerMessageIncomingTest {
 		};
 		
 		synchronized(holder) {
-			new PeerMessageIncoming(conn, (byte) 0, (byte) 0, 0);
+			new PeerMessageIncoming(conn, (byte) 0, (byte) PeerMessage.FLAG_FINAL, 0);
 			try {
 				holder.wait();
 			} catch (InterruptedException e) { fail(); }
 		}
 		
 		assertNotEquals(Thread.currentThread(), holder.thread);
+		conn.close();
 	}
 	
 	@Test

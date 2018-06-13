@@ -559,13 +559,19 @@ public class PeerConnection {
 		if(closed) return;
 		closed = true;
 		
-		queue.close();
+		if(queue != null) {
+			queue.close();
+		}
+		
 		try {
 			socket.close();
 		} catch(IOException exc) {
 			logger.warn("Caught exception closing socket to address {}", socket.getAddress(), exc);
 		} finally {
-			socket.swarm.closedConnection(this);
+			if(socket != null && socket.swarm != null) {
+				socket.swarm.closedConnection(this);
+			}
+			
 			synchronized(this) {
 				this.notifyAll();
 			}
@@ -573,7 +579,7 @@ public class PeerConnection {
 	}
 	
 	protected void pageQueueThread() {
-		Thread.currentThread().setName("PageQueue thread");
+		Thread.currentThread().setName("PeerConnection queue thread");
 		byte[] lastTag = new byte[0];
 		AppendableInputStream lastStream = null;
 		

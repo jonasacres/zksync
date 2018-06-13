@@ -86,10 +86,13 @@ public class PageQueueTest {
 	
 	@After
 	public void afterEach() {
+		queue.close();
 	}
 	
 	@AfterClass
 	public static void afterAll() {
+		archive.close();
+		master.close();
 		ZKFSTest.restoreArgon2Costs();
 	}
 	

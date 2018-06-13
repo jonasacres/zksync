@@ -49,7 +49,7 @@ public class ChunkAccumulatorTest {
 	
 	public class DummySocket extends PeerSocket {
 		int index;
-		boolean violated;
+		boolean violated, closed;
 		
 		public DummySocket(int index, PeerSwarm swarm) {
 			this.index = index;
@@ -65,8 +65,12 @@ public class ChunkAccumulatorTest {
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return -1; }
 		@Override public boolean isLocalRoleClient() { return false; }
-		@Override public void close() {}
-		@Override public boolean isClosed() { return false; }
+		@Override public void close() {
+			closeAllIncoming();
+			closeAllOutgoing();
+			closed = true;
+		}
+		@Override public boolean isClosed() { return closed; }
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public void handshake() throws ProtocolViolationException, IOException { }
 		@Override public int getPeerType() throws UnsupportedOperationException { return -1; }
@@ -160,15 +164,24 @@ public class ChunkAccumulatorTest {
 	
 	@After
 	public void afterEach() throws IOException {
+		for(DummyPeerConnection conn : connections) {
+			conn.close();
+		}
+		
+		swarm.close();
 		master.scratchStorage().purge();
 		archive.getStorage().purge();
 	}
 	
 	@AfterClass
 	public static void afterAll() throws IOException {
-		master.getStorage().purge();
+		archive.close();
+		master.close();
 		ZKFSTest.restoreArgon2Costs();
 	}
+	
+	@Test
+	public void testBlank() {}
 	
 	@Test
 	public void testAddChunkReturnsTrueIfAndOnlyIfFileFinished() throws IOException {

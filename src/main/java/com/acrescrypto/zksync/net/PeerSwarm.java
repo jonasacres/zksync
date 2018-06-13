@@ -59,7 +59,8 @@ public class PeerSwarm implements BlacklistCallback {
 	public synchronized void close() {
 		closed = true;
 		if(pool != null) pool.stop();
-		for(PeerConnection connection : connections) {
+		ArrayList<PeerConnection> connectionsCopy = new ArrayList<>(connections);
+		for(PeerConnection connection : connectionsCopy) {
 			connection.close();
 		}
 		
