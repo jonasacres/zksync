@@ -33,7 +33,7 @@ public class PeerMessageIncomingTest {
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }
 		@Override public boolean isLocalRoleClient() { return false; }
-		@Override public void close() {}
+		@Override public void _close() {}
 		@Override public boolean isClosed() { return false; }
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public void violation() { violated = true; }

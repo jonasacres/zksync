@@ -139,7 +139,7 @@ public class Inode implements Comparable<Inode> {
 		this.nlink = buf.getInt();
 		this.flags = buf.get();
 		
-		byte[] refTagBytes = new byte[fs.archive.refTagSize()];
+		byte[] refTagBytes = new byte[fs.archive.config.refTagSize()];
 		buf.get(refTagBytes);
 		this.refTag = new RefTag(fs.archive, refTagBytes);
 		

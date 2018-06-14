@@ -96,7 +96,7 @@ public class ZKArchiveTest {
 	public void testHasRefTagReturnsFalseIfRefTagIsNonsense() throws IOException {
 		RefTag refTag;
 		do {
-			refTag = new RefTag(archive, crypto.rng(archive.refTagSize()));
+			refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
 		} while(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);
 		assertFalse(archive.hasRefTag(refTag));
 	}

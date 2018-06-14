@@ -116,17 +116,6 @@ public class ZKArchive {
 		this.localConfig = localConfig;
 	}
 	
-	// TODO DHT: (refactor) deprecate; moved to config
-	public RevisionTree getRevisionTree() throws IOException {
-		assertOpen();
-		return config.getRevisionTree();
-	}
-	
-	// TODO DHT: (refactor) deprecate; moved to config
-	public int refTagSize() {
-		return RefTag.REFTAG_EXTRA_DATA_SIZE + crypto.hashLength();
-	}
-	
 	public static String dataDirForArchiveId(byte[] archiveId) {
 		return GLOBAL_DATA_DIR + Util.bytesToHex(archiveId);
 	}

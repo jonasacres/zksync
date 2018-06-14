@@ -196,13 +196,13 @@ public class PeerConnection {
 	
 	public void announceTips() throws IOException {
 		ZKArchive archive = socket.swarm.config.getArchive();
-		if(archive == null || archive.getRevisionTree() == null) {
+		if(archive == null || archive.getConfig().getRevisionTree() == null) {
 			send(CMD_ANNOUNCE_TIPS, new byte[0]);
 			return;
 		}
 		
-		ByteBuffer buf = ByteBuffer.allocate(archive.getRevisionTree().branchTips().size() * ObfuscatedRefTag.sizeForConfig(socket.swarm.config));
-		for(RefTag tag : archive.getRevisionTree().plainBranchTips()) {
+		ByteBuffer buf = ByteBuffer.allocate(archive.getConfig().getRevisionTree().branchTips().size() * ObfuscatedRefTag.sizeForConfig(socket.swarm.config));
+		for(RefTag tag : archive.getConfig().getRevisionTree().plainBranchTips()) {
 			buf.put(tag.obfuscate().serialize());
 		}
 		send(CMD_ANNOUNCE_TIPS, buf.array());
@@ -450,7 +450,7 @@ public class PeerConnection {
 	protected void handleRequestRefTags(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
 		ZKArchive archive = socket.swarm.config.getArchive();
 		assertPeerCapability(PEER_TYPE_FULL);
-		byte[] refTagBytes = new byte[archive.refTagSize()];
+		byte[] refTagBytes = new byte[archive.getConfig().refTagSize()];
 		int priority = msg.rxBuf.getInt();
 		
 		while(msg.rxBuf.hasRemaining()) {
@@ -462,7 +462,7 @@ public class PeerConnection {
 	protected void handleRequestRevisionContents(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
 		ZKArchive archive = socket.swarm.config.getArchive();
 		assertPeerCapability(PEER_TYPE_FULL);
-		byte[] refTagBytes = new byte[archive.refTagSize()];
+		byte[] refTagBytes = new byte[archive.getConfig().refTagSize()];
 		int priority = msg.rxBuf.getInt();
 		
 		while(msg.rxBuf.hasRemaining()) {
@@ -574,7 +574,7 @@ public class PeerConnection {
 	}
 
 	protected byte[] serializeRefTags(int priority, Collection<RefTag> tags) {
-		ByteBuffer buf = ByteBuffer.allocate(4 + tags.size() * socket.swarm.config.getArchive().refTagSize());
+		ByteBuffer buf = ByteBuffer.allocate(4 + tags.size() * socket.swarm.config.refTagSize());
 		buf.putInt(priority);
 		for(RefTag tag : tags) buf.put(tag.getBytes());
 		return buf.array();

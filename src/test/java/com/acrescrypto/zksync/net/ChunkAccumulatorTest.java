@@ -65,9 +65,7 @@ public class ChunkAccumulatorTest {
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return -1; }
 		@Override public boolean isLocalRoleClient() { return false; }
-		@Override public void close() {
-			closeAllIncoming();
-			closeAllOutgoing();
+		@Override public void _close() {
 			closed = true;
 		}
 		@Override public boolean isClosed() { return closed; }

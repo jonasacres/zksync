@@ -214,7 +214,7 @@ public class RequestPoolTest {
 	public void testAddRequestsToPeerCallsRequestRefTags() {
 		LinkedList<RefTag> tags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
-			RefTag tag = new RefTag(archive, crypto.rng(archive.refTagSize()));
+			RefTag tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
 			tags.add(tag);
 			pool.addRefTag(321, tag);
 		}
@@ -228,7 +228,7 @@ public class RequestPoolTest {
 	public void testAddRequestsToPeerCallsRequestRevisionContents() {
 		LinkedList<RefTag> tags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
-			RefTag tag = new RefTag(archive, crypto.rng(archive.refTagSize()));
+			RefTag tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
 			tags.add(tag);
 			pool.addRevision(-123, tag);
 		}
@@ -241,7 +241,7 @@ public class RequestPoolTest {
 	@Test
 	public void testAddRequestsToPeerToleratesSeedOnly() {
 		conn.mockSeedOnly = true;
-		RefTag tag = new RefTag(archive, crypto.rng(archive.refTagSize()));
+		RefTag tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
 		pool.addRevision(0, tag);		
 		pool.addRequestsToConnection(conn);
 		assertTrue(conn.requestedRevisions.isEmpty());
@@ -278,7 +278,7 @@ public class RequestPoolTest {
 		for(int i = 0; i < 16; i++) {
 			RefTag tag;
 			do {
-				tag = new RefTag(archive, crypto.rng(archive.refTagSize()));
+				tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
 			} while(tag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);
 			tags.add(tag);
 			pool.addRefTag(i, tag);
@@ -302,7 +302,7 @@ public class RequestPoolTest {
 		for(int i = 0; i < 16; i++) {
 			RefTag tag;
 			do {
-				tag = new RefTag(archive, crypto.rng(archive.refTagSize()));
+				tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
 			} while(tag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);
 			tags.add(tag);
 			pool.addRevision(i, tag);
@@ -344,7 +344,7 @@ public class RequestPoolTest {
 	public void testSerialization() throws IOException {
 		LinkedList<RefTag> tags = new LinkedList<>();
 		for(int i = 0; i < 64; i++) {
-			tags.add(new RefTag(archive, crypto.rng(archive.refTagSize())));
+			tags.add(new RefTag(archive, crypto.rng(archive.getConfig().refTagSize())));
 			
 			if(i % 3 == 0) pool.addPageTag(i, tags.peekLast().getShortHash());
 			if(i % 3 == 1) pool.addRefTag(i, tags.peekLast());

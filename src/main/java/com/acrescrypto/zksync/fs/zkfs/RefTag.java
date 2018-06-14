@@ -188,8 +188,8 @@ public class RefTag implements Comparable<RefTag> {
 	
 	public int compareTo(RefTag other) {
 		try {
-			if(config.archive.getRevisionTree().ancestorsOf(this).contains(other)) return 1;
-			if(config.archive.getRevisionTree().ancestorsOf(other).contains(this)) return -1;
+			if(config.getRevisionTree().ancestorsOf(this).contains(other)) return 1;
+			if(config.getRevisionTree().ancestorsOf(other).contains(this)) return -1;
 		} catch(Exception exc) {
 			throw new RuntimeException("Caught exception comparing revisions");
 		}

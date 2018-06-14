@@ -45,7 +45,7 @@ public class DiffSet {
 		RefTag[] tags = new RefTag[revisions.length];
 		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i];
 		
-		commonAncestor = revisions[0].getArchive().getRevisionTree().commonAncestorOf(tags);
+		commonAncestor = revisions[0].getArchive().getConfig().getRevisionTree().commonAncestorOf(tags);
 		findPathDiffs(findInodeDiffs(pickMergeFs()));
 	}
 	

@@ -77,10 +77,7 @@ public class PeerSwarmTest {
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }
 		@Override public boolean isLocalRoleClient() { return false; }
-		@Override public void close() {
-			closeAllIncoming();
-			closeAllOutgoing();
-		}
+		@Override public void _close() {}
 		@Override public boolean isClosed() { return false; }
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public String getAddress() { return address; }
@@ -104,7 +101,7 @@ public class PeerSwarmTest {
 		@Override public DummySocket getSocket() { return socket; }
 		@Override public void close() {
 			this.closed = true;
-			socket.close();
+			try { socket.close(); } catch(IOException exc) {}
 			queue.close();
 		}
 		
@@ -590,7 +587,7 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestRefTagSendsRequestRefTagToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
-		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
+		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
 		
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
@@ -607,7 +604,7 @@ public class PeerSwarmTest {
 	
 	@Test
 	public void testRequestRefTagSendsRequestRefTagToAllNewPeers() throws IOException {
-		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
+		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestRefTag(Integer.MAX_VALUE, tag);
 		swarm.openedConnection(conn);
@@ -618,7 +615,7 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestRevisionSendsRequestRevisionContentsToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
-		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
+		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
 		
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
@@ -635,7 +632,7 @@ public class PeerSwarmTest {
 
 	@Test
 	public void testRequestRevisionSendsRequestRevisionContentsToAllNewPeers() throws IOException {
-		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.refTagSize()));
+		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestRevision(11235813, tag);
 		swarm.openedConnection(conn);

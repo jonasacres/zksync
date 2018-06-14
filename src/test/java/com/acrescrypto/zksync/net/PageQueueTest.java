@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -424,7 +425,7 @@ public class PageQueueTest {
 		}
 		
 		// should be mostly different
-		/* TODO: Need to do some math to figure out what an acceptable test should be here and on similar tests.
+		/* TODO DHT: (itf) Need to do some math to figure out what an acceptable test should be here and on similar tests.
 		   This gets intermittent failures. Does that mean it's broken? Without statistical context, no idea.
 		   */
 		assertTrue(matches < numChunks/2);
@@ -762,5 +763,26 @@ public class PageQueueTest {
 			
 			assertTrue(Arrays.equals(expectedData, chunk.getData()));
 		}
+	}
+	
+	@Test
+	public void testCloseSetsClosed() {
+		queue.close();
+		assertTrue(queue.closed);
+	}
+	
+	@Test
+	public void testCloseWakesFromNextChunkBlock() throws InterruptedException {
+		MutableBoolean woke = new MutableBoolean();
+		Thread t = new Thread(()-> {
+			queue.nextChunk();
+			woke.setTrue();
+		});
+		
+		t.start();
+		assertFalse(Util.waitUntil(50, ()->woke.booleanValue()));
+		queue.close();
+		t.join(50);
+		assertTrue(woke.booleanValue());
 	}
 }

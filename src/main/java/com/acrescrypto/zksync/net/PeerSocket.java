@@ -34,13 +34,19 @@ public abstract class PeerSocket {
 	public abstract void write(byte[] data, int offset, int length) throws IOException, ProtocolViolationException;
 	public abstract int read(byte[] data, int offset, int length) throws IOException, ProtocolViolationException;
 	public abstract boolean isLocalRoleClient();
-	public abstract void close() throws IOException;
+	protected abstract void _close() throws IOException;
 	public abstract boolean isClosed();
 	public abstract void handshake(PeerConnection conn) throws ProtocolViolationException, IOException;
 	public abstract int getPeerType() throws UnsupportedOperationException;
 	public abstract byte[] getSharedSecret();
 	
 	public void handshake() throws ProtocolViolationException, IOException { handshake(null); }
+	
+	public final void close() throws IOException {
+		_close();
+		closeAllIncoming();
+		closeAllOutgoing();
+	}
 
 	/** Immediately close socket and blacklist due to a clear protocol violation. 
 	 * @throws IOException */
@@ -274,14 +280,12 @@ public abstract class PeerSocket {
 	}
 	
 	protected synchronized void closeAllIncoming() {
-		// TODO DHT: (implement) Refactor close() so that this gets called without each subclass having to call it directly
 		for(PeerMessageIncoming msg : incoming.values()) {
 			msg.rxBuf.setEOF();
 		}
 	}
 	
 	protected synchronized void closeAllOutgoing() {
-		// TODO DHT: (implement) Refactor close() so that this gets called without each subclass having to call it directly
 		for(PeerMessageOutgoing msg : outgoing) {
 			msg.abort();
 		}

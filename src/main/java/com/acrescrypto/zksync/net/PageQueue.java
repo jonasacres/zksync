@@ -264,7 +264,6 @@ public class PageQueue {
 	}
 	
 	public synchronized void close() {
-		// TODO DHT: (test) test PageQueue close()
 		closed = true;
 		this.notifyAll();
 	}

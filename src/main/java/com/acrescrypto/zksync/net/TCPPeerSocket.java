@@ -129,13 +129,10 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 
 	@Override
-	public void close() throws IOException {
+	public void _close() throws IOException {
 		if(connection != null) {
 			connection.close();
 		}
-		
-		closeAllIncoming();
-		closeAllOutgoing();
 		
 		if(socket != null) {
 			socket.close();

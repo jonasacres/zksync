@@ -103,7 +103,7 @@ public class PeerConnectionTest {
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }
 		@Override public boolean isLocalRoleClient() { return false; }
-		@Override public void close() { closed = true; }
+		@Override public void _close() { closed = true; }
 		@Override public boolean isClosed() { return closed; }
 		@Override public void handshake(PeerConnection conn) {}
 		@Override public int getPeerType() { return peerType; }
@@ -264,7 +264,7 @@ public class PeerConnectionTest {
 	}
 	
 	@After
-	public void afterEach() {
+	public void afterEach() throws IOException {
 		swarm.close();
 		socket.close();
 		conn.close();
@@ -448,7 +448,7 @@ public class PeerConnectionTest {
 
 		conn.announceTips();
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TIPS);
-		for(RefTag tag : archive.getRevisionTree().plainBranchTips()) {
+		for(RefTag tag : archive.getConfig().getRevisionTree().plainBranchTips()) {
 			assertReceivedBytes(tag.obfuscate().serialize());
 		}
 		assertFinished();
@@ -808,15 +808,15 @@ public class PeerConnectionTest {
 			tags[i] = new RefTag(archive, crypto.rng(crypto.hashLength()), RefTag.REF_TYPE_2INDIRECT, 2);
 			obfTags[i] = tags[i].obfuscate();
 			msg.receivedData((byte) 0, obfTags[i].serialize());
-			assertFalse(archive.getRevisionTree().branchTips().contains(obfTags[i]));
+			assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(obfTags[i]));
 		}
 		
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 		conn.handle(msg);
-		archive.getRevisionTree().read();
+		archive.getConfig().getRevisionTree().read();
 		for(int i = 0; i < tags.length; i++) {
-			assertTrue(archive.getRevisionTree().plainBranchTips().contains(tags[i]));
-			assertTrue(archive.getRevisionTree().branchTips().contains(obfTags[i]));
+			assertTrue(archive.getConfig().getRevisionTree().plainBranchTips().contains(tags[i]));
+			assertTrue(archive.getConfig().getRevisionTree().branchTips().contains(obfTags[i]));
 		}
 	}
 	
@@ -830,13 +830,13 @@ public class PeerConnectionTest {
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TIPS);
 		msg.receivedData(PeerMessage.FLAG_FINAL, obfTag.serialize());
-		assertFalse(archive.getRevisionTree().branchTips().contains(obfTag));
+		assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(obfTag));
 		try {
 			conn.handle(msg);
 			fail();
 		} catch(ProtocolViolationException exc) {
 		}
-		assertFalse(archive.getRevisionTree().branchTips().contains(obfTag));
+		assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(obfTag));
 	}
 	
 	@Test

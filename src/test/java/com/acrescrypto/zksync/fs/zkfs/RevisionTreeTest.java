@@ -44,7 +44,7 @@ public class RevisionTreeTest {
 			revisions[i] = revFs.commit();
 		}
 		
-		tree = fs.archive.getRevisionTree();
+		tree = fs.archive.config.getRevisionTree();
 	}
 	
 	public static void setupMultipleParentTest() throws IOException {
@@ -71,7 +71,7 @@ public class RevisionTreeTest {
 			}
 		}
 		
-		mtree = mfs.archive.getRevisionTree();
+		mtree = mfs.archive.config.getRevisionTree();
 	}
 	
 	public static int parentIndex(int childIndex) {

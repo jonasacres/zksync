@@ -27,7 +27,7 @@ public class DiffSetResolver {
 	PathDiffResolver pathResolver;
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
-		return latestVersionResolver(DiffSet.withCollection(archive.getRevisionTree().plainBranchTips()));
+		return latestVersionResolver(DiffSet.withCollection(archive.getConfig().getRevisionTree().plainBranchTips()));
 	}
 	
 	public static DiffSetResolver latestVersionResolver(DiffSet diffset) throws IOException {
@@ -51,7 +51,7 @@ public class DiffSetResolver {
 			Long defaultId = null;
 			
 			try {
-				ancestorTag = setResolver.fs.getArchive().getRevisionTree().commonAncestorOf(setResolver.diffset.revisions);
+				ancestorTag = setResolver.fs.getArchive().getConfig().getRevisionTree().commonAncestorOf(setResolver.diffset.revisions);
 				defaultId = ancestorTag.readOnlyFS().inodeForPath(diff.path).getStat().getInodeId();
 			} catch (IOException exc) {
 				if(ancestorTag == null) throw new RuntimeException("Unable to calculate common ancestor in diff merge");
