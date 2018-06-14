@@ -36,7 +36,7 @@ public class RequestPoolTest {
 	}
 	
 	class DummyConnection extends PeerConnection {
-		boolean requestedAll, mockSeedOnly, setPaused, setPausedValue;
+		boolean requestedAll, mockSeedOnly, setPaused, setPausedValue, requestedConfigInfo;
 		int requestedPriority;
 		LinkedList<RefTag> requestedRefTags = new LinkedList<>();
 		LinkedList<RefTag> requestedRevisions = new LinkedList<>();
@@ -63,6 +63,10 @@ public class RequestPoolTest {
 			if(mockSeedOnly) throw new PeerCapabilityException();
 			requestedPriority = priority;
 			requestedRevisions.addAll(refTags);
+		}
+		
+		@Override public void requestConfigInfo() {
+			requestedConfigInfo = true;
 		}
 	}
 	
@@ -161,6 +165,34 @@ public class RequestPoolTest {
 	public void testAddRequestsToPeerDoesntCallRequestAllWhenRequestEverythingCleared() {
 		pool.addRequestsToConnection(conn);
 		assertFalse(conn.requestedAll);
+	}
+	
+	@Test
+	public void testAddRequestsToPeerAddsConfigInfoRequestIfRequested() {
+		pool.setRequestingConfigInfo(true);
+		pool.addRequestsToConnection(conn);
+		assertTrue(conn.requestedConfigInfo);
+	}
+	
+	@Test
+	public void testAddRequestsToPeerDoesNotAddConfigInfoRequestIfNotRequested() {
+		pool.addRequestsToConnection(conn);
+		assertFalse(conn.requestedConfigInfo);
+	}
+	
+	@Test
+	public void testAddRequestsToPeerDoesNotAddDataRequestsIfConfigNotReadyToReceive() {
+		LinkedList<Long> tags = new LinkedList<>();
+		for(int i = 0; i < 16; i++) {
+			long tag = ByteBuffer.wrap(crypto.rng(8)).getLong();
+			tags.add(tag);
+			pool.addPageTag(123, tag);
+		}
+
+		config.setPageSize(-1);
+		assertFalse(config.canReceive());
+		pool.addRequestsToConnection(conn);
+		assertEquals(0, conn.requestedPageTags.size());
 	}
 	
 	@Test
@@ -360,11 +392,20 @@ public class RequestPoolTest {
 		assertFalse(Util.waitUntil(100, ()->archive.getConfig().getLocalStorage().exists(pool2.path())));
 	}
 	
+	@Test
 	public void testAutomaticallyRequestsConfigInfoWhenCanReceiveFalse() {
-		
+		config.setPageSize(-1);
+		assertFalse(config.canReceive());
+
+		RequestPool pool2 = new RequestPool(config); // need a second pool for the faster prune interval
+		assertTrue(pool2.requestingConfigInfo);
+		pool2.stop();		
 	}
-	// TODO DHT: (test) automatically requests config info when canReceive is false
-	// TODO DHT: (test) does not automatically request config info when canReceive is true
-	// TODO DHT: (test) delays requests when config info not received
-	// TODO DHT: (test) sends requests when config info received
+	
+	@Test
+	public void testDoesNotAutomaticallyRequestConfigInfoWhenCanReceiveTrue() {
+		RequestPool pool2 = new RequestPool(config); // need a second pool for the faster prune interval
+		assertFalse(pool2.requestingConfigInfo);
+		pool2.stop();		
+	}
 }
