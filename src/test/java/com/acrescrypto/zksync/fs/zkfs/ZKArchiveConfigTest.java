@@ -48,6 +48,8 @@ public class ZKArchiveConfigTest {
 		fs.write("foo", "bar".getBytes());
 		RefTag tag = fs.commit();
 		assertTrue(Arrays.equals("bar".getBytes(), clone.getArchive().openRevision(tag).read("foo")));
+		
+		clone.close();
 	}
 	
 	public void assertUnreadable(ZKArchiveConfig config) throws IOException {
@@ -59,7 +61,8 @@ public class ZKArchiveConfigTest {
 		try {
 			new ZKArchiveConfig(accessor, config.getArchiveId());
 			fail();
-		} catch(InvalidArchiveConfigException exc) {}
+		} catch(InvalidArchiveConfigException exc) {
+		}
 	}
 	
 	public byte[][] makeValidPageInfo() throws IOException {
@@ -99,6 +102,7 @@ public class ZKArchiveConfigTest {
 		};
 		
 		modified.write();
+		modified.close();
 	}
 	
 	public void writePhonySection(int statedSize, int actualSize) throws IOException {
@@ -119,6 +123,7 @@ public class ZKArchiveConfigTest {
 		};
 		
 		modified.write();
+		config.close();
 		config = modified;
 	}
 	
@@ -140,10 +145,13 @@ public class ZKArchiveConfigTest {
 	@After
 	public void afterEach() throws IOException {
 		master.storage.purge();
+		config.close();
+		seedConfig.close();
 	}
 	
 	@AfterClass
 	public static void afterAll() {
+		master.close();
 		ZKFSTest.restoreArgon2Costs();
 	}
 	
@@ -154,6 +162,7 @@ public class ZKArchiveConfigTest {
 		fs.write("foo", "bar".getBytes());
 		RefTag tag = fs.commit();
 		assertTrue(Arrays.equals("bar".getBytes(), config.getArchive().openRevision(tag).read("foo")));
+		fs.close();
 	}
 	
 	@Test
@@ -204,6 +213,7 @@ public class ZKArchiveConfigTest {
 		
 		modified.write();
 		assertUnreadable(config, accessor);
+		modified.close();
 	}
 	
 	@Test
@@ -218,6 +228,7 @@ public class ZKArchiveConfigTest {
 		
 		modified.write();
 		assertUnreadable(config);
+		modified.close();
 	}
 	
 	@Test
@@ -232,6 +243,7 @@ public class ZKArchiveConfigTest {
 		
 		modified.write();
 		assertUnreadable(config);
+		modified.close();
 	}
 	
 	@Test
@@ -251,6 +263,7 @@ public class ZKArchiveConfigTest {
 		
 		modified.write();
 		assertUnreadable(config);
+		modified.close();
 	}
 
 	@Test
@@ -269,6 +282,7 @@ public class ZKArchiveConfigTest {
 		
 		modified.write();
 		assertUnreadable(config);
+		modified.close();
 	}
 
 	@Test
@@ -295,6 +309,7 @@ public class ZKArchiveConfigTest {
 		
 		modified.write();
 		assertUnreadable(modified);
+		modified.close();
 	}
 	
 	@Test
@@ -356,6 +371,7 @@ public class ZKArchiveConfigTest {
 		FS example = master.localStorageFsForArchiveId(config.archiveId);
 		assertTrue(config.getLocalStorage().getClass().isInstance(example));
 		assertTrue(seedConfig.getLocalStorage().getClass().isInstance(example));
+		example.close();
 	}
 	
 	@Test
@@ -409,6 +425,7 @@ public class ZKArchiveConfigTest {
 	public void testArchiveRootIsNondeterministic() throws IOException {
 		ZKArchiveConfig newConfig = new ZKArchiveConfig(accessor, TEST_DESCRIPTION, PAGE_SIZE);
 		assertFalse(Arrays.equals(config.archiveRoot.getRaw(), newConfig.archiveRoot.getRaw()));
+		newConfig.close();
 	}
 	
 	@Test
@@ -416,6 +433,7 @@ public class ZKArchiveConfigTest {
 		// TODO: redo this when independent write key can be supplied...
 		ZKArchiveConfig newConfig = new ZKArchiveConfig(accessor, TEST_DESCRIPTION, PAGE_SIZE);
 		assertTrue(Arrays.equals(config.getPubKey().getBytes(), newConfig.getPubKey().getBytes()));
+		newConfig.close();
 	}
 	
 	@Test
@@ -425,6 +443,7 @@ public class ZKArchiveConfigTest {
 		ArchiveAccessor newAccessor = master.makeAccessorForRoot(newKey, false);
 		ZKArchiveConfig newConfig = new ZKArchiveConfig(newAccessor, TEST_DESCRIPTION, PAGE_SIZE);
 		assertFalse(Arrays.equals(config.getPubKey().getBytes(), newConfig.getPubKey().getBytes()));
+		newConfig.close();
 	}
 	
 	@Test
@@ -518,6 +537,7 @@ public class ZKArchiveConfigTest {
 	public void testArchivesHaveUniqueConfigFilePathTags() throws IOException {
 		ZKArchiveConfig config2 = new ZKArchiveConfig(accessor, TEST_DESCRIPTION, PAGE_SIZE);
 		assertFalse(Arrays.equals(config.tag(), config2.tag()));
+		config2.close();
 	}
 	
 	@Test

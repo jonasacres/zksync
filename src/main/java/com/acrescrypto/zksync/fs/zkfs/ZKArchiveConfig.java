@@ -68,7 +68,12 @@ public class ZKArchiveConfig {
 		initStorage();
 		this.revisionTree = new RevisionTree(this);
 		if(finish) {
-			finishOpening();
+			try {
+				finishOpening();
+			} catch(InvalidArchiveConfigException exc) {
+				close();
+				throw exc;
+			}
 		}
 	}
 	

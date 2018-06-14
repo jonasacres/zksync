@@ -34,11 +34,6 @@ public class RequestPool {
 	public RequestPool(ZKArchiveConfig config) {
 		this.config = config;
 		
-		// TODO DHT: (test) automatically requests config info when canReceive is false
-		// TODO DHT: (test) does not automatically request config info when canReceive is true
-		// TODO DHT: (test) delays requests when config info not received
-		// TODO DHT: (test) sends requests when config info received
-		
 		setRequestingConfigInfo(!config.canReceive());
 		new Thread(()->pruneThread()).start();
 	}

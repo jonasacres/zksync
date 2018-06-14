@@ -359,4 +359,12 @@ public class RequestPoolTest {
 		try { archive.getConfig().getLocalStorage().unlink(pool2.path()); } catch(ENOENTException exc) {}
 		assertFalse(Util.waitUntil(100, ()->archive.getConfig().getLocalStorage().exists(pool2.path())));
 	}
+	
+	public void testAutomaticallyRequestsConfigInfoWhenCanReceiveFalse() {
+		
+	}
+	// TODO DHT: (test) automatically requests config info when canReceive is false
+	// TODO DHT: (test) does not automatically request config info when canReceive is true
+	// TODO DHT: (test) delays requests when config info not received
+	// TODO DHT: (test) sends requests when config info received
 }
