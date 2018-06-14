@@ -21,7 +21,7 @@ public class MutableSecureFile extends SecureFile {
 	}
 	
 	public void write(byte[] plaintext, int padSize) throws IOException {
-		fs.write(path, makeContents(plaintext, padSize));
+		fs.safeWrite(path, makeContents(plaintext, padSize));
 	}
 	
 	protected byte[] readContents(byte[] contents) {

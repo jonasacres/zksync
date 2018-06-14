@@ -433,7 +433,6 @@ public class PeerConnection {
 			socket.swarm.config.getRevisionTree().addBranchTip(obfTag);
 		}
 		
-		// TODO DHT: (review) there's an unmitigated danger here that there's a separate zkarchive open with parallel revision tree changes
 		socket.swarm.config.getRevisionTree().write();
 	}
 	

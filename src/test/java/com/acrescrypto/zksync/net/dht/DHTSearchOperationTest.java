@@ -187,10 +187,9 @@ public class DHTSearchOperationTest {
 	
 	@Test
 	public void testRunInvokesCallbackWithBestResults() {
-		/* Because this test creates a small and random network, there's a small chance that our actual results will
-		 * differ slightly from the expectation. So instead of testing to ensure that our N results are the N best,
-		 * we will make sure that our N results are among the N+M best. (extraResults = M)
-		 */
+		// TODO DHT: (itf) Observed failure from AllTests. Can't reproduce with while loop in 10k iterations. c6f6e6cc691f496a2443958fc15f57d2fa5fd8d0 linux 6/14/18
+		// Failed to reproduce in 100 manual runs of DHTSearchOperationTests on save revision
+		
 		int extraResults = 2;
 		
 		ArrayList<DHTPeer> expectedResults = closestInList(searchId, client.simPeers, extraResults+DHTSearchOperation.MAX_RESULTS);
