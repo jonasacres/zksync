@@ -252,7 +252,11 @@ public class PeerConnection {
 	}
 	
 	public void sendConfigInfo() {
-		send(CMD_SEND_CONFIG_INFO, Util.serializeInt(socket.swarm.config.getPageSize()));
+		ByteBuffer configInfo = ByteBuffer.allocate(8+socket.swarm.config.getCrypto().asymPublicDHKeySize() + socket.swarm.config.getCrypto().hashLength());
+		configInfo.put(socket.swarm.config.getArchiveFingerprint());
+		configInfo.put(socket.swarm.config.getPubKey().getBytes());
+		configInfo.putLong(socket.swarm.config.getPageSize());
+		send(CMD_SEND_CONFIG_INFO, configInfo.array());
 	}
 	
 	public void setPaused(boolean paused) {
@@ -506,18 +510,28 @@ public class PeerConnection {
 	
 	protected void handleRequestConfigInfo(PeerMessageIncoming msg) throws ProtocolViolationException {
 		msg.rxBuf.requireEOF();
-		if(socket.swarm.config.isInitialized()) {
+		if(socket.swarm.config.canReceive()) {
 			sendConfigInfo();
 		}
 	}
 	
 	protected void handleSendConfigInfo(PeerMessageIncoming msg) throws EOFException, ProtocolViolationException {
-		int pageSize = msg.rxBuf.getInt();
-		assertState(0 <= pageSize && pageSize <= Integer.MAX_VALUE);
+		byte[] fingerprint = new byte[getCrypto().hashLength()];
+		byte[] pubKeyRaw = new byte[getCrypto().asymPublicDHKeySize()];
 		
-		// TODO DHT: (review) What if a malicious peer lies about this?
+		msg.rxBuf.get(fingerprint);
+		msg.rxBuf.get(pubKeyRaw);
+		long pageSizeLong = msg.rxBuf.getLong();
+		msg.rxBuf.requireEOF();
+		
+		assertState(0 <= pageSizeLong && pageSizeLong <= Integer.MAX_VALUE);
+		byte[] allegedArchiveId = socket.swarm.config.calculateArchiveId(fingerprint, pubKeyRaw, pageSizeLong);
+		assertState(Arrays.equals(socket.swarm.config.getArchiveId(), allegedArchiveId));
+		
 		if(!socket.swarm.config.canReceive()) {
-			socket.swarm.config.setPageSize(pageSize);
+			socket.swarm.config.setPageSize((int) pageSizeLong);
+			socket.swarm.config.setArchiveFingerprint(fingerprint);
+			socket.swarm.config.setPubKey(getCrypto().makePublicSigningKey(pubKeyRaw));
 		}
 		
 		socket.swarm.receivedConfigInfo();

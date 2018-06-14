@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.net;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -1551,13 +1552,154 @@ public class PeerConnectionTest {
 	@Test
 	public void testRequestConfigInfo() throws IOException {
 		conn.requestConfigInfo();
+		
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_CONFIG_INFO);
 		assertFinished();
 	}
+	
+	@Test
+	public void testSendConfigInfo() throws IOException {
+		conn.sendConfigInfo();
+		
+		assertReceivedCmd(PeerConnection.CMD_SEND_CONFIG_INFO);
+		assertReceivedBytes(archive.getConfig().getArchiveFingerprint());
+		assertReceivedBytes(archive.getConfig().getPubKey().getBytes());
+		assertReceivedBytes(Util.serializeLong(archive.getConfig().getPageSize()));
+		assertFinished();
+	}
+	
+	@Test
+	public void testHandleRequestConfigInfoSendsInfoIfInitialized() throws IOException, ProtocolViolationException {
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_REQUEST_CONFIG_INFO);
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		conn.handle(msg);
+		assertReceivedCmd(PeerConnection.CMD_SEND_CONFIG_INFO);
+	}
+	
+	@Test
+	public void testHandleRequestConfigInfoSendsNothingIfNotReadyToReceive() throws IOException, ProtocolViolationException {
+		archive.getConfig().setPageSize(-1); // force canReceive to return false
+		assertFalse(archive.getConfig().canReceive());
+		
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_REQUEST_CONFIG_INFO);
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		
+		conn.handle(msg);
+		assertNoMessage();
+	}
+	
+	@Test
+	public void testHandleSendConfigInfoSetsInfoWhenValid() throws ProtocolViolationException {
+		byte[] fingerprint = socket.swarm.config.getArchiveFingerprint();
+		byte[] pubKeyRaw = socket.swarm.config.getPubKey().getBytes();
+		long pageSize = socket.swarm.config.getPageSize();
+		
+		ByteBuffer configInfo = ByteBuffer.allocate(fingerprint.length + pubKeyRaw.length + 8);
+		configInfo.put(fingerprint);
+		configInfo.put(pubKeyRaw);
+		configInfo.putLong(pageSize);
 
-	// TODO DHT: (test) Test handle request config info sends page size if initialized
-	// TODO DHT: (test) Test handle request config info sends nothing if not initialized
-	// TODO DHT: (test) Test handle send config info sets page size if not initialized
-	// TODO DHT: (test) Test handle send config info does not set page size if initialized
-	// TODO DHT: (test) Test handle send config info triggers violation if page size is negative
+		socket.swarm.config.setArchiveFingerprint(null);
+		socket.swarm.config.setPubKey(null);
+		socket.swarm.config.setPageSize(-1);
+		
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_SEND_CONFIG_INFO);
+		msg.receivedData(PeerMessage.FLAG_FINAL, configInfo.array());
+		conn.handle(msg);
+		
+		assertTrue(socket.swarm.config.canReceive());
+		assertArrayEquals(fingerprint, socket.swarm.config.getArchiveFingerprint());
+		assertArrayEquals(pubKeyRaw, socket.swarm.config.getPubKey().getBytes());
+		assertEquals(pageSize, socket.swarm.config.getPageSize());
+	}
+	
+	@Test
+	public void testHandleSendConfigInfoTriggersViolationWhenFingerprintInvalid() throws ProtocolViolationException {
+		byte[] fingerprint = socket.swarm.config.getArchiveFingerprint();
+		byte[] pubKeyRaw = socket.swarm.config.getPubKey().getBytes();
+		long pageSize = socket.swarm.config.getPageSize();
+		
+		fingerprint[3] ^= 0x10;
+		
+		ByteBuffer configInfo = ByteBuffer.allocate(fingerprint.length + pubKeyRaw.length + 8);
+		configInfo.put(fingerprint);
+		configInfo.put(pubKeyRaw);
+		configInfo.putLong(pageSize);
+
+		socket.swarm.config.setArchiveFingerprint(null);
+		socket.swarm.config.setPubKey(null);
+		socket.swarm.config.setPageSize(-1);
+		
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_SEND_CONFIG_INFO);
+		msg.receivedData(PeerMessage.FLAG_FINAL, configInfo.array());
+		try {
+			conn.handle(msg);
+			fail();
+		} catch(ProtocolViolationException exc) {}
+		
+		assertFalse(socket.swarm.config.canReceive());
+		assertNull(socket.swarm.config.getArchiveFingerprint());
+		assertNull(socket.swarm.config.getPubKey());
+		assertEquals(-1, socket.swarm.config.getPageSize());
+	}
+
+	@Test
+	public void testHandleSendConfigInfoTriggersViolationWhenPubKeyInvalid() throws ProtocolViolationException {
+		byte[] fingerprint = socket.swarm.config.getArchiveFingerprint();
+		byte[] pubKeyRaw = socket.swarm.config.getPubKey().getBytes();
+		long pageSize = socket.swarm.config.getPageSize();
+		
+		pubKeyRaw[17] ^= 0x04;
+		
+		ByteBuffer configInfo = ByteBuffer.allocate(fingerprint.length + pubKeyRaw.length + 8);
+		configInfo.put(fingerprint);
+		configInfo.put(pubKeyRaw);
+		configInfo.putLong(pageSize);
+
+		socket.swarm.config.setArchiveFingerprint(null);
+		socket.swarm.config.setPubKey(null);
+		socket.swarm.config.setPageSize(-1);
+		
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_SEND_CONFIG_INFO);
+		msg.receivedData(PeerMessage.FLAG_FINAL, configInfo.array());
+		try {
+			conn.handle(msg);
+			fail();
+		} catch(ProtocolViolationException exc) {}
+		
+		assertFalse(socket.swarm.config.canReceive());
+		assertNull(socket.swarm.config.getArchiveFingerprint());
+		assertNull(socket.swarm.config.getPubKey());
+		assertEquals(-1, socket.swarm.config.getPageSize());
+	}
+	
+	@Test
+	public void testHandleSendConfigInfoTriggersViolationWhenPageSizeInvalid() throws ProtocolViolationException {
+		byte[] fingerprint = socket.swarm.config.getArchiveFingerprint();
+		byte[] pubKeyRaw = socket.swarm.config.getPubKey().getBytes();
+		long pageSize = socket.swarm.config.getPageSize();
+		
+		pageSize++;
+		
+		ByteBuffer configInfo = ByteBuffer.allocate(fingerprint.length + pubKeyRaw.length + 8);
+		configInfo.put(fingerprint);
+		configInfo.put(pubKeyRaw);
+		configInfo.putLong(pageSize);
+
+		socket.swarm.config.setArchiveFingerprint(null);
+		socket.swarm.config.setPubKey(null);
+		socket.swarm.config.setPageSize(-1);
+		
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_SEND_CONFIG_INFO);
+		msg.receivedData(PeerMessage.FLAG_FINAL, configInfo.array());
+		try {
+			conn.handle(msg);
+			fail();
+		} catch(ProtocolViolationException exc) {}
+		
+		assertFalse(socket.swarm.config.canReceive());
+		assertNull(socket.swarm.config.getArchiveFingerprint());
+		assertNull(socket.swarm.config.getPubKey());
+		assertEquals(-1, socket.swarm.config.getPageSize());
+	}
 }

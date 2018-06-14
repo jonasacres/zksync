@@ -36,6 +36,7 @@ public class ZKArchiveConfig {
 	public final static int CONFIG_SECTION_ARCHIVE_INFO = 0x0001;
 		
 	protected byte[] archiveId; // derived from archive root; will later include public key
+	protected byte[] archiveFingerprint;
 
 	protected Key archiveRoot; // randomly generated and stored encrypted in config file; derives most other keys
 	protected Key writeRoot; // derives private key
@@ -187,6 +188,7 @@ public class ZKArchiveConfig {
 				deriveKeypair();
 			}
 			
+			archiveFingerprint = fingerprint;
 			int sigSize = accessor.master.crypto.asymSignatureSize();
 			pubKey.assertValid(contents.array(), 0, contents.capacity()-sigSize, contents.array(), contents.capacity()-sigSize, sigSize);
 		} catch(SecurityException exc) {
@@ -258,12 +260,24 @@ public class ZKArchiveConfig {
 		return pubKey;
 	}
 	
+	public void setPubKey(PublicSigningKey pubKey) {
+		this.pubKey = pubKey;
+	}
+	
+	public void setArchiveFingerprint(byte[] archiveFingerprint) {
+		this.archiveFingerprint = archiveFingerprint;
+	}
+	
+	public byte[] getArchiveFingerprint() {
+		return archiveFingerprint;
+	}
+	
 	public RevisionTree getRevisionTree() {
 		return revisionTree;
 	}
 	
 	public boolean canReceive() {
-		return pageSize > 0;
+		return pageSize > 0 && pubKey != null && archiveFingerprint != null;
 	}
 	
 	public boolean isInitialized() {
@@ -363,7 +377,8 @@ public class ZKArchiveConfig {
 		archiveRoot = new Key(accessor.master.crypto, accessor.master.crypto.rng(accessor.master.crypto.symKeyLength()));
 		deriveKeypair();
 		configFileIv = calculateConfigFileIv();
-		archiveId = calculateArchiveId(deriveArchiveFingerprint());
+		archiveFingerprint = deriveArchiveFingerprint();
+		archiveId = calculateArchiveId(archiveFingerprint);
 	}
 	
 	protected byte[] deriveArchiveFingerprint() {
@@ -374,11 +389,11 @@ public class ZKArchiveConfig {
 		return accessor.master.crypto.hash(ciphertext);
 	}
 	
-	protected byte[] calculateArchiveId(byte[] archiveFingerprint) {
+	public byte[] calculateArchiveId(byte[] archiveFingerprint) {
 		return calculateArchiveId(archiveFingerprint, pubKey.getBytes(), pageSize);
 	}
 	
-	protected byte[] calculateArchiveId(byte[] archiveFingerprint, byte[] pubKeyRaw, long pageSizeLong) {
+	public byte[] calculateArchiveId(byte[] archiveFingerprint, byte[] pubKeyRaw, long pageSizeLong) {
 		ByteBuffer keyMaterialBuf = ByteBuffer.allocate(archiveFingerprint.length + pubKeyRaw.length + 8);
 		keyMaterialBuf.put(archiveFingerprint);
 		keyMaterialBuf.put(pubKeyRaw);
