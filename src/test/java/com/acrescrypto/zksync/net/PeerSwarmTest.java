@@ -84,7 +84,7 @@ public class PeerSwarmTest {
 		@Override public boolean isClosed() { return false; }
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public String getAddress() { return address; }
-		@Override public void handshake() {}
+		@Override public void handshake(PeerConnection conn) {}
 		@Override public int getPeerType() { return -1; }
 	}
 	

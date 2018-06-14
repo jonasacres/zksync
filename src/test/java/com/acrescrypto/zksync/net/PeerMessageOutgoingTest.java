@@ -13,7 +13,6 @@ import java.util.Arrays;
 import java.util.concurrent.TimeoutException;
 
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -37,7 +36,7 @@ public class PeerMessageOutgoingTest {
 		@Override public boolean isClosed() { return false; }
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public String getAddress() { return "dummy"; }
-		@Override public void handshake() throws ProtocolViolationException, IOException {}
+		@Override public void handshake(PeerConnection conn) throws ProtocolViolationException, IOException {}
 		@Override public int getPeerType() throws UnsupportedOperationException { return -1; }
 		@Override public synchronized void dataReady(MessageSegment segment) {
 			received = segment;

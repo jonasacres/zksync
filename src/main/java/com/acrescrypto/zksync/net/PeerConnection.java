@@ -68,7 +68,7 @@ public class PeerConnection {
 	
 	public PeerConnection(PeerSwarm swarm, PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
 		this.socket = PeerSocket.connectToAd(swarm, ad);
-		this.socket.handshake();
+		this.socket.handshake(this);
 		initialize();
 	}
 	
@@ -95,6 +95,33 @@ public class PeerConnection {
 		return socket.getPeerType();
 	}
 	
+	public void blacklist() {
+		socket.violation();
+	}
+
+	public synchronized void close() {
+		if(closed) return;
+		closed = true;
+		
+		if(queue != null) {
+			queue.close();
+		}
+		
+		try {
+			socket.close();
+		} catch(IOException exc) {
+			logger.warn("Caught exception closing socket to address {}", socket.getAddress(), exc);
+		} finally {
+			if(socket != null && socket.swarm != null) {
+				socket.swarm.closedConnection(this);
+			}
+			
+			synchronized(this) {
+				this.notifyAll();
+			}
+		}
+	}
+
 	public void announceTag(long shortTag) {
 		ByteBuffer tag = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
 		tag.putLong(shortTag);
@@ -230,25 +257,45 @@ public class PeerConnection {
 		send(CMD_SET_PAUSED, new byte[] { (byte) (paused ? 0x01 : 0x00) });
 	}
 	
-	protected byte[] serializeRefTags(int priority, Collection<RefTag> tags) {
-		ByteBuffer buf = ByteBuffer.allocate(4 + tags.size() * socket.swarm.config.getArchive().refTagSize());
-		buf.putInt(priority);
-		for(RefTag tag : tags) buf.put(tag.getBytes());
-		return buf.array();
+	public synchronized void setLocalPaused(boolean localPaused) {
+		this.localPaused = localPaused;
+		this.notifyAll();
+	}
+
+	public boolean isPausable(byte cmd) {
+		return cmd == CMD_SEND_PAGE;
+	}
+
+	public boolean isPaused() {
+		return remotePaused || localPaused;
+	}
+
+	public synchronized void waitForUnpause() throws SocketClosedException {
+		while(isPaused() && !closed) {
+			try {
+				this.wait();
+			} catch(InterruptedException e) {}
+			if(!closed) assertConnected();
+		}
+	}
+
+	public boolean wantsFile(byte[] tag) {
+		return !announcedTags.contains(Util.shortTag(tag));
+	}
+
+	public boolean hasFile(long shortTag) {
+		return announcedTags.contains(shortTag);
 	}
 	
-	protected void assertPeerCapability(int capability) throws PeerCapabilityException {
-		if(socket.getPeerType() < capability) throw new PeerCapabilityException();
+	public synchronized void waitForReady() throws SocketClosedException {
+		while(!receivedTags) {
+			try {
+				this.wait();
+			} catch (InterruptedException e) {}
+			assertConnected();
+		}
 	}
-	
-	protected void assertClientStatus(boolean mustBeClient) throws PeerRoleException {
-		if(this.socket.isLocalRoleClient() != mustBeClient) throw new PeerRoleException();
-	}
-	
-	protected void assertState(boolean state) throws ProtocolViolationException {
-		if(!state) throw new ProtocolViolationException();
-	}
-	
+
 	public boolean handle(PeerMessageIncoming msg) throws ProtocolViolationException {
 		try {
 			switch(msg.cmd) {
@@ -312,7 +359,7 @@ public class PeerConnection {
 		
 		return true;
 	}
-	
+
 	protected void handleAnnouncePeers(PeerMessageIncoming msg) throws EOFException, ProtocolViolationException {
 		while(msg.rxBuf.hasRemaining()) {
 			int adLen = Util.unsignShort(msg.rxBuf.getShort());
@@ -355,7 +402,6 @@ public class PeerConnection {
 			if(msg.rxBuf.isEOF() && msg.rxBuf.available() < 8) break;
 			
 			int len = Math.min(64*1024, msg.rxBuf.available());
-			System.out.println("read " + len);
 			ByteBuffer buf = ByteBuffer.allocate(len - len % 8); // round to 8-byte long boundary
 			msg.rxBuf.get(buf.array());
 			synchronized(this) {
@@ -372,9 +418,7 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
-		while(!socket.swarm.config.isInitialized()) {
-			Util.sleep(100);
-		}
+		Util.blockOn(()->!socket.swarm.config.isInitialized() && !closed);
 		
 		byte[] obfTagRaw = new byte[ObfuscatedRefTag.sizeForConfig(socket.swarm.config)];
 		while(msg.rxBuf.hasRemaining()) {
@@ -482,35 +526,9 @@ public class PeerConnection {
 		socket.makeOutgoingMessage(cmd, new ByteArrayInputStream(payload));
 	}
 	
-	public boolean isPausable(byte cmd) {
-		return cmd == CMD_SEND_PAGE;
-	}
-	
-	public boolean wantsFile(byte[] tag) {
-		return !announcedTags.contains(Util.shortTag(tag));
-	}
-	
 	protected synchronized void setRemotePaused(boolean paused) {
 		this.remotePaused = paused;
 		this.notifyAll();
-	}
-	
-	public synchronized void setLocalPaused(boolean localPaused) {
-		this.localPaused = localPaused;
-		this.notifyAll();
-	}
-	
-	public boolean isPaused() {
-		return remotePaused || localPaused;
-	}
-
-	public synchronized void waitForUnpause() throws SocketClosedException {
-		while(isPaused() && !closed) {
-			try {
-				this.wait();
-			} catch(InterruptedException e) {}
-			assertConnected();
-		}
 	}
 	
 	protected void sendEverything() throws IOException {
@@ -533,52 +551,31 @@ public class PeerConnection {
 		queue.addPageTag(priority, shortTag);
 	}
 	
-	public synchronized void waitForReady() throws SocketClosedException {
-		while(!receivedTags) {
-			try {
-				this.wait();
-			} catch (InterruptedException e) {}
-			assertConnected();
-		}
-	}
-	
 	protected void assertConnected() throws SocketClosedException {
 		if(socket.isClosed()) {
 			throw new SocketClosedException();
 		}
 	}
 
-	public boolean hasFile(long shortTag) {
-		return announcedTags.contains(shortTag);
+	protected byte[] serializeRefTags(int priority, Collection<RefTag> tags) {
+		ByteBuffer buf = ByteBuffer.allocate(4 + tags.size() * socket.swarm.config.getArchive().refTagSize());
+		buf.putInt(priority);
+		for(RefTag tag : tags) buf.put(tag.getBytes());
+		return buf.array();
 	}
 
-	public void blacklist() {
-		socket.violation();
+	protected void assertPeerCapability(int capability) throws PeerCapabilityException {
+		if(socket.getPeerType() < capability) throw new PeerCapabilityException();
 	}
 
-	public synchronized void close() {
-		if(closed) return;
-		closed = true;
-		
-		if(queue != null) {
-			queue.close();
-		}
-		
-		try {
-			socket.close();
-		} catch(IOException exc) {
-			logger.warn("Caught exception closing socket to address {}", socket.getAddress(), exc);
-		} finally {
-			if(socket != null && socket.swarm != null) {
-				socket.swarm.closedConnection(this);
-			}
-			
-			synchronized(this) {
-				this.notifyAll();
-			}
-		}
+	protected void assertClientStatus(boolean mustBeClient) throws PeerRoleException {
+		if(this.socket.isLocalRoleClient() != mustBeClient) throw new PeerRoleException();
 	}
-	
+
+	protected void assertState(boolean state) throws ProtocolViolationException {
+		if(!state) throw new ProtocolViolationException();
+	}
+
 	protected void pageQueueThread() {
 		Thread.currentThread().setName("PeerConnection queue thread");
 		byte[] lastTag = new byte[0];

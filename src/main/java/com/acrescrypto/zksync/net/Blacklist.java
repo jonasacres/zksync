@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
 
@@ -46,19 +47,24 @@ public class Blacklist {
 		MutableSecureFile.atPath(fs, path, key).write(serialize(), padLen);
 	}
 	
-	public synchronized void add(String address, int durationMs) throws IOException {
-		BlacklistEntry entry = blockedAddresses.getOrDefault(address, null);
-		if(entry != null) {
-			logger.warn("Renewing blacklist entry for {} for {}ms", address, durationMs);
-			entry.update(durationMs);
-		} else {
-			logger.warn("Adding blacklist entry for {} for {}ms", address, durationMs);
-			entry = new BlacklistEntry(address, durationMs);
-			blockedAddresses.put(address, entry);
+	public void add(String address, int durationMs) throws IOException {
+		Collection<BlacklistCallback> callbackList;
+		synchronized(this) {
+			BlacklistEntry entry = blockedAddresses.getOrDefault(address, null);
+			if(entry != null) {
+				logger.warn("Renewing blacklist entry for {} for {}ms", address, durationMs);
+				entry.update(durationMs);
+			} else {
+				logger.warn("Adding blacklist entry for {} for {}ms", address, durationMs);
+				entry = new BlacklistEntry(address, durationMs);
+				blockedAddresses.put(address, entry);
+			}
+			write();
+			
+			callbackList = new LinkedList<>(callbacks);
 		}
-		write();
 		
-		for(BlacklistCallback callback : callbacks) {
+		for(BlacklistCallback callback : callbackList) {
 			callback.disconnectAddress(address, durationMs);
 		}
 	}

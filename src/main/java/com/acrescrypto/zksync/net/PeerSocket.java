@@ -36,10 +36,12 @@ public abstract class PeerSocket {
 	public abstract boolean isLocalRoleClient();
 	public abstract void close() throws IOException;
 	public abstract boolean isClosed();
-	public abstract void handshake() throws ProtocolViolationException, IOException;
+	public abstract void handshake(PeerConnection conn) throws ProtocolViolationException, IOException;
 	public abstract int getPeerType() throws UnsupportedOperationException;
 	public abstract byte[] getSharedSecret();
 	
+	public void handshake() throws ProtocolViolationException, IOException { handshake(null); }
+
 	public int getPort() {
 		return -1;
 	}
@@ -81,7 +83,11 @@ public abstract class PeerSocket {
 	public PeerMessageOutgoing makeOutgoingMessage(byte cmd, InputStream txPayload) {
 		PeerMessageOutgoing msg = new PeerMessageOutgoing(connection, cmd, txPayload);
 		synchronized(outgoing) {
-			outgoing.add(msg);
+			if(isClosed()) {
+				msg.abort();
+			} else {
+				outgoing.add(msg);
+			}
 		}
 		return msg;
 	}
@@ -204,6 +210,9 @@ public abstract class PeerSocket {
 			synchronized(this) {
 				incoming.put(msgId, msg);
 				maxReceivedMessageId = msgId;
+				if(isClosed()) {
+					finishedMessage(msg);
+				}
 			}
 			pruneMessages();
 		} else if(incoming.containsKey(msgId)) { // existing message

@@ -212,7 +212,7 @@ public class Util {
 		for(Thread t : stackTraces.keySet()) {
 			instanceCounts.put(t.getName(), instanceCounts.getOrDefault(t.getName(), 0) + 1);
 			if(includeStackTraces) {
-				System.out.println(t.getName());
+				System.out.println(t.getName() + " - " + t.getId());
 				for(StackTraceElement e : stackTraces.get(t)) {
 					System.out.println("\t"+e.getClassName() + "::" + e.getMethodName() + " line " + e.getLineNumber());
 				}
@@ -232,7 +232,11 @@ public class Util {
 	}
 	
 	public static String caller(int depth) {
-		StackTraceElement e = (new Throwable()).getStackTrace()[2+depth];
-		return e.getClassName() + "." + e.getMethodName() + ":" + e.getLineNumber();
+		try {
+			StackTraceElement e = (new Throwable()).getStackTrace()[2+depth];
+			return e.getClassName() + "." + e.getMethodName() + ":" + e.getLineNumber();
+		} catch(ArrayIndexOutOfBoundsException exc) {
+			return "";
+		}
 	}
 }

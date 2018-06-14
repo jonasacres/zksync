@@ -38,7 +38,7 @@ public class PeerMessageIncomingTest {
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public void violation() { violated = true; }
 		@Override public String getAddress() { return "dummy"; }
-		@Override public void handshake() {}
+		@Override public void handshake(PeerConnection conn) {}
 		@Override public int getPeerType() { return -1; }
 		@Override public void finishedMessage(PeerMessageIncoming msg) {
 			finished = true;

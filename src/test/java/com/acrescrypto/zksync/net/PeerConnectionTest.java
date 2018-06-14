@@ -18,6 +18,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 
 import org.apache.commons.io.IOUtils;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -103,7 +104,7 @@ public class PeerConnectionTest {
 		@Override public boolean isLocalRoleClient() { return false; }
 		@Override public void close() { closed = true; }
 		@Override public boolean isClosed() { return closed; }
-		@Override public void handshake() {}
+		@Override public void handshake(PeerConnection conn) {}
 		@Override public int getPeerType() { return peerType; }
 		@Override public byte[] getSharedSecret() { return null; }
 		@Override public String getAddress() { return "127.0.0.1"; }
@@ -261,23 +262,36 @@ public class PeerConnectionTest {
 		socket.messages.clear();
 	}
 	
+	@After
+	public void afterEach() {
+		swarm.close();
+		socket.close();
+		conn.close();
+		archive.close();
+		master.close();
+	}
+	
 	@AfterClass
 	public static void afterAll() {
 		ZKFSTest.restoreArgon2Costs();
 	}
-
+	
 	@Test
 	public void testConstructWithAdConnectsToAdvertisement() throws IOException, UnsupportedProtocolException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
 		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master, 0);
+		
 		assertTrue(Util.waitUntil(100, ()->listener.listenSocket != null));
 		listener.advertise(swarm);
 		assertNull(listener.connectedPeer);
 		PeerConnection conn = new PeerConnection(swarm, listener.listenerForSwarm(swarm).localAd());
+
 		assertTrue(Util.waitUntil(100, ()->listener.connectedPeer != null));
-		
 		assertNotNull(listener.connectedPeer);
 		assertNotNull(conn.queue);
 		assertEquals(PeerConnection.PEER_TYPE_FULL, conn.getPeerType());
+		
+		conn.close();
+		listener.close();
 	}
 	
 	@Test
@@ -285,17 +299,22 @@ public class PeerConnectionTest {
 		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
 		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.getConfig().getArchiveId());
 		DummySwarm roSwarm = new DummySwarm(roConfig);
-
 		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master, 0);
+		
 		assertTrue(Util.waitUntil(100, ()->listener.listenSocket != null));
 		listener.advertise(roSwarm);
 		assertNull(listener.connectedPeer);
 		PeerConnection conn = new PeerConnection(swarm, listener.listenerForSwarm(roSwarm).localAd());
-		assertTrue(Util.waitUntil(100, ()->listener.connectedPeer != null));
 		
+		assertTrue(Util.waitUntil(100, ()->listener.connectedPeer != null));
 		assertNotNull(listener.connectedPeer);
 		assertNotNull(conn.queue);
 		assertEquals(PeerConnection.PEER_TYPE_BLIND, conn.getPeerType());
+		
+		roConfig.close();
+		roSwarm.close();
+		conn.close();
+		listener.close();
 	}
 	
 	@Test
@@ -303,17 +322,22 @@ public class PeerConnectionTest {
 		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
 		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.getConfig().getArchiveId());
 		DummySwarm roSwarm = new DummySwarm(roConfig);
-
 		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master, 0);
+
 		assertTrue(Util.waitUntil(100, ()->listener.listenSocket != null));
 		listener.advertise(swarm);
 		assertNull(listener.connectedPeer);
 		PeerConnection conn = new PeerConnection(roSwarm, listener.listenerForSwarm(swarm).localAd());
-		assertTrue(Util.waitUntil(100, ()->listener.connectedPeer != null));
 		
+		assertTrue(Util.waitUntil(100, ()->listener.connectedPeer != null));
 		assertNotNull(listener.connectedPeer);
 		assertNotNull(conn.queue);
 		assertEquals(PeerConnection.PEER_TYPE_BLIND, conn.getPeerType());
+
+		roConfig.close();
+		roSwarm.close();
+		conn.close();
+		listener.close();
 	}
 	
 	@Test

@@ -60,7 +60,8 @@ public class TCPPeerSocket extends PeerSocket {
 		if(ad.isBlacklisted(swarm.config.getAccessor().getMaster().getBlacklist())) throw new BlacklistedException(ad.host);
 	}
 	
-	public void handshake() throws ProtocolViolationException, IOException {
+	public void handshake(PeerConnection connection) throws ProtocolViolationException, IOException {
+		this.connection = connection;
 		this.socket = new Socket(ad.host, ad.port);
 		this.address = socket.getInetAddress().getHostAddress();
 		makeStreams();
@@ -237,7 +238,9 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		initKeys();
 		makeThreads();
-		this.connection = new PeerConnection(this);
+		if(connection == null) {
+			this.connection = new PeerConnection(this);
+		}
 	}
 	
 	protected Key nextLocalMessageKey() {
