@@ -52,8 +52,8 @@ public class DHTMessageStubTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		DHTClient.MESSAGE_EXPIRATION_TIME_MS = 100;
-		DHTClient.MESSAGE_RETRY_TIME_MS = 50;
+		DHTClient.messageExpirationTimeMs = 100;
+		DHTClient.messageRetryTimeMs = 50;
 	}
 	
 	@Before
@@ -72,8 +72,8 @@ public class DHTMessageStubTest {
 	
 	@AfterClass
 	public static void afterAll() {
-		DHTClient.MESSAGE_EXPIRATION_TIME_MS = DHTClient.DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
-		DHTClient.MESSAGE_RETRY_TIME_MS = DHTClient.DEFAULT_MESSAGE_RETRY_TIME_MS;
+		DHTClient.messageExpirationTimeMs = DHTClient.DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
+		DHTClient.messageRetryTimeMs = DHTClient.DEFAULT_MESSAGE_RETRY_TIME_MS;
 	}
 	
 	@Test
@@ -88,13 +88,13 @@ public class DHTMessageStubTest {
 	@Test
 	public void testConstructorSetsRetryTimerToResendMessage() {
 		assertNull(client.sent);
-		assertTrue(Util.waitUntil(DHTClient.MESSAGE_RETRY_TIME_MS+50, ()->stub.packet.equals(client.sent)));
+		assertTrue(Util.waitUntil(DHTClient.messageRetryTimeMs+50, ()->stub.packet.equals(client.sent)));
 	}
 	
 	@Test
 	public void testConstructorSetsExpirationTimerToMarkMessageAsMissed() {
 		assertNull(client.missed);
-		assertTrue(Util.waitUntil(DHTClient.MESSAGE_EXPIRATION_TIME_MS+50, ()->stub.equals(client.missed)));
+		assertTrue(Util.waitUntil(DHTClient.messageExpirationTimeMs+50, ()->stub.equals(client.missed)));
 	}
 	
 	@Test
@@ -121,7 +121,7 @@ public class DHTMessageStubTest {
 	@Test
 	public void testDispatchResponseIfMatchesCancelsExpirationMonitorIfMatch() throws ProtocolViolationException {
 		stub.dispatchResponse(makeResponse());
-		assertFalse(Util.waitUntil(DHTClient.MESSAGE_EXPIRATION_TIME_MS+50, ()->stub.equals(client.missed)));
+		assertFalse(Util.waitUntil(DHTClient.messageExpirationTimeMs+50, ()->stub.equals(client.missed)));
 	}
 	
 	@Test

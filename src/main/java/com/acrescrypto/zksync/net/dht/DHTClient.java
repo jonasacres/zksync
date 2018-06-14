@@ -33,13 +33,19 @@ public class DHTClient {
 	public final static int MAX_DATAGRAM_SIZE = 508; // 576 byte (guaranteed by RFC 791) - 60 byte IP header - 8 byte UDP header
 	
 	public final static int DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS = 500;
-	public static int LOOKUP_RESULT_MAX_WAIT_TIME_MS = DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS; // consider a lookup finished if we've received nothing in this many milliseconds
+	public static int lookupResultMaxWaitTimeMs = DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS; // consider a lookup finished if we've received nothing in this many milliseconds
 		
 	public final static int DEFAULT_MESSAGE_EXPIRATION_TIME_MS = 5000; // how long after first send attempt before we count a message as expired if no response received
-	public static int MESSAGE_EXPIRATION_TIME_MS = DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
+	public static int messageExpirationTimeMs = DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
 	
 	public final static int DEFAULT_MESSAGE_RETRY_TIME_MS = 2000;
-	public static int MESSAGE_RETRY_TIME_MS = DEFAULT_MESSAGE_RETRY_TIME_MS;
+	public static int messageRetryTimeMs = DEFAULT_MESSAGE_RETRY_TIME_MS;
+	
+	public final static int DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS = 9000;
+	public static int socketOpenFailCycleDelayMs = DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS;
+	
+	public final static int DEFAULT_SOCKET_CYCLE_DELAY_MS = 1000;
+	public static int socketCycleDelayMs = DEFAULT_SOCKET_CYCLE_DELAY_MS;
 	
 	public final static int KEY_INDEX_CLIENT_INFO = 0;
 	public final static int KEY_INDEX_ROUTING_TABLE = 1;
@@ -144,7 +150,7 @@ public class DHTClient {
 				updateStatus(STATUS_QUESTIONABLE);
 			}
 			
-			SnoozeThread progressMonitor = new SnoozeThread(LOOKUP_RESULT_MAX_WAIT_TIME_MS, true, ()->{
+			SnoozeThread progressMonitor = new SnoozeThread(lookupResultMaxWaitTimeMs, true, ()->{
 				if(callback != null) {
 					callback.receivedRecord(null);
 				}
@@ -208,6 +214,8 @@ public class DHTClient {
 		if(socket != null) {
 			socket.close();
 		}
+		
+		routingTable.close();
 	}
 	
 	public boolean isInitialized() {
@@ -239,6 +247,7 @@ public class DHTClient {
 	}
 	
 	protected void socketListener() {
+		Thread.currentThread().setName("DHTClient socketListener");
 		int lastPort = -1;
 		
 		while(!closed) {
@@ -263,12 +272,12 @@ public class DHTClient {
 					logger.warn("DHT socket listener thread encountered IOException", exc);
 				}
 				
-				Util.sleep(1000); // add in a delay to prevent a fail loop from gobbling CPU / spamming log
+				Util.sleep(socketCycleDelayMs); // add in a delay to prevent a fail loop from gobbling CPU / spamming log
 				try {
 					openSocket();
 				} catch (SocketException e) {
 					logger.error("DHT socket listener thread encountered IOException rebinding socket", exc);
-					Util.sleep(9000); // wait another 9 seconds if we know the socket is dead and the OS isn't giving it back
+					Util.sleep(socketOpenFailCycleDelayMs); // wait even longer if we know the socket is dead and the OS isn't giving it back
 				}
 			} catch(Exception exc) {
 				logger.error("DHT socket listener thread encountered exception", exc);
@@ -289,7 +298,8 @@ public class DHTClient {
 		pendingRequests.remove(stub);
 	}
 	
-	protected void sendDatagram(DatagramPacket packet) {
+	protected synchronized void sendDatagram(DatagramPacket packet) {
+		if(closed) return;
 		for(int i = 0; i < 2; i++) {
 			try {
 				socket.send(packet);

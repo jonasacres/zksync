@@ -771,6 +771,11 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testProcessesNewMessages() throws IOException {
+		/* TODO DHT: (itf) 718a3f4154a7b96d71c03bada00f66ebcabc88af 6/13/18 linux AllTests
+		 * 
+		 * Blacklisted address: localhost at TCPPeerSocketTest.beforeEach:315
+		 * NullPointerException at TCPPeerSocketTest.afterEach:323
+		 */
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();

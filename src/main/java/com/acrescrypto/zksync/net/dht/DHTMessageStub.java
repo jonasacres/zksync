@@ -21,7 +21,7 @@ public class DHTMessageStub {
 		this.cmd = msg.cmd;
 		this.msgId = msg.msgId;
 		this.packet = packet;
-		this.expirationMonitor = new SnoozeThread(DHTClient.MESSAGE_RETRY_TIME_MS, false, ()->retry());
+		this.expirationMonitor = new SnoozeThread(DHTClient.messageRetryTimeMs, false, ()->retry());
 		this.callback = msg.callback;
 	}
 	
@@ -44,7 +44,7 @@ public class DHTMessageStub {
 	
 	public void retry() {
 		peer.client.sendDatagram(packet);
-		expirationMonitor = new SnoozeThread(DHTClient.MESSAGE_EXPIRATION_TIME_MS - DHTClient.MESSAGE_RETRY_TIME_MS, false, ()->fail());
+		expirationMonitor = new SnoozeThread(DHTClient.messageExpirationTimeMs - DHTClient.messageRetryTimeMs, false, ()->fail());
 	}
 	
 	public void fail() {

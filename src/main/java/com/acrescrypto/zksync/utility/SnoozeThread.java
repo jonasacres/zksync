@@ -35,6 +35,7 @@ public class SnoozeThread {
 	}
 	
 	protected synchronized void snoozeThread() {
+		Thread.currentThread().setName("SnoozeThread " + delayMs + "ms");
 		while(!cancelled && System.currentTimeMillis() < expiration) {
 			try {
 				this.wait(expiration - System.currentTimeMillis());
