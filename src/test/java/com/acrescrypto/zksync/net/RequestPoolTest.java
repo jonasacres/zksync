@@ -94,6 +94,9 @@ public class RequestPoolTest {
 	@After
 	public void afterEach() {
 		pool.stop();
+		archive.close();
+		config.close();
+		conn.close();
 		RequestPool.pruneIntervalMs = RequestPool.DEFAULT_PRUNE_INTERVAL_MS;
 	}
 	
@@ -101,6 +104,9 @@ public class RequestPoolTest {
 	public static void afterAll() {
 		ZKFSTest.restoreArgon2Costs();
 	}
+	
+	@Test
+	public void testBlank() {}
 	
 	@Test
 	public void testAddPageTagShort() {
@@ -288,6 +294,7 @@ public class RequestPoolTest {
 		pool2.addRevision(0, revTag);
 		assertFalse(pool2.requestedRevisions.isEmpty());
 		assertTrue(Util.waitUntil(RequestPool.pruneIntervalMs+10, ()->pool2.hasRevision(0, revTag)));
+		pool2.stop();
 	}
 	
 	@Test

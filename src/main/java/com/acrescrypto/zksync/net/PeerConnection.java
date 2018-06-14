@@ -108,7 +108,9 @@ public class PeerConnection {
 		}
 		
 		try {
-			socket.close();
+			if(socket != null) {
+				socket.close();
+			}
 		} catch(IOException exc) {
 			logger.warn("Caught exception closing socket to address {}", socket.getAddress(), exc);
 		} finally {

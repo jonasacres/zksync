@@ -234,6 +234,10 @@ public class ZKArchiveConfig {
 		swarm.close();
 	}
 	
+	public boolean isClosed() {
+		return swarm.isClosed();
+	}
+	
 	public Key deriveKey(int root, int type, int index, byte[] tweak) {
 		if(root != ArchiveAccessor.KEY_ROOT_ARCHIVE) return accessor.deriveKey(root, type, index, tweak);
 		return archiveRoot.derive(((type & 0xFFFF) << 16) | (index & 0xFFFF), tweak);

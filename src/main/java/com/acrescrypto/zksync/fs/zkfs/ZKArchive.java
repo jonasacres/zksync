@@ -8,6 +8,7 @@ import java.util.LinkedList;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
@@ -60,21 +61,33 @@ public class ZKArchive {
 		config.close();
 	}
 	
+	public boolean isClosed() {
+		return config.isClosed();
+	}
+	
+	public void assertOpen() throws ClosedException {
+		if(isClosed()) throw new ClosedException();
+	}
+	
 	public ZKArchive cacheOnlyArchive() throws IOException {
+		assertOpen();
 		ZKArchive cacheOnly = new ZKArchive(config);
 		cacheOnly.storage = config.getCacheStorage();
 		return cacheOnly;
 	}
 	
 	public ZKFS openRevision(byte[] revision) throws IOException {
+		assertOpen();
 		return new ZKFS(new RefTag(this, revision));
 	}
 	
 	public ZKFS openRevision(RefTag revision) throws IOException {
+		assertOpen();
 		return openRevision(revision.getBytes());
 	}
 	
 	public ZKFS openBlank() throws IOException {
+		assertOpen();
 		return new ZKFS(RefTag.blank(this));
 	}
 	
@@ -105,6 +118,7 @@ public class ZKArchive {
 	
 	// TODO DHT: (refactor) deprecate; moved to config
 	public RevisionTree getRevisionTree() throws IOException {
+		assertOpen();
 		return config.getRevisionTree();
 	}
 	
@@ -125,13 +139,16 @@ public class ZKArchive {
 		return config;
 	}
 	
-	/** Test if we have a given page cached locally. */
-	public boolean hasPageTag(byte[] pageTag) {
+	/** Test if we have a given page cached locally. 
+	 * @throws ClosedException */
+	public boolean hasPageTag(byte[] pageTag) throws ClosedException {
+		assertOpen();
 		return config.getCacheStorage().exists(Page.pathForTag(pageTag));
 	}
 	
 	/** Test if we have every page of a given reftag cached locally. */
 	public boolean hasRefTag(RefTag refTag) throws IOException {
+		assertOpen();
 		if(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) return true;
 		try {
 			PageMerkle merkle = new PageMerkle(refTag.makeCacheOnly());
@@ -149,6 +166,7 @@ public class ZKArchive {
 	/** Test if we have every page of a given revision cached locally. 
 	 * @throws IOException */
 	public boolean hasRevision(RefTag revTag) throws IOException {
+		assertOpen();
 		if(!hasRefTag(revTag)) return false; // check if we have the inode table
 		ZKFS fs = openRevision(revTag);
 		for(int i = 0; i < fs.inodeTable.nextInodeId; i++) {

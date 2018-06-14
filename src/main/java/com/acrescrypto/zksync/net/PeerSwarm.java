@@ -73,6 +73,10 @@ public class PeerSwarm implements BlacklistCallback {
 		this.config.getAccessor().getMaster().getBlacklist().removeCallback(this);
 	}
 	
+	public boolean isClosed() {
+		return closed;
+	}
+	
 	public ZKArchiveConfig getConfig() {
 		return config;
 	}
