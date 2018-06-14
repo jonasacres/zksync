@@ -42,6 +42,18 @@ public abstract class PeerSocket {
 	
 	public void handshake() throws ProtocolViolationException, IOException { handshake(null); }
 
+	/** Immediately close socket and blacklist due to a clear protocol violation. 
+	 * @throws IOException */
+	public void violation() {
+		logger.warn("Logging violation for peer {}", getAddress());
+		try {
+			close();
+			swarm.config.getAccessor().getMaster().getBlacklist().add(getAddress(), Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
+		} catch (IOException exc) {
+			logger.warn("Caught exception closing socket to peer {}", getAddress(), exc);
+		}
+	}
+
 	public int getPort() {
 		return -1;
 	}
@@ -92,24 +104,21 @@ public abstract class PeerSocket {
 		return msg;
 	}
 	
-	/** Immediately close socket and blacklist due to a clear protocol violation. 
-	 * @throws IOException */
-	public void violation() {
-		logger.warn("Logging violation for peer {}", getAddress());
-		try {
-			close();
-			swarm.config.getAccessor().getMaster().getBlacklist().add(getAddress(), Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
-		} catch (IOException exc) {
-			logger.warn("Caught exception closing socket to peer {}", getAddress(), exc);
-		}
+	public synchronized void finishedMessage(PeerMessageIncoming message) throws IOException {
+		message.rxBuf.setEOF();
+		incoming.remove(message.msgId);
 	}
-	
-	protected synchronized int issueMessageId() {
-		return nextSendMessageId++;
+
+	public PeerMessageIncoming messageWithId(int msgId) {
+		return incoming.getOrDefault(msgId, null);
 	}
 
 	public boolean matchesAddress(String address) {
 		return getAddress().equals(address);
+	}
+
+	protected synchronized int issueMessageId() {
+		return nextSendMessageId++;
 	}
 
 	/** Handle some sort of I/O exception */
@@ -121,15 +130,6 @@ public abstract class PeerSocket {
 		} catch (IOException e) {
 			logger.warn("Caught exception closing socket to peer {}", getAddress(), exc);
 		}
-	}
-	
-	public synchronized void finishedMessage(PeerMessageIncoming message) throws IOException {
-		message.rxBuf.setEOF();
-		incoming.remove(message.msgId);
-	}
-	
-	public PeerMessageIncoming messageWithId(int msgId) {
-		return incoming.getOrDefault(msgId, null);
 	}
 	
 	@SuppressWarnings("unlikely-arg-type")

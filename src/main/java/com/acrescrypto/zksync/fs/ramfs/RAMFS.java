@@ -94,7 +94,7 @@ public class RAMFS extends FS {
 	}
 
 	@Override
-	public void mkdirp(String path) throws IOException {
+	public synchronized void mkdirp(String path) throws IOException {
 		if(!dirname(path).equals(path) && !exists(dirname(path))) {
 			mkdirp(dirname(path));
 		}

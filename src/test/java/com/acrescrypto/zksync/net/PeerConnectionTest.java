@@ -909,10 +909,6 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleRequestRefTagsToleratesNonexistentRefTags() throws IOException, ProtocolViolationException {
-		// TODO: Observed 27.090s time 5/27/18 on Linux, b3d12b3872276b15dd6e768a7876531131bafe0b
-		// Can't reproduce now, tried running individual test successively and in loop (5/28/18 Linux 421a8a9a20c0e918e8ff2b1e507c6da87a0c7c8d)
-		// Remove comment if can't be replicated in a month or two...
-		
 		ZKFS fs = archive.openBlank();
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REF_TAGS);
 		RefTag[] tags = new RefTag[16];

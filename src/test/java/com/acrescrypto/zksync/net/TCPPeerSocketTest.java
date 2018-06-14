@@ -307,6 +307,7 @@ public class TCPPeerSocketTest {
 	public void beforeEach() throws IOException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
 		TCPPeerSocket.maxHandshakeTimeMillis = 1000;
 		TCPPeerSocket.disableMakeThreads = true;
+		master.getBlacklist().clear();
 		swarm = new DummySwarm(archive.getConfig());
 		server = new DummyServer();
 		serverKey = master.getCrypto().makePrivateDHKey();
@@ -771,11 +772,6 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testProcessesNewMessages() throws IOException {
-		/* TODO DHT: (itf) 718a3f4154a7b96d71c03bada00f66ebcabc88af 6/13/18 linux AllTests
-		 * 
-		 * Blacklisted address: localhost at TCPPeerSocketTest.beforeEach:315
-		 * NullPointerException at TCPPeerSocketTest.afterEach:323
-		 */
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
@@ -818,7 +814,6 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testTriggersViolationIfLengthExceedsLimit() throws IOException {
-		// TODO DHT: (itf) When run from AllTests, this stalls. ca73c6f19dcf1c779e6512ecb2267ef81fcf6d69 6/13/18 linux
 		ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
 		buf.putInt(1234);
 		buf.putInt(socket.maxPayloadSize()+1);

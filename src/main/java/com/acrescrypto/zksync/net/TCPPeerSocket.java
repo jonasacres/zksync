@@ -79,31 +79,6 @@ public class TCPPeerSocket extends PeerSocket {
 		this.dhPrivateKey = crypto.makePrivateDHKey();
 	}
 	
-	protected void makeStreams() throws IOException {
-		this.out = socket.getOutputStream();
-		this.in = socket.getInputStream();
-	}
-	
-	protected void makeThreads() {
-		if(disableMakeThreads) return;
-		sendThread();
-		recvThread();
-	}
-	
-	protected void initKeys() {
-		if(isLocalRoleClient) {
-			localChainKey = makeChainRoot(0);
-			remoteChainKey = makeChainRoot(1);
-		} else {
-			localChainKey = makeChainRoot(1);
-			remoteChainKey = makeChainRoot(0);
-		}
-	}
-	
-	protected Key makeChainRoot(int index) {
-		return new Key(crypto, crypto.expand(sharedSecret, crypto.symKeyLength(), new byte[] { (byte) index }, "zksync".getBytes()));
-	}
-	
 	@Override
 	public synchronized void write(byte[] data, int offset, int length) throws IOException {
 		ByteBuffer buf = ByteBuffer.wrap(data, offset, length);
@@ -203,6 +178,31 @@ public class TCPPeerSocket extends PeerSocket {
 		}
 	}
 	
+	protected void initKeys() {
+		if(isLocalRoleClient) {
+			localChainKey = makeChainRoot(0);
+			remoteChainKey = makeChainRoot(1);
+		} else {
+			localChainKey = makeChainRoot(1);
+			remoteChainKey = makeChainRoot(0);
+		}
+	}
+
+	protected void makeStreams() throws IOException {
+		this.out = socket.getOutputStream();
+		this.in = socket.getInputStream();
+	}
+
+	protected void makeThreads() {
+		if(disableMakeThreads) return;
+		sendThread();
+		recvThread();
+	}
+
+	protected Key makeChainRoot(int index) {
+		return new Key(crypto, crypto.expand(sharedSecret, crypto.symKeyLength(), new byte[] { (byte) index }, "zksync".getBytes()));
+	}
+
 	protected void sendHandshake(PublicDHKey remotePubKey) throws IOException, ProtocolViolationException {
 		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, ()->peerType >= 0, ()->close());
 		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+crypto.hashLength()+4);

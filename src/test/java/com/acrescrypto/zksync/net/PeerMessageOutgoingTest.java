@@ -224,7 +224,6 @@ public class PeerMessageOutgoingTest {
 	
 	@Test
 	public void testSendOversizedMessages() throws IOException, TimeoutException {
-		// TODO: this test has been haunted by race conditions. remove this line if it's been a while and they've gone away. 5/17/18
 		byte[] oversized = writePRNG.getBytes(100*msg.maxPayloadBufferSize());
 		ByteBuffer readBuf = ByteBuffer.allocate(oversized.length);
 		
