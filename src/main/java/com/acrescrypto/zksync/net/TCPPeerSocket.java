@@ -35,7 +35,6 @@ public class TCPPeerSocket extends PeerSocket {
 	protected ByteBuffer remainingReadData;
 	protected TCPPeerAdvertisement ad;
 	protected int peerType = -1;
-	protected int remoteCount, localCount; // TODO DHT: (delete me)
 	
 	public TCPPeerSocket(PeerSwarm swarm, Socket socket, byte[] sharedSecret, int peerType) throws IOException {
 		this(swarm);

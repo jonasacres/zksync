@@ -53,6 +53,10 @@ public class RequestPool {
 		dirty = true;
 	}
 	
+	public void setPaused(boolean paused) {
+		this.paused = paused;
+	}
+	
 	public void receivedConfigInfo() {
 		setRequestingConfigInfo(false);
 		addDataRequests();

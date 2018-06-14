@@ -407,28 +407,35 @@ public class PageQueueTest {
 	
 	@Test
 	public void testAddPageTagSendsChunksInShuffledOrder() {
-		// ask for a page, see what order the chunks come in
-		LinkedList<Integer> seenChunks = new LinkedList<Integer>();
-		queue.addPageTag(0, pageTag);
-		while(queue.hasNextChunk()) {
-			seenChunks.add(queue.nextChunk().index); 
-		}
+		int[] matchCounts = new int[numChunks+1];
+		int numIterations = 10000;
 		
-		// force a reshuffle and try again, see how many places in the lineup match
-		Shuffler.purgeFixedOrderings();
-		queue.addPageTag(0, pageTag);
-		int chunkNum = 0, matches = 0;
-		while(queue.hasNextChunk()) {
-			if(queue.nextChunk().index == seenChunks.get(chunkNum++)) {
-				matches++;
+		for(int i = 0; i < numIterations; i++) {
+			// ask for a page, see what order the chunks come in
+			Shuffler.purgeFixedOrderings();
+			LinkedList<Integer> seenChunks = new LinkedList<Integer>();
+			queue.addPageTag(0, pageTag);
+			while(queue.hasNextChunk()) {
+				seenChunks.add(queue.nextChunk().index); 
 			}
+			
+			// force a reshuffle and try again, see how many places in the lineup match
+			Shuffler.purgeFixedOrderings();
+			queue.addPageTag(0, pageTag);
+			int chunkNum = 0, matches = 0;
+			while(queue.hasNextChunk()) {
+				if(queue.nextChunk().index == seenChunks.get(chunkNum++)) {
+					matches++;
+				}
+			}
+			
+			matchCounts[matches]++;
 		}
 		
-		// should be mostly different
-		/* TODO DHT: (itf) Need to do some math to figure out what an acceptable test should be here and on similar tests.
-		   This gets intermittent failures. Does that mean it's broken? Without statistical context, no idea.
-		   */
-		assertTrue(matches < numChunks/2);
+		// make sure the observed results roughly follow the expected probability distribution
+		assertTrue(matchCounts[0] + matchCounts[1] > 2*numIterations/3);
+		assertTrue(Math.abs(((double) matchCounts[1])/matchCounts[2] - 2.0) < 0.5);
+		assertTrue(Math.abs(((double) matchCounts[2])/matchCounts[3] - 3.0) < 1);
 	}
 	
 	@Test

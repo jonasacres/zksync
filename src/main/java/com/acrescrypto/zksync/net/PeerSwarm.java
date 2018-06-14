@@ -333,7 +333,10 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public void setPaused(boolean paused) {
-		// TODO DHT: (implement)
+		pool.setPaused(paused);
+		for(PeerConnection connection : connections) {
+			connection.setPaused(paused);
+		}
 	}
 	
 	public void requestConfigInfo() {

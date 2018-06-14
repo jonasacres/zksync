@@ -89,7 +89,7 @@ public class PeerSwarmTest {
 		DummySocket socket;
 		PeerAdvertisement seenAd;
 		int requestedPriority;
-		boolean requestedAll, requestedAllCancel;
+		boolean requestedAll, requestedAllCancel, requestedPause, requestedPauseValue;
 		long requestedTag;
 		RefTag requestedRefTag, requestedRevTag;
 		
@@ -133,6 +133,12 @@ public class PeerSwarmTest {
 				break;
 			}
 		}
+		
+		@Override public void setPaused(boolean paused) {
+			requestedPause = true;
+			requestedPauseValue = paused;
+		}
+		
 		@Override public void requestAll() { this.requestedAll = true; }
 		@Override public void requestAllCancel() { this.requestedAllCancel = true; }
 	}
@@ -638,5 +644,57 @@ public class PeerSwarmTest {
 		swarm.openedConnection(conn);
 		assertEquals(tag, conn.requestedRevTag);
 		assertEquals(11235813, conn.requestedPriority);
+	}
+	
+	@Test
+	public void testSetPausedTrueSendsPausedTrueToAllCurrentPeers() throws IOException {
+		DummyConnection[] conns = new DummyConnection[16];
+		
+		for(int i = 0; i < conns.length; i++) {
+			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
+			swarm.openedConnection(conns[i]);
+			conns[i].requestedPause = false; // clear pause request
+		}
+		
+		swarm.setPaused(true);
+		for(DummyConnection conn : conns) {
+			assertTrue(conn.requestedPause);
+			assertTrue(conn.requestedPauseValue);
+		}
+	}
+	
+	@Test
+	public void testSetPausedTrueSendsPausedTrueToAllNewPeers() throws IOException {
+		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
+		swarm.setPaused(true);
+		swarm.openedConnection(conn);
+		assertTrue(conn.requestedPause);
+		assertTrue(conn.requestedPauseValue);
+	}
+
+	@Test
+	public void testSetPausedFalseSendsPausedFalseToAllPeers() throws IOException {
+		DummyConnection[] conns = new DummyConnection[16];
+		
+		for(int i = 0; i < conns.length; i++) {
+			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
+			swarm.openedConnection(conns[i]);
+			conns[i].requestedPause = false; // clear pause request
+		}
+		
+		swarm.setPaused(false);
+		for(DummyConnection conn : conns) {
+			assertTrue(conn.requestedPause);
+			assertFalse(conn.requestedPauseValue);
+		}
+	}
+
+	@Test
+	public void testSetPausedFalseSendsPausedFalseToAllNewPeers() throws IOException {
+		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
+		swarm.setPaused(false);
+		swarm.openedConnection(conn);
+		assertTrue(conn.requestedPause);
+		assertFalse(conn.requestedPauseValue);
 	}
 }
