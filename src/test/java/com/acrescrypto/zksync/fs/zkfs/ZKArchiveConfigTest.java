@@ -35,8 +35,10 @@ public class ZKArchiveConfigTest {
 	
 	public void assertReadable(ZKArchiveConfig config) throws IOException {
 		ZKArchiveConfig clone = new ZKArchiveConfig(accessor, config.getArchiveId());
+		
 		assertEquals(config.getPageSize(), clone.getPageSize());
 		assertEquals(config.getDescription(), clone.getDescription());
+		
 		assertTrue(Arrays.equals(config.getArchiveId(), clone.getArchiveId()));
 		assertTrue(Arrays.equals(config.archiveRoot.getRaw(), clone.archiveRoot.getRaw()));
 		assertTrue(Arrays.equals(config.privKey.getBytes(), clone.privKey.getBytes()));
@@ -324,7 +326,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testGetPageSizeSeedOnly() {
-		assertEquals(-1, seedConfig.getPageSize());
+		assertEquals(PAGE_SIZE, seedConfig.getPageSize());
 	}
 	
 	@Test
@@ -504,4 +506,6 @@ public class ZKArchiveConfigTest {
 		ZKArchiveConfig config2 = new ZKArchiveConfig(accessor, TEST_DESCRIPTION, PAGE_SIZE);
 		assertFalse(Arrays.equals(config.tag(), config2.tag()));
 	}
+	
+	// TODO DHT: (test) Test verify
 }

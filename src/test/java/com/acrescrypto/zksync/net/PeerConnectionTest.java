@@ -1525,10 +1525,36 @@ public class PeerConnectionTest {
 			}
 		}
 	}
+	
+	@Test
+	public void testSendsTipsAtInitialization() throws IOException {
+		socket.close();
+		socket = new DummySocket(swarm);
+		PeerConnection conn2 = new PeerConnection(socket);
 
-	// TODO DHT: (test) Test sends tips at initialization
-	// TODO DHT: (test) Test sends tags at initialization
-	// TODO DHT: (test) Test request config info
+		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TIPS);
+		conn2.close();
+	}
+
+	@Test
+	public void testSendsTagsAtInitialization() throws IOException {
+		socket.close();
+		socket = new DummySocket(swarm);
+		PeerConnection conn2 = new PeerConnection(socket);
+
+		socket.messages.pollFirst();
+		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TAGS);
+		
+		conn2.close();
+	}
+	
+	@Test
+	public void testRequestConfigInfo() throws IOException {
+		conn.requestConfigInfo();
+		assertReceivedCmd(PeerConnection.CMD_REQUEST_CONFIG_INFO);
+		assertFinished();
+	}
+
 	// TODO DHT: (test) Test handle request config info sends page size if initialized
 	// TODO DHT: (test) Test handle request config info sends nothing if not initialized
 	// TODO DHT: (test) Test handle send config info sets page size if not initialized

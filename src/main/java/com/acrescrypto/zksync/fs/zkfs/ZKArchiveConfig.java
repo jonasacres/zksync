@@ -214,12 +214,15 @@ public class ZKArchiveConfig {
 			seedPlaintext.get(pubKeyBytes);
 			if(!Arrays.equals(configFileIv, calculateConfigFileIv(pubKeyBytes))) return false;
 			
+			long pageSizeLong = seedPlaintext.getLong();
+			if(pageSizeLong < 0 || pageSizeLong > Integer.MAX_VALUE);
+			
 			byte[] secureCiphertext = new byte[contents.remaining()-accessor.master.crypto.asymSignatureSize()];
 			contents.get(secureCiphertext);
 			byte[] fingerprint = accessor.master.crypto.hash(secureCiphertext);
 
 			PublicSigningKey allegedPubKey = accessor.master.crypto.makePublicSigningKey(pubKeyBytes);
-			if(!Arrays.equals(archiveId, calculateArchiveId(fingerprint, pubKeyBytes))) return false;
+			if(!Arrays.equals(archiveId, calculateArchiveId(fingerprint, pubKeyBytes, pageSizeLong))) return false;
 			
 			int sigSize = accessor.master.crypto.asymSignatureSize();
 			allegedPubKey.assertValid(contents.array(), 0, contents.capacity()-sigSize, contents.array(), contents.capacity()-sigSize, sigSize);
@@ -278,8 +281,9 @@ public class ZKArchiveConfig {
 	}
 	
 	protected byte[] serializeSeedPortion() {
-		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length);
+		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length + 8);
 		buf.put(pubKey.getBytes());
+		buf.putLong(pageSize);
 		assertState(!buf.hasRemaining());
 		return buf.array();
 	}
@@ -288,7 +292,7 @@ public class ZKArchiveConfig {
 		byte[] descString = description.getBytes();
 		int headerSize = 4; // magic
 		int sectionHeaderSize = 2 + 4; // section_type + length
-		int archiveInfoSize = 8 + archiveRoot.getRaw().length + descString.length; // pageSize + textRoot + authRoot + description
+		int archiveInfoSize = archiveRoot.getRaw().length + descString.length; // textRoot + authRoot + description
 		
 		assertState(descString.length <= Short.MAX_VALUE);
 		
@@ -296,7 +300,6 @@ public class ZKArchiveConfig {
 		buf.putInt(CONFIG_MAGIC);
 		buf.putShort((short) CONFIG_SECTION_ARCHIVE_INFO);
 		buf.putInt(archiveInfoSize);
-		buf.putLong(pageSize);
 		buf.put(archiveRoot.getRaw());
 		buf.put(descString);
 		
@@ -312,8 +315,12 @@ public class ZKArchiveConfig {
 	protected void deserializeSeedPortion(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		byte[] pubKeyBytes = new byte[accessor.master.crypto.asymPublicSigningKeySize()];
-		assertState(buf.remaining() == pubKeyBytes.length);
+		assertState(buf.remaining() == pubKeyBytes.length + 8);
 		buf.get(pubKeyBytes);
+		
+		long pageSizeTemp = buf.getLong();
+		assertState(0 < pageSizeTemp && pageSizeTemp <= Integer.MAX_VALUE);
+		pageSize = (int) pageSizeTemp; // supporting long (2GB+) page sizes is not easy right now
 		
 		try {
 			this.pubKey = accessor.master.crypto.makePublicSigningKey(pubKeyBytes);
@@ -340,16 +347,12 @@ public class ZKArchiveConfig {
 				continue;
 			}
 			
-			assertState(length >= 8 + accessor.master.crypto.symKeyLength());
-			
-			long longPageSize = buf.getLong();
-			assertState(longPageSize > 0 && longPageSize <= Integer.MAX_VALUE);
-			this.pageSize = (int) longPageSize; // supporting long (2GB+) page sizes is not easy right now
+			assertState(length >= accessor.master.crypto.symKeyLength());
 			
 			byte[] archiveRootRaw = new byte[accessor.master.crypto.symKeyLength()];
 			buf.get(archiveRootRaw);
 			this.archiveRoot = new Key(accessor.master.crypto, archiveRootRaw);
-			byte[] descriptionRaw = new byte[length - 8 - accessor.master.crypto.symKeyLength()];
+			byte[] descriptionRaw = new byte[length - accessor.master.crypto.symKeyLength()];
 			buf.get(descriptionRaw);
 			this.description = new String(descriptionRaw);
 			break;
@@ -372,13 +375,14 @@ public class ZKArchiveConfig {
 	}
 	
 	protected byte[] calculateArchiveId(byte[] archiveFingerprint) {
-		return calculateArchiveId(archiveFingerprint, pubKey.getBytes());
+		return calculateArchiveId(archiveFingerprint, pubKey.getBytes(), pageSize);
 	}
 	
-	protected byte[] calculateArchiveId(byte[] archiveFingerprint, byte[] pubKeyRaw) {
-		ByteBuffer keyMaterialBuf = ByteBuffer.allocate(archiveFingerprint.length + pubKeyRaw.length);
+	protected byte[] calculateArchiveId(byte[] archiveFingerprint, byte[] pubKeyRaw, long pageSizeLong) {
+		ByteBuffer keyMaterialBuf = ByteBuffer.allocate(archiveFingerprint.length + pubKeyRaw.length + 8);
 		keyMaterialBuf.put(archiveFingerprint);
 		keyMaterialBuf.put(pubKeyRaw);
+		keyMaterialBuf.putLong(pageSizeLong);
 		assertState(!keyMaterialBuf.hasRemaining());
 		byte[] id = accessor.seedRoot.authenticate(keyMaterialBuf.array());
 		return id;
