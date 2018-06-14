@@ -207,7 +207,7 @@ public class ZKArchiveConfig {
 			configFileIv = new byte[accessor.master.crypto.symIvLength()];
 			contents.get(configFileIv);
 
-			byte[] seedCiphertext = new byte[256 + accessor.master.crypto.symTagLength() + 4];
+			byte[] seedCiphertext = new byte[getCrypto().symPaddedCiphertextSize(seedPortionPadSize())];
 			contents.get(seedCiphertext);
 			byte[] seedPortion = accessor.configFileSeedKey.decrypt(configFileIv, seedCiphertext);
 			

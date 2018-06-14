@@ -494,6 +494,19 @@ public class ZKArchiveConfigTest {
 	}
 	
 	@Test
+	public void testValidatePageReturnsTrueForValidConfigFile() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		assertTrue(config.validatePage(config.tag(), configData));
+	}
+	
+	@Test
+	public void testValidatePageReturnsFalseForTamperedConfigFile() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		configData[1209] ^= 0x40;
+		assertFalse(config.validatePage(config.tag(), configData));
+	}
+	
+	@Test
 	public void testSerializedPageMatchesExpectedLength() throws IOException {
 		config.write();
 		long expectedSize = config.getSerializedPageSize();
@@ -507,5 +520,83 @@ public class ZKArchiveConfigTest {
 		assertFalse(Arrays.equals(config.tag(), config2.tag()));
 	}
 	
-	// TODO DHT: (test) Test verify
+	@Test
+	public void testVerifyReturnsTrueIfValidFileSupplied() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		assertTrue(config.verify(configData));
+	}
+	
+	@Test
+	public void testVerifyReturnsFalseIfVersionPortionTampered() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		configData[0] ^= 0x01;
+		assertFalse(config.verify(configData));
+	}
+	
+	@Test
+	public void testVerifyReturnsFalseIfIvPortionTampered() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		int offset = master.crypto.hashLength();
+		configData[offset] ^= 0x01;
+		assertFalse(config.verify(configData));
+	}
+	
+	@Test
+	public void testVerifyReturnsFalseIfSeedPortionTampered() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		int offset = master.crypto.hashLength();
+		offset += master.crypto.symIvLength();
+		configData[offset] ^= 0x01;
+		assertFalse(config.verify(configData));
+	}
+	
+	@Test
+	public void testVerifyReturnsFalseIfSeedPortionForgedWithFakePubKey() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		ByteBuffer configBuf = ByteBuffer.wrap(configData);
+		
+		byte[] forgedPubKey = config.getPubKey().getBytes().clone();
+		forgedPubKey[4] ^= 0x20;
+		ByteBuffer plaintext = ByteBuffer.allocate(master.crypto.asymPublicSigningKeySize() + 8);
+		plaintext.put(forgedPubKey);
+		plaintext.putLong(config.pageSize);
+		
+		configBuf.position(master.crypto.hashLength() + master.crypto.symIvLength());
+		configBuf.put(config.accessor.configFileSeedKey.encrypt(config.configFileIv, plaintext.array(), config.seedPortionPadSize()));
+		
+		assertFalse(config.verify(configData));
+	}
+
+	@Test
+	public void testVerifyReturnsFalseIfSeedPortionForgedWithFakePageSize() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		ByteBuffer configBuf = ByteBuffer.wrap(configData);
+		
+		ByteBuffer plaintext = ByteBuffer.allocate(master.crypto.asymPublicSigningKeySize() + 8);
+		plaintext.put(config.getPubKey().getBytes());
+		plaintext.putLong(config.pageSize+1);
+		
+		configBuf.position(master.crypto.hashLength() + master.crypto.symIvLength());
+		configBuf.put(config.accessor.configFileSeedKey.encrypt(config.configFileIv, plaintext.array(), config.seedPortionPadSize()));
+		
+		assertFalse(config.verify(configData));
+	}
+	
+	@Test
+	public void testVerifyReturnsFalseIfSecurePortionTampered() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		int offset = master.crypto.hashLength();
+		offset += master.crypto.symIvLength();
+		offset += master.crypto.symPaddedCiphertextSize(config.seedPortionPadSize());
+		configData[offset] ^= 0x01;
+		assertFalse(config.verify(configData));
+	}
+	
+	@Test
+	public void testVerifyReturnsFalseIfSignatureTampered() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		int offset = configData.length-1;
+		configData[offset] ^= 0x01;
+		assertFalse(config.verify(configData));
+	}
 }
