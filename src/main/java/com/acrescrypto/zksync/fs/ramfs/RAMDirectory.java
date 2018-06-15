@@ -37,7 +37,7 @@ public class RAMDirectory implements Directory {
 			matches.add("..");
 		}
 		
-		synchronized(fs) {
+		synchronized(fs.inodesByPath) {
 			Set<String> keys = new HashSet<>(fs.inodesByPath.keySet());
 			for(String path : keys) {
 				if(path.equals("/")) continue;
@@ -77,7 +77,7 @@ public class RAMDirectory implements Directory {
 			matches.add("..");
 		}
 		
-		synchronized(fs) {
+		synchronized(fs.inodesByPath) {
 			Set<String> keys = new HashSet<>(fs.inodesByPath.keySet());
 			for(String path : keys) {
 				if(!path.startsWith(prefix) || path.equals(prefix)) continue;

@@ -249,19 +249,25 @@ public class RAMFS extends FS {
 	
 	protected Inode llookup(String path) throws ENOENTException {
 		if(path.equals("")) path = "/";
-		Inode inode = inodesByPath.getOrDefault(unscopedPath(path), null);
-		if(inode == null) throw new ENOENTException(path);
-		return inode;
+		synchronized(inodesByPath) {
+			Inode inode = inodesByPath.getOrDefault(unscopedPath(path), null);
+			if(inode == null) throw new ENOENTException(path);
+			return inode;
+		}
 	}
 	
 	protected synchronized void setInode(String path, Inode inode) throws ENOENTException {
-		inodesByPath.put(unscopedPath(path), inode);
+		synchronized(inodesByPath) {
+			inodesByPath.put(unscopedPath(path), inode);
+		}
 	}
 	
-	protected synchronized void clearInode(String path) {
+	protected void clearInode(String path) {
 		try {
 			if(unscopedPath(path).equals("/")) return;
-			inodesByPath.remove(unscopedPath(path));
+			synchronized(inodesByPath) {
+				inodesByPath.remove(unscopedPath(path));
+			}
 		} catch(ENOENTException exc) {}
 	}
 	

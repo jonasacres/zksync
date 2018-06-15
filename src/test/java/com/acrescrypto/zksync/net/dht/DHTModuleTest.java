@@ -89,6 +89,7 @@ public class DHTModuleTest {
 	
 	@AfterClass
 	public static void afterAll() {
+		Util.waitUntil(1000, ()->TestUtils.isTidy()); // add a ton of grace time to wrap up threads on this test
 		TestUtils.assertTidy();
 		TCPPeerAdvertisement.disableReachabilityTest = false;
 		DHTRoutingTable.freshenIntervalMs = DHTRoutingTable.DEFAULT_FRESHEN_INTERVAL_MS;
