@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -65,7 +66,7 @@ public class DHTModuleTest {
 	@BeforeClass
 	public static void beforeAll() {
 		TCPPeerAdvertisement.disableReachabilityTest = true;
-		DHTRoutingTable.freshenIntervalMs = 400;
+		// DHTRoutingTable.freshenIntervalMs = 400;
 		DHTClient.messageExpirationTimeMs = 100;
 		DHTClient.messageRetryTimeMs = 50;
 		DHTClient.socketCycleDelayMs = 50;
@@ -79,6 +80,11 @@ public class DHTModuleTest {
 		blacklist = new Blacklist(new RAMFS(), "blacklist", new Key(crypto));
 		root = new DHTClient(new Key(crypto), blacklist);
 		root.listen(null, 0);
+	}
+	
+	@After
+	public void afterEach() {
+		root.close();
 	}
 	
 	@AfterClass
@@ -95,7 +101,8 @@ public class DHTModuleTest {
 	
 	@Test
 	public void testPeerDiscovery() throws IOException, InvalidBlacklistException {
-		ArrayList<DHTClient> clients = makeClients(1024);
+		// TODO DHT: (optimize) Figure out why we get so slow on this. Scale up to larger test networks.
+		ArrayList<DHTClient> clients = makeClients(128);
 		DHTID id = new DHTID(crypto.rng(crypto.hashLength()));
 		DHTRecord ad = makeBogusAd(0);
 		
