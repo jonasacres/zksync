@@ -6,10 +6,13 @@ import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
 
+import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
@@ -22,7 +25,7 @@ public class DHTRecordTest {
 	}
 	
 	static CryptoSupport crypto;
-	static DummyClient client;
+	DummyClient client;
 	
 	@BeforeClass
 	public static void beforeAll() {
@@ -32,6 +35,15 @@ public class DHTRecordTest {
 	@Before
 	public void beforeEach() {
 		client = new DummyClient();
+	}
+	
+	@After
+	public void afterEach() {
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 	
 	@Test

@@ -53,11 +53,6 @@ public class PeerConnection {
 		private static final long serialVersionUID = 1L;
 	}
 	
-	/** A message can't be sent to the remote peer because we are in the wrong role (client vs. server) */
-	public class PeerRoleException extends Exception {
-		private static final long serialVersionUID = 1L;
-	}
-
 	protected PeerSocket socket;
 	protected HashSet<Long> announcedTags = new HashSet<Long>();
 	protected boolean remotePaused, localPaused;
@@ -580,10 +575,6 @@ public class PeerConnection {
 
 	protected void assertPeerCapability(int capability) throws PeerCapabilityException {
 		if(socket.getPeerType() < capability) throw new PeerCapabilityException();
-	}
-
-	protected void assertClientStatus(boolean mustBeClient) throws PeerRoleException {
-		if(this.socket.isLocalRoleClient() != mustBeClient) throw new PeerRoleException();
 	}
 
 	protected void assertState(boolean state) throws ProtocolViolationException {

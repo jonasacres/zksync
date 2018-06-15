@@ -49,7 +49,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class DHTClientTest {
 	final static int MAX_TEST_TIME_MS = 2000;
-	final static int MAX_MSG_WAIT_TIME_MS = 200;
+	final static int MAX_MSG_WAIT_TIME_MS = 500;
 	
 	class RemotePeer implements AutoCloseable {
 		DHTClient listenClient;
@@ -511,6 +511,8 @@ public class DHTClientTest {
 				peerRecords.add(makeBogusAd(recordsPerPeer*i+j));
 			}
 
+			// TODO DHT: (itf) Failed in coverage test 568d93 linux 5/14/18 DHTClientTest.java:138, AssertionError -- if(strict) assertFalse(incoming.isEmpty());
+			// possibly resolved by setting MAX_MSG_WAIT_TIME_MS to 500, up from 200
 			DHTMessage getRecordsReq = r.receivePacket(DHTMessage.CMD_GET_RECORDS);
 			getRecordsReq.makeResponse(peerRecords).send();
 		}

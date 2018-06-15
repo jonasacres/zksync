@@ -342,12 +342,5 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void requestConfigInfo() {
-		pool.setRequestingConfigInfo(true);
-		for(PeerConnection connection : connections) {
-			connection.requestConfigInfo();
-		}
-	}
-	
 	// need a way to let consumer queue up file requests, but delay sending them until we have page info...
 }

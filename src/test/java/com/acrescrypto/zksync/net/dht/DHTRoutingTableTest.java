@@ -12,9 +12,11 @@ import java.util.Collection;
 import java.util.LinkedList;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
@@ -70,6 +72,11 @@ public class DHTRoutingTableTest {
 		Util.setCurrentTimeNanos(-1);
 		DHTRoutingTable.freshenIntervalMs = DHTRoutingTable.DEFAULT_FRESHEN_INTERVAL_MS;
 		table.close();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 	
 	@Test

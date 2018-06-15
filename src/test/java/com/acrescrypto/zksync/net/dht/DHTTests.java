@@ -8,12 +8,14 @@ import org.junit.runners.Suite;
 	DHTIDTest.class,
 	DHTBucketTest.class,
 	DHTPeerTest.class,
+	DHTRoutingTableTest.class,
 	DHTAdvertisementRecordTest.class,
 	DHTRecordStoreTest.class,
 	DHTMessageTest.class,
 	DHTMessageStubTest.class,
 	DHTSearchOperationTest.class,
-	DHTClientTest.class
+	DHTClientTest.class,
+	DHTRecordTest.class
 })
 
 public class DHTTests {

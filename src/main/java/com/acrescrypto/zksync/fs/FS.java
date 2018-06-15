@@ -148,7 +148,11 @@ public abstract class FS {
 			if(exists(path)) unlink(path);
 			link(safety, path);
 		} finally {
-			unlink(safety);
+			try {
+				unlink(safety);
+			} catch(IOException exc) {
+				// permissions or directory contents may have changed underneath us
+			}
 		}
 		squash(path);
 	}

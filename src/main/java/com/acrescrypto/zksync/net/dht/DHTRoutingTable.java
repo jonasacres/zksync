@@ -56,6 +56,7 @@ public class DHTRoutingTable {
 	}
 	
 	public synchronized void freshen() {
+		if(closed) return;
 		for(DHTBucket bucket : buckets) {
 			bucket.prune();
 			if(!bucket.needsFreshening()) continue;
