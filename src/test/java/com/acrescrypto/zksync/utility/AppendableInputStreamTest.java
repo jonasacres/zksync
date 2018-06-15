@@ -6,9 +6,11 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 
 public class AppendableInputStreamTest {
@@ -19,6 +21,11 @@ public class AppendableInputStreamTest {
 		byte[] read = new byte[expected.length];
 		stream.read(read);
 		assertTrue(Arrays.equals(expected, read));
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 	
 	@Before

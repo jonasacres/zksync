@@ -12,6 +12,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PRNG;
@@ -64,6 +65,12 @@ public class DHTModuleTest {
 	@BeforeClass
 	public static void beforeAll() {
 		TCPPeerAdvertisement.disableReachabilityTest = true;
+		DHTRoutingTable.freshenIntervalMs = 400;
+		DHTClient.messageExpirationTimeMs = 100;
+		DHTClient.messageRetryTimeMs = 50;
+		DHTClient.socketCycleDelayMs = 50;
+		DHTClient.socketOpenFailCycleDelayMs = 100;
+		DHTClient.lookupResultMaxWaitTimeMs = 50;
 	}
 	
 	@Before
@@ -76,9 +83,16 @@ public class DHTModuleTest {
 	
 	@AfterClass
 	public static void afterAll() {
+		TestUtils.assertTidy();
 		TCPPeerAdvertisement.disableReachabilityTest = false;
+		DHTRoutingTable.freshenIntervalMs = DHTRoutingTable.DEFAULT_FRESHEN_INTERVAL_MS;
+		DHTClient.messageExpirationTimeMs = DHTClient.DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
+		DHTClient.messageRetryTimeMs = DHTClient.DEFAULT_MESSAGE_RETRY_TIME_MS;
+		DHTClient.socketCycleDelayMs = DHTClient.DEFAULT_SOCKET_CYCLE_DELAY_MS;
+		DHTClient.socketOpenFailCycleDelayMs = DHTClient.DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS;
+		DHTClient.lookupResultMaxWaitTimeMs = DHTClient.DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS;
 	}
-
+	
 	@Test
 	public void testPeerDiscovery() throws IOException, InvalidBlacklistException {
 		ArrayList<DHTClient> clients = makeClients(1024);
@@ -105,5 +119,9 @@ public class DHTModuleTest {
 		
 		assertTrue(Util.waitUntil(100, ()->finished.booleanValue()));
 		assertTrue(found.toBoolean());
+		
+		for(DHTClient client : clients) {
+			client.close();
+		}
 	}
 }

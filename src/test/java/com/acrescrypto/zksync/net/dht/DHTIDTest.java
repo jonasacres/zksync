@@ -6,9 +6,11 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
 
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -18,6 +20,11 @@ public class DHTIDTest {
 	@BeforeClass
 	public static void beforeAll() {
 		crypto = new CryptoSupport();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 	
 	@Test

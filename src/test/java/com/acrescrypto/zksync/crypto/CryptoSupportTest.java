@@ -10,6 +10,7 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -23,6 +24,7 @@ public class CryptoSupportTest  {
 	
 	@AfterClass
 	public static void afterClass() {
+		TestUtils.assertTidy();
 	}
 	
 	@Test

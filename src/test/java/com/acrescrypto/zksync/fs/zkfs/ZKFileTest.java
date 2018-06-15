@@ -9,11 +9,13 @@ import java.security.Security;
 import java.util.Arrays;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.FileTestBase;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -33,9 +35,17 @@ public class ZKFileTest extends FileTestBase {
 		scratch = zkscratch = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 	}
 	
+	@After
+	public void afterEach() throws IOException {
+		zkscratch.archive.close();
+		zkscratch.close();
+		master.close();
+	}
+	
 	@AfterClass
 	public static void afterClass() throws IOException {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 
 	@Test

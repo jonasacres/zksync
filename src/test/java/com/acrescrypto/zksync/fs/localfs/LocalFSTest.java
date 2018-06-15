@@ -8,6 +8,7 @@ import org.junit.*;
 
 import org.apache.commons.io.FileUtils;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.utility.Util;
@@ -29,6 +30,7 @@ public class LocalFSTest extends FSTestBase {
 	@AfterClass
 	public static void afterClass() {
 		deleteFiles();
+		TestUtils.assertTidy();
 	}
 
 	protected static void deleteFiles() {

@@ -15,6 +15,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.FS;
@@ -176,6 +177,7 @@ public class ChunkAccumulatorTest {
 		archive.close();
 		master.close();
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Test

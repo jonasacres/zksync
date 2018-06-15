@@ -10,10 +10,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
@@ -83,6 +85,11 @@ public class DHTRecordStoreTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 	
 	@Before

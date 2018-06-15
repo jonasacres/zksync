@@ -4,28 +4,40 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.security.Security;
 import java.util.Arrays;
 
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
+
+import com.acrescrypto.zksync.TestUtils;
 
 public class StoredAccessRecordTest {
 	ZKMaster master;
 	ZKArchive archive;
 	
-	@Before
-	public void beforeClass() throws IOException {
+	@BeforeClass
+	public static void beforeAll() {
 		ZKFSTest.cheapenArgon2Costs();
-		Security.addProvider(new BouncyCastleProvider());
+	}
+	
+	@Before
+	public void beforeEach() throws IOException {
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 	}
 	
 	@After
-	public void afterClass() throws IOException {
+	public void afterEach() {
+		archive.close();
+		master.close();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 		ZKFSTest.restoreArgon2Costs();
 	}
 	
@@ -37,6 +49,7 @@ public class StoredAccessRecordTest {
 		assertTrue(Arrays.equals(archive.getConfig().getArchiveId(), deserialized.archive.getConfig().getArchiveId()));
 		assertTrue(Arrays.equals(archive.getConfig().getAccessor().passphraseRoot.getRaw(), deserialized.archive.getConfig().getAccessor().passphraseRoot.getRaw()));
 		assertTrue(Arrays.equals(archive.getConfig().getAccessor().seedRoot.getRaw(), deserialized.archive.getConfig().getAccessor().seedRoot.getRaw()));
+		deserialized.close();
 	}
 	
 	@Test
@@ -49,6 +62,7 @@ public class StoredAccessRecordTest {
 		assertTrue(Arrays.equals(archive.getConfig().getAccessor().seedRoot.getRaw(), deserialized.archive.getConfig().getAccessor().seedRoot.getRaw()));
 		assertEquals(archive.getConfig().getAccessor().passphraseRoot, null);
 		assertEquals(deserialized.archive.getConfig().getAccessor().passphraseRoot, null);
+		deserialized.close();
 	}
 	
 	@Test
@@ -60,5 +74,6 @@ public class StoredAccessRecordTest {
 		assertTrue(Arrays.equals(archive.getConfig().getAccessor().seedRoot.getRaw(), deserialized.archive.getConfig().getAccessor().seedRoot.getRaw()));
 		assertNotEquals(archive.getConfig().getAccessor().passphraseRoot, null);
 		assertEquals(deserialized.archive.getConfig().getAccessor().passphraseRoot, null);
+		deserialized.close();
 	}
 }

@@ -19,6 +19,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
@@ -187,6 +188,7 @@ public class PeerSwarmTest {
 		archive.close();
 		master.close();
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Test

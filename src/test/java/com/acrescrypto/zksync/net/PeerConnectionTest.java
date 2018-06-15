@@ -25,6 +25,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
@@ -275,6 +276,7 @@ public class PeerConnectionTest {
 	@AfterClass
 	public static void afterAll() {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Test

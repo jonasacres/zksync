@@ -6,11 +6,13 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.File;
 
 public class PageMerkleTest {
@@ -34,9 +36,18 @@ public class PageMerkleTest {
 		merkle = file.merkle;
 	}
 	
+	@After
+	public void afterEach() throws IOException {
+		file.close();
+		fs.close();
+		archive.close();
+		master.close();
+	}
+	
 	@AfterClass
 	public static void afterAll() {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Test

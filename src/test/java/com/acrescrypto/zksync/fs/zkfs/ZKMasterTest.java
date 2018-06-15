@@ -11,11 +11,13 @@ import java.io.IOException;
 import java.net.Socket;
 import java.util.Arrays;
 
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.utility.Util;
@@ -33,9 +35,15 @@ public class ZKMasterTest {
 		master = ZKMaster.openBlankTestVolume();
 	}
 	
+	@After
+	public void afterEach() throws IOException {
+		master.close();
+	}
+	
 	@AfterClass
 	public static void afterAll() {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Test
@@ -79,6 +87,7 @@ public class ZKMasterTest {
 		int size = 12345;
 		ZKArchive archive = master.createArchive(size, "");
 		assertEquals(size, archive.getConfig().getPageSize());
+		archive.close();
 	}
 	
 	@Test
@@ -86,6 +95,7 @@ public class ZKMasterTest {
 		String desc = "happy archive";
 		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, desc);
 		assertEquals(desc, archive.getConfig().getDescription());
+		archive.close();
 	}
 	
 	@Test
@@ -106,6 +116,11 @@ public class ZKMasterTest {
 		assertFalse(fs0.exists("test1"));
 		assertFalse(fs1.exists("test0"));
 		assertTrue(fs1.exists("test1"));
+		
+		fs0.close();
+		fs1.close();
+		arch0.close();
+		arch1.close();
 	}
 	
 	@Test
@@ -114,6 +129,7 @@ public class ZKMasterTest {
 		scratch.write("test", "some data".getBytes());
 		assertFalse(master.storage.exists("test"));
 		assertTrue(master.scratchStorage().exists("test"));
+		scratch.close();
 	}
 	
 	@Test
@@ -129,6 +145,8 @@ public class ZKMasterTest {
 		Key seedKey = new Key(master.crypto);
 		master.makeAccessorForRoot(seedKey, true);
 		assertTrue(Arrays.equals(seedKey.getRaw(), master.accessorForRoot(seedKey).seedRoot.getRaw()));
+		
+		archive.close();
 	}
 	
 	@Test
@@ -157,12 +175,15 @@ public class ZKMasterTest {
 		assertFalse(master.storageFsForArchiveId(archive.config.archiveId).exists("test"));
 		assertFalse(master.scratchStorage().exists("test"));
 		assertFalse(archive.storage.exists("test"));
+		
+		archive.close();
 	}
 	
 	@Test
 	public void testAllArchivesReturnsListOfAllArchives() throws IOException {
 		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		assertTrue(master.allArchives.contains(archive));
+		archive.close();
 	}
 	
 	@Test
@@ -173,6 +194,9 @@ public class ZKMasterTest {
 		assertFalse(master.allArchives.contains(archive));
 		master.discoveredArchive(archive);
 		assertTrue(master.allArchives.contains(archive));
+		
+		masterPrime.close();
+		archive.close();
 	}
 	
 	@Test
@@ -194,6 +218,10 @@ public class ZKMasterTest {
 		master.discoveredArchive(archive);
 		assertTrue(master.allArchives.contains(archive));
 		assertFalse(master.allArchives.contains(roArchive));
+		
+		roArchive.close();
+		archive.close();
+		masterPrime.close();
 	}
 	
 	@Test
@@ -208,6 +236,9 @@ public class ZKMasterTest {
 		
 		master.discoveredArchive(archive);
 		assertEquals(1, master.allArchives.size());
+		
+		archive.close();
+		masterPrime.close();
 	}
 	
 	@Test
@@ -216,17 +247,22 @@ public class ZKMasterTest {
 		assertTrue(master.allArchives().contains(archive));
 		master.removedArchive(archive);
 		assertFalse(master.allArchives().contains(archive));
+		archive.close();
 	}
 	
 	@Test
 	public void testRemovedArchiveToleratesArchivesNotInList() throws IOException {
 		ZKMaster masterPrime = ZKMaster.openBlankTestVolume();
 		ZKArchive archivePrime = masterPrime.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
-		master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
+		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 
 		assertEquals(1, master.allArchives().size());
 		master.removedArchive(archivePrime);
 		assertEquals(1, master.allArchives().size());
+		
+		archivePrime.close();
+		masterPrime.close();
+		archive.close();
 	}
 	
 	@Test

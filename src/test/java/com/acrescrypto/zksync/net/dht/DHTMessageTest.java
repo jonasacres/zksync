@@ -15,9 +15,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
@@ -164,6 +166,11 @@ public class DHTMessageTest {
 	@After
 	public void afterEach() {
 		Util.setCurrentTimeNanos(-1);
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 	
 	@Test

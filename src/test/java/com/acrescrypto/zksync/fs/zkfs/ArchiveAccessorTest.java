@@ -17,6 +17,7 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveAccessorDiscoveryCallback;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveDiscovery;
@@ -44,6 +45,7 @@ public class ArchiveAccessorTest {
 	@AfterClass
 	public static void afterAll() throws IOException {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Test
@@ -190,6 +192,8 @@ public class ArchiveAccessorTest {
 		});
 		accessor.discoveredArchive(archive);
 		assertTrue(holder.passed);
+		
+		archive.close();
 	}
 	
 	@Test
@@ -206,6 +210,8 @@ public class ArchiveAccessorTest {
 		accessor.addCallback(callback);
 		accessor.removeCallback(callback);
 		accessor.discoveredArchive(archive);
+		
+		archive.close();
 	}
 	
 	@Test

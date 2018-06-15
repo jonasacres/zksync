@@ -23,6 +23,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
@@ -305,7 +306,7 @@ public class TCPPeerSocketTest {
 	
 	@Before
 	public void beforeEach() throws IOException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
-		TCPPeerSocket.maxHandshakeTimeMillis = 1000;
+		TCPPeerSocket.maxHandshakeTimeMillis = 400;
 		TCPPeerSocket.disableMakeThreads = true;
 		master.getBlacklist().clear();
 		swarm = new DummySwarm(archive.getConfig());
@@ -330,6 +331,7 @@ public class TCPPeerSocketTest {
 		master.close();
 		TCPPeerSocket.disableMakeThreads = false;
 		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
+		TestUtils.assertTidy();
 	}
 
 	@Test

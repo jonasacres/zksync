@@ -12,10 +12,12 @@ import java.util.Arrays;
 import java.util.HashMap;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
@@ -236,8 +238,13 @@ public class BackedFSTest extends FSTestBase {
 	}
 	
 	@After
-	public void afterAll() throws IOException {
+	public void afterEach() throws IOException {
 		if(cacheFS.exists("/")) cacheFS.rmrf("/");
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 	
 	@Test

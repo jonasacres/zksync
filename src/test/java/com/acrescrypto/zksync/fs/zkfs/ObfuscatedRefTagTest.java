@@ -10,11 +10,13 @@ import java.security.Security;
 import java.util.Arrays;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 
 public class ObfuscatedRefTagTest {
@@ -31,6 +33,7 @@ public class ObfuscatedRefTagTest {
 	@AfterClass
 	public static void afterClass() {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 
 	@Before
@@ -41,6 +44,13 @@ public class ObfuscatedRefTagTest {
 		fs.write("test", "test".getBytes());
 		refTag = fs.commit();
 		obfTag = new ObfuscatedRefTag(refTag);
+		fs.close();
+		archive.close();
+	}
+	
+	@After
+	public void afterEach() {
+		master.close();
 	}
 	
 	@Test

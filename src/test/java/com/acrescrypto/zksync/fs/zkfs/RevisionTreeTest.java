@@ -9,6 +9,8 @@ import java.util.HashSet;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
+import com.acrescrypto.zksync.TestUtils;
+
 public class RevisionTreeTest {
 	public final static int NUM_REVISIONS = 60;
 	public final static int NUM_ROOTS = 4;
@@ -18,13 +20,23 @@ public class RevisionTreeTest {
 	static RefTag[] revisions, mrevisions;
 	static ZKMaster singlemaster, multimaster;
 	
-	@BeforeClass
-	
+	@BeforeClass	
 	public static void beforeClass() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
 		Security.addProvider(new BouncyCastleProvider());
 		setupSingleParentTest();
 		setupMultipleParentTest();
+	}
+	
+	@AfterClass
+	public static void afterAll() throws IOException {
+		fs.archive.close();
+		mfs.archive.close();
+		fs.close();
+		mfs.close();
+		singlemaster.close();
+		multimaster.close();
+		TestUtils.assertTidy();
 	}
 	
 	public static void setupSingleParentTest() throws IOException {

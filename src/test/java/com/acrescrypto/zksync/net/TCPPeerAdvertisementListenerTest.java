@@ -16,12 +16,14 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 
 public class TCPPeerAdvertisementListenerTest {
@@ -54,6 +56,7 @@ public class TCPPeerAdvertisementListenerTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
+		ZKFSTest.cheapenArgon2Costs();
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 	}
@@ -72,8 +75,10 @@ public class TCPPeerAdvertisementListenerTest {
 	
 	@AfterClass
 	public static void afterAll() {
+		ZKFSTest.restoreArgon2Costs();
 		archive.close();
 		master.close();
+		TestUtils.assertTidy();
 	}
 	
 	@Test

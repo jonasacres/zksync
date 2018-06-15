@@ -19,6 +19,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
@@ -95,6 +96,7 @@ public class PageQueueTest {
 		archive.close();
 		master.close();
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	public HashSet<Long> expectedPageTagsForRefTag(RefTag refTag) throws IOException {

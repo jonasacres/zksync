@@ -6,11 +6,13 @@ import java.io.IOException;
 import java.security.Security;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
@@ -43,6 +45,7 @@ public class DiffSetTest {
 	@AfterClass
 	public static void afterClass() {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Before
@@ -63,6 +66,14 @@ public class DiffSetTest {
 			fs.squash("modified");
 			children[i] = fs.commit();
 		}
+		
+		fs.close();
+		archive.close();
+	}
+	
+	@After
+	public void afterEach() {
+		master.close();		
 	}
 	
 	@Test
@@ -96,6 +107,8 @@ public class DiffSetTest {
 	
 		assertEquals(1, diffset.inodeDiffs.size()); // modified
 		assertEquals(0, diffset.pathDiffs.size());
+		fs.getArchive().close();
+		fs.close();
 	}
 	
 	@Test
@@ -311,6 +324,9 @@ public class DiffSetTest {
 		assertEquals(2, diffset.inodeDiffs.size()); // file1, /
 		assertEquals(1, diffset.pathDiffs.size()); // file1
 		assertTrue(diffset.pathDiffs.containsKey("file1"));
+		
+		fs.close();
+		fs.getArchive().close();
 	}
 	
 	protected void trivialInodeDiffTest(DiffExampleLambda meat) throws IOException {
@@ -323,5 +339,8 @@ public class DiffSetTest {
 		
 		DiffSet diffset = new DiffSet(revs);
 		assertEquals(numDiffs, diffset.inodeDiffs.size());
+		
+		fs.close();
+		fs.getArchive().close();
 	}
 }

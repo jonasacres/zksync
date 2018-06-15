@@ -5,11 +5,13 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 
@@ -45,9 +47,16 @@ public class ZKArchiveTest {
 		archive = config.archive;
 	}
 	
+	@After
+	public void afterEach() {
+		archive.close();
+		master.close();
+	}
+	
 	@AfterClass
 	public static void afterAll() {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Test
@@ -57,6 +66,7 @@ public class ZKArchiveTest {
 		PageMerkle merkle = new PageMerkle(inode.refTag);
 		
 		assertTrue(archive.hasPageTag(merkle.getPageTag(0)));
+		fs.close();
 	}
 	
 	@Test
@@ -70,6 +80,7 @@ public class ZKArchiveTest {
 			ZKFS fs = addMockData(archive);
 			Inode inode = fs.inodeForPath("file"+i);
 			assertTrue(archive.hasRefTag(inode.refTag));
+			fs.close();
 		}
 	}
 	
@@ -82,6 +93,7 @@ public class ZKArchiveTest {
 			archive.storage.unlink(Page.pathForTag(merkle.getPageTag(0)));
 			assertFalse(archive.hasRefTag(inode.refTag));
 		}
+		fs.close();
 	}
 	
 	@Test
@@ -90,6 +102,7 @@ public class ZKArchiveTest {
 		Inode inode = fs.inodeForPath("file2");
 		archive.storage.unlink(Page.pathForTag(PageMerkle.tagForChunk(inode.refTag, 0)));
 		assertFalse(archive.hasRefTag(inode.refTag));
+		fs.close();
 	}
 	
 	@Test
@@ -105,6 +118,7 @@ public class ZKArchiveTest {
 	public void testHasRevisionReturnsTrueIfRevisionContentsInStorage() throws IOException {
 		ZKFS fs = addMockData(archive);
 		assertTrue(archive.hasRevision(fs.baseRevision));
+		fs.close();
 	}
 	
 	@Test
@@ -115,6 +129,7 @@ public class ZKArchiveTest {
 			PageMerkle merkle = new PageMerkle(inode.refTag);
 			archive.storage.unlink(Page.pathForTag(merkle.getPageTag(0)));
 			assertFalse(archive.hasRevision(fs.baseRevision));
+			fs.close();
 		}
 	}
 	
@@ -124,6 +139,7 @@ public class ZKArchiveTest {
 		Inode inode = fs.inodeForPath("file2");
 		archive.storage.unlink(Page.pathForTag(PageMerkle.tagForChunk(inode.refTag, 0)));
 		assertFalse(archive.hasRevision(fs.baseRevision));
+		fs.close();
 	}
 	
 	@Test
@@ -132,6 +148,7 @@ public class ZKArchiveTest {
 		PageMerkle merkle = new PageMerkle(fs.baseRevision);
 		archive.storage.unlink(Page.pathForTag(merkle.getPageTag(0)));
 		assertFalse(archive.hasRevision(fs.baseRevision));
+		fs.close();
 	}
 	
 	@Test
@@ -142,5 +159,6 @@ public class ZKArchiveTest {
 		assertTrue(revTag.numPages > 1);
 		archive.storage.unlink(Page.pathForTag(PageMerkle.tagForChunk(revTag, 0)));
 		assertFalse(archive.hasRevision(revTag));
+		fs.close();
 	}
 }

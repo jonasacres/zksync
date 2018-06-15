@@ -14,6 +14,8 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
+
 public class StoredAccessTest {
 	ZKMaster master;
 
@@ -26,6 +28,7 @@ public class StoredAccessTest {
 	@AfterClass
 	public static void afterClass() throws IOException {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Before
@@ -35,7 +38,7 @@ public class StoredAccessTest {
 	
 	@After
 	public void after() throws IOException {
-		master.purge();
+		master.close();
 	}
 	
 	@Test
@@ -48,6 +51,9 @@ public class StoredAccessTest {
 		assertTrue(clone.allArchives().contains(archive));
 		assertEquals(1, clone.allArchives.size());
 		assertFalse(clone.allArchives.getLast().config.accessor.isSeedOnly());
+		
+		archive.close();
+		clone.close();
 	}
 	
 	@Test
@@ -64,6 +70,10 @@ public class StoredAccessTest {
 		assertTrue(clone.allArchives().contains(roArchive));
 		assertEquals(1, clone.allArchives.size());
 		assertTrue(clone.allArchives.getLast().config.accessor.isSeedOnly());
+		
+		archive.close();
+		roArchive.close();
+		clone.close();
 	}
 	
 	@Test
@@ -81,9 +91,15 @@ public class StoredAccessTest {
 		master.storedAccess.deleteArchiveAccess(archiveA);
 		assertFalse(master.allArchives().contains(archiveA));
 		assertTrue(master.allArchives().contains(archiveB));
+		
+		clone.close();
 		clone = ZKMaster.openTestVolume();
 		assertFalse(clone.allArchives().contains(archiveA));
 		assertTrue(clone.allArchives().contains(archiveB));
+		
+		clone.close();
+		archiveA.close();
+		archiveB.close();
 	}
 	
 	@Test
@@ -96,5 +112,8 @@ public class StoredAccessTest {
 
 		ZKMaster clone = ZKMaster.openTestVolume();
 		assertFalse(clone.allArchives().contains(archive));
+		
+		archive.close();
+		clone.close();
 }
 }

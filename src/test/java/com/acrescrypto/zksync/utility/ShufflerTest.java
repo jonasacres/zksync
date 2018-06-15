@@ -6,11 +6,18 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.HashSet;
 
+import org.junit.AfterClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.utility.Shuffler.ShuffleOrdering;
 
 public class ShufflerTest {
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
+	}
+	
 	@Test
 	public void testShuffleOrderingCreatesRandomOrderings() {
 		for(int size = 10; size < 15; size++) {

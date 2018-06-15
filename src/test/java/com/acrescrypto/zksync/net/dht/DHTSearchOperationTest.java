@@ -9,9 +9,11 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
@@ -137,6 +139,11 @@ public class DHTSearchOperationTest {
 		searchId = new DHTID(crypto.rng(crypto.hashLength()));
 		results = null;
 		op = new DHTSearchOperation(client, searchId, (results)->{this.results = results;});
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 	
 	@Test

@@ -17,7 +17,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class DHTRoutingTable {
 	public final static int DEFAULT_FRESHEN_INTERVAL_MS = 1000*60;
-	public static int FRESHEN_INTERVAL_MS = DEFAULT_FRESHEN_INTERVAL_MS;
+	public static int freshenIntervalMs = DEFAULT_FRESHEN_INTERVAL_MS;
 	
 	protected DHTClient client;
 	protected ArrayList<DHTBucket> buckets = new ArrayList<>();
@@ -47,7 +47,7 @@ public class DHTRoutingTable {
 		this.notifyAll();
 	}
 	
-	public void reset() {
+	public synchronized void reset() {
 		buckets.clear();
 		allPeers.clear();
 		for(int i = 0; i <= 8*client.idLength(); i++) {
@@ -55,7 +55,7 @@ public class DHTRoutingTable {
 		}
 	}
 	
-	public void freshen() {
+	public synchronized void freshen() {
 		for(DHTBucket bucket : buckets) {
 			bucket.prune();
 			if(!bucket.needsFreshening()) continue;
@@ -63,7 +63,7 @@ public class DHTRoutingTable {
 		}
 	}
 	
-	public Collection<DHTPeer> closestPeers(DHTID id, int numPeers) {
+	public synchronized Collection<DHTPeer> closestPeers(DHTID id, int numPeers) {
 		DHTID greatestDistance = null;
 		DHTPeer mostDistantPeer = null;
 		ArrayList<DHTPeer> closest = new ArrayList<>(numPeers);
@@ -98,7 +98,7 @@ public class DHTRoutingTable {
 		suggestPeer(peer, Util.currentTimeMillis());
 	}
 	
-	public void suggestPeer(DHTPeer peer, long lastSeen) {
+	public synchronized void suggestPeer(DHTPeer peer, long lastSeen) {
 		int order = peer.id.xor(client.id).order();
 		DHTBucket bucket = buckets.get(order+1); // add 1 since an exact match has order -1
 		if(bucket.hasCapacity()) {
@@ -130,7 +130,7 @@ public class DHTRoutingTable {
 		Thread.currentThread().setName("DHTRoutingTable freshen thread");
 		while(!closed) {
 			try {
-				synchronized(this) { this.wait(FRESHEN_INTERVAL_MS); }
+				synchronized(this) { this.wait(freshenIntervalMs); }
 				freshen();
 			} catch(Exception exc) {
 				logger.error("DHT routing table freshen thread encountered exception", exc);
@@ -157,7 +157,7 @@ public class DHTRoutingTable {
 		}
 	}
 	
-	protected byte[] serialize() {
+	protected synchronized byte[] serialize() {
 		LinkedList<byte[]> pieces = new LinkedList<>();
 		int totalLength = 0;
 		

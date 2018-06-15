@@ -18,6 +18,7 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
@@ -153,6 +154,7 @@ public class ZKArchiveConfigTest {
 	public static void afterAll() {
 		master.close();
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Test
@@ -296,6 +298,7 @@ public class ZKArchiveConfigTest {
 		
 		modified.write();
 		assertUnreadable(modified);
+		modified.close();
 	}
 	
 	@Test

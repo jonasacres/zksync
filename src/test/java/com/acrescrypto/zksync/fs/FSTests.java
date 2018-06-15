@@ -16,7 +16,6 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFSTests;
 	RAMFSTests.class,
 	BackedFSTest.class,
 	SwarmFSTest.class
-	// SSHFS omitted due to speed issues
 })
 
 public class FSTests {

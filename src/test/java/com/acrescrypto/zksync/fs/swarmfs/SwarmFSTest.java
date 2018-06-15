@@ -8,11 +8,13 @@ import static org.junit.Assert.assertTrue;
 import java.io.IOException;
 import java.util.Arrays;
 
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
@@ -72,11 +74,21 @@ public class SwarmFSTest {
 		
 		swarm = new DummyPeerSwarm(archive.getConfig());
 		swarmFs = new SwarmFS(swarm);
+		fs.close();
+	}
+	
+	@After
+	public void afterEach() throws IOException {
+		swarmFs.close();
+		swarm.close();
+		archive.close();
+		master.close();
 	}
 	
 	@AfterClass
 	public static void afterAll() {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Test

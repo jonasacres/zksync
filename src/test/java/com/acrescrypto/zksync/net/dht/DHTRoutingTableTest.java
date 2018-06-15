@@ -68,7 +68,7 @@ public class DHTRoutingTableTest {
 	@After
 	public void afterEach() {
 		Util.setCurrentTimeNanos(-1);
-		DHTRoutingTable.FRESHEN_INTERVAL_MS = DHTRoutingTable.DEFAULT_FRESHEN_INTERVAL_MS;
+		DHTRoutingTable.freshenIntervalMs = DHTRoutingTable.DEFAULT_FRESHEN_INTERVAL_MS;
 		table.close();
 	}
 	
@@ -279,7 +279,7 @@ public class DHTRoutingTableTest {
 	
 	@Test
 	public void testFreshenThreadCallsFreshenPeriodically() {
-		DHTRoutingTable.FRESHEN_INTERVAL_MS = 5;
+		DHTRoutingTable.freshenIntervalMs = 5;
 		Util.setCurrentTimeMillis(0);
 		table.suggestPeer(makeTestPeer(0));
 		table.close();
@@ -287,6 +287,6 @@ public class DHTRoutingTableTest {
 		Util.setCurrentTimeMillis(DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
 		assert(client.lookupIds.isEmpty());
 		table = new DHTRoutingTable(client);
-		assertTrue(Util.waitUntil(2*DHTRoutingTable.FRESHEN_INTERVAL_MS, ()->!client.lookupIds.isEmpty()));
+		assertTrue(Util.waitUntil(2*DHTRoutingTable.freshenIntervalMs, ()->!client.lookupIds.isEmpty()));
 	}
 }

@@ -11,6 +11,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.Arrays;
 import org.junit.*;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.fs.zkfs.*;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;
@@ -36,16 +37,24 @@ public class DiffSetResolverTest {
 	
 	@AfterClass
 	public static void afterClass() {
+		master.close();
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Before
-	public void before() throws IOException {
+	public void beforeEach() throws IOException {
 		master.purge();
 		Util.setCurrentTimeNanos(-1);
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "unit test");
 		fs = archive.openBlank();
 		base = fs.commit();
+	}
+	
+	@After
+	public void afterEach() throws IOException {
+		fs.close();
+		archive.close();
 	}
 	
 	@Test
@@ -150,6 +159,7 @@ public class DiffSetResolverTest {
 			fs.unlink("file");
 			RefTag revDeleted = fs.commit();
 			
+			fs.close();
 			fs = archive.openRevision(base);
 			RefTag revNotDeleted = fs.commit();
 			
@@ -168,9 +178,12 @@ public class DiffSetResolverTest {
 
 			RefTag tag = diffset.resolver(inodeResolver, pathResolver).resolve();
 			
+			fs.close();
 			fs = archive.openRevision(tag);
 			assertFalse(fs.exists("file"));
+			fs.close();
 		}
+		archive.close();
 	}
 	
 	@Test
@@ -215,20 +228,17 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testDirectoriesMergeContents() throws IOException, DiffResolutionException {
-		for(int j = 0; j < 10; j++) { // repeat due to history of intermittent failures
-			before();
-			for(byte i = 0; i < 4; i++) {
-				fs.write(""+i, (""+i).getBytes());
-				fs.commit();
+		for(byte i = 0; i < 4; i++) {
+			fs.write(""+i, (""+i).getBytes());
+			fs.commit();
 
-				if(i == 1) fs = base.getFS();
-			}
-			
-			RefTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
-			ZKFS mergeFs = merge.readOnlyFS();
-			
-			for(byte i = 0; i < 4; i++) assertEquals(""+i, new String(mergeFs.read(""+i)));
+			if(i == 1) fs = base.getFS();
 		}
+		
+		RefTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+		ZKFS mergeFs = merge.readOnlyFS();
+		
+		for(byte i = 0; i < 4; i++) assertEquals(""+i, new String(mergeFs.read(""+i)));
 	}
 	
 	@Test
@@ -257,25 +267,22 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testDefaultAllowsDeletion() throws IOException, DiffResolutionException {
-		for(int i = 0; i < 8; i++) {
-			before();
-			fs.write("file", "foo".getBytes());
-			base = fs.commit();
-			
-			if(Math.random() < 0.5) {
-				fs.unlink("file");
-				fs.commit(); // tip 1 (contains deletion)
-				base.getFS().commit(); // tip 2 (empty)
-			} else {
-				fs.commit(); // tip 1 (empty)
-				fs = base.getFS();
-				fs.unlink("file");
-				fs.commit(); // tip 2 (contains deletion)
-			}
-			
-			ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-			assertFalse(mergeFs.exists("file"));
+		fs.write("file", "foo".getBytes());
+		base = fs.commit();
+		
+		if(Math.random() < 0.5) {
+			fs.unlink("file");
+			fs.commit(); // tip 1 (contains deletion)
+			base.getFS().commit(); // tip 2 (empty)
+		} else {
+			fs.commit(); // tip 1 (empty)
+			fs = base.getFS();
+			fs.unlink("file");
+			fs.commit(); // tip 2 (contains deletion)
 		}
+		
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		assertFalse(mergeFs.exists("file"));
 	}
 	
 	@Test
@@ -305,52 +312,46 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testChangedFromIsFirstTiebreaker() throws IOException, DiffResolutionException {
-		for(int i = 0; i < 8; i++) {
-			before();
-			Util.setCurrentTimeNanos(0);
-			fs.write("file", "foo".getBytes());
-			base = fs.commit();
-			RefTag[] revs = new RefTag[4];
-			
-			for(int j = 0; j < 4; j++) {
-				if(j == 2) fs = base.getFS();
-				Util.setCurrentTimeNanos(1+j%2);
-				fs.write("file", (""+j).getBytes());
-				revs[j] = fs.commit();
-			}
-			
-			ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-			if(Arrays.compareUnsigned(revs[0].getBytes(), revs[2].getBytes()) < 0) {
-				assertEquals("3", new String(mergeFs.read("file")));
-			} else {
-				assertEquals("1", new String(mergeFs.read("file")));
-			}
+		Util.setCurrentTimeNanos(0);
+		fs.write("file", "foo".getBytes());
+		base = fs.commit();
+		RefTag[] revs = new RefTag[4];
+		
+		for(int j = 0; j < 4; j++) {
+			if(j == 2) fs = base.getFS();
+			Util.setCurrentTimeNanos(1+j%2);
+			fs.write("file", (""+j).getBytes());
+			revs[j] = fs.commit();
+		}
+		
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		if(Arrays.compareUnsigned(revs[0].getBytes(), revs[2].getBytes()) < 0) {
+			assertEquals("3", new String(mergeFs.read("file")));
+		} else {
+			assertEquals("1", new String(mergeFs.read("file")));
 		}
 	}
 	
 	@Test
 	public void testSerializedInodeIsSecondTiebraker() throws IOException, DiffResolutionException {
-		for(int i = 0; i < 8; i++) {
-			before();
-			Util.setCurrentTimeNanos(0);
-			fs.write("file", "foo".getBytes());
-			base = fs.commit();
-			byte[][] serializations = new byte[2][];
-			
-			for(int j = 0; j < 2; j++) {
-				fs = base.getFS();
-				Util.setCurrentTimeNanos(1);
-				fs.write("file", (""+j).getBytes());
-				fs.commit();
-				serializations[j] = fs.inodeForPath("file").serialize();
-			}
-			
-			ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-			if(Arrays.compareUnsigned(serializations[0], serializations[1]) < 0) {
-				assertEquals("1", new String(mergeFs.read("file")));
-			} else {
-				assertEquals("0", new String(mergeFs.read("file")));
-			}
+		Util.setCurrentTimeNanos(0);
+		fs.write("file", "foo".getBytes());
+		base = fs.commit();
+		byte[][] serializations = new byte[2][];
+		
+		for(int j = 0; j < 2; j++) {
+			fs = base.getFS();
+			Util.setCurrentTimeNanos(1);
+			fs.write("file", (""+j).getBytes());
+			fs.commit();
+			serializations[j] = fs.inodeForPath("file").serialize();
+		}
+		
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		if(Arrays.compareUnsigned(serializations[0], serializations[1]) < 0) {
+			assertEquals("1", new String(mergeFs.read("file")));
+		} else {
+			assertEquals("0", new String(mergeFs.read("file")));
 		}
 	}
 	

@@ -9,6 +9,7 @@ import java.util.Stack;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.zkfs.FreeList.FreeListExhaustedException;
 
 public class FreeListTest {
@@ -24,10 +25,22 @@ public class FreeListTest {
 	}
 	
 	@Before
-	public void before() throws IOException {
+	public void beforeEach() throws IOException {
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		if(archive.storage.exists("/")) archive.storage.rmrf("/");
 		fs = archive.openBlank();
+	}
+	
+	@After
+	public void afterEach() throws IOException {
+		fs.close();
+		archive.close();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		master.close();
+		TestUtils.assertTidy();
 	}
 	
 	@Test

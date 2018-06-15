@@ -186,7 +186,6 @@ public class PeerConnection {
 	public void announceTags() {
 		ZKArchive archive = socket.swarm.config.getArchive();
 		if(archive == null) {
-			// TODO DHT: (review) Make sure we only hit this branch when we're initializing from an archive ID and have no data yet.
 			send(CMD_ANNOUNCE_TAGS, new byte[0]);
 			return;
 		}

@@ -9,7 +9,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class StoredAccessRecord {
 	protected ZKArchive archive;
-	protected boolean seedOnly;
+	protected boolean seedOnly, locallyInstantiated;
 	
 	public StoredAccessRecord(ZKArchive archive, boolean seedOnly) {
 		this.seedOnly = seedOnly;
@@ -18,6 +18,10 @@ public class StoredAccessRecord {
 	
 	public StoredAccessRecord(ZKMaster master, ByteBuffer buf) throws IOException {
 		deserialize(master, buf);
+	}
+	
+	public void close() {
+		if(locallyInstantiated) archive.close();
 	}
 	
 	public ZKArchive getArchive() {
@@ -57,5 +61,6 @@ public class StoredAccessRecord {
 		// TODO: This is a blocking P2P network operation if we don't have the config on hand. Refactor?
 		ZKArchiveConfig config = new ZKArchiveConfig(accessor, archiveId);
 		archive = config.getArchive();
+		locallyInstantiated = true;
 	}
 }

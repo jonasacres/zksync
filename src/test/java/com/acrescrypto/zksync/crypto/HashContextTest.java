@@ -1,16 +1,23 @@
 package com.acrescrypto.zksync.crypto;
 
+import static org.junit.Assert.assertTrue;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import org.junit.AfterClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.utility.Util;
 
-import junit.framework.TestCase;
+public class HashContextTest {
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
+	}
 
-public class HashContextTest extends TestCase {
 	@Test
 	public void testMatchesReference() {
 		byte[][][] vectors = getTestVectors();

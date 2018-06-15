@@ -9,10 +9,12 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.utility.Util;
@@ -85,6 +87,11 @@ public class DHTBucketTest {
 		Util.setCurrentTimeNanos(-1);
 	}
 	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
+	}
+
 	@Test
 	public void testHasCapacityReturnsTrueIfEmptySlotsAvailable() {
 		DHTBucket bucket = new DHTBucket(client, 16);

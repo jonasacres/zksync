@@ -6,8 +6,11 @@ import java.security.Security;
 import java.util.Arrays;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
+import com.acrescrypto.zksync.TestUtils;
 
 public class PRNGTest {
 	byte[] key = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
@@ -18,6 +21,11 @@ public class PRNGTest {
 	@BeforeClass
 	public static void beforeClass() {
 		Security.addProvider(new BouncyCastleProvider());
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 
 	/* These aren't comprehensive tests by any stretch, and I don't know any tests that can "prove" the

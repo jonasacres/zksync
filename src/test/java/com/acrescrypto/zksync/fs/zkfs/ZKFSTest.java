@@ -10,6 +10,7 @@ import java.util.Arrays;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
@@ -20,7 +21,7 @@ import com.acrescrypto.zksync.fs.File;
 public class ZKFSTest extends FSTestBase {
 	int oldDefaultTimeCost, oldDefaultParallelism, oldDefaultMemoryCost;
 	ZKFS zkscratch;
-	static ZKMaster master;
+	ZKMaster master;
 	
 	@Before
 	public void beforeEach() throws IOException {
@@ -31,7 +32,10 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	@After
-	public void afterEach() {
+	public void afterEach() throws IOException {
+		master.close();
+		zkscratch.close();
+		zkscratch.archive.close();
 		restoreArgon2Costs();
 	}
 	
@@ -42,7 +46,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	@AfterClass
 	public static void afterClass() throws IOException {
-		master.purge();
+		TestUtils.assertTidy();
 	}
 	
 	@Test

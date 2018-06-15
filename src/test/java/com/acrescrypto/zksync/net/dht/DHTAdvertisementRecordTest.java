@@ -5,9 +5,11 @@ import static org.junit.Assert.assertEquals;
 
 import java.nio.ByteBuffer;
 
+import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
@@ -21,6 +23,11 @@ public class DHTAdvertisementRecordTest {
 	public static void beforeAll() {
 		crypto = new CryptoSupport();
 		ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234, crypto.rng(crypto.hashLength()));
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 	
 	@Test

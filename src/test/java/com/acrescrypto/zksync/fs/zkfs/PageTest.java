@@ -4,11 +4,13 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
 
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.File;
 
 public class PageTest {
@@ -34,9 +36,18 @@ public class PageTest {
 		page = new Page(file, 0);
 	}
 	
+	@After
+	public void afterEach() throws IOException {
+		file.close();
+		fs.close();
+		archive.close();
+		master.close();
+	}
+	
 	@AfterClass
 	public static void afterAll() {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Test

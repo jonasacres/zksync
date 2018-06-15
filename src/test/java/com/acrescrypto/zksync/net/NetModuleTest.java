@@ -9,6 +9,7 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
@@ -40,6 +41,7 @@ public class NetModuleTest {
 	@AfterClass
 	public static void afterClass() {
 		ZKFSTest.restoreArgon2Costs();
+		TestUtils.assertTidy();
 	}
 	
 	@Test
@@ -69,5 +71,12 @@ public class NetModuleTest {
 		assertArrayEquals(fsa.read("file0"), fsb.read("file0"));
 		assertArrayEquals(fsa.read("file1"), fsb.read("file1"));
 		// assertArrayEquals(fsa.read("file2"), fsb.read("file2"));
+		
+		fsa.close();
+		fsb.close();
+		aConfig.getArchive().close();
+		bConfig.getArchive().close();
+		aMaster.close();
+		bMaster.close();
 	}
 }

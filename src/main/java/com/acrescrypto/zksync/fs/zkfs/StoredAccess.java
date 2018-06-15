@@ -125,4 +125,10 @@ public class StoredAccess implements ArchiveDiscovery {
 	@Override
 	public void stopDiscoveringArchives(ArchiveAccessor accessor) {
 	}
+
+	public void close() {
+		for(StoredAccessRecord record : records) {
+			record.close();
+		}
+	}
 }

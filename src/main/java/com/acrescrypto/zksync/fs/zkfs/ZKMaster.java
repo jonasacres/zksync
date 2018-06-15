@@ -87,6 +87,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 	
 	public void close() {
+		storedAccess.close();
 		if(listener != null) {
 			try {
 				listener.close();

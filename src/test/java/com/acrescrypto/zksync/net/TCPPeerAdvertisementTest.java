@@ -9,10 +9,12 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
@@ -43,6 +45,11 @@ public class TCPPeerAdvertisementTest {
 	public void beforeEach() throws UnconnectableAdvertisementException, IOException, InvalidBlacklistException {
 		blacklist = new Blacklist(new RAMFS(), "blacklist", new Key(crypto, crypto.makeSymmetricKey()));
 		ad = new TCPPeerAdvertisement(crypto.makePublicDHKey(pubKey), host, port, encryptedArchiveId).resolve();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 	
 	@Test

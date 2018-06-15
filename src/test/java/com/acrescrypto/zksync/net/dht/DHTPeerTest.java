@@ -14,10 +14,12 @@ import java.util.Arrays;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
@@ -185,6 +187,11 @@ public class DHTPeerTest {
 	@After
 	public void afterEach() {
 		Util.setCurrentTimeNanos(-1);
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 
 	@Test
