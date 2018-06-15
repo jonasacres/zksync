@@ -280,31 +280,38 @@ public class PageQueueTest {
 	
 	@Test
 	public void testEverythingSendsInShuffledOrder() throws IOException {
-		LinkedList<Long> seenTags = new LinkedList<Long>();
+		HashMap<Integer,Integer> matchCounts = new HashMap<>();
 		
-		// send everything, note the order we get tags in
-		queue.startSendingEverything();
-		while(queue.hasNextChunk()) {
-			long shortTag = Util.shortTag(queue.nextChunk().tag);
-			if(seenTags.isEmpty() || seenTags.peekLast() != shortTag) {
-				seenTags.add(shortTag);
+		for(int i = 0; i < 50; i++) {
+			LinkedList<Long> seenTags = new LinkedList<Long>();
+			
+			// send everything, note the order we get tags in
+			queue.startSendingEverything();
+			while(queue.hasNextChunk()) {
+				long shortTag = Util.shortTag(queue.nextChunk().tag);
+				if(seenTags.isEmpty() || seenTags.peekLast() != shortTag) {
+					seenTags.add(shortTag);
+				}
 			}
+			
+			// go again, count up how many times the same tag comes at the same position in the lineup
+			queue.startSendingEverything();
+			int pagesSeen = 0, matches = 0;
+			long lastTag = -1;
+			while(queue.hasNextChunk()) {
+				long shortTag = Util.shortTag(queue.nextChunk().tag);
+				if(lastTag == -1 || lastTag != shortTag) {
+					lastTag = shortTag;
+					if(seenTags.get(pagesSeen++) == shortTag) matches++;
+				}
+			}
+			
+			// should be mostly different
+			matchCounts.put(matches, 1 + matchCounts.getOrDefault(matches, 0));
 		}
 		
-		// go again, count up how many times the same tag comes at the same position in the lineup
-		queue.startSendingEverything();
-		int pagesSeen = 0, matches = 0;
-		long lastTag = -1;
-		while(queue.hasNextChunk()) {
-			long shortTag = Util.shortTag(queue.nextChunk().tag);
-			if(lastTag == -1 || lastTag != shortTag) {
-				lastTag = shortTag;
-				if(seenTags.get(pagesSeen++) == shortTag) matches++;
-			}
-		}
-		
-		// should be mostly different
-		assertTrue(matches < pagesSeen/2);
+		assertTrue(matchCounts.get(0) + matchCounts.get(1) >= 30);
+		assertTrue(matchCounts.get(2) >= 4);
 	}
 	
 	@Test
@@ -514,36 +521,41 @@ public class PageQueueTest {
 	
 	@Test
 	public void testAddRefTagContentsSendsPagesInShuffledOrder() {
-		// queue up a reftag, note the order the pages come in
-		LinkedList<Long> seenPageTags = new LinkedList<Long>();
-		queue.addRefTagContents(0, refTag2Indirect);
-		while(queue.hasNextChunk()) {
-			long shortTag = Util.shortTag(queue.nextChunk().tag);
-			if(seenPageTags.isEmpty() || seenPageTags.getLast() != shortTag) {
-				seenPageTags.add(shortTag);
-			}
-		}
-		
-		// reshuffle, go again, note how many positions in the new lineup match the old one
-		Shuffler.purgeFixedOrderings();
-		queue.addRefTagContents(0, refTag2Indirect);
-		int pagesSeen = 0, matches = 0;
-		long lastShortTag = 0;
-		while(queue.hasNextChunk()) {
-			long shortTag = Util.shortTag(queue.nextChunk().tag);
-			if(lastShortTag != shortTag) {
-				lastShortTag = shortTag;
-				if(seenPageTags.get(pagesSeen) == shortTag) {
-					matches++;
+		HashMap<Integer,Integer> matchCounts = new HashMap<>();
+		for(int i = 0; i < 50; i++) {
+			// queue up a reftag, note the order the pages come in
+			LinkedList<Long> seenPageTags = new LinkedList<Long>();
+			queue.addRefTagContents(0, refTag2Indirect);
+			while(queue.hasNextChunk()) {
+				long shortTag = Util.shortTag(queue.nextChunk().tag);
+				if(seenPageTags.isEmpty() || seenPageTags.getLast() != shortTag) {
+					seenPageTags.add(shortTag);
 				}
-				
-				pagesSeen++;
 			}
+			
+			// reshuffle, go again, note how many positions in the new lineup match the old one
+			Shuffler.purgeFixedOrderings();
+			queue.addRefTagContents(0, refTag2Indirect);
+			int pagesSeen = 0, matches = 0;
+			long lastShortTag = 0;
+			while(queue.hasNextChunk()) {
+				long shortTag = Util.shortTag(queue.nextChunk().tag);
+				if(lastShortTag != shortTag) {
+					lastShortTag = shortTag;
+					if(seenPageTags.get(pagesSeen) == shortTag) {
+						matches++;
+					}
+					
+					pagesSeen++;
+				}
+			}
+			
+			matchCounts.put(matches, 1 + matchCounts.getOrDefault(matches, 0));
+			assertTrue(pagesSeen == seenPageTags.size());
 		}
 		
-		// should be mostly different
-		assertTrue(pagesSeen == seenPageTags.size());
-		assertTrue(matches < pagesSeen/2);
+		assertTrue(matchCounts.get(0) + matchCounts.get(1) >= 30);
+		assertTrue(matchCounts.get(2) >= 4);
 	}
 	
 	@Test
@@ -663,7 +675,7 @@ public class PageQueueTest {
 		}
 		
 		assertEquals(seenRefTags.size(), numTagsSeen);
-		assertTrue(matches < numTagsSeen/2);
+		assertTrue(matches <= numTagsSeen/2);
 	}
 	
 	@Test

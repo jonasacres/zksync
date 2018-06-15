@@ -2,12 +2,17 @@ package com.acrescrypto.zksync;
 
 import static org.junit.Assert.fail;
 
+import java.util.HashSet;
 import java.util.Map;
 
 import com.acrescrypto.zksync.utility.Util;
 
 public class TestUtils {
+	static HashSet<Long> knownZombieThreads = new HashSet<>();
+	
 	public static boolean isThreadAcceptable(Thread thread, StackTraceElement[] backtrace) {
+		if(knownZombieThreads.contains(thread.getId())) return true;
+		
 		String[] acceptable = {
 				"Reference Handler",
 				"process reaper",
@@ -27,7 +32,10 @@ public class TestUtils {
 	public static boolean threadsTidy() {
 		Map<Thread,StackTraceElement[]> traces = Thread.getAllStackTraces();
 		for(Thread t : traces.keySet()) {
-			if(!isThreadAcceptable(t, traces.get(t))) return false;
+			if(!isThreadAcceptable(t, traces.get(t))) {
+				knownZombieThreads.add(t.getId());
+				return false;
+			}
 		}
 		
 		return true;
