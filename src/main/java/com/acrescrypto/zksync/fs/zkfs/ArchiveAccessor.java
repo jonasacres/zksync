@@ -26,7 +26,7 @@ public class ArchiveAccessor {
 	public final static int KEY_INDEX_ARCHIVE = 0;
 	public final static int KEY_INDEX_LOCAL = 1;
 	public final static int KEY_INDEX_PAGE = 2;
-	public final static int KEY_INDEX_PAGE_MERKLE = 3;
+	public final static int KEY_INDEX_PAGE_MERKLE = 3; // TODO DHT: deprecated; remove
 	public final static int KEY_INDEX_REVISION = 4;
 	public final static int KEY_INDEX_CONFIG_FILE = 5;
 	public final static int KEY_INDEX_REVISION_TREE = 6;

@@ -33,10 +33,12 @@ public class PageTree {
 		this.numPages = tag.numPages;
 		
 		this.chunkCache = new HashCache<>(8,
-				(index)->chunkAtIndex(index),
+				(index)->loadChunkAtIndex(index),
 				(index, chunk)->{ if(chunk.dirty) chunk.write(); }
 				);
 	}
+	
+	protected PageTree() {} // used for testing
 	
 	public boolean exists() throws IOException {
 		switch(refTag.getRefType()) {
@@ -107,14 +109,14 @@ public class PageTree {
 	
 	protected void resizeToSmallerLevel(long newMinPages, long diff) throws IOException {
 		long newRootId = chunkIdAtPosition(-diff, 0);
-		setTag(chunkAtIndex(newRootId).chunkTag);
+		setTag(loadChunkAtIndex(newRootId).chunkTag);
 		
 		/* TODO: renumber cached chunks in memory (requires a chance to HashCache) */
 		chunkCache.removeAll();
 	}
 	
 	protected void resizeToLargerLevel(long newMinPages, long diff) throws IOException {
-		PageTreeChunk root = chunkAtIndex(0);
+		PageTreeChunk root = loadChunkAtIndex(0);
 		for(int i = 0; i < diff; i++) {
 			PageTreeChunk newRoot = new PageTreeChunk(this, new byte[archive.crypto.hashLength()], 0);
 			newRoot.setTag(0, root.chunkTag);
@@ -130,7 +132,7 @@ public class PageTree {
 	}
 	
 	public byte[] tagForChunk(long index) throws IOException {
-		return chunkCache.get(index).chunkTag;
+		return chunkAtIndex(index).chunkTag;
 	}
 	
 	public ZKArchive getArchive() {
@@ -138,7 +140,7 @@ public class PageTree {
 	}
 	
 	protected PageTreeChunk chunkForPageNum(long pageNum) throws IOException {
-		return chunkCache.get(chunkIndexForPageNum(pageNum));
+		return chunkAtIndex(chunkIndexForPageNum(pageNum));
 	}
 	
 	protected long chunkIndexForPageNum(long pageNum) {
@@ -148,6 +150,10 @@ public class PageTree {
 	}
 	
 	protected PageTreeChunk chunkAtIndex(long index) throws IOException {
+		return chunkAtIndex(index);
+	}
+	
+	protected PageTreeChunk loadChunkAtIndex(long index) throws IOException {
 		if(index == 0) {
 			return new PageTreeChunk(this, refTag.getHash(), 0);
 		}
@@ -159,7 +165,7 @@ public class PageTree {
 		long parentIndex = indexForParent(index);
 		long offsetInParent = (index - 1) % tagsPerChunk();
 		
-		byte[] chunkTag = chunkCache.get(parentIndex).getTag(offsetInParent);
+		byte[] chunkTag = chunkAtIndex(parentIndex).getTag(offsetInParent);
 		return new PageTreeChunk(this, chunkTag, index);
 	}
 	
@@ -199,7 +205,7 @@ public class PageTree {
 	
 	protected boolean hasChunkLocally(int index) throws IOException {
 		if(!archive.config.getCacheStorage().exists(Page.pathForTag(tagForChunk(index)))) return false;
-		PageTreeChunk chunk = chunkAtIndex(index);
+		PageTreeChunk chunk = loadChunkAtIndex(index);
 		for(int i = 0; i < tagsPerChunk(); i++) {
 			byte[] tag = chunk.getTag(i);
 			if(!archive.config.getCacheStorage().exists(Page.pathForTag(tag))) return false;
@@ -223,6 +229,10 @@ public class PageTree {
 	}
 	
 	protected int tagsPerChunk() {
+		/* Much of this class is written to avoid the assumption of int-sized values, but some
+		 * stuff like ArrayList wants ints. So we're actually limited to int-sizes stuff anyway, which is
+		 * probably fine for now.
+		 * */
 		return archive.config.getPageSize()/archive.getCrypto().hashLength();
 	}
 	

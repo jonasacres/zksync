@@ -23,7 +23,8 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetTest;
 	ZKArchiveTest.class,
 	ZKMasterTest.class,
 	PageTest.class,
-	PageMerkleTest.class
+	PageMerkleTest.class,
+	PageTreeChunkTest.class
 })
 
 public class ZKFSTests {

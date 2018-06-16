@@ -18,6 +18,7 @@ public class PageTreeChunk {
 	public PageTreeChunk(PageTree tree, byte[] chunkTag, long index) throws IOException {
 		this.index = index;
 		this.chunkTag = chunkTag;
+		this.tree = tree;
 		this.tags = new ArrayList<>(tree.tagsPerChunk());
 		
 		if(isZero(chunkTag)) {
@@ -28,10 +29,10 @@ public class PageTreeChunk {
 	}
 	
 	public boolean hasTag(long offset) {
-		return isZero(getTag(offset));
+		return !isZero(getTag(offset));
 	}
 	
-	public void setTag(long offset, byte[] tag) throws IOException {
+	public void setTag(long offset, byte[] tag) {
 		if(Arrays.equals(tag, tags.get((int) offset))) return;
 		
 		tags.set((int) offset, tag);
@@ -42,14 +43,14 @@ public class PageTreeChunk {
 		return tags.get((int) offset);
 	}
 	
-	public void markDirty() throws IOException {
+	public void markDirty() {
 		dirty = true;
 		tree.markDirty(this);
 	}
 	
 	public PageTreeChunk parent() throws IOException {
 		if(index == 0) return null;
-		return tree.chunkCache.get(tree.indexForParent(index));
+		return tree.chunkAtIndex(tree.indexForParent(index));
 	}
 	
 	protected void initBlank() {
@@ -68,6 +69,8 @@ public class PageTreeChunk {
 		} else {
 			tree.setTag(chunkTag);
 		}
+		
+		dirty = false;
 	}
 	
 	protected void read() throws IOException {
@@ -111,13 +114,13 @@ public class PageTreeChunk {
 
 		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
 				ArchiveAccessor.KEY_TYPE_CIPHER,
-				ArchiveAccessor.KEY_INDEX_PAGE_MERKLE,
+				ArchiveAccessor.KEY_INDEX_PAGE,
 				buf.array());
 	}
 	
 	protected Key authKey() {
 		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
 				ArchiveAccessor.KEY_TYPE_AUTH,
-				ArchiveAccessor.KEY_INDEX_PAGE_MERKLE);
+				ArchiveAccessor.KEY_INDEX_PAGE);
 	}
 }
