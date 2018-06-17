@@ -16,21 +16,38 @@ public class PageTree {
 	protected long inodeId, inodeIdentity;
 	protected long numChunks, maxNumPages, numPages;
 	
-	public PageTree(RefTag tag) throws IOException {
-		this(tag, InodeTable.INODE_ID_INODE_TABLE, 0);
+	/* Open a revtag, which is a reftag to an inode table */ 
+	public PageTree(RefTag revTag) throws IOException {
+		this.archive = revTag.getArchive();
+		this.refTag = revTag;
+		this.inodeId = InodeTable.INODE_ID_INODE_TABLE;
+		this.inodeIdentity = 0;
+		finishInit();
 	}
 	
-	public PageTree(RefTag tag, long inodeId, long inodeIdentity) throws IOException {
-		this.archive = tag.getArchive();
+	public PageTree(Inode inode) {
+		this.archive = inode.fs.archive;
 		assert(0 < tagsPerChunk() && tagsPerChunk() <= Integer.MAX_VALUE);
-		this.refTag = tag;
-		this.inodeId = inodeId;
-		this.inodeIdentity = inodeIdentity;
-
-		int numLeafChunks = (int) Math.ceil(tag.numPages / tagsPerChunk());
-		numChunks = numLeafChunks + chunkIndexForPageNum(0);
-		this.maxNumPages = numLeafChunks * tagsPerChunk();
-		this.numPages = tag.numPages;
+		this.refTag = inode.refTag;
+		this.inodeId = inode.stat.getInodeId();
+		this.inodeIdentity = inode.identity;
+		finishInit();
+	}
+	
+	protected PageTree() {} // used for testing
+	
+	protected void finishInit() {
+		int numLeafChunks = (int) Math.ceil((double) refTag.numPages / tagsPerChunk());
+		int level = (int) Math.ceil(Math.log(numLeafChunks)/Math.log(tagsPerChunk()));
+		int supportNodes = (int) (1-Math.pow(tagsPerChunk(), level))/(1-tagsPerChunk());
+		
+		numChunks = supportNodes + numLeafChunks;
+		this.numPages = refTag.numPages;
+		if(refTag.getRefType() == RefTag.REF_TYPE_2INDIRECT) {
+			this.maxNumPages = numLeafChunks * tagsPerChunk();
+		} else {
+			this.maxNumPages = 1;
+		}
 		
 		this.chunkCache = new HashCache<>(8,
 				(index)->loadChunkAtIndex(index),
@@ -38,13 +55,11 @@ public class PageTree {
 				);
 	}
 	
-	protected PageTree() {} // used for testing
-	
 	public boolean exists() throws IOException {
 		switch(refTag.getRefType()) {
 		case RefTag.REF_TYPE_IMMEDIATE: return true;
 		case RefTag.REF_TYPE_INDIRECT:
-			return archive.storage.exists(Page.pathForTag(refTag.getHash()));
+			return archive.config.getCacheStorage().exists(Page.pathForTag(refTag.getHash()));
 		case RefTag.REF_TYPE_2INDIRECT:
 			return hasTreeContentsLocally();
 		default:
@@ -75,8 +90,10 @@ public class PageTree {
 	}
 	
 	public RefTag commit() throws IOException {
-		while(dirtyChunks.peek() != null) {
-			dirtyChunks.poll().write();
+		if(numPages > 1) {
+			while(dirtyChunks.peek() != null) {
+				dirtyChunks.poll().write();
+			}
 		}
 
 		return getRefTag();
@@ -128,10 +145,12 @@ public class PageTree {
 	}
 	
 	public boolean hasTag(long pageNum) throws IOException {
+		if(pageNum < 0 || pageNum >= numPages) return false;
 		return chunkForPageNum(pageNum).hasTag(pageNum % tagsPerChunk());
 	}
 	
 	public byte[] tagForChunk(long index) throws IOException {
+		if(index == 0) return refTag.getHash();
 		return chunkAtIndex(index).chunkTag;
 	}
 	
@@ -150,12 +169,14 @@ public class PageTree {
 	}
 	
 	protected PageTreeChunk chunkAtIndex(long index) throws IOException {
-		return chunkAtIndex(index);
+		System.out.println("cache check: " + index);
+		return chunkCache.get(index);
 	}
 	
 	protected PageTreeChunk loadChunkAtIndex(long index) throws IOException {
+		System.out.println("loading: " + index);
 		if(index == 0) {
-			return new PageTreeChunk(this, refTag.getHash(), 0);
+			return new PageTreeChunk(this, tagForChunk(0), 0);
 		}
 		
 		if(index >= numChunks) {

@@ -7,6 +7,7 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SignedSecureFile;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PageTreeChunk {
 	protected PageTree tree;
@@ -16,6 +17,7 @@ public class PageTreeChunk {
 	protected boolean dirty;
 	
 	public PageTreeChunk(PageTree tree, byte[] chunkTag, long index) throws IOException {
+		System.out.println("Chunk " + index + ": " + Util.bytesToHex(chunkTag));
 		this.index = index;
 		this.chunkTag = chunkTag;
 		this.tree = tree;

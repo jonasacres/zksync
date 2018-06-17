@@ -11,6 +11,7 @@ import static org.junit.Assert.fail;
 import java.io.IOException;
 import java.util.Arrays;
 
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -72,6 +73,12 @@ public class PageTreeChunkTest {
 		
 		parent = new PageTreeChunk(tree, new byte[crypto.hashLength()], 1234);
 		chunk = new PageTreeChunk(tree, new byte[crypto.hashLength()], 1);
+	}
+	
+	@After
+	public void afterEach() {
+		tree.archive.close();
+		master.close();
 	}
 	
 	@AfterClass
