@@ -206,6 +206,7 @@ public class RefTag implements Comparable<RefTag> {
 	}
 	
 	public ZKArchive getArchive() throws IOException {
+		// TODO DHT: (review) Do we still need cacheOnly? 
 		return cacheOnly ? config.archive.cacheOnlyArchive() : config.archive;
 	}
 	

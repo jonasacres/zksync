@@ -130,6 +130,7 @@ public class PageTreeTest {
 	public void testExistsReturnsTrueIfRefTagIs2IndirectAndChunksAndPagesExist() throws IOException {
 		assertTrue(tree.exists());
 	}
+	
 	// exists returns true if reftag is 2indirect and all chunks and pages present
 	// exists returns false if reftag is 2indirect and all chunks exists but not all pages present
 	// exists returns false if reftag is 2indirect and not all chunks present

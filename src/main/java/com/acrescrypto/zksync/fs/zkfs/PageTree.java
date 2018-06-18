@@ -22,7 +22,7 @@ public class PageTree {
 		this.refTag = revTag;
 		this.inodeId = InodeTable.INODE_ID_INODE_TABLE;
 		this.inodeIdentity = 0;
-		finishInit();
+		initWithSize(refTag.getNumPages());
 	}
 	
 	public PageTree(Inode inode) {
@@ -31,19 +31,34 @@ public class PageTree {
 		this.refTag = inode.refTag;
 		this.inodeId = inode.stat.getInodeId();
 		this.inodeIdentity = inode.identity;
-		finishInit();
+		initWithSize(refTag.getNumPages());
+	}
+	
+	protected PageTree(PageTree original) {
+		this.archive = original.archive;
+		this.refTag = original.refTag;
+		this.inodeId = original.inodeId;
+		this.inodeIdentity = original.inodeIdentity;
+		
+		this.numChunks = original.numChunks;
+		this.numPages = original.numChunks;
+		this.maxNumPages = original.maxNumPages;
+		
+		this.dirtyChunks = original.dirtyChunks;
+		this.chunkCache = original.chunkCache;
 	}
 	
 	protected PageTree() {} // used for testing
 	
-	protected void finishInit() {
-		int numLeafChunks = (int) Math.ceil((double) refTag.numPages / tagsPerChunk());
+	protected void initWithSize(long size) {
+		int numLeafChunks = (int) Math.ceil((double) size / tagsPerChunk());
 		int level = (int) Math.ceil(Math.log(numLeafChunks)/Math.log(tagsPerChunk()));
 		int supportNodes = (int) (1-Math.pow(tagsPerChunk(), level))/(1-tagsPerChunk());
 		
 		numChunks = supportNodes + numLeafChunks;
-		this.numPages = refTag.numPages;
-		if(refTag.getRefType() == RefTag.REF_TYPE_2INDIRECT) {
+		this.numPages = size;
+		
+		if(numPages > 1 || refTag.getRefType() == RefTag.REF_TYPE_2INDIRECT) {
 			this.maxNumPages = numLeafChunks * tagsPerChunk();
 		} else {
 			this.maxNumPages = 1;
@@ -106,14 +121,11 @@ public class PageTree {
 	public void resize(long newMinPages) throws IOException {
 		long currentLevel = levelOfChunkId(chunkIndexForPageNum(0));
 		long newLevel = (int) Math.floor(Math.log(newMinPages)/Math.log(tagsPerChunk()));
-		long diff = newLevel - currentLevel;
 		
-		if(diff == 0) {
+		if(newLevel == currentLevel) {
 			resizeToSameLevel(newMinPages);
-		} else if(diff < 0) {
-			resizeToSmallerLevel(newMinPages, diff);
-		} else if(diff > 0) {
-			resizeToLargerLevel(newMinPages, diff);
+		} else {
+			resizeToDifferentLevel(newMinPages);
 		}
 	}
 	
@@ -128,26 +140,15 @@ public class PageTree {
 		numPages = newMinPages;
 	}
 	
-	protected void resizeToSmallerLevel(long newMinPages, long diff) throws IOException {
-		long newRootId = chunkIdAtPosition(-diff, 0);
-		setTag(loadChunkAtIndex(newRootId).chunkTag);
+	protected void resizeToDifferentLevel(long newMinPages) throws IOException {
+		PageTree existing = new PageTree(this);
+		initWithSize(newMinPages);
 		
-		/* TODO: renumber cached chunks in memory (requires a chance to HashCache) */
-		chunkCache.removeAll();
-	}
-	
-	protected void resizeToLargerLevel(long newMinPages, long diff) throws IOException {
-		PageTreeChunk root = loadChunkAtIndex(0);
-		for(int i = 0; i < diff; i++) {
-			PageTreeChunk newRoot = new PageTreeChunk(this, new byte[archive.crypto.hashLength()], 0);
-			newRoot.setTag(0, root.chunkTag);
-			root = newRoot;
+		for(int i = 0; i < Math.min(existing.numPages, newMinPages); i++) {
+			setPageTag(i, existing.getPageTag(i));
 		}
-
-		/* TODO: renumber cached chunks in memory (requires a chance to HashCache) */
-		chunkCache.removeAll();
 	}
-	
+
 	public boolean hasTag(long pageNum) throws IOException {
 		if(pageNum < 0 || pageNum >= numPages) return false;
 		return chunkForPageNum(pageNum).hasTag(pageNum % tagsPerChunk());
