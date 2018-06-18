@@ -19,7 +19,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.Page;
-import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
+import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -70,7 +70,7 @@ public class SwarmFSTest {
 		
 		ZKFS fs = archive.openBlank();
 		fs.write("test", new byte[archive.getConfig().getPageSize()]);
-		tag = new PageMerkle(fs.inodeForPath("test").getRefTag()).getPageTag(0);
+		tag = new PageTree(fs.inodeForPath("test")).getPageTag(0);
 		
 		swarm = new DummyPeerSwarm(archive.getConfig());
 		swarmFs = new SwarmFS(swarm);

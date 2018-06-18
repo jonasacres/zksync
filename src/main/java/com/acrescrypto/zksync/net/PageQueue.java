@@ -7,12 +7,14 @@ import java.util.PriorityQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.Page;
-import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
+import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.utility.Shuffler;
@@ -104,29 +106,34 @@ public class PageQueue {
 		int classPriority() { return -10; }
 	}
 	
-	class RefTagContentsQueueItem extends QueueItem {
-		PageMerkle merkle;
+	class InodeContentsQueueItem extends QueueItem {
+		PageTree tree;
 		Shuffler shuffler;
 		
-		RefTagContentsQueueItem(int priority, RefTag refTag) {
+		InodeContentsQueueItem(int priority, RefTag revTag, long inodeId) {
 			super(priority);
-			if(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) {
-				shuffler = Shuffler.fixedShuffler(0);
-			} else {
-				try {
-					this.merkle = new PageMerkle(refTag.makeCacheOnly());
-					this.merkle.assertExists();
-					shuffler = Shuffler.fixedShuffler(merkle.numPages());
-				} catch(IOException exc) {
-					shuffler = Shuffler.fixedShuffler(0);
+			try {
+				Inode inode = revTag.getFS().getInodeTable().inodeWithId(inodeId);
+				if(inode.isDeleted()) throw new EINVALException("inode not issued in requested revtag");
+				PageTree tree = new PageTree(inode);
+				tree.assertExists();
+				if(tree.numPages() > Integer.MAX_VALUE) {
+					throw new EINVALException("inode contents has too many pages"); // forces abort of this request
 				}
+				shuffler = Shuffler.fixedShuffler((int) tree.numPages());
+			} catch(IOException exc) {
+				shuffler = Shuffler.fixedShuffler(0);
 			}
 		}
 		
 		@Override
 		QueueItem nextChild() {
 			if(!shuffler.hasNext()) return null;
-			return new PageQueueItem(priority, merkle.getArchive(), merkle.getPageTag(shuffler.next()));
+			try {
+				return new PageQueueItem(priority, tree.getArchive(), tree.getPageTag(shuffler.next()));
+			} catch(IOException exc) {
+				return null;
+			}
 		}
 		
 		@Override
@@ -158,17 +165,15 @@ public class PageQueue {
 		@Override
 		QueueItem nextChild() {
 			try {
-				RefTag refTag;			
-
-				do {
-					if(!shuffler.hasNext()) {
-						return null;
-					}
+				while(shuffler.hasNext()) {
 					int inodeId = shuffler.next();
-					refTag = inodeTable.inodeWithId(inodeId).getRefTag();
-				} while(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);
+					RefTag refTag = inodeTable.inodeWithId(inodeId).getRefTag();
+					if(refTag.getRefType() != RefTag.REF_TYPE_IMMEDIATE) {
+						return new InodeContentsQueueItem(priority, refTag, inodeId);
+					}
+				}
 				
-				return new RefTagContentsQueueItem(priority, refTag);
+				return null;
 			} catch (IOException exc) {
 				logger.error("Caught exception queuing revision tag {}", revTag, exc);
 				return null;
@@ -240,8 +245,8 @@ public class PageQueue {
 		addItem(new PageQueueItem(priority, archive, pageTag));
 	}
 	
-	public void addRefTagContents(int priority, RefTag refTag) {
-		addItem(new RefTagContentsQueueItem(priority, refTag));
+	public void addInodeContents(int priority, RefTag revTag, long inodeId) {
+		addItem(new InodeContentsQueueItem(priority, revTag, inodeId));
 	}
 	
 	public void addRevisionTag(int priority, RefTag revTag) {

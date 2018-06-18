@@ -21,7 +21,7 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.zkfs.Page;
-import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
+import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -133,8 +133,8 @@ public class ChunkAccumulatorTest {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
 		fs.commit();
-		PageMerkle merkle = new PageMerkle(fs.inodeForPath("file").getRefTag());
-		tag = merkle.getPageTag(0);
+		PageTree tree = new PageTree(fs.inodeForPath("file"));
+		tag = tree.getPageTag(0);
 		page = archive.getStorage().read(Page.pathForTag(tag));
 		
 		ByteBuffer buf = ByteBuffer.wrap(page);

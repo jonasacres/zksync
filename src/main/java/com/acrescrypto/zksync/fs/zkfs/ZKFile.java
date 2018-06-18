@@ -17,7 +17,7 @@ public class ZKFile extends File {
 	protected Inode inode; /** inode describing metadata of this file */
 	protected long offset; /** current location of file pointer (offset in bytes into file) */
 	protected String path; /** path from which the file was opened */
-	protected PageMerkle merkle; /** Merkle tree of page hashes, used to locate/validate page contents. */
+	protected PageTree tree; /** Tree of page hashes, used to locate/validate page contents. */
 	protected int mode; /** file access mode bitmask */
 	protected Page bufferedPage; /** buffered page contents (page for current file pointer offset) */
 	protected boolean dirty; /** true if file has been modified since last flush */
@@ -50,7 +50,7 @@ public class ZKFile extends File {
 			this.inode = fs.create(path);
 		}
 		
-		this.merkle = new PageMerkle(this.inode.getRefTag());
+		this.tree = new PageTree(this.inode);
 		if((mode & O_TRUNC) != 0) truncate(0);
 		if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();
 	}
@@ -65,16 +65,17 @@ public class ZKFile extends File {
 		return inode;
 	}
 	
-	/** Updates the page merkle reference to a specific page number. Updates inode reftag automatically. */
+	/** Updates the page tree reference to a specific page number. Updates inode reftag automatically. */
 	public void setPageTag(int pageNum, byte[] hash) throws IOException {
 		assertWritable();
-		merkle.setPageTag(pageNum, hash);
-		inode.setRefTag(merkle.getRefTag());
+		tree.setPageTag(pageNum, hash);
+		inode.setRefTag(tree.getRefTag());
 	}
 	
-	/** Obtain page merkle reference for a specific page number. */
-	public byte[] getPageTag(int pageNum) {
-		return merkle.getPageTag(pageNum);
+	/** Obtain page tree reference for a specific page number. 
+	 * @throws IOException */
+	public byte[] getPageTag(int pageNum) throws IOException {
+		return tree.getPageTag(pageNum);
 	}
 
 	@Override
@@ -102,9 +103,9 @@ public class ZKFile extends File {
 			seek(oldOffset, SEEK_SET);
 		} else {
 			int newPageCount = (int) Math.ceil((double) size/zkfs.archive.config.pageSize);
-			merkle.resize(newPageCount);
-			for(int i = newPageCount; i < merkle.maxPages; i++) {
-				merkle.setPageTag(i, new byte[zkfs.archive.crypto.hashLength()]);
+			tree.resize(newPageCount);
+			for(int i = newPageCount; i < tree.maxNumPages; i++) {
+				tree.setPageTag(i, new byte[zkfs.archive.crypto.hashLength()]);
 			}
 
 			inode.getStat().setSize(size);
@@ -148,7 +149,7 @@ public class ZKFile extends File {
 		
 		bufferedPage = new Page(this, pageNum);
 		
-		if(merkle.hasTag(pageNum) && pageNum < inode.refTag.numPages) {
+		if(tree.hasTag(pageNum) && pageNum < inode.refTag.numPages) {
 			bufferedPage.load();
 		} else {
 			bufferedPage.blank();
@@ -226,7 +227,7 @@ public class ZKFile extends File {
 		inode.setChangedFrom(zkfs.baseRevision);
 		inode.setModifiedTime(now);
 		if(bufferedPage != null) bufferedPage.flush();
-		inode.setRefTag(merkle.commit());
+		inode.setRefTag(tree.commit());
 		zkfs.inodeTable.setInode(inode);
 		dirty = false;
 	}

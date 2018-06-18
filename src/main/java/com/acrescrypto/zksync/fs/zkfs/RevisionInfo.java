@@ -32,7 +32,7 @@ public class RevisionInfo extends ZKFile {
 		this.path = REVISION_INFO_PATH;
 		this.mode = O_RDWR;
 		this.inode = inode;
-		this.merkle = new PageMerkle(this.inode.getRefTag());
+		this.tree = new PageTree(this.inode);
 		load();
 	}
 

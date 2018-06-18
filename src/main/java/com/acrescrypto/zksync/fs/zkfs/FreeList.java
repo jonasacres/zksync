@@ -27,7 +27,7 @@ public class FreeList extends ZKFile {
 		this.path = FREE_LIST_PATH;
 		this.mode = O_RDWR;
 		this.inode = inode;
-		this.merkle = new PageMerkle(this.inode.getRefTag());
+		this.tree = new PageTree(this.inode);
 		lastReadPage = this.inode.refTag.numPages;
 	}
 	

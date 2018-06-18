@@ -24,7 +24,7 @@ public class RequestPool {
 	
 	boolean dirty;
 	ZKArchiveConfig config;
-	HashMap<Integer,LinkedList<RefTag>> requestedRefTags = new HashMap<>();
+	HashMap<Integer,HashMap<RefTag,LinkedList<Long>>> requestedInodes = new HashMap<>();
 	HashMap<Integer,LinkedList<RefTag>> requestedRevisions = new HashMap<>();
 	HashMap<Integer,LinkedList<Long>> requestedPageTags = new HashMap<>();
 	
@@ -74,17 +74,18 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void addRefTag(int priority, RefTag refTag) {
-		requestedRefTags.putIfAbsent(priority, new LinkedList<>());
-		requestedRefTags.get(priority).add(refTag);
+	public synchronized void addInode(int priority, RefTag revTag, long inodeId) {
+		requestedInodes.putIfAbsent(priority, new HashMap<>());
+		requestedInodes.get(priority).putIfAbsent(revTag, new LinkedList<>());
+		requestedInodes.get(priority).get(revTag).add(inodeId);
 		dirty = true;
 
 		if(config.canReceive()) {
 			for(PeerConnection connection : config.getSwarm().connections) {
-				ArrayList<RefTag> list = new ArrayList<>(1);
-				list.add(refTag);
+				ArrayList<Long> list = new ArrayList<>(1);
+				list.add(inodeId);
 				try {
-					connection.requestRefTags(priority, list);
+					connection.requestInodes(priority, revTag, list);
 				} catch (PeerCapabilityException e) {}
 			}
 		}
@@ -123,11 +124,16 @@ public class RequestPool {
 	}
 	
 	public boolean hasPageTag(int priority, long shortTag) {
-		return requestedPageTags.getOrDefault(priority, new LinkedList<>()).contains(shortTag);
+		return requestedPageTags
+				.getOrDefault(priority, new LinkedList<>())
+				.contains(shortTag);
 	}
 	
-	public boolean hasRefTag(int priority, RefTag refTag) {
-		return requestedRefTags.getOrDefault(priority, new LinkedList<>()).contains(refTag);
+	public boolean hasInode(int priority, RefTag refTag, long inodeId) {
+		return requestedInodes
+				.getOrDefault(priority, new HashMap<>())
+				.getOrDefault(refTag, new LinkedList<>())
+				.contains(inodeId);
 	}
 	
 	public boolean hasRevision(int priority, RefTag revTag) {
@@ -162,8 +168,10 @@ public class RequestPool {
 		}
 		
 		try {
-			for(int priority : requestedRefTags.keySet()) {
-				conn.requestRefTags(priority, requestedRefTags.get(priority));
+			for(int priority : requestedInodes.keySet()) {
+				for(RefTag revTag : requestedInodes.get(priority).keySet()) {
+					conn.requestInodes(priority, revTag, requestedInodes.get(priority).get(revTag));
+				}
 			}
 			
 			for(int priority : requestedRevisions.keySet()) {
@@ -206,15 +214,23 @@ public class RequestPool {
 	}
 	
 	protected void pruneRefTags() throws IOException {
-		for(int priority : requestedRefTags.keySet()) {
-			LinkedList<RefTag> existing = requestedRefTags.get(priority);
-			existing.removeIf((refTag)->{
-				try {
-					return config.getArchive().hasRefTag(refTag);
-				} catch(IOException exc) {
-					return false;
+		for(int priority : requestedInodes.keySet()) {
+			HashMap<RefTag,LinkedList<Long>> existing = requestedInodes.get(priority);
+			LinkedList<RefTag> emptyTags = new LinkedList<>();
+			for(RefTag revTag : existing.keySet()) {
+				LinkedList<Long> inodeIds = existing.get(revTag);
+				if(inodeIds.isEmpty()) {
+					emptyTags.add(revTag);
+				} else {
+					inodeIds.removeIf((inodeId)->{
+						try {
+							return config.getArchive().hasInode(revTag, inodeId);
+						} catch (IOException e) {
+							return false;
+						}
+					});
 				}
-			});
+			}
 		}
 	}
 
@@ -270,14 +286,20 @@ public class RequestPool {
 			pieces.add(buf.array());
 		}
 		
-		pieces.add(Util.serializeInt(requestedRefTags.size()));
-		for(int priority : requestedRefTags.keySet()) {
-			LinkedList<RefTag> list = requestedRefTags.get(priority);
-			ByteBuffer buf = ByteBuffer.allocate(2*4+config.refTagSize()*list.size());
-			buf.putInt(priority);
-			buf.putInt(list.size());
-			for(RefTag tag : list) buf.put(tag.getBytes());
-			pieces.add(buf.array());
+		pieces.add(Util.serializeInt(requestedInodes.size()));
+		for(int priority : requestedInodes.keySet()) {
+			HashMap<RefTag, LinkedList<Long>> map = requestedInodes.get(priority);
+			pieces.add(Util.serializeInt(priority));
+			pieces.add(Util.serializeInt(map.size()));
+
+			for(RefTag revTag : map.keySet()) {
+				LinkedList<Long> inodeIds = map.get(revTag);
+				ByteBuffer buf = ByteBuffer.allocate(4 + config.refTagSize() + 4 + 8*inodeIds.size());
+				buf.put(revTag.getBytes());
+				buf.putInt(inodeIds.size());
+				for(long inodeId : inodeIds) buf.putLong(inodeId);
+				pieces.add(buf.array());
+			}
 		}
 		
 		pieces.add(Util.serializeInt(requestedRevisions.size()));
@@ -309,15 +331,19 @@ public class RequestPool {
 			}
 		}
 		
-		int numRefTagPriorities = buf.getInt();
-		for(int i = 0; i < numRefTagPriorities; i++) {
+		int numInodePriorities = buf.getInt();
+		for(int i = 0; i < numInodePriorities; i++) {
 			int priority = buf.getInt();
-			int numEntries = buf.getInt();
-			for(int j = 0; j < numEntries; j++) {
+			int numRevTags = buf.getInt();
+			for(int j = 0; j < numRevTags; j++) {
 				byte[] tagBytes = new byte[config.refTagSize()];
 				buf.get(tagBytes);
-				RefTag tag = new RefTag(config, tagBytes);
-				addRefTag(priority, tag);
+				int numInodeIds = buf.getInt();
+				RefTag revTag = new RefTag(config, tagBytes);
+				
+				for(int k = 0; k < numInodeIds; k++) {
+					addInode(priority, revTag, buf.getLong());
+				}
 			}
 		}
 		

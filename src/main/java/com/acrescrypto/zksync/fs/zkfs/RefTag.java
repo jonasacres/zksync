@@ -19,7 +19,7 @@ public class RefTag implements Comparable<RefTag> {
 	protected long numPages;
 	protected boolean cacheOnly;
 	
-	/** doubly-indirect storage; tag points to a merkle tree containing tags for each page of data. */
+	/** doubly-indirect storage; tag points to a tree containing tags for each page of data. */
 	public static final byte REF_TYPE_2INDIRECT = 2;
 	
 	/** indirect storage; tag points to a single page, containing the data. */

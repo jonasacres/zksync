@@ -299,13 +299,13 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void requestRefTag(int priority, RefTag refTag) {
-		pool.addRefTag(priority, refTag);
+	public void requestInode(int priority, RefTag revTag, long inodeId) {
+		pool.addInode(priority, revTag, inodeId);
 		for(PeerConnection connection : connections) {
-			ArrayList<RefTag> list = new ArrayList<>(1);
-			list.add(refTag);
+			ArrayList<Long> list = new ArrayList<>(1);
+			list.add(inodeId);
 			try {
-				connection.requestRefTags(priority, list);
+				connection.requestInodes(priority, revTag, list);
 			} catch (PeerCapabilityException e) {}
 		}
 	}

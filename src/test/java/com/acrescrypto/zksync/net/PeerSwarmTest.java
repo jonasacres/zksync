@@ -20,7 +20,7 @@ import org.junit.Test;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.TestUtils;
-import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
+import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -91,7 +91,7 @@ public class PeerSwarmTest {
 		PeerAdvertisement seenAd;
 		int requestedPriority;
 		boolean requestedAll, requestedAllCancel, requestedPause, requestedPauseValue;
-		long requestedTag;
+		long requestedTag, requestedInodeId;
 		RefTag requestedRefTag, requestedRevTag;
 		
 		public DummyConnection(DummySocket socket) throws IOException {
@@ -120,10 +120,11 @@ public class PeerSwarmTest {
 				break;
 			}
 		}
-		@Override public void requestRefTags(int priority, Collection<RefTag> tags) {
+		@Override public void requestInodes(int priority, RefTag revTag, Collection<Long> inodeIds) {
 			requestedPriority = priority;
-			for(RefTag tag : tags) {
-				this.requestedRefTag = tag;
+			this.requestedRevTag = revTag;
+			for(Long inodeId : inodeIds) {
+				this.requestedInodeId = inodeId;
 				break;
 			}
 		}
@@ -161,8 +162,8 @@ public class PeerSwarmTest {
 		
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		PageMerkle merkle = new PageMerkle(fs.inodeForPath("file").getRefTag());
-		pageTag = merkle.getPageTag(0);
+		PageTree tree = new PageTree(fs.inodeForPath("file"));
+		pageTag = tree.getPageTag(0);
 	}
 	
 	@Before
@@ -442,8 +443,8 @@ public class PeerSwarmTest {
 		
 		ZKFS fs = swarm.config.getArchive().openBlank();
 		fs.write("newfile", new byte[swarm.config.getPageSize()]);
-		PageMerkle merkle = new PageMerkle(fs.inodeForPath("newfile").getRefTag());
-		byte[] tag = merkle.getPageTag(0);
+		PageTree tree = new PageTree(fs.inodeForPath("newfile"));
+		byte[] tag = tree.getPageTag(0);
 		
 		Thread thread = new Thread(()->{
 			swarm.waitForPage(tag);
@@ -593,9 +594,10 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testRequestRefTagSendsRequestRefTagToAllCurrentPeers() throws IOException {
+	public void testRequestInodeSendsRequestInodeToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
-		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag revTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		long inodeId = archive.getCrypto().defaultPrng().getLong();
 		
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
@@ -603,20 +605,23 @@ public class PeerSwarmTest {
 			assertFalse(conns[i].requestedAll);
 		}
 		
-		swarm.requestRefTag(-44332211, tag);
+		swarm.requestInode(-44332211, revTag, inodeId);
 		for(DummyConnection conn : conns) {
-			assertEquals(tag, conn.requestedRefTag);
+			assertEquals(revTag, conn.requestedRevTag);
+			assertEquals(inodeId, conn.requestedInodeId);
 			assertEquals(-44332211, conn.requestedPriority);
 		}
 	}
 	
 	@Test
-	public void testRequestRefTagSendsRequestRefTagToAllNewPeers() throws IOException {
+	public void testRequestInodeSendsRequestInodeToAllNewPeers() throws IOException {
 		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		long inodeId = archive.getCrypto().defaultPrng().getLong();
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
-		swarm.requestRefTag(Integer.MAX_VALUE, tag);
+		swarm.requestInode(Integer.MAX_VALUE, tag, inodeId);
 		swarm.openedConnection(conn);
-		assertEquals(tag, conn.requestedRefTag);
+		assertEquals(tag, conn.requestedRevTag);
+		assertEquals(inodeId, conn.requestedInodeId);
 		assertEquals(Integer.MAX_VALUE, conn.requestedPriority);
 	}
 	

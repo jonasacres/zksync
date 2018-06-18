@@ -26,20 +26,19 @@ public class ArchiveAccessor {
 	public final static int KEY_INDEX_ARCHIVE = 0;
 	public final static int KEY_INDEX_LOCAL = 1;
 	public final static int KEY_INDEX_PAGE = 2;
-	public final static int KEY_INDEX_PAGE_MERKLE = 3; // TODO DHT: deprecated; remove
-	public final static int KEY_INDEX_REVISION = 4;
-	public final static int KEY_INDEX_CONFIG_FILE = 5;
-	public final static int KEY_INDEX_REVISION_TREE = 6;
-	public final static int KEY_INDEX_SEED = 7;
-	public final static int KEY_INDEX_SEED_REG = 8;
-	public final static int KEY_INDEX_SEED_TEMPORAL = 9;
-	public final static int KEY_INDEX_STORED_ACCESS = 10;
-	public final static int KEY_INDEX_REFTAG = 11;
-	public final static int KEY_INDEX_BLACKLIST = 12;
-	public final static int KEY_INDEX_ACCUMULATOR = 13;
-	public final static int KEY_INDEX_AD_IDENTITY = 14;
-	public final static int KEY_INDEX_AD_ARCHIVE_ID = 15;
-	public final static int KEY_INDEX_REQUEST_POOL = 16;
+	public final static int KEY_INDEX_REVISION = 3;
+	public final static int KEY_INDEX_CONFIG_FILE = 4;
+	public final static int KEY_INDEX_REVISION_TREE = 5;
+	public final static int KEY_INDEX_SEED = 6;
+	public final static int KEY_INDEX_SEED_REG = 7;
+	public final static int KEY_INDEX_SEED_TEMPORAL = 8;
+	public final static int KEY_INDEX_STORED_ACCESS = 9;
+	public final static int KEY_INDEX_REFTAG = 10;
+	public final static int KEY_INDEX_BLACKLIST = 11;
+	public final static int KEY_INDEX_ACCUMULATOR = 12;
+	public final static int KEY_INDEX_AD_IDENTITY = 13;
+	public final static int KEY_INDEX_AD_ARCHIVE_ID = 14;
+	public final static int KEY_INDEX_REQUEST_POOL = 15;
 	
 	protected ZKMaster master;
 

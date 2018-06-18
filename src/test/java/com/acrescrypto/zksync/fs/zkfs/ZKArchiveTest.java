@@ -63,9 +63,9 @@ public class ZKArchiveTest {
 	public void testHasPageTagReturnsTrueIfPageTagInStorage() throws IOException {
 		ZKFS fs = addMockData(archive);
 		Inode inode = fs.inodeForPath("file1");
-		PageMerkle merkle = new PageMerkle(inode.refTag);
+		PageTree tree = new PageTree(inode);
 		
-		assertTrue(archive.hasPageTag(merkle.getPageTag(0)));
+		assertTrue(archive.hasPageTag(tree.getPageTag(0)));
 		fs.close();
 	}
 	
@@ -75,43 +75,57 @@ public class ZKArchiveTest {
 	}
 	
 	@Test
-	public void testHasRefTagReturnsTrueIfAllPagesOfRefTagInStorage() throws IOException {
+	public void testHasInodeReturnsTrueIfAllPagesOfRefTagInStorage() throws IOException {
 		for(int i = 0; i <= 2; i++) {
 			ZKFS fs = addMockData(archive);
 			Inode inode = fs.inodeForPath("file"+i);
-			assertTrue(archive.hasRefTag(inode.refTag));
+			assertTrue(archive.hasInode(fs.baseRevision, inode.stat.getInodeId()));
 			fs.close();
 		}
 	}
 	
 	@Test
-	public void testHasRefTagReturnsFalseIfAnyPagesMissingFromStorage() throws IOException {
+	public void testHasInodeReturnsFalseIfAnyPagesMissingFromStorage() throws IOException {
 		ZKFS fs = addMockData(archive);
 		for(int i = 1; i <= 2; i++) {	
 			Inode inode = fs.inodeForPath("file"+i);
-			PageMerkle merkle = new PageMerkle(inode.refTag);
-			archive.storage.unlink(Page.pathForTag(merkle.getPageTag(0)));
-			assertFalse(archive.hasRefTag(inode.refTag));
+			PageTree tree = new PageTree(inode);
+			archive.storage.unlink(Page.pathForTag(tree.getPageTag(0)));
+			assertFalse(archive.hasInode(fs.baseRevision, inode.stat.getInodeId()));
 		}
 		fs.close();
 	}
 	
 	@Test
-	public void testHasRefTagReturnsFalseIfMerkleChunkMissingFromStorage() throws IOException {
+	public void testHasInodeReturnsFalseIfPageTreeChunkMissingFromStorage() throws IOException {
 		ZKFS fs = addMockData(archive);
 		Inode inode = fs.inodeForPath("file2");
-		archive.storage.unlink(Page.pathForTag(PageMerkle.tagForChunk(inode.refTag, 0)));
-		assertFalse(archive.hasRefTag(inode.refTag));
+		PageTree tree = new PageTree(inode);
+		
+		archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
+		assertFalse(archive.hasInode(fs.baseRevision, inode.getStat().getInodeId()));
 		fs.close();
 	}
 	
 	@Test
-	public void testHasRefTagReturnsFalseIfRefTagIsNonsense() throws IOException {
-		RefTag refTag;
-		do {
-			refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
-		} while(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);
-		assertFalse(archive.hasRefTag(refTag));
+	public void testHasInodeReturnsFalseIfRevTagIsNonsense() throws IOException {
+		ZKFS fs = addMockData(archive);
+		RefTag revTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+		assertFalse(archive.hasInode(revTag, fs.stat("file2").getInodeId()));
+	}
+	
+	@Test
+	public void testHasInodeReturnsFalseIfInodeIsUnissued() throws IOException {
+		ZKFS fs = addMockData(archive);
+		assertFalse(archive.hasInode(fs.baseRevision, fs.getInodeTable().nextInodeId));
+	}
+	
+	@Test
+	public void testHasInodeReturnsFalseIfInodeIsDeleted() throws IOException {
+		ZKFS fs = addMockData(archive);
+		Inode inode = fs.inodeForPath("file2");
+		fs.unlink("file2");
+		assertFalse(archive.hasInode(fs.baseRevision, inode.stat.getInodeId()));
 	}
 	
 	@Test
@@ -126,18 +140,19 @@ public class ZKArchiveTest {
 		for(int i = 1; i <= 2; i++) {
 			ZKFS fs = addMockData(archive);
 			Inode inode = fs.inodeForPath("file"+i);
-			PageMerkle merkle = new PageMerkle(inode.refTag);
-			archive.storage.unlink(Page.pathForTag(merkle.getPageTag(0)));
+			PageTree tree = new PageTree(inode);
+			archive.storage.unlink(Page.pathForTag(tree.getPageTag(0)));
 			assertFalse(archive.hasRevision(fs.baseRevision));
 			fs.close();
 		}
 	}
 	
 	@Test
-	public void testHasRevisionReturnsFalseIfMissingAnyFileMerkleChunks() throws IOException {
+	public void testHasRevisionReturnsFalseIfMissingAnyFilePageTreeChunks() throws IOException {
 		ZKFS fs = addMockData(archive);
 		Inode inode = fs.inodeForPath("file2");
-		archive.storage.unlink(Page.pathForTag(PageMerkle.tagForChunk(inode.refTag, 0)));
+		PageTree tree = new PageTree(inode);
+		archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
 		assertFalse(archive.hasRevision(fs.baseRevision));
 		fs.close();
 	}
@@ -145,19 +160,20 @@ public class ZKArchiveTest {
 	@Test
 	public void testHasRevisionReturnsFalseIfPagesMissingFromInodeTable() throws IOException {
 		ZKFS fs = addMockData(archive);
-		PageMerkle merkle = new PageMerkle(fs.baseRevision);
-		archive.storage.unlink(Page.pathForTag(merkle.getPageTag(0)));
+		PageTree tree = new PageTree(fs.baseRevision);
+		archive.storage.unlink(Page.pathForTag(tree.getPageTag(0)));
 		assertFalse(archive.hasRevision(fs.baseRevision));
 		fs.close();
 	}
 	
 	@Test
-	public void testHasRevisionReturnsFalseIfMerkleChunksMissingFromInodeTable() throws IOException {
+	public void testHasRevisionReturnsFalseIfPageTreeChunksMissingFromInodeTable() throws IOException {
 		ZKFS fs = addMockData(archive);
 		for(int i = 0; i < 1024; i++) fs.write(""+i, "".getBytes());
 		RefTag revTag = fs.commit();
 		assertTrue(revTag.numPages > 1);
-		archive.storage.unlink(Page.pathForTag(PageMerkle.tagForChunk(revTag, 0)));
+		PageTree tree = new PageTree(revTag);
+		archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
 		assertFalse(archive.hasRevision(revTag));
 		fs.close();
 	}

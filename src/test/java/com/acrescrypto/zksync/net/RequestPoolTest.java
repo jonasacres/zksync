@@ -20,6 +20,8 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
+import com.acrescrypto.zksync.fs.zkfs.Inode;
+import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
@@ -39,9 +41,12 @@ public class RequestPoolTest {
 	class DummyConnection extends PeerConnection {
 		boolean requestedAll, mockSeedOnly, setPaused, setPausedValue, requestedConfigInfo;
 		int requestedPriority;
+		RefTag requestedRevTag;
+		
 		LinkedList<RefTag> requestedRefTags = new LinkedList<>();
 		LinkedList<RefTag> requestedRevisions = new LinkedList<>();
 		LinkedList<Long> requestedPageTags = new LinkedList<>();
+		LinkedList<Long> requestedInodeIds = new LinkedList<>();
 		
 		@Override public void setPaused(boolean paused) {
 			this.setPaused = true;
@@ -54,10 +59,11 @@ public class RequestPoolTest {
 			requestedPageTags.addAll(pageTags);
 		}
 		
-		@Override public void requestRefTags(int priority, Collection<RefTag> refTags) throws PeerCapabilityException { 
+		@Override public void requestInodes(int priority, RefTag revTag, Collection<Long> inodeIds) throws PeerCapabilityException { 
 			if(mockSeedOnly) throw new PeerCapabilityException();
 			requestedPriority = priority;
-			requestedRefTags.addAll(refTags);
+			requestedRevTag = revTag;
+			requestedInodeIds.addAll(inodeIds);
 		}
 		
 		@Override public void requestRevisionContents(int priority, Collection<RefTag> refTags) throws PeerCapabilityException {
@@ -131,11 +137,11 @@ public class RequestPoolTest {
 	}
 	
 	@Test
-	public void testAddRefTag() throws IOException {
+	public void testAddInode() throws IOException {
 		RefTag refTag = archive.openBlank().commit();
-		assertFalse(pool.hasRefTag(271828183, refTag));
-		pool.addRefTag(271828183, refTag);
-		assertTrue(pool.hasRefTag(271828183, refTag));
+		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
+		pool.addInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE);
+		assertTrue(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
 	}
 	
 	@Test
@@ -213,16 +219,18 @@ public class RequestPoolTest {
 	}
 	
 	@Test
-	public void testAddRequestsToPeerCallsRequestRefTags() {
-		LinkedList<RefTag> tags = new LinkedList<>();
+	public void testAddRequestsToPeerCallsRequestInodes() {
+		RefTag revTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+		LinkedList<Long> inodeIds = new LinkedList<>();
+		
 		for(int i = 0; i < 16; i++) {
-			RefTag tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
-			tags.add(tag);
-			pool.addRefTag(321, tag);
+			inodeIds.add(crypto.defaultPrng().getLong());
+			pool.addInode(321, revTag, inodeIds.getLast());
 		}
 		
 		pool.addRequestsToConnection(conn);
-		assertEquals(tags, conn.requestedRefTags);
+		assertEquals(inodeIds, conn.requestedInodeIds);
+		assertEquals(revTag, conn.requestedRevTag);
 		assertEquals(321, conn.requestedPriority);
 	}
 
@@ -271,29 +279,28 @@ public class RequestPoolTest {
 	}
 	
 	@Test
-	public void testPruneRemovesAcquiredRefTags() throws IOException {
+	public void testPruneRemovesAcquiredInodes() throws IOException {
 		ZKFS fs = archive.openBlank();
 		fs.write("testpath", new byte[2*archive.getConfig().getPageSize()]);
-		RefTag realTag = fs.inodeForPath("testpath").getRefTag();
-
-		LinkedList<RefTag> tags = new LinkedList<>();
+		fs.commit();
+		
+		Inode realInode = fs.inodeForPath("testpath");
+		LinkedList<Long> inodeIds = new LinkedList<>();
+		
 		for(int i = 0; i < 16; i++) {
-			RefTag tag;
-			do {
-				tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
-			} while(tag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);
-			tags.add(tag);
-			pool.addRefTag(i, tag);
+			inodeIds.add(crypto.defaultPrng().getLong());
+			pool.addInode(i, fs.getBaseRevision(), inodeIds.getLast());
 		}
 		
-		pool.addRefTag(-1, realTag);
-		assertTrue(pool.hasRefTag(-1, realTag));
+		pool.addInode(-1, fs.getBaseRevision(), realInode.getStat().getInodeId());
+		assertTrue(pool.hasInode(-1, fs.getBaseRevision(), realInode.getStat().getInodeId()));
 		pool.prune();
-		for(int i = 0; i < tags.size(); i++) {
-			assertTrue(pool.hasRefTag(i, tags.get(i)));
+		
+		for(int i = 0; i < inodeIds.size(); i++) {
+			assertTrue(pool.hasInode(i, fs.getBaseRevision(), inodeIds.get(i)));
 		}
 		
-		assertFalse(pool.hasRefTag(-1, realTag));
+		assertFalse(pool.hasInode(-1, fs.getBaseRevision(), realInode.getStat().getInodeId()));
 	}
 	
 	@Test
@@ -349,7 +356,11 @@ public class RequestPoolTest {
 			tags.add(new RefTag(archive, crypto.rng(archive.getConfig().refTagSize())));
 			
 			if(i % 3 == 0) pool.addPageTag(i, tags.peekLast().getShortHash());
-			if(i % 3 == 1) pool.addRefTag(i, tags.peekLast());
+			if(i % 3 == 1) {
+				for(int j = 0; j < 4; j++) {
+					pool.addInode(i, tags.peekLast(), tags.peekLast().getShortHash()+j);
+				}
+			}
 			if(i % 3 == 2) pool.addRevision(i, tags.peekLast());
 		}
 		
@@ -360,7 +371,11 @@ public class RequestPoolTest {
 		assertEquals(pool.requestingEverything, pool2.requestingEverything);
 		for(int i = 0; i < 64; i++) {
 			if(i % 3 == 0) assertTrue(pool2.hasPageTag(i, tags.get(i).getShortHash()));
-			if(i % 3 == 1) assertTrue(pool2.hasRefTag(i, tags.get(i)));
+			if(i % 3 == 1) {
+				for(int j = 0; j < 4; j++) {
+					assertTrue(pool2.hasInode(i, tags.get(i), tags.get(i).getShortHash() + j));
+				}
+			}
 			if(i % 3 == 2) assertTrue(pool2.hasRevision(i, tags.get(i)));
 		}
 		

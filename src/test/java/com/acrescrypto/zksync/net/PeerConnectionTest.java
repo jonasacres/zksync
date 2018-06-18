@@ -37,9 +37,10 @@ import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
+import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.Page;
-import com.acrescrypto.zksync.fs.zkfs.PageMerkle;
+import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
@@ -49,7 +50,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.PageQueue.EverythingQueueItem;
 import com.acrescrypto.zksync.net.PageQueue.PageQueueItem;
 import com.acrescrypto.zksync.net.PageQueue.QueueItem;
-import com.acrescrypto.zksync.net.PageQueue.RefTagContentsQueueItem;
+import com.acrescrypto.zksync.net.PageQueue.InodeContentsQueueItem;
 import com.acrescrypto.zksync.net.PageQueue.RevisionQueueItem;
 import com.acrescrypto.zksync.net.PeerConnection.PeerCapabilityException;
 import com.acrescrypto.zksync.utility.Util;
@@ -500,28 +501,31 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testRequestRefTags() throws PeerCapabilityException, IOException {
-		int numTags = 16;
-		ArrayList<RefTag> tags = new ArrayList<>(numTags);
+	public void testRequestInodes() throws PeerCapabilityException, IOException {
+		int numInodes = 16;
+		RefTag revTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+		ArrayList<Long> inodeIds = new ArrayList<>(numInodes);
 		
-		for(int i = 0; i < numTags; i++) {
-			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
+		for(int i = 0; i < numInodes; i++) {
+			inodeIds.add(crypto.defaultPrng().getLong());
 		}
 		
-		conn.requestRefTags(Integer.MIN_VALUE, tags);
-		assertReceivedCmd(PeerConnection.CMD_REQUEST_REF_TAGS);
+		conn.requestInodes(Integer.MIN_VALUE, revTag, inodeIds);
+		assertReceivedCmd(PeerConnection.CMD_REQUEST_INODES);
 		assertReceivedBytes(Util.serializeInt(Integer.MIN_VALUE));
-		for(RefTag tag : tags) assertReceivedBytes(tag.getBytes());
+		assertReceivedBytes(revTag.getBytes());
+		for(Long inodeId : inodeIds) assertReceivedBytes(Util.serializeLong(inodeId));
 		assertFinished();
 	}
 	
 	@Test
-	public void testRequestRefTagsThrowsExceptionIfNotFullPeer() throws PeerCapabilityException {
+	public void testRequestInodesThrowsExceptionIfNotFullPeer() throws PeerCapabilityException {
 		blindPeer();
 		try {
-			ArrayList<RefTag> tags = new ArrayList<>(1);
-			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
-			conn.requestRefTags(0, tags);
+			RefTag revTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			ArrayList<Long> inodeIds = new ArrayList<>(1);
+			inodeIds.add(crypto.defaultPrng().getLong());
+			conn.requestInodes(0, revTag, inodeIds);
 			fail();
 		} catch(PeerCapabilityException exc) {
 			assertNoMessage();
@@ -879,70 +883,83 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testRequestRefTagsAddsRequestedRefTagsToPageQueue() throws ProtocolViolationException, IOException {
+	public void testRequestInodesAddsRequestedInodesToPageQueue() throws ProtocolViolationException, IOException {
 		ZKFS fs = archive.openBlank();
-		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REF_TAGS);
-		RefTag[] tags = new RefTag[16];
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_INODES);
+		Inode[] inodes = new Inode[16];
 
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 
-		for(int i = 0; i < tags.length; i++) {
+		for(int i = 0; i < inodes.length; i++) {
 			fs.write("file"+i, new byte[archive.getConfig().getPageSize()]);
-			tags[i] = fs.inodeForPath("file"+i).getRefTag();
-			msg.receivedData((byte) 0, tags[i].getBytes());
+			inodes[i] = fs.inodeForPath("file"+i);
+		}
+		
+		msg.receivedData((byte) 0, fs.commit().getBytes());
+		
+		for(Inode inode : inodes) {
+			msg.receivedData((byte) 0, Util.serializeLong(inode.getStat().getInodeId()));
 		}
 
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 		conn.handle(msg);
 		
-		for(RefTag tag : tags) {
+		for(Inode inode : inodes) {
 			assertQueuedItemLike((_item) -> {
-				if(!(_item instanceof RefTagContentsQueueItem)) return false;
-				RefTagContentsQueueItem item = (RefTagContentsQueueItem) _item;
-				return tag.equals(item.merkle.getRefTag());
+				if(!(_item instanceof InodeContentsQueueItem)) return false;
+				InodeContentsQueueItem item = (InodeContentsQueueItem) _item;
+				return inode.getStat().getInodeId() == item.tree.getInodeId();
 			});
 		}
 	}
 	
 	@Test(expected=ProtocolViolationException.class)
-	public void testRequestRefTagsTriggersViolationIfNotFullPeer() throws ProtocolViolationException, IOException {
+	public void testRequestInodesTriggersViolationIfNotFullPeer() throws ProtocolViolationException, IOException {
 		blindPeer();
-		testRequestRefTagsAddsRequestedRefTagsToPageQueue();
+		testRequestInodesAddsRequestedInodesToPageQueue();
 	}
 	
 	@Test
-	public void testHandleRequestRefTagsToleratesNonexistentRefTags() throws IOException, ProtocolViolationException {
+	public void testHandleRequestInodesToleratesNonexistentRevTags() throws IOException, ProtocolViolationException {
 		ZKFS fs = archive.openBlank();
-		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REF_TAGS);
-		RefTag[] tags = new RefTag[16];
-
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_INODES);
+		Inode[] inodes = new Inode[16];
+		
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
-
-		for(int i = 0; i < tags.length/2; i++) {
+		
+		for(int i = 0; i < inodes.length; i++) {
 			fs.write("file"+i, new byte[archive.getConfig().getPageSize()]);
-			tags[i] = fs.inodeForPath("file"+i).getRefTag();
-			msg.receivedData((byte) 0, tags[i].getBytes());
+			inodes[i] = fs.inodeForPath("file"+i);
 		}
 		
-		msg.receivedData((byte) 0, crypto.rng(tags[0].getBytes().length));
+		msg.receivedData((byte) 0, Util.serializeLong(fs.getInodeTable().nextInodeId));
+		msg.receivedData((byte) 0, fs.commit().getBytes());
 		
-		for(int i = tags.length/2; i < tags.length; i++) {
-			fs.write("file"+i, new byte[archive.getConfig().getPageSize()]);
-			tags[i] = fs.inodeForPath("file"+i).getRefTag();
-			msg.receivedData((byte) 0, tags[i].getBytes());
+		for(int i = 0; i < inodes.length; i++) {
+			if(i != inodes.length/2) {
+				msg.receivedData((byte) 0, Util.serializeLong(inodes[i].getStat().getInodeId()));
+			} else {
+				msg.receivedData((byte) 0, Util.serializeLong(fs.getInodeTable().nextInodeId));
+			}
 		}
-
+		
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 		conn.handle(msg);
 		
-		for(RefTag tag : tags) {
+		for(int i = 0; i < inodes.length; i++) {
+			if(i == inodes.length/2) continue;
+			final Inode inode = inodes[i];
+			
 			assertQueuedItemLike((_item) -> {
-				if(!(_item instanceof RefTagContentsQueueItem)) return false;
-				RefTagContentsQueueItem item = (RefTagContentsQueueItem) _item;
-				return item.merkle != null && tag.equals(item.merkle.getRefTag());
+				if(!(_item instanceof InodeContentsQueueItem)) return false;
+				InodeContentsQueueItem item = (InodeContentsQueueItem) _item;
+				return inode.getStat().getInodeId() == item.tree.getInodeId();
 			});
 		}
 	}
+	
+	// TODO DHT: (Test) testHandleRequestInodesToleratesNonexistentInodeIds
+	// TODO DHT: (Test) testHandleRequestInodesToleratesDeletedInodeIds
 	
 	@Test
 	public void testHandleRequestRevisionContentsAddsRequestedRevTagToPageQueue() throws IOException, ProtocolViolationException {
@@ -1008,11 +1025,11 @@ public class PeerConnectionTest {
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_PAGE_TAGS);
 		fs.write("file", new byte[tags.length*archive.getConfig().getPageSize()]);
 		fs.commit();
-		PageMerkle merkle = new PageMerkle(fs.inodeForPath("file").getRefTag());
+		PageTree treee = new PageTree(fs.inodeForPath("file"));
 		
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 		for(int i = 0; i < tags.length; i++) {
-			tags[i] = merkle.getPageTag(i);
+			tags[i] = treee.getPageTag(i);
 			msg.receivedData((byte) 0, ByteBuffer.allocate(8).putLong(Util.shortTag(tags[i])).array());
 		}
 		
@@ -1029,17 +1046,17 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testHandleRequestTagsToleratesNonexistentTags() throws ProtocolViolationException, IOException {
+	public void testHandleRequestPageTagsToleratesNonexistentTags() throws ProtocolViolationException, IOException {
 		byte[][] tags = new byte[16][];
 		ZKFS fs = archive.openBlank();		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_PAGE_TAGS);
 		fs.write("file", new byte[tags.length*archive.getConfig().getPageSize()]);
 		fs.commit();
-		PageMerkle merkle = new PageMerkle(fs.inodeForPath("file").getRefTag());
+		PageTree tree = new PageTree(fs.inodeForPath("file"));
 		
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 		for(int i = 0; i < tags.length; i++) {
-			tags[i] = merkle.getPageTag(i);
+			tags[i] = tree.getPageTag(i);
 			msg.receivedData((byte) 0, ByteBuffer.allocate(8).putLong(Util.shortTag(tags[i])).array());
 			if(i == tags.length/2) msg.receivedData((byte) 0, ByteBuffer.allocate(8).put(crypto.rng(8)).array());
 		}
@@ -1059,7 +1076,7 @@ public class PeerConnectionTest {
 	@Test
 	public void testHandleRequestTagsWorksForSeedOnly() throws ProtocolViolationException, IOException {
 		blindPeer();
-		testHandleRequestTagsToleratesNonexistentTags();
+		testHandleRequestPageTagsToleratesNonexistentTags();
 	}
 	
 	@Test
@@ -1067,7 +1084,7 @@ public class PeerConnectionTest {
 		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageMerkle(fs.inodeForPath("file").getRefTag()).getPageTag(0);
+		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
 		int numChunks = (int) Math.ceil(((double) buf.limit())/PeerMessage.FILE_CHUNK_SIZE);
@@ -1109,7 +1126,7 @@ public class PeerConnectionTest {
 		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageMerkle(fs.inodeForPath("file").getRefTag()).getPageTag(0);
+		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
 		byte[] chunk = new byte[PeerMessage.MESSAGE_SIZE];
@@ -1127,7 +1144,7 @@ public class PeerConnectionTest {
 		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageMerkle(fs.inodeForPath("file").getRefTag()).getPageTag(0);
+		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
 		int numChunks = (int) Math.ceil(((double) buf.limit())/PeerMessage.FILE_CHUNK_SIZE);
@@ -1145,7 +1162,7 @@ public class PeerConnectionTest {
 	public void testHandleSendPageCountersExistingPagesWithAnnounce() throws IOException, ProtocolViolationException {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageMerkle(fs.inodeForPath("file").getRefTag()).getPageTag(0);
+		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
 		byte[] chunk = new byte[PeerMessage.MESSAGE_SIZE];
@@ -1252,8 +1269,8 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testIsPausableReturnsFalseIfCommandIsCmdRequestRefTags() {
-		assertFalse(conn.isPausable(PeerConnection.CMD_REQUEST_REF_TAGS));
+	public void testIsPausableReturnsFalseIfCommandIsCmdRequestInodes() {
+		assertFalse(conn.isPausable(PeerConnection.CMD_REQUEST_INODES));
 	}
 	
 	@Test

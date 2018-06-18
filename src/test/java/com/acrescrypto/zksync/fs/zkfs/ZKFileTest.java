@@ -148,7 +148,7 @@ public class ZKFileTest extends FileTestBase {
 	
 	@Test
 	public void testGraduateSizes() throws IOException {
-		// what happens when we grow past the threshold to need multiple chunks in our pagemerkle?
+		// what happens when we grow past the threshold to need multiple chunks in our pagetree?
 		String path = "graduate-sizes";
 		ZKFile file = zkscratch.open(path, ZKFile.O_CREAT|ZKFile.O_WRONLY|ZKFile.O_TRUNC);
 		int pagesPerChunk = zkscratch.archive.config.pageSize / (2*master.crypto.hashLength());
@@ -160,5 +160,5 @@ public class ZKFileTest extends FileTestBase {
 		file.close();
 	}
 
-	// TODO: test squashing of page merkle chunk timestamps
+	// TODO: test squashing of page tree chunk timestamps
 }

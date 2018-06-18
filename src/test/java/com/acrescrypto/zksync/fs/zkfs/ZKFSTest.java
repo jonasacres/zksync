@@ -242,8 +242,8 @@ public class ZKFSTest extends FSTestBase {
 		assertTrue(zkscratch.inodeTable.getStat().getSize() <= zkscratch.archive.config.pageSize);
 		assertEquals(1, zkscratch.inodeTable.inode.refTag.numPages);
 		ZKFS revFs = rev.getFS();
-		assertTrue(Arrays.equals(revFs.inodeTable.merkle.getRefTag().getBytes(), zkscratch.inodeTable.merkle.getRefTag().getBytes()));
-		assertEquals(zkscratch.inodeTable.merkle.maxPages, revFs.inodeTable.merkle.maxPages);
+		assertTrue(Arrays.equals(revFs.inodeTable.tree.getRefTag().getBytes(), zkscratch.inodeTable.tree.getRefTag().getBytes()));
+		assertEquals(zkscratch.inodeTable.tree.maxNumPages, revFs.inodeTable.tree.maxNumPages);
 		assertEquals(zkscratch.inodeTable.getStat().getSize(), revFs.inodeTable.getStat().getSize());
 	}
 	
@@ -258,8 +258,8 @@ public class ZKFSTest extends FSTestBase {
 		assertTrue(zkscratch.inodeTable.getStat().getSize() > zkscratch.archive.config.pageSize);
 		ZKFS revFs = rev.readOnlyFS();
 		
-		assertTrue(Arrays.equals(revFs.inodeTable.merkle.getRefTag().getBytes(), zkscratch.inodeTable.merkle.getRefTag().getBytes()));
-		assertEquals(zkscratch.inodeTable.merkle.maxPages, revFs.inodeTable.merkle.maxPages);
+		assertTrue(Arrays.equals(revFs.inodeTable.tree.getRefTag().getBytes(), zkscratch.inodeTable.tree.getRefTag().getBytes()));
+		assertEquals(zkscratch.inodeTable.tree.maxNumPages, revFs.inodeTable.tree.maxNumPages);
 		assertEquals(zkscratch.inodeTable.getStat().getSize(), revFs.inodeTable.getStat().getSize());
 	}
 	

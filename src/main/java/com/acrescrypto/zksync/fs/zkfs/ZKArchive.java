@@ -135,18 +135,18 @@ public class ZKArchive {
 		return config.getCacheStorage().exists(Page.pathForTag(pageTag));
 	}
 	
-	/** Test if we have every page of a given reftag cached locally. */
-	public boolean hasRefTag(RefTag refTag) throws IOException {
+	/** Test if we have every page of a given inode cached locally. */
+	public boolean hasInode(RefTag revTag, long inodeId) throws IOException {
 		assertOpen();
-		if(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) return true;
+		PageTree inodeTableTree = new PageTree(revTag);
+		if(!inodeTableTree.exists()) return false;
+
 		try {
-			PageMerkle merkle = new PageMerkle(refTag.makeCacheOnly());
-			if(!merkle.exists()) return false;
-			for(int i = 0; i < merkle.numPages(); i++) {
-				if(!config.getCacheStorage().exists(Page.pathForTag(merkle.getPageTag(i)))) return false;
-			}
+			Inode inode = revTag.getFS().inodeTable.inodeWithId(inodeId);
+			if(inode.isDeleted()) return false;
 			
-			return true;
+			PageTree tree = new PageTree(inode);
+			return tree.exists();	
 		} catch(InaccessibleStorageException exc) {
 			return false;
 		}
@@ -156,12 +156,15 @@ public class ZKArchive {
 	 * @throws IOException */
 	public boolean hasRevision(RefTag revTag) throws IOException {
 		assertOpen();
-		if(!hasRefTag(revTag)) return false; // check if we have the inode table
+		PageTree inodeTableTree = new PageTree(revTag);
+		if(!inodeTableTree.exists()) return false;
+
 		ZKFS fs = openRevision(revTag);
 		for(int i = 0; i < fs.inodeTable.nextInodeId; i++) {
 			Inode inode = fs.inodeTable.inodeWithId(i);
 			if(inode.isDeleted()) continue;
-			if(!hasRefTag(inode.refTag)) return false;
+			PageTree tree = new PageTree(inode);
+			if(!tree.exists()) return false;
 		}
 		
 		return true;

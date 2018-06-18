@@ -71,8 +71,8 @@ public class ZKArchiveConfigTest {
 		ZKFS fs = config.archive.openBlank();
 		fs.write("foo", new byte[config.pageSize]);
 		fs.commit();
-		PageMerkle merkle = new PageMerkle(fs.inodeForPath("foo").refTag);
-		info[0] = merkle.getPageTag(0);
+		PageTree tree = new PageTree(fs.inodeForPath("foo"));
+		info[0] = tree.getPageTag(0);
 		info[1] = fs.archive.storage.read(Page.pathForTag(info[0]));
 		return info;
 	}

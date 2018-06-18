@@ -33,7 +33,7 @@ public class PeerConnection {
 	public final static byte CMD_ANNOUNCE_TIPS = 0x04;
 	public final static byte CMD_REQUEST_ALL = 0x05;
 	public final static byte CMD_REQUEST_ALL_CANCEL = 0x06;
-	public final static byte CMD_REQUEST_REF_TAGS = 0x07;
+	public final static byte CMD_REQUEST_INODES = 0x07;
 	public final static byte CMD_REQUEST_REVISION_CONTENTS = 0x08;
 	public final static byte CMD_REQUEST_PAGE_TAGS = 0x09;
 	public final static byte CMD_SEND_PAGE = 0x0a;
@@ -228,11 +228,19 @@ public class PeerConnection {
 		send(CMD_REQUEST_PAGE_TAGS, pageTagsMerged.array());
 	}
 	
-	/** Request all pages pertaining to a given reftag (including merkle tree chunks). */
-	public void requestRefTags(int priority, Collection<RefTag> refTags) throws PeerCapabilityException {
-		if(refTags.isEmpty()) return;
+	/** Request encrypted files pertaining to a given inode (including page tree chunks). */
+	public void requestInodes(int priority, RefTag revTag, Collection<Long> inodeIds) throws PeerCapabilityException {
+		if(inodeIds.isEmpty()) return;
 		assertPeerCapability(PEER_TYPE_FULL);
-		send(CMD_REQUEST_REF_TAGS, serializeRefTags(priority, refTags));
+		
+		ByteBuffer buf = ByteBuffer.allocate(4 + revTag.getBytes().length + 8*inodeIds.size());
+		buf.putInt(priority);
+		buf.put(revTag.getBytes());
+		for(long inodeId: inodeIds) {
+			buf.putLong(inodeId);
+		}
+		
+		send(CMD_REQUEST_INODES, buf.array());
 	}
 	
 	public void requestRevisionContents(int priority, Collection<RefTag> tips) throws PeerCapabilityException {
@@ -317,8 +325,8 @@ public class PeerConnection {
 			case CMD_REQUEST_ALL_CANCEL:
 				handleRequestAllCancel(msg);
 				break;
-			case CMD_REQUEST_REF_TAGS:
-				handleRequestRefTags(msg);
+			case CMD_REQUEST_INODES:
+				handleRequestInodes(msg);
 				break;
 			case CMD_REQUEST_REVISION_CONTENTS:
 				handleRequestRevisionContents(msg);
@@ -440,15 +448,16 @@ public class PeerConnection {
 		stopSendingEverything();
 	}
 
-	protected void handleRequestRefTags(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
+	protected void handleRequestInodes(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
 		ZKArchive archive = socket.swarm.config.getArchive();
 		assertPeerCapability(PEER_TYPE_FULL);
 		byte[] refTagBytes = new byte[archive.getConfig().refTagSize()];
 		int priority = msg.rxBuf.getInt();
+		RefTag tag = new RefTag(archive, msg.rxBuf.read(refTagBytes));
 		
 		while(msg.rxBuf.hasRemaining()) {
-			RefTag tag = new RefTag(archive, msg.rxBuf.read(refTagBytes));
-			sendTagContents(priority, tag);
+			long inodeId = msg.rxBuf.getLong();
+			sendInodeContents(priority, tag, inodeId);
 		}
 	}
 	
@@ -552,8 +561,8 @@ public class PeerConnection {
 		queue.addRevisionTag(priority, refTag);
 	}
 	
-	protected void sendTagContents(int priority, RefTag refTag) throws IOException {
-		queue.addRefTagContents(priority, refTag);
+	protected void sendInodeContents(int priority, RefTag revTag, long inodeId) throws IOException {
+		queue.addInodeContents(priority, revTag, inodeId);
 	}
 	
 	protected void sendPageTag(int priority, long shortTag) throws IOException {

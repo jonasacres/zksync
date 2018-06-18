@@ -85,6 +85,10 @@ public class PageTree {
 		return chunkForPageNum(pageNum).getTag(pageNum % tagsPerChunk());
 	}
 	
+	public long numPages() {
+		return numPages;
+	}
+	
 	public long numChunks() {
 		return numChunks;
 	}
@@ -259,5 +263,9 @@ public class PageTree {
 	
 	protected long chunkIdAtPosition(long level, long offset) {
 		return (long) (1-Math.pow(tagsPerChunk(), level))/(1-tagsPerChunk()) + offset;
+	}
+
+	public long getInodeId() {
+		return inodeId;
 	}
 }
