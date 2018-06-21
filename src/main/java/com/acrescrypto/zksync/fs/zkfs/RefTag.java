@@ -47,7 +47,7 @@ public class RefTag implements Comparable<RefTag> {
 	
 	public RefTag(ZKArchive archive, byte[] tag) {
 		this(archive.config, tag);
-		cacheOnly = archive.isCacheOnly(); 
+		cacheOnly = archive.isCacheOnly();
 	}
 	
 	public RefTag(ZKArchive archive, byte[] hash, int refType, long numPages) {

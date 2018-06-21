@@ -55,10 +55,11 @@ public class ZKFileTest extends FileTestBase {
 		ZKFile file = zkscratch.open("immediate-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
 		file.write(contents);
 		file.close();
+		assertEquals(RefTag.REF_TYPE_IMMEDIATE, file.inode.refTag.refType);
 		
 		file = zkscratch.open("immediate-write-test", ZKFile.O_RDONLY);
-		assertTrue(Arrays.equals(file.read(), contents));
 		assertEquals(RefTag.REF_TYPE_IMMEDIATE, file.inode.refTag.refType);
+		assertTrue(Arrays.equals(file.read(), contents));
 	}
 	
 	@Test
@@ -78,10 +79,12 @@ public class ZKFileTest extends FileTestBase {
 	public void testMultipageWrite() throws IOException {
 		byte[] contents = new byte[5*zkscratch.archive.config.pageSize];
 		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);
+		
 		ZKFile file = zkscratch.open("multipage-write-test", ZKFile.O_CREAT|ZKFile.O_RDWR);
 		file.write(contents);
 		file.close();
 		
+		System.out.println("Reopening");
 		file = zkscratch.open("multipage-write-test", ZKFile.O_RDONLY);
 		assertTrue(Arrays.equals(file.read(), contents));
 		assertEquals(RefTag.REF_TYPE_2INDIRECT, file.inode.refTag.refType);
@@ -151,7 +154,7 @@ public class ZKFileTest extends FileTestBase {
 		// what happens when we grow past the threshold to need multiple chunks in our pagetree?
 		String path = "graduate-sizes";
 		ZKFile file = zkscratch.open(path, ZKFile.O_CREAT|ZKFile.O_WRONLY|ZKFile.O_TRUNC);
-		int pagesPerChunk = zkscratch.archive.config.pageSize / (2*master.crypto.hashLength());
+		int pagesPerChunk = zkscratch.archive.config.pageSize / master.crypto.hashLength();
 		
 		byte[] onePage = new byte[zkscratch.archive.config.pageSize];
 		for(int i = 0; i < pagesPerChunk+1; i++) {
@@ -159,6 +162,4 @@ public class ZKFileTest extends FileTestBase {
 		}
 		file.close();
 	}
-
-	// TODO: test squashing of page tree chunk timestamps
 }

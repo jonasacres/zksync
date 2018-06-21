@@ -69,7 +69,6 @@ public class ZKFile extends File {
 	public void setPageTag(int pageNum, byte[] hash) throws IOException {
 		assertWritable();
 		tree.setPageTag(pageNum, hash);
-		inode.setRefTag(tree.getRefTag());
 	}
 	
 	/** Obtain page tree reference for a specific page number. 
@@ -149,7 +148,7 @@ public class ZKFile extends File {
 		
 		bufferedPage = new Page(this, pageNum);
 		
-		if(tree.hasTag(pageNum) && pageNum < inode.refTag.numPages) {
+		if(tree.hasTag(pageNum) && pageNum < tree.numPages) {
 			bufferedPage.load();
 		} else {
 			bufferedPage.blank();

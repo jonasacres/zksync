@@ -158,15 +158,14 @@ public class Page {
 	public void load() throws IOException {
 		int pageSize = file.zkfs.archive.config.pageSize;
 		
-		if(file.inode.refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) {
-			assert(pageNum == 0);
+		byte[] pageTag = file.getPageTag(pageNum);
+		if(pageNum == 0 && file.tree.numPages == 1 && pageTag.length < file.getFS().getArchive().getCrypto().hashLength()) {
 			contents = ByteBuffer.allocate((int) file.zkfs.archive.config.pageSize);
 			contents.put(file.inode.refTag.getLiteral());
 			size = contents.position();
 			return;
 		}
 		
-		byte[] pageTag = file.getPageTag(pageNum);
 		byte[] plaintext = SignedSecureFile
 		  .withTag(pageTag, file.zkfs.archive.storage, textKey(), authKey(), file.zkfs.archive.config.pubKey)
 		  .read();

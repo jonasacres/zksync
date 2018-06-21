@@ -1,11 +1,14 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 import org.junit.After;
 import org.junit.AfterClass;
@@ -15,6 +18,9 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PageTreeTest {
 	CryptoSupport crypto;
@@ -72,7 +78,7 @@ public class PageTreeTest {
 		assertEquals(0, fromRevTag.inodeIdentity);
 		
 		assertEquals(1, fromRevTag.numChunks);
-		assertEquals(1, fromRevTag.maxNumPages);
+		assertEquals(fromRevTag.tagsPerChunk(), fromRevTag.maxNumPages);
 		assertEquals(1, fromRevTag.numPages);
 		
 		assertNotNull(fromRevTag.chunkCache);
@@ -131,32 +137,247 @@ public class PageTreeTest {
 		assertTrue(tree.exists());
 	}
 	
-	// exists returns true if reftag is 2indirect and all chunks and pages present
-	// exists returns false if reftag is 2indirect and all chunks exists but not all pages present
-	// exists returns false if reftag is 2indirect and not all chunks present
+	@Test
+	public void testExistsReturnsFalseIfRefTagIs2IndirectAndChunksExistButPageMissing() throws IOException {
+		archive.storage.unlink(Page.pathForTag(tree.getPageTag(1)));
+		assertFalse(tree.exists());
+	}
 	
-	// assertExists throws exception if exists returns false
-	// assertExists does now throw exception if exists returns true
+	@Test
+	public void testExistsReturnsFalseIfRefTagIs2IndirectAndsPagesExistButChunkMissing() throws IOException {
+		archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
+		assertFalse(tree.exists());
+	}
 	
-	// getRefTag returns ref tag
+	@Test(expected=ENOENTException.class)
+	public void testAssertExistsThrowsExceptionIfExistsReturnsFalse() throws IOException {
+		archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
+		tree.assertExists();
+	}
+	
+	@Test
+	public void testAssertExistsDoesNotThrowExceptionIfExistsReturnsTrue() throws IOException {
+		tree.assertExists();
+	}
+	
+	@Test
+	public void testGetRefTagReturnsRefTag() {
+		assertEquals(doubleIndirectTag, tree.getRefTag());
+	}
+	
+	@Test
+	public void testSetPageTagReplacesExistingPageTags() throws IOException {
+		byte[] randomTag = crypto.hash(Util.serializeInt(1234));
+		tree.setPageTag(1, randomTag);
+		assertArrayEquals(randomTag, tree.getPageTag(1));
+	}
+	
+	@Test
+	public void testSetPageTagReplacesBlankPageTags() throws IOException {
+		byte[] randomTag = crypto.hash(Util.serializeInt(1234));
+		tree.setPageTag(tree.numPages, randomTag);
+		assertArrayEquals(randomTag, tree.getPageTag(tree.numPages-1));
+	}
+	
+	@Test
+	public void testSetPageTagAutomaticallyResizesTreeIfNeeded() throws IOException {
+		assertEquals(1, tree.numChunks());
+		tree.setPageTag(tree.tagsPerChunk(), crypto.hash(Util.serializeInt(1)));
+		assertEquals(3, tree.numChunks());
+		assertEquals(tree.tagsPerChunk()*tree.tagsPerChunk(), tree.maxNumPages);
+	}
 
-	// setPageTag replaces existing page tags
-	// setPageTag replaces blank page tags
-	// setPageTag automatically resizes tree if needed
-	// setPageTag calls archive.addPageTag
+	@Test
+	public void testGetPageTagReturnsTag() throws IOException {
+		byte[] tag = crypto.rng(crypto.hashLength());
+		tree.setPageTag((int) (tree.tagsPerChunk()*0.5), tag);
+		assertEquals(tag, tree.getPageTag((int) (tree.tagsPerChunk()*0.5)));
+	}
 	
-	// getPageTag returns tag
-	// getPageTag returns blank tag if tag has not been set
+	@Test
+	public void testGetPageTagReturnsBlankTagIfTagHasNotBeenSet() throws IOException {
+		byte[] nullTag = new byte[crypto.hashLength()];
+		assertArrayEquals(nullTag, tree.getPageTag(2));
+	}
 	
-	// numChunks returns numChunks
+	@Test
+	public void testGetNumChunksReturnsNumberOfChunks() throws IOException {
+		assertEquals(tree.numChunks, tree.numChunks());
+		tree.setPageTag(tree.tagsPerChunk(), new byte[crypto.hashLength()]);
+		assertEquals(tree.numChunks, tree.numChunks());
+	}
 	
-	// commit writes dirty chunks if numChunks greater than 1
-	// commit does not write chunks if numChunks not greater than 1
-	// chunk tags are passed to archive.addPageTag
+	@Test
+	public void testCommitWritesDirtyChunksIfDoublyIndirect() throws IOException {
+		ArrayList<byte[]> oldTags = new ArrayList<>();
+		
+		for(int pageNum = 0; pageNum < tree.numPages(); pageNum++) {
+			oldTags.add(tree.getPageTag(pageNum));
+			assertTrue(archive.config.getCacheStorage().exists(Page.pathForTag(tree.getPageTag(pageNum))));
+		}
+		
+		ZKFile file = fs.open("2indirect", File.O_WRONLY);
+		file.seek(archive.config.pageSize, File.SEEK_SET);
+		file.write("bleep".getBytes());
+		file.close();
+		tree = new PageTree(file.inode);
+		
+		for(int pageNum = 0; pageNum < tree.numPages(); pageNum++) {
+			if(pageNum == 1) {
+				assertFalse(Arrays.equals(oldTags.get(pageNum), tree.getPageTag(pageNum)));
+			} else {
+				assertTrue(Arrays.equals(oldTags.get(pageNum), tree.getPageTag(pageNum)));
+			}
+			
+			oldTags.add(tree.getPageTag(pageNum));
+			assertTrue(archive.config.getCacheStorage().exists(Page.pathForTag(oldTags.get(pageNum))));
+			assertTrue(archive.config.getCacheStorage().exists(Page.pathForTag(tree.getPageTag(pageNum))));
+		}
+	}
 	
-	// resize downward to same tree height clears old tags and updates numPages
-	// resize upward to same tree height updates numPages
+	@Test
+	public void testCommitDoesNotWriteChunksIfIndirect() throws IOException {
+		PageTree indirectTree = new PageTree(fs.inodeForPath("indirect"));
+		byte[] oldTag = indirectTree.getPageTag(0);
+		fs.write("indirect", crypto.rng(archive.config.pageSize));
+		
+		indirectTree = new PageTree(fs.inodeForPath("indirect"));
+		assertArrayEquals(indirectTree.getRefTag().getHash(), indirectTree.getPageTag(0));
+		assertFalse(Arrays.equals(oldTag, indirectTree.getPageTag(0)));
+		assertTrue(archive.config.getCacheStorage().exists(Page.pathForTag(indirectTag.getHash())));
+	}
 	
+	@Test
+	public void testCommitDoesNotWriteChunksIfImmediate() throws IOException {
+		PageTree immediateTree = new PageTree(fs.inodeForPath("immediate"));
+		assertEquals(immediateTag, immediateTree.refTag);
+		assertArrayEquals(immediateTag.getLiteral(), immediateTree.getPageTag(0));
+		assertFalse(archive.config.getCacheStorage().exists(Page.pathForTag(immediateTag.getHash())));
+	}
+	
+	@Test
+	public void testChunkTagsPassedToArchive() throws IOException {
+		for(int i = 0; i < tree.numChunks; i++) {
+			boolean found = false;
+			
+			for(byte[] passed : archive.allPageTags) {
+				if(Arrays.equals(passed, tree.tagForChunk(i))) {
+					found = true;
+					break;
+				}
+			}
+			
+			System.out.println(i);
+			assertTrue(found);
+		}	
+	}
+	
+	@Test
+	public void testPageTagsPassedToArchive() throws IOException {
+		for(int i = 0; i < tree.numChunks; i++) {
+			boolean found = false;
+			
+			for(byte[] passed : archive.allPageTags) {
+				if(Arrays.equals(passed, tree.getPageTag(i))) {
+					found = true;
+					break;
+				}
+			}
+			
+			assertTrue(found);
+		}	
+	}
+	
+	@Test
+	public void testImmediatesNotPassedToArchive() throws IOException {
+		for(byte[] passed : archive.allPageTags) {
+			assertFalse(Arrays.equals(passed, immediateTag.getHash()));
+			assertFalse(Arrays.equals(passed, immediateTag.getLiteral()));
+		}
+	}
+	
+	@Test
+	public void testResizeDownwardToSameTreeHeight() throws IOException {
+		int max = (int) (1.5*tree.tagsPerChunk());
+		int cutoff = tree.tagsPerChunk() + 1;
+		byte[] nullTag = new byte[crypto.hashLength()];
+		
+		for(int i = 0; i < max; i++) {
+			tree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+		}
+		
+		tree.resize(cutoff);
+		assertEquals(max, tree.numPages);
+		
+		for(int i = 0; i < cutoff; i++) {
+			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), tree.getPageTag(i));
+		}
+		
+		for(int i = cutoff; i < max; i++) {
+			assertArrayEquals(nullTag, tree.getPageTag(i));
+		}
+	}
+	
+	@Test
+	public void testResizeUpwardToSameTreeHeight() throws IOException {
+		int max = (int) (1.5*tree.tagsPerChunk());
+		int cutoff = tree.tagsPerChunk() + 1;
+		byte[] nullTag = new byte[crypto.hashLength()];
+		
+		for(int i = 0; i < cutoff; i++) {
+			tree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+		}
+		
+		tree.resize(max);
+		assertEquals(cutoff, tree.numPages);
+		
+		for(int i = 0; i < cutoff; i++) {
+			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), tree.getPageTag(i));
+		}
+		
+		for(int i = cutoff; i < max; i++) {
+			assertArrayEquals(nullTag, tree.getPageTag(i));
+		}
+	}
+	
+	@Test
+	public void testResizeDownwardInHeightOneLevel() throws IOException {
+		int max = (int) (1.5*tree.tagsPerChunk()), contracted = tree.tagsPerChunk();
+		for(int i = 0; i < max; i++) {
+			tree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+		}
+		
+		tree.resize(contracted);
+		assertEquals(contracted, tree.numPages);
+		
+		for(int i = 0; i < contracted; i++) {
+			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), tree.getPageTag(i));
+		}
+	}
+	
+	@Test
+	public void testResizeDownwardInHeightMultipleLevels() throws IOException {
+		ZKArchive smallPageArchive = master.createArchive(1024, "i have small, lovable pages!");
+		ZKFS smallPageFs = smallPageArchive.openBlank();
+		smallPageFs.write("test", new byte[0]);
+		PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
+		
+		int max = (int) (smallPageTree.tagsPerChunk()*smallPageTree.tagsPerChunk()+1), contracted = smallPageTree.tagsPerChunk();
+		for(int i = 0; i < max; i++) {
+			smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+			for(int j = 0; j < i; j++) {
+				System.out.println("i=" + i + " j=" + j);
+				assertArrayEquals(archive.crypto.hash(Util.serializeInt(j)), smallPageTree.getPageTag(j));
+			}
+		}
+		
+		smallPageTree.resize(contracted);
+		assertEquals(contracted, smallPageTree.numPages);
+		
+		for(int i = 0; i < contracted; i++) {
+			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+		}
+	}
 	// resize downward in tree height by one level
 	// resize downward in tree height by multiple levels
 	
@@ -171,4 +392,6 @@ public class PageTreeTest {
 	// tagForChunk returns tag for requested chunk
 	
 	// getArchive returns archive
+
+	// TODO: test squashing of page tree chunk timestamps
 }
