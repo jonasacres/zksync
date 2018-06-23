@@ -34,7 +34,11 @@ public class PageTree {
 		initWithSize(refTag.getNumPages());
 	}
 	
-	protected PageTree(PageTree original) {
+	/** Clone another tree, hijacking its chunkCache in the process. This is used for resizing.
+	 * It is expected that the original tree will be wiped with initWithSize immediately afterwards before calling
+	 * any further operations.
+	 * */
+	protected PageTree(PageTree original) throws IOException {
 		this.archive = original.archive;
 		this.refTag = original.refTag;
 		this.inodeId = original.inodeId;
@@ -45,7 +49,15 @@ public class PageTree {
 		this.maxNumPages = original.maxNumPages;
 		
 		this.dirtyChunks = original.dirtyChunks;
-		this.chunkCache = original.chunkCache;
+		
+		for(long chunkId : original.chunkCache.cachedKeys()) {
+			original.chunkCache.get(chunkId).tree = this;
+		}
+		
+		this.chunkCache = new HashCache<>(original.chunkCache,
+				(index)->loadChunkAtIndex(index),
+				(index, chunk)->{  }
+				);
 	}
 	
 	protected PageTree() {} // used for testing
@@ -67,9 +79,12 @@ public class PageTree {
 		}
 		
 		this.dirtyChunks = new LinkedList<>();
-		this.chunkCache = new HashCache<>(8,
+		this.chunkCache = new HashCache<>(256, // TODO DHT: change back to 8
 				(index)->loadChunkAtIndex(index),
-				(index, chunk)->{ if(chunk.dirty) chunk.write(); }
+				(index, chunk)->{
+					System.out.println("Evicting chunk " + index + " of " + numChunks + ", dirty=" + chunk.dirty);
+					if(chunk.dirty) chunk.write();
+				}
 				);
 	}
 	
@@ -100,8 +115,8 @@ public class PageTree {
 			resize(1+pageNum);
 		}
 		
-		numPages = Math.max(numPages, 1+pageNum);
 		chunkForPageNum(pageNum).setTag(pageNum % tagsPerChunk(), pageTag);
+		numPages = Math.max(numPages, 1+pageNum);
 	}
 	
 	public byte[] getPageTag(long pageNum) throws IOException {
@@ -137,7 +152,6 @@ public class PageTree {
 		
 		long currentLevel = levelOfChunkId(chunkIndexForPageNum(0));
 		long newLevel = (int) Math.max(0, Math.floor(Math.log(newMinPages-1)/Math.log(tagsPerChunk())));
-		System.out.println("newMinPages=" + newMinPages + " oldNumPages=" + numPages + ", numChunks=" + numChunks + " currentLevel=" + currentLevel + " newLevel=" + newLevel);
 		
 		if(newLevel == currentLevel) {
 			resizeToSameLevel(newMinPages);
@@ -164,11 +178,10 @@ public class PageTree {
 		initWithSize(newMinPages);
 		this.refTag = RefTag.blank(archive);
 		
+		maxNumPages = (long) (Math.pow(tagsPerChunk(), levelOfChunkId(chunkIndexForPageNum(0))) * tagsPerChunk());
 		for(int i = 0; i < Math.min(existing.numPages, newMinPages); i++) {
 			setPageTag(i, existing.getPageTag(i));
 		}
-
-		maxNumPages = (long) (Math.pow(tagsPerChunk(), levelOfChunkId(chunkIndexForPageNum(0))) * tagsPerChunk());
 	}
 
 	public boolean hasTag(long pageNum) throws IOException {
@@ -219,8 +232,9 @@ public class PageTree {
 		
 		if(index >= numChunks) {
 			long level = levelOfChunkId(index);
-			long newMinPages = Math.max(tagsPerChunk() * (1 + offsetOfChunkId(index)), (int) Math.pow(tagsPerChunk(), level-1));
-			System.out.println("Resize for newMinPages=" + newMinPages + " to accommodate index "  + index);
+			long supportedByPreviousLevel = (int) (tagsPerChunk() * Math.pow(tagsPerChunk(), level-1));
+			long supportedByChunkOffset = tagsPerChunk() * (1 + offsetOfChunkId(index));
+			long newMinPages = Math.max(supportedByChunkOffset, supportedByPreviousLevel);
 			resize(newMinPages);
 		}
 		
@@ -233,10 +247,10 @@ public class PageTree {
 	
 	protected long indexForParent(long index) {
 		long level = levelOfChunkId(index);
-		long offset = index == 0 ? 0 : (index - 1) % tagsPerChunk();
+		long baseIndex = (1 - (int) Math.pow(tagsPerChunk(), level))/(1-tagsPerChunk());
 		
+		long parentOffset = index == 0 ? 0 : (index - baseIndex) / tagsPerChunk();
 		long parentLevel = level - 1;
-		long parentOffset = offset/tagsPerChunk();
 		long parentIndex = chunkIdAtPosition(parentLevel, parentOffset);
 		
 		return parentIndex;
@@ -290,7 +304,9 @@ public class PageTree {
 	}
 	
 	protected long offsetOfChunkId(long chunkId) {
-		return chunkId == 0 ? 0 : (chunkId - 1) % tagsPerChunk();
+		long level = levelOfChunkId(chunkId);
+		long base = (long) (1-Math.pow(tagsPerChunk(), level))/(1-tagsPerChunk());
+		return chunkId - base;
 	}
 	
 	protected int tagsPerChunk() {

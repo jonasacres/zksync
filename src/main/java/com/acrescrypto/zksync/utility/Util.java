@@ -63,8 +63,12 @@ public class Util {
 	}
 
 	public static String bytesToHex(byte[] b) {
+		return bytesToHex(b, b.length);
+	}
+	
+	public static String bytesToHex(byte[] b, int length) {
 		StringBuilder sb = new StringBuilder();
-		for(int i = 0; i < b.length; i++) sb.append(String.format("%02x", b[i]));
+		for(int i = 0; i < length; i++) sb.append(String.format("%02x", b[i]));
 		return sb.toString();
 	}
 

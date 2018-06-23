@@ -29,6 +29,12 @@ public class HashCache<K,V> {
 		this.evict = evict;
 	}
 	
+	public HashCache(HashCache<K,V> existing, CacheLookup<K,V> lookup, CacheEvict<K,V> evict) {
+		this(existing.capacity, lookup, evict);
+		cache = new HashMap<>(existing.cache);
+		evictionQueue = new LinkedList<>(existing.evictionQueue);
+	}
+	
 	public synchronized V get(K key) throws IOException {
 		V result = cache.getOrDefault(key, null);
 		if(result == null) result = add(key);

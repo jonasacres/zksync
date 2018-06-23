@@ -7,6 +7,7 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SignedSecureFile;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PageTreeChunk {
 	protected PageTree tree;
@@ -69,8 +70,11 @@ public class PageTreeChunk {
 				  .withParams(tree.archive.storage, textKey(), authKey(), tree.archive.config.privKey)
 				  .write(serialized, tree.archive.config.pageSize);
 		if(index != 0) {
+			PageTreeChunk parent = parent();
+			System.out.println("Writing chunk index " + index + " tag " + Util.bytesToHex(chunkTag, 4) + " to " + parent.index);
 			parent().setTag((index-1) % tree.tagsPerChunk(), chunkTag);
 		} else {
+			System.out.println("Setting chunk index " + index + " tag " + Util.bytesToHex(chunkTag, 4) + " as tree root");
 			tree.setTag(chunkTag);
 		}
 		

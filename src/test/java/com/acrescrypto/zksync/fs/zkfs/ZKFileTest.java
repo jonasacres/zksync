@@ -84,7 +84,6 @@ public class ZKFileTest extends FileTestBase {
 		file.write(contents);
 		file.close();
 		
-		System.out.println("Reopening");
 		file = zkscratch.open("multipage-write-test", ZKFile.O_RDONLY);
 		assertTrue(Arrays.equals(file.read(), contents));
 		assertEquals(RefTag.REF_TYPE_2INDIRECT, file.inode.refTag.refType);

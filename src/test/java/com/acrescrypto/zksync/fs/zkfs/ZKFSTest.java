@@ -243,7 +243,7 @@ public class ZKFSTest extends FSTestBase {
 		assertEquals(1, zkscratch.inodeTable.inode.refTag.numPages);
 		ZKFS revFs = rev.getFS();
 		assertTrue(Arrays.equals(revFs.inodeTable.tree.getRefTag().getBytes(), zkscratch.inodeTable.tree.getRefTag().getBytes()));
-		assertEquals(zkscratch.inodeTable.tree.maxNumPages, revFs.inodeTable.tree.maxNumPages);
+		assertTrue(revFs.inodeTable.tree.maxNumPages <= revFs.inodeTable.tree.tagsPerChunk());
 		assertEquals(zkscratch.inodeTable.getStat().getSize(), revFs.inodeTable.getStat().getSize());
 	}
 	

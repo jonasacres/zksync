@@ -14,6 +14,7 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -267,7 +268,6 @@ public class PageTreeTest {
 				}
 			}
 			
-			System.out.println(i);
 			assertTrue(found);
 		}	
 	}
@@ -362,13 +362,11 @@ public class PageTreeTest {
 		smallPageFs.write("test", new byte[0]);
 		PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
 		
-		int max = (int) (smallPageTree.tagsPerChunk()*smallPageTree.tagsPerChunk()+1), contracted = smallPageTree.tagsPerChunk();
+		int contracted = smallPageTree.tagsPerChunk();
+		int max = (int) (smallPageTree.tagsPerChunk()*smallPageTree.tagsPerChunk()+1);
+		
 		for(int i = 0; i < max; i++) {
 			smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
-			for(int j = 0; j < i; j++) {
-				System.out.println("i=" + i + " j=" + j);
-				assertArrayEquals(archive.crypto.hash(Util.serializeInt(j)), smallPageTree.getPageTag(j));
-			}
 		}
 		
 		smallPageTree.resize(contracted);
@@ -378,11 +376,79 @@ public class PageTreeTest {
 			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
 		}
 	}
-	// resize downward in tree height by one level
-	// resize downward in tree height by multiple levels
+
+	@Test
+	public void testResizeUpwardInHeightOneLevel() throws IOException {
+		int original = tree.tagsPerChunk();
+		int max = (int) (1.5*tree.tagsPerChunk());
+		byte[] blank = new byte[crypto.hashLength()];
+		
+		for(int i = 0; i < original; i++) {
+			tree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+		}
+		
+		tree.resize(max);
+		assertEquals(max, tree.numPages);
+		
+		for(int i = 0; i < original; i++) {
+			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), tree.getPageTag(i));
+		}
+		
+		for(int i = original; i < max; i++) {
+			assertArrayEquals(blank, tree.getPageTag(i));
+		}
+	}
+
+	@Test
+	public void testResizeUpwardInHeightMultipleLevels() throws IOException {
+		ZKArchive smallPageArchive = master.createArchive(1024, "adopt a tinypage now!");
+		ZKFS smallPageFs = smallPageArchive.openBlank();
+		smallPageFs.write("test", new byte[0]);
+		PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
+		
+		int original = smallPageTree.tagsPerChunk();
+		int max = (int) (smallPageTree.tagsPerChunk()*smallPageTree.tagsPerChunk()+1);
+		byte[] blank = new byte[crypto.hashLength()];
+		
+		for(int i = 0; i < original; i++) {
+			smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+		}
+		
+		smallPageTree.resize(max);
+		assertEquals(max, smallPageTree.numPages);
+		
+		for(int i = 0; i < original; i++) {
+			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+		}
+		
+		for(int i = original; i < max; i++) {
+			assertArrayEquals(blank, tree.getPageTag(i));
+		}
+	}
 	
-	// resize upward in tree height by one level
-	// resize upward in tree height by multiple levels
+	@Test
+	public void testLargeScaleTree() throws IOException {
+		ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
+		ZKFS smallPageFs = smallPageArchive.openBlank();
+		smallPageFs.write("test", new byte[0]);
+		PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
+		
+		int max = (int) Math.pow(smallPageTree.tagsPerChunk(), 5);
+		
+		for(int i = 0; i < max; i++) {
+			System.out.println(i + " of " + max);
+			if(i == 456) {
+				System.out.println("trouble...");
+			}
+			smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+		}
+	
+		for(int i = 0; i < max; i++) {
+			System.out.println("Verifying " + i + " of " + max);
+			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+		}
+	}
 	
 	// hasTag returns true if tag not blank
 	// hasTag returns false if tag blank
