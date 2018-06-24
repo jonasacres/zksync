@@ -37,15 +37,20 @@ public class HashCache<K,V> {
 	
 	public synchronized V get(K key) throws IOException {
 		V result = cache.getOrDefault(key, null);
-		if(result == null) result = add(key);
-		resetKey(key);
+		if(result == null) {
+			result = add(key);
+		}
+		else {
+			resetKey(key);
+		}
 		return result;
 	}
-		
+	
 	protected synchronized V add(K key) throws IOException {
 		V result = lookup.getValue(key);
 		if(result == null) return null;
 		
+		resetKey(key);
 		cache.put(key, result);
 		enforceCapacityLimit();
 		return result;
@@ -56,6 +61,7 @@ public class HashCache<K,V> {
 		V value = cache.get(key);
 		evictionQueue.remove(key);
 		evict.evict(key, value);
+		cache.remove(key);
 		return value;
 	}
 	
@@ -69,6 +75,7 @@ public class HashCache<K,V> {
 	}
 	
 	protected void resetKey(K key) {
+		if(!cache.containsKey(key)) return;
 		evictionQueue.remove(key);
 		evictionQueue.add(key);
 	}
@@ -79,14 +86,19 @@ public class HashCache<K,V> {
 	
 	protected void enforceCapacityLimit() throws IOException {
 		if(capacity <= 0) return;
-		while(cache.size() > capacity) {
+		while(evictionQueue.size() > capacity) {
 			K key = evictionQueue.remove();
-			V value = cache.remove(key);
+			V value = cache.get(key);
 			evict.evict(key, value);
+			cache.remove(key);
 		}
 	}
 	
 	public Iterable<K> cachedKeys() {
 		return cache.keySet();
+	}
+
+	public boolean hasCached(long key) {
+		return cache.containsKey(key);
 	}
 }

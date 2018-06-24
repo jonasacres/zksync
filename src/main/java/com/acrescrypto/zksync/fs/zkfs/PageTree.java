@@ -56,7 +56,8 @@ public class PageTree {
 		
 		this.chunkCache = new HashCache<>(original.chunkCache,
 				(index)->loadChunkAtIndex(index),
-				(index, chunk)->{  }
+				(index, chunk)->{
+					if(chunk.dirty) chunk.write(); }
 				);
 	}
 	
@@ -79,10 +80,9 @@ public class PageTree {
 		}
 		
 		this.dirtyChunks = new LinkedList<>();
-		this.chunkCache = new HashCache<>(256, // TODO DHT: change back to 8
+		this.chunkCache = new HashCache<>(8,
 				(index)->loadChunkAtIndex(index),
 				(index, chunk)->{
-					System.out.println("Evicting chunk " + index + " of " + numChunks + ", dirty=" + chunk.dirty);
 					if(chunk.dirty) chunk.write();
 				}
 				);
@@ -242,6 +242,11 @@ public class PageTree {
 		long offsetInParent = (index - 1) % tagsPerChunk();
 		
 		byte[] chunkTag = chunkAtIndex(parentIndex).getTag(offsetInParent);
+		if(chunkCache.hasCached(index)) {
+			// it's possible that finding the parent triggered a separate search operation for this index, due to evictions
+			return chunkCache.get(index);
+		}
+
 		return new PageTreeChunk(this, chunkTag, index);
 	}
 	
@@ -323,5 +328,19 @@ public class PageTree {
 
 	public long getInodeId() {
 		return inodeId;
+	}
+	
+	public void dump() throws IOException {
+		System.out.println(this + ": inodeId=" + inodeId + ", inodeIdentity=" + inodeIdentity + ", refTag=" + Util.bytesToHex(refTag.getBytes()));
+		System.out.println("numChunks=" + numChunks + ", maxNumPages=" + maxNumPages + ", numPages=" + numPages);
+		for(int i = 0; i < numChunks; i++) {
+			chunkAtIndex(i).dump();
+		}
+	}
+	
+	public void dumpCache() throws IOException {
+		for(long chunkId : chunkCache.cachedKeys()) {
+			chunkCache.get(chunkId).dump();
+		}
 	}
 }

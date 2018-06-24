@@ -15,6 +15,7 @@ public class PrivateDHKey {
 	}
 	
 	public byte[] sharedSecret(PublicDHKey otherKey) {
+		// TODO DHT: (refactor) Hash this with the public keys in a manner consistent with https://doi.org/10.6028/NIST.SP.800-56Cr1, https://doi.org/10.6028/NIST.SP.800-56Ar3 
 		return curve25519.calculateAgreement(otherKey.pubKey, privKey);
 	}
 	

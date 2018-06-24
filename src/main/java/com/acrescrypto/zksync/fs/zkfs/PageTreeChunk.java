@@ -58,6 +58,15 @@ public class PageTreeChunk {
 		return tree.chunkAtIndex(tree.indexForParent(index));
 	}
 	
+	public void dump() {
+		System.out.println("Chunk " + index + ", dirty=" + dirty + " " + this);
+		for(int i = 0; i < tree.tagsPerChunk(); i++) {
+			int childOffset = (int) (tree.tagsPerChunk()*tree.offsetOfChunkId(index) + i);
+			long childId = tree.chunkIdAtPosition(tree.levelOfChunkId(index)+1, childOffset);
+			System.out.println("\t" + i + " ("+ childId +"): " + Util.bytesToHex(tags.get(i)));
+		}
+	}
+	
 	protected void initBlank() {
 		for(int i = 0; i < tree.tagsPerChunk(); i++) {
 			tags.add(new byte[tree.archive.crypto.hashLength()]);
@@ -69,12 +78,12 @@ public class PageTreeChunk {
 		chunkTag = SignedSecureFile
 				  .withParams(tree.archive.storage, textKey(), authKey(), tree.archive.config.privKey)
 				  .write(serialized, tree.archive.config.pageSize);
+		
 		if(index != 0) {
 			PageTreeChunk parent = parent();
-			System.out.println("Writing chunk index " + index + " tag " + Util.bytesToHex(chunkTag, 4) + " to " + parent.index);
-			parent().setTag((index-1) % tree.tagsPerChunk(), chunkTag);
+			long offset = (index-1) % tree.tagsPerChunk();
+			parent.setTag(offset, chunkTag);
 		} else {
-			System.out.println("Setting chunk index " + index + " tag " + Util.bytesToHex(chunkTag, 4) + " as tree root");
 			tree.setTag(chunkTag);
 		}
 		

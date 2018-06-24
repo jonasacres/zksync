@@ -5,6 +5,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -428,6 +429,11 @@ public class PageTreeTest {
 	
 	@Test
 	public void testLargeScaleTree() throws IOException {
+		/** A chunk is not in the cache, so we look it up
+		 * In the process of looking it up, we evict one of its children
+		 * That eviction causes another lookup of the same chunk
+		 * We continue the original lookup operation, overwriting the in-memory copy (dirtied with the changes of the child) with a blank
+		 */
 		ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
 		ZKFS smallPageFs = smallPageArchive.openBlank();
 		smallPageFs.write("test", new byte[0]);
@@ -436,19 +442,16 @@ public class PageTreeTest {
 		int max = (int) Math.pow(smallPageTree.tagsPerChunk(), 5);
 		
 		for(int i = 0; i < max; i++) {
-			System.out.println(i + " of " + max);
-			if(i == 456) {
-				System.out.println("trouble...");
-			}
 			smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
-			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
 		}
-	
+		
 		for(int i = 0; i < max; i++) {
-			System.out.println("Verifying " + i + " of " + max);
+			System.out.println("Verifying " + i);
 			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
 		}
 	}
+	
+	// random access
 	
 	// hasTag returns true if tag not blank
 	// hasTag returns false if tag blank
