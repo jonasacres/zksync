@@ -80,7 +80,7 @@ public class PageTree {
 		}
 		
 		this.dirtyChunks = new LinkedList<>();
-		this.chunkCache = new HashCache<>(8,
+		this.chunkCache = new HashCache<>(16,
 				(index)->loadChunkAtIndex(index),
 				(index, chunk)->{
 					if(chunk.dirty) chunk.write();
@@ -300,6 +300,10 @@ public class PageTree {
 	
 	protected void markDirty(PageTreeChunk chunk) {
 		dirtyChunks.add(chunk);
+	}
+	
+	protected void markClean(PageTreeChunk chunk) {
+		dirtyChunks.remove(chunk);
 	}
 	
 	protected long levelOfChunkId(long chunkId) {

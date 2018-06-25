@@ -10,6 +10,7 @@ import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.LinkedList;
 
 import org.junit.After;
 import org.junit.AfterClass;
@@ -34,6 +35,8 @@ public class PageTreeChunkTest {
 				e.printStackTrace();
 				fail();
 			}
+			
+			dirtyChunks = new LinkedList<>();
 		}
 		
 		@Override

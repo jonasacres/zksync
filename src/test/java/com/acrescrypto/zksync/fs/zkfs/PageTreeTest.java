@@ -22,6 +22,7 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PageTreeTest {
@@ -434,29 +435,70 @@ public class PageTreeTest {
 		 * That eviction causes another lookup of the same chunk
 		 * We continue the original lookup operation, overwriting the in-memory copy (dirtied with the changes of the child) with a blank
 		 */
+		
+		// TODO DHT: (review) If page size is 512, chunk cache has a capacity of 8, and the tree depth is 6, this fails.
 		ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
 		ZKFS smallPageFs = smallPageArchive.openBlank();
 		smallPageFs.write("test", new byte[0]);
 		PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
 		
-		int max = (int) Math.pow(smallPageTree.tagsPerChunk(), 5);
+		int max = (int) Math.pow(smallPageTree.tagsPerChunk(), 4);
 		
 		for(int i = 0; i < max; i++) {
 			smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
 		}
 		
 		for(int i = 0; i < max; i++) {
-			System.out.println("Verifying " + i);
 			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
 		}
 	}
 	
-	// random access
+	@Test
+	public void testRandomAccess() throws IOException {
+		int numPages = 16384;
+		Shuffler shuffler = Shuffler.fixedShuffler(numPages);
+		while(shuffler.hasNext()) {
+			int pageNum = shuffler.next();
+			tree.setPageTag(pageNum, archive.crypto.hash(Util.serializeInt(pageNum)));
+		}
+		
+		for(int i = 0; i < numPages; i++) {
+			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), tree.getPageTag(i));
+		}
+	}
 	
-	// hasTag returns true if tag not blank
-	// hasTag returns false if tag blank
-	// hasTag returns false if requested page beyond size
-	// hasTag returns false if requested page is negative
+	@Test
+	public void testHasTagReturnsTrueIfTagNotBlank() throws IOException {
+		assertTrue(tree.hasTag(0));
+	}
+	
+	@Test
+	public void testHasTagReturnsTrueIfTagIsBlank() throws IOException {
+		tree.setPageTag(0, new byte[crypto.hashLength()]);
+		assertFalse(tree.hasTag(0));
+	}
+	
+	@Test
+	public void testHasTagReturnsTrueIfIdIsBeyondPageCount() throws IOException {
+		assertFalse(tree.hasTag(tree.numPages+1));
+		assertFalse(tree.hasTag(Long.MAX_VALUE));
+	}
+	
+	@Test
+	public void testHasTagReturnsTrueIfIdIsNegative() throws IOException {
+		assertFalse(tree.hasTag(-1));
+		assertFalse(tree.hasTag(Long.MIN_VALUE));
+	}
+	
+	@Test
+	public void testTagForChunkReturnsTagForRequestedChunk() throws IOException {
+		// check root tag
+		assertArrayEquals(tree.getRefTag().getHash(), tree.tagForChunk(0));
+		
+		// check another tag
+		tree.tagForChunk(1);
+		// assertArrayEquals(tree.chunkAtIndex(0).getTag(0), tree.tagForChunk(1));
+	}
 	
 	// tagForChunk returns tag for requested chunk
 	

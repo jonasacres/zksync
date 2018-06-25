@@ -78,6 +78,7 @@ public class PageTreeChunk {
 		chunkTag = SignedSecureFile
 				  .withParams(tree.archive.storage, textKey(), authKey(), tree.archive.config.privKey)
 				  .write(serialized, tree.archive.config.pageSize);
+		System.out.println("Write " + tree.inodeId + " " + tree.inodeIdentity + " " + Util.bytesToHex(chunkTag));
 		
 		if(index != 0) {
 			PageTreeChunk parent = parent();
@@ -88,9 +89,11 @@ public class PageTreeChunk {
 		}
 		
 		dirty = false;
+		tree.markClean(this);
 	}
 	
 	protected void read() throws IOException {
+		System.out.println("Read " + tree.inodeId + " " + tree.inodeIdentity + " " + Util.bytesToHex(chunkTag));
 		byte[] serialized = SignedSecureFile
 				  .withTag(chunkTag, tree.archive.storage, textKey(), authKey(), tree.archive.config.pubKey)
 				  .read();
