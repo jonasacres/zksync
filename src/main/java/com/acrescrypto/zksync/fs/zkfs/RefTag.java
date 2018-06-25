@@ -85,7 +85,7 @@ public class RefTag implements Comparable<RefTag> {
 		int len = config.accessor.master.crypto.hashLength() - hash[hash.length-1];
 		if(len <= 0) return new byte[0];
 		ByteBuffer buf = ByteBuffer.allocate(len);
-		buf.put(hash, 0, len);
+		buf.put(hash, 0, Math.min(hash.length, len));
 		return buf.array();
 	}
 	

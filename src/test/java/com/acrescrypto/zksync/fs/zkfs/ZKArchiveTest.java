@@ -109,7 +109,6 @@ public class ZKArchiveTest {
 	
 	@Test
 	public void testHasInodeReturnsFalseIfRevTagIsNonsense() throws IOException {
-		// TODO DHT: (itf) Stalls and fails. 6/23/18 d66d900ebf61207e7e18d196dc10dda85b2f2501 linux actively working on demerkleization.
 		ZKFS fs = addMockData(archive);
 		RefTag revTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
 		assertFalse(archive.hasInode(revTag, fs.stat("file2").getInodeId()));

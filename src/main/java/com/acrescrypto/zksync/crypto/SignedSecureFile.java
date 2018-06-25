@@ -96,6 +96,7 @@ public class SignedSecureFile {
 			tag = authKey.authenticate(buf.array());
 			
 			fs.write(path(), buf.array());
+			fs.squash(path());
 			return tag;
 		} catch(IOException exc) {
 			logger.error("Caught exception writing SignedSecureFile to {}", path(), exc);

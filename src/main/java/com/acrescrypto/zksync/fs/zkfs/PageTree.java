@@ -89,8 +89,10 @@ public class PageTree {
 	}
 	
 	public boolean exists() throws IOException {
+		if(numPages < 0) return false;
+		
 		switch(refTag.getRefType()) {
-		case RefTag.REF_TYPE_IMMEDIATE: return true;
+		case RefTag.REF_TYPE_IMMEDIATE: return numPages >= 0 && numPages <= 1;
 		case RefTag.REF_TYPE_INDIRECT:
 			return archive.config.getCacheStorage().exists(Page.pathForTag(refTag.getHash()));
 		case RefTag.REF_TYPE_2INDIRECT:
@@ -279,6 +281,7 @@ public class PageTree {
 	}
 	
 	protected boolean hasTreeContentsLocally() throws IOException {
+		if(numChunks <= 0 || numPages <= 0) return false;
 		for(int i = 0; i < numChunks; i++) {
 			if(!hasChunkLocally(i)) return false;
 		}

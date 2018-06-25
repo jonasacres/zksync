@@ -5,7 +5,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -15,7 +14,6 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -495,14 +493,22 @@ public class PageTreeTest {
 		// check root tag
 		assertArrayEquals(tree.getRefTag().getHash(), tree.tagForChunk(0));
 		
-		// check another tag
-		tree.tagForChunk(1);
-		// assertArrayEquals(tree.chunkAtIndex(0).getTag(0), tree.tagForChunk(1));
+		// scale up to multiple chunks and check those
+		for(int i = 0; i <= 1 + tree.tagsPerChunk(); i++) {
+			tree.setPageTag(i, crypto.hash(Util.serializeInt(i)));
+		}
+		
+		assertArrayEquals(tree.chunkAtIndex(0).getTag(0), tree.tagForChunk(1));
+		assertArrayEquals(tree.chunkAtIndex(0).getTag(1), tree.tagForChunk(2));
 	}
 	
-	// tagForChunk returns tag for requested chunk
-	
-	// getArchive returns archive
+	@Test
+	public void testGetArchiveReturnsArchive() throws IOException {
+		assertEquals(archive, tree.getArchive());
+	}
 
-	// TODO: test squashing of page tree chunk timestamps
+	@Test
+	public void testPageTreeChunkFilesHaveSquashedTimestamps() throws IOException {
+		assertEquals(0, archive.config.getCacheStorage().stat(Page.pathForTag(tree.tagForChunk(0))).getMtime());
+	}
 }
