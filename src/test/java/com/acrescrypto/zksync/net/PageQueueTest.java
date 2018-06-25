@@ -153,7 +153,7 @@ public class PageQueueTest {
 		assertEquals(numChunks, seenChunks.size());
 		seenTags.add(lastTag);
 		
-		assertTrue(seenTags.size() == expected.size());
+		assertEquals(expected.size(), seenTags.size());
 	}
 	
 	public void assertQueueDrainOfSize(int size) {
@@ -632,14 +632,14 @@ public class PageQueueTest {
 		assertFalse(Arrays.equals(pageTag, nextTag));
 	}
 	
-	public RefTag refTagForPageTag(RefTag revTag, byte[] pageTag) throws IOException {
+	public Inode inodeForPageTag(RefTag revTag, byte[] pageTag) throws IOException {
 		ZKFS fs = revTag.readOnlyFS();
 		for(int i = 0; i < fs.getInodeTable().nextInodeId; i++) {
-			RefTag refTag = fs.getInodeTable().inodeWithId(i).getRefTag();
-			PageTree tree = new PageTree(refTag);
+			Inode inode = fs.getInodeTable().inodeWithId(i);
+			PageTree tree = new PageTree(inode);
 			for(int j = 0; j < tree.numPages(); j++) {
 				if(Arrays.equals(pageTag, tree.getPageTag(j))) {
-					return refTag;
+					return inode;
 				}
 			}
 		}
@@ -649,34 +649,34 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddRevisionTagSendsRefTagsInShuffledOrder() throws IOException {
-		LinkedList<RefTag> seenRefTags = new LinkedList<RefTag>();
+	public void testAddRevisionTagSendsInodesInShuffledOrder() throws IOException {
+		LinkedList<Long> seenInodes = new LinkedList<Long>();
 
 		queue.addRevisionTag(0, secondRevTag);
 		while(queue.hasNextChunk()) {
-			RefTag tag = refTagForPageTag(secondRevTag, queue.nextChunk().tag);
-			if(seenRefTags.isEmpty() || !seenRefTags.getLast().equals(tag)) {
-				seenRefTags.add(tag);
+			Inode inode = inodeForPageTag(secondRevTag, queue.nextChunk().tag);
+			if(seenInodes.isEmpty() || !seenInodes.getLast().equals(inode.getStat().getInodeId())) {
+				seenInodes.add(inode.getStat().getInodeId());
 			}
 		}
 		
 		Shuffler.purgeFixedOrderings();
-		RefTag lastTag = null;
+		long lastId = -1;
 		int matches = 0, numTagsSeen = 0;
 		queue.addRevisionTag(0, secondRevTag);
 		while(queue.hasNextChunk()) {
-			RefTag tag = refTagForPageTag(secondRevTag, queue.nextChunk().tag);
-			if(lastTag == null || !lastTag.equals(tag)) {
-				if(seenRefTags.get(numTagsSeen).equals(tag)) {
+			Inode inode = inodeForPageTag(secondRevTag, queue.nextChunk().tag);
+			if(lastId < 0 || lastId != inode.getStat().getInodeId()) {
+				if(seenInodes.get(numTagsSeen).equals(inode.getStat().getInodeId())) {
 					matches++;
 				}
 				
 				numTagsSeen++;
-				lastTag = tag;
+				lastId = inode.getStat().getInodeId();
 			}
 		}
 		
-		assertEquals(seenRefTags.size(), numTagsSeen);
+		assertEquals(seenInodes.size(), numTagsSeen);
 		assertTrue(matches <= numTagsSeen/2);
 	}
 	

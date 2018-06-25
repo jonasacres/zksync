@@ -138,6 +138,7 @@ public class ZKArchive {
 	/** Test if we have every page of a given inode cached locally. */
 	public boolean hasInode(RefTag revTag, long inodeId) throws IOException {
 		assertOpen();
+		if(inodeId < 0) return false;
 		PageTree inodeTableTree = new PageTree(revTag);
 		if(!inodeTableTree.exists()) return false;
 
@@ -147,7 +148,7 @@ public class ZKArchive {
 			
 			PageTree tree = new PageTree(inode);
 			return tree.exists();	
-		} catch(InaccessibleStorageException exc) {
+		} catch(InaccessibleStorageException|IllegalArgumentException exc) {
 			return false;
 		}
 	}

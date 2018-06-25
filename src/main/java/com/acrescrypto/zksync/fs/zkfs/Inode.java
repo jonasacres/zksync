@@ -213,7 +213,9 @@ public class Inode implements Comparable<Inode> {
 	
 	/** clear inode contents. */
 	public void markDeleted() {
+		long oldId = stat.getInodeId();
 		stat = new Stat();
+		stat.setInodeId(oldId);
 		refTag = RefTag.blank(fs.archive);
 		changedFrom = RefTag.blank(fs.archive);
 		nlink = 0;

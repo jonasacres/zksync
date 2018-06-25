@@ -114,8 +114,8 @@ public class PageQueue {
 			super(priority);
 			try {
 				Inode inode = revTag.getFS().getInodeTable().inodeWithId(inodeId);
-				if(inode.isDeleted()) throw new EINVALException("inode not issued in requested revtag");
-				PageTree tree = new PageTree(inode);
+				if(inode.isDeleted()) throw new EINVALException("inode " + inodeId + " not issued in requested revtag");
+				tree = new PageTree(inode);
 				tree.assertExists();
 				if(tree.numPages() > Integer.MAX_VALUE) {
 					throw new EINVALException("inode contents has too many pages"); // forces abort of this request
@@ -169,7 +169,7 @@ public class PageQueue {
 					int inodeId = shuffler.next();
 					RefTag refTag = inodeTable.inodeWithId(inodeId).getRefTag();
 					if(refTag.getRefType() != RefTag.REF_TYPE_IMMEDIATE) {
-						return new InodeContentsQueueItem(priority, refTag, inodeId);
+						return new InodeContentsQueueItem(priority, revTag, inodeId);
 					}
 				}
 				

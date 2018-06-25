@@ -125,6 +125,7 @@ public class ZKArchiveTest {
 		ZKFS fs = addMockData(archive);
 		Inode inode = fs.inodeForPath("file2");
 		fs.unlink("file2");
+		fs.commit();
 		assertFalse(archive.hasInode(fs.baseRevision, inode.stat.getInodeId()));
 	}
 	

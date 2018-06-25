@@ -294,7 +294,7 @@ public class RequestPool {
 
 			for(RefTag revTag : map.keySet()) {
 				LinkedList<Long> inodeIds = map.get(revTag);
-				ByteBuffer buf = ByteBuffer.allocate(4 + config.refTagSize() + 4 + 8*inodeIds.size());
+				ByteBuffer buf = ByteBuffer.allocate(config.refTagSize() + 4 + 8*inodeIds.size());
 				buf.put(revTag.getBytes());
 				buf.putInt(inodeIds.size());
 				for(long inodeId : inodeIds) buf.putLong(inodeId);

@@ -281,6 +281,7 @@ public class InodeTable extends ZKFile {
 		this.tree.assertExists();
 		this.inode = new Inode(zkfs);
 		this.inode.setRefTag(tag);
+		this.inode.setFlags(Inode.FLAG_RETAIN);
 		this.inode.stat.setSize(zkfs.archive.config.pageSize * tag.numPages);
 		this.revision = new RevisionInfo(inodeWithId(INODE_ID_REVISION_INFO));
 		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST));

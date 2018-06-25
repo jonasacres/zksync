@@ -920,11 +920,12 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testHandleRequestInodesToleratesNonexistentRevTags() throws IOException, ProtocolViolationException {
+	public void testHandleRequestInodesToleratesNonexistentInodeIds() throws IOException, ProtocolViolationException {
 		ZKFS fs = archive.openBlank();
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_INODES);
 		Inode[] inodes = new Inode[16];
 		
+		// priority
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 		
 		for(int i = 0; i < inodes.length; i++) {
@@ -932,7 +933,7 @@ public class PeerConnectionTest {
 			inodes[i] = fs.inodeForPath("file"+i);
 		}
 		
-		msg.receivedData((byte) 0, Util.serializeLong(fs.getInodeTable().nextInodeId));
+		// rev tag
 		msg.receivedData((byte) 0, fs.commit().getBytes());
 		
 		for(int i = 0; i < inodes.length; i++) {
@@ -953,11 +954,12 @@ public class PeerConnectionTest {
 			assertQueuedItemLike((_item) -> {
 				if(!(_item instanceof InodeContentsQueueItem)) return false;
 				InodeContentsQueueItem item = (InodeContentsQueueItem) _item;
-				return inode.getStat().getInodeId() == item.tree.getInodeId();
+				return item.tree != null && inode.getStat().getInodeId() == item.tree.getInodeId();
 			});
 		}
 	}
 	
+	// TODO DHT: (Test) testHandleRequestInodesToleratesNonexistentRevTags
 	// TODO DHT: (Test) testHandleRequestInodesToleratesNonexistentInodeIds
 	// TODO DHT: (Test) testHandleRequestInodesToleratesDeletedInodeIds
 	

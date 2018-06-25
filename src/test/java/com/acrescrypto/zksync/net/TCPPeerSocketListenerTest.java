@@ -258,6 +258,7 @@ public class TCPPeerSocketListenerTest {
 		listener.close();
 		try {
 			connect();
+			// TODO DHT: (itf) 6/25/18 f9bbf196a2674446bfeb6f77df23b9d4eb6c1844 linux FastTests failed. Maybe need delay to ensure socket is closed?
 			fail();
 		} catch(ConnectException exc) {}
 	}
