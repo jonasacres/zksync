@@ -261,7 +261,7 @@ public class PageTreeTest {
 		for(int i = 0; i < tree.numChunks; i++) {
 			boolean found = false;
 			
-			for(byte[] passed : archive.allPageTags) {
+			for(byte[] passed : archive.allPageTags()) {
 				if(Arrays.equals(passed, tree.tagForChunk(i))) {
 					found = true;
 					break;
@@ -277,7 +277,7 @@ public class PageTreeTest {
 		for(int i = 0; i < tree.numChunks; i++) {
 			boolean found = false;
 			
-			for(byte[] passed : archive.allPageTags) {
+			for(byte[] passed : archive.allPageTags()) {
 				if(Arrays.equals(passed, tree.getPageTag(i))) {
 					found = true;
 					break;
@@ -290,7 +290,7 @@ public class PageTreeTest {
 	
 	@Test
 	public void testImmediatesNotPassedToArchive() throws IOException {
-		for(byte[] passed : archive.allPageTags) {
+		for(byte[] passed : archive.allPageTags()) {
 			assertFalse(Arrays.equals(passed, immediateTag.getHash()));
 			assertFalse(Arrays.equals(passed, immediateTag.getLiteral()));
 		}

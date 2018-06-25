@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.LinkedList;
+import java.util.HashMap;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
@@ -36,13 +36,13 @@ public class ZKArchive {
 	protected ZKArchiveConfig config;
 	protected ZKMaster master;
 	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
-	protected LinkedList<byte[]> allPageTags;
+	protected HashMap<Long,byte[]> allPageTags;
 	
 	protected ZKArchive(ZKArchiveConfig config) throws IOException {
 		this.master = config.accessor.master;
 		this.storage = config.storage;
 		this.crypto = config.accessor.master.crypto;
-		this.allPageTags = new LinkedList<>();
+		this.allPageTags = new HashMap<>();
 		this.config = config;
 		Key localKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_CONFIG_FILE);
 		this.localConfig = new LocalConfig(config.localStorage, localKey);
@@ -193,19 +193,20 @@ public class ZKArchive {
 	}
 
 	public Collection<byte[]> allPageTags() {
-		return allPageTags;
+		return allPageTags.values();
 	}
 	
 	public void addPageTag(byte[] tag) {
 		if(allPageTags != null) {
-			allPageTags.add(tag);
+			allPageTags.put(Util.shortTag(tag), tag);
 		}
 	}
 	
 	protected void buildAllPageTagsList() throws IOException {
 		DirectoryTraverser traverser = new DirectoryTraverser(storage, storage.opendir("/"));
 		while(traverser.hasNext()) {
-			allPageTags.add(Page.tagForPath(traverser.next()));
+			byte[] tag = Page.tagForPath(traverser.next());
+			allPageTags.put(Util.shortTag(tag), tag);
 		}
 	}
 }
