@@ -99,7 +99,7 @@ public class PeerMessageOutgoingTest {
 		expected.put(expectedPayload);
 		
 		socket.waitForDataReady();
-		assertEquals(msg.msgId, socket.received.msgId);
+		assertEquals(msg.msgId, socket.received.msg.msgId);
 		byte[] received = socket.readBufferedMessage(msg);
 		assertTrue(Arrays.equals(expected.array(), received));
 	}
@@ -135,7 +135,7 @@ public class PeerMessageOutgoingTest {
 	public void testConstructor() {
 		assertEquals(connection, msg.connection);
 		assertEquals(CMD, msg.cmd);
-		assertEquals(socket.messageId, msg.msgId);
+		assertEquals(Integer.MIN_VALUE, msg.msgId);
 		assertEquals(readEnd, msg.txPayload);
 	}
 	
@@ -145,7 +145,7 @@ public class PeerMessageOutgoingTest {
 		writeEnd.write(new byte[1]);
 		writeEnd.flush();
 		socket.waitForDataReady();
-		assertEquals(msg.msgId, socket.received.msgId);
+		assertEquals(msg.msgId, socket.received.msg.msgId);
 	}
 	
 	@Test
@@ -166,7 +166,7 @@ public class PeerMessageOutgoingTest {
 		writeEnd.flush();
 		connection.unpause();
 		socket.waitForDataReady();
-		assertEquals(msg.msgId, socket.received.msgId);
+		assertEquals(msg.msgId, socket.received.msg.msgId);
 	}
 	
 	@Test
@@ -177,7 +177,7 @@ public class PeerMessageOutgoingTest {
 		writeEnd2.write(new byte[4]);
 		writeEnd2.flush();
 		socket.waitForDataReady();
-		assertEquals(nonpausable.msgId, socket.received.msgId);
+		assertEquals(nonpausable.msgId, socket.received.msg.msgId);
 		writeEnd2.close();
 	}
 	

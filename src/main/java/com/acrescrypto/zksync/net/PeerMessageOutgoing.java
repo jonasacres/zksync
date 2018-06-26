@@ -25,11 +25,11 @@ public class PeerMessageOutgoing extends PeerMessage {
 		this.flags = flags;
 		this.txPayload = txPayload;
 		this.msgId = msgId;
-		runTxThread();
+		if(connection != null) runTxThread(); // allow null spec for test purposes
 	}
 	
 	public PeerMessageOutgoing(PeerConnection connection, byte cmd, InputStream txPayload) {
-		this(connection, connection.socket.issueMessageId(), cmd, (byte) 0, txPayload);
+		this(connection, Integer.MIN_VALUE, cmd, (byte) 0, txPayload);
 	}
 	
 	public synchronized void abort() {
@@ -117,7 +117,7 @@ public class PeerMessageOutgoing extends PeerMessage {
 		byte segmentFlags = (byte) (flags | (txClosed() ? FLAG_FINAL : 0x00));
 		synchronized(this) {
 			if(aborted) return;
-			queuedSegment = new MessageSegment(msgId, cmd, segmentFlags, buffer);
+			queuedSegment = new MessageSegment(this, segmentFlags, buffer);
 		}
 	}
 	

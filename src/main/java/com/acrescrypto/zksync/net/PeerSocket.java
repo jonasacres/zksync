@@ -22,7 +22,7 @@ public abstract class PeerSocket {
 	protected LinkedList<MessageSegment> ready = new LinkedList<MessageSegment>();	
 	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
 	
-	protected int nextSendMessageId, maxSentMessageId = -1, maxReceivedMessageId = Integer.MIN_VALUE;
+	protected int nextSendMessageId, maxReceivedMessageId = Integer.MIN_VALUE;
 	protected final Logger logger = LoggerFactory.getLogger(PeerSocket.class);
 	
 	protected String address;
@@ -140,40 +140,16 @@ public abstract class PeerSocket {
 	
 	@SuppressWarnings("unlikely-arg-type")
 	protected void sendMessage(MessageSegment segment) throws IOException, ProtocolViolationException {
+		// TODO DHT: (test) Test auto-assignment of message IDs when ID is Integer.MIN_VALUE
+		if(segment.msg.msgId == Integer.MIN_VALUE) segment.assignMsgId(issueMessageId());
 		write(segment.content.array(), 0, segment.content.limit());
 		segment.delivered();
-		maxSentMessageId = Math.max(maxSentMessageId, segment.msgId);
 		
 		if((segment.flags & PeerMessage.FLAG_FINAL) != 0) {
 			synchronized(outgoing) {
-				outgoing.remove((Integer) segment.msgId);
+				outgoing.remove((Integer) segment.msg.msgId);
 			}
 		}
-	}
-	
-	protected MessageSegment nextMessage() {
-		/* once we send message id N, then all messages with ID M < N are ignored unless the first segment of M was sent before the first segment of N.
-		** since PeerMessageOutgoing is threaded, this creates a race condition where N might be created first, but M is sent to PeerSocket first, blocking the recipient from
-		** considering M. This alleviates that. */
-		
-		/* TODO: write a test for this. also, consider whether we want a delay of 50ms or so before sending a non-contiguous message to allow a chance for sluggish messages that were
-		 * created first to inject their message into the queue. Or refactor so that the message ID is not actually assigned until the first segment is serialized onto the wire.
-		 */
-		
-		MessageSegment min = null;
-		for(MessageSegment segment : ready) {
-			if(segment.msgId <= this.maxSentMessageId+1) {
-				ready.remove(segment);
-				return segment;
-			}
-			
-			if(min == null || min.msgId > segment.msgId) {
-				min = segment;
-			}
-		}
-		
-		ready.remove(min);
-		return min;
 	}
 	
 	protected void sendThread() {
@@ -183,7 +159,7 @@ public abstract class PeerSocket {
 				try {
 					synchronized(this) {
 						while(!ready.isEmpty()) {
-							sendMessage(nextMessage());
+							sendMessage(ready.remove());
 						}
 					}
 					

@@ -749,6 +749,10 @@ public class TCPPeerSocketTest {
 	}
 	
 	@Test
+	public void testAssignsMessageIdWhenCurrentIdIsNegative() {
+	}
+	
+	@Test
 	public void testSendsMessageSegmentsWhenReady() throws IOException {
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
@@ -760,9 +764,9 @@ public class TCPPeerSocketTest {
 		
 		socket.dataReady(segment);
 		ByteBuffer received = ByteBuffer.wrap(conn.serverReadNext());
-		assertEquals(segment.msgId, received.getInt());
+		assertEquals(segment.msg.msgId, received.getInt());
 		assertEquals(payload.length, received.getInt());
-		assertEquals(segment.cmd, received.get());
+		assertEquals(segment.msg.cmd, received.get());
 		assertEquals(segment.flags, received.get());
 		assertEquals(0, received.getShort());
 		
@@ -948,7 +952,7 @@ public class TCPPeerSocketTest {
 		DummyConnection conn = new DummyConnection(socket).handshake();
 
 		MessageSegment segment0 = new MessageSegment(Integer.MAX_VALUE, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
-		MessageSegment segment1 = new MessageSegment(Integer.MIN_VALUE, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment1 = new MessageSegment(Integer.MIN_VALUE+1, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		
 		conn.serverWrite(segment0.content.array());
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(Integer.MAX_VALUE) != null));
@@ -973,9 +977,9 @@ public class TCPPeerSocketTest {
 
 		conn.serverWrite(segment1.content.array());
 		ByteBuffer buf = ByteBuffer.wrap(conn.serverReadNext());
-		assertEquals(segment1.msgId, buf.getInt());
+		assertEquals(segment1.msg.msgId, buf.getInt());
 		assertEquals(0, buf.getInt()); // length
-		assertEquals(segment1.cmd, buf.get());
+		assertEquals(segment1.msg.cmd, buf.get());
 		assertEquals(PeerMessage.FLAG_CANCEL | PeerMessage.FLAG_FINAL, buf.get());
 		assertEquals(0, buf.getShort());
 		assertFalse(buf.hasRemaining());
