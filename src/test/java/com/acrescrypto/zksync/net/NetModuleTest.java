@@ -62,7 +62,9 @@ public class NetModuleTest {
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
 		
+		// make sure we get all the pages from A, and we don't somehow end up with unexpected extra pages (yes, this was a real bug)
 		Util.waitUntil(2000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size());
+		assertFalse(Util.waitUntil(50, ()->aConfig.getArchive().allPageTags().size() != bConfig.getArchive().allPageTags().size()));
 		assertEquals(aConfig.getArchive().allPageTags().size(), bConfig.getArchive().allPageTags().size());
 		
 		ZKFS fsa = aConfig.getRevisionTree().plainBranchTips().get(0).getFS();

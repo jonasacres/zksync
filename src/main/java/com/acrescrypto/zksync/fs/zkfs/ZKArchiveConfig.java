@@ -165,6 +165,7 @@ public class ZKArchiveConfig {
 		assertState(!writeBuf.hasRemaining());
 		
 		storage.write(Page.pathForTag(tag()), writeBuf.array());
+		if(archive != null) archive.addPageTag(tag());
 	}
 	
 	public void read() throws IOException {

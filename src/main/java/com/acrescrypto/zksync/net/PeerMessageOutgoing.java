@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.net;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -100,9 +101,9 @@ public class PeerMessageOutgoing extends PeerMessage {
 				r = -1;
 			}
 
-			if(r < 0) {
+			if(r < 0 || txReachedEOF()) {
 				txEOF = true;
-				break;
+				if(r < 0) break;
 			}
 			
 			buffer.position(buffer.position() + r);
@@ -119,6 +120,12 @@ public class PeerMessageOutgoing extends PeerMessage {
 			if(aborted) return;
 			queuedSegment = new MessageSegment(this, segmentFlags, buffer);
 		}
+	}
+	
+	protected boolean txReachedEOF() throws IOException {
+		if(txEOF) return true;
+		if(txPayload instanceof ByteArrayInputStream && txPayload.available() <= 0) return true;
+		return false;
 	}
 	
 	protected void sendNext() throws IOException {
