@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.net;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.io.IOException;
 
@@ -63,7 +62,8 @@ public class NetModuleTest {
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
 		
-		assertTrue(Util.waitUntil(2000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size()));
+		Util.waitUntil(2000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size());
+		assertEquals(aConfig.getArchive().allPageTags().size(), bConfig.getArchive().allPageTags().size());
 		
 		ZKFS fsa = aConfig.getRevisionTree().plainBranchTips().get(0).getFS();
 		ZKFS fsb = bConfig.getRevisionTree().plainBranchTips().get(0).getFS();

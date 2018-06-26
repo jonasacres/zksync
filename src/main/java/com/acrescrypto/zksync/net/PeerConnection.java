@@ -199,6 +199,7 @@ public class PeerConnection {
 		for(RefTag tag : archive.getConfig().getRevisionTree().plainBranchTips()) {
 			buf.put(tag.obfuscate().serialize());
 		}
+		
 		send(CMD_ANNOUNCE_TIPS, buf.array());
 	}
 	

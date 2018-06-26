@@ -194,9 +194,6 @@ public class DHTSearchOperationTest {
 	
 	@Test
 	public void testRunInvokesCallbackWithBestResults() {
-		// TODO DHT: (itf) Observed failure from AllTests. Can't reproduce with while loop in 10k iterations. c6f6e6cc691f496a2443958fc15f57d2fa5fd8d0 linux 6/14/18
-		// Failed to reproduce in 100 manual runs of DHTSearchOperationTests on save revision
-		
 		int extraResults = 2;
 		
 		ArrayList<DHTPeer> expectedResults = closestInList(searchId, client.simPeers, extraResults+DHTSearchOperation.MAX_RESULTS);

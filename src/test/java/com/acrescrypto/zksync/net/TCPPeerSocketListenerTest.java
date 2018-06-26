@@ -253,12 +253,12 @@ public class TCPPeerSocketListenerTest {
 	}
 	
 	@Test
-	public void testStopsListeningWhenCloseCalled() throws UnknownHostException, IOException {
+	public void testStopsListeningWhenCloseCalled() throws UnknownHostException, IOException, InvalidBlacklistException {
 		connect();
 		listener.close();
+		Util.sleep(25); // observed socket staying open briefly after connection close on Linux 4.15.0-23-generic
 		try {
 			connect();
-			// TODO DHT: (itf) 6/25/18 f9bbf196a2674446bfeb6f77df23b9d4eb6c1844 linux FastTests failed. Maybe need delay to ensure socket is closed?
 			fail();
 		} catch(ConnectException exc) {}
 	}

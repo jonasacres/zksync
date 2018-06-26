@@ -473,7 +473,7 @@ public class DHTClientTest {
 	}
 	
 	@Test
-	public void testLookupObtainsRecordsFromMultiplePeers() throws IOException, ProtocolViolationException {
+	public void testLookupObtainsRecordsFromMultiplePeers() throws IOException, ProtocolViolationException, InvalidBlacklistException {
 		int recordsPerPeer = 4;
 		
 		MutableInt numSeen = new MutableInt();
@@ -511,8 +511,6 @@ public class DHTClientTest {
 				peerRecords.add(makeBogusAd(recordsPerPeer*i+j));
 			}
 
-			// TODO DHT: (itf) Failed in coverage test 568d93 linux 5/14/18 DHTClientTest.java:138, AssertionError -- if(strict) assertFalse(incoming.isEmpty());
-			// possibly resolved by setting MAX_MSG_WAIT_TIME_MS to 500, up from 200
 			DHTMessage getRecordsReq = r.receivePacket(DHTMessage.CMD_GET_RECORDS);
 			getRecordsReq.makeResponse(peerRecords).send();
 		}

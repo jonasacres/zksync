@@ -47,6 +47,7 @@ public class TestUtils {
 	
 	public static void assertTidy() {
 		if(!Util.waitUntil(500, ()->isTidy())) {
+			System.out.println("Thread untidiness detected!");
 			Util.threadReport(true);
 			fail();
 		}
