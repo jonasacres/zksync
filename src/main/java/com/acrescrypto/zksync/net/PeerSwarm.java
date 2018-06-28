@@ -15,11 +15,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
+import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
-import com.acrescrypto.zksync.fs.DirectoryTraverser;
-import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
@@ -32,7 +30,6 @@ public class PeerSwarm implements BlacklistCallback {
 	protected HashSet<PeerAdvertisement> knownAds = new HashSet<PeerAdvertisement>();
 	protected HashSet<PeerAdvertisement> connectedAds = new HashSet<PeerAdvertisement>();
 	protected ZKArchiveConfig config;
-	protected HashSet<Long> currentTags = new HashSet<Long>();
 	protected HashMap<Long,ChunkAccumulator> activeFiles = new HashMap<Long,ChunkAccumulator>();
 	protected HashMap<Long,Condition> pageWaits = new HashMap<Long,Condition>();
 	protected HashMap<PeerAdvertisement,Long> adEmbargoes = new HashMap<PeerAdvertisement,Long>();
@@ -50,7 +47,6 @@ public class PeerSwarm implements BlacklistCallback {
 	public PeerSwarm(ZKArchiveConfig config) throws IOException {
 		this.config = config;
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
-		buildCurrentTags();
 		connectionThread();
 		pool = new RequestPool(config);
 		pool.read();
@@ -86,15 +82,6 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	public ZKArchiveConfig getConfig() {
 		return config;
-	}
-	
-	public void buildCurrentTags() throws IOException {
-		FS fs = config.getAccessor().getMaster().storageFsForArchiveId(config.getArchiveId());
-		DirectoryTraverser traverser = new DirectoryTraverser(fs, fs.opendir("/"));
-		while(traverser.hasNext()) {
-			byte[] tag = Page.tagForPath(traverser.next());
-			currentTags.add(Util.shortTag(tag));
-		}
 	}
 	
 	@Override
@@ -243,9 +230,9 @@ public class PeerSwarm implements BlacklistCallback {
 		}).start();
 	}
 	
-	public void waitForPage(byte[] tag) {
+	public void waitForPage(byte[] tag) throws ClosedException {
 		long shortTag = Util.shortTag(tag);
-		if(currentTags.contains(shortTag)) return;
+		if(config.getArchive() != null && config.getArchive().hasPageTag(tag)) return;
 		
 		pageWaitLock.lock();
 		if(!pageWaits.containsKey(shortTag)) {
@@ -275,7 +262,6 @@ public class PeerSwarm implements BlacklistCallback {
 	protected synchronized void receivedPage(byte[] tag) {
 		long shortTag = Util.shortTag(tag);
 		activeFiles.remove(shortTag);
-		currentTags.add(shortTag);
 		pageWaitLock.lock();
 		if(pageWaits.containsKey(shortTag)) {
 			pageWaits.get(shortTag).signalAll();

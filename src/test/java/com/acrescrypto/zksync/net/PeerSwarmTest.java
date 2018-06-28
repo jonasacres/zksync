@@ -20,6 +20,7 @@ import org.junit.Test;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.TestUtils;
+import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
@@ -145,9 +146,9 @@ public class PeerSwarmTest {
 		@Override public void requestAllCancel() { this.requestedAllCancel = true; }
 	}
 	
-	static byte[] pageTag;
 	static ZKMaster master;
-	static ZKArchive archive;
+	ZKArchive archive;
+	byte[] pageTag;
 	
 	PeerSwarm swarm;
 	DummyConnection connection;
@@ -158,18 +159,20 @@ public class PeerSwarmTest {
 	public static void beforeAll() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
 		master = ZKMaster.openBlankTestVolume();
+	}
+	
+	@Before
+	public void before() throws IOException {
+		connectedAddresses.clear();
+		
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
 		PageTree tree = new PageTree(fs.inodeForPath("file"));
 		pageTag = tree.getPageTag(0);
-	}
-	
-	@Before
-	public void before() throws IOException {
-		connectedAddresses.clear();
-		swarm = new PeerSwarm(archive.getConfig());
+
+		swarm = archive.getConfig().getSwarm();
 		exploded = false;
 		connection = new DummyConnection(new DummySocket("127.0.0.1", swarm));
 		connection.socket.ad = new DummyAdvertisement();
@@ -177,8 +180,8 @@ public class PeerSwarmTest {
 	
 	@After
 	public void after() {
-		swarm.close();
 		connection.close();
+		archive.close();
 		try { Thread.sleep(1); } catch(InterruptedException exc) {} // give exploding ads a chance to percolate through before turning logging back on
 		((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(PeerSwarm.class)).setLevel(Level.WARN);
 		Util.setCurrentTimeNanos(-1);
@@ -186,7 +189,6 @@ public class PeerSwarmTest {
 	
 	@AfterClass
 	public static void afterAll() {
-		archive.close();
 		master.close();
 		ZKFSTest.restoreArgon2Costs();
 		TestUtils.assertTidy();
@@ -425,8 +427,12 @@ public class PeerSwarmTest {
 		Holder holder = new Holder();
 		
 		Thread thread = new Thread(()->{
-			swarm.waitForPage(pageTag);
-			holder.waited = true;
+			try {
+				swarm.waitForPage(pageTag);
+				holder.waited = true;
+			} catch (ClosedException e) {
+				e.printStackTrace();
+			}
 		});
 		assertFalse(holder.waited);
 		thread.start();
@@ -441,14 +447,15 @@ public class PeerSwarmTest {
 		class Holder { boolean waited; }
 		Holder holder = new Holder();
 		
-		ZKFS fs = swarm.config.getArchive().openBlank();
-		fs.write("newfile", new byte[swarm.config.getPageSize()]);
-		PageTree tree = new PageTree(fs.inodeForPath("newfile"));
-		byte[] tag = tree.getPageTag(0);
+		byte[] tag = archive.getCrypto().rng(archive.getCrypto().hashLength());
 		
 		Thread thread = new Thread(()->{
-			swarm.waitForPage(tag);
-			holder.waited = true;
+			try {
+				swarm.waitForPage(tag);
+				holder.waited = true;
+			} catch (ClosedException e) {
+				e.printStackTrace();
+			}
 		});
 		assertFalse(holder.waited);
 		thread.start();
