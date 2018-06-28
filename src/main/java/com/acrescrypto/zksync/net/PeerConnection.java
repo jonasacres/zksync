@@ -419,7 +419,8 @@ public class PeerConnection {
 			msg.rxBuf.get(buf.array());
 			synchronized(this) {
 				while(buf.hasRemaining()) {
-					announcedTags.add(buf.getLong());
+					long shortTag = buf.getLong();
+					announcedTags.add(shortTag);
 				}
 			}
 		}

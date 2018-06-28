@@ -114,6 +114,9 @@ public class PageQueue {
 		InodeContentsQueueItem(int priority, RefTag revTag, long inodeId) {
 			super(priority);
 			try {
+				PageTree inodeTableTree = new PageTree(revTag);
+				inodeTableTree.assertExists();
+				
 				Inode inode = revTag.getFS().getInodeTable().inodeWithId(inodeId);
 				if(inode.isDeleted()) throw new EINVALException("inode " + inodeId + " not issued in requested revtag");
 				tree = new PageTree(inode);

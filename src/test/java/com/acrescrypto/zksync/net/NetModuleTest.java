@@ -304,4 +304,45 @@ public class NetModuleTest {
 		aMaster.close();
 		bMaster.close();
 	}
+	
+	/** Party A writes files to the archive. Party B does not specially request anything, but is able to read the files. 
+	 * @throws IOException 
+	 * @throws UnconnectableAdvertisementException */
+	@Test
+	public void testOnDemandDownload() throws IOException, UnconnectableAdvertisementException {
+		Key rootKey = new Key(crypto);
+		
+		ZKMaster aMaster = ZKMaster.openBlankTestVolume("copy1");
+		ArchiveAccessor aAccessor = aMaster.makeAccessorForRoot(rootKey, false);
+		ZKArchiveConfig aConfig = new ZKArchiveConfig(aAccessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+		ZKFS fsa = aConfig.getArchive().openBlank();
+		
+		fsa.write("immediate", crypto.rng(crypto.hashLength()-1));
+		fsa.write("indirect", crypto.rng(aConfig.getPageSize()));
+		fsa.write("2indirect", crypto.rng(5*aConfig.getPageSize()));
+		fsa.commit();
+		
+		aMaster.listenOnTCP(0);
+		aMaster.getTCPListener().advertise(aConfig.getSwarm());
+		TCPPeerAdvertisement ad = aMaster.getTCPListener().listenerForSwarm(aConfig.getSwarm()).localAd();
+		
+		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
+		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
+		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
+		bConfig.getSwarm().addPeerAdvertisement(ad);
+		bConfig.finishOpening();
+
+		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionTree().plainBranchTips().size() == 1));
+		ZKFS fsb = bConfig.getRevisionTree().plainBranchTips().get(0).getFS();
+		assertArrayEquals(fsa.read("immediate"), fsb.read("immediate"));
+		assertArrayEquals(fsa.read("indirect"), fsb.read("indirect"));
+		assertArrayEquals(fsa.read("2indirect"), fsb.read("2indirect"));
+				
+		fsb.close();
+		fsa.close();
+		aConfig.getArchive().close();
+		bConfig.getArchive().close();
+		aMaster.close();
+		bMaster.close();
+	}
 }

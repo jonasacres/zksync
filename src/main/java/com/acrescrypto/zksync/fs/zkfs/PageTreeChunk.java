@@ -36,12 +36,16 @@ public class PageTreeChunk {
 	public void setTag(long offset, byte[] tag) {
 		if(Arrays.equals(tag, tags.get((int) offset))) return;
 		
-		tags.set((int) offset, tag);
+		loadTag(offset, tag);
 		if(tag.length >= tree.archive.getCrypto().hashLength() && !isZero(tag)) {
 			tree.archive.addPageTag(tag);
 		}
 		
 		markDirty();
+	}
+	
+	public void loadTag(long offset, byte[] tag) {
+		tags.set((int) offset, tag);
 	}
 	
 	public byte[] getTag(long offset) {

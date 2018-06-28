@@ -279,7 +279,6 @@ public class InodeTable extends ZKFile {
 	/** initialize from existing inode table data, identified by a reftag */
 	private void readExisting(RefTag tag) throws IOException {
 		this.tree = new PageTree(tag);
-		this.tree.assertExists();
 		this.inode = new Inode(zkfs);
 		this.inode.setRefTag(tag);
 		this.inode.setFlags(Inode.FLAG_RETAIN);

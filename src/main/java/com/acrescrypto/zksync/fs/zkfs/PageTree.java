@@ -230,7 +230,7 @@ public class PageTree {
 			PageTreeChunk chunk = new PageTreeChunk(this, tagForChunk(0), 0);
 			
 			if(refTag.getRefType() != RefTag.REF_TYPE_2INDIRECT && !refTag.isBlank()) {
-				chunk.setTag(0, refTag.getLiteral());
+				chunk.loadTag(0, refTag.getLiteral());
 			}
 			
 			return chunk;
