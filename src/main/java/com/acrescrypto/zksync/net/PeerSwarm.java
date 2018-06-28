@@ -56,19 +56,26 @@ public class PeerSwarm implements BlacklistCallback {
 		pool.read();
 	}
 	
-	public synchronized void close() {
+	public void close() {
 		closed = true;
 		if(pool != null) pool.stop();
-		ArrayList<PeerConnection> connectionsCopy = new ArrayList<>(connections);
+		
+		ArrayList<PeerConnection> connectionsCopy;
+		synchronized(this) {
+			connectionsCopy = new ArrayList<>(connections);
+		}
+		
 		for(PeerConnection connection : connectionsCopy) {
 			connection.close();
 		}
 		
-		pageWaitLock.lock();
-		for(Condition cond : pageWaits.values()) {
-			cond.signalAll();
+		synchronized(this) {
+			pageWaitLock.lock();
+			for(Condition cond : pageWaits.values()) {
+				cond.signalAll();
+			}
+			pageWaitLock.unlock();
 		}
-		pageWaitLock.unlock();
 		
 		this.config.getAccessor().getMaster().getBlacklist().removeCallback(this);
 	}

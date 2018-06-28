@@ -133,6 +133,10 @@ public class PageTree {
 		return numChunks;
 	}
 	
+	public long numDataPages() {
+		return numPages + (refTag.getRefType() == RefTag.REF_TYPE_2INDIRECT ? numChunks : 0);
+	}
+	
 	public RefTag commit() throws IOException {
 		if(numPages > 1) {
 			while(dirtyChunks.peek() != null) {

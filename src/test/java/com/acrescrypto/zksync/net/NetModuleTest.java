@@ -206,8 +206,8 @@ public class NetModuleTest {
 		
 		// we should get a config (1 page), inode table (1 page), revinfo (1 page), the file (2 pages) and its pagetree (1 page). root is literal so no page.
 		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionTree().plainBranchTips().size() == 1));
-		Util.waitUntil(2000, ()->bConfig.getArchive().allPageTags().size() == 5);
-		assertEquals(5, bConfig.getArchive().allPageTags().size());
+		Util.waitUntil(2000, ()->bConfig.getArchive().allPageTags().size() == 6);
+		assertEquals(6, bConfig.getArchive().allPageTags().size());
 				
 		ZKFS fsb = bConfig.getRevisionTree().plainBranchTips().get(0).getFS();
 		assertArrayEquals(fsb.read("path"), fsa.read("path"));

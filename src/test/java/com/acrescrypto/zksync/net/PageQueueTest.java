@@ -110,6 +110,12 @@ public class PageQueueTest {
 			expectedTags.add(Util.shortTag(tree.getPageTag(i)));
 		}
 		
+		if(inode.getRefTag().getRefType() == RefTag.REF_TYPE_2INDIRECT) {
+			for(int i = 0; i < tree.numChunks(); i++) {
+				expectedTags.add(Util.shortTag(tree.tagForChunk(i)));
+			}
+		}
+		
 		return expectedTags;
 	}
 
@@ -498,9 +504,9 @@ public class PageQueueTest {
 			seenChunks.add(ref.index);
 		}
 		
-		// last page should have sent all its chunks, and we should have seen the expected number of pages
+		// last page should have sent all its chunks, and we should have seen the expected number of pages + the page tree (1 page)
 		assertEquals(numChunks, seenChunks.size());
-		assertEquals(inode2Indirect.getRefTag().getNumPages(), seenPageTags.size());
+		assertEquals(inode2Indirect.getRefTag().getNumPages() + 1, seenPageTags.size());
 		
 		// every page should actually be a part of the requested reftag
 		PageTree tree = new PageTree(inode2Indirect);
@@ -578,12 +584,12 @@ public class PageQueueTest {
 		// try again, except add a real one after and make sure we still get data
 		queue.addInodeContents(0, corrupt, inodeIndirect.getStat().getInodeId());
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
-		assertQueueDrainOfSize((int) (numChunks*inode2Indirect.getRefTag().getNumPages()));
+		assertQueueDrainOfSize((int) (numChunks*new PageTree(inode2Indirect).numDataPages()));
 		
 		// and again, except the legal one goes first
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 		queue.addInodeContents(0, corrupt, inodeIndirect.getStat().getInodeId());
-		assertQueueDrainOfSize((int) (numChunks*inode2Indirect.getRefTag().getNumPages()));
+		assertQueueDrainOfSize((int) (numChunks*new PageTree(inode2Indirect).numDataPages()));
 	}
 	
 	@Test
@@ -593,11 +599,11 @@ public class PageQueueTest {
 
 		queue.addInodeContents(0, revTag, inodeImmediate.getStat().getInodeId());
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
-		assertQueueDrainOfSize((int) (numChunks*inode2Indirect.getRefTag().getNumPages()));
+		assertQueueDrainOfSize((int) (numChunks*new PageTree(inode2Indirect).numDataPages()));
 		
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 		queue.addInodeContents(0, revTag, inodeImmediate.getStat().getInodeId());
-		assertQueueDrainOfSize((int) (numChunks*inode2Indirect.getRefTag().getNumPages()));
+		assertQueueDrainOfSize((int) (numChunks*new PageTree(inode2Indirect).numDataPages()));
 	}
 	
 	@Test
@@ -608,8 +614,9 @@ public class PageQueueTest {
 	
 	@Test
 	public void testaddInodeContentsToleratesDoublyIndirectRefTag() {
+		long numDataPages = new PageTree(inode2Indirect).numDataPages();
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
-		assertQueueDrainOfSize((int) (numChunks * inode2Indirect.getRefTag().getNumPages()));
+		assertQueueDrainOfSize((int) (numChunks * numDataPages));
 	}
 	
 	@Test
@@ -643,6 +650,12 @@ public class PageQueueTest {
 			PageTree tree = new PageTree(inode);
 			for(int j = 0; j < tree.numPages(); j++) {
 				if(Arrays.equals(pageTag, tree.getPageTag(j))) {
+					return inode;
+				}
+			}
+
+			for(int j = 0; j < tree.numChunks(); j++) {
+				if(Arrays.equals(pageTag, tree.tagForChunk(j))) {
 					return inode;
 				}
 			}
