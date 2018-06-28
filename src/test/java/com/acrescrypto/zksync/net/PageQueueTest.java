@@ -85,7 +85,7 @@ public class PageQueueTest {
 	
 	@Before
 	public void beforeEach() {
-		queue = new PageQueue(archive);
+		queue = new PageQueue(archive.getConfig());
 	}
 	
 	@After

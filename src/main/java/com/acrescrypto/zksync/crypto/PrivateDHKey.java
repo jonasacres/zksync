@@ -1,5 +1,8 @@
 package com.acrescrypto.zksync.crypto;
 
+import java.nio.ByteBuffer;
+
+import org.bouncycastle.util.Arrays;
 import org.whispersystems.curve25519.Curve25519;
 
 public class PrivateDHKey {
@@ -14,9 +17,26 @@ public class PrivateDHKey {
 		this.pubKey = new PublicDHKey(crypto, pubKey);
 	}
 	
+	protected byte[] sharedSecretRaw(PublicDHKey otherKey) {
+		return curve25519.calculateAgreement(otherKey.getBytes(), privKey);
+	}
+	
 	public byte[] sharedSecret(PublicDHKey otherKey) {
-		// TODO DHT: (refactor) Hash this with the public keys in a manner consistent with https://doi.org/10.6028/NIST.SP.800-56Cr1, https://doi.org/10.6028/NIST.SP.800-56Ar3 
-		return curve25519.calculateAgreement(otherKey.pubKey, privKey);
+		byte[] lesserKey, greaterKey, salt = "zksync".getBytes();
+		
+		if(Arrays.compareUnsigned(pubKey.getBytes(), otherKey.getBytes()) < 0) {
+			lesserKey = pubKey.getBytes();
+			greaterKey = otherKey.getBytes();
+		} else {
+			lesserKey = otherKey.getBytes();
+			greaterKey = pubKey.getBytes();
+		}
+		
+		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length + otherKey.getBytes().length);
+		buf.put(lesserKey);
+		buf.put(greaterKey);
+		byte[] rawSecret = curve25519.calculateAgreement(otherKey.pubKey, privKey);
+		return crypto.expand(rawSecret, crypto.symKeyLength(), salt, buf.array());
 	}
 	
 	public PublicDHKey publicKey() {

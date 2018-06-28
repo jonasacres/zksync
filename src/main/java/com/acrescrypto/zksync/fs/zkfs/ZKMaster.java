@@ -41,8 +41,12 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 	
 	public static ZKMaster openBlankTestVolume() throws IOException {
-		RAMFS.removeVolume(TEST_VOLUME);
-		return openTestVolume();
+		return openBlankTestVolume(TEST_VOLUME);
+	}
+	
+	public static ZKMaster openBlankTestVolume(String name) throws IOException {
+		RAMFS.removeVolume(name);
+		return openTestVolume((String reason) -> { return "zksync".getBytes(); }, name);
 	}
 	
 	public static ZKMaster openTestVolume(PassphraseProvider ppProvider, String name) throws IOException {

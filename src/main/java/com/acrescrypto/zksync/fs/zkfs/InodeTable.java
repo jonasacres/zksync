@@ -114,6 +114,7 @@ public class InodeTable extends ZKFile {
 		tree.removeBranchTip(zkfs.baseRevision);
 		for(RefTag parent : additionalParents) tree.removeBranchTip(parent);
 		tree.write();
+		zkfs.archive.config.swarm.announceTips();
 	}
 	
 	/** size of an inode for this table, in bytes */

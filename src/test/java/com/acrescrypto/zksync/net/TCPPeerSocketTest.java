@@ -1048,4 +1048,28 @@ public class TCPPeerSocketTest {
 			return false;
 		}));
 	}
+	
+	@Test
+	public void testAssignsMessageIdWhenIdIsIntegerMinValue() throws IOException, ProtocolViolationException {
+		int msgId = Integer.MIN_VALUE;
+		TCPPeerSocket.disableMakeThreads = false;
+		new DummyConnection(socket).handshake();
+
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		assertEquals(msgId, segment.msg.msgId);
+		socket.sendMessage(segment);
+		assertNotEquals(msgId, segment.msg.msgId);
+	}
+	
+	@Test
+	public void testPreservesMessageIdWhenIdIsNotIntegerMinValue() throws IOException, ProtocolViolationException {
+		int msgId = Integer.MIN_VALUE+1;
+		TCPPeerSocket.disableMakeThreads = false;
+		new DummyConnection(socket).handshake();
+
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		assertEquals(msgId, segment.msg.msgId);
+		socket.sendMessage(segment);
+		assertEquals(msgId, segment.msg.msgId);
+	}
 }

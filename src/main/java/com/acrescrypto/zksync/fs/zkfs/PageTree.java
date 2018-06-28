@@ -270,7 +270,6 @@ public class PageTree {
 				refType = RefTag.REF_TYPE_IMMEDIATE;
 			} else {
 				refType = RefTag.REF_TYPE_INDIRECT;
-				archive.addPageTag(tag);
 			}
 		} else {
 			refType = RefTag.REF_TYPE_2INDIRECT;

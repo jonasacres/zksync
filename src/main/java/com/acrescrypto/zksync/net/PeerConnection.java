@@ -59,7 +59,7 @@ public class PeerConnection {
 	protected PageQueue queue;
 	protected boolean receivedTags, closed;
 	protected final Logger logger = LoggerFactory.getLogger(PeerConnection.class);
-	boolean sentProof;
+	boolean sentProof, wantsEverything;
 	
 	public PeerConnection(PeerSwarm swarm, PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
 		this.socket = PeerSocket.connectToAd(swarm, ad);
@@ -74,7 +74,7 @@ public class PeerConnection {
 	
 	protected void initialize() throws IOException {
 		socket.connection = this;
-		this.queue = new PageQueue(socket.swarm.config.getArchive());
+		this.queue = new PageQueue(socket.swarm.config);
 		new Thread(()->pageQueueThread()).start();
 		announceTips();
 		announceTags();
@@ -123,6 +123,10 @@ public class PeerConnection {
 		ByteBuffer tag = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
 		tag.putLong(shortTag);
 		send(CMD_ANNOUNCE_TAGS, tag.array());
+		if(wantsEverything) {
+			// TODO DHT: (test) Test that page tags are automatically queued if everything requested (and not queued if everything not requested)
+			queue.addPageTag(PageQueue.DEFAULT_EVERYTHING_PRIORITY, shortTag);
+		}
 	}
 	
 	public void announceSelf(PeerAdvertisement ad) {
@@ -551,6 +555,7 @@ public class PeerConnection {
 	}
 	
 	protected void sendEverything() throws IOException {
+		wantsEverything = true;
 		queue.startSendingEverything();
 	}
 

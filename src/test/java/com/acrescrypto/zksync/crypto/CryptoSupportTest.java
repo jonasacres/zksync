@@ -357,8 +357,8 @@ public class CryptoSupportTest  {
 		PrivateDHKey alice = crypto.makePrivateDHKeyPair(alicePrivKey, alicePubKey);
 		PrivateDHKey bob = crypto.makePrivateDHKeyPair(bobPrivKey, bobPubKey);
 		
-		assertTrue(Arrays.equals(expectedSecret, alice.sharedSecret(bob.publicKey())));
-		assertTrue(Arrays.equals(expectedSecret, bob.sharedSecret(alice.publicKey())));
+		assertTrue(Arrays.equals(expectedSecret, alice.sharedSecretRaw(bob.publicKey())));
+		assertTrue(Arrays.equals(expectedSecret, bob.sharedSecretRaw(alice.publicKey())));
 	}
 	
 	private byte[][][] aes128OCBTestVectors() {

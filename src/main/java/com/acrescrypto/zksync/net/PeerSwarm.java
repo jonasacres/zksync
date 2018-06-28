@@ -23,7 +23,6 @@ import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
-import com.acrescrypto.zksync.net.PeerConnection.PeerCapabilityException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerSwarm implements BlacklistCallback {
@@ -203,6 +202,7 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 		
 		new Thread(()-> {
+			Thread.currentThread().setName("PeerSwarm openConnection thread");
 			PeerConnection conn = null;
 			try {
 				synchronized(this) {
@@ -281,7 +281,7 @@ public class PeerSwarm implements BlacklistCallback {
 		announceTag(tag);
 	}
 	
-	protected void announceTag(byte[] tag) {
+	public void announceTag(byte[] tag) {
 		long shortTag = Util.shortTag(tag);
 		for(PeerConnection connection : connections) {
 			connection.announceTag(shortTag);
@@ -294,31 +294,14 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	public void requestTag(int priority, long shortTag) {
 		pool.addPageTag(priority, shortTag);
-		for(PeerConnection connection : connections) {
-			connection.requestPageTag(priority, shortTag);
-		}
 	}
 	
 	public void requestInode(int priority, RefTag revTag, long inodeId) {
 		pool.addInode(priority, revTag, inodeId);
-		for(PeerConnection connection : connections) {
-			ArrayList<Long> list = new ArrayList<>(1);
-			list.add(inodeId);
-			try {
-				connection.requestInodes(priority, revTag, list);
-			} catch (PeerCapabilityException e) {}
-		}
 	}
 	
 	public void requestRevision(int priority, RefTag revTag) {
 		pool.addRevision(priority, revTag);
-		for(PeerConnection connection : connections) {
-			ArrayList<RefTag> list = new ArrayList<>(1);
-			list.add(revTag);
-			try {
-				connection.requestRevisionContents(priority, list);
-			} catch(PeerCapabilityException exc) {}
-		}
 	}
 	
 	public void requestAll() {
@@ -339,6 +322,12 @@ public class PeerSwarm implements BlacklistCallback {
 		pool.setPaused(paused);
 		for(PeerConnection connection : connections) {
 			connection.setPaused(paused);
+		}
+	}
+
+	public void announceTips() throws IOException {
+		for(PeerConnection connection : connections) {
+			connection.announceTips();
 		}
 	}
 	

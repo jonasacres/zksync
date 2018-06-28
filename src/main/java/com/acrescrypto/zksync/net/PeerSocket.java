@@ -140,7 +140,6 @@ public abstract class PeerSocket {
 	
 	@SuppressWarnings("unlikely-arg-type")
 	protected void sendMessage(MessageSegment segment) throws IOException, ProtocolViolationException {
-		// TODO DHT: (test) Test auto-assignment of message IDs when ID is Integer.MIN_VALUE
 		if(segment.msg.msgId == Integer.MIN_VALUE) segment.assignMsgId(issueMessageId());
 		write(segment.content.array(), 0, segment.content.limit());
 		segment.delivered();

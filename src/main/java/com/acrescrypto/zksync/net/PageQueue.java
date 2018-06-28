@@ -17,6 +17,7 @@ import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -120,7 +121,10 @@ public class PageQueue {
 				if(tree.numPages() > Integer.MAX_VALUE) {
 					throw new EINVALException("inode contents has too many pages"); // forces abort of this request
 				}
-				shuffler = Shuffler.fixedShuffler((int) tree.numPages());
+				
+				int count = (int) tree.numPages();
+				if(tree.getRefTag().getRefType() == RefTag.REF_TYPE_2INDIRECT) count += tree.numChunks();
+				shuffler = Shuffler.fixedShuffler(count);
 			} catch(IOException exc) {
 				shuffler = Shuffler.fixedShuffler(0);
 			}
@@ -130,7 +134,15 @@ public class PageQueue {
 		QueueItem nextChild() {
 			if(!shuffler.hasNext()) return null;
 			try {
-				return new PageQueueItem(priority, tree.getArchive(), tree.getPageTag(shuffler.next()));
+				int next = shuffler.next();
+				byte[] tag;
+				if(next < tree.numPages()) {
+					tag = tree.getPageTag(next);
+				} else {
+					tag = tree.tagForChunk(next - tree.numPages());
+				}
+				
+				return new PageQueueItem(priority, tree.getArchive(), tag);
 			} catch(IOException exc) {
 				return null;
 			}
@@ -221,12 +233,12 @@ public class PageQueue {
 	
 	private Logger logger = LoggerFactory.getLogger(PageQueue.class);
 	protected PriorityQueue<QueueItem> itemsByPriority = new PriorityQueue<QueueItem>();
-	protected ZKArchive archive;
+	protected ZKArchiveConfig config;
 	protected EverythingQueueItem everythingItem;
 	protected boolean closed;
 	
-	public PageQueue(ZKArchive archive) {
-		this.archive = archive;
+	public PageQueue(ZKArchiveConfig config) {
+		this.config = config;
 	}
 	
 	public void addChunkReference(int priority, ChunkReference reference) {
@@ -235,14 +247,14 @@ public class PageQueue {
 	
 	public void addPageTag(int priority, long shortTag) {
 		try {
-			addPageTag(priority, archive.expandShortTag(shortTag));
+			addPageTag(priority, config.getArchive().expandShortTag(shortTag));
 		} catch (IOException exc) {
 			logger.error("Caught exception queuing short tag {}", String.format("%16x", shortTag), exc);
 		}
 	}
 	
 	public void addPageTag(int priority, byte[] pageTag) {
-		addItem(new PageQueueItem(priority, archive, pageTag));
+		addItem(new PageQueueItem(priority, config.getArchive(), pageTag));
 	}
 	
 	public void addInodeContents(int priority, RefTag revTag, long inodeId) {
@@ -255,7 +267,7 @@ public class PageQueue {
 	
 	public void startSendingEverything() {
 		if(everythingItem != null && !everythingItem.done) return;
-		everythingItem = new EverythingQueueItem(DEFAULT_EVERYTHING_PRIORITY, archive);
+		everythingItem = new EverythingQueueItem(DEFAULT_EVERYTHING_PRIORITY, config.getArchive());
 		addItem(everythingItem);
 	}
 	

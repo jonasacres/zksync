@@ -197,9 +197,11 @@ public class ZKArchive {
 	}
 	
 	public void addPageTag(byte[] tag) {
-		if(allPageTags != null) {
-			allPageTags.put(Util.shortTag(tag), tag);
-		}
+		long shortTag = Util.shortTag(tag);
+		if(allPageTags != null && !allPageTags.containsKey(shortTag)) {
+			allPageTags.put(shortTag, tag);
+			config.swarm.announceTag(tag);
+		}		
 	}
 	
 	protected void buildAllPageTagsList() throws IOException {
