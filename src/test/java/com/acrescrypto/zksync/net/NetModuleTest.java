@@ -52,7 +52,6 @@ public class NetModuleTest {
 	/** Party A writes data to an archive. B connects and downloads it. */ 
 	@Test
 	public void testOneWaySync() throws IOException, UnconnectableAdvertisementException {
-		// TODO DHT: (itf) linux 5/29/18 post-c3b635b intermittent stalls on attempting to get bConfig config file
 		Key rootKey = new Key(crypto);
 		
 		ZKMaster aMaster = ZKMaster.openBlankTestVolume("copy1");
@@ -67,7 +66,6 @@ public class NetModuleTest {
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
 		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
 		bConfig.getSwarm().addPeerAdvertisement(ad);
-		// assertTrue(Util.waitUntil(1000, ()->bConfig.getSwarm().connections.size() > 0));
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
 		
