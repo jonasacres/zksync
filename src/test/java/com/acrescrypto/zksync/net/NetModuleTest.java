@@ -67,6 +67,7 @@ public class NetModuleTest {
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
 		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
 		bConfig.getSwarm().addPeerAdvertisement(ad);
+		// assertTrue(Util.waitUntil(1000, ()->bConfig.getSwarm().connections.size() > 0));
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
 		

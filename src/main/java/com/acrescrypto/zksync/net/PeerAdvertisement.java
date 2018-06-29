@@ -15,6 +15,7 @@ public abstract class PeerAdvertisement {
 	public final static int TYPE_TCP_PEER = 0;
 	
 	protected PublicDHKey pubKey;
+	protected int failCount; // used by PeerSwarm to track connection attempts
 	
 	public static PeerAdvertisement deserializeRecord(CryptoSupport crypto, ByteBuffer serialized) throws UnconnectableAdvertisementException {
 		byte type = serialized.get();

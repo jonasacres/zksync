@@ -32,7 +32,9 @@ import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerSwarm implements BlacklistCallback {
-	public final static int EMBARGO_EXPIRE_TIME_MILLIS = 1000*60*10; // wait 10 minutes before retrying unconnectable ads
+	public final static int EMBARGO_EXPIRE_TIME_MILLIS = 1000*60*10; // wait 10 minutes before retrying consistently unconnectable ads
+	public final static int EMBARGO_SOFT_EXPIRE_TIME_MILLIS = 1000; // wait 1s before retrying an ad before it is classified as consistently unconnectable
+	public final static int EMBARGO_FAIL_COUNT_THRESHOLD = 3; // how many times do we try an ad before deeming it consistently unconnectable?
 	
 	protected ArrayList<PeerConnection> connections = new ArrayList<PeerConnection>();
 	protected HashSet<PeerAdvertisement> knownAds = new HashSet<PeerAdvertisement>();
@@ -206,8 +208,8 @@ public class PeerSwarm implements BlacklistCallback {
 		for(PeerAdvertisement ad : knownAds) {
 			if(isConnectedToAd(ad)) continue;
 			if(adEmbargoes.containsKey(ad)) {
-				long expireTime = Util.currentTimeMillis() - EMBARGO_EXPIRE_TIME_MILLIS;
-				if(adEmbargoes.get(ad) <= expireTime) {
+				if(adEmbargoes.get(ad) >= Util.currentTimeMillis()) {
+					ad.failCount = 0;
 					adEmbargoes.remove(ad);
 				} else {
 					continue;
@@ -268,7 +270,12 @@ public class PeerSwarm implements BlacklistCallback {
 				if(conn == null) {
 					synchronized(this) {
 						activeSockets--;
-						adEmbargoes.put(ad, Util.currentTimeMillis());
+						boolean unconnectable = ++ad.failCount >= EMBARGO_FAIL_COUNT_THRESHOLD;
+						int delay = unconnectable ? EMBARGO_EXPIRE_TIME_MILLIS : EMBARGO_SOFT_EXPIRE_TIME_MILLIS;
+						if(unconnectable) ad.failCount = 0;
+
+						// TODO DHT: (test) Embargo fail count stuff (don't embargo until count hit, embargo when count hits, clear fail count on connect, clear fail count on embargo)
+						adEmbargoes.put(ad, Util.currentTimeMillis() + delay);
 						connectedAds.remove(ad);
 					}
 				}
