@@ -968,7 +968,6 @@ public class PeerConnectionTest {
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 		conn.handle(msg);
 		
-		assertNoQueuedItemLike((_item) -> _item instanceof InodeContentsQueueItem);
 		assertNoMessage();
 	}
 	
