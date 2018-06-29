@@ -347,7 +347,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testEmbaroesUnconnectablePeers() throws InterruptedException {
+	public void testSoftEmbaroesUnconnectablePeers() throws InterruptedException {
 		((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(PeerSwarm.class)).setLevel(Level.OFF);
 		DummyAdvertisement ad = new DummyAdvertisement("some-ad");
 		Util.setCurrentTimeNanos(0);
@@ -356,10 +356,29 @@ public class PeerSwarmTest {
 		swarm.addPeerAdvertisement(ad);
 		assertFalse(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
 		ad.explode = false;
-		Util.setCurrentTimeNanos(1000l*1000l*PeerSwarm.EMBARGO_EXPIRE_TIME_MILLIS);
+		Util.setCurrentTimeMillis(PeerSwarm.EMBARGO_SOFT_EXPIRE_TIME_MILLIS);
 		assertTrue(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
 	}
-	
+
+	@Test
+	public void testHardEmbaroesConsistentlyUnconnectablePeers() throws InterruptedException {
+		((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(PeerSwarm.class)).setLevel(Level.OFF);
+		DummyAdvertisement ad = new DummyAdvertisement("some-ad");
+		Util.setCurrentTimeNanos(0);
+		ad.explode = true;
+		assertFalse(connectedAddresses.contains(ad.address));
+		swarm.addPeerAdvertisement(ad);
+		while(ad.failCount < PeerSwarm.EMBARGO_FAIL_COUNT_THRESHOLD) {
+			int count = ad.failCount;
+			Util.setCurrentTimeMillis(Util.currentTimeMillis() + PeerSwarm.EMBARGO_SOFT_EXPIRE_TIME_MILLIS);
+			Util.waitUntil(50, ()->ad.failCount > count);
+		}
+		assertFalse(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
+		ad.explode = false;
+		Util.setCurrentTimeMillis(Util.currentTimeMillis() + PeerSwarm.EMBARGO_EXPIRE_TIME_MILLIS);
+		assertTrue(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
+	}
+
 	@Test
 	public void testStopsConnectingToAdsWhenMaxSocketCountReached() throws InterruptedException {
 		int initial = connectedAddresses.size();

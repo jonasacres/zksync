@@ -379,7 +379,7 @@ public class NetModuleTest {
 		
 		for(int i = 0; i < numPeers; i++) {
 			final int ii = i;
-			Util.waitUntil(1000, ()->configs[ii].getSwarm().connections.size() >= numPeers-1);
+			Util.waitUntil(2000, ()->configs[ii].getSwarm().connections.size() >= numPeers-1);
 			assertEquals(numPeers-1, configs[i].getSwarm().connections.size());
 		}
 		

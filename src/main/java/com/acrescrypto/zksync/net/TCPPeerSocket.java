@@ -223,7 +223,7 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		out.write(dhPrivateKey.publicKey().getBytes());
 		out.write(keyHash);
-		out.write(ByteBuffer.allocate(4).putInt(timeIndex).array());
+		out.write(Util.serializeInt(timeIndex));
 		out.write(proof);
 		out.write(ephAuth);
 		out.write(staticKeyCiphertext);

@@ -1,7 +1,7 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
-import java.net.ConnectException;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -208,9 +208,11 @@ public class PeerSwarm implements BlacklistCallback {
 		for(PeerAdvertisement ad : knownAds) {
 			if(isConnectedToAd(ad)) continue;
 			if(adEmbargoes.containsKey(ad)) {
-				if(adEmbargoes.get(ad) >= Util.currentTimeMillis()) {
-					ad.failCount = 0;
+				if(adEmbargoes.get(ad) <= Util.currentTimeMillis()) {
 					adEmbargoes.remove(ad);
+					if(ad.failCount >= EMBARGO_FAIL_COUNT_THRESHOLD) {
+						ad.failCount = 0;
+					}
 				} else {
 					continue;
 				}
@@ -262,7 +264,7 @@ public class PeerSwarm implements BlacklistCallback {
 				}
 			} catch (BlacklistedException exc) {
 				logger.debug("Ignoring ad for blacklisted peer {}", ad);
-			} catch(ConnectException exc) {
+			} catch(SocketException exc) {
 				logger.info("Caught network exception connecting to peer {}", ad);
 			} catch(Exception exc) {
 				logger.error("Caught exception connecting to peer {}", ad, exc);
@@ -272,8 +274,7 @@ public class PeerSwarm implements BlacklistCallback {
 						activeSockets--;
 						boolean unconnectable = ++ad.failCount >= EMBARGO_FAIL_COUNT_THRESHOLD;
 						int delay = unconnectable ? EMBARGO_EXPIRE_TIME_MILLIS : EMBARGO_SOFT_EXPIRE_TIME_MILLIS;
-						if(unconnectable) ad.failCount = 0;
-
+						
 						// TODO DHT: (test) Embargo fail count stuff (don't embargo until count hit, embargo when count hits, clear fail count on connect, clear fail count on embargo)
 						adEmbargoes.put(ad, Util.currentTimeMillis() + delay);
 						connectedAds.remove(ad);

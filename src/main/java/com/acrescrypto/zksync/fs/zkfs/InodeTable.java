@@ -187,7 +187,11 @@ public class InodeTable extends ZKFile {
 	/** array of all inodes stored at a given page number of the inode table */
 	protected Inode[] inodesForPage(long pageNum) throws IOException {
 		Inode[] list = new Inode[inodesPerPage()];
-		seek(pageNum*zkfs.archive.config.pageSize, SEEK_SET);
+		try {
+			seek(pageNum*zkfs.archive.config.pageSize, SEEK_SET);
+		} catch(IllegalArgumentException exc) {
+			throw new IOException();
+		}
 		ByteBuffer buf = ByteBuffer.wrap(read((int) zkfs.archive.config.pageSize));
 		byte[] serialized = new byte[inodeSize()];
 		int i = 0;

@@ -64,7 +64,7 @@ public class TCPPeerAdvertisementListenerTest {
 	@Before
 	public void before() throws IOException {
 		swarm = new DummySwarm(archive.getConfig());
-		socketListener = new DummyTCPPeerSocketListener(master, 0);
+		socketListener = new DummyTCPPeerSocketListener(master, 1);
 		listener = new TCPPeerAdvertisementListener(swarm, socketListener);
 	}
 	
