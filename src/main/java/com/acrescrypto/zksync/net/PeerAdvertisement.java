@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
@@ -12,6 +13,8 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 
 public abstract class PeerAdvertisement {
 	public final static int TYPE_TCP_PEER = 0;
+	
+	protected PublicDHKey pubKey;
 	
 	public static PeerAdvertisement deserializeRecord(CryptoSupport crypto, ByteBuffer serialized) throws UnconnectableAdvertisementException {
 		byte type = serialized.get();
@@ -44,6 +47,10 @@ public abstract class PeerAdvertisement {
 	
 	public PeerConnection connect(PeerSwarm swarm) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
 		return new PeerConnection(swarm, this);
+	}
+	
+	public PublicDHKey getPubKey() {
+		return pubKey;
 	}
 	
 	public boolean equals(Object _other) {

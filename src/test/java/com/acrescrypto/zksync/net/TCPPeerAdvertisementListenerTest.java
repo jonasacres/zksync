@@ -86,7 +86,7 @@ public class TCPPeerAdvertisementListenerTest {
 		PrivateDHKey privKey = master.getCrypto().makePrivateDHKey();
 		ByteBuffer buf = ByteBuffer.allocate(2*master.getCrypto().asymPublicDHKeySize()+master.getCrypto().hashLength()+4);
 		buf.put(privKey.publicKey().getBytes());
-		buf.put(listener.dhPrivateKey.publicKey().getBytes());
+		buf.put(listener.swarm.identityKey.publicKey().getBytes());
 		buf.put(swarm.config.getArchiveId());
 		buf.putInt(0);
 		
@@ -105,7 +105,7 @@ public class TCPPeerAdvertisementListenerTest {
 	@Test
 	public void testLocalAdReturnsWellFormattedAdvertisement() throws UnconnectableAdvertisementException {
 		TCPPeerAdvertisement ad = listener.localAd();
-		assertTrue(Arrays.equals(listener.dhPrivateKey.publicKey().getBytes(), ad.pubKey.getBytes()));
+		assertTrue(Arrays.equals(listener.swarm.identityKey.publicKey().getBytes(), ad.pubKey.getBytes()));
 		assertEquals("localhost", ad.host);
 		assertEquals(socketListener.getPort(), ad.port);
 	}
@@ -121,7 +121,7 @@ public class TCPPeerAdvertisementListenerTest {
 		assertTrue(swarm.selfAd instanceof TCPPeerAdvertisement);
 		
 		TCPPeerAdvertisement selfAd = (TCPPeerAdvertisement) swarm.selfAd;
-		assertTrue(Arrays.equals(listener.dhPrivateKey.publicKey().getBytes(), selfAd.pubKey.getBytes()));
+		assertTrue(Arrays.equals(listener.swarm.identityKey.publicKey().getBytes(), selfAd.pubKey.getBytes()));
 		assertEquals(socketListener.getPort(), selfAd.port);
 		assertEquals("localhost", selfAd.host);
 		
@@ -152,7 +152,7 @@ public class TCPPeerAdvertisementListenerTest {
 		assertTrue(swarm.selfAd instanceof TCPPeerAdvertisement);
 		
 		TCPPeerAdvertisement selfAd = (TCPPeerAdvertisement) swarm.selfAd;
-		assertTrue(Arrays.equals(listener.dhPrivateKey.publicKey().getBytes(), selfAd.pubKey.getBytes()));
+		assertTrue(Arrays.equals(listener.swarm.identityKey.publicKey().getBytes(), selfAd.pubKey.getBytes()));
 		assertEquals(socketListener.getPort(), selfAd.port);
 		assertEquals("localhost", selfAd.host);
 		
@@ -165,8 +165,8 @@ public class TCPPeerAdvertisementListenerTest {
 		ZKArchive archive2 = master.createArchive(65536, "");
 		DummySwarm swarm2 = new DummySwarm(archive2.getConfig());
 		TCPPeerAdvertisementListener listener2 = new TCPPeerAdvertisementListener(swarm2, socketListener);
-		assertFalse(Arrays.equals(listener.dhPrivateKey.getBytes(), listener2.dhPrivateKey.getBytes()));
-		assertFalse(Arrays.equals(listener.dhPrivateKey.publicKey().getBytes(), listener2.dhPrivateKey.publicKey().getBytes()));
+		assertFalse(Arrays.equals(listener.swarm.identityKey.getBytes(), listener2.swarm.identityKey.getBytes()));
+		assertFalse(Arrays.equals(listener.swarm.identityKey.publicKey().getBytes(), listener2.swarm.identityKey.publicKey().getBytes()));
 		archive2.close();
 		swarm2.close();
 	}
@@ -174,7 +174,7 @@ public class TCPPeerAdvertisementListenerTest {
 	@Test
 	public void testGeneratesReusesExistingKeypairOnRepeatedInstancesForArchiveId() throws IOException {
 		TCPPeerAdvertisementListener listener2 = new TCPPeerAdvertisementListener(swarm, socketListener);
-		assertTrue(Arrays.equals(listener.dhPrivateKey.getBytes(), listener2.dhPrivateKey.getBytes()));
-		assertTrue(Arrays.equals(listener.dhPrivateKey.publicKey().getBytes(), listener2.dhPrivateKey.publicKey().getBytes()));
+		assertTrue(Arrays.equals(listener.swarm.identityKey.getBytes(), listener2.swarm.identityKey.getBytes()));
+		assertTrue(Arrays.equals(listener.swarm.identityKey.publicKey().getBytes(), listener2.swarm.identityKey.publicKey().getBytes()));
 	}
 }

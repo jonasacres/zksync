@@ -7,6 +7,8 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 
+import org.apache.commons.io.IOUtils;
+
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
@@ -36,13 +38,14 @@ public class TCPPeerSocket extends PeerSocket {
 	protected TCPPeerAdvertisement ad;
 	protected int peerType = -1;
 	
-	public TCPPeerSocket(PeerSwarm swarm, Socket socket, byte[] sharedSecret, int peerType) throws IOException {
+	public TCPPeerSocket(PeerSwarm swarm, PublicDHKey remoteIdentityKey, Socket socket, byte[] sharedSecret, int peerType) throws IOException {
 		this(swarm);
 		this.address = socket.getInetAddress().getHostAddress();
 		this.socket = socket;
 		this.isLocalRoleClient = false;
 		this.sharedSecret = sharedSecret;
 		this.peerType = peerType;
+		this.remoteIdentityKey = remoteIdentityKey;
 		makeStreams();
 		initKeys();
 		swarm.openedConnection(new PeerConnection(this));
@@ -56,6 +59,7 @@ public class TCPPeerSocket extends PeerSocket {
 		this.crypto = swarm.config.getAccessor().getMaster().getCrypto();
 		this.dhPrivateKey = crypto.makePrivateDHKey();
 		this.isLocalRoleClient = true;
+		this.remoteIdentityKey = ad.pubKey;
 		if(ad.isBlacklisted(swarm.config.getAccessor().getMaster().getBlacklist())) throw new BlacklistedException(ad.host);
 	}
 	
@@ -87,7 +91,7 @@ public class TCPPeerSocket extends PeerSocket {
 			int writeLen = Math.min(buf.remaining(), MAX_MSG_LEN);
 			byte[] ciphertext = nextLocalMessageKey().encrypt(msgIv, buf.array(), buf.position(), writeLen, 0);
 			buf.position(buf.position() + writeLen);
-			out.write(ByteBuffer.allocate(4).putInt(ciphertext.length).array(), 0, 4);
+			out.write(Util.serializeInt(ciphertext.length), 0, 4);
 			out.write(ciphertext);
 		}
 	}
@@ -104,17 +108,12 @@ public class TCPPeerSocket extends PeerSocket {
 		}
 		
 		ByteBuffer lenBuf = ByteBuffer.allocate(4);
-		in.read(lenBuf.array(), 0, lenBuf.remaining());
+		IOUtils.readFully(in, lenBuf.array());
 		int msgLen = lenBuf.getInt();
 		assertState(0 < msgLen && msgLen <= MAX_MSG_LEN + 2*crypto.symBlockSize()); // add some grace in for padding + built-in overhead in ciphertext
 		
 		byte[] ciphertext = new byte[msgLen];
-		int numRead = 0;
-		while(numRead < msgLen) {
-			int r = in.read(ciphertext, numRead, ciphertext.length - numRead);
-			assertState(r > 0);
-			numRead += r;
-		}
+		IOUtils.readFully(in, ciphertext);
 		
 		remainingReadData = ByteBuffer.wrap(nextRemoteMessageKey().decrypt(new byte[crypto.symIvLength()], ciphertext));
 		int readLen = Math.min(length, remainingReadData.remaining());
@@ -208,15 +207,26 @@ public class TCPPeerSocket extends PeerSocket {
 		keyHashInput.putInt(0);
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		
-		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
+		// want: use identity key to authenticate ephemeral key: hmac(ss(hash(client_identity || 0x00), server_identity), client_eph_pub)
+		// do not send identity key in cleartext: symenc(hash(temp_secret || 0x00), 0, identity_pub_key)
+		
 		byte[] tempSharedSecret = dhPrivateKey.sharedSecret(remotePubKey);
+		byte[] staticSecret = swarm.identityKey.sharedSecret(remotePubKey);
+		Key staticSymKeyAuth = new Key(crypto, staticSecret).derive(0, new byte[0]);
+		Key staticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
+		
+		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
 		byte[] proof = swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
+		byte[] ephAuth = staticSymKeyAuth.authenticate(tempSharedSecret);
 		byte[] keyHash = keyHashKey.authenticate(keyHashInput.array());
+		byte[] staticKeyCiphertext = staticSymKeyText.encrypt(new byte[crypto.symIvLength()], swarm.identityKey.publicKey().getBytes(), -1);
 		
 		out.write(dhPrivateKey.publicKey().getBytes());
 		out.write(keyHash);
 		out.write(ByteBuffer.allocate(4).putInt(timeIndex).array());
 		out.write(proof);
+		out.write(ephAuth);
+		out.write(staticKeyCiphertext);
 		
 		PublicDHKey remoteEphemeralPubKey = crypto.makePublicDHKey(readRaw(crypto.asymPublicDHKeySize()));
 		this.sharedSecret = dhPrivateKey.sharedSecret(remoteEphemeralPubKey);

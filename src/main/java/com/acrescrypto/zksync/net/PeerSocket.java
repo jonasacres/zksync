@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.ByteArrayInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketException;
@@ -11,6 +12,7 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
@@ -18,6 +20,7 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 public abstract class PeerSocket {
 	protected PeerSwarm swarm;
 	protected PeerConnection connection;
+	protected PublicDHKey remoteIdentityKey;
 	protected LinkedList<PeerMessageOutgoing> outgoing = new LinkedList<PeerMessageOutgoing>();
 	protected LinkedList<MessageSegment> ready = new LinkedList<MessageSegment>();	
 	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
@@ -165,6 +168,7 @@ public abstract class PeerSocket {
 					try {
 						synchronized(outgoing) { outgoing.wait(100); }
 					} catch (InterruptedException e) {}
+				} catch(EOFException|SocketException exc) {
 				} catch (IOException exc) {
 					ioexception(exc);
 				} catch(Exception exc) {
@@ -198,7 +202,7 @@ public abstract class PeerSocket {
 				}
 			} catch(ProtocolViolationException exc) {
 				violation();
-			} catch(SocketException exc) { // socket closed; just ignore it
+			} catch(SocketException|EOFException exc) { // socket closed; just ignore it
 			} catch(Exception exc) {
 				logger.error("Socket receive thread for {} caught exception", getAddress(), exc);
 				violation();
@@ -213,29 +217,31 @@ public abstract class PeerSocket {
 			return;
 		}
 		
-		if(msgId > maxReceivedMessageId) { // new message
-			msg = new PeerMessageIncoming(connection, cmd, flags, msgId);
-			synchronized(this) {
-				incoming.put(msgId, msg);
-				maxReceivedMessageId = msgId;
-				if(isClosed()) {
-					finishedMessage(msg);
+		synchronized(this) {
+			if(msgId > maxReceivedMessageId) { // new message
+				msg = new PeerMessageIncoming(connection, cmd, flags, msgId);
+				synchronized(this) {
+					incoming.put(msgId, msg);
+					maxReceivedMessageId = msgId;
+					if(isClosed()) {
+						finishedMessage(msg);
+					}
 				}
+				pruneMessages();
+			} else if(incoming.containsKey(msgId)) { // existing message
+				msg = incoming.get(msgId);
+			} else { // pruned message
+				if(maxReceivedMessageId == Integer.MAX_VALUE) {
+					// we can accept no new messages since we've exceeded the limits of the 32-bit ID field; close and force a reconnect
+					close();
+				}
+				
+				if((flags & PeerMessage.FLAG_FINAL) == 0) {
+					// tell peer we don't want to hear more about this if they intend to send more
+					rejectMessage(msgId, cmd);
+				}
+				return;
 			}
-			pruneMessages();
-		} else if(incoming.containsKey(msgId)) { // existing message
-			msg = incoming.get(msgId);
-		} else { // pruned message
-			if(maxReceivedMessageId == Integer.MAX_VALUE) {
-				// we can accept no new messages since we've exceeded the limits of the 32-bit ID field; close and force a reconnect
-				close();
-			}
-			
-			if((flags & PeerMessage.FLAG_FINAL) == 0) {
-				// tell peer we don't want to hear more about this if they intend to send more
-				rejectMessage(msgId, cmd);
-			}
-			return;
 		}
 		
 		msg.receivedData(flags, payload);

@@ -43,8 +43,17 @@ public class Key {
 		return decrypt(iv, ciphertext, 0, ciphertext.length);
 	}
 	
+	// TODO DHT: (test) decryptUnpadded
+	public byte[] decryptUnpadded(byte[] iv, byte[] ciphertext) {
+		return decryptUnpadded(iv, ciphertext, 0, ciphertext.length);
+	}
+	
 	public byte[] decrypt(byte[] iv, byte[] ciphertext, int offset, int length) {
 		return crypto.decrypt(raw, iv, ciphertext, offset, length, null, 0, 0, true);
+	}
+	
+	public byte[] decryptUnpadded(byte[] iv, byte[] ciphertext, int offset, int length) {
+		return crypto.decrypt(raw, iv, ciphertext, offset, length, null, 0, 0, false);
 	}
 
 	public byte[] authenticate(byte[] data) {

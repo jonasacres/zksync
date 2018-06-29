@@ -14,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
@@ -23,7 +24,9 @@ import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocketListener {
+	public final static int MAX_RECENT_PROOFS = 128;
 	protected int port, requestedPort;
+	
 	protected CryptoSupport crypto;
 	protected Blacklist blacklist;
 	protected ServerSocket listenSocket;
@@ -31,6 +34,7 @@ public class TCPPeerSocketListener {
 	protected Thread thread;
 	protected Logger logger = LoggerFactory.getLogger(TCPPeerSocketListener.class);
 	protected LinkedList<TCPPeerAdvertisementListener> adListeners;
+	protected LinkedList<Long> recentProofs;
 	protected boolean closed, established;
 	
 	public TCPPeerSocketListener(ZKMaster master, int port) throws IOException {
@@ -39,7 +43,8 @@ public class TCPPeerSocketListener {
 		this.requestedPort = port;
 		this.master = master;
 		this.port = port == 0 ? cachedPort() : port;
-		this.adListeners = new LinkedList<TCPPeerAdvertisementListener>();
+		this.adListeners = new LinkedList<>();
+		this.recentProofs = new LinkedList<>();
 		this.thread = new Thread( ()->listenThread() );
 		this.thread.start();
 	}
@@ -167,6 +172,7 @@ public class TCPPeerSocketListener {
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(Exception exc) {
+			exc.printStackTrace();
 			logger.error("Caught unexpected exception on connection to peer {}", peerSocketRaw.getInetAddress().toString(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
@@ -182,17 +188,21 @@ public class TCPPeerSocketListener {
 		
 		InputStream in = peerSocketRaw.getInputStream();
 		OutputStream out = peerSocketRaw.getOutputStream();
-		
+
 		// This will need to be rethought if we ever have different crypto configurations between archives
 		byte[] pubKeyRaw = new byte[adListeners.getFirst().crypto.asymPublicSigningKeySize()];
 		byte[] keyHash = new byte[adListeners.getFirst().crypto.hashLength()];
 		byte[] proof = new byte[adListeners.getFirst().crypto.symKeyLength()];
+		byte[] ephAuth = new byte[adListeners.getFirst().crypto.hashLength()];
+		byte[] staticKeyCiphertext = new byte[adListeners.getFirst().crypto.asymPublicDHKeySize() + adListeners.getFirst().crypto.symTagLength()];
 		byte[] timeIndexBytes = new byte[4];
 		
 		IOUtils.readFully(in, pubKeyRaw);
 		IOUtils.readFully(in, keyHash);
-		IOUtils.readFully(in, timeIndexBytes);
+		IOUtils.readFully(in, timeIndexBytes); // TODO DHT: (redesign) Don't like this field being plaintext and mutable.
 		IOUtils.readFully(in, proof);
+		IOUtils.readFully(in, ephAuth);
+		IOUtils.readFully(in, staticKeyCiphertext);
 		
 		PublicDHKey pubKey = crypto.makePublicDHKey(pubKeyRaw);
 		TCPPeerAdvertisementListener ad = findMatchingAdvertisement(pubKey, keyHash);
@@ -210,8 +220,19 @@ public class TCPPeerSocketListener {
 			long startsIn = startTime - Util.currentTimeMillis();
 			assertState(0 <= startsIn && startsIn <= 10000);
 		}
+
+		// TODO DHT: (test) Test proof tag caching
+		byte[] tempSharedSecret = ad.swarm.identityKey.sharedSecret(crypto.makePublicDHKey(pubKeyRaw));
+		checkProofAgainstReplays(tempSharedSecret, proof);
 		
-		byte[] tempSharedSecret = ad.dhPrivateKey.sharedSecret(crypto.makePublicDHKey(pubKeyRaw));
+		Key clientStaticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
+		byte[] clientStaticKeyRaw = clientStaticSymKeyText.decryptUnpadded(new byte[crypto.symIvLength()], staticKeyCiphertext);
+		PublicDHKey clientStaticKey = crypto.makePublicDHKey(clientStaticKeyRaw);
+		byte[] staticSecret = ad.swarm.identityKey.sharedSecret(clientStaticKey);
+		Key clientStaticSymKeyAuth = new Key(crypto, staticSecret).derive(0, new byte[0]);
+		byte[] expectedEphAuth = clientStaticSymKeyAuth.authenticate(tempSharedSecret);
+		assertState(Util.safeEquals(ephAuth, expectedEphAuth));
+		
 		byte[] expectedProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
 		byte[] responseProof;
 		PrivateDHKey ephemeralKey = crypto.makePrivateDHKey();
@@ -231,7 +252,7 @@ public class TCPPeerSocketListener {
 		out.write(responseProof);
 		
 		established = true;
-		return new TCPPeerSocket(ad.swarm, peerSocketRaw, sharedSecret, peerType);
+		return new TCPPeerSocket(ad.swarm, clientStaticKey, peerSocketRaw, sharedSecret, peerType);
 	}
 	
 	protected TCPPeerAdvertisementListener findMatchingAdvertisement(PublicDHKey pubKey, byte[] keyHash) throws ProtocolViolationException {
@@ -244,5 +265,18 @@ public class TCPPeerSocketListener {
 	
 	protected void assertState(boolean state) throws ProtocolViolationException {
 		if(!state) throw new ProtocolViolationException();
+	}
+	
+	protected void checkProofAgainstReplays(byte[] tempSharedSecret, byte[] proof) throws ProtocolViolationException {
+		long proofTag = Util.shortTag(crypto.authenticate(tempSharedSecret, proof));
+		assertState(!recentProofs.contains(proofTag));
+		recentProofs.add(proofTag);
+		pruneRecentProofs();
+	}
+	
+	protected void pruneRecentProofs() {
+		while(recentProofs.size() > MAX_RECENT_PROOFS) {
+			recentProofs.removeFirst();
+		}
 	}
 }

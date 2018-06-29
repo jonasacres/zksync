@@ -8,6 +8,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -196,6 +197,8 @@ public class TCPPeerSocketTest {
 			serverReadRaw(crypto.hashLength()); // key auth
 			int timeIndex = ByteBuffer.wrap(serverReadRaw(4)).getInt();
 			serverReadRaw(crypto.symKeyLength()); // proof
+			serverReadRaw(crypto.hashLength());
+			serverReadRaw(crypto.asymPrivateDHKeySize() + crypto.symTagLength());
 			
 			this.secret = serverEphKey.sharedSecret(pubKey);
 			byte[] tempSecret = serverKey.sharedSecret(pubKey);
@@ -277,12 +280,13 @@ public class TCPPeerSocketTest {
 		ServerSocket server = null;
 		Socket clientSocketRaw = null, serverSocket = null;
 		TCPPeerSocket clientSocket = null;
+		PublicDHKey identityKey = crypto.makePrivateDHKey().publicKey();
 		
 		try {
 			byte[] secret = master.getCrypto().rng(master.getCrypto().asymDHSecretSize());
 			server = new ServerSocket(0);
 			clientSocketRaw = new Socket("localhost", server.getLocalPort());
-			clientSocket = new TCPPeerSocket(swarm, clientSocketRaw, secret, PeerConnection.PEER_TYPE_BLIND);
+			clientSocket = new TCPPeerSocket(swarm, identityKey, clientSocketRaw, secret, PeerConnection.PEER_TYPE_BLIND);
 			serverSocket = server.accept();
 			assertEquals(clientSocketRaw, clientSocket.socket);
 			assertTrue(Arrays.equals(secret, clientSocket.getSharedSecret()));
@@ -634,7 +638,7 @@ public class TCPPeerSocketTest {
 		socket.read(buf, 0, limit);
 	}
 	
-	@Test(expected = ProtocolViolationException.class)
+	@Test(expected = EOFException.class)
 	public void testReadThrowsExceptionIfEofReceivedInMessage() throws IOException, ProtocolViolationException {
 		int limit = TCPPeerSocket.MAX_MSG_LEN;
 		byte[] buf = new byte[limit];

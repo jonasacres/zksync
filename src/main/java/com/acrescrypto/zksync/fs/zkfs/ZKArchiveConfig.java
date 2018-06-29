@@ -510,4 +510,8 @@ public class ZKArchiveConfig {
 		if(!pubKey.verify(allegedPage, 0, sigOffset, allegedPage, sigOffset, pubKey.getCrypto().asymSignatureSize())) return false;
 		return true;
 	}
+
+	public ZKMaster getMaster() {
+		return accessor.getMaster();
+	}
 }

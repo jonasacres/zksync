@@ -43,7 +43,7 @@ public class PeerSwarmTest {
 		}
 		@Override public void blacklist(Blacklist blacklist) throws IOException {}
 		@Override public boolean isBlacklisted(Blacklist blacklist) throws IOException { return blacklisted; }
-		@Override public byte[] serialize() { return null; }
+		@Override public byte[] serialize() { return new byte[0]; }
 		@Override public boolean matchesAddress(String address) { return this.address.equals(address); }
 		@Override public byte getType() { return type; }
 		@Override public boolean isReachable() { return true; }

@@ -288,7 +288,7 @@ public class PeerConnectionTest {
 		listener.advertise(swarm);
 		assertNull(listener.connectedPeer);
 		PeerConnection conn = new PeerConnection(swarm, listener.listenerForSwarm(swarm).localAd());
-
+		
 		assertTrue(Util.waitUntil(100, ()->listener.connectedPeer != null));
 		assertNotNull(listener.connectedPeer);
 		assertNotNull(conn.queue);

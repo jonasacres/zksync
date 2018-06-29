@@ -118,6 +118,13 @@ public class TCPPeerSocketListenerTest {
 	
 	protected void sendHandshake(PublicDHKey adKey, Socket socket, int timeSliceOffset, ZKArchiveConfig proofConfig) throws IOException {
 		int timeSlice = swarm.config.getAccessor().timeSliceIndex() + timeSliceOffset;
+
+		byte[] tempSharedSecret = peerKey.sharedSecret(adKey);
+		byte[] staticSecret = swarm.identityKey.sharedSecret(adKey);
+		Key staticSymKeyAuth = new Key(crypto, staticSecret).derive(0, new byte[0]);
+		Key staticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
+		byte[] ephAuth = staticSymKeyAuth.authenticate(tempSharedSecret);
+		byte[] staticKeyCiphertext = staticSymKeyText.encrypt(new byte[crypto.symIvLength()], swarm.identityKey.publicKey().getBytes(), -1);
 		
 		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize()+crypto.hashLength()+4);
 		keyHashInput.put(peerKey.publicKey().getBytes());
@@ -128,7 +135,7 @@ public class TCPPeerSocketListenerTest {
 		
 		byte[] keyHash = keyHashKey.authenticate(keyHashInput.array());
 		byte[] proof;
-		if(proofConfig != null) proof = proofConfig.getAccessor().temporalProof(timeSlice, 0, peerKey.sharedSecret(adKey));
+		if(proofConfig != null) proof = proofConfig.getAccessor().temporalProof(timeSlice, 0, tempSharedSecret);
 		else proof = crypto.rng(crypto.symKeyLength());
 		
 		OutputStream out = socket.getOutputStream();
@@ -136,6 +143,8 @@ public class TCPPeerSocketListenerTest {
 		out.write(keyHash);
 		out.write(ByteBuffer.allocate(4).putInt(timeSlice).array());
 		out.write(proof);
+		out.write(ephAuth);
+		out.write(staticKeyCiphertext);
 	}
 	
 	@BeforeClass
@@ -400,7 +409,7 @@ public class TCPPeerSocketListenerTest {
 		listener.advertise(swarm);
 		Socket socket = connect();
 		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
-		assertTrue(Util.waitUntil(100, ()->swarm.opened != null));
+		assertTrue(Util.waitUntil(100000, ()->swarm.opened != null));
 		assertEquals(PeerConnection.PEER_TYPE_FULL, swarm.opened.getPeerType());
 	}
 	

@@ -65,6 +65,7 @@ public class PeerConnection {
 		this.socket = PeerSocket.connectToAd(swarm, ad);
 		this.socket.handshake(this);
 		initialize();
+		announceSelf();
 	}
 	
 	public PeerConnection(PeerSocket socket) throws IOException {
@@ -94,9 +95,11 @@ public class PeerConnection {
 		socket.violation();
 	}
 
-	public synchronized void close() {
-		if(closed) return;
-		closed = true;
+	public void close() {
+		synchronized(this) {
+			if(closed) return;
+			closed = true;
+		}
 		
 		if(queue != null) {
 			queue.close();
@@ -126,6 +129,21 @@ public class PeerConnection {
 		if(wantsEverything) {
 			// TODO DHT: (test) Test that page tags are automatically queued if everything requested (and not queued if everything not requested)
 			queue.addPageTag(PageQueue.DEFAULT_EVERYTHING_PRIORITY, shortTag);
+		}
+	}
+	
+	public void announceSelf() {
+		// TODO DHT: (test) doesn't announce self if not listening / announces self when listening
+		TCPPeerSocketListener listener = socket.swarm.getConfig().getMaster().getTCPListener();
+		if(listener == null) return;
+		
+		TCPPeerAdvertisementListener adListener = listener.listenerForSwarm(socket.swarm);
+		if(adListener == null) return;
+		
+		try {
+			announceSelf(adListener.localAd());
+		} catch(UnconnectableAdvertisementException exc) {
+			logger.error("Unable to announce local ad", exc);
 		}
 	}
 	
@@ -456,6 +474,8 @@ public class PeerConnection {
 
 	protected void handleRequestInodes(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
 		ZKArchive archive = socket.swarm.config.getArchive();
+		if(archive == null) return; // can't send inodes since we're not fully initialized
+		
 		assertPeerCapability(PEER_TYPE_FULL);
 		byte[] refTagBytes = new byte[archive.getConfig().refTagSize()];
 		int priority = msg.rxBuf.getInt();
@@ -469,6 +489,8 @@ public class PeerConnection {
 	
 	protected void handleRequestRevisionContents(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
 		ZKArchive archive = socket.swarm.config.getArchive();
+		if(archive == null) return; // can't send revisions since we're not fully initialized
+
 		assertPeerCapability(PEER_TYPE_FULL);
 		byte[] refTagBytes = new byte[archive.getConfig().refTagSize()];
 		int priority = msg.rxBuf.getInt();
@@ -480,6 +502,7 @@ public class PeerConnection {
 	}
 	
 	protected void handleRequestPageTags(PeerMessageIncoming msg) throws IOException {
+		if(socket.swarm.config.getArchive() == null) return; // can't send pages since we're not fully initialized
 		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
 		int priority = msg.rxBuf.getInt();
 		while(msg.rxBuf.hasRemaining()) {

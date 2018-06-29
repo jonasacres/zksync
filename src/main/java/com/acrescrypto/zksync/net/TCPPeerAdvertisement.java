@@ -15,7 +15,6 @@ import com.acrescrypto.zksync.utility.Util;
 public class TCPPeerAdvertisement extends PeerAdvertisement {
 	public static boolean disableReachabilityTest = false; // set to true to make isReachable always return true; helpful for testing
 	
-	protected PublicDHKey pubKey;
 	protected String host;
 	protected byte[] encryptedArchiveId;
 	protected int port;
@@ -163,10 +162,6 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	
 	public int getVersion() {
 		return version;
-	}
-	
-	public PublicDHKey getPubKey() {
-		return pubKey;
 	}
 	
 	public byte[] getEncryptedArchiveId() {

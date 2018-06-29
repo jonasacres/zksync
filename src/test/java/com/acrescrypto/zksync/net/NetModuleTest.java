@@ -52,6 +52,7 @@ public class NetModuleTest {
 	/** Party A writes data to an archive. B connects and downloads it. */ 
 	@Test
 	public void testOneWaySync() throws IOException, UnconnectableAdvertisementException {
+		// TODO DHT: (itf) linux 5/29/18 post-c3b635b intermittent stalls on attempting to get bConfig config file
 		Key rootKey = new Key(crypto);
 		
 		ZKMaster aMaster = ZKMaster.openBlankTestVolume("copy1");
@@ -305,9 +306,7 @@ public class NetModuleTest {
 		bMaster.close();
 	}
 	
-	/** Party A writes files to the archive. Party B does not specially request anything, but is able to read the files. 
-	 * @throws IOException 
-	 * @throws UnconnectableAdvertisementException */
+	/** Party A writes files to the archive. Party B does not specially request anything, but is able to read the files. */
 	@Test
 	public void testOnDemandDownload() throws IOException, UnconnectableAdvertisementException {
 		Key rootKey = new Key(crypto);
@@ -344,5 +343,55 @@ public class NetModuleTest {
 		bConfig.getArchive().close();
 		aMaster.close();
 		bMaster.close();
+	}
+	
+	/** N parties are created, P_0 through P_(N-1).
+	 * Each P_k connects to P_(k+1 % N).
+	 * After a suitable delay, each party should have N-1 connections.
+	 */
+	@Test
+	public void testPeerDiscovery() throws IOException, UnconnectableAdvertisementException {
+		int numPeers = 8;
+		Key rootKey = new Key(crypto);
+		
+		ZKMaster[] masters = new ZKMaster[numPeers];
+		ZKArchiveConfig[] configs = new ZKArchiveConfig[numPeers];
+		TCPPeerAdvertisement[] ads = new TCPPeerAdvertisement[numPeers];
+		
+		for(int i = 0; i < numPeers; i++) {
+			masters[i] = ZKMaster.openBlankTestVolume("copy" + i);
+			masters[i].listenOnTCP(0);
+
+			ArchiveAccessor accessor = masters[i].makeAccessorForRoot(rootKey, false);
+			if(i == 0) {
+				configs[i] = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+				masters[i].getTCPListener().advertise(configs[i].getSwarm());
+			} else {
+				configs[i] = new ZKArchiveConfig(accessor, configs[0].getArchiveId(), false);
+				masters[i].getTCPListener().advertise(configs[i].getSwarm());
+				configs[i].getSwarm().addPeerAdvertisement(ads[i-1]);
+				configs[i].finishOpening();
+			}
+			
+			ads[i] = masters[i].getTCPListener().listenerForSwarm(configs[i].getSwarm()).localAd();
+		}
+		
+		configs[0].getSwarm().addPeerAdvertisement(ads[numPeers-1]);
+		
+		for(int i = 0; i < numPeers; i++) {
+			final int ii = i;
+			Util.waitUntil(1000, ()->configs[ii].getSwarm().connections.size() >= numPeers-1);
+			assertEquals(numPeers-1, configs[i].getSwarm().connections.size());
+		}
+		
+		Util.sleep(50);
+		for(int i = 0; i < numPeers; i++) {
+			assertEquals(numPeers-1, configs[i].getSwarm().connections.size());
+		}
+		
+		for(int i = 0; i < numPeers; i++) {
+			configs[i].getArchive().close();
+			masters[i].close();
+		}
 	}
 }
