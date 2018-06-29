@@ -275,7 +275,6 @@ public class PeerSwarm implements BlacklistCallback {
 						boolean unconnectable = ++ad.failCount >= EMBARGO_FAIL_COUNT_THRESHOLD;
 						int delay = unconnectable ? EMBARGO_EXPIRE_TIME_MILLIS : EMBARGO_SOFT_EXPIRE_TIME_MILLIS;
 						
-						// TODO DHT: (test) Embargo fail count stuff (don't embargo until count hit, embargo when count hits, clear fail count on connect, clear fail count on embargo)
 						adEmbargoes.put(ad, Util.currentTimeMillis() + delay);
 						connectedAds.remove(ad);
 					}

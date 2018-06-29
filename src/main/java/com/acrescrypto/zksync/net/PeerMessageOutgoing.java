@@ -107,9 +107,11 @@ public class PeerMessageOutgoing extends PeerMessage {
 			}
 			
 			buffer.position(buffer.position() + r);
+			
+			// grab more data if available
 			if(txPayload.available() > 0) continue;
 			try { Thread.sleep(1); } catch(InterruptedException exc) {}
-			if(txPayload.available() == 0) break;
+			if(txPayload.available() <= 0) break;
 		}
 		
 		buffer.limit(buffer.position());

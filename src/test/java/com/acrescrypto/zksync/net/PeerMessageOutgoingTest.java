@@ -30,6 +30,8 @@ public class PeerMessageOutgoingTest {
 		int timeoutMs = 250;
 		byte[] written;
 		
+		int total;
+		
 		@Override public PeerAdvertisement getAd() { return null; }
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }
@@ -42,7 +44,6 @@ public class PeerMessageOutgoingTest {
 		@Override public int getPeerType() throws UnsupportedOperationException { return -1; }
 		@Override public synchronized void dataReady(MessageSegment segment) {
 			received = segment;
-			segment.delivered();
 			this.notifyAll();
 		}
 		
@@ -51,13 +52,15 @@ public class PeerMessageOutgoingTest {
 			if(received == null) {
 				try { this.wait(timeoutMs); } catch(InterruptedException exc) {}
 				if(received == null) throw new TimeoutException();
-			} 
+			}
 		}
 		
 		public byte[] readBufferedMessage(PeerMessageOutgoing msg) {
 			synchronized(msg) {
 				byte[] content = new byte[received.content.limit()];
 				System.arraycopy(received.content.array(), 0, content, 0, content.length);
+				total += received.content.limit() - PeerMessage.HEADER_LENGTH;
+				received.delivered();
 				received = null;
 				return content;
 			}
