@@ -357,6 +357,7 @@ public class NetModuleTest {
 		ZKArchiveConfig[] configs = new ZKArchiveConfig[numPeers];
 		TCPPeerAdvertisement[] ads = new TCPPeerAdvertisement[numPeers];
 		
+		// initialize peers; 0 sets up the archive, everyone follow's 0's lead
 		for(int i = 0; i < numPeers; i++) {
 			masters[i] = ZKMaster.openBlankTestVolume("copy" + i);
 			masters[i].listenOnTCP(0);
@@ -377,15 +378,17 @@ public class NetModuleTest {
 		
 		configs[0].getSwarm().addPeerAdvertisement(ads[numPeers-1]);
 		
+		// give everyone time to connect. We could have duplicate connections early on, so the connections might be higher than desired for a moment.
 		for(int i = 0; i < numPeers; i++) {
 			final int ii = i;
-			Util.waitUntil(2000, ()->configs[ii].getSwarm().connections.size() >= numPeers-1);
-			assertEquals(numPeers-1, configs[i].getSwarm().connections.size());
+			assertTrue(Util.waitUntil(2000, ()->configs[ii].getSwarm().connections.size() >= numPeers-1));
 		}
 		
-		Util.sleep(50);
+		// Give some time for duplicates to get shut down, and then check to make sure everyone has exactly numPeers-1 connections.
+		Util.sleep(200);
 		for(int i = 0; i < numPeers; i++) {
-			assertEquals(numPeers-1, configs[i].getSwarm().connections.size());
+			final int ii = i;
+			assertEquals(numPeers-1, configs[ii].getSwarm().connections.size());
 		}
 		
 		for(int i = 0; i < numPeers; i++) {
@@ -401,10 +404,9 @@ public class NetModuleTest {
 	 * The parties then merge all revtags. After a suitable delay, the parties should arrive at a single, shared revtag.
 	 * 
 	 * The filesystem pointed to by this revtag should contain the files written by each party.
-	 * @throws UnconnectableAdvertisementException 
 	 */
-	// @Test
-	public void testManyPartySync() throws IOException, UnconnectableAdvertisementException {
+	@Test
+	public void testManyPartySync() throws IOException, UnconnectableAdvertisementException, DiffResolutionException {
 		int numPeers = 8;
 		Key rootKey = new Key(crypto);
 		
@@ -436,6 +438,16 @@ public class NetModuleTest {
 			fs.write("2indirect-" + i, crypto.prng(crypto.hash(Util.serializeLong(i))).getBytes(2*configs[i].getPageSize()));
 			fs.commit();
 			fs.close();
+		}
+		
+		for(int i = 0; i < numPeers; i++) {
+			final int ii = i;
+			assertTrue(Util.waitUntil(2000, ()->configs[ii].getRevisionTree().plainBranchTips().size() == numPeers));
+		}
+		
+		for(int i = 0; i < numPeers; i++) {
+			RefTag tag = DiffSetResolver.canonicalMergeResolver(configs[i].getArchive()).resolve();
+			System.out.println("Tag: " + Util.bytesToHex(tag.getBytes()));
 		}
 		
 		for(int i = 0; i < numPeers; i++) {

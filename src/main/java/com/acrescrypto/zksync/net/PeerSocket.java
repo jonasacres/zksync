@@ -46,6 +46,7 @@ public abstract class PeerSocket {
 	public void handshake() throws ProtocolViolationException, IOException { handshake(null); }
 	
 	public final void close() throws IOException {
+		if(isClosed()) return;
 		_close();
 		closeAllIncoming();
 		closeAllOutgoing();
@@ -144,8 +145,11 @@ public abstract class PeerSocket {
 	@SuppressWarnings("unlikely-arg-type")
 	protected void sendMessage(MessageSegment segment) throws IOException, ProtocolViolationException {
 		if(segment.msg.msgId == Integer.MIN_VALUE) segment.assignMsgId(issueMessageId());
-		write(segment.content.array(), 0, segment.content.limit());
-		segment.delivered();
+		try {
+			write(segment.content.array(), 0, segment.content.limit());
+		} finally {
+			segment.delivered();
+		}
 		
 		if((segment.flags & PeerMessage.FLAG_FINAL) != 0) {
 			synchronized(outgoing) {
@@ -168,7 +172,7 @@ public abstract class PeerSocket {
 					try {
 						synchronized(outgoing) { outgoing.wait(100); }
 					} catch (InterruptedException e) {}
-				} catch(EOFException|SocketException exc) {
+				} catch(EOFException exc) {
 				} catch (IOException exc) {
 					ioexception(exc);
 				} catch(Exception exc) {
@@ -277,9 +281,12 @@ public abstract class PeerSocket {
 		new PeerMessageOutgoing(connection, msgId, cmd, PeerMessage.FLAG_CANCEL, new ByteArrayInputStream(new byte[0]));
 	}
 	
-	protected synchronized void dataReady(MessageSegment segment) {
-		if(isClosed()) return;
-		ready.add(segment);
+	protected void dataReady(MessageSegment segment) {
+		synchronized(this) {
+			if(isClosed()) return;
+			ready.add(segment);
+		}
+		
 		synchronized(outgoing) { outgoing.notifyAll(); }
 	}
 	

@@ -27,7 +27,8 @@ public class DiffSetResolver {
 	PathDiffResolver pathResolver;
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
-		return latestVersionResolver(DiffSet.withCollection(archive.getConfig().getRevisionTree().plainBranchTips()));
+		DiffSet diffSet = DiffSet.withCollection(archive.getConfig().getRevisionTree().plainBranchTips());
+		return latestVersionResolver(diffSet);
 	}
 	
 	public static DiffSetResolver latestVersionResolver(DiffSet diffset) throws IOException {
@@ -96,9 +97,12 @@ public class DiffSetResolver {
 	}
 	
 	public RefTag resolve() throws IOException, DiffResolutionException {
+		System.out.println("Resolving " + diffset.revisions.length + " revisions");
 		selectResolutions();
 		applyResolutions();
-		return fs.commit(diffset.revisions);
+		RefTag revTag = fs.commit(diffset.revisions);
+		fs.getInodeTable().dumpInodes();
+		return revTag;
 	}
 	
 	protected void selectResolutions() {

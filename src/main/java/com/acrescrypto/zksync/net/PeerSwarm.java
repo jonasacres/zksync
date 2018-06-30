@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -13,6 +13,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.bouncycastle.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,7 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
+import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
@@ -68,12 +70,7 @@ public class PeerSwarm implements BlacklistCallback {
 		closed = true;
 		if(pool != null) pool.stop();
 		
-		ArrayList<PeerConnection> connectionsCopy;
-		synchronized(this) {
-			connectionsCopy = new ArrayList<>(connections);
-		}
-		
-		for(PeerConnection connection : connectionsCopy) {
+		for(PeerConnection connection : getConnections()) {
 			connection.close();
 		}
 		
@@ -144,6 +141,9 @@ public class PeerSwarm implements BlacklistCallback {
 		
 		PeerConnection existing;
 		while((existing = connectionForKey(connection.socket.remoteIdentityKey)) != null && existing != connection) {
+			if(Arrays.compareUnsigned(identityKey.publicKey().getBytes(), connection.socket.remoteIdentityKey.getBytes()) < 0) {
+				break; // whoever has the higher public key closes the connection
+			}
 			existing.close();
 			connections.remove(existing); // may have already been closed, so make sure it's removed
 		}
@@ -177,9 +177,13 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public synchronized void advertiseSelf(PeerAdvertisement ad) {
-		for(PeerConnection connection : connections) {
+		for(PeerConnection connection : getConnections()) {
 			connection.announceSelf(ad);
 		}
+	}
+	
+	public synchronized Collection<PeerConnection> getConnections() {
+		return new ArrayList<>(connections);
 	}
 	
 	protected void connectionThread() {
@@ -229,8 +233,8 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	protected PeerConnection connectionForKey(PublicDHKey key) {
-		for(PeerConnection connection : connections) {
-			if(connection.socket.remoteIdentityKey != null && Arrays.equals(connection.socket.remoteIdentityKey.getBytes(), key.getBytes())) {
+		for(PeerConnection connection : getConnections()) {
+			if(connection.socket.remoteIdentityKey != null && Arrays.areEqual(connection.socket.remoteIdentityKey.getBytes(), key.getBytes())) {
 				return connection;
 			}
 		}
@@ -296,11 +300,12 @@ public class PeerSwarm implements BlacklistCallback {
 		pageWaitLock.unlock();
 	}
 	
-	public ChunkAccumulator accumulatorForTag(byte[] tag) throws IOException {
+	public synchronized ChunkAccumulator accumulatorForTag(byte[] tag) throws IOException {
 		long shortTag = Util.shortTag(tag);
 		if(!activeFiles.containsKey(shortTag)) {
 			int numChunksExpected = (int) Math.ceil((double) config.getPageSize() / PeerMessage.FILE_CHUNK_SIZE);
 			ChunkAccumulator fileHandle = new ChunkAccumulator(this, tag, numChunksExpected);
+			
 			activeFiles.put(shortTag, fileHandle);
 			return fileHandle;
 		}
@@ -329,8 +334,14 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	public void announceTag(byte[] tag) {
 		long shortTag = Util.shortTag(tag);
-		for(PeerConnection connection : connections) {
+		for(PeerConnection connection : getConnections()) {
 			connection.announceTag(shortTag);
+		}
+	}
+	
+	public void announceTip(ObfuscatedRefTag tip) {
+		for(PeerConnection connection : getConnections()) {
+			connection.announceTip(tip);
 		}
 	}
 	
@@ -352,33 +363,30 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	public void requestAll() {
 		pool.setRequestingEverything(true);
-		for(PeerConnection connection : connections) {
-			connection.requestAll();
-		}
 	}
 	
 	public void stopRequestingAll() {
 		pool.setRequestingEverything(false);
-		for(PeerConnection connection : connections) {
+		for(PeerConnection connection : getConnections()) {
 			connection.requestAllCancel();
 		}
 	}
 	
 	public void setPaused(boolean paused) {
 		pool.setPaused(paused);
-		for(PeerConnection connection : connections) {
+		for(PeerConnection connection : getConnections()) {
 			connection.setPaused(paused);
 		}
 	}
 
 	public void announceTips() throws IOException {
-		for(PeerConnection connection : connections) {
+		for(PeerConnection connection : getConnections()) {
 			connection.announceTips();
 		}
 	}
 	
 	public void announcePeer(PeerAdvertisement ad) {
-		for(PeerConnection connection : connections) {
+		for(PeerConnection connection : getConnections()) {
 			connection.announcePeer(ad);
 		}
 	}
@@ -429,7 +437,7 @@ public class PeerSwarm implements BlacklistCallback {
 		System.out.println("\tConnections: " + connections.size());
 		int i = 0;
 		for(PeerConnection connection : connections) {
-			System.out.println("\t\tConnection " + (i++) + ": " + Util.bytesToHex(connection.socket.remoteIdentityKey.getBytes()));
+			System.out.println("\t\tConnection " + (i++) + ": " + Util.bytesToHex(connection.socket.remoteIdentityKey.getBytes()) + " " + (connection.socket.isLocalRoleClient() ? "client" : "server"));
 		}
 	}
 }

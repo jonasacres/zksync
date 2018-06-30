@@ -3,6 +3,7 @@ import java.io.ByteArrayInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
@@ -210,6 +211,10 @@ public class PeerConnection {
 		announceTags(archive.allPageTags());
 	}
 	
+	public void announceTip(ObfuscatedRefTag tip) {
+		send(CMD_ANNOUNCE_TIPS, tip.serialize());
+	}
+	
 	public void announceTips() throws IOException {
 		ZKArchive archive = socket.swarm.config.getArchive();
 		if(archive == null || archive.getConfig().getRevisionTree() == null) {
@@ -217,9 +222,10 @@ public class PeerConnection {
 			return;
 		}
 		
-		ByteBuffer buf = ByteBuffer.allocate(archive.getConfig().getRevisionTree().branchTips().size() * ObfuscatedRefTag.sizeForConfig(socket.swarm.config));
-		for(RefTag tag : archive.getConfig().getRevisionTree().plainBranchTips()) {
-			buf.put(tag.obfuscate().serialize());
+		Collection<ObfuscatedRefTag> branchTipsClone = new ArrayList<>(archive.getConfig().getRevisionTree().branchTips());
+		ByteBuffer buf = ByteBuffer.allocate(branchTipsClone.size() * ObfuscatedRefTag.sizeForConfig(socket.swarm.config));
+		for(ObfuscatedRefTag tag : branchTipsClone) {
+			buf.put(tag.serialize());
 		}
 		
 		send(CMD_ANNOUNCE_TIPS, buf.array());
@@ -318,15 +324,12 @@ public class PeerConnection {
 		return announcedTags.contains(shortTag);
 	}
 	
-	public synchronized void waitForReady() throws SocketClosedException {
-		while(!receivedTags) {
-			try {
-				this.wait();
-			} catch (InterruptedException e) {}
-			assertConnected();
-		}
+	protected void waitForFullInit() {
+		Util.blockOn(()->!closed && !socket.swarm.config.isInitialized());
+		Util.blockOn(()->!closed && !socket.swarm.config.canReceive());
+		Util.blockOn(()->!closed && socket.swarm.config.getArchive() == null);
 	}
-
+	
 	public boolean handle(PeerMessageIncoming msg) throws ProtocolViolationException {
 		try {
 			switch(msg.cmd) {
@@ -450,8 +453,7 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
-		Util.blockOn(()->!socket.swarm.config.isInitialized() && !closed);
-		
+		Util.blockOn(()->!closed && !socket.swarm.config.isInitialized());
 		byte[] obfTagRaw = new byte[ObfuscatedRefTag.sizeForConfig(socket.swarm.config)];
 		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(obfTagRaw);
@@ -463,6 +465,7 @@ public class PeerConnection {
 	}
 	
 	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException, IOException {
+		waitForFullInit();
 		msg.rxBuf.requireEOF();
 		sendEverything();
 	}
@@ -473,8 +476,8 @@ public class PeerConnection {
 	}
 
 	protected void handleRequestInodes(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
+		waitForFullInit();
 		ZKArchive archive = socket.swarm.config.getArchive();
-		if(archive == null) return; // can't send inodes since we're not fully initialized
 		
 		assertPeerCapability(PEER_TYPE_FULL);
 		byte[] refTagBytes = new byte[archive.getConfig().refTagSize()];
@@ -488,8 +491,8 @@ public class PeerConnection {
 	}
 	
 	protected void handleRequestRevisionContents(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
+		waitForFullInit();
 		ZKArchive archive = socket.swarm.config.getArchive();
-		if(archive == null) return; // can't send revisions since we're not fully initialized
 
 		assertPeerCapability(PEER_TYPE_FULL);
 		byte[] refTagBytes = new byte[archive.getConfig().refTagSize()];
@@ -502,7 +505,7 @@ public class PeerConnection {
 	}
 	
 	protected void handleRequestPageTags(PeerMessageIncoming msg) throws IOException {
-		if(socket.swarm.config.getArchive() == null) return; // can't send pages since we're not fully initialized
+		waitForFullInit();
 		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
 		int priority = msg.rxBuf.getInt();
 		while(msg.rxBuf.hasRemaining()) {
@@ -513,15 +516,19 @@ public class PeerConnection {
 	
 	protected void handleSendPage(PeerMessageIncoming msg) throws IOException, ProtocolViolationException {
 		byte[] tag = msg.rxBuf.read(socket.swarm.config.getCrypto().hashLength());
+		if(!Arrays.equals(tag, socket.swarm.getConfig().tag())) {
+			waitForFullInit();
+		}
+		
 		if(socket.swarm.getConfig().getCacheStorage().exists(Page.pathForTag(tag))) {
 			announceTag(Util.shortTag(tag));
 			return;
 		}
 		
+		ChunkAccumulator accumulator = socket.swarm.accumulatorForTag(tag);		
 		int actualPageSize = socket.swarm.config.getSerializedPageSize();
 		int expectedChunks = (int) Math.ceil(((double) actualPageSize)/PeerMessage.FILE_CHUNK_SIZE);
 		int finalChunkSize = actualPageSize % PeerMessage.FILE_CHUNK_SIZE;
-		ChunkAccumulator accumulator = socket.swarm.accumulatorForTag(tag);
 		
 		while(!accumulator.isFinished() && msg.rxBuf.hasRemaining()) {
 			long offset = Util.unsignInt(msg.rxBuf.getInt());

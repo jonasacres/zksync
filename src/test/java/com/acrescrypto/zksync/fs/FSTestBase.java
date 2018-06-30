@@ -130,7 +130,7 @@ public abstract class FSTestBase {
 		scratch.write(filename, "some data".getBytes());
 		Stat stat = scratch.stat(filename);
 		Long now = System.currentTimeMillis();
-		assertEquals(0, Math.abs(stat.getCtime()/(1000l*1000l) - now), 1000);
+		assertEquals(0, Math.abs(stat.getCtime()/(1000l*1000l) - now), 2000);
 		
 		Long atime = 31337000000000l, mtime = 80085000000000l;
 		scratch.setAtime(filename, atime);

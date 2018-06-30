@@ -46,10 +46,12 @@ public class RevisionTree {
 	
 	public synchronized void addBranchTip(ObfuscatedRefTag newBranch) throws InvalidSignatureException {
 		newBranch.assertValid();
+		if(branchTips.contains(newBranch)) return;
 		branchTips.add(newBranch);
 		if(!config.accessor.isSeedOnly()) {
 			plainBranchTips.add(newBranch.reveal());
 		}
+		config.swarm.announceTip(newBranch);
 	}
 	
 	public synchronized void removeBranchTip(RefTag oldBranch) throws IOException {

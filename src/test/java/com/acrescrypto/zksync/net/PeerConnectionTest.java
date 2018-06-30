@@ -1454,38 +1454,6 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testWaitForReadyDoesntBlockIfTagsReceived() throws ProtocolViolationException, SocketClosedException {
-		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TAGS);
-		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
-		conn.handle(msg);
-		conn.waitForReady();
-	}
-	
-	@Test
-	public void testWaitForReadyBlocksUntilTagsReceived() throws SocketClosedException, ProtocolViolationException {
-		class Holder { boolean waited; }
-		Holder holder = new Holder();
-		
-		Thread thread = new Thread(()->{
-			try {
-				conn.waitForReady();
-				holder.waited = true;
-			} catch (SocketClosedException e) {
-				e.printStackTrace();
-			}
-		});
-		
-		thread.start();
-		try { Thread.sleep(10); } catch (InterruptedException e) {}
-		assertFalse(holder.waited);
-		
-		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_ANNOUNCE_TAGS);
-		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
-		conn.handle(msg);
-		assertTrue(Util.waitUntil(100, ()->holder.waited));
-	}
-	
-	@Test
 	public void testPageQueueThreadSendsIfUnpaused() throws ProtocolViolationException, IOException {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);

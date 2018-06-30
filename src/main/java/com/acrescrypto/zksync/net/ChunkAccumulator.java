@@ -31,7 +31,7 @@ public class ChunkAccumulator {
 		
 		public ChunkVersion(FS scratchFS, byte[] chunk) throws IOException {
 			this.scratchFS = scratchFS;
-			this.hash = swarm.config.getAccessor().getMaster().getCrypto().hash(chunk);
+			this.hash = hashForChunk(chunk);
 			write(chunk);
 		}
 		
@@ -43,8 +43,16 @@ public class ChunkAccumulator {
 			scratchFS.unlink(path());
 		}
 		
+		public boolean matches(byte[] chunk) {
+			return Arrays.equals(hashForChunk(chunk), hash);
+		}
+
 		protected String path() {
 			return Util.bytesToHex(hash);
+		}
+		
+		protected byte[] hashForChunk(byte[] chunk) {
+			return swarm.config.getAccessor().getMaster().getCrypto().authenticate(tag, chunk);
 		}
 		
 		protected void write(byte[] chunk) throws IOException {
@@ -73,6 +81,7 @@ public class ChunkAccumulator {
 	
 	public synchronized boolean addChunk(int index, byte[] chunk, PeerConnection peer) throws IOException {
 		if(finished) return true;
+		
 		boolean needsInsert = true;
 		if(index >= numChunksExpected || index < 0) throw new EINVALException(Util.bytesToHex(tag) + ":" + index);
 		ChunkVersion version = new ChunkVersion(peer.socket.swarm.config.getAccessor().getMaster().scratchStorage(), chunk);
@@ -89,14 +98,23 @@ public class ChunkAccumulator {
 			chunksByIndex.get(index).add(version);
 		}
 		
+		boolean add = true;
 		for(PeerChunkInfo peerInfo : peersByIndex.get(index)) {
 			if(peerInfo.peer == peer) {
+				if(peerInfo.version.matches(chunk)) {
+					add = false;
+					break;
+				}
+				
 				logger.warn("Peer " + peerInfo.peer.socket.getAddress() + " sent multiple versions of chunk {} of tag {}; blacklisting.", index, Util.bytesToHex(tag));
 				peer.blacklist();
 			}
 		}
 		
-		peersByIndex.get(index).add(new PeerChunkInfo(version, peer));
+		if(add) {
+			peersByIndex.get(index).add(new PeerChunkInfo(version, peer));
+		}
+		
 		return hasCandidatesForAllChunks() && trySolutions(new ArrayList<ChunkVersion>());
 	}
 	

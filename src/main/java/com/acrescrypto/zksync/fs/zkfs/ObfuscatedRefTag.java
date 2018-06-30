@@ -62,7 +62,9 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	}
 	
 	public void assertValid() throws InvalidSignatureException {
-		if(!verify()) throw new InvalidSignatureException();
+		if(!verify()) {
+			throw new InvalidSignatureException();
+		}
 	}
 	
 	public RefTag reveal() throws InvalidSignatureException {

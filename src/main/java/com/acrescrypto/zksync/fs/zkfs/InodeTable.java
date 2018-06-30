@@ -324,6 +324,19 @@ public class InodeTable extends ZKFile {
 		}
 	}
 	
+	public void dumpInodes() throws IOException {
+		System.out.println("Inode table for " + Util.bytesToHex(zkfs.baseRevision.getHash()));
+		for(int i = 0; i < nextInodeId; i++) {
+			Inode inode = inodeWithId(i);
+			System.out.printf("\tInode %d: tag=%s... refType=%d identity=%x hash=%s\n",
+					i,
+					Util.bytesToHex(inode.refTag.getLiteral(), 4),
+					inode.refTag.refType,
+					inode.identity,
+					Util.bytesToHex(zkfs.archive.crypto.hash(inode.serialize())), 4);
+		}
+	}
+	
 	/** Iteraable for all inodes in the table */
 	public Iterable<Inode> values() {
 		@SuppressWarnings("resource")

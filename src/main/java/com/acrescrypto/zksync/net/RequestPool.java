@@ -46,6 +46,12 @@ public class RequestPool {
 	public void setRequestingEverything(boolean requestingEverything) {
 		this.requestingEverything = requestingEverything;
 		dirty = true;
+		
+		if(config.canReceive()) {
+			for(PeerConnection connection : config.getSwarm().getConnections()) {
+				connection.requestAll();
+			}
+		}
 	}
 	
 	public void setRequestingConfigInfo(boolean requestingConfigInfo) {
@@ -81,7 +87,7 @@ public class RequestPool {
 		dirty = true;
 
 		if(config.canReceive()) {
-			for(PeerConnection connection : config.getSwarm().connections) {
+			for(PeerConnection connection : config.getSwarm().getConnections()) {
 				ArrayList<Long> list = new ArrayList<>(1);
 				list.add(inodeId);
 				try {
@@ -97,7 +103,7 @@ public class RequestPool {
 		dirty = true;
 		
 		if(config.canReceive()) {
-			for(PeerConnection connection : config.getSwarm().connections) {
+			for(PeerConnection connection : config.getSwarm().getConnections()) {
 				ArrayList<RefTag> list = new ArrayList<>(1);
 				list.add(revTag);
 				try {
@@ -113,7 +119,7 @@ public class RequestPool {
 		dirty = true;
 		
 		if(config.canReceive()) {
-			for(PeerConnection connection : config.getSwarm().connections) {
+			for(PeerConnection connection : config.getSwarm().getConnections()) {
 				connection.requestPageTag(priority, shortTag);
 			}
 		}
@@ -153,7 +159,7 @@ public class RequestPool {
 	}
 	
 	protected void addDataRequests() {
-		for(PeerConnection conn : config.getSwarm().connections) {
+		for(PeerConnection conn : config.getSwarm().getConnections()) {
 			addDataRequestsToConnection(conn);
 		}
 	}
