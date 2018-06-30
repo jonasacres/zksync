@@ -293,11 +293,9 @@ public class PeerMessageIncomingTest {
 		});
 		thread.start();
 		
-		try { Thread.sleep(1); } catch (InterruptedException e) { e.printStackTrace(); };
-		assertFalse(holder.passed);
+		assertFalse(Util.waitUntil(10, ()->holder.passed));
 		msg.rxBuf.get();
-		try { Thread.sleep(1); } catch (InterruptedException e) { e.printStackTrace(); };
-		assertTrue(holder.passed);
+		assertTrue(Util.waitUntil(10, ()->holder.passed));
 	}
 	
 	@Test

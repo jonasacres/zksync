@@ -4,7 +4,7 @@ require 'colorize'
 
 def run_test(itr)
   file = "/tmp/zksync-test-output-#{Process.pid}-#{itr}"
-  output = `mvn clean test -e -Dtest=com.acrescrypto.zksync.AllTests 1>#{file} 2>&1`
+  output = `JAVA_HOME=/home/jonas/java/jdk1.8.0_171 mvn clean test -e -Dtest=com.acrescrypto.zksync.AllTests 1>#{file} 2>&1`
   return false unless $?.to_i == 0
   File.unlink(file)
   true

@@ -393,4 +393,54 @@ public class NetModuleTest {
 			masters[i].close();
 		}
 	}
+	
+	/** N+1 parties are created, P_0 through P_N. The peers are connected and request sync of all pages.
+	 * Each peer except P_N writes a set of files. P_N acts as a read-only peer. After a suitable delay,
+	 * each party should have each set of files and revtags.
+	 * 
+	 * The parties then merge all revtags. After a suitable delay, the parties should arrive at a single, shared revtag.
+	 * 
+	 * The filesystem pointed to by this revtag should contain the files written by each party.
+	 * @throws UnconnectableAdvertisementException 
+	 */
+	// @Test
+	public void testManyPartySync() throws IOException, UnconnectableAdvertisementException {
+		int numPeers = 8;
+		Key rootKey = new Key(crypto);
+		
+		ZKMaster[] masters = new ZKMaster[numPeers];
+		ZKArchiveConfig[] configs = new ZKArchiveConfig[numPeers];
+		TCPPeerAdvertisement[] ads = new TCPPeerAdvertisement[numPeers];
+		
+		for(int i = 0; i < numPeers; i++) {
+			masters[i] = ZKMaster.openBlankTestVolume("copy" + i);
+			masters[i].listenOnTCP(0);
+
+			ArchiveAccessor accessor = masters[i].makeAccessorForRoot(rootKey, false);
+			if(i == 0) {
+				configs[i] = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+				masters[i].getTCPListener().advertise(configs[i].getSwarm());
+			} else {
+				configs[i] = new ZKArchiveConfig(accessor, configs[0].getArchiveId(), false);
+				masters[i].getTCPListener().advertise(configs[i].getSwarm());
+				configs[i].getSwarm().addPeerAdvertisement(ads[i-1]);
+				configs[i].finishOpening();
+			}
+			
+			ads[i] = masters[i].getTCPListener().listenerForSwarm(configs[i].getSwarm()).localAd();
+			configs[i].getSwarm().requestAll();
+
+			ZKFS fs = configs[i].getArchive().openBlank();
+			fs.write("immediate-" + i, crypto.hash(Util.serializeInt(i)));
+			fs.write("indirect-" + i, crypto.prng(crypto.hash(Util.serializeInt(i))).getBytes(configs[i].getPageSize()));
+			fs.write("2indirect-" + i, crypto.prng(crypto.hash(Util.serializeLong(i))).getBytes(2*configs[i].getPageSize()));
+			fs.commit();
+			fs.close();
+		}
+		
+		for(int i = 0; i < numPeers; i++) {
+			configs[i].getArchive().close();
+			masters[i].close();
+		}
+	}
 }
