@@ -194,15 +194,25 @@ public class TCPPeerSocketTest {
 			while(client.socket == null) { try { Thread.sleep(1); } catch(InterruptedException exc) {} }
 			this.serverSock = server.getClientWithPort(client.socket.getLocalPort());
 			PublicDHKey pubKey = crypto.makePublicDHKey(serverReadRaw(crypto.asymPublicDHKeySize()));
+			byte[] tempSecret = serverKey.sharedSecret(pubKey);
+
 			serverReadRaw(crypto.hashLength()); // key auth
 			int timeIndex = ByteBuffer.wrap(serverReadRaw(4)).getInt();
 			serverReadRaw(crypto.symKeyLength()); // proof
-			serverReadRaw(crypto.hashLength());
-			serverReadRaw(crypto.asymPrivateDHKeySize() + crypto.symTagLength());
 			
-			this.secret = serverEphKey.sharedSecret(pubKey);
-			byte[] tempSecret = serverKey.sharedSecret(pubKey);
-			byte[] auth = crypto.authenticate(secret, tempSecret);
+			byte[] clientStaticKeyCiphertext = serverReadRaw(crypto.asymPrivateDHKeySize() + crypto.symTagLength());
+			Key clientStaticKeyText = new Key(crypto, tempSecret).derive(0, new byte[0]);
+			byte[] clientStaticKeyRaw = clientStaticKeyText.decryptUnpadded(new byte[crypto.symIvLength()], clientStaticKeyCiphertext);
+			PublicDHKey clientStaticKey = crypto.makePublicDHKey(clientStaticKeyRaw);
+			
+			byte[] staticSecret = serverKey.sharedSecret(clientStaticKey);
+			byte[] ephemeralSecret = serverEphKey.sharedSecret(pubKey);
+			ByteBuffer sharedSecretMaterial = ByteBuffer.allocate(2*crypto.asymDHSecretSize());
+			sharedSecretMaterial.put(staticSecret);
+			sharedSecretMaterial.put(ephemeralSecret);
+			this.secret = crypto.hash(sharedSecretMaterial.array());
+			
+			byte[] auth = crypto.authenticate(secret, Util.serializeInt(timeIndex));
 			byte[] proof = peerArchive.getConfig().getAccessor().temporalProof(timeIndex, 1, secret);
 			
 			initKeys(false);
@@ -315,7 +325,7 @@ public class TCPPeerSocketTest {
 		master.getBlacklist().clear();
 		swarm = new DummySwarm(archive.getConfig());
 		server = new DummyServer();
-		serverKey = master.getCrypto().makePrivateDHKey();
+		serverKey = swarm.identityKey;
 		byte[] encryptedArchiveId = archive.getConfig().getEncryptedArchiveId(serverKey.publicKey().getBytes());
 		ad = new TCPPeerAdvertisement(serverKey.publicKey(), "localhost", server.getPort(), encryptedArchiveId).resolve();
 		socket = new TCPPeerSocket(swarm, ad);

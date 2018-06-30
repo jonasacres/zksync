@@ -193,7 +193,6 @@ public class TCPPeerSocketListener {
 		byte[] pubKeyRaw = new byte[adListeners.getFirst().crypto.asymPublicSigningKeySize()];
 		byte[] keyHash = new byte[adListeners.getFirst().crypto.hashLength()];
 		byte[] proof = new byte[adListeners.getFirst().crypto.symKeyLength()];
-		byte[] ephAuth = new byte[adListeners.getFirst().crypto.hashLength()];
 		byte[] staticKeyCiphertext = new byte[adListeners.getFirst().crypto.asymPublicDHKeySize() + adListeners.getFirst().crypto.symTagLength()];
 		byte[] timeIndexBytes = new byte[4];
 		
@@ -201,7 +200,6 @@ public class TCPPeerSocketListener {
 		IOUtils.readFully(in, keyHash);
 		IOUtils.readFully(in, timeIndexBytes); // TODO DHT: (redesign) Don't like this field being plaintext and mutable.
 		IOUtils.readFully(in, proof);
-		IOUtils.readFully(in, ephAuth);
 		IOUtils.readFully(in, staticKeyCiphertext);
 		
 		PublicDHKey pubKey = crypto.makePublicDHKey(pubKeyRaw);
@@ -229,14 +227,16 @@ public class TCPPeerSocketListener {
 		byte[] clientStaticKeyRaw = clientStaticSymKeyText.decryptUnpadded(new byte[crypto.symIvLength()], staticKeyCiphertext);
 		PublicDHKey clientStaticKey = crypto.makePublicDHKey(clientStaticKeyRaw);
 		byte[] staticSecret = ad.swarm.identityKey.sharedSecret(clientStaticKey);
-		Key clientStaticSymKeyAuth = new Key(crypto, staticSecret).derive(0, new byte[0]);
-		byte[] expectedEphAuth = clientStaticSymKeyAuth.authenticate(tempSharedSecret);
-		assertState(Util.safeEquals(ephAuth, expectedEphAuth));
 		
 		byte[] expectedProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
 		byte[] responseProof;
 		PrivateDHKey ephemeralKey = crypto.makePrivateDHKey();
-		byte[] sharedSecret = ephemeralKey.sharedSecret(pubKey);
+		byte[] ephemeralSecret = ephemeralKey.sharedSecret(pubKey);
+		
+		ByteBuffer sharedSecretMaterial = ByteBuffer.allocate(2*crypto.asymDHSecretSize());
+		sharedSecretMaterial.put(staticSecret);
+		sharedSecretMaterial.put(ephemeralSecret);
+		byte[] sharedSecret = crypto.hash(sharedSecretMaterial.array());		
 		
 		int peerType;
 		if(Util.safeEquals(expectedProof, proof)) {
@@ -248,7 +248,7 @@ public class TCPPeerSocketListener {
 		}
 		
 		out.write(ephemeralKey.publicKey().getBytes());
-		out.write(ad.crypto.authenticate(sharedSecret, tempSharedSecret));
+		out.write(ad.crypto.authenticate(sharedSecret, Util.serializeInt(timeIndex)));
 		out.write(responseProof);
 		
 		established = true;

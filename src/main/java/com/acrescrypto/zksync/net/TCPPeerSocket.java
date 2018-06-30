@@ -212,12 +212,10 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		byte[] tempSharedSecret = dhPrivateKey.sharedSecret(remotePubKey);
 		byte[] staticSecret = swarm.identityKey.sharedSecret(remotePubKey);
-		Key staticSymKeyAuth = new Key(crypto, staticSecret).derive(0, new byte[0]);
 		Key staticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
 		
 		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
 		byte[] proof = swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
-		byte[] ephAuth = staticSymKeyAuth.authenticate(tempSharedSecret);
 		byte[] keyHash = keyHashKey.authenticate(keyHashInput.array());
 		byte[] staticKeyCiphertext = staticSymKeyText.encrypt(new byte[crypto.symIvLength()], swarm.identityKey.publicKey().getBytes(), -1);
 		
@@ -225,13 +223,17 @@ public class TCPPeerSocket extends PeerSocket {
 		out.write(keyHash);
 		out.write(Util.serializeInt(timeIndex));
 		out.write(proof);
-		out.write(ephAuth);
 		out.write(staticKeyCiphertext);
 		
 		PublicDHKey remoteEphemeralPubKey = crypto.makePublicDHKey(readRaw(crypto.asymPublicDHKeySize()));
-		this.sharedSecret = dhPrivateKey.sharedSecret(remoteEphemeralPubKey);
+		byte[] ephemeralSecret = dhPrivateKey.sharedSecret(remoteEphemeralPubKey);
+		ByteBuffer sharedSecretMaterial = ByteBuffer.allocate(2*crypto.asymDHSecretSize());
+		sharedSecretMaterial.put(staticSecret);
+		sharedSecretMaterial.put(ephemeralSecret);
+		this.sharedSecret = crypto.hash(sharedSecretMaterial.array());
+		
 		byte[] remoteAuth = readRaw(crypto.hashLength());
-		byte[] expectedAuth = crypto.authenticate(this.sharedSecret, tempSharedSecret);
+		byte[] expectedAuth = crypto.authenticate(this.sharedSecret, Util.serializeInt(timeIndex));
 		assertState(Util.safeEquals(remoteAuth, expectedAuth));
 		
 		byte[] expectedRemoteProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, sharedSecret);
