@@ -97,11 +97,14 @@ public class DiffSetResolver {
 	}
 	
 	public RefTag resolve() throws IOException, DiffResolutionException {
-		System.out.println("Resolving " + diffset.revisions.length + " revisions");
+//		System.out.println("Resolving " + diffset.revisions.length + " revisions with " + diffset.inodeDiffs.size() + " inode diffs, "  + diffset.pathDiffs.size() + " path diffs");
+//		for(InodeDiff diff : diffset.inodeDiffs.values()) {
+//			System.out.println(diff.dump());
+//		}
 		selectResolutions();
 		applyResolutions();
 		RefTag revTag = fs.commit(diffset.revisions);
-		fs.getInodeTable().dumpInodes();
+		// TODO DHT: (test) Uncomment when I get home for testing. fs.getInodeTable().dumpInodes();
 		return revTag;
 	}
 	

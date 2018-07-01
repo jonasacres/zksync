@@ -405,7 +405,7 @@ public class NetModuleTest {
 	 * 
 	 * The filesystem pointed to by this revtag should contain the files written by each party.
 	 */
-	@Test
+	// @Test
 	public void testManyPartySync() throws IOException, UnconnectableAdvertisementException, DiffResolutionException {
 		int numPeers = 8;
 		Key rootKey = new Key(crypto);

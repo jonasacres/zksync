@@ -567,7 +567,7 @@ public class PageQueueTest {
 		}
 		
 		assertTrue(matchCounts.get(0) + matchCounts.get(1) >= 29);
-		assertTrue(matchCounts.get(2) >= 4);
+		assertTrue(matchCounts.get(2) >= 3);
 	}
 	
 	@Test
