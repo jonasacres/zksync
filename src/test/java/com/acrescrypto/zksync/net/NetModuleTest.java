@@ -405,7 +405,7 @@ public class NetModuleTest {
 	 * 
 	 * The filesystem pointed to by this revtag should contain the files written by each party.
 	 */
-	// @Test
+	@Test
 	public void testManyPartySync() throws IOException, UnconnectableAdvertisementException, DiffResolutionException {
 		int numPeers = 8;
 		Key rootKey = new Key(crypto);
@@ -446,8 +446,20 @@ public class NetModuleTest {
 		}
 		
 		for(int i = 0; i < numPeers; i++) {
-			RefTag tag = DiffSetResolver.canonicalMergeResolver(configs[i].getArchive()).resolve();
-			System.out.println("Tag: " + Util.bytesToHex(tag.getBytes()));
+			configs[i].getRevisionTree().consolidate();
+			DiffSetResolver.canonicalMergeResolver(configs[i].getArchive()).resolve();
+			assertEquals(1, configs[i].getRevisionTree().branchTips().size());
+			if(i > 0) {
+				assertEquals(configs[i-1].getRevisionTree().branchTips().get(0), configs[i].getRevisionTree().branchTips().get(0));
+			}
+			
+			ZKFS fs = configs[i].getRevisionTree().plainBranchTips().get(0).getFS();
+			for(int j = 0; j < numPeers; j++) {
+				assertArrayEquals(crypto.hash(Util.serializeInt(j)), fs.read("immediate-" + j));
+				assertArrayEquals(crypto.prng(crypto.hash(Util.serializeInt(j))).getBytes(configs[j].getPageSize()), fs.read("indirect-" + j));
+				assertArrayEquals(crypto.prng(crypto.hash(Util.serializeLong(j))).getBytes(2*configs[j].getPageSize()), fs.read("2indirect-" + j));
+			}
+			fs.close();
 		}
 		
 		for(int i = 0; i < numPeers; i++) {

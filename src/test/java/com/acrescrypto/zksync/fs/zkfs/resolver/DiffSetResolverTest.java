@@ -411,4 +411,23 @@ public class DiffSetResolverTest {
 		assertEquals(mergeFs.inodeForPath("link-a"), mergeFs.inodeForPath("link-b"));
 		assertEquals(3, mergeFs.inodeForPath("file").getNlink());
 	}
+	
+	@Test
+	public void testResolverConsistency() throws IOException, DiffResolutionException {
+		RefTag[] revs = new RefTag[2], merges = new RefTag[2];
+		fs.write("file1", "some data".getBytes());
+		revs[0] = fs.commit();
+		
+		fs = archive.openBlank();
+		fs.write("file2", "more data".getBytes());
+		revs[1] = fs.commit();
+		
+		for(int i = 0; i < 2; i++) {
+			DiffSet diffset = new DiffSet(revs);
+			DiffSetResolver resolver = DiffSetResolver.latestVersionResolver(diffset);
+			merges[i] = resolver.resolve();
+		}
+		
+		assertEquals(merges[0], merges[1]);
+	}
 }

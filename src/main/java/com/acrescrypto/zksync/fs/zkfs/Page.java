@@ -142,9 +142,8 @@ public class Page {
 		
 		// without further ado, let's go about the nasty business of killing the feature other content-addressable
 		// encrypted file storage systems like to brag about.
-		ByteBuffer buf = ByteBuffer.allocate(20);
-		buf.putLong(file.getInode().getStat().getInodeId()); // no dedupe between files
-		buf.putLong(file.getInode().getIdentity()); // guard against key reuse when inodes are recycled
+		ByteBuffer buf = ByteBuffer.allocate(12);
+		buf.putLong(file.getInode().getIdentity()); // no dedupe between files (do not use inode id, breaks diff merges)
 		buf.putInt(pageNum); // no dedupe within file
 		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_PAGE, buf.array());
 	}

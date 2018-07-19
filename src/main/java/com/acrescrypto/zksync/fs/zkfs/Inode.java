@@ -190,7 +190,7 @@ public class Inode implements Comparable<Inode> {
 	
 	/** printable string summary for debug */
 	public String toString() {
-		return String.format("%d (%08x) - %d %d bytes, %d %d %s", stat.getInodeId(), hashCode(), nlink, stat.getSize(), stat.getMtime(), stat.getAtime(), Util.bytesToHex(refTag.tag));
+		return String.format("%d (%08x) - %d %d bytes, %d %d %s", stat.getInodeId(), hashCode(), nlink, stat.getSize(), stat.getMtime(), stat.getAtime(), Util.bytesToHex(refTag.tag, 4));
 	}
 
 	@Override

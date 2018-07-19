@@ -128,8 +128,7 @@ public class PageTreeChunk {
 	}
 	
 	protected Key textKey() {
-		ByteBuffer buf = ByteBuffer.allocate(24);
-		buf.putLong(tree.inodeId);
+		ByteBuffer buf = ByteBuffer.allocate(16);
 		buf.putLong(tree.inodeIdentity);
 		buf.putLong(index);
 

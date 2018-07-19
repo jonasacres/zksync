@@ -80,11 +80,27 @@ public class InodeTable extends ZKFile {
 	 * 
 	 * @return RefTag for the newly created revision
 	 *  */
-	public RefTag commit(RefTag[] additionalParents) throws IOException {
+	public RefTag commitWithTimestamp(RefTag[] additionalParents, long timestamp) throws IOException {
 		freelist.commit();
 		updateRevisionInfo(additionalParents);
+		
+		if(timestamp >= 0) {
+			Inode[] fixedTimestampInodes = new Inode[] {
+					this.inodeWithId(INODE_ID_ROOT_DIRECTORY),
+					this.inodeWithId(INODE_ID_REVISION_INFO),
+					this.inodeWithId(INODE_ID_FREELIST),
+			};
+			
+			for(Inode fixedInode : fixedTimestampInodes) {
+				fixedInode.setModifiedTime(timestamp);
+				fixedInode.getStat().setMtime(timestamp);
+				fixedInode.getStat().setAtime(timestamp);
+			}
+		}
+
 		syncInodes();
 		updateTree(additionalParents);
+			
 		return inode.refTag;
 	}
 	
@@ -328,12 +344,13 @@ public class InodeTable extends ZKFile {
 		System.out.println("Inode table for " + Util.bytesToHex(zkfs.baseRevision.getHash()));
 		for(int i = 0; i < nextInodeId; i++) {
 			Inode inode = inodeWithId(i);
-			System.out.printf("\tInode %d: tag=%s... refType=%d identity=%x hash=%s\n",
+			System.out.printf("\tInode %d: tag=%s... refType=%d identity=%x hash=%s\n\t\t%s\n",
 					i,
 					Util.bytesToHex(inode.refTag.getLiteral(), 4),
 					inode.refTag.refType,
 					inode.identity,
-					Util.bytesToHex(zkfs.archive.crypto.hash(inode.serialize())), 4);
+					Util.bytesToHex(zkfs.archive.crypto.hash(inode.serialize()), 4),
+					inode.toString());
 		}
 	}
 	

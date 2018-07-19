@@ -76,6 +76,23 @@ public class RevisionTree {
 		return set;
 	}
 	
+	public synchronized void consolidate() throws IOException {
+		HashSet<RefTag> obsoleted = new HashSet<RefTag>();
+		
+		for(RefTag tag : plainBranchTips) {
+			for(RefTag otherTag : plainBranchTips) {
+				if(otherTag == tag) continue;
+				if(ancestorsOf(tag).contains(otherTag)) {
+					obsoleted.add(otherTag);
+				}
+			}
+		}
+		
+		for(RefTag obsoleteTag : obsoleted) {
+			removeBranchTip(obsoleteTag);
+		}
+	}
+	
 	protected synchronized void addAncestorsOf(RefTag revision, HashSet<RefTag> set) throws IOException {
 		if(revision == null) return;
 		set.add(revision);

@@ -34,11 +34,15 @@ public class ZKFS extends FS {
 	}
 		
 	public RefTag commit(RefTag[] additionalParents) throws IOException {
+		return commitWithTimestamp(additionalParents, -1);
+	}
+	
+	public RefTag commitWithTimestamp(RefTag[] additionalParents, long timestamp) throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) {
 			dir.commit();
 		}
 		
-		return baseRevision = inodeTable.commit(additionalParents);
+		return baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
 	}
 	
 	public RefTag commit() throws IOException {
