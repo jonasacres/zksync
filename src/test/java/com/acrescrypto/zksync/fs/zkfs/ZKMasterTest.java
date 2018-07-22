@@ -180,27 +180,27 @@ public class ZKMasterTest {
 	}
 	
 	@Test
-	public void testAllArchivesReturnsListOfAllArchives() throws IOException {
+	public void testAllConfigsReturnsListOfAllArchiveConfigs() throws IOException {
 		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
-		assertTrue(master.allArchives.contains(archive));
+		assertTrue(master.allConfigs.contains(archive.config));
 		archive.close();
 	}
 	
 	@Test
-	public void testDiscoveredArchiveAddsArchiveToListOfAllArchives() throws IOException {
+	public void testDiscoveredArchiveConfigAddsToListOfAllConfigs() throws IOException {
 		ZKMaster masterPrime = ZKMaster.openBlankTestVolume();
 		ZKArchive archive = masterPrime.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		
-		assertFalse(master.allArchives.contains(archive));
-		master.discoveredArchive(archive);
-		assertTrue(master.allArchives.contains(archive));
+		assertFalse(master.allConfigs.contains(archive.config));
+		master.discoveredArchiveConfig(archive.config);
+		assertTrue(master.allConfigs.contains(archive.config));
 		
 		masterPrime.close();
 		archive.close();
 	}
 	
 	@Test
-	public void testDiscoveredArchiveReplacesSeedOnlyReferencesWithReadAccess() throws IOException {
+	public void testDiscoveredArchiveConfigReplacesSeedOnlyReferencesWithReadAccess() throws IOException {
 		ZKMaster masterPrime = ZKMaster.openBlankTestVolume();
 		ZKArchive archive = masterPrime.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		
@@ -208,16 +208,16 @@ public class ZKMasterTest {
 		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.config.archiveId);
 		ZKArchive roArchive = roConfig.getArchive();
 		
-		assertFalse(master.allArchives.contains(archive));
-		assertFalse(master.allArchives.contains(roArchive));
+		assertFalse(master.allConfigs.contains(archive.config));
+		assertFalse(master.allConfigs.contains(roArchive.config));
 		
-		master.discoveredArchive(roArchive);
-		assertFalse(master.allArchives.contains(archive));
-		assertTrue(master.allArchives.contains(roArchive));		
+		master.discoveredArchiveConfig(roArchive.config);
+		assertFalse(master.allConfigs.contains(archive.config));
+		assertTrue(master.allConfigs.contains(roArchive.config));
 		
-		master.discoveredArchive(archive);
-		assertTrue(master.allArchives.contains(archive));
-		assertFalse(master.allArchives.contains(roArchive));
+		master.discoveredArchiveConfig(archive.config);
+		assertTrue(master.allConfigs.contains(archive.config));
+		assertFalse(master.allConfigs.contains(roArchive.config));
 		
 		roArchive.close();
 		archive.close();
@@ -225,40 +225,40 @@ public class ZKMasterTest {
 	}
 	
 	@Test
-	public void testDiscoveredArchiveDoesNotCreateDuplicateEntries() throws IOException {
+	public void testDiscoveredArchiveConfigDoesNotCreateDuplicateEntries() throws IOException {
 		ZKMaster masterPrime = ZKMaster.openBlankTestVolume();
 		ZKArchive archive = masterPrime.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		
-		assertEquals(0, master.allArchives.size());
+		assertEquals(0, master.allConfigs.size());
 		
-		master.discoveredArchive(archive);
-		assertEquals(1, master.allArchives.size());
+		master.discoveredArchiveConfig(archive.config);
+		assertEquals(1, master.allConfigs.size());
 		
-		master.discoveredArchive(archive);
-		assertEquals(1, master.allArchives.size());
+		master.discoveredArchiveConfig(archive.config);
+		assertEquals(1, master.allConfigs.size());
 		
 		archive.close();
 		masterPrime.close();
 	}
 	
 	@Test
-	public void testRemovedArchiveRemovesArchiveFromListOfAllArchives() throws IOException {
+	public void testRemovedArchiveConfigRemovesConfigFromListOfAllConfigs() throws IOException {
 		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
-		assertTrue(master.allArchives().contains(archive));
-		master.removedArchive(archive);
-		assertFalse(master.allArchives().contains(archive));
+		assertTrue(master.allConfigs().contains(archive.config));
+		master.removedArchiveConfig(archive.config);
+		assertFalse(master.allConfigs().contains(archive.config));
 		archive.close();
 	}
 	
 	@Test
-	public void testRemovedArchiveToleratesArchivesNotInList() throws IOException {
+	public void testRemovedArchiveConfigToleratesConfigsNotInList() throws IOException {
 		ZKMaster masterPrime = ZKMaster.openBlankTestVolume();
 		ZKArchive archivePrime = masterPrime.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 
-		assertEquals(1, master.allArchives().size());
-		master.removedArchive(archivePrime);
-		assertEquals(1, master.allArchives().size());
+		assertEquals(1, master.allConfigs().size());
+		master.removedArchiveConfig(archivePrime.config);
+		assertEquals(1, master.allConfigs().size());
 		
 		archivePrime.close();
 		masterPrime.close();

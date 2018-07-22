@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.net.SocketException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -18,6 +19,9 @@ import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveAccessorDiscoveryCallback;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.TCPPeerSocketListener;
+import com.acrescrypto.zksync.net.dht.DHTClient;
+import com.acrescrypto.zksync.net.dht.DHTPeer;
+import com.acrescrypto.zksync.net.dht.DHTZKArchiveDiscovery;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
@@ -29,11 +33,13 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected PassphraseProvider passphraseProvider;
 	protected StoredAccess storedAccess;
 	protected Key localKey;
-	protected LinkedList<ArchiveAccessor> accessors = new LinkedList<ArchiveAccessor>();
-	protected LinkedList<ZKArchive> allArchives = new LinkedList<ZKArchive>();
+	protected LinkedList<ArchiveAccessor> accessors = new LinkedList<>();
+	protected LinkedList<ZKArchiveConfig> allConfigs = new LinkedList<>();
 	protected Blacklist blacklist;
 	protected Logger logger = LoggerFactory.getLogger(ZKMaster.class);
 	protected TCPPeerSocketListener listener;
+	protected DHTClient dhtClient;
+	protected DHTZKArchiveDiscovery dhtDiscovery;
 	protected long debugTime = -1;
 	
 	public static ZKMaster openTestVolume() throws IOException {
@@ -73,8 +79,15 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		this.passphraseProvider = passphraseProvider;
 		getLocalKey();
 		this.storedAccess = new StoredAccess(this);
-		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive(ArchiveAccessor.KEY_INDEX_BLACKLIST, new byte[0]));
+		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive(ArchiveAccessor.KEY_INDEX_BLACKLIST, "blacklist".getBytes()));
+		this.dhtClient = new DHTClient(localKey.derive(ArchiveAccessor.KEY_INDEX_DHT_STORAGE, "dht-storage".getBytes()), blacklist);
+		this.dhtDiscovery = new DHTZKArchiveDiscovery();
 		loadStoredAccessors();
+	}
+	
+	public void activateDHT(String address, int port, DHTPeer root) throws SocketException {
+		dhtClient.addPeer(root);
+		dhtClient.listen(address, port);
 	}
 	
 	// Expect this to be deprecated someday.
@@ -92,6 +105,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public void close() {
 		storedAccess.close();
+		dhtClient.close();
 		if(listener != null) {
 			try {
 				listener.close();
@@ -124,9 +138,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public ZKArchive createArchive(int pageSize, String description) throws IOException {
 		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive '" + description + "'");
-		byte[] passphraseRootRaw = crypto.deriveKeyFromPassphrase(passphrase);
-		Key passphraseRoot = new Key(crypto, passphraseRootRaw);
-		ArchiveAccessor accessor = makeAccessorForRoot(passphraseRoot, false);
+		ArchiveAccessor accessor = makeAccessorForPassphrase(passphrase);
 		ZKArchiveConfig config = new ZKArchiveConfig(accessor, description, pageSize);
 		return config.archive;
 	}
@@ -155,6 +167,12 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		return null;
 	}
 	
+	public ArchiveAccessor makeAccessorForPassphrase(byte[] passphrase) {
+		byte[] passphraseRootRaw = crypto.deriveKeyFromPassphrase("zksync".getBytes());
+		Key passphraseRoot = new Key(crypto, passphraseRootRaw);
+		return makeAccessorForRoot(passphraseRoot, false);
+	}
+	
 	public synchronized ArchiveAccessor makeAccessorForRoot(Key rootKey, boolean isSeed) {
 		ArchiveAccessor accessor = accessorForRoot(rootKey);
 		if(accessor != null) return accessor;
@@ -175,28 +193,33 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 
 	@Override
-	public void discoveredArchive(ZKArchive archive) {
-		for(ZKArchive existing : allArchives) {
-			if(Arrays.equals(existing.config.archiveId, archive.config.archiveId)) {
-				if(!existing.config.accessor.isSeedOnly()) {
+	public void discoveredArchiveConfig(ZKArchiveConfig config) {
+		for(ZKArchiveConfig existing : allConfigs) {
+			if(Arrays.equals(existing.archiveId, config.archiveId)) {
+				if(!existing.accessor.isSeedOnly()) {
 					return; // already have full access to this archive
-				} else if(archive.config.accessor.isSeedOnly()) {
+				} else if(config.accessor.isSeedOnly()) {
 					return; // no point in replacing one seed-only version with another
 				}
 				
 				// replace seed-only with full access
-				allArchives.remove(existing);
+				allConfigs.remove(existing);
 			}
 		}
-		allArchives.add(archive);
+		
+		allConfigs.add(config);
 	}
 	
-	public void removedArchive(ZKArchive archive) {
-		allArchives.remove(archive);
+	public void removedArchiveConfig(ZKArchiveConfig config) {
+		allConfigs.remove(config);
 	}
 	
-	public Collection<ZKArchive> allArchives() {
-		return allArchives;
+	public Collection<ZKArchiveConfig> allConfigs() {
+		return allConfigs;
+	}
+	
+	public DHTClient getDHTClient() {
+		return dhtClient;
 	}
 
 	protected void loadStoredAccessors() {
@@ -227,5 +250,10 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 			keyFile.write(localKey.getRaw(), 512);
 			return true;
 		}
+	}
+
+	@Deprecated // test purposes only
+	public void setDHTClient(DHTClient dhtClient) {
+		this.dhtClient = dhtClient;
 	}
 }

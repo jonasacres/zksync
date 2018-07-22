@@ -7,6 +7,7 @@ import org.junit.runners.Suite;
 @Suite.SuiteClasses({
 	FastTests.class,
 	ModuleTests.class,
+	IntegrationTest.class
 })
 
 public class AllTests {

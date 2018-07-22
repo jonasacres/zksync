@@ -176,6 +176,10 @@ public class PeerSwarm implements BlacklistCallback {
 		knownAds.add(ad);
 	}
 	
+	public synchronized Collection<PeerAdvertisement> knownAds() {
+		return knownAds;
+	}
+	
 	public synchronized void advertiseSelf(PeerAdvertisement ad) {
 		for(PeerConnection connection : getConnections()) {
 			connection.announceSelf(ad);

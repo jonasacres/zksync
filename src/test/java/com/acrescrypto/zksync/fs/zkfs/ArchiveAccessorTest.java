@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -185,12 +186,13 @@ public class ArchiveAccessorTest {
 		
 		accessor.addCallback(new ArchiveAccessorDiscoveryCallback() {
 			@Override
-			public void discoveredArchive(ZKArchive cbArchive) {
-				assertTrue(archive == cbArchive);
+			public void discoveredArchiveConfig(ZKArchiveConfig config) {
+				assertArrayEquals(archive.config.archiveId, config.archiveId);
 				holder.passed = true;
 			}
 		});
-		accessor.discoveredArchive(archive);
+		
+		accessor.discoveredArchiveConfig(archive.config);
 		assertTrue(holder.passed);
 		
 		archive.close();
@@ -202,14 +204,14 @@ public class ArchiveAccessorTest {
 		
 		ArchiveAccessorDiscoveryCallback callback = new ArchiveAccessorDiscoveryCallback() {
 			@Override
-			public void discoveredArchive(ZKArchive cbArchive) {
+			public void discoveredArchiveConfig(ZKArchiveConfig config) {
 				fail();
 			}
 		};
 		
 		accessor.addCallback(callback);
 		accessor.removeCallback(callback);
-		accessor.discoveredArchive(archive);
+		accessor.discoveredArchiveConfig(archive.config);
 		
 		archive.close();
 	}

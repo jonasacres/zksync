@@ -49,12 +49,12 @@ public class StoredAccess implements ArchiveDiscovery {
 			write();
 		}
 		
-		master.removedArchive(archive);
+		master.removedArchiveConfig(archive.config);
 	}
 	
 	public void purge() throws IOException {
 		for(StoredAccessRecord record : records) {
-			master.removedArchive(record.archive);
+			master.removedArchiveConfig(record.archive.config);
 		}
 		
 		records.clear();

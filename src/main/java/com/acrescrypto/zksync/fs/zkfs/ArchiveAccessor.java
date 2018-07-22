@@ -1,7 +1,9 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 
@@ -39,6 +41,7 @@ public class ArchiveAccessor {
 	public final static int KEY_INDEX_AD_IDENTITY = 13;
 	public final static int KEY_INDEX_AD_ARCHIVE_ID = 14;
 	public final static int KEY_INDEX_REQUEST_POOL = 15;
+	public final static int KEY_INDEX_DHT_STORAGE = 16;
 	
 	protected ZKMaster master;
 
@@ -56,7 +59,7 @@ public class ArchiveAccessor {
 	protected int type; // KEY_ROOT_PASSPHRASE or KEY_ROOT_SEED
 
 	protected HashSet<ArchiveDiscovery> discoveryMethods = new HashSet<ArchiveDiscovery>();
-	protected HashSet<ZKArchive> knownArchives = new HashSet<ZKArchive>();
+	protected ArrayList<ZKArchiveConfig> knownArchiveConfigs = new ArrayList<ZKArchiveConfig>();
 	protected ArrayList<ArchiveAccessorDiscoveryCallback> callbacks = new ArrayList<ArchiveAccessorDiscoveryCallback>();
 	
 	public interface ArchiveDiscovery {
@@ -65,7 +68,7 @@ public class ArchiveAccessor {
 	}
 	
 	public interface ArchiveAccessorDiscoveryCallback {
-		void discoveredArchive(ZKArchive archive);
+		void discoveredArchiveConfig(ZKArchiveConfig config);
 	}	
 
 	public ArchiveAccessor(ZKMaster master, Key root, int type) {
@@ -83,16 +86,27 @@ public class ArchiveAccessor {
 		}
 	}
 	
-	public ArchiveAccessor addDefaultDiscoveries() {
-		// TODO DHT: (implement) add discovery for DHT
+	public ArchiveAccessor discoverOnDHT() {
+		master.dhtDiscovery.discoverArchives(this);
 		return this;
 	}
 	
-	public void discoveredArchive(ZKArchive archive) {
-		if(knownArchives.contains(archive)) return;
-		knownArchives.add(archive);
+	public ZKArchiveConfig discoveredArchiveId(byte[] archiveId) throws IOException {
+		for(ZKArchiveConfig config : knownArchiveConfigs) {
+			if(Arrays.equals(config.archiveId, archiveId)) return config;
+		}
+		
+		ZKArchiveConfig config = new ZKArchiveConfig(this, archiveId);
+		discoveredArchiveConfig(config);
+		
+		return config;
+	}
+	
+	public void discoveredArchiveConfig(ZKArchiveConfig config) {
+		knownArchiveConfigs.remove(config);
+		knownArchiveConfigs.add(config);
 		for(ArchiveAccessorDiscoveryCallback callback : callbacks) {
-			callback.discoveredArchive(archive);
+			callback.discoveredArchiveConfig(config);
 		}
 	}
 	
@@ -127,8 +141,8 @@ public class ArchiveAccessor {
 		return this;
 	}
 	
-	public Collection<ZKArchive> knownArchives() {
-		return knownArchives;
+	public Collection<ZKArchiveConfig> knownArchiveConfigs() {
+		return knownArchiveConfigs;
 	}
 	
 	public boolean isSeedOnly() {
@@ -193,8 +207,8 @@ public class ArchiveAccessor {
 		configFileSeedKey = deriveKey(KEY_ROOT_SEED, KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_FILE, new byte[0]);
 	}
 	
-	protected Key temporalSeedId(int offset) {
-		return temporalSeedDerivative(true, offset);
+	public byte[] temporalSeedId(int offset) {
+		return temporalSeedDerivative(true, offset).authenticate("dht-seed".getBytes());
 	}
 	
 	protected Key temporalSeedKey(int offset) {

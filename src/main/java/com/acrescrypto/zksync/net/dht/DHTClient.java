@@ -128,6 +128,10 @@ public class DHTClient {
 		return socket.getLocalPort();
 	}
 	
+	public DHTPeer getLocalPeer() {
+		return new DHTPeer(this, bindAddress, getPort(), key.publicKey().getBytes());
+	}
+	
 	public DHTClient setStatusCallback(DHTStatusCallback statusCallback) {
 		this.statusCallback = statusCallback;
 		return this;

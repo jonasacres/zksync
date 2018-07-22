@@ -241,13 +241,6 @@ public class PageTreeChunkTest {
 	}
 	
 	@Test
-	public void testTextKeyDependsOnInodeId() {
-		Key oldKey = chunk.textKey();
-		tree.inodeId++;
-		assertFalse(Arrays.equals(oldKey.getRaw(), chunk.textKey().getRaw()));
-	}
-	
-	@Test
 	public void testTextKeyDependsOnInodeIdentity() {
 		Key oldKey = chunk.textKey();
 		tree.inodeIdentity++;

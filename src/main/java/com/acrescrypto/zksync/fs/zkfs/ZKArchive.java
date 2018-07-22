@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 
@@ -53,8 +52,6 @@ public class ZKArchive {
 		if(!isCacheOnly()) { // only need the list for non-networked archives, which are not cache-only
 			buildAllPageTagsList();
 		}
-		
-		this.config.accessor.discoveredArchive(this);
 	}
 	
 	public void close() {
@@ -185,11 +182,7 @@ public class ZKArchive {
 			return false;
 		}
 		
-		if(Arrays.equals(config.archiveId, ((ZKArchive) other).config.archiveId)) {
-			return config.accessor.isSeedOnly() == ((ZKArchive) other).config.accessor.isSeedOnly();
-		}
-		
-		return false;
+		return config.equals(((ZKArchive) other).config);
 	}
 
 	public Collection<byte[]> allPageTags() {

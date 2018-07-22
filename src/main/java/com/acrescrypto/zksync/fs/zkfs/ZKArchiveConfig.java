@@ -52,6 +52,17 @@ public class ZKArchiveConfig {
 	protected PeerSwarm swarm;
 	protected RevisionTree revisionTree;
 	
+	public static byte[] decryptArchiveId(ArchiveAccessor accessor, byte[] iv, byte[] encryptedArchiveId) {
+		Key key = accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_AD_ARCHIVE_ID);
+		if(iv.length != key.getCrypto().symBlockSize()) {
+			ByteBuffer truncated = ByteBuffer.allocate(key.getCrypto().symBlockSize());
+			truncated.put(iv, 0, Math.min(iv.length, truncated.capacity()));
+			iv = truncated.array();
+		}
+		
+		return key.decryptCBC(iv, encryptedArchiveId);
+	}
+	
 	/** Read an existing archive. 
 	 * @throws IOException */
 	public ZKArchiveConfig(ArchiveAccessor accessor, byte[] archiveId) throws IOException {
@@ -91,12 +102,14 @@ public class ZKArchiveConfig {
 		initStorage();
 		this.revisionTree = new RevisionTree(this);
 		this.archive = new ZKArchive(this);
+		this.accessor.discoveredArchiveConfig(this);
 		write();
 	}
 	
 	public ZKArchiveConfig finishOpening() throws IOException {
 		read();
 		this.archive = new ZKArchive(this);
+		this.accessor.discoveredArchiveConfig(this);
 		return this;
 	}
 	
@@ -513,5 +526,17 @@ public class ZKArchiveConfig {
 
 	public ZKMaster getMaster() {
 		return accessor.getMaster();
+	}
+	
+	public boolean equals(Object other) {
+		if(!(other instanceof ZKArchiveConfig)) {
+			return false;
+		}
+		
+		if(Arrays.equals(archiveId, ((ZKArchiveConfig) other).archiveId)) {
+			return accessor.isSeedOnly() == ((ZKArchiveConfig) other).accessor.isSeedOnly();
+		}
+		
+		return false;
 	}
 }
