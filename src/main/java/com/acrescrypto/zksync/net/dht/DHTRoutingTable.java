@@ -100,11 +100,20 @@ public class DHTRoutingTable {
 	}
 	
 	public synchronized void suggestPeer(DHTPeer peer, long lastSeen) {
-		int order = peer.id.xor(client.id).order();
+		for(DHTPeer existing : allPeers) {
+			if(existing.id.equals(peer.id) && existing.address.equals(peer.address) && existing.port == peer.port) {
+				return; // already have this peer
+			}
+		}
+		
+		DHTPeer insertablePeer = new DHTPeer(client, peer.address, peer.port, peer.key);
+		insertablePeer.id = new DHTID(peer.id.rawId.clone()); // some tests hijack this field, so we'll respect that
+		
+		int order = insertablePeer.id.xor(client.id).order();
 		DHTBucket bucket = buckets.get(order+1); // add 1 since an exact match has order -1
 		if(bucket.hasCapacity()) {
-			bucket.add(peer, lastSeen);
-			allPeers.add(peer);
+			bucket.add(insertablePeer, lastSeen);
+			allPeers.add(insertablePeer);
 			try {
 				write();
 			} catch (IOException exc) {
@@ -121,6 +130,13 @@ public class DHTRoutingTable {
 		DHTPeer newPeer = new DHTPeer(client, address, port, pubKey.getBytes());
 		suggestPeer(newPeer);
 		return newPeer;
+	}
+	
+	public synchronized void dump() {
+		System.out.println("\tRouting table: " + allPeers.size() + " entries");
+		for(DHTPeer peer : allPeers()) {
+			System.out.println("\t\t " + Util.bytesToHex(peer.key.getBytes(), 4) + " " + peer.address + ":" + peer.port + " " + peer.lastSeen);
+		}
 	}
 	
 	protected void removedPeer(DHTPeer peer) {

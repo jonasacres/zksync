@@ -86,8 +86,9 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 	
 	public void activateDHT(String address, int port, DHTPeer root) throws SocketException {
-		dhtClient.addPeer(root);
 		dhtClient.listen(address, port);
+		dhtClient.addPeer(root);
+		dhtClient.autoFindPeers();
 	}
 	
 	// Expect this to be deprecated someday.

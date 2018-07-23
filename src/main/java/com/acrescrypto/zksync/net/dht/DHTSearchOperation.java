@@ -10,7 +10,7 @@ public class DHTSearchOperation {
 	}
 	
 	public final static int MAX_RESULTS = 8;
-	public final static int SEARCH_QUERY_TIMEOUT_MS = 5000;
+	public final static int SEARCH_QUERY_TIMEOUT_MS = 5000; // TODO DHT: (implement) Make this timeout work
 	
 	int activeQueries = 0;
 	
@@ -53,7 +53,9 @@ public class DHTSearchOperation {
 	protected synchronized void requestNodes(DHTPeer peer) {
 		queried.add(peer);
 		activeQueries++;
-		peer.findNode(searchId, (peers, isFinal)->handleFindNodeResults(peers, isFinal));
+		peer.findNode(searchId, (peers, isFinal)->{
+			handleFindNodeResults(peers, isFinal);
+		});
 	}
 	
 	protected synchronized void handleFindNodeResults(Collection<DHTPeer> peers, boolean isFinal) {

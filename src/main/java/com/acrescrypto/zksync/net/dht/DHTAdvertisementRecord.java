@@ -86,4 +86,8 @@ public class DHTAdvertisementRecord extends DHTRecord {
 		if(!(o instanceof DHTAdvertisementRecord)) return false;
 		return ad.equals(((DHTAdvertisementRecord) o).ad);
 	}
+	
+	public String toString() {
+		return ad.toString();
+	}
 }

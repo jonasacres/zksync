@@ -47,6 +47,9 @@ public class DHTClient {
 	public final static int DEFAULT_SOCKET_CYCLE_DELAY_MS = 1000;
 	public static int socketCycleDelayMs = DEFAULT_SOCKET_CYCLE_DELAY_MS;
 	
+	public final static int DEFAULT_AUTO_FIND_PEERS_INTERVAL_MS = 1000*60*15;
+	public static int autoFindPeersIntervalMs = DEFAULT_AUTO_FIND_PEERS_INTERVAL_MS;
+	
 	public final static int KEY_INDEX_CLIENT_INFO = 0;
 	public final static int KEY_INDEX_ROUTING_TABLE = 1;
 	public final static int KEY_INDEX_RECORD_STORE = 2;
@@ -137,7 +140,7 @@ public class DHTClient {
 		return this;
 	}
 	
-	public void findPeers() { // TODO DHT: (design) When does this get called?
+	public void findPeers() {
 		new DHTSearchOperation(this, id, (peers)->{
 			// no need to do anything; just doing the search populates the routing table
 			if(peers == null || peers.isEmpty()) {
@@ -146,6 +149,17 @@ public class DHTClient {
 			
 			initialized = true;
 		}).run();
+	}
+	
+	public void autoFindPeers() {
+		new Thread(()->{
+			Thread.currentThread().setName("DHTClient autoFindPeers");
+			while(!closed) {
+				Util.blockOn(()->routingTable.allPeers().isEmpty());
+				findPeers();
+				Util.sleep(autoFindPeersIntervalMs);
+			}
+		}).start();
 	}
 	
 	public void lookup(DHTID searchId, LookupCallback callback) {
@@ -226,6 +240,12 @@ public class DHTClient {
 		return initialized;
 	}
 	
+	public void dump() {
+		System.out.println("DHTClient " + this + " initialized=" + initialized);
+		routingTable.dump();
+		store.dump();
+	}
+	
 	protected void openSocket() throws SocketException {
 		if(closed) return;
 		InetAddress addr;
@@ -251,7 +271,7 @@ public class DHTClient {
 	}
 	
 	protected void socketListener() {
-		Thread.currentThread().setName("DHTClient socketListener");
+		Thread.currentThread().setName("DHTClient socketListener " + Util.bytesToHex(key.publicKey().getBytes(), 4) + " " + getPort());
 		int lastPort = -1;
 		
 		while(!closed) {
@@ -547,7 +567,17 @@ public class DHTClient {
 		}
 	}
 	
+	public int getStatus() {
+		return lastStatus;
+	}
+	
 	protected void assertSupportedState(boolean state) throws UnsupportedProtocolException {
-		if(!state) throw new UnsupportedProtocolException();
+		if(!state) {
+			throw new UnsupportedProtocolException();
+		}
+	}
+	
+	public String toString() {
+		return Util.bytesToHex(key.publicKey().getBytes(), 4) + " " + bindAddress + ":" + getPort();
 	}
 }

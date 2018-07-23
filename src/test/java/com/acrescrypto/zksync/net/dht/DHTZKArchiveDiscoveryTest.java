@@ -214,7 +214,9 @@ public class DHTZKArchiveDiscoveryTest {
 		for(int i = 0; i < 4; i++) {
 			client.records.clear();
 			assertTrue(Util.waitUntil(100+discovery.advertisementIntervalMs, ()->!client.records.isEmpty()));
-			assertTrue(Util.currentTimeMillis() >= timeStart + i*discovery.advertisementIntervalMs);
+			
+			// fudge expected timestamp by 1ms due to rounding issues
+			assertTrue(Util.currentTimeMillis()+1 >= timeStart + i*discovery.advertisementIntervalMs);
 		}
 	}
 

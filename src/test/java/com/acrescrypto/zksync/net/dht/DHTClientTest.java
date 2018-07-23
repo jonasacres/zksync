@@ -321,6 +321,7 @@ public class DHTClientTest {
 		DHTClient.messageRetryTimeMs = DHTClient.DEFAULT_MESSAGE_RETRY_TIME_MS;
 		DHTClient.socketCycleDelayMs = DHTClient.DEFAULT_SOCKET_CYCLE_DELAY_MS;
 		DHTClient.socketOpenFailCycleDelayMs = DHTClient.DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS;
+		DHTClient.autoFindPeersIntervalMs = DHTClient.DEFAULT_AUTO_FIND_PEERS_INTERVAL_MS;
 		TCPPeerAdvertisement.disableReachabilityTest = false;
 	}
 	
@@ -1080,5 +1081,16 @@ public class DHTClientTest {
 		client.lastStatus = DHTClient.STATUS_GOOD;
 		clientPeer.ping();
 		assertFalse(Util.waitUntil(100, ()->-1 != receivedStatus.intValue()));
+	}
+	
+	@Test
+	public void testAutoFindPeersCallsFindPeersOnInterval() throws IOException, ProtocolViolationException {
+		DHTClient.autoFindPeersIntervalMs = 50;
+		client.autoFindPeers();
+		long timeStart = Util.currentTimeMillis();
+		for(int i = 0; i < 8; i++) {
+			remote.receivePacket().makeResponse(new ArrayList<>()).send();
+			assertTrue(Util.currentTimeMillis() - timeStart >= i*DHTClient.autoFindPeersIntervalMs);
+		}
 	}
 }

@@ -171,4 +171,8 @@ public class DHTPeer implements Sendable {
 			throw new EINVALException("(dht peer)");
 		}
 	}
+	
+	public String toString() {
+		return Util.bytesToHex(key.getBytes(), 4) + " " + address + ":" + port;
+	}
 }

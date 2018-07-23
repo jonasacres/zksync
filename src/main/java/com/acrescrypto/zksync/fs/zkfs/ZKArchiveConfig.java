@@ -107,6 +107,8 @@ public class ZKArchiveConfig {
 	}
 	
 	public ZKArchiveConfig finishOpening() throws IOException {
+		if(archive != null) return this;
+		
 		read();
 		this.archive = new ZKArchive(this);
 		this.accessor.discoveredArchiveConfig(this);

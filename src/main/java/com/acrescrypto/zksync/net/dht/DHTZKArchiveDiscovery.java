@@ -39,6 +39,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	}
 
 	protected void discoveryThread(ArchiveAccessor accessor) {
+		Thread.currentThread().setName("DHTZKArchiveDiscovery discovery thread");
 		while(isDiscovering(accessor)) {
 			try {
 				Util.blockOn(()->isDiscovering(accessor) && !accessor.getMaster().getDHTClient().initialized);
@@ -54,6 +55,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	}
 	
 	protected void advertisementThread(ArchiveAccessor accessor) {
+		Thread.currentThread().setName("DHTZKArchiveDiscovery advertisement thread");
 		while(isAdvertising(accessor)) {
 			try {
 				Util.blockOn(()->isAdvertising(accessor) && !accessor.getMaster().getDHTClient().initialized);
@@ -77,7 +79,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	}
 	
 	protected void discover(ArchiveAccessor accessor) {
-		DHTID searchId = new DHTID(accessor.temporalSeedId(accessor.timeSliceIndex()));
+		DHTID searchId = new DHTID(accessor.temporalSeedId(0));
 		accessor.getMaster().getDHTClient().lookup(searchId, (record)->{
 			if(!(record instanceof DHTAdvertisementRecord)) return;
 			DHTAdvertisementRecord adRecord = (DHTAdvertisementRecord) record;

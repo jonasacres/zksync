@@ -169,6 +169,6 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	}
 	
 	public String toString() {
-		return "TCPPeerAdvertisement: " + host + ":" + port;
+		return "TCPPeerAdvertisement: " + Util.bytesToHex(pubKey.getBytes(), 4) + " " + ipAddress + ":" + port;
 	}
 }

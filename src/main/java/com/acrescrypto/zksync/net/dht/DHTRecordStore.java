@@ -98,6 +98,16 @@ public class DHTRecordStore {
 		
 		return records;
 	}
+	
+	public void dump() {
+		System.out.println("\tRecord store: " + entriesById.size() + " keys");
+		for(DHTID id : entriesById.keySet()) {
+			System.out.println("\t\t" + Util.bytesToHex(id.rawId, 4) + " " + entriesById.get(id).size());
+			for(StoreEntry entry : entriesById.get(id)) {
+				System.out.println("\t\t\t" + entry.record);
+			}
+		}
+	}
 
 	@SuppressWarnings("unlikely-arg-type")
 	protected synchronized boolean hasRoomForRecord(DHTID id, DHTRecord record) throws IOException {
