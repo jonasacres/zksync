@@ -21,7 +21,13 @@ public class Util {
 	}
 	
 	public static synchronized void hexdump(String caption, byte[] data) {
+		if(data == null) {
+			System.out.printf("%s (null, no fingerprint)\n", caption);
+			return;
+		}
+
 		System.out.printf("%s (%d bytes, fingerprint %s)\n", caption, data.length, fingerprint(data));
+		
 		for(int i = 0; i <= 16 * (int) Math.ceil((double) data.length/16); i++) {
 			if((i % 16) == 0) {
 				if(i != 0) {

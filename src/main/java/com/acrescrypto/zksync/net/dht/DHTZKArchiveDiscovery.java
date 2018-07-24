@@ -133,7 +133,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	
 	protected void advertise(DiscoveryEntry entry) {
 		for(ZKArchiveConfig config : entry.accessor.knownArchiveConfigs()) {
-			if(!config.isInitialized()) continue;
+			if(!config.canReceive()) continue;
 			if(entry.accessor.getMaster().getTCPListener() == null) continue;
 			TCPPeerAdvertisementListener listener = entry.accessor.getMaster().getTCPListener().listenerForSwarm(config.getSwarm());
 			if(listener == null) continue;

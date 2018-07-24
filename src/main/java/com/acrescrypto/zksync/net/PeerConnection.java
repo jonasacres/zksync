@@ -326,8 +326,8 @@ public class PeerConnection {
 	}
 	
 	protected void waitForFullInit() {
-		Util.blockOn(()->!closed && !socket.swarm.config.isInitialized());
 		Util.blockOn(()->!closed && !socket.swarm.config.canReceive());
+		Util.blockOn(()->!closed && !socket.swarm.config.hasKey() && !socket.swarm.config.getAccessor().isSeedOnly());
 		Util.blockOn(()->!closed && socket.swarm.config.getArchive() == null);
 	}
 	
@@ -454,7 +454,7 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
-		Util.blockOn(()->!closed && !socket.swarm.config.isInitialized());
+		Util.blockOn(()->!closed && !socket.swarm.config.hasKey());
 		byte[] obfTagRaw = new byte[ObfuscatedRefTag.sizeForConfig(socket.swarm.config)];
 		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(obfTagRaw);

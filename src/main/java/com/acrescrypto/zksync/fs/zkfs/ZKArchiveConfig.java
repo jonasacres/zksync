@@ -266,9 +266,8 @@ public class ZKArchiveConfig {
 		return pageSize > 0 && pubKey != null && archiveFingerprint != null;
 	}
 	
-	public boolean isInitialized() {
-		// TODO DHT: (review) Why does relying on archiveFingerprint for ALL cases fail?
-		return accessor.isSeedOnly() ? archiveFingerprint != null : archiveRoot != null;
+	public boolean hasKey() {
+		return archiveRoot != null;
 	}
 	
 	protected byte[] serializeVersionPortion() {
