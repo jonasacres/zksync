@@ -385,9 +385,10 @@ public class NetModuleTest {
 		}
 		
 		// Give some time for duplicates to get shut down, and then check to make sure everyone has exactly numPeers-1 connections.
-		Util.sleep(200);
+		Util.sleep(300);
 		for(int i = 0; i < numPeers; i++) {
 			final int ii = i;
+			// TODO DHT: (itf) d92b0c30d 7/23/18 linux AllTests, expected:<7> but was:<8>
 			assertEquals(numPeers-1, configs[ii].getSwarm().connections.size());
 		}
 		
@@ -448,6 +449,7 @@ public class NetModuleTest {
 		for(int i = 0; i < numPeers; i++) {
 			configs[i].getRevisionTree().consolidate();
 			DiffSetResolver.canonicalMergeResolver(configs[i].getArchive()).resolve();
+			// TODO DHT: (itf) d92b0c30d 7/23/18 linux expected:<1> but was:<9>
 			assertEquals(1, configs[i].getRevisionTree().branchTips().size());
 			if(i > 0) {
 				assertEquals(configs[i-1].getRevisionTree().branchTips().get(0), configs[i].getRevisionTree().branchTips().get(0));

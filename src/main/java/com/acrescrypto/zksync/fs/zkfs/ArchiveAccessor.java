@@ -146,8 +146,8 @@ public class ArchiveAccessor {
 		return this;
 	}
 	
-	public Collection<ZKArchiveConfig> knownArchiveConfigs() {
-		return knownArchiveConfigs;
+	public synchronized Collection<ZKArchiveConfig> knownArchiveConfigs() {
+		return new ArrayList<>(knownArchiveConfigs);
 	}
 	
 	public boolean isSeedOnly() {
