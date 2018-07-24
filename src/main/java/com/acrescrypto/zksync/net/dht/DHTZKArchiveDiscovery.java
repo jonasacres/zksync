@@ -105,7 +105,6 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		return isDiscovering(accessor); // might make discovery and advertisement separate someday, but not today
 	}
 	
-	// TODO DHT: (test) test forceUpdate
 	public void forceUpdate(ArchiveAccessor accessor) {
 		DiscoveryEntry entry = activeDiscoveries.get(accessor);
 		if(entry == null) return;

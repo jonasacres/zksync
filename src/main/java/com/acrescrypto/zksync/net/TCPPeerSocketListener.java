@@ -220,7 +220,6 @@ public class TCPPeerSocketListener {
 			assertState(0 <= startsIn && startsIn <= 10000);
 		}
 
-		// TODO DHT: (test) Test proof tag caching
 		byte[] tempSharedSecret = ad.swarm.identityKey.sharedSecret(crypto.makePublicDHKey(pubKeyRaw));
 		checkProofAgainstReplays(tempSharedSecret, proof);
 		

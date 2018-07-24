@@ -498,4 +498,18 @@ public class TCPPeerSocketListenerTest {
 
 		socket.close();
 	}
+	
+	@Test
+	public void testRefusesReplayedConnectionAttempts() throws UnknownHostException, IOException, UnconnectableAdvertisementException {
+		listener.advertise(swarm);
+		Socket socket = connect();
+		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
+		assertTrue(Util.waitUntil(100, ()->swarm.opened != null));
+		socket.close();
+		
+		swarm.opened = null;
+		socket = connect();
+		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
+		assertFalse(Util.waitUntil(100, ()->swarm.opened != null));
+	}
 }

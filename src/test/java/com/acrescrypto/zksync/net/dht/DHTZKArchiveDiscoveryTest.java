@@ -241,4 +241,28 @@ public class DHTZKArchiveDiscoveryTest {
 		master.getTCPListener().advertise(archive.getConfig().getSwarm());
 		assertTrue(Util.waitUntil(50, ()->client.records.size() > 0));
 	}
+	
+	@Test
+	public void testForceUpdateTriggersImmediateAdvertisement() throws IOException {
+		master.listenOnTCP(0);
+		master.getTCPListener().advertise(archive.getConfig().getSwarm());
+		discovery.advertisementIntervalMs = 1000;
+		discovery.discoverArchives(archive.getConfig().getAccessor());
+		assertTrue(Util.waitUntil(50, ()->!client.records.isEmpty()));
+		client.records.clear();
+		discovery.forceUpdate(archive.getConfig().getAccessor());
+		assertTrue(Util.waitUntil(50, ()->!client.records.isEmpty()));
+	}
+	
+	@Test
+	public void testForceUpdateTriggersImmediateDiscovery() throws IOException {
+		master.listenOnTCP(0);
+		master.getTCPListener().advertise(archive.getConfig().getSwarm());
+		discovery.discoveryIntervalMs = 1000;
+		discovery.discoverArchives(archive.getConfig().getAccessor());
+		assertTrue(Util.waitUntil(discovery.discoveryIntervalMs, ()->client.searchId != null));
+		client.searchId = null;
+		discovery.forceUpdate(archive.getConfig().getAccessor());
+		assertTrue(Util.waitUntil(50, ()->client.searchId != null));
+	}
 }

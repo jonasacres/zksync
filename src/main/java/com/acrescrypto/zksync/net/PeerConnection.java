@@ -122,19 +122,20 @@ public class PeerConnection {
 			}
 		}
 	}
-
+	
+	/** Announce a tag to the remote peer, and automatically send the page if the remote peer is requesting all data.
+	 * Note that the alternative forms of announceTags do NOT automatically send pages to the remote peer at this time.
+	 */
 	public void announceTag(long shortTag) {
 		ByteBuffer tag = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
 		tag.putLong(shortTag);
 		send(CMD_ANNOUNCE_TAGS, tag.array());
 		if(wantsEverything) {
-			// TODO DHT: (test) Test that page tags are automatically queued if everything requested (and not queued if everything not requested)
 			queue.addPageTag(PageQueue.DEFAULT_EVERYTHING_PRIORITY, shortTag);
 		}
 	}
 	
 	public void announceSelf() {
-		// TODO DHT: (test) doesn't announce self if not listening / announces self when listening
 		TCPPeerSocketListener listener = socket.swarm.getConfig().getMaster().getTCPListener();
 		if(listener == null) return;
 		

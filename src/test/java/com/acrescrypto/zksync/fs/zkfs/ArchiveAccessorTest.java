@@ -292,4 +292,16 @@ public class ArchiveAccessorTest {
 		accessor.removeAllDiscoveries();
 		assertEquals(discoveries.length, removed.seen);
 	}
+	
+	@Test
+	public void testConfigWithIdReturnsNullIfNoConfigWithIdPresent() {
+		assertNull(accessor.configWithId(master.getCrypto().rng(master.getCrypto().hashLength())));
+	}
+	
+	@Test
+	public void testConfigWithIdReturnsCachedConfig() throws IOException {
+		ZKArchiveConfig config = new ZKArchiveConfig(accessor, "config", ZKArchive.DEFAULT_PAGE_SIZE);
+		assertEquals(config, accessor.configWithId(config.getArchiveId()));
+		config.archive.close();
+	}
 }

@@ -43,7 +43,6 @@ public class Key {
 		return decrypt(iv, ciphertext, 0, ciphertext.length);
 	}
 	
-	// TODO DHT: (test) decryptUnpadded
 	public byte[] decryptUnpadded(byte[] iv, byte[] ciphertext) {
 		return decryptUnpadded(iv, ciphertext, 0, ciphertext.length);
 	}

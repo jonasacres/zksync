@@ -61,7 +61,7 @@ public class PeerSwarm implements BlacklistCallback {
 		this.config = config;
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
 		connectionThread();
-		initIdentity(); // TODO DHT: (test) PeerSwarm identity key init, file read/write
+		initIdentity();
 		pool = new RequestPool(config);
 		pool.read();
 	}
@@ -404,14 +404,19 @@ public class PeerSwarm implements BlacklistCallback {
 		try {
 			deserialize(storedFile().read());
 		} catch(ENOENTException exc) {
+			// let it slide without log message
+		} catch(SecurityException exc) {
+			logger.warn("Caught security exception decrypting stored advertisement for archive {}; creating new ad.", Util.bytesToHex(config.getArchiveId()), exc);
+		} catch (IOException exc) {
+			logger.error("Caught exception opening stored advertisement for archive {}", Util.bytesToHex(config.getArchiveId()), exc);
+		} finally {
+			if(this.identityKey != null) return;
 			try {
 				this.identityKey = config.getCrypto().makePrivateDHKey();
 				storedFile().write(serialize(), 0);
-			} catch (IOException e) {
+			} catch (IOException exc) {
 				logger.error("Caught exception writing advertisement for archive {}", Util.bytesToHex(config.getArchiveId()), exc);
 			}
-		} catch (IOException exc) {
-			logger.error("Caught exception opening stored advertisement for archive {}", Util.bytesToHex(config.getArchiveId()), exc);
 		}
 	}
 	

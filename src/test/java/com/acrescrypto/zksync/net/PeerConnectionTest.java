@@ -19,6 +19,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -78,12 +79,6 @@ public class PeerConnectionTest {
 		@Override
 		public void closedConnection(PeerConnection connection) {
 			closedConnection = connection;
-		}
-	}
-	
-	class DummyPageQueue extends PageQueue {
-		public DummyPageQueue(ZKArchiveConfig config) {
-			super(config);
 		}
 	}
 	
@@ -358,6 +353,41 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
+	public void testAnnounceTagAddsToQueueIfEverythingRequested() throws IOException {
+		MutableBoolean passed = new MutableBoolean();
+		
+		conn.sendEverything();
+		conn.setLocalPaused(true);
+		conn.queue.itemsByPriority.clear();
+		conn.announceTag(Util.shortTag(archive.getConfig().tag()));
+		
+		conn.queue.itemsByPriority.forEach((item)->{
+			if(!(item instanceof PageQueueItem)) return;
+			PageQueueItem pqItem = (PageQueueItem) item;
+			if(Arrays.equals(archive.getConfig().tag(), pqItem.tag)) passed.setTrue();
+		});
+		
+		assertTrue(passed.booleanValue());
+	}
+	
+	@Test
+	public void testAnnounceTagDoesNotAddToQueueIfEverythingNotRequested() {
+		MutableBoolean passed = new MutableBoolean();
+		
+		conn.setLocalPaused(true);
+		conn.queue.itemsByPriority.clear();
+		conn.announceTag(Util.shortTag(archive.getConfig().tag()));
+		
+		conn.queue.itemsByPriority.forEach((item)->{
+			if(!(item instanceof PageQueueItem)) return;
+			PageQueueItem pqItem = (PageQueueItem) item;
+			if(Arrays.equals(archive.getConfig().tag(), pqItem.tag)) passed.setTrue();
+		});
+		
+		assertFalse(passed.booleanValue());
+	}
+	
+	@Test
 	public void testAnnounceShortTags() throws IOException {
 		int numTags = 16;
 		LinkedList<Long> tags = new LinkedList<>();
@@ -396,9 +426,35 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testAnnounceSelf() throws UnconnectableAdvertisementException, IOException {
+	public void testAnnounceSelfWithAdSendsAnnouncement() throws UnconnectableAdvertisementException, IOException {
 		PeerAdvertisement ad = makeTCPPeer(0);
 		conn.announceSelf(ad);
+		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_SELF_AD);
+		assertReceivedBytes(ByteBuffer.allocate(2).putShort((short) ad.serialize().length).array());
+		assertReceivedBytes(ad.serialize());
+		assertFinished();
+	}
+	
+	@Test
+	public void testAnnounceSelfWithoutAdDoesntAnnounceIfNoTcpListener() {
+		conn.announceSelf();
+		assertNoMessage();
+	}
+	
+	@Test
+	public void testAnnounceSelfWithoutAdDoesntAnnounceIfNoSwarmListener() throws IOException {
+		master.listenOnTCP(0);
+		conn.announceSelf();
+		assertNoMessage();
+	}
+	
+	@Test
+	public void testAnnounceSelfWIthoutAdAnnouncesLocalAdFromSwarmListener() throws IOException, UnconnectableAdvertisementException {
+		master.listenOnTCP(0);
+		master.getTCPListener().advertise(swarm);
+		TCPPeerAdvertisement ad = master.getTCPListener().listenerForSwarm(swarm).localAd();
+		conn.announceSelf(ad);
+		
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_SELF_AD);
 		assertReceivedBytes(ByteBuffer.allocate(2).putShort((short) ad.serialize().length).array());
 		assertReceivedBytes(ad.serialize());

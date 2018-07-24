@@ -68,4 +68,18 @@ public class KeyTest {
 			assertTrue(Arrays.equals(buf, recovered));
 		}
 	}
+	
+	@Test
+	public void testDecryptUnpadded() {
+		// if we encrypt with -1 padding (no padding), we should be able to call decryptUnpadded
+		byte[] keyBytes = new byte[32], iv = new byte[12];
+		for(int i = 0; i < 128; i++) {
+			byte[] buf = new byte[i];
+			keyBytes[31] = (byte) i;
+			iv[11] = (byte) i;
+			Key key = new Key(crypto, keyBytes);
+			byte[] recovered = key.decryptUnpadded(iv, key.encrypt(iv, buf, -1));
+			assertTrue(Arrays.equals(buf, recovered));
+		}
+	}
 }

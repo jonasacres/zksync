@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.net;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -21,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.exceptions.ClosedException;
+import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
@@ -195,7 +197,30 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testBlank() {}
+	public void testSwarmCachesIdentityKey() throws IOException {
+		PeerSwarm swarm2 = new PeerSwarm(swarm.getConfig());
+		assertArrayEquals(swarm.identityKey.getBytes(), swarm2.identityKey.getBytes());
+		assertArrayEquals(swarm.identityKey.publicKey().getBytes(), swarm2.identityKey.publicKey().getBytes());
+	}
+	
+	@Test
+	public void testSwarmInitializesIdentityKeyIfNotCached() throws IOException {
+		FS fs = swarm.config.getMaster().localStorageFsForArchiveId(swarm.config.getArchiveId());
+		fs.unlink("identity");
+		PeerSwarm swarm2 = new PeerSwarm(swarm.getConfig());
+		assertFalse(Arrays.equals(swarm.identityKey.getBytes(), swarm2.identityKey.getBytes()));
+		assertFalse(Arrays.equals(swarm.identityKey.publicKey().getBytes(), swarm2.identityKey.publicKey().getBytes()));
+	}
+	
+	@Test
+	public void testSwarmInitializesIdentityKeyIfCachedVersionCorrupt() throws IOException {
+		((ch.qos.logback.classic.Logger) LoggerFactory.getLogger(PeerSwarm.class)).setLevel(Level.ERROR);
+		FS fs = swarm.config.getMaster().localStorageFsForArchiveId(swarm.config.getArchiveId());
+		fs.write("identity", master.getCrypto().rng((int) fs.stat("identity").getSize()));
+		PeerSwarm swarm2 = new PeerSwarm(swarm.getConfig());
+		assertFalse(Arrays.equals(swarm.identityKey.getBytes(), swarm2.identityKey.getBytes()));
+		assertFalse(Arrays.equals(swarm.identityKey.publicKey().getBytes(), swarm2.identityKey.publicKey().getBytes()));
+	}
 	
 	@Test
 	public void testOpenedConnectionAddsOpenConnection() {

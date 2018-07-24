@@ -242,7 +242,6 @@ public class ArchiveAccessor {
 		return seedRoot;
 	}
 	
-	// TODO DHT: (test) test configWithId
 	public synchronized ZKArchiveConfig configWithId(byte[] archiveId) {
 		for(ZKArchiveConfig config : knownArchiveConfigs) {
 			if(Arrays.equals(config.getArchiveId(), archiveId)) return config;
