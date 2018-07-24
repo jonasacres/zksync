@@ -95,7 +95,6 @@ public class DHTClient {
 	
 	public DHTClient(Key storageKey, Blacklist blacklist) {
 		this(storageKey, blacklist, new byte[storageKey.getCrypto().hashLength()]);
-		// TODO DHT: (design) What about the bootstrap peer? Test vs. reality
 	}
 	
 	public DHTClient(Key storageKey, Blacklist blacklist, byte[] networkId) {
@@ -128,6 +127,7 @@ public class DHTClient {
 	}
 	
 	public int getPort() {
+		if(socket == null) return -1;
 		return socket.getLocalPort();
 	}
 	
@@ -578,6 +578,7 @@ public class DHTClient {
 	}
 	
 	public String toString() {
+		if(key == null) return "uninitialized DHTClient";
 		return Util.bytesToHex(key.publicKey().getBytes(), 4) + " " + bindAddress + ":" + getPort();
 	}
 }

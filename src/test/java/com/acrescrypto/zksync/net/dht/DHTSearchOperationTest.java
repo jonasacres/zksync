@@ -9,6 +9,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
@@ -141,6 +142,12 @@ public class DHTSearchOperationTest {
 		op = new DHTSearchOperation(client, searchId, (results)->{this.results = results;});
 	}
 	
+	@After
+	public void afterEach() {
+		DHTSearchOperation.MAX_RESULTS = DHTSearchOperation.DEFAULT_MAX_RESULTS;
+		DHTSearchOperation.SEARCH_QUERY_TIMEOUT_MS = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
+	}
+	
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
@@ -210,5 +217,14 @@ public class DHTSearchOperationTest {
 		op.run();
 		waitForResult();
 		assertEquals(0, results.size());
+	}
+	
+	@Test
+	public void testInvokesCallbackOnTimeoutIfResponseNotReceived() {
+		DHTSearchOperation.SEARCH_QUERY_TIMEOUT_MS = 50;
+		sendResponses = false;
+		op.run();
+		waitForResult();
+		assertEquals(DHTSearchOperation.MAX_RESULTS, results.size());
 	}
 }

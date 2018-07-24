@@ -147,8 +147,10 @@ public class DHTRoutingTable {
 		Thread.currentThread().setName("DHTRoutingTable freshen thread");
 		while(!closed) {
 			try {
-				synchronized(this) { this.wait(freshenIntervalMs); }
-				freshen();
+				synchronized(this) { if(!closed) this.wait(freshenIntervalMs); }
+				if(!closed) {
+					freshen();
+				}
 			} catch(Exception exc) {
 				logger.error("DHT routing table freshen thread encountered exception", exc);
 			}

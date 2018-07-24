@@ -121,41 +121,6 @@ public class ZKArchiveConfig {
 		this.storage = new BackedFS(accessor.master.storageFsForArchiveId(archiveId), new SwarmFS(swarm));
 	}
 	
-	public void parseFile(ByteBuffer contents) {
-		assertState(contents.getLong() == CONFIG_MAGIC);
-		while(contents.hasRemaining()) {
-			int type = Util.unsignShort(contents.getShort());
-			int length = Util.unsignShort(contents.getShort());
-			int expectedIndex = contents.position() + length;
-			
-			assertState(contents.remaining() >= length);
-			switch(type) {
-			case CONFIG_SECTION_ARCHIVE_INFO:
-				parseArchiveInfo(contents);
-				break;
-			default:
-				assertState(false);
-			}
-			
-			assertState(contents.position() == expectedIndex);
-		}
-	}
-	
-	public void parseArchiveInfo(ByteBuffer contents) {
-		long longPageSize = contents.getLong();
-		assertState(0 < longPageSize && longPageSize <= Integer.MAX_VALUE);
-		pageSize = (int) longPageSize;
-		
-		int descLen = Util.unsignShort(contents.getShort());
-		byte[] desc = new byte[descLen];
-		contents.get(desc);
-		description = new String(desc);
-		
-		byte[] archiveRootRaw = new byte[accessor.master.crypto.symKeyLength()];		
-		contents.get(archiveRootRaw);
-		archiveRoot = new Key(accessor.master.crypto, archiveRootRaw);
-	}
-	
 	protected int seedPortionPadSize() {
 		return 256;
 	}
@@ -302,7 +267,8 @@ public class ZKArchiveConfig {
 	}
 	
 	public boolean isInitialized() {
-		return archiveRoot != null;
+		// TODO DHT: (review) Why does relying on archiveFingerprint for ALL cases fail?
+		return accessor.isSeedOnly() ? archiveFingerprint != null : archiveRoot != null;
 	}
 	
 	protected byte[] serializeVersionPortion() {

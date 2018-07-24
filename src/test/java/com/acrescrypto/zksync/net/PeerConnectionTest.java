@@ -279,7 +279,7 @@ public class PeerConnectionTest {
 		ZKFSTest.restoreArgon2Costs();
 		TestUtils.assertTidy();
 	}
-	
+
 	@Test
 	public void testConstructWithAdConnectsToAdvertisement() throws IOException, UnsupportedProtocolException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
 		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master, 0);

@@ -5,6 +5,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -23,6 +24,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
+import com.acrescrypto.zksync.net.dht.DHTSearchOperation;
 import com.acrescrypto.zksync.utility.Util;
 
 public class IntegrationTest {
@@ -43,6 +45,12 @@ public class IntegrationTest {
 		rootClient.listen("127.0.0.1", 0);
 		assertTrue(Util.waitUntil(50, ()->rootClient.getStatus() >= DHTClient.STATUS_QUESTIONABLE));
 		root = rootClient.getLocalPeer();
+	}
+	
+	@After
+	public void afterEach() {
+		DHTSearchOperation.SEARCH_QUERY_TIMEOUT_MS = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
+		rootClient.close();
 	}
 	
 	@AfterClass
@@ -104,5 +112,74 @@ public class IntegrationTest {
 			archives[i].close();
 			masters[i].close();
 		}
+	}
+	
+	@Test
+	public void testSeedPeerIntegration() throws IOException {
+		DHTSearchOperation.SEARCH_QUERY_TIMEOUT_MS = 50; // let DHT lookups timeout quickly
+		
+		// first, make an original archive
+		ZKMaster originalMaster = ZKMaster.openBlankTestVolume("original");
+		ZKArchive originalArchive = originalMaster.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "an archive");
+		originalMaster.listenOnTCP(0);
+		originalMaster.activateDHT("127.0.0.1", 0, root);
+		originalArchive.getConfig().getAccessor().discoverOnDHT();
+		originalMaster.getTCPListener().advertise(originalArchive.getConfig().getSwarm());
+		byte[] archiveId = originalArchive.getConfig().getArchiveId();
+
+		byte[] expectedImmediate = crypto.prng(originalArchive.getConfig().getArchiveId()).getBytes(crypto.hashLength()-1);
+		byte[] expected1page = crypto.prng(originalArchive.getConfig().getArchiveId()).getBytes(originalArchive.getConfig().getPageSize()-1);
+		byte[] expectedMultipage = crypto.prng(originalArchive.getConfig().getArchiveId()).getBytes(10*originalArchive.getConfig().getPageSize());
+
+		// populate it with some data
+		ZKFS fs = originalArchive.openBlank();
+		fs.write("immediate", expectedImmediate);
+		fs.write("1page", expected1page);
+		fs.write("multipage", expectedMultipage);
+		fs.commit();
+		fs.close();
+		
+		// now make a seed-only peer
+		ZKMaster seedMaster = ZKMaster.openBlankTestVolume("seed");
+		ArchiveAccessor seedAccessor = seedMaster.makeAccessorForRoot(originalArchive.getConfig().getAccessor().getSeedRoot(), true);
+		seedMaster.listenOnTCP(0);
+		seedMaster.activateDHT("127.0.0.1", 0, root);
+		seedAccessor.discoverOnDHT();
+		assertTrue(Util.waitUntil(3000, ()->seedAccessor.configWithId(archiveId) != null));
+		
+		// grab everything from the original
+		ZKArchiveConfig seedConfig = seedAccessor.configWithId(archiveId);
+		seedConfig.finishOpening();
+		seedConfig.getSwarm().requestAll();
+		assertTrue(Util.waitUntil(3000, ()->seedConfig.getArchive().allPageTags().size() == originalArchive.allPageTags().size()));
+		seedMaster.getTCPListener().advertise(seedConfig.getSwarm());
+		
+		// original goes offline; now the seed is the only place to get data
+		originalArchive.close();
+		originalMaster.close();
+		
+		// now make another peer with the passphrase
+		ZKMaster cloneMaster = ZKMaster.openBlankTestVolume("clone");
+		Util.sleep(1000);
+		cloneMaster.listenOnTCP(0);
+		cloneMaster.activateDHT("127.0.0.1", 0, root);
+		ArchiveAccessor cloneAccessor = cloneMaster.makeAccessorForPassphrase("zksync".getBytes());
+		cloneAccessor.discoverOnDHT();
+		assertTrue(Util.waitUntil(3000, ()->cloneAccessor.configWithId(archiveId) != null));
+		
+		// grab the archive from the network (i.e. the blind peer)
+		ZKArchiveConfig cloneConfig = cloneAccessor.configWithId(archiveId);
+		cloneConfig.finishOpening();
+		Util.waitUntil(3000, ()->cloneConfig.getRevisionTree().plainBranchTips().size() > 0);
+		ZKFS cloneFs = cloneConfig.getArchive().openRevision(cloneConfig.getRevisionTree().plainBranchTips().get(0));
+		
+		// make sure the data matches up
+		assertArrayEquals(expectedImmediate, fs.read("immediate"));
+		assertArrayEquals(expected1page, fs.read("1page"));
+		assertArrayEquals(expectedMultipage, fs.read("multipage"));
+
+		cloneFs.close();
+		cloneConfig.getArchive().close();
+		cloneMaster.close();
 	}
 }

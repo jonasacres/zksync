@@ -4,13 +4,18 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.TreeSet;
 
+import com.acrescrypto.zksync.utility.SnoozeThread;
+
 public class DHTSearchOperation {
 	interface SearchOperationCallback {
 		void searchOperationFinished(Collection<DHTPeer> closestPeers);
 	}
 	
-	public final static int MAX_RESULTS = 8;
-	public final static int SEARCH_QUERY_TIMEOUT_MS = 5000; // TODO DHT: (implement) Make this timeout work
+	public final static int DEFAULT_MAX_RESULTS = 8;
+	public final static int DEFAULT_SEARCH_QUERY_TIMEOUT_MS = 3000;
+	
+	public static int MAX_RESULTS = DEFAULT_MAX_RESULTS;
+	public static int SEARCH_QUERY_TIMEOUT_MS = DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
 	
 	int activeQueries = 0;
 	
@@ -19,6 +24,7 @@ public class DHTSearchOperation {
 	HashSet<DHTPeer> queried = new HashSet<DHTPeer>();
 	TreeSet<DHTPeer> closestPeers = new TreeSet<>((a,b)->a.id.xor(searchId).compareTo(b.id.xor(searchId)));
 	SearchOperationCallback callback;
+	SnoozeThread timeout;
 	
 	public DHTSearchOperation(DHTClient client, DHTID searchId, SearchOperationCallback callback) {
 		this.client = client;
@@ -27,6 +33,8 @@ public class DHTSearchOperation {
 	}
 	
 	public synchronized void run() {
+		this.timeout = new SnoozeThread(SEARCH_QUERY_TIMEOUT_MS, true, ()->callback.searchOperationFinished(closestPeers));
+		
 		for(DHTPeer peer : client.routingTable.allPeers()) {
 			addIfBetter(peer);
 		}
@@ -59,6 +67,8 @@ public class DHTSearchOperation {
 	}
 	
 	protected synchronized void handleFindNodeResults(Collection<DHTPeer> peers, boolean isFinal) {
+		if(timeout.isCancelled()) return;
+		
 		if(peers != null) {
 			for(DHTPeer peer : peers) {
 				addIfBetter(peer);
@@ -77,7 +87,9 @@ public class DHTSearchOperation {
 	protected synchronized void finishedQuery() {
 		activeQueries--;
 		if(activeQueries == 0) {
-			callback.searchOperationFinished(closestPeers);
+			timeout.cancel(); // invokes callback.searchOperationFinished
+		} else {
+			timeout.snooze();
 		}
 	}
 }

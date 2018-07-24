@@ -63,6 +63,7 @@ public class TCPPeerSocketListener {
 	
 	public void advertise(PeerSwarm swarm) {
 		adListeners.add(new TCPPeerAdvertisementListener(swarm, this));
+		swarm.config.getAccessor().forceAdvertisement();
 	}
 	
 	public TCPPeerAdvertisementListener listenerForSwarm(PeerSwarm swarm) {

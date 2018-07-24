@@ -102,9 +102,14 @@ public class ArchiveAccessor {
 		return config;
 	}
 	
+	public void forceAdvertisement() {
+		master.dhtDiscovery.forceUpdate(this);
+	}
+	
 	public void discoveredArchiveConfig(ZKArchiveConfig config) {
 		knownArchiveConfigs.remove(config);
 		knownArchiveConfigs.add(config);
+		forceAdvertisement();
 		for(ArchiveAccessorDiscoveryCallback callback : callbacks) {
 			callback.discoveredArchiveConfig(config);
 		}
@@ -231,5 +236,18 @@ public class ArchiveAccessor {
 
 	public ZKMaster getMaster() {
 		return master;
+	}
+	
+	public Key getSeedRoot() {
+		return seedRoot;
+	}
+	
+	// TODO DHT: (test) test configWithId
+	public synchronized ZKArchiveConfig configWithId(byte[] archiveId) {
+		for(ZKArchiveConfig config : knownArchiveConfigs) {
+			if(Arrays.equals(config.getArchiveId(), archiveId)) return config;
+		}
+		
+		return null;
 	}
 }
