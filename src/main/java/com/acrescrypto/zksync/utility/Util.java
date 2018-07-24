@@ -243,4 +243,14 @@ public class Util {
 			return "";
 		}
 	}
+	
+	public static byte[] concat(byte[]... values) {
+		int totalSize = 0;
+		for(byte[] value : values) totalSize += value.length;
+		
+		ByteBuffer buf = ByteBuffer.allocate(totalSize);
+		for(byte[] value : values) buf.put(value);
+		
+		return buf.array();
+	}
 }

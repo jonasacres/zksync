@@ -193,21 +193,38 @@ public class TCPPeerSocketListener {
 		// This will need to be rethought if we ever have different crypto configurations between archives
 		byte[] pubKeyRaw = new byte[adListeners.getFirst().crypto.asymPublicSigningKeySize()];
 		byte[] keyHash = new byte[adListeners.getFirst().crypto.hashLength()];
-		byte[] proof = new byte[adListeners.getFirst().crypto.symKeyLength()];
+		byte[] keyKnowledgeProof = new byte[adListeners.getFirst().crypto.symKeyLength()];
 		byte[] staticKeyCiphertext = new byte[adListeners.getFirst().crypto.asymPublicDHKeySize() + adListeners.getFirst().crypto.symTagLength()];
-		byte[] timeIndexBytes = new byte[4];
+		byte[] timeProof = new byte[adListeners.getFirst().crypto.hashLength()];
 		
 		IOUtils.readFully(in, pubKeyRaw);
 		IOUtils.readFully(in, keyHash);
-		IOUtils.readFully(in, timeIndexBytes); // TODO DHT: (redesign) Don't like this field being plaintext and mutable.
-		IOUtils.readFully(in, proof);
+		IOUtils.readFully(in, timeProof);
+		IOUtils.readFully(in, keyKnowledgeProof);
 		IOUtils.readFully(in, staticKeyCiphertext);
 		
 		PublicDHKey pubKey = crypto.makePublicDHKey(pubKeyRaw);
 		TCPPeerAdvertisementListener ad = findMatchingAdvertisement(pubKey, keyHash);
-		int timeIndex = ByteBuffer.wrap(timeIndexBytes).getInt();
+
+		byte[] tempSharedSecret = ad.swarm.identityKey.sharedSecret(crypto.makePublicDHKey(pubKeyRaw));
+		checkProofAgainstReplays(tempSharedSecret, keyKnowledgeProof);
+		
+		Key clientStaticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
+		byte[] clientStaticKeyRaw = clientStaticSymKeyText.decryptUnpadded(new byte[crypto.symIvLength()], staticKeyCiphertext);
+		PublicDHKey clientStaticKey = crypto.makePublicDHKey(clientStaticKeyRaw);
+		byte[] staticSecret = ad.swarm.identityKey.sharedSecret(clientStaticKey);
+		int timeIndex = Integer.MIN_VALUE;
+		
+		for(int diff : new int[] { 0, -1, 1 }) {
+			int attemptedTimeIndex = ad.swarm.config.getAccessor().timeSliceIndex() + diff;
+			byte[] expectedTimeProof = crypto.authenticate(tempSharedSecret, Util.serializeInt(attemptedTimeIndex));
+			if(Util.safeEquals(expectedTimeProof, timeProof)) {
+				timeIndex = attemptedTimeIndex;
+			}
+		}
+		
+		assertState(timeIndex > Integer.MIN_VALUE);
 		int diff = timeIndex - ad.swarm.config.getAccessor().timeSliceIndex();
-		assertState(Math.abs(diff) <= 1);
 		if(diff < 0) {
 			// stated index is in past
 			long expiration = ad.swarm.config.getAccessor().timeSlice(timeIndex) + ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS;
@@ -220,36 +237,33 @@ public class TCPPeerSocketListener {
 			assertState(0 <= startsIn && startsIn <= 10000);
 		}
 
-		byte[] tempSharedSecret = ad.swarm.identityKey.sharedSecret(crypto.makePublicDHKey(pubKeyRaw));
-		checkProofAgainstReplays(tempSharedSecret, proof);
 		
-		Key clientStaticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
-		byte[] clientStaticKeyRaw = clientStaticSymKeyText.decryptUnpadded(new byte[crypto.symIvLength()], staticKeyCiphertext);
-		PublicDHKey clientStaticKey = crypto.makePublicDHKey(clientStaticKeyRaw);
-		byte[] staticSecret = ad.swarm.identityKey.sharedSecret(clientStaticKey);
-		
-		byte[] expectedProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
-		byte[] responseProof;
+		byte[] expectedKeyKnowledgeProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
+		byte[] responseKeyKnowledgeProof;
 		PrivateDHKey ephemeralKey = crypto.makePrivateDHKey();
 		byte[] ephemeralSecret = ephemeralKey.sharedSecret(pubKey);
 		
-		ByteBuffer sharedSecretMaterial = ByteBuffer.allocate(2*crypto.asymDHSecretSize());
-		sharedSecretMaterial.put(staticSecret);
-		sharedSecretMaterial.put(ephemeralSecret);
-		byte[] sharedSecret = crypto.hash(sharedSecretMaterial.array());		
+		byte[] sharedSecret = crypto.hash(Util.concat(staticSecret, ephemeralSecret));		
 		
 		int peerType;
-		if(Util.safeEquals(expectedProof, proof)) {
+		if(Util.safeEquals(expectedKeyKnowledgeProof, keyKnowledgeProof)) {
 			peerType = PeerConnection.PEER_TYPE_FULL;
-			responseProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 1, sharedSecret);
+			responseKeyKnowledgeProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 1, sharedSecret);
 		} else {
 			peerType = PeerConnection.PEER_TYPE_BLIND;
-			responseProof = crypto.rng(crypto.symKeyLength());
+			responseKeyKnowledgeProof = crypto.rng(crypto.symKeyLength());
 		}
 		
+		byte[] finalProofText = Util.concat(Util.serializeInt(timeIndex), // 4
+				clientStaticKeyRaw, // 32
+				pubKeyRaw, // 32
+				keyKnowledgeProof, // 64
+				ad.swarm.identityKey.publicKey().getBytes(), // 32
+				ephemeralKey.publicKey().getBytes(), // 32
+				responseKeyKnowledgeProof); // 64
 		out.write(ephemeralKey.publicKey().getBytes());
-		out.write(ad.crypto.authenticate(sharedSecret, Util.serializeInt(timeIndex)));
-		out.write(responseProof);
+		out.write(ad.crypto.authenticate(sharedSecret, finalProofText));
+		out.write(responseKeyKnowledgeProof);
 		
 		established = true;
 		return new TCPPeerSocket(ad.swarm, clientStaticKey, peerSocketRaw, sharedSecret, peerType);

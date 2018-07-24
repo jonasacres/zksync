@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.net;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -197,8 +198,17 @@ public class TCPPeerSocketTest {
 			byte[] tempSecret = serverKey.sharedSecret(pubKey);
 
 			serverReadRaw(crypto.hashLength()); // key auth
-			int timeIndex = ByteBuffer.wrap(serverReadRaw(4)).getInt();
-			serverReadRaw(crypto.symKeyLength()); // proof
+			byte[] timeProof = serverReadRaw(crypto.hashLength());
+			byte[] keyKnowledgeProof = serverReadRaw(crypto.symKeyLength()); // proof
+			int timeIndex = Integer.MIN_VALUE;
+			
+			for(int diff : new int[] { 0, -1, 1}) {
+				int expectedTimeIndex = swarm.config.getAccessor().timeSliceIndex() + diff;
+				byte[] expectedTimeProof = crypto.authenticate(tempSecret, Util.serializeInt(expectedTimeIndex));
+				if(Arrays.equals(expectedTimeProof, timeProof)) {
+					timeIndex = expectedTimeIndex;
+				}
+			}
 			
 			byte[] clientStaticKeyCiphertext = serverReadRaw(crypto.asymPrivateDHKeySize() + crypto.symTagLength());
 			Key clientStaticKeyText = new Key(crypto, tempSecret).derive(0, new byte[0]);
@@ -210,16 +220,27 @@ public class TCPPeerSocketTest {
 			ByteBuffer sharedSecretMaterial = ByteBuffer.allocate(2*crypto.asymDHSecretSize());
 			sharedSecretMaterial.put(staticSecret);
 			sharedSecretMaterial.put(ephemeralSecret);
-			this.secret = crypto.hash(sharedSecretMaterial.array());
+			this.secret = crypto.hash(Util.concat(staticSecret, ephemeralSecret));
 			
-			byte[] auth = crypto.authenticate(secret, Util.serializeInt(timeIndex));
-			byte[] proof = peerArchive.getConfig().getAccessor().temporalProof(timeIndex, 1, secret);
+			byte[] proof = sendValidProof
+					? peerArchive.getConfig().getAccessor().temporalProof(timeIndex, 1, secret)
+					: crypto.rng(crypto.symKeyLength());
+			byte[] authText = Util.concat(Util.serializeInt(timeIndex),
+					clientStaticKey.getBytes(),
+					pubKey.getBytes(),
+					keyKnowledgeProof,
+					serverKey.publicKey().getBytes(),
+					serverEphKey.publicKey().getBytes(),
+					proof);			
+			byte[] auth = sendValidAuth
+					? crypto.authenticate(secret, authText)
+					: crypto.rng(crypto.hashLength());
 			
 			initKeys(false);
 			
 			serverWriteRaw(serverEphKey.publicKey().getBytes());
-			serverWriteRaw(sendValidAuth ? auth : crypto.rng(auth.length));
-			serverWriteRaw(sendValidProof ? proof : crypto.rng(proof.length));
+			serverWriteRaw(auth);
+			serverWriteRaw(proof);
 			synchronized(this) {
 				try { this.wait(); } catch (InterruptedException e) {}
 			}
@@ -389,7 +410,9 @@ public class TCPPeerSocketTest {
 		
 		byte[] pubKey = readBytes(crypto.asymPublicDHKeySize());
 		byte[] keyHash = readBytes(crypto.hashLength());
-		int timeIndex = ByteBuffer.wrap(readBytes(server.getClient(0), 4)).getInt();
+		byte[] timeProof = readBytes(crypto.hashLength());
+		
+		byte[] tempSecret = socket.dhPrivateKey.sharedSecret(ad.pubKey);
 		
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+crypto.hashLength()+4);
@@ -398,10 +421,11 @@ public class TCPPeerSocketTest {
 		keyHashInput.put(swarm.config.getArchiveId());
 		keyHashInput.putInt(0);
 		byte[] expectedKeyHash = keyHashKey.authenticate(keyHashInput.array());
+		byte[] expectedTimeProof = crypto.authenticate(tempSecret, Util.serializeInt(swarm.config.getAccessor().timeSliceIndex()));
 		
 		assertTrue(Arrays.equals(socket.dhPrivateKey.publicKey().getBytes(), pubKey));
 		assertTrue(Arrays.equals(expectedKeyHash, keyHash));
-		assertEquals(swarm.config.getAccessor().timeSliceIndex(), timeIndex);
+		assertArrayEquals(expectedTimeProof, timeProof);
 	}
 	
 	@Test
@@ -409,13 +433,24 @@ public class TCPPeerSocketTest {
 		blindHandshake(socket);
 		PublicDHKey clientKey = crypto.makePublicDHKey(readBytes(crypto.asymPublicDHKeySize()));
 		readBytes(crypto.hashLength());
-		int timeIndex = ByteBuffer.wrap(readBytes(4)).getInt();
-		byte[] proof = readBytes(crypto.symKeyLength());
+		byte[] timeProof = readBytes(crypto.hashLength());
+		byte[] keyKnowledgeProof = readBytes(crypto.symKeyLength());
+		byte[] tempSecret = serverKey.sharedSecret(clientKey);
+		int timeIndex = Integer.MIN_VALUE;
 		
-		byte[] secret = serverKey.sharedSecret(clientKey);
-		byte[] expectedProof = swarm.config.getAccessor().temporalProof(timeIndex, 0, secret);
+		for(int diff : new int[] { 0, -1, 1 }) {
+			int expectedTimeIndex = swarm.config.getAccessor().timeSliceIndex() + diff;
+			byte[] expectedTimeProof = crypto.authenticate(tempSecret, Util.serializeInt(expectedTimeIndex));
+			if(Arrays.equals(expectedTimeProof, timeProof)) {
+				timeIndex = expectedTimeIndex;
+			}
+		}
 		
-		assertTrue(Arrays.equals(expectedProof, proof));
+		assertTrue(timeIndex > Integer.MIN_VALUE);
+		
+		byte[] expectedKeyKnowledgeProof = swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSecret);
+		
+		assertTrue(Arrays.equals(expectedKeyKnowledgeProof, keyKnowledgeProof));
 	}
 	
 	@Test
