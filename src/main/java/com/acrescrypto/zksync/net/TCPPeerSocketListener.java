@@ -243,27 +243,31 @@ public class TCPPeerSocketListener {
 		PrivateDHKey ephemeralKey = crypto.makePrivateDHKey();
 		byte[] ephemeralSecret = ephemeralKey.sharedSecret(pubKey);
 		
-		byte[] sharedSecret = crypto.hash(Util.concat(staticSecret, ephemeralSecret));		
-		
 		int peerType;
 		if(Util.safeEquals(expectedKeyKnowledgeProof, keyKnowledgeProof)) {
 			peerType = PeerConnection.PEER_TYPE_FULL;
-			responseKeyKnowledgeProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 1, sharedSecret);
+			responseKeyKnowledgeProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 1, tempSharedSecret);
 		} else {
 			peerType = PeerConnection.PEER_TYPE_BLIND;
 			responseKeyKnowledgeProof = crypto.rng(crypto.symKeyLength());
 		}
 		
-		byte[] finalProofText = Util.concat(Util.serializeInt(timeIndex), // 4
-				clientStaticKeyRaw, // 32
-				pubKeyRaw, // 32
-				keyKnowledgeProof, // 64
-				ad.swarm.identityKey.publicKey().getBytes(), // 32
-				ephemeralKey.publicKey().getBytes(), // 32
-				responseKeyKnowledgeProof); // 64
+		byte[] sharedSecretText = Util.concat(pubKeyRaw,
+				keyHash,
+				timeProof,
+				keyKnowledgeProof,
+				staticKeyCiphertext,
+				ephemeralKey.publicKey().getBytes(),
+				responseKeyKnowledgeProof,
+				ad.swarm.config.getAccessor().temporalSeedId(timeIndex));
+		byte[] sharedSecretRoot = crypto.authenticate(Util.concat(staticSecret, ephemeralSecret),
+				sharedSecretText);
+		byte[] sharedSecret = crypto.authenticate(sharedSecretRoot, Util.serializeInt(0));
+		byte[] handshakeProofKey = crypto.authenticate(sharedSecretRoot, Util.serializeInt(1));
+		
 		out.write(ephemeralKey.publicKey().getBytes());
-		out.write(ad.crypto.authenticate(sharedSecret, finalProofText));
 		out.write(responseKeyKnowledgeProof);
+		out.write(crypto.authenticate(handshakeProofKey, ad.swarm.config.getAccessor().temporalSeedId(timeIndex)));
 		
 		established = true;
 		return new TCPPeerSocket(ad.swarm, clientStaticKey, peerSocketRaw, sharedSecret, peerType);

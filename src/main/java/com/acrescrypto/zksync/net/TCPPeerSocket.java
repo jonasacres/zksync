@@ -226,28 +226,32 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		PublicDHKey remoteEphemeralPubKey = crypto.makePublicDHKey(readRaw(crypto.asymPublicDHKeySize()));
 		byte[] ephemeralSecret = dhPrivateKey.sharedSecret(remoteEphemeralPubKey);
-		this.sharedSecret = crypto.hash(Util.concat(staticSecret, ephemeralSecret));
 		
-		byte[] remoteAuth = readRaw(crypto.hashLength());
-		
-		byte[] expectedRemoteProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, sharedSecret);
 		byte[] remoteKeyKnowledgeProof = readRaw(crypto.symKeyLength());
+		byte[] handshakeProof = readRaw(crypto.hashLength());
+		
+		byte[] expectedRemoteProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, tempSharedSecret);
 		if(Util.safeEquals(expectedRemoteProof, remoteKeyKnowledgeProof)) {
 			peerType = PeerConnection.PEER_TYPE_FULL;
 		} else {
 			peerType = PeerConnection.PEER_TYPE_BLIND;
 		}
 
-		byte[] expectedAuthText = Util.concat(Util.serializeInt(timeIndex),
-				swarm.identityKey.publicKey().getBytes(),
-				dhPrivateKey.publicKey().getBytes(),
+		byte[] sharedSecretText = Util.concat(dhPrivateKey.publicKey().getBytes(),
+				keyHash,
+				timeProof,
 				keyKnowledgeProof,
-				remotePubKey.getBytes(),
+				staticKeyCiphertext,
 				remoteEphemeralPubKey.getBytes(),
-				remoteKeyKnowledgeProof
-				);
-		byte[] expectedAuth = crypto.authenticate(this.sharedSecret, expectedAuthText);
-		assertState(Util.safeEquals(remoteAuth, expectedAuth));
+				remoteKeyKnowledgeProof,
+				swarm.config.getAccessor().temporalSeedId(timeIndex));
+		byte[] sharedSecretRoot = crypto.authenticate(Util.concat(staticSecret, ephemeralSecret),
+				sharedSecretText);
+		sharedSecret = crypto.authenticate(sharedSecretRoot, Util.serializeInt(0));
+		byte[] handshakeProofKey = crypto.authenticate(sharedSecretRoot, Util.serializeInt(1));
+		byte[] expectedHandshakeProof = crypto.authenticate(handshakeProofKey, swarm.config.getAccessor().temporalSeedId(timeIndex));
+
+		assertState(Util.safeEquals(handshakeProof, expectedHandshakeProof));
 
 		initKeys();
 		makeThreads();

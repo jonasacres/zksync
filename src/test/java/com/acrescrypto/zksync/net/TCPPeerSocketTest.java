@@ -197,9 +197,9 @@ public class TCPPeerSocketTest {
 			PublicDHKey pubKey = crypto.makePublicDHKey(serverReadRaw(crypto.asymPublicDHKeySize()));
 			byte[] tempSecret = serverKey.sharedSecret(pubKey);
 
-			serverReadRaw(crypto.hashLength()); // key auth
+			byte[] keyHash = serverReadRaw(crypto.hashLength());
 			byte[] timeProof = serverReadRaw(crypto.hashLength());
-			byte[] keyKnowledgeProof = serverReadRaw(crypto.symKeyLength()); // proof
+			byte[] keyKnowledgeProof = serverReadRaw(crypto.symKeyLength());
 			int timeIndex = Integer.MIN_VALUE;
 			
 			for(int diff : new int[] { 0, -1, 1}) {
@@ -215,32 +215,35 @@ public class TCPPeerSocketTest {
 			byte[] clientStaticKeyRaw = clientStaticKeyText.decryptUnpadded(new byte[crypto.symIvLength()], clientStaticKeyCiphertext);
 			PublicDHKey clientStaticKey = crypto.makePublicDHKey(clientStaticKeyRaw);
 			
+			byte[] proof = sendValidProof
+					? peerArchive.getConfig().getAccessor().temporalProof(timeIndex, 1, tempSecret)
+					: crypto.rng(crypto.symKeyLength());
+
 			byte[] staticSecret = serverKey.sharedSecret(clientStaticKey);
 			byte[] ephemeralSecret = serverEphKey.sharedSecret(pubKey);
-			ByteBuffer sharedSecretMaterial = ByteBuffer.allocate(2*crypto.asymDHSecretSize());
-			sharedSecretMaterial.put(staticSecret);
-			sharedSecretMaterial.put(ephemeralSecret);
-			this.secret = crypto.hash(Util.concat(staticSecret, ephemeralSecret));
-			
-			byte[] proof = sendValidProof
-					? peerArchive.getConfig().getAccessor().temporalProof(timeIndex, 1, secret)
-					: crypto.rng(crypto.symKeyLength());
-			byte[] authText = Util.concat(Util.serializeInt(timeIndex),
-					clientStaticKey.getBytes(),
-					pubKey.getBytes(),
+			byte[] sharedSecretText = Util.concat(pubKey.getBytes(),
+					keyHash,
+					timeProof,
 					keyKnowledgeProof,
-					serverKey.publicKey().getBytes(),
+					clientStaticKeyCiphertext,
 					serverEphKey.publicKey().getBytes(),
-					proof);			
+					proof,
+					swarm.config.getAccessor().temporalSeedId(timeIndex));
+
+			byte[] secretRoot = crypto.authenticate(Util.concat(staticSecret, ephemeralSecret), sharedSecretText);
+			byte[] handshakeProofKey = crypto.authenticate(secretRoot, Util.serializeInt(1));
+			this.secret = crypto.authenticate(secretRoot, Util.serializeInt(0));
+			
 			byte[] auth = sendValidAuth
-					? crypto.authenticate(secret, authText)
+					? crypto.authenticate(handshakeProofKey, swarm.config.getAccessor().temporalSeedId(timeIndex))
 					: crypto.rng(crypto.hashLength());
 			
 			initKeys(false);
 			
 			serverWriteRaw(serverEphKey.publicKey().getBytes());
-			serverWriteRaw(auth);
 			serverWriteRaw(proof);
+			serverWriteRaw(auth);
+			
 			synchronized(this) {
 				try { this.wait(); } catch (InterruptedException e) {}
 			}

@@ -59,7 +59,7 @@ public class TCPPeerSocketListenerTest {
 	TCPPeerSocketListener listener;
 	DummySwarm swarm;
 	PrivateDHKey peerKey;
-	byte[] keyKnowledgeProof;
+	byte[] keyKnowledgeProof, keyHash, staticKeyCiphertext, timeProof;
 	
 	protected Socket connect() throws UnknownHostException, IOException {
 		return connect(listener);
@@ -123,7 +123,7 @@ public class TCPPeerSocketListenerTest {
 		byte[] tempSharedSecret = peerKey.sharedSecret(adKey);
 		byte[] staticSecret = swarm.identityKey.sharedSecret(adKey);
 		Key staticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
-		byte[] staticKeyCiphertext = staticSymKeyText.encrypt(new byte[crypto.symIvLength()], swarm.identityKey.publicKey().getBytes(), -1);
+		staticKeyCiphertext = staticSymKeyText.encrypt(new byte[crypto.symIvLength()], swarm.identityKey.publicKey().getBytes(), -1);
 		
 		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize()+crypto.hashLength()+4);
 		keyHashInput.put(peerKey.publicKey().getBytes());
@@ -132,11 +132,11 @@ public class TCPPeerSocketListenerTest {
 		keyHashInput.putInt(0);
 		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
 		
-		byte[] keyHash = keyHashKey.authenticate(keyHashInput.array());
+		keyHash = keyHashKey.authenticate(keyHashInput.array());
 		if(proofConfig != null) keyKnowledgeProof = proofConfig.getAccessor().temporalProof(timeSlice, 0, tempSharedSecret);
 		else keyKnowledgeProof = crypto.rng(crypto.symKeyLength());
 		
-		byte[] timeProof = crypto.authenticate(tempSharedSecret, Util.serializeInt(timeSlice));
+		timeProof = crypto.authenticate(tempSharedSecret, Util.serializeInt(timeSlice));
 		
 		OutputStream out = socket.getOutputStream();
 		out.write(peerKey.publicKey().getBytes());
@@ -423,21 +423,23 @@ public class TCPPeerSocketListenerTest {
 		Util.waitUntil(100, ()->swarm.opened != null);
 		
 		PublicDHKey ephemeral = crypto.makePublicDHKey(readData(socket, crypto.asymPublicDHKeySize()));
-		byte[] ephemeralSecret = peerKey.sharedSecret(ephemeral);
-		byte[] secret = crypto.hash(Util.concat(staticSecret, ephemeralSecret));
-		byte[] finalProofHash = readData(socket, crypto.hashLength());
 		byte[] responseKeyKnowledgeProof = readData(socket, crypto.symKeyLength());
-
-		byte[] expectedFinalProofHashText = Util.concat(Util.serializeInt(timeIndex),
-				swarm.identityKey.publicKey().getBytes(),
-				peerKey.publicKey().getBytes(),
+		byte[] ephemeralSecret = peerKey.sharedSecret(ephemeral);
+		byte[] sharedSecretText = Util.concat(peerKey.publicKey().getBytes(),
+				keyHash,
+				timeProof,
 				keyKnowledgeProof,
-				listener.listenerForSwarm(swarm).localAd().pubKey.getBytes(),
+				staticKeyCiphertext,
 				ephemeral.getBytes(),
-				responseKeyKnowledgeProof);
-		byte[] expectedFinalProofHash = crypto.authenticate(secret, expectedFinalProofHashText);
+				responseKeyKnowledgeProof,
+				swarm.config.getAccessor().temporalSeedId(timeIndex));
+		byte[] sharedSecretRoot = crypto.authenticate(Util.concat(staticSecret, ephemeralSecret), sharedSecretText);
+		byte[] handshakeProofKey = crypto.authenticate(sharedSecretRoot, Util.serializeInt(1));
+		byte[] handshakeProofHash = readData(socket, crypto.hashLength());
+
+		byte[] expectedHandshakeProofHash = crypto.authenticate(handshakeProofKey, swarm.config.getAccessor().temporalSeedId(timeIndex));
 		
-		assertTrue(Arrays.equals(expectedFinalProofHash, finalProofHash));
+		assertTrue(Arrays.equals(expectedHandshakeProofHash, handshakeProofHash));
 	}
 	
 	@Test
@@ -488,21 +490,15 @@ public class TCPPeerSocketListenerTest {
 		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
 		listener.advertise(swarm);
 		Socket socket = connect();
-		byte[] staticSecret = sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
+		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
 		Util.waitUntil(100, ()->swarm.opened != null);
 		
-		PublicDHKey ephemeral = crypto.makePublicDHKey(readData(socket, crypto.asymPrivateDHKeySize()));
-		byte[] ephemeralSecret = peerKey.sharedSecret(ephemeral);
-		ByteBuffer sharedSecretMaterial = ByteBuffer.allocate(2*crypto.asymDHSecretSize());
-		sharedSecretMaterial.put(staticSecret);
-		sharedSecretMaterial.put(ephemeralSecret);
-		byte[] secret = crypto.hash(sharedSecretMaterial.array());		
+		readData(socket, crypto.asymPrivateDHKeySize());
+		byte[] tempSecret = peerKey.sharedSecret(listener.listenerForSwarm(swarm).localAd().pubKey);
 
-		readData(socket, crypto.hashLength());
-		
-		byte[] responseProof = readData(socket, crypto.symKeyLength());
-		byte[] expectedResponseProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, secret);
-		assertTrue(Arrays.equals(expectedResponseProof, responseProof));
+		byte[] responseKnowledgeProof = readData(socket, crypto.symKeyLength());
+		byte[] expectedResponseKnowledgeProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, tempSecret);
+		assertTrue(Arrays.equals(expectedResponseKnowledgeProof, responseKnowledgeProof));
 
 		socket.close();
 	}
