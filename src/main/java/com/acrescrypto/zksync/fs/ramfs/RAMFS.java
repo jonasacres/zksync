@@ -99,7 +99,9 @@ public class RAMFS extends FS {
 			mkdirp(dirname(path));
 		}
 		
-		mkdir(path);
+		try {
+			mkdir(path);
+		} catch(EEXISTSException exc) {}
 	}
 
 	@Override

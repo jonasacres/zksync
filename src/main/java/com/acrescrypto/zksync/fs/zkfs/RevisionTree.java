@@ -15,6 +15,7 @@ import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
+import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionTree {
 	protected ArrayList<ObfuscatedRefTag> branchTips = new ArrayList<ObfuscatedRefTag>();
@@ -169,5 +170,21 @@ public class RevisionTree {
 	
 	protected Key branchTipKey() {
 		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REVISION_TREE);
+	}
+	
+	public synchronized void dump() {
+		System.out.println(Util.bytesToHex(config.swarm.getPublicIdentityKey().getBytes(), 4) + " Revision tree: " + plainBranchTips.size());
+		int i = 0;
+		for(ObfuscatedRefTag tag : branchTips()) {
+			i++;
+			System.out.println("\t" + i + ": " + Util.bytesToHex(tag.serialize(), 4));
+			try {
+				for(RefTag ancestor : ancestorsOf(tag.reveal())) {
+					System.out.println("\t\t" + Util.bytesToHex(ancestor.obfuscate().serialize(), 4));
+				}
+			} catch(Exception exc) {
+				System.out.println("\t\tCan't dump tags " + exc.getClass());
+			}
+		}
 	}
 }

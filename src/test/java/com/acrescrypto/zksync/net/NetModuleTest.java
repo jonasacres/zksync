@@ -442,13 +442,26 @@ public class NetModuleTest {
 		
 		for(int i = 0; i < numPeers; i++) {
 			final int ii = i;
-			assertTrue(Util.waitUntil(2000, ()->configs[ii].getRevisionTree().plainBranchTips().size() == numPeers));
+			Util.waitUntil(10000, ()->configs[ii].getRevisionTree().plainBranchTips().size() == numPeers);
+			if(configs[ii].getRevisionTree().plainBranchTips().size() != numPeers) {
+				for(int j = 0; j < numPeers; j++) {
+					System.out.println("Dumping " + j);
+					configs[j].getRevisionTree().dump();
+					configs[j].getSwarm().dumpConnections();
+				}
+			}
+			assertEquals(numPeers, configs[ii].getRevisionTree().plainBranchTips().size());
 		}
+		
+		Util.sleep(1000);
 		
 		for(int i = 0; i < numPeers; i++) {
 			configs[i].getRevisionTree().consolidate();
 			DiffSetResolver.canonicalMergeResolver(configs[i].getArchive()).resolve();
 			// TODO DHT: (itf) d92b0c30d 7/23/18 linux expected:<1> but was:<9>
+			if(configs[i].getRevisionTree().branchTips().size() != 1) {
+				configs[i].getRevisionTree().dump();
+			}
 			assertEquals(1, configs[i].getRevisionTree().branchTips().size());
 			if(i > 0) {
 				assertEquals(configs[i-1].getRevisionTree().branchTips().get(0), configs[i].getRevisionTree().branchTips().get(0));

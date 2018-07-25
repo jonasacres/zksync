@@ -28,6 +28,7 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
+import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
@@ -76,10 +77,13 @@ public class PeerSwarm implements BlacklistCallback {
 		
 		synchronized(this) {
 			pageWaitLock.lock();
-			for(Condition cond : pageWaits.values()) {
-				cond.signalAll();
+			try {
+				for(Condition cond : pageWaits.values()) {
+					cond.signalAll();
+				}
+			} finally {
+				pageWaitLock.unlock();
 			}
-			pageWaitLock.unlock();
 		}
 		
 		this.config.getAccessor().getMaster().getBlacklist().removeCallback(this);
@@ -196,6 +200,10 @@ public class PeerSwarm implements BlacklistCallback {
 		return new ArrayList<>(connections);
 	}
 	
+	public PublicDHKey getPublicIdentityKey() {
+		return identityKey.publicKey();
+	}
+	
 	protected void connectionThread() {
 		new Thread(() -> {
 			Thread.currentThread().setName("PeerSwarm connection thread");
@@ -297,17 +305,38 @@ public class PeerSwarm implements BlacklistCallback {
 		}).start();
 	}
 	
-	public void waitForPage(byte[] tag) throws ClosedException {
+	public void waitForPage(int priority, byte[] tag) {
 		long shortTag = Util.shortTag(tag);
-		if(config.getArchive() != null && config.getArchive().hasPageTag(tag)) return;
-		
-		pageWaitLock.lock();
-		if(!pageWaits.containsKey(shortTag)) {
-			pageWaits.put(shortTag, pageWaitLock.newCondition());
+		while(waitingForPage(tag)) {
+			// TODO DHT: (test) Test that waitForPage requests tag periodically
+			requestTag(priority, tag);
+			pageWaitLock.lock();
+			try {
+				if(!pageWaits.containsKey(shortTag)) {
+					pageWaits.put(shortTag, pageWaitLock.newCondition());
+				}
+				
+				try {
+					if(waitingForPage(tag)) {
+						pageWaits.get(shortTag).await(5000, TimeUnit.MILLISECONDS);
+					}
+				} catch (InterruptedException e) {}
+			} finally {		
+				pageWaitLock.unlock();
+			}
 		}
-		
-		pageWaits.get(shortTag).awaitUninterruptibly();
-		pageWaitLock.unlock();
+	}
+	
+	protected boolean waitingForPage(byte[] tag) {
+		if(Arrays.equals(tag, config.tag())) {
+			return !config.getCacheStorage().exists(Page.pathForTag(tag));
+		} else {
+			try {
+				return config.getArchive() == null || !config.getArchive().hasPageTag(tag);
+			} catch (ClosedException e) {
+				return false;
+			}  
+		}
 	}
 	
 	public synchronized ChunkAccumulator accumulatorForTag(byte[] tag) throws IOException {
@@ -330,13 +359,18 @@ public class PeerSwarm implements BlacklistCallback {
 	protected synchronized void receivedPage(byte[] tag) {
 		long shortTag = Util.shortTag(tag);
 		activeFiles.remove(shortTag);
-		pageWaitLock.lock();
-		if(pageWaits.containsKey(shortTag)) {
-			pageWaits.get(shortTag).signalAll();
-		}
-		pageWaitLock.unlock();
+		
 		if(config.getArchive() != null) {
 			config.getArchive().addPageTag(tag);
+		}
+
+		pageWaitLock.lock();
+		try {
+			if(pageWaits.containsKey(shortTag)) {
+				pageWaits.get(shortTag).signalAll();
+			}
+		} finally {
+			pageWaitLock.unlock();
 		}
 		
 		announceTag(tag);

@@ -129,6 +129,8 @@ public class ZKArchive {
 	 * @throws ClosedException */
 	public boolean hasPageTag(byte[] pageTag) throws ClosedException {
 		assertOpen();
+		if(allPageTags.containsKey(Util.shortTag(pageTag))) return true;
+		
 		return config.getCacheStorage().exists(Page.pathForTag(pageTag));
 	}
 	

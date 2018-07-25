@@ -147,16 +147,14 @@ public class SwarmFS extends FS {
 	@Override
 	public byte[] read(String path) throws IOException {
 		byte[] pageTag = Page.tagForPath(path);
-		swarm.requestTag(REQUEST_PRIORITY, pageTag);
-		swarm.waitForPage(pageTag);
+		swarm.waitForPage(REQUEST_PRIORITY, pageTag);
 		return swarm.getConfig().getCacheStorage().read(path);
 	}
 
 	@Override
 	public File open(String path, int mode) throws IOException {
 		byte[] pageTag = Page.tagForPath(path);
-		swarm.requestTag(REQUEST_PRIORITY, pageTag);
-		swarm.waitForPage(pageTag);
+		swarm.waitForPage(REQUEST_PRIORITY, pageTag);
 		return swarm.getConfig().getCacheStorage().open(path, mode);
 	}
 

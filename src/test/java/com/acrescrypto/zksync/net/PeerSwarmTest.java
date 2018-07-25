@@ -21,7 +21,6 @@ import org.junit.Test;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.TestUtils;
-import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
@@ -471,12 +470,8 @@ public class PeerSwarmTest {
 		Holder holder = new Holder();
 		
 		Thread thread = new Thread(()->{
-			try {
-				swarm.waitForPage(pageTag);
-				holder.waited = true;
-			} catch (ClosedException e) {
-				e.printStackTrace();
-			}
+			swarm.waitForPage(0, pageTag);
+			holder.waited = true;
 		});
 		assertFalse(holder.waited);
 		thread.start();
@@ -494,12 +489,8 @@ public class PeerSwarmTest {
 		byte[] tag = archive.getCrypto().rng(archive.getCrypto().hashLength());
 		
 		Thread thread = new Thread(()->{
-			try {
-				swarm.waitForPage(tag);
-				holder.waited = true;
-			} catch (ClosedException e) {
-				e.printStackTrace();
-			}
+			swarm.waitForPage(0, tag);
+			holder.waited = true;
 		});
 		assertFalse(holder.waited);
 		thread.start();

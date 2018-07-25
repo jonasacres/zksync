@@ -189,6 +189,7 @@ public class PeerConnection {
 	public void announceShortTags(Collection<Long> tags) {
 		ByteBuffer serialized = ByteBuffer.allocate(tags.size() * RefTag.REFTAG_SHORT_SIZE);
 		for(Long shortTag : tags) {
+			if(!serialized.hasRemaining()) break; // possible to add tags as we iterate
 			serialized.putLong(shortTag);
 		}
 		send(CMD_ANNOUNCE_TAGS, serialized.array());
@@ -197,6 +198,7 @@ public class PeerConnection {
 	public void announceTags(Collection<byte[]> tags) {
 		ByteBuffer serialized = ByteBuffer.allocate(tags.size() * RefTag.REFTAG_SHORT_SIZE);
 		for(byte[] tag : tags) {
+			if(!serialized.hasRemaining()) break; // possible to add tags as we iterate
 			serialized.putLong(Util.shortTag(tag));
 		}
 		send(CMD_ANNOUNCE_TAGS, serialized.array());
@@ -661,6 +663,10 @@ public class PeerConnection {
 				logger.error("Caught exception in PeerConnection page queue thread", exc);
 				try { Thread.sleep(500); } catch(InterruptedException exc2) {}
 			}
+		}
+		
+		if(lastStream != null) {
+			lastStream.eof();
 		}
 	}
 	
