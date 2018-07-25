@@ -384,12 +384,11 @@ public class NetModuleTest {
 			assertTrue(Util.waitUntil(2000, ()->configs[ii].getSwarm().connections.size() >= numPeers-1));
 		}
 		
-		// Give some time for duplicates to get shut down, and then check to make sure everyone has exactly numPeers-1 connections.
-		Util.sleep(300);
+		// Give some time for duplicates to get managed, and then check to make sure everyone has exactly numPeers-1 connections.
+		Util.sleep(100);
 		for(int i = 0; i < numPeers; i++) {
 			final int ii = i;
-			// TODO DHT: (itf) d92b0c30d 7/23/18 linux AllTests, expected:<7> but was:<8>
-			assertEquals(numPeers-1, configs[ii].getSwarm().connections.size());
+			assertTrue(Util.waitUntil(3000, ()->configs[ii].getSwarm().connections.size() == numPeers-1));
 		}
 		
 		for(int i = 0; i < numPeers; i++) {

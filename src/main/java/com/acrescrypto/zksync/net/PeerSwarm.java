@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -13,7 +14,6 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.bouncycastle.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -139,13 +139,19 @@ public class PeerSwarm implements BlacklistCallback {
 			}
 		}
 		
-		PeerConnection existing;
-		while((existing = connectionForKey(connection.socket.remoteIdentityKey)) != null && existing != connection) {
-			if(Arrays.compareUnsigned(identityKey.publicKey().getBytes(), connection.socket.remoteIdentityKey.getBytes()) < 0) {
-				break; // whoever has the higher public key closes the connection
+		for(PeerConnection existing : getConnections()) {
+			if(existing == connection) continue;
+			if(existing.socket.remoteIdentityKey == null) continue;
+			if(!Arrays.equals(connection.socket.remoteIdentityKey.getBytes(), existing.socket.remoteIdentityKey.getBytes())) continue;
+			boolean existingIsLowOrder = Util.compareArrays(existing.socket.getSharedSecret(), connection.socket.getSharedSecret()) < 0;
+			
+			if(existingIsLowOrder) {
+				connection.close();
+				return;
 			}
+			
 			existing.close();
-			connections.remove(existing); // may have already been closed, so make sure it's removed
+			connections.remove(existing);
 		}
 		
 		pool.addRequestsToConnection(connection);
@@ -238,7 +244,7 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	protected PeerConnection connectionForKey(PublicDHKey key) {
 		for(PeerConnection connection : getConnections()) {
-			if(connection.socket.remoteIdentityKey != null && Arrays.areEqual(connection.socket.remoteIdentityKey.getBytes(), key.getBytes())) {
+			if(connection.socket.remoteIdentityKey != null && java.util.Arrays.equals(connection.socket.remoteIdentityKey.getBytes(), key.getBytes())) {
 				return connection;
 			}
 		}
