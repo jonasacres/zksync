@@ -56,7 +56,7 @@ public class NetModuleTest {
 		
 		ZKMaster aMaster = ZKMaster.openBlankTestVolume("copy1");
 		ArchiveAccessor aAccessor = aMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig aConfig = new ZKArchiveConfig(aAccessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+		ZKArchiveConfig aConfig = ZKArchiveConfig.createDefault(aAccessor);
 		addMockData(aConfig.getArchive());
 		aMaster.listenOnTCP(0);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
@@ -64,7 +64,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
@@ -95,7 +95,7 @@ public class NetModuleTest {
 		
 		ZKMaster aMaster = ZKMaster.openBlankTestVolume("copy1");
 		ArchiveAccessor aAccessor = aMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig aConfig = new ZKArchiveConfig(aAccessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+		ZKArchiveConfig aConfig = ZKArchiveConfig.createDefault(aAccessor);
 		addMockData(aConfig.getArchive());
 		aMaster.listenOnTCP(0);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
@@ -103,7 +103,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
@@ -139,7 +139,7 @@ public class NetModuleTest {
 		
 		ZKMaster aMaster = ZKMaster.openBlankTestVolume("copy1");
 		ArchiveAccessor aAccessor = aMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig aConfig = new ZKArchiveConfig(aAccessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+		ZKArchiveConfig aConfig = ZKArchiveConfig.createDefault(aAccessor);
 		addMockData(aConfig.getArchive());
 		aMaster.listenOnTCP(0);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
@@ -147,7 +147,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
@@ -184,7 +184,7 @@ public class NetModuleTest {
 		
 		ZKMaster aMaster = ZKMaster.openBlankTestVolume("copy1");
 		ArchiveAccessor aAccessor = aMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig aConfig = new ZKArchiveConfig(aAccessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+		ZKArchiveConfig aConfig = ZKArchiveConfig.createDefault(aAccessor);
 		ZKFS fsa = aConfig.getArchive().openBlank();
 		
 		fsa.write("path", crypto.rng(2*aConfig.getPageSize()));
@@ -199,7 +199,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestRevision(0, fsa.getBaseRevision());
@@ -227,7 +227,7 @@ public class NetModuleTest {
 		
 		ZKMaster aMaster = ZKMaster.openBlankTestVolume("copy1");
 		ArchiveAccessor aAccessor = aMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig aConfig = new ZKArchiveConfig(aAccessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+		ZKArchiveConfig aConfig = ZKArchiveConfig.createDefault(aAccessor);
 		ZKFS fsa = aConfig.getArchive().openBlank();
 		
 		for(int i = 0; i < 10; i++) {
@@ -243,7 +243,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 
@@ -268,7 +268,7 @@ public class NetModuleTest {
 		
 		ZKMaster aMaster = ZKMaster.openBlankTestVolume("copy1");
 		ArchiveAccessor aAccessor = aMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig aConfig = new ZKArchiveConfig(aAccessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+		ZKArchiveConfig aConfig = ZKArchiveConfig.createDefault(aAccessor);
 		ZKFS fsa = aConfig.getArchive().openBlank();
 		
 		fsa.write("path", crypto.rng(5*aConfig.getPageSize()));
@@ -281,7 +281,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 
@@ -312,7 +312,7 @@ public class NetModuleTest {
 		
 		ZKMaster aMaster = ZKMaster.openBlankTestVolume("copy1");
 		ArchiveAccessor aAccessor = aMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig aConfig = new ZKArchiveConfig(aAccessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+		ZKArchiveConfig aConfig = ZKArchiveConfig.createDefault(aAccessor);
 		ZKFS fsa = aConfig.getArchive().openBlank();
 		
 		fsa.write("immediate", crypto.rng(crypto.hashLength()-1));
@@ -326,7 +326,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = new ZKArchiveConfig(bAccessor, aConfig.getArchiveId(), false);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 
@@ -364,10 +364,10 @@ public class NetModuleTest {
 
 			ArchiveAccessor accessor = masters[i].makeAccessorForRoot(rootKey, false);
 			if(i == 0) {
-				configs[i] = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+				configs[i] = ZKArchiveConfig.createDefault(accessor);
 				masters[i].getTCPListener().advertise(configs[i].getSwarm());
 			} else {
-				configs[i] = new ZKArchiveConfig(accessor, configs[0].getArchiveId(), false);
+				configs[i] = ZKArchiveConfig.openExisting(accessor, configs[0].getArchiveId(), false, null);
 				masters[i].getTCPListener().advertise(configs[i].getSwarm());
 				configs[i].getSwarm().addPeerAdvertisement(ads[i-1]);
 				configs[i].finishOpening();
@@ -420,10 +420,10 @@ public class NetModuleTest {
 
 			ArchiveAccessor accessor = masters[i].makeAccessorForRoot(rootKey, false);
 			if(i == 0) {
-				configs[i] = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+				configs[i] = ZKArchiveConfig.createDefault(accessor);
 				masters[i].getTCPListener().advertise(configs[i].getSwarm());
 			} else {
-				configs[i] = new ZKArchiveConfig(accessor, configs[0].getArchiveId(), false);
+				configs[i] = ZKArchiveConfig.openExisting(accessor, configs[0].getArchiveId(), false, null);
 				masters[i].getTCPListener().advertise(configs[i].getSwarm());
 				configs[i].getSwarm().addPeerAdvertisement(ads[i-1]);
 				configs[i].finishOpening();

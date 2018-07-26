@@ -380,7 +380,7 @@ public class PeerSwarmTest {
 		swarm.addPeerAdvertisement(ad);
 		assertFalse(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
 		ad.explode = false;
-		Util.setCurrentTimeMillis(PeerSwarm.EMBARGO_SOFT_EXPIRE_TIME_MILLIS);
+		Util.setCurrentTimeMillis(PeerSwarm.EMBARGO_SOFT_EXPIRE_TIME_MS);
 		assertTrue(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
 	}
 
@@ -394,12 +394,12 @@ public class PeerSwarmTest {
 		swarm.addPeerAdvertisement(ad);
 		while(ad.failCount < PeerSwarm.EMBARGO_FAIL_COUNT_THRESHOLD) {
 			int count = ad.failCount;
-			Util.setCurrentTimeMillis(Util.currentTimeMillis() + PeerSwarm.EMBARGO_SOFT_EXPIRE_TIME_MILLIS);
+			Util.setCurrentTimeMillis(Util.currentTimeMillis() + PeerSwarm.EMBARGO_SOFT_EXPIRE_TIME_MS);
 			Util.waitUntil(50, ()->ad.failCount > count);
 		}
 		assertFalse(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
 		ad.explode = false;
-		Util.setCurrentTimeMillis(Util.currentTimeMillis() + PeerSwarm.EMBARGO_EXPIRE_TIME_MILLIS);
+		Util.setCurrentTimeMillis(Util.currentTimeMillis() + PeerSwarm.EMBARGO_EXPIRE_TIME_MS);
 		assertTrue(Util.waitUntil(200, ()->connectedAddresses.contains(ad.address)));
 	}
 
@@ -502,6 +502,61 @@ public class PeerSwarmTest {
 		endTime = System.currentTimeMillis() + 100;
 		while(!holder.waited && System.currentTimeMillis() < endTime) Thread.sleep(1);
 		assertTrue(holder.waited);
+	}
+	
+	@Test
+	public void testWaitForPageAutomaticallyMakesRequest() throws IOException {
+		byte[] tag = master.getCrypto().rng(master.getCrypto().hashLength());
+		
+		DummyConnection[] conns = new DummyConnection[16];
+		long shortTag = Util.shortTag(tag);
+		
+		for(int i = 0; i < conns.length; i++) {
+			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
+			swarm.openedConnection(conns[i]);
+		}
+		
+		new Thread(()->{
+			swarm.waitForPage(0, tag);
+		}).start();
+		
+		for(DummyConnection conn : conns) {
+			assertTrue(Util.waitUntil(50, ()->conn.requestedTag == shortTag));
+		}
+		
+		swarm.receivedPage(tag);
+	}
+	
+	@Test
+	public void testWaitForPageRepeatsRequest() throws IOException {
+		swarm.waitPageRetryTimeMs = 50;
+		byte[] tag = master.getCrypto().rng(master.getCrypto().hashLength());
+		
+		DummyConnection[] conns = new DummyConnection[16];
+		long shortTag = Util.shortTag(tag);
+		
+		for(int i = 0; i < conns.length; i++) {
+			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
+			swarm.openedConnection(conns[i]);
+		}
+		
+		new Thread(()->{
+			swarm.waitForPage(0, tag);
+		}).start();
+		
+		for(DummyConnection conn : conns) {
+			assertTrue(Util.waitUntil(swarm.waitPageRetryTimeMs+10, ()->conn.requestedTag == shortTag));
+		}
+		
+		for(DummyConnection conn : conns) {
+			conn.requestedTag = -1;
+		}
+		
+		for(DummyConnection conn : conns) {
+			assertTrue(Util.waitUntil(swarm.waitPageRetryTimeMs+10, ()->conn.requestedTag == shortTag));
+		}
+		
+		swarm.receivedPage(tag);
 	}
 	
 	@Test

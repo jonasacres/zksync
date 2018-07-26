@@ -63,18 +63,35 @@ public class ZKArchiveConfig {
 		return key.decryptCBC(iv, encryptedArchiveId);
 	}
 	
-	/** Read an existing archive. 
-	 * @throws IOException */
-	public ZKArchiveConfig(ArchiveAccessor accessor, byte[] archiveId) throws IOException {
-		this(accessor, archiveId, true);
+	public static ZKArchiveConfig createDefault(ArchiveAccessor accessor) throws IOException {
+		return create(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE, accessor.passphraseRoot, accessor.passphraseRoot);
 	}
 	
-	/* Bootstrapping the archive is a mess of chicken-and-egg problems, especially where PeerSwarm is concerned. */
+	public static ZKArchiveConfig create(ArchiveAccessor accessor, String description, int pageSize) throws IOException {
+		Key archiveRoot = new Key(accessor.master.crypto);
+		return create(accessor, description, pageSize, archiveRoot, archiveRoot);
+	}
 	
-	public ZKArchiveConfig(ArchiveAccessor accessor, byte[] archiveId, boolean finish) throws IOException {
+	public static ZKArchiveConfig create(ArchiveAccessor accessor, String description, int pageSize, Key archiveRoot, Key writeRoot) throws IOException {
+		return new ZKArchiveConfig(accessor, description, pageSize, archiveRoot, writeRoot);
+	}
+	
+	public static ZKArchiveConfig openExisting(ArchiveAccessor accessor, byte[] archiveId) throws IOException {
+		return openExisting(accessor, archiveId, true, null);
+	}
+	
+	public static ZKArchiveConfig openExisting(ArchiveAccessor accessor, byte[] archiveId, boolean finish, Key writeRoot) throws IOException {
+		return new ZKArchiveConfig(accessor, archiveId, finish, writeRoot);
+	}
+	
+	/* Bootstrapping the archive is a mess of chicken-and-egg problems, especially where PeerSwarm is concerned.
+	 * So, we have the ability to defer finishing opening (i.e. reading the config file itself) while we solve those problems.
+	 * */
+	protected ZKArchiveConfig(ArchiveAccessor accessor, byte[] archiveId, boolean finish, Key writeRoot) throws IOException {
 		this.accessor = accessor;
 		this.pageSize = -1;
 		this.archiveId = archiveId;
+		this.writeRoot = writeRoot;
 
 		initStorage();
 		this.revisionTree = new RevisionTree(this);
@@ -90,7 +107,7 @@ public class ZKArchiveConfig {
 	
 	/** Create a new archive. 
 	 * @throws IOException */
-	public ZKArchiveConfig(ArchiveAccessor accessor, String description, int pageSize) throws IOException {
+	protected ZKArchiveConfig(ArchiveAccessor accessor, String description, int pageSize, Key archiveRoot, Key writeRoot) throws IOException {
 		assert(pageSize > 0);
 		assert(!accessor.isSeedOnly());
 		
@@ -98,7 +115,7 @@ public class ZKArchiveConfig {
 		this.pageSize = pageSize;
 		this.description = description;
 		
-		initArchiveSpecific();
+		initArchiveSpecific(archiveRoot, writeRoot);
 		initStorage();
 		this.revisionTree = new RevisionTree(this);
 		this.archive = new ZKArchive(this);
@@ -359,8 +376,9 @@ public class ZKArchiveConfig {
 		}
 	}
 	
-	protected void initArchiveSpecific() {
-		archiveRoot = new Key(accessor.master.crypto, accessor.master.crypto.rng(accessor.master.crypto.symKeyLength()));
+	protected void initArchiveSpecific(Key archiveRoot, Key writeRoot) {
+		this.archiveRoot = archiveRoot;
+		this.writeRoot = writeRoot;
 		deriveKeypair();
 		configFileIv = calculateConfigFileIv();
 		archiveFingerprint = deriveArchiveFingerprint();
@@ -402,7 +420,7 @@ public class ZKArchiveConfig {
 	}
 	
 	protected void deriveKeypair() {
-		this.writeRoot = accessor.passphraseRoot; // TODO: allow some means of supplying a separate write passphrase
+		if(writeRoot == null) writeRoot = archiveRoot;
 		privKey = accessor.master.crypto.makePrivateSigningKey(writeRoot.getRaw());
 		if(pubKey != null) {
 			assertState(Arrays.equals(pubKey.getBytes(), privKey.publicKey().getBytes()));

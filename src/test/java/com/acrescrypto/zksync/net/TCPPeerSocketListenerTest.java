@@ -390,7 +390,7 @@ public class TCPPeerSocketListenerTest {
 	@Test
 	public void testMarksPeersBlindIfOwnArchiveIsSeedOnly() throws UnknownHostException, IOException, UnconnectableAdvertisementException {
 		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
-		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.getConfig().getArchiveId());
+		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
 		DummySwarm roSwarm = new DummySwarm(roConfig);
 		
 		listener.advertise(roSwarm);
@@ -463,7 +463,7 @@ public class TCPPeerSocketListenerTest {
 	public void testSendsBogusProofWhenArchiveIsSeedOnly() throws UnconnectableAdvertisementException, IOException, InvalidBlacklistException {
 		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
 		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
-		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.getConfig().getArchiveId());
+		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
 		DummySwarm roSwarm = new DummySwarm(roConfig);
 		
 		listener.advertise(roSwarm);

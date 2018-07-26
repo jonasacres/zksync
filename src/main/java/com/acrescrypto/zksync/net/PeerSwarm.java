@@ -35,9 +35,10 @@ import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerSwarm implements BlacklistCallback {
-	public final static int EMBARGO_EXPIRE_TIME_MILLIS = 1000*60*10; // wait 10 minutes before retrying consistently unconnectable ads
-	public final static int EMBARGO_SOFT_EXPIRE_TIME_MILLIS = 1000; // wait 1s before retrying an ad before it is classified as consistently unconnectable
+	public final static int EMBARGO_EXPIRE_TIME_MS = 1000*60*10; // wait 10 minutes before retrying consistently unconnectable ads
+	public final static int EMBARGO_SOFT_EXPIRE_TIME_MS = 1000; // wait 1s before retrying an ad before it is classified as consistently unconnectable
 	public final static int EMBARGO_FAIL_COUNT_THRESHOLD = 3; // how many times do we try an ad before deeming it consistently unconnectable?
+	public final static int DEFAULT_WAIT_PAGE_RETRY_TIME_MS = 5000; // how often should waitForPage retry requests for the page it is waiting in?
 	
 	protected ArrayList<PeerConnection> connections = new ArrayList<PeerConnection>();
 	protected HashSet<PeerAdvertisement> knownAds = new HashSet<PeerAdvertisement>();
@@ -57,6 +58,7 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	int maxSocketCount = 128;
 	int maxPeerListSize = 1024;
+	int waitPageRetryTimeMs = DEFAULT_WAIT_PAGE_RETRY_TIME_MS;
 	
 	public PeerSwarm(ZKArchiveConfig config) throws IOException {
 		this.config = config;
@@ -295,7 +297,7 @@ public class PeerSwarm implements BlacklistCallback {
 					synchronized(this) {
 						activeSockets--;
 						boolean unconnectable = ++ad.failCount >= EMBARGO_FAIL_COUNT_THRESHOLD;
-						int delay = unconnectable ? EMBARGO_EXPIRE_TIME_MILLIS : EMBARGO_SOFT_EXPIRE_TIME_MILLIS;
+						int delay = unconnectable ? EMBARGO_EXPIRE_TIME_MS : EMBARGO_SOFT_EXPIRE_TIME_MS;
 						
 						adEmbargoes.put(ad, Util.currentTimeMillis() + delay);
 						connectedAds.remove(ad);
@@ -308,7 +310,6 @@ public class PeerSwarm implements BlacklistCallback {
 	public void waitForPage(int priority, byte[] tag) {
 		long shortTag = Util.shortTag(tag);
 		while(waitingForPage(tag)) {
-			// TODO DHT: (test) Test that waitForPage requests tag periodically
 			requestTag(priority, tag);
 			pageWaitLock.lock();
 			try {
@@ -318,7 +319,7 @@ public class PeerSwarm implements BlacklistCallback {
 				
 				try {
 					if(waitingForPage(tag)) {
-						pageWaits.get(shortTag).await(5000, TimeUnit.MILLISECONDS);
+						pageWaits.get(shortTag).await(waitPageRetryTimeMs, TimeUnit.MILLISECONDS);
 					}
 				} catch (InterruptedException e) {}
 			} finally {		

@@ -95,7 +95,7 @@ public class RequestPoolTest {
 		master = ZKMaster.openBlankTestVolume();
 		
 		ArchiveAccessor accessor = master.makeAccessorForRoot(new Key(crypto), false);
-		config = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+		config = ZKArchiveConfig.createDefault(accessor);
 		archive = new DummyArchive(config);
 		
 		conn = new DummyConnection();

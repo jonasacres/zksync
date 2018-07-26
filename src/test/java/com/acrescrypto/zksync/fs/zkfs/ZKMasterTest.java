@@ -205,7 +205,7 @@ public class ZKMasterTest {
 		ZKArchive archive = masterPrime.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		
 		ArchiveAccessor roAccessor = archive.config.accessor.makeSeedOnly();
-		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.config.archiveId);
+		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.config.archiveId);
 		ZKArchive roArchive = roConfig.getArchive();
 		
 		assertFalse(master.allConfigs.contains(archive.config));

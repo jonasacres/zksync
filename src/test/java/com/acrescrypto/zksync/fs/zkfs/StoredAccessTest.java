@@ -60,7 +60,7 @@ public class StoredAccessTest {
 	public void testStoreSeedOnly() throws IOException {
 		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		ArchiveAccessor roAccessor = archive.config.accessor.makeSeedOnly();
-		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.config.archiveId);
+		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.config.archiveId);
 		ZKArchive roArchive = roConfig.getArchive();
 
 		master.storedAccess.storeArchiveAccess(archive, true);

@@ -137,10 +137,17 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		if(storage.exists("/")) storage.rmrf("/");
 	}
 	
+	public ZKArchive createDefaultArchive() throws IOException {
+		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive");
+		ArchiveAccessor accessor = makeAccessorForPassphrase(passphrase);
+		ZKArchiveConfig config = ZKArchiveConfig.createDefault(accessor);
+		return config.archive;
+	}
+	
 	public ZKArchive createArchive(int pageSize, String description) throws IOException {
 		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive '" + description + "'");
 		ArchiveAccessor accessor = makeAccessorForPassphrase(passphrase);
-		ZKArchiveConfig config = new ZKArchiveConfig(accessor, description, pageSize);
+		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, description, pageSize);
 		return config.archive;
 	}
 	

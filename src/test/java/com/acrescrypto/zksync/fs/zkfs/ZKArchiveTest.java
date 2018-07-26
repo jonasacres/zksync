@@ -43,7 +43,7 @@ public class ZKArchiveTest {
 		crypto = new CryptoSupport();
 		master = ZKMaster.openBlankTestVolume();
 		accessor = master.makeAccessorForRoot(new Key(crypto), false);
-		config = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
+		config = ZKArchiveConfig.create(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE);
 		archive = config.archive;
 	}
 	

@@ -96,7 +96,7 @@ public class ArchiveAccessor {
 			if(Arrays.equals(config.archiveId, archiveId)) return config;
 		}
 		
-		ZKArchiveConfig config = new ZKArchiveConfig(this, archiveId, false);
+		ZKArchiveConfig config = new ZKArchiveConfig(this, archiveId, false, null);
 		discoveredArchiveConfig(config);
 		
 		return config;

@@ -61,12 +61,12 @@ public class TCPPeerSocketListener {
 		}
 	}
 	
-	public void advertise(PeerSwarm swarm) {
+	public synchronized void advertise(PeerSwarm swarm) {
 		adListeners.add(new TCPPeerAdvertisementListener(swarm, this));
 		swarm.config.getAccessor().forceAdvertisement();
 	}
 	
-	public TCPPeerAdvertisementListener listenerForSwarm(PeerSwarm swarm) {
+	public synchronized TCPPeerAdvertisementListener listenerForSwarm(PeerSwarm swarm) {
 		for(TCPPeerAdvertisementListener listener : adListeners) {
 			if(listener.swarm == swarm) return listener;
 		}
@@ -151,7 +151,7 @@ public class TCPPeerSocketListener {
 		}
 	}
 	
-	protected void updatePortCache() {
+	protected synchronized void updatePortCache() {
 		this.port = listenSocket.getLocalPort();
 		cachePort();
 		logger.info("Listening for peers on TCP port {}", port);
@@ -191,11 +191,11 @@ public class TCPPeerSocketListener {
 		OutputStream out = peerSocketRaw.getOutputStream();
 
 		// This will need to be rethought if we ever have different crypto configurations between archives
-		byte[] pubKeyRaw = new byte[adListeners.getFirst().crypto.asymPublicSigningKeySize()];
-		byte[] keyHash = new byte[adListeners.getFirst().crypto.hashLength()];
-		byte[] keyKnowledgeProof = new byte[adListeners.getFirst().crypto.symKeyLength()];
-		byte[] staticKeyCiphertext = new byte[adListeners.getFirst().crypto.asymPublicDHKeySize() + adListeners.getFirst().crypto.symTagLength()];
-		byte[] timeProof = new byte[adListeners.getFirst().crypto.hashLength()];
+		byte[] pubKeyRaw = new byte[crypto.asymPublicSigningKeySize()];
+		byte[] keyHash = new byte[crypto.hashLength()];
+		byte[] keyKnowledgeProof = new byte[crypto.symKeyLength()];
+		byte[] staticKeyCiphertext = new byte[crypto.asymPublicDHKeySize() + crypto.symTagLength()];
+		byte[] timeProof = new byte[crypto.hashLength()];
 		
 		IOUtils.readFully(in, pubKeyRaw);
 		IOUtils.readFully(in, keyHash);
@@ -273,7 +273,7 @@ public class TCPPeerSocketListener {
 		return new TCPPeerSocket(ad.swarm, clientStaticKey, peerSocketRaw, sharedSecret, peerType);
 	}
 	
-	protected TCPPeerAdvertisementListener findMatchingAdvertisement(PublicDHKey pubKey, byte[] keyHash) throws ProtocolViolationException {
+	protected synchronized TCPPeerAdvertisementListener findMatchingAdvertisement(PublicDHKey pubKey, byte[] keyHash) throws ProtocolViolationException {
 		for(TCPPeerAdvertisementListener ad : adListeners) {
 			if(ad.matchesKeyHash(pubKey, keyHash)) return ad;
 		}

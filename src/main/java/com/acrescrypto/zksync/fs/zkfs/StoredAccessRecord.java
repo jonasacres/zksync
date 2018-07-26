@@ -31,14 +31,28 @@ public class StoredAccessRecord {
 	protected byte[] serialize() {
 		boolean writeAsSeed = seedOnly || archive.config.accessor.isSeedOnly();
 		int type = writeAsSeed ? 1 : 0;
-		Key key = writeAsSeed ? archive.config.accessor.seedRoot : archive.config.accessor.passphraseRoot;
 		
-		ByteBuffer buf = ByteBuffer.allocate(2+1 + archive.master.crypto.symKeyLength() + archive.master.crypto.hashLength());
-		buf.putShort((short) 0); // version
-		buf.put((byte) type); // type
-		buf.put(key.getRaw());
-		buf.put(archive.config.archiveId);
-		return buf.array();
+		return Util.concat(
+				Util.serializeShort((short) 0), // version
+				new byte[] { (byte) type },
+				archive.config.accessor.seedRoot.getRaw(),
+				keyIfDesired(!writeAsSeed, archive.config.accessor.passphraseRoot),
+				keyIfDesired(!writeAsSeed, archive.config.writeRoot),
+				archive.config.archiveId
+				);
+	}
+	
+	protected byte[] keyIfDesired(boolean desired, Key key) {
+		if(!desired || key == null) return new byte[archive.crypto.symKeyLength()];
+		return key.getRaw();
+	}
+	
+	protected boolean isBlank(byte[] array) {
+		for(byte b : array) {
+			if(b != 0) return false;
+		}
+		
+		return true;
 	}
 	
 	protected void deserialize(ZKMaster master, ByteBuffer buf) throws IOException {
@@ -48,18 +62,26 @@ public class StoredAccessRecord {
 		byte type = buf.get();
 		if(type > 1) throw new EINVALException("unsupported record type");
 		
-		byte[] keyMaterial = new byte[master.crypto.symKeyLength()];
-		buf.get(keyMaterial);
+		byte[] seedKeyRaw = new byte[master.crypto.symKeyLength()];
+		buf.get(seedKeyRaw);
+		
+		byte[] passphraseKeyRaw = new byte[master.crypto.symKeyLength()];
+		buf.get(passphraseKeyRaw);
+		
+		byte[] writeKeyRaw = new byte[master.crypto.symKeyLength()];
+		buf.get(writeKeyRaw);
 		
 		byte[] archiveId = new byte[master.crypto.hashLength()];
 		buf.get(archiveId);
 		
 		this.seedOnly = type != 0;
-		Key key = new Key(master.crypto, keyMaterial);
+		Key seedKey = new Key(master.crypto, seedKeyRaw);
+		Key passphraseKey = isBlank(passphraseKeyRaw) ? null : new Key(master.crypto, passphraseKeyRaw);
+		Key writeKey = isBlank(writeKeyRaw) ? null : new Key(master.crypto, writeKeyRaw);
 		
-		ArchiveAccessor accessor = master.makeAccessorForRoot(key, seedOnly);
-		// TODO: This is a blocking P2P network operation if we don't have the config on hand. Refactor?
-		ZKArchiveConfig config = new ZKArchiveConfig(accessor, archiveId);
+		ArchiveAccessor accessor = master.makeAccessorForRoot(seedOnly ? seedKey : passphraseKey, seedOnly);
+		// TODO DHT: (review) This is a blocking P2P network operation if we don't have the config on hand. Refactor? And what about write keys?
+		ZKArchiveConfig config = ZKArchiveConfig.openExisting(accessor, archiveId, true, writeKey);
 		archive = config.getArchive();
 		locallyInstantiated = true;
 	}

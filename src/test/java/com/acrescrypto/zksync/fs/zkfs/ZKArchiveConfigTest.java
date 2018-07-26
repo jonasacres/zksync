@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -35,7 +36,7 @@ public class ZKArchiveConfigTest {
 	ZKArchiveConfig config, seedConfig;
 	
 	public void assertReadable(ZKArchiveConfig config) throws IOException {
-		ZKArchiveConfig clone = new ZKArchiveConfig(accessor, config.getArchiveId());
+		ZKArchiveConfig clone = ZKArchiveConfig.openExisting(accessor, config.getArchiveId());
 		
 		assertEquals(config.getPageSize(), clone.getPageSize());
 		assertEquals(config.getDescription(), clone.getDescription());
@@ -60,7 +61,7 @@ public class ZKArchiveConfigTest {
 	
 	public void assertUnreadable(ZKArchiveConfig config, ArchiveAccessor accessor) throws IOException {
 		try {
-			new ZKArchiveConfig(accessor, config.getArchiveId());
+			ZKArchiveConfig.openExisting(accessor, config.getArchiveId());
 			fail();
 		} catch(InvalidArchiveConfigException exc) {
 		}
@@ -78,7 +79,7 @@ public class ZKArchiveConfigTest {
 	}
 	
 	public void writeModifiedPageSize(int newSize) throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
 			@Override
 			protected byte[] serializeSecurePortion() {
 				byte[] descString = description.getBytes();
@@ -107,7 +108,8 @@ public class ZKArchiveConfigTest {
 	}
 	
 	public void writePhonySection(int statedSize, int actualSize) throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE) {
+		Key key = new Key(master.crypto);
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE, key, key) {
 			@Override
 			protected byte[] serializeSecurePortion() {
 				ByteBuffer securePortion = ByteBuffer.wrap(super.serializeSecurePortion());
@@ -139,8 +141,8 @@ public class ZKArchiveConfigTest {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		config = new ZKArchiveConfig(accessor, TEST_DESCRIPTION, PAGE_SIZE);
-		seedConfig = new ZKArchiveConfig(seedAccessor, config.getArchiveId());
+		config = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE);
+		seedConfig = ZKArchiveConfig.openExisting(seedAccessor, config.getArchiveId());
 	}
 	
 	@After
@@ -204,7 +206,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testRefuseBadMagic() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
 			@Override
 			protected byte[] serializeSecurePortion() {
 				byte[] serialized = super.serializeSecurePortion();
@@ -220,7 +222,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testRefuseBadArchivePubKey() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
 			@Override
 			protected byte[] serializeSeedPortion() {
 				byte[] fakePubKey = accessor.master.crypto.makePrivateSigningKey(new byte[32]).publicKey().getBytes();
@@ -235,7 +237,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testRefuseBadIV() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
 			@Override
 			public void write() throws IOException {
 				configFileIv[0] ^= 0x01;
@@ -250,7 +252,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testRefuseCorruptedIVWriteSide() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
 			@Override
 			public void write() throws IOException {
 				configFileIv[0] ^= 0x01;
@@ -270,7 +272,7 @@ public class ZKArchiveConfigTest {
 
 	@Test
 	public void testRefuseCorruptedIVReadSide() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
 			@Override
 			public void write() throws IOException {
 				super.write();
@@ -289,7 +291,8 @@ public class ZKArchiveConfigTest {
 
 	@Test
 	public void testRefuseShortSeedPortion() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE) {
+		Key key = new Key(master.crypto);
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE, key, key) {
 			@Override
 			protected int seedPortionPadSize() {
 				return super.seedPortionPadSize()-1;
@@ -303,7 +306,8 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testRefuseLongSeedPortion() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE) {
+		Key key = new Key(master.crypto);
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE, key, key) {
 			@Override
 			protected int seedPortionPadSize() {
 				return super.seedPortionPadSize()+1;
@@ -426,29 +430,51 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testArchiveRootIsNondeterministic() throws IOException {
-		ZKArchiveConfig newConfig = new ZKArchiveConfig(accessor, TEST_DESCRIPTION, PAGE_SIZE);
+		ZKArchiveConfig newConfig = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE);
 		assertFalse(Arrays.equals(config.archiveRoot.getRaw(), newConfig.archiveRoot.getRaw()));
 		newConfig.close();
 	}
 	
 	@Test
 	public void testPubKeyDeterministicWithWriteKey() throws IOException {
-		// TODO: redo this when independent write key can be supplied...
-		ZKArchiveConfig newConfig = new ZKArchiveConfig(accessor, TEST_DESCRIPTION, PAGE_SIZE);
-		assertTrue(Arrays.equals(config.getPubKey().getBytes(), newConfig.getPubKey().getBytes()));
+		ZKArchiveConfig newConfig = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, config.archiveRoot, config.writeRoot);
+		assertArrayEquals(config.getPubKey().getBytes(), newConfig.getPubKey().getBytes());
 		newConfig.close();
 	}
 	
 	@Test
 	public void testPubKeyChangesWithWriteKey() throws IOException {
-		// TODO: redo this when independent write key can be supplied...
-		Key newKey = new Key(master.crypto, master.crypto.rng(master.crypto.symKeyLength()));
-		ArchiveAccessor newAccessor = master.makeAccessorForRoot(newKey, false);
-		ZKArchiveConfig newConfig = new ZKArchiveConfig(newAccessor, TEST_DESCRIPTION, PAGE_SIZE);
+		Key newWriteKey = new Key(master.crypto);
+		ZKArchiveConfig newConfig = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, config.archiveRoot, newWriteKey);
 		assertFalse(Arrays.equals(config.getPubKey().getBytes(), newConfig.getPubKey().getBytes()));
 		newConfig.close();
 	}
 	
+	@Test
+	public void testDefaultArchiveGeneratesConsistentArchiveId() throws IOException {
+		ZKArchiveConfig config1 = ZKArchiveConfig.createDefault(accessor);
+		ZKArchiveConfig config2 = ZKArchiveConfig.createDefault(accessor);
+		
+		assertArrayEquals(config1.archiveId, config2.archiveId);
+		
+		config1.close();
+		config2.close();
+	}
+	
+	@Test
+	public void testDefaultArchiveUsesPassphraseForRootKey() throws IOException {
+		ZKArchiveConfig config = ZKArchiveConfig.createDefault(accessor);
+		assertArrayEquals(accessor.passphraseRoot.getRaw(), config.archiveRoot.getRaw());
+		config.close();
+	}
+
+	@Test
+	public void testDefaultArchiveUsesPassphraseForWriteKey() throws IOException {
+		ZKArchiveConfig config = ZKArchiveConfig.createDefault(accessor);
+		assertArrayEquals(accessor.passphraseRoot.getRaw(), config.writeRoot.getRaw());
+		config.close();
+	}
+
 	@Test
 	public void testValidatePageReturnsTrueOnValidPages() throws IOException {
 		byte[][] info = makeValidPageInfo();
@@ -538,7 +564,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testArchivesHaveUniqueConfigFilePathTags() throws IOException {
-		ZKArchiveConfig config2 = new ZKArchiveConfig(accessor, TEST_DESCRIPTION, PAGE_SIZE);
+		ZKArchiveConfig config2 = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE);
 		assertFalse(Arrays.equals(config.tag(), config2.tag()));
 		config2.close();
 	}

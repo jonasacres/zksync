@@ -300,7 +300,7 @@ public class ArchiveAccessorTest {
 	
 	@Test
 	public void testConfigWithIdReturnsCachedConfig() throws IOException {
-		ZKArchiveConfig config = new ZKArchiveConfig(accessor, "config", ZKArchive.DEFAULT_PAGE_SIZE);
+		ZKArchiveConfig config = ZKArchiveConfig.createDefault(accessor);
 		assertEquals(config, accessor.configWithId(config.getArchiveId()));
 		config.archive.close();
 	}

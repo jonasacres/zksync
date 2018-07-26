@@ -463,7 +463,7 @@ public class TCPPeerSocketTest {
 		// the check against the expected hash validates that the test was configured correctly.
 		
 		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
-		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.getConfig().getArchiveId());
+		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
 		DummySwarm roSwarm = new DummySwarm(roConfig);
 		TCPPeerSocket roSocket = new TCPPeerSocket(roSwarm, ad);
 		blindHandshake(roSocket);
@@ -521,7 +521,7 @@ public class TCPPeerSocketTest {
 	@Test
 	public void testHandshakeSetsPeerTypeToSeedOnlyIfArchiveHasSeedOnlyAccess() throws IOException, BlacklistedException {
 		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
-		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.getConfig().getArchiveId());
+		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
 		DummySwarm roSwarm = new DummySwarm(roConfig);
 		TCPPeerSocket roSocket = new TCPPeerSocket(roSwarm, ad);
 		assertNotEquals(PeerConnection.PEER_TYPE_BLIND, roSocket.getPeerType());

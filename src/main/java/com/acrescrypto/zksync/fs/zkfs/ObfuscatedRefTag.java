@@ -56,8 +56,6 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	}
 	
 	public boolean verify() {
-		// TODO DHT: (redesign) Come back and validate these once we get the key.
-		if(config.pubKey == null) return true;
 		return config.pubKey.verify(ciphertext, signature);
 	}
 	

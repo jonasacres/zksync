@@ -296,7 +296,7 @@ public class PeerConnectionTest {
 	@Test
 	public void testConstructWithAdConnectsToAdvertisementSetsPeerTypeBlindIfAdvertiserIsBlind() throws IOException, UnsupportedProtocolException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
 		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
-		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.getConfig().getArchiveId());
+		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
 		DummySwarm roSwarm = new DummySwarm(roConfig);
 		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master, 0);
 		
@@ -319,7 +319,7 @@ public class PeerConnectionTest {
 	@Test
 	public void testConstructWithAdConnectsToAdvertisementSetsPeerTypeBlindIfLocalIsBlind() throws IOException, UnsupportedProtocolException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
 		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
-		ZKArchiveConfig roConfig = new ZKArchiveConfig(roAccessor, archive.getConfig().getArchiveId());
+		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
 		DummySwarm roSwarm = new DummySwarm(roConfig);
 		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master, 0);
 
