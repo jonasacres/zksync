@@ -11,7 +11,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-import org.apache.commons.lang3.mutable.MutableInt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,7 +24,6 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
-import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTClient {
@@ -148,6 +146,8 @@ public class DHTClient {
 			}
 			
 			initialized = true;
+		}, (record)->{
+			// just ignore records here
 		}).run();
 	}
 	
@@ -168,34 +168,9 @@ public class DHTClient {
 				updateStatus(STATUS_QUESTIONABLE);
 			}
 			
-			SnoozeThread progressMonitor = new SnoozeThread(lookupResultMaxWaitTimeMs, true, ()->{
-				if(callback != null) {
-					callback.receivedRecord(null);
-				}
-			});
-			
-			MutableInt pending = new MutableInt();
-			pending.setValue(peers.size());
-			
-			for(DHTPeer peer : peers) {
-				peer.getRecords(searchId, (records, isFinal)->{
-					if(!progressMonitor.snooze()) return;
-					
-					if(records != null) {
-						for(DHTRecord record : records) {
-							callback.receivedRecord(record);
-						}
-					}
-					
-					if(isFinal) {
-						boolean last;
-						synchronized(pending) { last = pending.decrementAndGet() == 0; }
-						if(last) {
-							progressMonitor.cancel();
-						}
-					}
-				});
-			}
+			callback.receivedRecord(null); // we won't be getting any more records, so signal end of results
+		}, (record)->{
+			callback.receivedRecord(record);
 		}).run();
 	}
 	
@@ -220,6 +195,8 @@ public class DHTClient {
 					peer.addRecord(searchId, record);
 				}
 			}
+		}, (existingRecord)->{
+			// don't need to do anything with existing records here
 		}).run();
 	}
 	
@@ -401,9 +378,6 @@ public class DHTClient {
 			case DHTMessage.CMD_FIND_NODE:
 				processRequestFindNode(message);
 				break;
-			case DHTMessage.CMD_GET_RECORDS:
-				processRequestGetRecords(message);
-				break;
 			case DHTMessage.CMD_ADD_RECORD:
 				processRequestAddRecord(message);
 				break;
@@ -423,13 +397,9 @@ public class DHTClient {
 		assertSupportedState(message.payload.length == idLength());
 		DHTID id = new DHTID(message.payload);
 		
-		message.makeResponse(routingTable.closestPeers(id, DHTSearchOperation.MAX_RESULTS)).send();
-	}
-	
-	protected void processRequestGetRecords(DHTMessage message) throws ProtocolViolationException, UnsupportedProtocolException {
-		assertSupportedState(message.payload.length == idLength());
-		DHTID id = new DHTID(message.payload);
-		message.makeResponse(store.recordsForId(id)).send();
+		DHTMessage response = message.makeResponse(routingTable.closestPeers(id, DHTSearchOperation.maxResults));
+		response.addItemList(store.recordsForId(id));
+		response.send();
 	}
 	
 	protected void processRequestAddRecord(DHTMessage message) throws ProtocolViolationException, UnsupportedProtocolException {
@@ -481,10 +451,6 @@ public class DHTClient {
 	
 	protected DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, DHTMessageCallback callback) {
 		return new DHTMessage(recipient, DHTMessage.CMD_FIND_NODE, id.rawId, callback);
-	}
-	
-	protected DHTMessage getRecordsMessage(DHTPeer recipient, DHTID id, DHTMessageCallback callback) {
-		return new DHTMessage(recipient, DHTMessage.CMD_GET_RECORDS, id.rawId, callback);
 	}
 	
 	protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, DHTRecord record, DHTMessageCallback callback) {

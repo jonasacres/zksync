@@ -226,9 +226,9 @@ public class DHTMessageTest {
 		assertEquals(cmd, msg.cmd);
 		assertEquals(msgId, msg.msgId);
 		assertEquals(DHTMessage.FLAG_RESPONSE, msg.flags);
-		assertFalse(items == msg.items);
-		assertEquals(items.size(), msg.items.size());
-		assertTrue(items.containsAll(msg.items));
+		assertFalse(items == msg.itemLists.get(0));
+		assertEquals(items.size(), msg.itemLists.get(0).size());
+		assertTrue(items.containsAll(msg.itemLists.get(0)));
 	}
 	
 	@Test
@@ -259,8 +259,37 @@ public class DHTMessageTest {
 		assertEquals(req.cmd, resp.cmd);
 		assertEquals(peer, resp.peer);
 		assertEquals(DHTMessage.FLAG_RESPONSE, resp.flags);
-		assertFalse(peerList == resp.items);
-		assertEquals(peerList, resp.items);
+		assertFalse(peerList == resp.itemLists.get(0));
+		assertEquals(peerList, resp.itemLists.get(0));
+	}
+	
+	@Test
+	public void testSupplementaryListsAreAddedToSerialization() {
+		int numItems = 4;
+		@SuppressWarnings("unchecked")
+		ArrayList<DHTRecord>[] itemsLists = new ArrayList[2];
+		for(int i = 0; i < itemsLists.length; i++) {
+			itemsLists[i] = new ArrayList<>(numItems);
+			for(int j = 0; j < numItems + i; j++) {
+				itemsLists[i].add(new DummyRecord(j + numItems*i));
+			}
+		}
+
+		byte cmd = DHTMessage.CMD_FIND_NODE;
+		int msgId = 1234;
+
+		DHTMessage msg = new DHTMessage(peer, cmd, msgId, itemsLists[0]);
+		msg.addItemList(itemsLists[1]);
+		assertEquals(peer, msg.peer);
+		assertEquals(cmd, msg.cmd);
+		assertEquals(msgId, msg.msgId);
+		assertEquals(DHTMessage.FLAG_RESPONSE, msg.flags);
+		assertEquals(itemsLists.length, msg.itemLists.size());
+		for(int i = 0; i < itemsLists.length; i++) {
+			assertFalse(itemsLists[i] == msg.itemLists.get(i));
+			assertEquals(itemsLists[i].size(), msg.itemLists.get(i).size());
+			assertTrue(itemsLists[i].containsAll(msg.itemLists.get(i)));
+		}
 	}
 	
 	@Test
@@ -289,12 +318,13 @@ public class DHTMessageTest {
 		}
 		
 		HashSet<DummyRecord> set = new HashSet<>();
-		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_GET_RECORDS, 1234, items);
+		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, 1234, items);
 		req.send();
 		
 		for(DatagramPacket packet : client.packets) {
 			ByteBuffer buf = ByteBuffer.wrap(decodePacket(privateKeyForPeer(0), req, packet));
 			while(buf.hasRemaining()) {
+				buf.get();
 				buf.getShort();
 				DummyRecord record = new DummyRecord(buf);
 				assertFalse(set.contains(record));
@@ -303,6 +333,38 @@ public class DHTMessageTest {
 		}
 		
 		assertEquals(numRecords, set.size());
+	}
+	
+	@Test
+	public void testSerializesMultipleItemLists() throws UnsupportedProtocolException {
+		int numRecords = 64;
+		@SuppressWarnings("unchecked")
+		ArrayList<DHTRecord>[] itemLists = new ArrayList[2];
+		for(int i = 0; i < itemLists.length; i++) {
+			itemLists[i] = new ArrayList<DHTRecord>(numRecords);
+			for(int j = 0; j < numRecords; j++) {
+				itemLists[i].add(new DummyRecord(j));
+			}
+		}
+		
+		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, 1234, itemLists[0]);
+		req.addItemList(itemLists[1]);
+		req.send();
+		
+		for(DatagramPacket packet : client.packets) {
+			ByteBuffer buf = ByteBuffer.wrap(decodePacket(privateKeyForPeer(0), req, packet));
+			while(buf.hasRemaining()) {
+				int listIndex = buf.get();
+				buf.getShort();
+				DummyRecord record = new DummyRecord(buf);
+				assertTrue(itemLists[listIndex].contains(record));
+				itemLists[listIndex].remove(record);
+			}
+		}
+		
+		for(ArrayList<DHTRecord> itemList : itemLists) {
+			assertEquals(0, itemList.size());
+		}
 	}
 	
 	@Test

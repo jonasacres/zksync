@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 
 import org.junit.After;
@@ -16,10 +17,48 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTSearchOperationTest {
+	class DummyRecord extends DHTRecord {
+		byte[] contents;
+		boolean reachable = true, valid = true;
+		
+		public DummyRecord(int i) {
+			ByteBuffer buf = ByteBuffer.allocate(32);
+			buf.putInt(i);
+			buf.put(crypto.prng(ByteBuffer.allocate(4).putInt(i).array()).getBytes(buf.remaining()));
+			contents = buf.array();
+		}
+		
+		public DummyRecord(ByteBuffer serialized) throws UnsupportedProtocolException {
+			deserialize(serialized);
+		}
+		
+		@Override
+		public byte[] serialize() {
+			ByteBuffer serialized = ByteBuffer.allocate(2+contents.length);
+			serialized.putShort((short) contents.length);
+			serialized.put(contents);
+			return serialized.array();
+		}
+
+		@Override
+		public void deserialize(ByteBuffer serialized) throws UnsupportedProtocolException {
+			int len = Util.unsignShort(serialized.getShort());
+			contents = new byte[len];
+			serialized.get(contents);
+			if((contents[0] & 0x80) != 0) throw new UnsupportedProtocolException();
+		}
+
+		@Override public boolean isValid() { return valid; }
+		@Override public boolean isReachable() { return reachable; }
+		public boolean equals(Object o) { return Arrays.equals(contents, ((DummyRecord) o).contents); }
+		public int hashCode() { return ByteBuffer.wrap(contents).getInt(); }
+	}
+
 	class DummyClient extends DHTClient {
 		ArrayList<DHTPeer> simPeers;
 
@@ -55,16 +94,23 @@ public class DHTSearchOperationTest {
 	class DummyPeer extends DHTPeer {
 		DummyClient client;
 		ArrayList<DHTPeer> knownPeers;
+		ArrayList<DHTRecord> records;
 		
 		int requestsReceived = 0;
 		
 		public DummyPeer(DummyClient client, String address, int port, byte[] pubKey) {
 			super(client, address, port, pubKey);
 			this.client = client;
+			
+			int numRecords = 8;
+			this.records = new ArrayList<>(numRecords);
+			for(int i = 0; i < numRecords; i++) {
+				records.add(new DummyRecord(i));
+			}
 		}
 		
 		@Override
-		public void findNode(DHTID id, DHTFindNodeCallback callback) {
+		public void findNode(DHTID id, DHTFindNodePeerCallback peerCallback, DHTFindNodeRecordCallback recordCallback) {
 			if(knownPeers == null) {
 				knownPeers = client.peerSample(512);
 			}
@@ -72,7 +118,7 @@ public class DHTSearchOperationTest {
 			requestsReceived++;
 			if(sendResponses) {
 				// cut responses into two halves so that we have to reassemble multiple responses
-				ArrayList<DHTPeer> closest = closestInList(searchId, knownPeers, DHTSearchOperation.MAX_RESULTS);
+				ArrayList<DHTPeer> closest = closestInList(searchId, knownPeers, DHTSearchOperation.maxResults);
 				ArrayList<DHTPeer> lowerHalf = new ArrayList<>(), upperHalf = new ArrayList<>();
 				
 				for(DHTPeer peer : closest) {
@@ -83,10 +129,14 @@ public class DHTSearchOperationTest {
 					}
 				}
 				
-				Thread t1 = new Thread(()->callback.response(lowerHalf, false));
+				Thread t1 = new Thread(()->peerCallback.response(lowerHalf, false));
 				Thread t2 = new Thread(()->{
 					try { t1.join(); } catch (InterruptedException e) { }
-					callback.response(upperHalf, true);
+					for(DHTRecord record : records) {
+						recordCallback.receivedRecord(record);
+					}
+					recordCallback.receivedRecord(null);
+					peerCallback.response(upperHalf, true);
 				});
 				
 				t1.start();
@@ -100,6 +150,7 @@ public class DHTSearchOperationTest {
 	DHTID searchId;
 	DHTSearchOperation op;
 	Collection<DHTPeer> results;
+	ArrayList<DHTRecord> records;
 	boolean sendResponses = true;
 	
 	public void waitForResult() {
@@ -139,13 +190,17 @@ public class DHTSearchOperationTest {
 		client = new DummyClient();
 		searchId = new DHTID(crypto.rng(crypto.hashLength()));
 		results = null;
-		op = new DHTSearchOperation(client, searchId, (results)->{this.results = results;});
+		records = new ArrayList<>();
+		op = new DHTSearchOperation(client,
+				searchId,
+				(results)->this.results = results,
+				(record)->this.records.add(record));
 	}
 	
 	@After
 	public void afterEach() {
-		DHTSearchOperation.MAX_RESULTS = DHTSearchOperation.DEFAULT_MAX_RESULTS;
-		DHTSearchOperation.SEARCH_QUERY_TIMEOUT_MS = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
+		DHTSearchOperation.maxResults = DHTSearchOperation.DEFAULT_MAX_RESULTS;
+		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
 	}
 	
 	@AfterClass
@@ -157,13 +212,13 @@ public class DHTSearchOperationTest {
 	public void testConstructorSetsFields() {
 		assertEquals(client, op.client);
 		assertEquals(searchId, op.searchId);
-		assertNotNull(op.callback);
+		assertNotNull(op.peerCallback);
 	}
 	
 	@Test
 	public void testRunSendsRequestToClosestPeers() {
 		sendResponses = false;
-		ArrayList<DHTPeer> closest = closestInList(searchId, client.routingTable.allPeers(), DHTSearchOperation.MAX_RESULTS);
+		ArrayList<DHTPeer> closest = closestInList(searchId, client.routingTable.allPeers(), DHTSearchOperation.maxResults);
 		
 		op.run();
 		
@@ -180,7 +235,7 @@ public class DHTSearchOperationTest {
 	public void testRunSendsRequestRecursively() {
 		int numSeen = 0;
 		DHTID worstInitialDistance = null;
-		for(DHTPeer peer : closestInList(searchId, client.routingTable.allPeers(), DHTSearchOperation.MAX_RESULTS)) {
+		for(DHTPeer peer : closestInList(searchId, client.routingTable.allPeers(), DHTSearchOperation.maxResults)) {
 			if(worstInitialDistance == null || worstInitialDistance.compareTo(peer.id.xor(searchId)) < 0) {
 				worstInitialDistance = peer.id.xor(searchId);
 			}
@@ -196,14 +251,14 @@ public class DHTSearchOperationTest {
 			}
 		}
 		
-		assertTrue(numSeen > DHTSearchOperation.MAX_RESULTS);
+		assertTrue(numSeen > DHTSearchOperation.maxResults);
 	}
 	
 	@Test
 	public void testRunInvokesCallbackWithBestResults() {
 		int extraResults = 2;
 		
-		ArrayList<DHTPeer> expectedResults = closestInList(searchId, client.simPeers, extraResults+DHTSearchOperation.MAX_RESULTS);
+		ArrayList<DHTPeer> expectedResults = closestInList(searchId, client.simPeers, extraResults+DHTSearchOperation.maxResults);
 		op.run();
 		waitForResult();
 		
@@ -221,10 +276,10 @@ public class DHTSearchOperationTest {
 	
 	@Test
 	public void testInvokesCallbackOnTimeoutIfResponseNotReceived() {
-		DHTSearchOperation.SEARCH_QUERY_TIMEOUT_MS = 50;
+		DHTSearchOperation.searchQueryTimeoutMs = 50;
 		sendResponses = false;
 		op.run();
 		waitForResult();
-		assertEquals(DHTSearchOperation.MAX_RESULTS, results.size());
+		assertEquals(DHTSearchOperation.maxResults, results.size());
 	}
 }

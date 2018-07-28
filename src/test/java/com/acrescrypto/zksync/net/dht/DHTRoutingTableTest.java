@@ -175,7 +175,7 @@ public class DHTRoutingTableTest {
 			table.suggestPeer(makeTestPeer(i));
 		}
 		
-		int numPeers = DHTSearchOperation.MAX_RESULTS;
+		int numPeers = DHTSearchOperation.maxResults;
 		DHTID id = new DHTID(client.crypto.rng(client.idLength()));
 		Collection<DHTPeer> closest = table.closestPeers(id, numPeers);
 		

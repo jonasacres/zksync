@@ -49,7 +49,7 @@ public class IntegrationTest {
 	
 	@After
 	public void afterEach() {
-		DHTSearchOperation.SEARCH_QUERY_TIMEOUT_MS = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
+		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
 		rootClient.close();
 	}
 	
@@ -116,7 +116,7 @@ public class IntegrationTest {
 	
 	@Test
 	public void testSeedPeerIntegration() throws IOException {
-		DHTSearchOperation.SEARCH_QUERY_TIMEOUT_MS = 50; // let DHT lookups timeout quickly
+		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
 		
 		// first, make an original archive
 		ZKMaster originalMaster = ZKMaster.openBlankTestVolume("original");

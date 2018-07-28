@@ -7,15 +7,19 @@ import java.util.TreeSet;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 
 public class DHTSearchOperation {
-	interface SearchOperationCallback {
+	interface SearchOperationPeerCallback {
 		void searchOperationFinished(Collection<DHTPeer> closestPeers);
+	}
+	
+	interface SearchOperationRecordCallback {
+		void searchOperationDiscoveredRecord(DHTRecord record);
 	}
 	
 	public final static int DEFAULT_MAX_RESULTS = 8;
 	public final static int DEFAULT_SEARCH_QUERY_TIMEOUT_MS = 3000;
 	
-	public static int MAX_RESULTS = DEFAULT_MAX_RESULTS;
-	public static int SEARCH_QUERY_TIMEOUT_MS = DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
+	public static int maxResults = DEFAULT_MAX_RESULTS;
+	public static int searchQueryTimeoutMs = DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
 	
 	int activeQueries = 0;
 	
@@ -23,24 +27,26 @@ public class DHTSearchOperation {
 	DHTClient client;
 	HashSet<DHTPeer> queried = new HashSet<DHTPeer>();
 	TreeSet<DHTPeer> closestPeers = new TreeSet<>((a,b)->a.id.xor(searchId).compareTo(b.id.xor(searchId)));
-	SearchOperationCallback callback;
+	SearchOperationPeerCallback peerCallback;
+	SearchOperationRecordCallback recordCallback;
 	SnoozeThread timeout;
 	
-	public DHTSearchOperation(DHTClient client, DHTID searchId, SearchOperationCallback callback) {
+	public DHTSearchOperation(DHTClient client, DHTID searchId, SearchOperationPeerCallback peerCallback, SearchOperationRecordCallback recordCallback) {
 		this.client = client;
 		this.searchId = searchId;
-		this.callback = callback;
+		this.peerCallback = peerCallback;
+		this.recordCallback = recordCallback;
 	}
 	
 	public synchronized void run() {
-		this.timeout = new SnoozeThread(SEARCH_QUERY_TIMEOUT_MS, true, ()->callback.searchOperationFinished(closestPeers));
+		this.timeout = new SnoozeThread(searchQueryTimeoutMs, true, ()->peerCallback.searchOperationFinished(closestPeers));
 		
 		for(DHTPeer peer : client.routingTable.allPeers()) {
 			addIfBetter(peer);
 		}
 		
 		if(closestPeers.isEmpty()) {
-			callback.searchOperationFinished(closestPeers);
+			peerCallback.searchOperationFinished(closestPeers);
 			return;
 		}
 		
@@ -53,7 +59,7 @@ public class DHTSearchOperation {
 		if(closestPeers.contains(peer)) return;
 		closestPeers.add(peer);
 		
-		while(closestPeers.size() > MAX_RESULTS) {
+		while(closestPeers.size() > maxResults) {
 			closestPeers.pollLast();
 		}
 	}
@@ -63,6 +69,8 @@ public class DHTSearchOperation {
 		activeQueries++;
 		peer.findNode(searchId, (peers, isFinal)->{
 			handleFindNodeResults(peers, isFinal);
+		}, (record)->{
+			recordCallback.searchOperationDiscoveredRecord(record);
 		});
 	}
 	

@@ -102,16 +102,13 @@ public class DHTModuleTest {
 	
 	@Test
 	public void testPeerDiscovery() throws IOException, InvalidBlacklistException {
-		// TODO DHT: (optimize) Figure out why we get so slow on this. Scale up to larger test networks.
-		ArrayList<DHTClient> clients = makeClients(128);
+		ArrayList<DHTClient> clients = makeClients(256);
 		DHTID id = new DHTID(crypto.rng(crypto.hashLength()));
 		DHTRecord ad = makeBogusAd(0);
 		
 		for(int i = 0; i < 16; i++) {
 			clients.get(i).addRecord(id, ad);
 		}
-		
-		Util.sleep(1000); // leave time for network operations to finish
 		
 		MutableBoolean finished = new MutableBoolean(), found = new MutableBoolean();
 		

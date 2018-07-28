@@ -17,6 +17,7 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -50,6 +51,43 @@ import com.acrescrypto.zksync.utility.Util;
 public class DHTClientTest {
 	final static int MAX_TEST_TIME_MS = 2000;
 	final static int MAX_MSG_WAIT_TIME_MS = 500;
+	
+	class DummyRecord extends DHTRecord {
+		byte[] contents;
+		boolean reachable = true, valid = true;
+		
+		public DummyRecord(int i) {
+			ByteBuffer buf = ByteBuffer.allocate(32);
+			buf.putInt(i);
+			buf.put(client.crypto.prng(ByteBuffer.allocate(4).putInt(i).array()).getBytes(buf.remaining()));
+			contents = buf.array();
+		}
+		
+		public DummyRecord(ByteBuffer serialized) throws UnsupportedProtocolException {
+			deserialize(serialized);
+		}
+		
+		@Override
+		public byte[] serialize() {
+			ByteBuffer serialized = ByteBuffer.allocate(2+contents.length);
+			serialized.putShort((short) contents.length);
+			serialized.put(contents);
+			return serialized.array();
+		}
+
+		@Override
+		public void deserialize(ByteBuffer serialized) throws UnsupportedProtocolException {
+			int len = Util.unsignShort(serialized.getShort());
+			contents = new byte[len];
+			serialized.get(contents);
+			if((contents[0] & 0x80) != 0) throw new UnsupportedProtocolException();
+		}
+
+		@Override public boolean isValid() { return valid; }
+		@Override public boolean isReachable() { return reachable; }
+		public boolean equals(Object o) { return Arrays.equals(contents, ((DummyRecord) o).contents); }
+		public int hashCode() { return ByteBuffer.wrap(contents).getInt(); }
+	}
 	
 	class RemotePeer implements AutoCloseable {
 		DHTClient listenClient;
@@ -308,6 +346,8 @@ public class DHTClientTest {
 	
 	@After
 	public void afterEach() {
+		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
+
 		remote.close();
 		client.close();
 		Util.setCurrentTimeNanos(-1);
@@ -316,13 +356,13 @@ public class DHTClientTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TCPPeerAdvertisement.disableReachabilityTest = false;
 		DHTClient.lookupResultMaxWaitTimeMs = DHTClient.DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS;
 		DHTClient.messageExpirationTimeMs = DHTClient.DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
 		DHTClient.messageRetryTimeMs = DHTClient.DEFAULT_MESSAGE_RETRY_TIME_MS;
 		DHTClient.socketCycleDelayMs = DHTClient.DEFAULT_SOCKET_CYCLE_DELAY_MS;
 		DHTClient.socketOpenFailCycleDelayMs = DHTClient.DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS;
 		DHTClient.autoFindPeersIntervalMs = DHTClient.DEFAULT_AUTO_FIND_PEERS_INTERVAL_MS;
-		TCPPeerAdvertisement.disableReachabilityTest = false;
 	}
 	
 	@Test
@@ -389,63 +429,57 @@ public class DHTClientTest {
 	
 	@Test
 	public void testLookupInvokesCallbackWithEachReceivedRecord() throws IOException, ProtocolViolationException {
-		MutableInt numSeen = new MutableInt();
 		MutableBoolean seenNull = new MutableBoolean();
 		ArrayList<DHTRecord> records = new ArrayList<>();
-		
+
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
-		client.lookup(searchId, (resp)->{
+		client.lookup(searchId, (record)->{
 			assertFalse(seenNull.booleanValue());
-			if(resp == null) {
+			if(record == null) {
 				seenNull.setTrue();
 				return;
 			}
-			
-			assertTrue(records.contains(resp));
-			numSeen.increment();
+
+			assertTrue(records.contains(record));
+			records.remove(record);
 		});
-		
+
 		DHTMessage findNodeReq = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
 		ArrayList<DHTPeer> peers = new ArrayList<>(1);
 		peers.add(remote.peer);
-		findNodeReq.makeResponse(peers).send();
-		
-		DHTMessage getRecordsReq = remote.receivePacket(DHTMessage.CMD_GET_RECORDS);
 		for(int i = 0; i < DHTRecordStore.MAX_RECORDS_PER_ID; i++) records.add(makeBogusAd(i));
-		getRecordsReq.makeResponse(records).send();
-		
+		findNodeReq.makeResponse(peers).addItemList(records).send();
+
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->seenNull.booleanValue()));
-		assertEquals(records.size(), numSeen.intValue());
+		assertEquals(0, records.size());
 	}
-	
+
 	@Test
 	public void testLookupInvokesCallbackWithNullIfNoResponseReceivedInTime() throws IOException, ProtocolViolationException {
 		MutableBoolean seenNull = new MutableBoolean();
-		DHTClient.lookupResultMaxWaitTimeMs = 10;
-		
+		ArrayList<DHTRecord> records = new ArrayList<>();
+		DHTSearchOperation.searchQueryTimeoutMs = 50;
+
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
-		client.lookup(searchId, (resp)->{
+		client.lookup(searchId, (record)->{
 			assertFalse(seenNull.booleanValue());
-			assertNull(resp);
+			assertNull(record);
 			seenNull.setTrue();
 		});
-		
-		DHTMessage findNodeReq = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
-		ArrayList<DHTPeer> peers = new ArrayList<>(1);
-		peers.add(remote.peer);
-		findNodeReq.makeResponse(peers).send();
-		
-		remote.receivePacket(DHTMessage.CMD_GET_RECORDS);		
-		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->seenNull.booleanValue()));
-	}
 
+		remote.receivePacket(DHTMessage.CMD_FIND_NODE);
+		assertTrue(Util.waitUntil(DHTSearchOperation.searchQueryTimeoutMs+10, ()->seenNull.booleanValue()));
+		assertEquals(0, records.size());
+	}
+	
 	@Test
 	public void testLookupInvokesCallbackWithNullIfPartialResponseReceivedInTime() throws IOException, ProtocolViolationException {
 		MutableBoolean seenNull = new MutableBoolean();
 		MutableInt numSeen = new MutableInt();
 		ArrayList<DHTRecord> records = new ArrayList<>();
 		DHTClient.lookupResultMaxWaitTimeMs = 50;
-		
+		DHTSearchOperation.searchQueryTimeoutMs = 50;
+
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
 		client.lookup(searchId, (resp)->{
 			assertFalse(seenNull.booleanValue());
@@ -455,35 +489,34 @@ public class DHTClientTest {
 				numSeen.increment();
 			}
 		});
-		
+
 		DHTMessage findNodeReq = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
 		ArrayList<DHTPeer> peers = new ArrayList<>(1);
 		peers.add(remote.peer);
-		findNodeReq.makeResponse(peers).send();
-		
-		DHTMessage getRecordsReq = remote.receivePacket(DHTMessage.CMD_GET_RECORDS);
+
 		for(int i = 0; i < DHTRecordStore.MAX_RECORDS_PER_ID; i++) records.add(makeBogusAd(i));
-		
+
 		class RiggedMessage extends DHTMessage {
-			public RiggedMessage(DHTMessage msg) { super(msg.peer, msg.cmd, msg.msgId, msg.items); }			
+			public RiggedMessage(DHTMessage msg) { super(msg.peer, msg.cmd, msg.msgId, null); this.itemLists = msg.itemLists; }                
+
 			@Override protected int numPacketsNeeded() { return super.numPacketsNeeded() + 1; }
 		};
-		
-		new RiggedMessage(getRecordsReq.makeResponse(records)).send();
+
+		new RiggedMessage(findNodeReq.makeResponse(records).addItemList(records)).send();
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->seenNull.booleanValue()));
 	}
 	
 	@Test
 	public void testLookupObtainsRecordsFromMultiplePeers() throws IOException, ProtocolViolationException, InvalidBlacklistException {
 		int recordsPerPeer = 4;
-		
+
 		MutableInt numSeen = new MutableInt();
 		MutableBoolean seenNull = new MutableBoolean();
 		ArrayList<RemotePeer> remotes = new ArrayList<>();
 		ArrayList<DHTPeer> peers = new ArrayList<>();
-		
+
 		remotes.add(remote);
-		for(int i = 0; i < DHTSearchOperation.MAX_RESULTS-1; i++) {
+		for(int i = 0; i < DHTSearchOperation.maxResults-1; i++) {
 			remotes.add(new RemotePeer());
 		}
 
@@ -496,29 +529,24 @@ public class DHTClientTest {
 				seenNull.setTrue();
 				return;
 			}
-			
+
 			numSeen.increment();
 		});
-		
+
 		int i = 0;
-		for(RemotePeer r : remotes) {
-			DHTMessage findNodeReq = r.receivePacket(DHTMessage.CMD_FIND_NODE);
-			findNodeReq.makeResponse(peers).send(); 
-		}		
-		
 		for(RemotePeer r : remotes) {
 			ArrayList<DHTRecord> peerRecords = new ArrayList<>();
 			for(int j = 0; j < recordsPerPeer; j++) {
 				peerRecords.add(makeBogusAd(recordsPerPeer*i+j));
 			}
 
-			DHTMessage getRecordsReq = r.receivePacket(DHTMessage.CMD_GET_RECORDS);
-			getRecordsReq.makeResponse(peerRecords).send();
-		}
-		
+			DHTMessage findNodeReq = r.receivePacket(DHTMessage.CMD_FIND_NODE);
+			findNodeReq.makeResponse(peers).addItemList(peerRecords).send(); 
+		}               
+
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->seenNull.booleanValue()));
 		assertEquals(recordsPerPeer*remotes.size(), numSeen.intValue());
-		
+
 		for(RemotePeer r : remotes) r.close();
 	}
 	
@@ -529,11 +557,11 @@ public class DHTClientTest {
 			MutableInt numFindNode = new MutableInt();
 			MutableInt numReceived = new MutableInt();
 			
-			network.setHandlerForClosest(searchId, DHTSearchOperation.MAX_RESULTS, (remote)->{
+			network.setHandlerForClosest(searchId, DHTSearchOperation.maxResults, (remote)->{
 				DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
 				assertArrayEquals(searchId.rawId, findNodeMsg.payload);
 				synchronized(numFindNode) { numFindNode.increment();  }
-				findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, DHTSearchOperation.MAX_RESULTS)).send();
+				findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, DHTSearchOperation.maxResults)).send();
 				
 				DHTMessage addRecordMsg = remote.receivePacket(DHTMessage.CMD_ADD_RECORD);
 				synchronized(numReceived) { numReceived.increment(); }
@@ -557,7 +585,7 @@ public class DHTClientTest {
 			client.addRecord(searchId, makeBogusAd(0));
 			network.run();
 							
-			assertEquals(DHTSearchOperation.MAX_RESULTS, numReceived.intValue());
+			assertEquals(DHTSearchOperation.maxResults, numReceived.intValue());
 		}
 	}
 	
@@ -609,7 +637,7 @@ public class DHTClientTest {
 		Util.sleep(10);
 		
 		MutableBoolean received = new MutableBoolean();
-		clientPeer.getRecords(remote.listenClient.id, (records, isFinal)->{ received.setTrue(); });
+		clientPeer.findNode(remote.listenClient.id, (peers, isFinal)->{ received.setTrue(); }, (record)->{});
 		Util.waitUntil(MAX_TEST_TIME_MS, ()->received.booleanValue());
 	}
 	
@@ -623,7 +651,7 @@ public class DHTClientTest {
 		Util.sleep(10);
 		
 		MutableBoolean received = new MutableBoolean();
-		clientPeer.getRecords(remote.listenClient.id, (records, isFinal)->{ received.setTrue(); });
+		clientPeer.findNode(remote.listenClient.id, (peers, isFinal)->{ received.setTrue(); }, (record)->{});
 		Util.waitUntil(MAX_TEST_TIME_MS, ()->received.booleanValue());
 	}
 	
@@ -716,15 +744,15 @@ public class DHTClientTest {
 	
 	@Test
 	public void testRespondsToFindNodeWithClosestPeers() throws IOException, ProtocolViolationException {
-		for(int i = 0; i < 4*DHTSearchOperation.MAX_RESULTS; i++) {
+		for(int i = 0; i < 4*DHTSearchOperation.maxResults; i++) {
 			DHTPeer peer = new DHTPeer(client, "localhost", i+10000, crypto.makePrivateDHKey().publicKey());
 			client.addPeer(peer);
 		}
 		
 		DHTID searchId = remote.peer.id;
-		ArrayList<DHTPeer> results = new ArrayList<>(DHTSearchOperation.MAX_RESULTS);
+		ArrayList<DHTPeer> results = new ArrayList<>(DHTSearchOperation.maxResults);
 		int numReceived = 0;
-		clientPeer.findNode(searchId, (resp, isFinal)->{});
+		clientPeer.findNode(searchId, (resp, isFinal)->{}, (record)->{});
 		
 		while(true) {
 			DHTMessage resp = remote.receivePacket();
@@ -732,6 +760,7 @@ public class DHTClientTest {
 			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
 			
 			while(buf.hasRemaining()) {
+				buf.get(); // list id
 				buf.getShort(); // item length
 				results.add(new DHTPeer(remote.listenClient, buf));
 			}
@@ -739,7 +768,7 @@ public class DHTClientTest {
 			if(resp.numExpected == numReceived) break;
 		}
 		
-		assertEquals(DHTSearchOperation.MAX_RESULTS, results.size());
+		assertEquals(DHTSearchOperation.maxResults, results.size());
 		
 		DHTID mostDistant = null;
 		for(DHTPeer result : results) {
@@ -764,15 +793,15 @@ public class DHTClientTest {
 		 * the peers the client does have.
 		 */
 		
-		for(int i = 0; i < DHTSearchOperation.MAX_RESULTS-2; i++) {
+		for(int i = 0; i < DHTSearchOperation.maxResults-2; i++) {
 			DHTPeer peer = new DHTPeer(client, "localhost", i+10000, crypto.makePrivateDHKey().publicKey());
 			client.addPeer(peer);
 		}
 		
 		DHTID searchId = remote.peer.id;
-		ArrayList<DHTPeer> results = new ArrayList<>(DHTSearchOperation.MAX_RESULTS);
+		ArrayList<DHTPeer> results = new ArrayList<>(DHTSearchOperation.maxResults);
 		int numReceived = 0;
-		clientPeer.findNode(searchId, (resp, isFinal)->{});
+		clientPeer.findNode(searchId, (resp, isFinal)->{}, (record)->{});
 		
 		while(true) {
 			DHTMessage resp = remote.receivePacket();
@@ -780,6 +809,7 @@ public class DHTClientTest {
 			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
 			
 			while(buf.hasRemaining()) {
+				buf.get(); // list id
 				buf.getShort(); // item length
 				results.add(new DHTPeer(remote.listenClient, buf));
 			}
@@ -792,67 +822,69 @@ public class DHTClientTest {
 	}
 	
 	@Test
-	public void testGetRecordsIgnoresTruncatedID() throws IOException, ProtocolViolationException {
-		DHTMessage req = remote.listenClient.getRecordsMessage(clientPeer, clientPeer.id, null);
-		req.payload = crypto.rng(req.payload.length-1);
-		req.send();
+	public void testRespondsToFindNodeWithListOfRecords() throws IOException, ProtocolViolationException, UnsupportedProtocolException {
+		DHTID searchId = remote.peer.id;
+		int numRecords = 16;
+		ArrayList<DHTRecord> records = new ArrayList<>(numRecords);
 		
-		Util.sleep(10);
-		remote.strict = false;
-		assertNull(remote.receivePacket());
-		assertAlive();
-	}
-
-	@Test
-	public void testGetRecordsIgnoresOverlyLongID() throws IOException, ProtocolViolationException {
-		DHTMessage req = remote.listenClient.getRecordsMessage(clientPeer, clientPeer.id, null);
-		req.payload = crypto.rng(req.payload.length+1);
-		req.send();
-		
-		Util.sleep(10);
-		remote.strict = false;
-		assertNull(remote.receivePacket());
-		assertAlive();
-	}
-	
-	@Test
-	public void testGetRecordsReturnsListOfRecords() throws IOException, ProtocolViolationException, UnsupportedProtocolException {
-		DHTID id = new DHTID(crypto.rng(client.idLength()));
-		
-		for(int i = 0; i < DHTRecordStore.MAX_RECORDS_PER_ID; i++) {
-			client.store.addRecordForId(id, makeBogusAd(i));
+		for(int i = 0; i < numRecords; i++) {
+			DHTRecord record = new DummyRecord(i);
+			records.add(record);
+			client.store.addRecordForId(searchId, record);
 		}
 		
-		assertTrue(Util.waitUntil(100, ()->client.store.recordsForId(id).size() == DHTRecordStore.MAX_RECORDS_PER_ID));
-		
-		clientPeer.getRecords(id, (resp, isFinal)->{});		
-		ArrayList<DHTRecord> records = new ArrayList<>(DHTRecordStore.MAX_RECORDS_PER_ID);
-		DHTMessage resp = null;
 		int numReceived = 0;
+		clientPeer.findNode(searchId, (resp, isFinal)->{}, (record)->{});
 		
-		while(resp == null || numReceived < resp.numExpected) {
-			resp = remote.receivePacket(DHTMessage.CMD_GET_RECORDS);
+		while(true) {
+			DHTMessage resp = remote.receivePacket();
 			numReceived++;
 			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
 			
 			while(buf.hasRemaining()) {
-				buf.getShort(); // record length
-				records.add(DHTRecord.deserializeRecord(crypto, buf));
+				int listIndex = buf.get();
+				int itemSize = buf.getShort(); // item length
+				if(listIndex == 1) {
+					DHTRecord record = new DummyRecord(buf);
+					assertTrue(records.contains(record));
+					records.remove(record);
+				} else {
+					buf.position(buf.position() + itemSize);
+				}
 			}
+			
+			if(resp.numExpected == numReceived) break;
 		}
-
-		assertEquals(DHTRecordStore.MAX_RECORDS_PER_ID, records.size());
-		assertTrue(records.containsAll(client.store.recordsForId(id)));
+		
+		assertEquals(0, records.size());
 	}
 
 	@Test
-	public void testGetRecordsReturnsEmptyListIfNoRecordsForId() throws IOException, ProtocolViolationException, UnsupportedProtocolException {
-		DHTID id = new DHTID(crypto.rng(client.idLength()));
-		clientPeer.getRecords(id, (resp, isFinal)->{});		
-		DHTMessage resp = null;
-		resp = remote.receivePacket(DHTMessage.CMD_GET_RECORDS);
-		assertEquals(1, resp.numExpected);
-		assertEquals(0, resp.payload.length);
+	public void testFindNodeResponseIncludesNoRecordsIfNoRecordsForId() throws IOException, ProtocolViolationException, UnsupportedProtocolException {
+		for(int i = 0; i < 4*DHTSearchOperation.maxResults; i++) {
+			DHTPeer peer = new DHTPeer(client, "localhost", i+10000, crypto.makePrivateDHKey().publicKey());
+			client.addPeer(peer);
+		}
+		
+		DHTID searchId = remote.peer.id;
+		clientPeer.findNode(searchId, (resp, isFinal)->{}, (record)->{});
+		int numReceived = 0;
+		
+		while(true) {
+			DHTMessage resp = remote.receivePacket();
+			numReceived++;
+			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
+			
+			while(buf.hasRemaining()) {
+				int listIndex = buf.get();
+				int itemLength = buf.getShort(); // item length
+				
+				assertNotEquals(1, listIndex); // list id
+				buf.position(buf.position() + itemLength);
+			}
+			
+			if(resp.numExpected == numReceived) break;
+		}
 	}
 	
 	@Test
@@ -931,20 +963,6 @@ public class DHTClientTest {
 	}
 	
 	@Test
-	public void testGetRecordsMessageConstructsAppropriateGetRecordsMessages() {
-		DHTMessageCallback callback = (resp)->{};
-		DHTID id = new DHTID(crypto.rng(client.idLength()));
-		DHTMessage getRecords = client.getRecordsMessage(remote.peer, id, callback);
-		
-		assertNotEquals(0, getRecords.msgId); // admittedly there's a 1 in 2**32 chance of this failing randomly
-		assertEquals(callback, getRecords.callback);
-		assertEquals(DHTMessage.CMD_GET_RECORDS, getRecords.cmd);
-		assertEquals(remote.peer, getRecords.peer);
-		assertArrayEquals(id.rawId, getRecords.payload);
-		assertEquals(0, getRecords.flags);
-	}
-	
-	@Test
 	public void testAddRecordMessageConstructsAppropriateAddRecordMessages() {
 		DHTMessageCallback callback = (resp)->{};
 		DHTID id = new DHTID(crypto.rng(client.idLength()));
@@ -986,7 +1004,7 @@ public class DHTClientTest {
 		client.lastStatus = -1; // we're already in a questionable state, so clear this
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.routingTable.reset();
-		client.lookup(clientPeer.id, null);
+		client.lookup(clientPeer.id, (record)->{});
 		
 		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_QUESTIONABLE == receivedStatus.intValue()));
 	}

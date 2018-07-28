@@ -16,8 +16,7 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 public class DHTMessage {
 	public final static byte CMD_PING = 0;
 	public final static byte CMD_FIND_NODE = 1;
-	public final static byte CMD_GET_RECORDS = 2;
-	public final static byte CMD_ADD_RECORD = 3;
+	public final static byte CMD_ADD_RECORD = 2;
 	
 	public final static byte FLAG_RESPONSE = 0x01;
 	
@@ -31,7 +30,7 @@ public class DHTMessage {
 	byte cmd, flags, numExpected;
 	byte[] payload, authTag;
 	boolean isFinal;
-	Collection<? extends Sendable> items;
+	ArrayList<Collection<? extends Sendable>> itemLists;
 	
 	public DHTMessage(DHTPeer recipient, byte cmd, byte[] payload, DHTMessageCallback callback) {
 		this(recipient, cmd, ByteBuffer.wrap(payload), callback);
@@ -57,7 +56,8 @@ public class DHTMessage {
 		this.cmd = cmd;
 		this.flags = FLAG_RESPONSE;
 		this.authTag = recipient.localAuthTag();
-		this.items = items != null ? new ArrayList<>(items) : new ArrayList<>(0);
+		this.itemLists = new ArrayList<>();
+		if(items != null) this.itemLists.add(new ArrayList<>(items));
 		this.msgId = msgId;
 	}
 	
@@ -67,6 +67,11 @@ public class DHTMessage {
 	
 	public DHTMessage makeResponse(Collection<? extends Sendable> items) {
 		return new DHTMessage(peer, cmd, msgId, items);
+	}
+	
+	public DHTMessage addItemList(Collection<? extends Sendable> items) {
+		this.itemLists.add(new ArrayList<>(items));
+		return this;
 	}
 	
 	public void send() {
@@ -80,23 +85,26 @@ public class DHTMessage {
 	protected DatagramPacket sendItems() {
 		int numPackets = 1;
 		ByteBuffer sendBuf = ByteBuffer.allocate(maxPayloadSize());
-
-		if(items != null && !items.isEmpty()) {
+		
+		if(itemLists != null && !itemLists.isEmpty()) {
 			numPackets = numPacketsNeeded();
 			
-			for(Sendable item : items) {
-				byte[] serialized = item.serialize();
-				int itemLen = 2 + serialized.length;
-				if(sendBuf.capacity() < itemLen) continue;
-				if(sendBuf.remaining() < itemLen) {
-					sendBuf.limit(sendBuf.position());
-					sendBuf.position(0);
-					sendDatagram(numPackets, sendBuf);
-					sendBuf.clear();
+			for(int i = 0; i < itemLists.size(); i++) {
+				for(Sendable item : itemLists.get(i)) {
+					byte[] serialized = item.serialize();
+					int itemLen = 1 + 2 + serialized.length;
+					if(sendBuf.capacity() < itemLen) continue;
+					if(sendBuf.remaining() < itemLen) {
+						sendBuf.limit(sendBuf.position());
+						sendBuf.position(0);
+						sendDatagram(numPackets, sendBuf);
+						sendBuf.clear();
+					}
+					
+					sendBuf.put((byte) i);
+					sendBuf.putShort((short) serialized.length);
+					sendBuf.put(serialized);
 				}
-				
-				sendBuf.putShort((short) serialized.length);
-				sendBuf.put(serialized);
 			}
 		}
 		
@@ -107,13 +115,15 @@ public class DHTMessage {
 	
 	protected int numPacketsNeeded() {
 		int numNeeded = 0, bytesRemaining = 0;
-		for(Sendable item : items) {
-			int len = item.serialize().length + 2;
-			if(len > bytesRemaining) {
-				numNeeded++;
-				bytesRemaining = maxPayloadSize();
+		for(Collection<? extends Sendable> list : itemLists) {
+			for(Sendable item : list) {
+				int len = 1 + 2 + item.serialize().length;
+				if(len > bytesRemaining) {
+					numNeeded++;
+					bytesRemaining = maxPayloadSize();
+				}
+				bytesRemaining -= len;
 			}
-			bytesRemaining -= len;
 		}
 		
 		return numNeeded;
@@ -144,7 +154,7 @@ public class DHTMessage {
 		keyMaterial.put(ephKey.sharedSecret(peer.key));
 		byte[] symKeyRaw = peer.client.crypto.makeSymmetricKey(keyMaterial.array());
 		Key symKey = new Key(peer.client.crypto, symKeyRaw);
-
+		
 		ByteBuffer plaintext = ByteBuffer.allocate(headerSize() + sendBuf.remaining());
 		plaintext.put(peer.client.key.publicKey().getBytes());
 		plaintext.put(authTag);
@@ -201,7 +211,7 @@ public class DHTMessage {
 	}
 	
 	protected int maxPayloadSize() {
-		return DHTClient.MAX_DATAGRAM_SIZE - headerSize();
+		return peer.client.crypto.symPadToReachSize(DHTClient.MAX_DATAGRAM_SIZE-headerSize()-peer.client.crypto.asymPublicDHKeySize());
 	}
 	
 	protected void assertValidAuthTag() throws ProtocolViolationException {

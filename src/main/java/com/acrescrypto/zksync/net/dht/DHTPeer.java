@@ -14,14 +14,14 @@ import com.acrescrypto.zksync.utility.Util;
 public class DHTPeer implements Sendable {
 	public final int QUESTIONABLE_TIME_INTERVAL_MS = 1000*60*15; // ping peers in our routing table if they haven't been seen in this interval of time
 	
-	interface DHTFindNodeCallback {
+	interface DHTFindNodePeerCallback {
 		void response(Collection<DHTPeer> references, boolean isFinal);
 	}
 	
-	interface DHTGetRecordsCallback {
-		void response(Collection<DHTRecord> records, boolean isFinal);
+	interface DHTFindNodeRecordCallback {
+		void receivedRecord(DHTRecord record);
 	}
-	
+
 	protected DHTClient client;
 	protected DHTID id;
 	protected String address;
@@ -70,54 +70,51 @@ public class DHTPeer implements Sendable {
 		client.pingMessage(this, null).send();
 	}
 	
-	public void findNode(DHTID nodeId, DHTFindNodeCallback callback) {
+	public void findNode(DHTID nodeId, DHTFindNodePeerCallback peerCallback, DHTFindNodeRecordCallback recordCallback) {
 		client.findNodeMessage(this, nodeId, (resp)->{
 			ArrayList<DHTPeer> receivedPeers = new ArrayList<>();
 			this.remoteAuthTag = resp.authTag;
 			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
 			while(buf.hasRemaining()) {
-				if(buf.remaining() < 2) throw new ProtocolViolationException();
+				if(buf.remaining() < 1+2) throw new ProtocolViolationException();
 				
+				int listIndex = buf.get();
 				int nextLen = Util.unsignShort(buf.getShort());
 				if(nextLen <= 0 || nextLen > buf.remaining()) throw new ProtocolViolationException();
 				int expectedPos = buf.position() + nextLen;
-				DHTPeer peer;
-				
-				try {
-					peer = new DHTPeer(client, buf);
-				} catch(EINVALException exc) {
-					throw new ProtocolViolationException();
+				if(listIndex < 0 || listIndex > 1) {
+					continue;
 				}
 				
-				if(expectedPos != buf.position()) throw new ProtocolViolationException();
-				
-				receivedPeers.add(peer);
-				client.routingTable.suggestPeer(peer);
-			}
-			
-			callback.response(receivedPeers, resp.isFinal);
-		}).send();
-	}
-	
-	public void getRecords(DHTID recordId, DHTGetRecordsCallback callback) {
-		client.getRecordsMessage(this, recordId, (resp)->{
-			ArrayList<DHTRecord> receivedRecords = new ArrayList<>();
-			this.remoteAuthTag = resp.authTag;
-			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
-			while(buf.hasRemaining()) {
-				int nextLen = buf.getShort();
-				if(nextLen < 0 || nextLen > buf.remaining()) throw new ProtocolViolationException();
-				int expectedPos = buf.position() + nextLen;
-				
-				try {
-					receivedRecords.add(client.deserializeRecord(buf));
+				switch(listIndex) {
+				case 0: // peer list item
+					DHTPeer peer;
+					
+					try {
+						peer = new DHTPeer(client, buf);
+					} catch(EINVALException exc) {
+						throw new ProtocolViolationException();
+					}
+					
 					if(expectedPos != buf.position()) throw new ProtocolViolationException();
-				} catch (UnsupportedProtocolException exc) {
+					
+					receivedPeers.add(peer);
+					client.routingTable.suggestPeer(peer);
+					break;
+				case 1: // record list item
+					try {
+						recordCallback.receivedRecord(client.deserializeRecord(buf));
+						if(buf.position() != expectedPos) throw new UnsupportedProtocolException();
+					} catch (UnsupportedProtocolException e) {
+						buf.position(expectedPos);
+					}
+					break;
+				default:
 					buf.position(expectedPos);
-				}
+				}				
 			}
 			
-			callback.response(receivedRecords, resp.isFinal);
+			peerCallback.response(receivedPeers, resp.isFinal);
 		}).send();
 	}
 	

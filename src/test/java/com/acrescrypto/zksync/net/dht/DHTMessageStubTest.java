@@ -62,7 +62,7 @@ public class DHTMessageStubTest {
 		crypto = new CryptoSupport();
 		client = new DummyClient();
 		peer = new DHTPeer(client, "127.0.0.1", 12345, crypto.rng(crypto.asymPublicDHKeySize()));
-		req = new DHTMessage(peer, DHTMessage.CMD_GET_RECORDS, new byte[0], (response)->{resp = response;});
+		req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, new byte[0], (response)->{resp = response;});
 		
 		byte[] serialized = req.serialize(1, ByteBuffer.allocate(0));
 		
