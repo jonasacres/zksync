@@ -4,6 +4,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.util.Arrays;
 
 import org.junit.After;
 import org.junit.AfterClass;
@@ -16,6 +17,7 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
+import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -31,6 +33,14 @@ public class IntegrationTest {
 	DHTPeer root;
 	DHTClient rootClient;
 	CryptoSupport crypto;
+	
+	public byte[] readFile(ZKFS fs, String path) {
+		try {
+			return fs.read(path);
+		} catch(Exception exc) {
+			return new byte[0];
+		}
+	}
 	
 	@BeforeClass
 	public static void beforeAll() {
@@ -181,5 +191,64 @@ public class IntegrationTest {
 		cloneFs.close();
 		cloneConfig.getArchive().close();
 		cloneMaster.close();
+	}
+	
+	@Test
+	public void testDefaultArchiveIntegration() throws IOException {
+		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
+		ZKMaster[] masters = new ZKMaster[16];
+		ZKArchive[] archives = new ZKArchive[masters.length];
+		ZKFS[] fs = new ZKFS[masters.length];
+		
+		for(int i = 0; i < masters.length; i++) {
+			masters[i] = ZKMaster.openBlankTestVolume(""+i);
+			archives[i] = masters[i].createDefaultArchive();
+
+			masters[i].listenOnTCP(0);
+			masters[i].activateDHT("127.0.0.1", 0, root);
+			masters[i].getTCPListener().advertise(archives[i].getConfig().getSwarm());
+			archives[i].getConfig().getAccessor().discoverOnDHT();
+			archives[i].getConfig().getRevisionTree().setAutomerge(true);
+			
+			fs[i] = archives[i].openBlank();
+			fs[i].write("immediate-"+i, crypto.prng(Util.serializeInt(i)).getBytes(crypto.hashLength()-1));
+			fs[i].write("1page-"+i, crypto.prng(Util.serializeInt(i)).getBytes(archives[i].getConfig().getPageSize()));
+			fs[i].write("multipage-"+i, crypto.prng(Util.serializeInt(i)).getBytes(10*archives[i].getConfig().getPageSize()));
+			fs[i].commit();
+			System.out.println("Instantiated " + i + " of " + masters.length);
+		}
+		
+		for(int i = 0; i < masters.length; i++) {
+			archives[i].getConfig().getSwarm().dumpConnections();
+			for(int j = 0; j < masters.length; j++) {
+				System.out.println(i + ":" + j + " of " + masters.length);
+				final int ii = i, jj = j;
+				byte[] expectedImmediate = crypto.prng(Util.serializeInt(j)).getBytes(crypto.hashLength()-1);
+				byte[] expected1Page = crypto.prng(Util.serializeInt(j)).getBytes(archives[j].getConfig().getPageSize());
+				byte[] expectedMultipage = crypto.prng(Util.serializeInt(j)).getBytes(10*archives[j].getConfig().getPageSize());
+				
+				assertTrue(Util.waitUntil(1000, ()->Arrays.equals(expectedImmediate, readFile(fs[ii], "immediate-"+jj))));
+				assertTrue(Util.waitUntil(1000, ()->Arrays.equals(expected1Page, readFile(fs[ii], "1page-"+jj))));
+				assertTrue(Util.waitUntil(1000, ()->Arrays.equals(expectedMultipage, readFile(fs[ii], "multipage-"+jj))));
+			}
+		}
+		
+		assertTrue(Util.waitUntil(5000, ()->{
+			for(int i = 0; i < masters.length; i++) {
+				if(archives[i].getConfig().getRevisionTree().branchTips().size() > 1) return false;
+				
+				ObfuscatedRefTag baseTag = archives[0].getConfig().getRevisionTree().branchTips().get(0);
+				ObfuscatedRefTag tag = archives[i].getConfig().getRevisionTree().branchTips().get(0);
+				if(!tag.equals(baseTag)) return false;
+			}
+			
+			return true;
+		}));
+		
+		for(int i = 0; i < masters.length; i++) {
+			fs[i].close();
+			archives[i].close();
+			masters[i].close();
+		}
 	}
 }

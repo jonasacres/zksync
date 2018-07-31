@@ -12,15 +12,18 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
+import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
+import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionTree {
 	protected ArrayList<ObfuscatedRefTag> branchTips = new ArrayList<ObfuscatedRefTag>();
 	protected ArrayList<RefTag> plainBranchTips = new ArrayList<RefTag>();
 	protected ZKArchiveConfig config;
+	protected boolean automerge;
 	private Logger logger = LoggerFactory.getLogger(RevisionTree.class);
 	
 	public RevisionTree(ZKArchiveConfig config) throws IOException {
@@ -43,6 +46,7 @@ public class RevisionTree {
 	public synchronized void addBranchTip(RefTag newBranch) throws IOException {
 		plainBranchTips.add(newBranch);
 		branchTips.add(newBranch.obfuscate());
+		if(automerge) executeAutomerge();
 	}
 	
 	public synchronized void addBranchTip(ObfuscatedRefTag newBranch) throws InvalidSignatureException {
@@ -51,6 +55,7 @@ public class RevisionTree {
 		branchTips.add(newBranch);
 		if(!config.accessor.isSeedOnly()) {
 			plainBranchTips.add(newBranch.reveal());
+			if(automerge) executeAutomerge();
 		}
 		config.swarm.announceTip(newBranch);
 	}
@@ -172,6 +177,14 @@ public class RevisionTree {
 		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REVISION_TREE);
 	}
 	
+	public void setAutomerge(boolean automerge) {
+		this.automerge = automerge;
+	}
+	
+	public boolean getAutomerge() {
+		return automerge;
+	}
+	
 	public synchronized void dump() {
 		System.out.println(Util.bytesToHex(config.swarm.getPublicIdentityKey().getBytes(), 4) + " Revision tree: " + plainBranchTips.size());
 		int i = 0;
@@ -185,6 +198,17 @@ public class RevisionTree {
 			} catch(Exception exc) {
 				System.out.println("\t\tCan't dump tags " + exc.getClass());
 			}
+		}
+	}
+	
+	protected void executeAutomerge() {
+		try {
+			// TODO DHT: (test) Test automerges
+			RefTag tag = DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
+			System.out.println("Merged into " + Util.bytesToHex(tag.getHash(), 4));
+			consolidate();
+		} catch (DiffResolutionException | IOException exc) {
+			logger.error("Error automerging branch tip", exc);
 		}
 	}
 }

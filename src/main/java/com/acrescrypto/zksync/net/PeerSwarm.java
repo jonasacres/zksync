@@ -481,7 +481,7 @@ public class PeerSwarm implements BlacklistCallback {
 		identityKey = config.getCrypto().makePrivateDHKeyPair(privateKeyRaw, publicKeyRaw);
 	}
 	
-	protected void dumpConnections() {
+	public void dumpConnections() {
 		System.out.println("PeerSwarm: archive ID " + Util.bytesToHex(config.getArchiveId()));
 		System.out.println("\tIdentity: " + Util.bytesToHex(identityKey.publicKey().getBytes()));
 		System.out.println("\tConnections: " + connections.size());
