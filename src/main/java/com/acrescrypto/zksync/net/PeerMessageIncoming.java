@@ -176,7 +176,7 @@ public class PeerMessageIncoming extends PeerMessage {
 	}
 	
 	protected void processThread() {
-		new Thread(() -> {
+		connection.socket.threadPool.submit(()->{
 			Thread.currentThread().setName("PeerMessageIncoming process thread");
 			try {
 				connection.handle(this);
@@ -188,6 +188,6 @@ public class PeerMessageIncoming extends PeerMessage {
 			}
 			
 			markFinished();
-		}).start();
+		});
 	}
 }

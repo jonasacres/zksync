@@ -53,8 +53,9 @@ public class PeerMessageOutgoing extends PeerMessage {
 	}
 
 	protected void runTxThread() {
-		new Thread(() -> {
-			Thread.currentThread().setName("PeerMessageOutgoing tx thread");
+		if(connection.socket.threadPool.isShutdown()) return;
+		connection.socket.threadPool.submit(() -> {
+			Thread.currentThread().setName("PeerMessageOutgoing tx thread cmd=" + cmd);
 			try {
 				while(!txClosed() && !aborted) {
 					if(queuedSegment != null) queuedSegment.waitForDelivery();
@@ -71,7 +72,7 @@ public class PeerMessageOutgoing extends PeerMessage {
 			} catch(Exception exc) {
 				logger.error("Outgoing message thread to {} caught exception", connection.socket.getAddress(), exc);
 			}
-		}).start();
+		});
 	}
 	
 	protected void accumulateNext() throws IOException {

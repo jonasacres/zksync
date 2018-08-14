@@ -88,6 +88,11 @@ public class ZKArchive {
 		return new ZKFS(RefTag.blank(this));
 	}
 	
+	public ZKFS openLatest() throws IOException {
+		assertOpen();
+		return new ZKFS(config.getRevisionTree().latest());
+	}
+	
 	public boolean isCacheOnly() {
 		if(!(storage instanceof BackedFS) && !(storage instanceof SwarmFS)) return true;
 		return false;

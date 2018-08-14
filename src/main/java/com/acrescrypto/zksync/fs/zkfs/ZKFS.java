@@ -1,10 +1,12 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.nio.file.Paths;
 
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
 import com.acrescrypto.zksync.utility.HashCache;
+import com.acrescrypto.zksync.utility.Util;
 
 // A ZKSync archive.
 public class ZKFS extends FS {
@@ -326,5 +328,21 @@ public class ZKFS extends FS {
 
 	public RefTag getBaseRevision() {
 		return baseRevision;
+	}
+	
+	public void dump() throws IOException {
+		System.out.println("Revision " + Util.bytesToHex(baseRevision.obfuscate().serialize(), 4));
+		dump("/", 1);
+	}
+	
+	public void dump(String path, int depth) throws IOException {
+		String padding = new String(new char[depth]).replace("\0", "  ");
+		ZKDirectory dir = opendir(path);
+		for(String subpath : dir.list()) {
+			System.out.println(padding + subpath);
+			if(stat(Paths.get(path, subpath).toString()).isDirectory()) {
+				dump(subpath, depth+1);
+			}
+		}
 	}
 }

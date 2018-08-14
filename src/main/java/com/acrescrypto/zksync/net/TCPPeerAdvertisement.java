@@ -20,6 +20,7 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	protected int port;
 	protected int version;
 	protected String ipAddress;
+	protected int hash = 0;
 	
 	public TCPPeerAdvertisement(PublicDHKey pubKey, String host, int port, byte[] encryptedArchiveId) {
 		this(pubKey, host, port, encryptedArchiveId, 0);
@@ -123,6 +124,7 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	
 	@Override
 	public int hashCode() {
+		if(hash != 0) return hash;
 		String portStr = ""+port;
 		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length + host.length() + portStr.length() + encryptedArchiveId.length + 4);
 		buf.put(pubKey.getBytes());
@@ -130,7 +132,8 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 		buf.put(portStr.getBytes());
 		buf.putInt(version);
 		buf.put(encryptedArchiveId);
-		return new String(Util.bytesToHex(buf.array())).hashCode();
+		hash = new String(Util.bytesToHex(buf.array())).hashCode();
+		return hash;
 	}
 	
 	@Override

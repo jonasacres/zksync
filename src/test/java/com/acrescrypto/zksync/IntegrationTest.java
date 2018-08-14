@@ -2,9 +2,9 @@ package com.acrescrypto.zksync;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
-import java.util.Arrays;
 
 import org.junit.After;
 import org.junit.AfterClass;
@@ -218,22 +218,10 @@ public class IntegrationTest {
 			System.out.println("Instantiated " + i + " of " + masters.length);
 		}
 		
-		for(int i = 0; i < masters.length; i++) {
-			archives[i].getConfig().getSwarm().dumpConnections();
-			for(int j = 0; j < masters.length; j++) {
-				System.out.println(i + ":" + j + " of " + masters.length);
-				final int ii = i, jj = j;
-				byte[] expectedImmediate = crypto.prng(Util.serializeInt(j)).getBytes(crypto.hashLength()-1);
-				byte[] expected1Page = crypto.prng(Util.serializeInt(j)).getBytes(archives[j].getConfig().getPageSize());
-				byte[] expectedMultipage = crypto.prng(Util.serializeInt(j)).getBytes(10*archives[j].getConfig().getPageSize());
-				
-				assertTrue(Util.waitUntil(1000, ()->Arrays.equals(expectedImmediate, readFile(fs[ii], "immediate-"+jj))));
-				assertTrue(Util.waitUntil(1000, ()->Arrays.equals(expected1Page, readFile(fs[ii], "1page-"+jj))));
-				assertTrue(Util.waitUntil(1000, ()->Arrays.equals(expectedMultipage, readFile(fs[ii], "multipage-"+jj))));
-			}
-		}
+		Util.sleep(30000);
+		fail();
 		
-		assertTrue(Util.waitUntil(5000, ()->{
+		Util.waitUntil(600000, ()->{
 			for(int i = 0; i < masters.length; i++) {
 				if(archives[i].getConfig().getRevisionTree().branchTips().size() > 1) return false;
 				
@@ -243,7 +231,26 @@ public class IntegrationTest {
 			}
 			
 			return true;
-		}));
+		});
+
+		for(int i = 0; i < masters.length; i++) {
+			archives[i].getConfig().getSwarm().dumpConnections();
+			archives[i].getConfig().getRevisionTree().dump();
+			ZKFS mergedFs = archives[i].openLatest();
+			mergedFs.dump();
+			for(int j = 0; j < masters.length; j++) {
+				System.out.println(i + ":" + j + " of " + masters.length);
+				final int jj = j;
+				byte[] expectedImmediate = crypto.prng(Util.serializeInt(j)).getBytes(crypto.hashLength()-1);
+				byte[] expected1Page = crypto.prng(Util.serializeInt(j)).getBytes(archives[j].getConfig().getPageSize());
+				byte[] expectedMultipage = crypto.prng(Util.serializeInt(j)).getBytes(10*archives[j].getConfig().getPageSize());
+				
+				assertArrayEquals(expectedImmediate, readFile(mergedFs, "immediate-"+jj));
+				assertArrayEquals(expected1Page, readFile(mergedFs, "1page-"+jj));
+				assertArrayEquals(expectedMultipage, readFile(mergedFs, "multipage-"+jj));
+			}
+			mergedFs.close();
+		}
 		
 		for(int i = 0; i < masters.length; i++) {
 			fs[i].close();

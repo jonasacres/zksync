@@ -126,43 +126,46 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public synchronized void openedConnection(PeerConnection connection) {
+	public void openedConnection(PeerConnection connection) {
 		if(closed) {
 			connection.close();
 			return;
 		}
 		
-		PeerAdvertisement ad = connection.socket.getAd();
-		if(ad != null) {
-			// should be in both of these already but let's make sure
-			connectedAds.remove(ad);
-			connectedAds.add(connection.socket.getAd());
-			knownAds.remove(ad);
-			knownAds.add(connection.socket.getAd());
-
-			for(PeerConnection existing : connections) {
-				existing.announcePeer(ad);
-			}
-		}
-		
-		for(PeerConnection existing : getConnections()) {
-			if(existing == connection) continue;
-			if(existing.socket.remoteIdentityKey == null) continue;
-			if(!Arrays.equals(connection.socket.remoteIdentityKey.getBytes(), existing.socket.remoteIdentityKey.getBytes())) continue;
-			boolean existingIsLowOrder = Util.compareArrays(existing.socket.getSharedSecret(), connection.socket.getSharedSecret()) < 0;
-			
-			if(existingIsLowOrder) {
-				connection.close();
-				return;
+		synchronized(this) {
+			PeerAdvertisement ad = connection.socket.getAd();
+			if(ad != null) {
+				// should be in both of these already but let's make sure
+				connectedAds.remove(ad);
+				connectedAds.add(connection.socket.getAd());
+				knownAds.remove(ad);
+				knownAds.add(connection.socket.getAd());
+	
+				for(PeerConnection existing : connections) {
+					existing.announcePeer(ad);
+				}
 			}
 			
-			existing.close();
-			connections.remove(existing);
+			for(PeerConnection existing : getConnections()) {
+				if(existing == connection) continue;
+				if(existing.socket.remoteIdentityKey == null) continue;
+				if(!Arrays.equals(connection.socket.remoteIdentityKey.getBytes(), existing.socket.remoteIdentityKey.getBytes())) continue;
+				boolean existingIsLowOrder = Util.compareArrays(existing.socket.getSharedSecret(), connection.socket.getSharedSecret()) < 0;
+				
+				if(existingIsLowOrder) {
+					connection.close();
+					return;
+				}
+				
+				existing.close();
+				connections.remove(existing);
+			}
+			
+			connection.announcePeers(knownAds);
+			connections.add(connection);
 		}
 		
 		pool.addRequestsToConnection(connection);
-		connection.announcePeers(knownAds);
-		connections.add(connection);
 	}
 	
 	public synchronized void closedConnection(PeerConnection connection) {
@@ -170,7 +173,7 @@ public class PeerSwarm implements BlacklistCallback {
 		connections.remove(connection);
 	}
 	
-	public synchronized void addPeerAdvertisement(PeerAdvertisement ad) {
+	public void addPeerAdvertisement(PeerAdvertisement ad) {
 		// This could be improved. Once we hit capacity, how can we prune ads for low-quality peers for higher-quality ones?
 		if(ad instanceof TCPPeerAdvertisement) { // ignore our own ad
 			TCPPeerAdvertisement tcpAd = (TCPPeerAdvertisement) ad;
@@ -180,19 +183,26 @@ public class PeerSwarm implements BlacklistCallback {
 		if(knownAds.size() >= maxPeerListSize) return;
 		if(!PeerSocket.adSupported(ad)) return;
 		
-		if(!knownAds.contains(ad)) {
+		boolean announce;
+
+		synchronized(this) {
+			if(knownAds.size() >= maxPeerListSize) return;
+			announce = !knownAds.contains(ad);
+			if(announce) {
+				knownAds.add(ad);
+			}
+		}
+
+		if(announce) {
 			announcePeer(ad);
 		}
-		
-		knownAds.remove(ad);
-		knownAds.add(ad);
 	}
 	
-	public synchronized Collection<PeerAdvertisement> knownAds() {
+	public Collection<PeerAdvertisement> knownAds() {
 		return knownAds;
 	}
 	
-	public synchronized void advertiseSelf(PeerAdvertisement ad) {
+	public void advertiseSelf(PeerAdvertisement ad) {
 		for(PeerConnection connection : getConnections()) {
 			connection.announceSelf(ad);
 		}
@@ -273,10 +283,8 @@ public class PeerSwarm implements BlacklistCallback {
 			Thread.currentThread().setName("PeerSwarm openConnection thread");
 			PeerConnection conn = null;
 			try {
-				synchronized(this) {
-					conn = ad.connect(this);
-					openedConnection(conn);
-				}
+				conn = ad.connect(this);
+				openedConnection(conn);
 			} catch (UnsupportedProtocolException exc) {
 				logger.info("Ignoring unsupported ad type " + ad.getType());
 			} catch (ProtocolViolationException exc) {
@@ -353,7 +361,7 @@ public class PeerSwarm implements BlacklistCallback {
 		return activeFiles.get(shortTag);
 	}
 	
-	protected synchronized void receivedConfigInfo() {
+	protected void receivedConfigInfo() {
 		pool.receivedConfigInfo();
 	}
 	

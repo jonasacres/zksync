@@ -11,10 +11,12 @@ import com.acrescrypto.zksync.utility.Util;
  * for the inode table itself identifies a revision in the archive. RefTags contain certain metadata to indicate
  * how the content is stored. */
 public class RefTag implements Comparable<RefTag> {
+	public final static byte FLAG_NO_NEW_CONTENT = 1 << 0;
+	
 	protected ZKArchiveConfig config;
 	protected RevisionInfo info;
 	protected byte[] tag, hash;
-	protected byte archiveType, versionMajor, versionMinor;
+	protected byte archiveType, versionMajor, versionMinor, flags;
 	protected int refType;	
 	protected long numPages;
 	protected boolean cacheOnly;
@@ -34,6 +36,7 @@ public class RefTag implements Comparable<RefTag> {
 	// 2 bytes version
 	// 1 byte ref type
 	// 8 bytes num chunks
+	// 1 byte flags
 	
 	public static int REFTAG_SHORT_SIZE = 8;
 	
@@ -68,6 +71,19 @@ public class RefTag implements Comparable<RefTag> {
 		
 		this.config = config;
 		deserialize(tag);
+	}
+	
+	public boolean hasFlag(byte flag) {
+		return (flags & flag) != 0;
+	}
+	
+	public void setFlag(byte flag) {
+		flags |= flag;
+		this.tag = serialize();
+	}
+	
+	public byte getFlags() {
+		return flags;
 	}
 	
 	public byte[] padHash(byte[] hash) {
@@ -139,7 +155,8 @@ public class RefTag implements Comparable<RefTag> {
 		buf.put(versionMinor);
 		buf.put((byte) (this.refType & 0x03));
 		buf.putLong(numPages);
-		buf.put(new byte[REFTAG_EXTRA_DATA_SIZE-2-8-1-1]);
+		buf.put(flags);
+		buf.put(new byte[REFTAG_EXTRA_DATA_SIZE-2-8-1-1-1]);
 		
 		assert(!buf.hasRemaining());
 		return buf.array();
@@ -156,6 +173,7 @@ public class RefTag implements Comparable<RefTag> {
 		this.versionMinor = buf.get();
 		this.refType = buf.get() & 0x03;
 		this.numPages = buf.getLong();
+		this.flags = buf.get();
 		this.tag = serialized.clone();
 	}
 	
@@ -187,18 +205,29 @@ public class RefTag implements Comparable<RefTag> {
 	}
 	
 	public int compareTo(RefTag other) {
+		if(this.equals(other)) return 0;
+		
 		try {
-			if(config.getRevisionTree().ancestorsOf(this).contains(other)) return 1;
-			if(config.getRevisionTree().ancestorsOf(other).contains(this)) return -1;
+			if(config.getRevisionTree().tagHasAncestor(this, other)) return 1;
+			if(config.getRevisionTree().tagHasAncestor(other, this)) return -1;
 		} catch(Exception exc) {
-			throw new RuntimeException("Caught exception comparing revisions");
+			// can't load at least one of the two revisions; proceed to other comparisons
 		}
 		
-		int r = (new Long(info.inode.modifiedTime)).compareTo(other.info.inode.modifiedTime);
-		if(r != 0) return r;
+		try {
+			if(getInfo() != null && other.getInfo() != null) {
+				int r = (new Long(info.inode.modifiedTime)).compareTo(other.info.inode.modifiedTime);
+				if(r != 0) return r;
+			}
+		} catch (IOException e) {
+		}
 		
-		for(int i = 0; i < tag.length; i++) if(tag[i] != other.tag[i]) return Byte.valueOf(tag[i]).compareTo(other.tag[i]);
-		return 0;
+		for(int i = 0; i < tag.length; i++) {
+			int v = Util.unsignByte(tag[i]) - Util.unsignByte(other.tag[i]);
+			if(v != 0) return v;
+		}
+		
+		return 0; // shouldn't be possible since we checked equality at start
 	}
 	
 	public ZKArchiveConfig getConfig() {

@@ -651,11 +651,12 @@ public class PeerConnection {
 					lastStream.write(chunk.tag);
 					lastTag = chunk.tag;
 				}
-
 				
 				lastStream.write(ByteBuffer.allocate(4).putInt(chunk.index).array());
 				lastStream.write(chunk.getData());
-				if(!queue.expectTagNext(chunk.tag)) {
+				
+				boolean hasMore = queue.expectTagNext(chunk.tag);
+				if(!hasMore) {
 					lastStream.eof();
 					lastStream = null;
 				}

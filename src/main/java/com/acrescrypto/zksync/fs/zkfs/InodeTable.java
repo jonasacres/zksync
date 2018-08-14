@@ -100,7 +100,7 @@ public class InodeTable extends ZKFile {
 
 		syncInodes();
 		updateTree(additionalParents);
-			
+		
 		return inode.refTag;
 	}
 	
@@ -125,6 +125,12 @@ public class InodeTable extends ZKFile {
 	/** add our new commit to the list of branch tips, and remove our ancestors */
 	protected void updateTree(RefTag[] additionalParents) throws IOException {
 		RefTag tag = inode.getRefTag();
+		if(additionalParents.length > 0) {
+			// TODO DHT: (test) Test setting of no new content flag.
+			// TODO DHT: (redesign) Ensure that we only set this flag if there really is no new content.
+			tag.setFlag(RefTag.FLAG_NO_NEW_CONTENT);
+		}
+		
 		RevisionTree tree = zkfs.archive.config.getRevisionTree();
 		tree.addBranchTip(tag);
 		tree.removeBranchTip(zkfs.baseRevision);

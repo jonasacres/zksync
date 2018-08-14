@@ -107,6 +107,10 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 		return buffer.array();
 	}
 	
+	public int hashCode() {
+		return ByteBuffer.wrap(ciphertext).getInt();
+	}
+	
 	public boolean equals(Object obj) {
 		if(!ObfuscatedRefTag.class.isInstance(obj)) return false;
 		return Arrays.equals(serialize(), ((ObfuscatedRefTag) obj).serialize());

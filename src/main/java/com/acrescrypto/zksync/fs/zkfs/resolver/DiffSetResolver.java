@@ -42,6 +42,7 @@ public class DiffSetResolver {
 	PathDiffResolver pathResolver;
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
+		// TODO DHT: withTangledCollection
 		DiffSet diffSet = DiffSet.withCollection(archive.getConfig().getRevisionTree().plainBranchTips());
 		return latestVersionResolver(diffSet);
 	}

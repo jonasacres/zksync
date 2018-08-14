@@ -9,7 +9,7 @@ public class AppendableInputStream extends InputStream {
 	protected Queue<ByteBuffer> chunks = new LinkedList<ByteBuffer>();
 	protected boolean eof;
 	long readLen, writeLen;
-
+	
 	public void write(int b) {
 		write(ByteBuffer.wrap(new byte[] { (byte) b }));
 	}

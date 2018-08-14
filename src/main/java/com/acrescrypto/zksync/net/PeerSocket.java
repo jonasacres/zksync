@@ -8,6 +8,8 @@ import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +26,7 @@ public abstract class PeerSocket {
 	protected LinkedList<PeerMessageOutgoing> outgoing = new LinkedList<PeerMessageOutgoing>();
 	protected LinkedList<MessageSegment> ready = new LinkedList<MessageSegment>();	
 	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
+	protected ExecutorService threadPool = Executors.newFixedThreadPool(4);
 	
 	protected int nextSendMessageId, maxReceivedMessageId = Integer.MIN_VALUE;
 	protected final Logger logger = LoggerFactory.getLogger(PeerSocket.class);
@@ -50,6 +53,7 @@ public abstract class PeerSocket {
 		_close();
 		closeAllIncoming();
 		closeAllOutgoing();
+		threadPool.shutdownNow();
 	}
 
 	/** Immediately close socket and blacklist due to a clear protocol violation. 

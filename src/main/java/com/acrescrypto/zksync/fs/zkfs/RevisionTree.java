@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 
 import org.slf4j.Logger;
@@ -22,7 +23,9 @@ import com.acrescrypto.zksync.utility.Util;
 public class RevisionTree {
 	protected ArrayList<ObfuscatedRefTag> branchTips = new ArrayList<ObfuscatedRefTag>();
 	protected ArrayList<RefTag> plainBranchTips = new ArrayList<RefTag>();
+	protected HashMap<ObfuscatedRefTag,Long> prunedTips = new HashMap<>();
 	protected ZKArchiveConfig config;
+	protected RefTag latest;
 	protected boolean automerge;
 	private Logger logger = LoggerFactory.getLogger(RevisionTree.class);
 	
@@ -44,28 +47,41 @@ public class RevisionTree {
 	}
 	
 	public synchronized void addBranchTip(RefTag newBranch) throws IOException {
+		if(plainBranchTips.contains(newBranch)) return;
+		ObfuscatedRefTag obf = newBranch.obfuscate();
+		if(prunedTips.containsKey(obf)) return;
+		
 		plainBranchTips.add(newBranch);
-		branchTips.add(newBranch.obfuscate());
-		if(automerge) executeAutomerge();
+		branchTips.add(obf);
+//		System.out.println(Util.bytesToHex(config.swarm.getPublicIdentityKey().getBytes(), 6) + " added " + newBranch.hasFlag(RefTag.FLAG_NO_NEW_CONTENT) + " " + Util.bytesToHex(newBranch.obfuscate().serialize(), 4) + " - " + branchTips.size());
+//		if(automerge && !newBranch.hasFlag(RefTag.FLAG_NO_NEW_CONTENT)) executeAutomerge();
+//		if(latest == null || latest.compareTo(newBranch) < 0 || tagSupercedes(newBranch, latest)) {
+//			latest = newBranch;
+//		}
 	}
 	
-	public synchronized void addBranchTip(ObfuscatedRefTag newBranch) throws InvalidSignatureException {
+	public synchronized void addBranchTip(ObfuscatedRefTag newBranch) throws InvalidSignatureException, IOException {
+		if(branchTips.contains(newBranch) || prunedTips.containsKey(newBranch)) return;
+		if(!config.accessor.isSeedOnly()) {
+			addBranchTip(newBranch.reveal());
+			return;
+		}
+
 		newBranch.assertValid();
 		if(branchTips.contains(newBranch)) return;
 		branchTips.add(newBranch);
-		if(!config.accessor.isSeedOnly()) {
-			plainBranchTips.add(newBranch.reveal());
-			if(automerge) executeAutomerge();
-		}
 		config.swarm.announceTip(newBranch);
 	}
 	
 	public synchronized void removeBranchTip(RefTag oldBranch) throws IOException {
+		ObfuscatedRefTag obf = oldBranch.obfuscate();
+		prunedTips.put(obf, Util.currentTimeMillis());
 		plainBranchTips.remove(oldBranch);
-		branchTips.remove(oldBranch.obfuscate());
+		branchTips.remove(obf);
 	}
 	
 	public synchronized void removeBranchTip(ObfuscatedRefTag oldBranch) {
+		prunedTips.put(oldBranch, Util.currentTimeMillis());
 		branchTips.remove(oldBranch);
 		if(!config.accessor.isSeedOnly()) {
 			try {
@@ -74,6 +90,33 @@ public class RevisionTree {
 				logger.info("Signature verification failed on obfuscated reftag meant for deletion", exc);
 			}
 		}
+	}
+	
+	public boolean tagHasAncestor(RefTag tag, RefTag ancestor) throws IOException {
+		if(tag.equals(ancestor)) return true;
+		
+		for(RefTag parent : tag.getInfo().parents) {
+			if(parent.equals(ancestor)) return true;
+		}
+		
+		for(RefTag parent : tag.getInfo().parents) {
+			if(tagHasAncestor(parent, ancestor)) return true;
+		}
+		
+		return false;
+	}
+	
+	public boolean tagSupercedes(RefTag tag, RefTag other) throws IOException {
+		if(tagHasAncestor(tag, other)) return true;
+		
+		// this is redundant with the tagHasAncestor check, but faster if we're merging parallel changes to the same generation, common in automerges
+		if(tag.getInfo().getParents().containsAll(other.getInfo().getParents())) return true;
+		
+		for(RefTag parent : other.getInfo().getParents()) {
+			if(!tagHasAncestor(tag, parent)) return false;
+		}
+		
+		return true;
 	}
 	
 	public HashSet<RefTag> ancestorsOf(RefTag revision) throws IOException {
@@ -88,7 +131,7 @@ public class RevisionTree {
 		for(RefTag tag : plainBranchTips) {
 			for(RefTag otherTag : plainBranchTips) {
 				if(otherTag == tag) continue;
-				if(ancestorsOf(tag).contains(otherTag)) {
+				if(tagSupercedes(tag, otherTag)) {
 					obsoleted.add(otherTag);
 				}
 			}
@@ -96,6 +139,7 @@ public class RevisionTree {
 		
 		for(RefTag obsoleteTag : obsoleted) {
 			removeBranchTip(obsoleteTag);
+			System.out.println(Util.bytesToHex(config.swarm.getPublicIdentityKey().getBytes(), 6) + " pruned " + obsoleteTag.hasFlag(RefTag.FLAG_NO_NEW_CONTENT) + " " + Util.bytesToHex(obsoleteTag.obfuscate().serialize(), 4) + " - " + branchTips.size());
 		}
 	}
 	
@@ -151,7 +195,9 @@ public class RevisionTree {
 				ObfuscatedRefTag obfTag = new ObfuscatedRefTag(config, tag);
 				obfTag.assertValid();
 				branchTips.add(obfTag);
-				plainBranchTips.add(obfTag.reveal());
+				RefTag refTag = obfTag.reveal();
+				plainBranchTips.add(refTag);
+				// if(latest == null || latest.compareTo(refTag) < 0) latest = refTag;
 			} catch (InvalidSignatureException exc) {
 				logger.error("Invalid signature on stored obfuscating reftag; skipping", exc);
 			}
@@ -186,7 +232,7 @@ public class RevisionTree {
 	}
 	
 	public synchronized void dump() {
-		System.out.println(Util.bytesToHex(config.swarm.getPublicIdentityKey().getBytes(), 4) + " Revision tree: " + plainBranchTips.size());
+		System.out.println(Util.bytesToHex(config.swarm.getPublicIdentityKey().getBytes(), 6) + " Revision tree: " + branchTips.size());
 		int i = 0;
 		for(ObfuscatedRefTag tag : branchTips()) {
 			i++;
@@ -201,12 +247,16 @@ public class RevisionTree {
 		}
 	}
 	
+	public RefTag latest() {
+		return latest;
+	}
+	
 	protected void executeAutomerge() {
 		try {
 			// TODO DHT: (test) Test automerges
 			RefTag tag = DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
-			System.out.println("Merged into " + Util.bytesToHex(tag.getHash(), 4));
 			consolidate();
+			System.out.println(Util.bytesToHex(config.swarm.getPublicIdentityKey().getBytes(), 6) + " Merged into " + Util.bytesToHex(tag.obfuscate().serialize(), 4) + " - " + branchTips.size() + " total");
 		} catch (DiffResolutionException | IOException exc) {
 			logger.error("Error automerging branch tip", exc);
 		}

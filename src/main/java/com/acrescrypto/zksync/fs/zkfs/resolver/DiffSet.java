@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Map;
 
 import com.acrescrypto.zksync.fs.zkfs.Inode;
@@ -27,6 +28,26 @@ public class DiffSet {
 	
 	/** differences in inode listings */
 	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>(); // differences in inode table entries
+	
+	// TODO DHT: (test) Test tangled collection
+	public static DiffSet withTangledCollection(Collection<RefTag> revisions) throws IOException {
+		LinkedList<RefTag> finalList = new LinkedList<>();
+		while(!revisions.isEmpty()) {
+			LinkedList<RefTag> candidates = new LinkedList<>();
+			for(RefTag revision : revisions) {
+				if(!revision.hasFlag(RefTag.FLAG_NO_NEW_CONTENT)) {
+					finalList.add(revision);
+					continue;
+				}
+				
+				candidates.addAll(revision.getInfo().getParents());
+			}
+			
+			revisions = candidates;
+		}
+		
+		return DiffSet.withCollection(finalList);
+	}
 	
 	/** build a DiffSet from a collection of RefTags */
 	public static DiffSet withCollection(Collection<RefTag> revisions) throws IOException {
