@@ -9,6 +9,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -49,6 +51,7 @@ public class PeerSwarm implements BlacklistCallback {
 	protected HashMap<PeerAdvertisement,Long> adEmbargoes = new HashMap<PeerAdvertisement,Long>();
 	protected RequestPool pool;
 	protected PrivateDHKey identityKey;
+	protected ExecutorService threadPool = Executors.newCachedThreadPool();
 	
 	protected Lock pageWaitLock = new ReentrantLock();
 	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
@@ -217,7 +220,7 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	protected void connectionThread() {
-		new Thread(() -> {
+		threadPool.submit(() -> {
 			Thread.currentThread().setName("PeerSwarm connection thread");
 			while(!closed) {
 				PeerAdvertisement ad = selectConnectionAd();
@@ -235,7 +238,7 @@ public class PeerSwarm implements BlacklistCallback {
 					logger.error("Connection thread caught exception handling ad {}", ad, exc);
 				}
 			}
-		}).start();
+		});
 	}
 	
 	protected synchronized PeerAdvertisement selectConnectionAd() {
@@ -279,7 +282,7 @@ public class PeerSwarm implements BlacklistCallback {
 			connectedAds.add(ad);
 		}
 		
-		new Thread(()-> {
+		threadPool.submit(()-> {
 			Thread.currentThread().setName("PeerSwarm openConnection thread");
 			PeerConnection conn = null;
 			try {
@@ -312,7 +315,7 @@ public class PeerSwarm implements BlacklistCallback {
 					}
 				}
 			}
-		}).start();
+		});
 	}
 	
 	public void waitForPage(int priority, byte[] tag) {

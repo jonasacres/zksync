@@ -349,7 +349,7 @@ public class TCPPeerSocketListenerTest {
 		TCPPeerSocket.maxHandshakeTimeMillis = 5;
 		listener.advertise(swarm);
 		Socket socket = connect();
-		Util.sleep(TCPPeerSocket.maxHandshakeTimeMillis+1);
+		Util.sleep(TCPPeerSocket.maxHandshakeTimeMillis+20);
 		assertSocketClosed(socket, true);
 	}
 	

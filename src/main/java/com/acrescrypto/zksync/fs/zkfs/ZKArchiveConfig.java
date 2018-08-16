@@ -37,7 +37,7 @@ public class ZKArchiveConfig {
 		
 	protected byte[] archiveId; // derived from archive root; will later include public key
 	protected byte[] archiveFingerprint;
-
+	
 	protected Key archiveRoot; // randomly generated and stored encrypted in config file; derives most other keys
 	protected Key writeRoot; // derives private key
 	protected PrivateSigningKey privKey; // derived from the write key root
@@ -46,7 +46,7 @@ public class ZKArchiveConfig {
 	protected BackedFS storage;
 	protected FS localStorage;
 	protected ArchiveAccessor accessor;
-	protected int pageSize;
+	protected int pageSize, tagsPerChunk;
 	protected String description;
 	protected ZKArchive archive;
 	protected PeerSwarm swarm;
@@ -446,6 +446,12 @@ public class ZKArchiveConfig {
 
 	public int getPageSize() {
 		return pageSize;
+	}
+	
+	public int getTagsPerChunk() {
+		if(tagsPerChunk > 0) return tagsPerChunk;
+		tagsPerChunk = pageSize/archive.crypto.hashLength();
+		return tagsPerChunk;
 	}
 	
 	public void setPageSize(int pageSize) {

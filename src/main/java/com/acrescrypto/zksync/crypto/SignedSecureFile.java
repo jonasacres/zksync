@@ -61,7 +61,7 @@ public class SignedSecureFile {
 		this.pubKey = pubKey;
 	}
 	
-	public byte[] read() throws IOException {
+	public byte[] read(boolean verify) throws IOException {
 		try {
 			byte[] contents = fs.read(path());
 			if(!Arrays.equals(authKey.authenticate(contents), tag)) {
@@ -73,15 +73,20 @@ public class SignedSecureFile {
 				throw new SecurityException();
 			}
 			
-			
-			if(!pubKey.verify(contents, 0, sigOffset, contents, sigOffset, pubKey.crypto.asymSignatureSize())) {
-				throw new SecurityException();
+			if(verify) {
+				if(!pubKey.verify(contents, 0, sigOffset, contents, sigOffset, pubKey.crypto.asymSignatureSize())) {
+					throw new SecurityException();
+				}
 			}
 			
 			return textKey.decrypt(fixedIV(), contents, 0, sigOffset);
 		} catch (IOException exc) {
 			throw new InaccessibleStorageException();
 		}
+	}
+	
+	public byte[] read() throws IOException {
+		return read(true);
 	}
 	
 	public byte[] write(byte[] plaintext, int padSize) throws IOException {

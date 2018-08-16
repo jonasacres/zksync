@@ -91,8 +91,8 @@ public class DHTRoutingTable {
 		return closest;
 	}
 	
-	public Collection<DHTPeer> allPeers() {
-		return allPeers;
+	public synchronized Collection<DHTPeer> allPeers() {
+		return new ArrayList<>(allPeers);
 	}
 	
 	public void suggestPeer(DHTPeer peer) {

@@ -18,7 +18,6 @@ import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKArchive {
-	
 	public final static String GLOBAL_DATA_DIR = ".zksync/archive/data/";
 	public final static String CONFIG_DIR = ".zksync/archive/config/";
 	public final static String REVISION_DIR = ".zksync/archive/revisions/";

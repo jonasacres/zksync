@@ -130,11 +130,7 @@ public class Util {
 	}
 	
 	public static void delay(long delay, AnonymousCallback action) {
-		new Thread(()->{
-			Thread.currentThread().setName("Util.delay thread");
-			sleep(delay);
-			try { action.cb(); } catch (Exception e) {}
-		}).start();
+		new SnoozeThread(delay, false, ()->{try { action.cb(); } catch(Exception exc) {}});
 	}
 	
 	public static void sleep(long durationMs) {
@@ -144,12 +140,8 @@ public class Util {
 		} catch(InterruptedException exc) {}
 	}
 	
-	public static void ensure(int maxDelay, WaitTest test, AnonymousCallback action) {
-		new Thread(()-> {
-			Thread.currentThread().setName("Util.ensure thread " + action.getClass().getSimpleName());
-			if(waitUntil(maxDelay, test)) return;
-			try { action.cb(); } catch(Exception exc) {}
-		}).start();
+	public static void ensure(long maxDelayMs, long frequency, WaitTest test, AnonymousCallback action) {
+		WaitSupervisor.shared().add(maxDelayMs, frequency, test, action);
 	}
 	
 	/** Side-channel-attack resistant comparison of byte arrays. */
@@ -237,6 +229,8 @@ public class Util {
 		for(String name : sortedInstanceNames) {
 			System.out.println(name + ": " + instanceCounts.get(name));
 		}
+		
+		SnoozeThreadSupervisor.shared().dump();
 		
 		System.out.println("\n");
 	}

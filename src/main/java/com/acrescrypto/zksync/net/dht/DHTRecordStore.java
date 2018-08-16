@@ -85,7 +85,7 @@ public class DHTRecordStore {
 	
 	public void addRecordForId(DHTID id, DHTRecord record) throws IOException {
 		if(!hasRoomForRecord(id, record)) return;
-		new Thread(()->addRecordIfReachable(id, record)).start();
+		client.threadPool.submit(()->addRecordIfReachable(id, record));
 	}
 	
 	public synchronized Collection<DHTRecord> recordsForId(DHTID id) {
@@ -127,6 +127,7 @@ public class DHTRecordStore {
 	}
 	
 	protected void addRecordIfReachable(DHTID id, DHTRecord record) {
+		Thread.currentThread().setName("Add record worker");
 		try {
 			if(!record.isReachable()) return;
 			
@@ -146,6 +147,7 @@ public class DHTRecordStore {
 		} catch(IOException exc) {
 			logger.error("Caught exception adding record to record store", exc);
 		}
+		Thread.currentThread().setName("Idle worker");
 	}
 	
 	protected String path() {

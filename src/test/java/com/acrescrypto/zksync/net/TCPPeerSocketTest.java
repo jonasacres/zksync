@@ -551,7 +551,7 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.maxHandshakeTimeMillis = 20;
 		blindHandshake(socket);
 		assertFalse(Util.waitUntil(TCPPeerSocket.maxHandshakeTimeMillis-5, ()->socket.isClosed()));
-		assertTrue(Util.waitUntil(20, ()->socket.isClosed()));
+		assertTrue(Util.waitUntil(100, ()->socket.isClosed()));
 	}
 	
 	@Test

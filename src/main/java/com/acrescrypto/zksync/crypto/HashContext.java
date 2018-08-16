@@ -18,6 +18,11 @@ public class HashContext {
 		return this;
 	}
 	
+	public HashContext update(byte[] data, int offset, int length) {
+		digest.update(data, offset, length);
+		return this;
+	}
+
 	public byte[] finish() {
 		byte[] finalDigest = new byte[digest.getDigestSize()];
 		digest.doFinal(finalDigest, 0);

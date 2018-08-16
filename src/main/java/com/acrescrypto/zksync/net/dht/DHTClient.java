@@ -10,6 +10,8 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,6 +84,7 @@ public class DHTClient {
 	Key storageKey, tagKey;
 	String bindAddress;
 	Thread socketListenerThread;
+	ExecutorService threadPool = Executors.newCachedThreadPool();
 	boolean closed, initialized;
 	DHTStatusCallback statusCallback;
 	int bindPort;
@@ -206,6 +209,7 @@ public class DHTClient {
 	
 	public void close() {
 		closed = true;
+		threadPool.shutdownNow();
 		if(socket != null) {
 			socket.close();
 		}

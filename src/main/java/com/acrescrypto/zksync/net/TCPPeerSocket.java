@@ -64,8 +64,15 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	public void handshake(PeerConnection connection) throws ProtocolViolationException, IOException {
+		int port;
+		try {
+			port = swarm.config.getMaster().getTCPListener().getPort();
+		} catch(NullPointerException exc) {
+			port = 0;
+		}
+		
 		this.connection = connection;
-		this.socket = new Socket(ad.host, ad.port);
+		this.socket = new Socket(ad.host, ad.port, null, port);
 		this.address = socket.getInetAddress().getHostAddress();
 		makeStreams();
 		try {
@@ -199,7 +206,7 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 
 	protected void sendHandshake(PublicDHKey remotePubKey) throws IOException, ProtocolViolationException {
-		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, ()->peerType >= 0, ()->close());
+		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, 10, ()->peerType >= 0, ()->close());
 		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+crypto.hashLength()+4);
 		keyHashInput.put(dhPrivateKey.publicKey().getBytes());
 		keyHashInput.put(remotePubKey.getBytes());

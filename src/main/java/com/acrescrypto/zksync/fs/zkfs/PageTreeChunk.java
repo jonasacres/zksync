@@ -16,7 +16,7 @@ public class PageTreeChunk {
 	long index;
 	protected boolean dirty;
 	
-	public PageTreeChunk(PageTree tree, byte[] chunkTag, long index) throws IOException {
+	public PageTreeChunk(PageTree tree, byte[] chunkTag, long index, boolean verify) throws IOException {
 		this.index = index;
 		this.chunkTag = chunkTag;
 		this.tree = tree;
@@ -25,7 +25,7 @@ public class PageTreeChunk {
 		if(isZero(chunkTag)) {
 			initBlank();
 		} else {
-			read();
+			read(verify);
 		}
 	}
 	
@@ -71,8 +71,9 @@ public class PageTreeChunk {
 	}
 	
 	protected void initBlank() {
-		for(int i = 0; i < tree.tagsPerChunk(); i++) {
-			tags.add(new byte[tree.archive.crypto.hashLength()]);
+		int tagsPerChunk = tree.tagsPerChunk(), hashLen = tree.archive.crypto.hashLength();
+		for(int i = 0; i < tagsPerChunk; i++) {
+			tags.add(new byte[hashLen]);
 		}
 	}
 	
@@ -94,10 +95,10 @@ public class PageTreeChunk {
 		tree.markClean(this);
 	}
 	
-	protected void read() throws IOException {
+	protected void read(boolean verify) throws IOException {
 		byte[] serialized = SignedSecureFile
 				  .withTag(chunkTag, tree.archive.storage, textKey(), authKey(), tree.archive.config.pubKey)
-				  .read();
+				  .read(verify);
 		deserialize(ByteBuffer.wrap(serialized));
 	}
 	

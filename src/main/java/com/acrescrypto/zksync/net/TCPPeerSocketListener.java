@@ -181,7 +181,7 @@ public class TCPPeerSocketListener {
 	}
 	
 	protected TCPPeerSocket performServerHandshake(Socket peerSocketRaw) throws IOException, ProtocolViolationException {
-		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, ()->established, ()->peerSocketRaw.close());
+		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, 10, ()->established, ()->peerSocketRaw.close());
 		
 		if(adListeners.isEmpty()) {
 			throw new ProtocolViolationException(); // not ready to accept peers

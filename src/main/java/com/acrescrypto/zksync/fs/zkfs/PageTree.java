@@ -15,6 +15,7 @@ public class PageTree {
 	protected Queue<PageTreeChunk> dirtyChunks;
 	protected long inodeId, inodeIdentity;
 	protected long numChunks, maxNumPages, numPages;
+	protected boolean trusted; // if true, do not validate public key signature on each page chunk
 	
 	/* Open a revtag, which is a reftag to an inode table */ 
 	public PageTree(RefTag revTag) throws IOException {
@@ -31,6 +32,7 @@ public class PageTree {
 		this.refTag = inode.refTag;
 		this.inodeId = inode.stat.getInodeId();
 		this.inodeIdentity = inode.identity;
+		this.trusted = true; // if we validated the inode table, we know the page chunks are legit too
 		initWithSize(refTag.getNumPages());
 	}
 	
@@ -39,6 +41,7 @@ public class PageTree {
 	 * any further operations.
 	 * */
 	protected PageTree(PageTree original) throws IOException {
+		this.trusted = original.trusted;
 		this.archive = original.archive;
 		this.refTag = original.refTag;
 		this.inodeId = original.inodeId;
@@ -227,7 +230,7 @@ public class PageTree {
 	
 	protected PageTreeChunk loadChunkAtIndex(long index) throws IOException {
 		if(index == 0) {
-			PageTreeChunk chunk = new PageTreeChunk(this, tagForChunk(0), 0);
+			PageTreeChunk chunk = new PageTreeChunk(this, tagForChunk(0), 0, !trusted);
 			
 			if(refTag.getRefType() != RefTag.REF_TYPE_2INDIRECT && !refTag.isBlank()) {
 				chunk.loadTag(0, refTag.getLiteral());
@@ -253,7 +256,7 @@ public class PageTree {
 			return chunkCache.get(index);
 		}
 
-		return new PageTreeChunk(this, chunkTag, index);
+		return new PageTreeChunk(this, chunkTag, index, !trusted);
 	}
 	
 	protected long indexForParent(long index) {
@@ -329,7 +332,7 @@ public class PageTree {
 		 * stuff like ArrayList wants ints. So we're actually limited to int-sizes stuff anyway, which is
 		 * probably fine for now.
 		 * */
-		return archive.config.getPageSize()/archive.getCrypto().hashLength();
+		return archive.config.getTagsPerChunk();
 	}
 	
 	protected long chunkIdAtPosition(long level, long offset) {
@@ -338,6 +341,14 @@ public class PageTree {
 
 	public long getInodeId() {
 		return inodeId;
+	}
+	
+	public void setTrusted(boolean trusted) {
+		this.trusted = trusted;
+	}
+	
+	public boolean getTrusted() {
+		return trusted;
 	}
 	
 	public void dump() throws IOException {

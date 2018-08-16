@@ -84,6 +84,10 @@ public class CryptoSupport {
 		return startHash().update(data).finish();
 	}
 	
+	public byte[] hash(byte[] data, int offset, int length) {
+		return startHash().update(data, offset, length).finish();
+	}
+
 	public byte[] authenticate(byte[] key, byte[] data) {
 		// Key must be no greater than 64 bytes, per requirements of blake2
 		Digest digest = new Blake2bDigest(key, hashLength(), null, null);

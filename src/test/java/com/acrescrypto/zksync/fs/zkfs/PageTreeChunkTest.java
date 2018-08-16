@@ -74,8 +74,8 @@ public class PageTreeChunkTest {
 		master = ZKMaster.openBlankTestVolume();
 		tree = new DummyPageTree();
 		
-		parent = new PageTreeChunk(tree, new byte[crypto.hashLength()], 1234);
-		chunk = new PageTreeChunk(tree, new byte[crypto.hashLength()], 1);
+		parent = new PageTreeChunk(tree, new byte[crypto.hashLength()], 1234, false);
+		chunk = new PageTreeChunk(tree, new byte[crypto.hashLength()], 1, false);
 	}
 	
 	@After
@@ -113,7 +113,7 @@ public class PageTreeChunkTest {
 		}
 		chunk.write();
 		
-		PageTreeChunk chunk2 = new PageTreeChunk(tree, chunk.chunkTag, chunk.index);
+		PageTreeChunk chunk2 = new PageTreeChunk(tree, chunk.chunkTag, chunk.index, false);
 		for(int i = 0; i < tree.tagsPerChunk(); i++) {
 			assertArrayEquals(crypto.hash(Util.serializeInt(i)), chunk2.getTag(i));
 		}
@@ -171,7 +171,7 @@ public class PageTreeChunkTest {
 	
 	@Test
 	public void testParentReturnsNullIfChunkIsRoot() throws IOException {
-		PageTreeChunk root = new PageTreeChunk(tree, new byte[crypto.hashLength()], 0);
+		PageTreeChunk root = new PageTreeChunk(tree, new byte[crypto.hashLength()], 0, false);
 		assertNull(root.parent());
 	}
 	
@@ -231,12 +231,12 @@ public class PageTreeChunkTest {
 		chunkData[23219] ^= 0x08;
 		tree.archive.storage.write(Page.pathForTag(chunk.chunkTag), chunkData);
 		
-		new PageTreeChunk(tree, chunk.chunkTag, chunk.index);
+		new PageTreeChunk(tree, chunk.chunkTag, chunk.index, false);
 	}
 	
 	@Test
 	public void testTextKeyConsistent() throws IOException {
-		PageTreeChunk chunk2 = new PageTreeChunk(tree, chunk.chunkTag, chunk.index);
+		PageTreeChunk chunk2 = new PageTreeChunk(tree, chunk.chunkTag, chunk.index, false);
 		assertArrayEquals(chunk.textKey().getRaw(), chunk2.textKey().getRaw());
 	}
 	
@@ -249,7 +249,9 @@ public class PageTreeChunkTest {
 	
 	@Test
 	public void testTextKeyDependsOnChunkIndex() throws IOException {
-		PageTreeChunk chunk2 = new PageTreeChunk(tree, chunk.chunkTag, chunk.index+1);
+		PageTreeChunk chunk2 = new PageTreeChunk(tree, chunk.chunkTag, chunk.index+1, false);
 		assertFalse(Arrays.equals(chunk.textKey().getRaw(), chunk2.textKey().getRaw()));
 	}
+	
+	// TODO DHT: (test) Test trusted chunks
 }
