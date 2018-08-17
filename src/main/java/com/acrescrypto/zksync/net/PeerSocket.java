@@ -163,7 +163,7 @@ public abstract class PeerSocket {
 	}
 	
 	protected void sendThread() {
-		new Thread(() -> {
+		swarm.threadPool.submit(() -> {
 			Thread.currentThread().setName("TCPPeerSocket send thread port " + getPort());
 			while(!isClosed()) {
 				try {
@@ -183,11 +183,11 @@ public abstract class PeerSocket {
 					logger.error("Socket send thread for peer {} caught exception", getAddress(), exc);
 				}
 			}
-		}).start();
+		});
 	}
 	
 	protected void recvThread() {
-		new Thread(() -> {
+		swarm.threadPool.submit(() -> {
 			Thread.currentThread().setName("PeerSocket receive thread " + getPort());
 			try {
 				while(!isClosed()) {
@@ -215,7 +215,7 @@ public abstract class PeerSocket {
 				logger.error("Socket receive thread for {} caught exception", getAddress(), exc);
 				violation();
 			}
-		}).start();
+		});
 	}
 	
 	protected void processMessage(int msgId, byte cmd, byte flags, byte[] payload) throws IOException {

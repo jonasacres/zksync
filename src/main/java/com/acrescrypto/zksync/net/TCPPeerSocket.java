@@ -38,7 +38,7 @@ public class TCPPeerSocket extends PeerSocket {
 	protected TCPPeerAdvertisement ad;
 	protected int peerType = -1;
 	
-	public TCPPeerSocket(PeerSwarm swarm, PublicDHKey remoteIdentityKey, Socket socket, byte[] sharedSecret, int peerType) throws IOException {
+	public TCPPeerSocket(PeerSwarm swarm, PublicDHKey remoteIdentityKey, Socket socket, byte[] sharedSecret, int peerType, int portNum) throws IOException {
 		this(swarm);
 		this.address = socket.getInetAddress().getHostAddress();
 		this.socket = socket;
@@ -46,6 +46,12 @@ public class TCPPeerSocket extends PeerSocket {
 		this.sharedSecret = sharedSecret;
 		this.peerType = peerType;
 		this.remoteIdentityKey = remoteIdentityKey;
+		
+		if(portNum != 0) {
+			byte[] encryptedArchiveId = swarm.config.getEncryptedArchiveId(remoteIdentityKey.getBytes());
+			this.ad = new TCPPeerAdvertisement(remoteIdentityKey, socket.getInetAddress().getHostAddress(), portNum, encryptedArchiveId);
+		}
+		
 		makeStreams();
 		initKeys();
 		swarm.openedConnection(new PeerConnection(this));
@@ -64,15 +70,8 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	public void handshake(PeerConnection connection) throws ProtocolViolationException, IOException {
-		int port;
-		try {
-			port = swarm.config.getMaster().getTCPListener().getPort();
-		} catch(NullPointerException exc) {
-			port = 0;
-		}
-		
 		this.connection = connection;
-		this.socket = new Socket(ad.host, ad.port, null, port);
+		this.socket = new Socket(ad.host, ad.port);
 		this.address = socket.getInetAddress().getHostAddress();
 		makeStreams();
 		try {
@@ -219,9 +218,14 @@ public class TCPPeerSocket extends PeerSocket {
 		Key staticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
 		
 		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
+		int port = 0;
+		try {
+			port = swarm.config.getMaster().getTCPListener().getPort();
+		} catch(NullPointerException exc) {}
 		byte[] keyKnowledgeProof = swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
 		byte[] keyHash = keyHashKey.authenticate(keyHashInput.array());
-		byte[] staticKeyCiphertext = staticSymKeyText.encrypt(new byte[crypto.symIvLength()], swarm.identityKey.publicKey().getBytes(), -1);
+		byte[] staticKeyCiphertext = staticSymKeyText.encrypt(crypto.symNonce(0), swarm.identityKey.publicKey().getBytes(), -1);
+		byte[] encryptedPortNum = staticSymKeyText.encrypt(crypto.symNonce(1), Util.serializeShort((short) port), -1);
 		
 		byte[] timeProof = crypto.authenticate(tempSharedSecret, Util.serializeInt(timeIndex));
 		
@@ -230,6 +234,7 @@ public class TCPPeerSocket extends PeerSocket {
 		out.write(timeProof);
 		out.write(keyKnowledgeProof);
 		out.write(staticKeyCiphertext);
+		out.write(encryptedPortNum);
 		
 		PublicDHKey remoteEphemeralPubKey = crypto.makePublicDHKey(readRaw(crypto.asymPublicDHKeySize()));
 		byte[] ephemeralSecret = dhPrivateKey.sharedSecret(remoteEphemeralPubKey);

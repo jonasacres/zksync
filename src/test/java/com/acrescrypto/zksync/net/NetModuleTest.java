@@ -443,16 +443,17 @@ public class NetModuleTest {
 		for(int i = 0; i < numPeers; i++) {
 			final int ii = i;
 			Util.waitUntil(10000, ()->configs[ii].getRevisionTree().plainBranchTips().size() == numPeers);
-			if(configs[ii].getRevisionTree().plainBranchTips().size() != numPeers) {
-				for(int j = 0; j < numPeers; j++) {
-					System.out.println("Dumping " + j);
-					configs[j].getRevisionTree().dump();
-					configs[j].getSwarm().dumpConnections();
-				}
-			}
+//			if(configs[ii].getRevisionTree().plainBranchTips().size() != numPeers) {
+//				for(int j = 0; j < numPeers; j++) {
+//					System.out.println("Dumping " + j);
+//					configs[j].getRevisionTree().dump();
+//					configs[j].getSwarm().dumpConnections();
+//				}
+//			}
 			assertEquals(numPeers, configs[ii].getRevisionTree().plainBranchTips().size());
 		}
 		
+		fail();
 		Util.sleep(1000);
 		
 		for(int i = 0; i < numPeers; i++) {

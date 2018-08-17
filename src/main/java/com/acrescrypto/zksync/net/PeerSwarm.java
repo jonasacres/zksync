@@ -225,12 +225,10 @@ public class PeerSwarm implements BlacklistCallback {
 			while(!closed) {
 				PeerAdvertisement ad = selectConnectionAd();
 				if(ad == null || activeSockets >= maxSocketCount) {
-					try {
-						TimeUnit.MILLISECONDS.sleep(100);
-					} catch(InterruptedException exc) {}
+					Util.sleep(100);
 					continue;
 				}
-				
+							
 				try {
 					logger.trace("Connecting to ad {}", ad);
 					openConnection(ad);

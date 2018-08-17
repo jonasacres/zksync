@@ -211,6 +211,7 @@ public class TCPPeerSocketTest {
 			}
 			
 			byte[] clientStaticKeyCiphertext = serverReadRaw(crypto.asymPrivateDHKeySize() + crypto.symTagLength());
+			serverReadRaw(2 + crypto.symTagLength()); // encrypted port number
 			Key clientStaticKeyText = new Key(crypto, tempSecret).derive(0, new byte[0]);
 			byte[] clientStaticKeyRaw = clientStaticKeyText.decryptUnpadded(new byte[crypto.symIvLength()], clientStaticKeyCiphertext);
 			PublicDHKey clientStaticKey = crypto.makePublicDHKey(clientStaticKeyRaw);
@@ -320,7 +321,7 @@ public class TCPPeerSocketTest {
 			byte[] secret = master.getCrypto().rng(master.getCrypto().asymDHSecretSize());
 			server = new ServerSocket(0);
 			clientSocketRaw = new Socket("localhost", server.getLocalPort());
-			clientSocket = new TCPPeerSocket(swarm, identityKey, clientSocketRaw, secret, PeerConnection.PEER_TYPE_BLIND);
+			clientSocket = new TCPPeerSocket(swarm, identityKey, clientSocketRaw, secret, PeerConnection.PEER_TYPE_BLIND, 0);
 			serverSocket = server.accept();
 			assertEquals(clientSocketRaw, clientSocket.socket);
 			assertTrue(Arrays.equals(secret, clientSocket.getSharedSecret()));

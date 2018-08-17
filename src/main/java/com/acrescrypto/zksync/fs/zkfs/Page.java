@@ -19,14 +19,23 @@ public class Page {
 	private ByteBuffer contents; /** page contents */
 	boolean dirty; /** true if page has been written to since last read/flush */
 	
-	public static String pathForTag(byte[] tag) {
-	    StringBuilder sb = new StringBuilder();
-	    for(int i = 0; i < tag.length; i++) {
-	        sb.append(String.format("%02x", tag[i]));
-	    	if(i < 2) sb.append("/");
+	private final static char[] hexArray = "0123456789abcdef".toCharArray();
+	public static String pathForTag(byte[] bytes) {
+		// credit: https://stackoverflow.com/questions/9655181/how-to-convert-a-byte-array-to-a-hex-string-in-java#9855338
+	    char[] hexChars = new char[2*bytes.length + 2];
+	    int ofs = 0;
+	    
+	    for (int j = 0; j < bytes.length; j++ ) {
+	        int v = bytes[j] & 0xFF;
+	        hexChars[ofs + 2*j] = hexArray[v >>> 4];
+	        hexChars[ofs + 2*j + 1] = hexArray[v & 0x0F];
+	        if(j < 2) {
+	        	hexChars[ofs + 2*j + 2] = '/';
+	        	ofs++;
+	        }
 	    }
 	    
-		return sb.toString();
+	    return new String(hexChars);
 	}
 	
 	public static byte[] tagForPath(String path) {
@@ -167,7 +176,7 @@ public class Page {
 		
 		byte[] plaintext = SignedSecureFile
 		  .withTag(pageTag, file.zkfs.archive.storage, textKey(), authKey(), file.zkfs.archive.config.pubKey)
-		  .read();
+		  .read(!file.trusted);
 		
 		contents = ByteBuffer.allocate(pageSize);
 		contents.put(plaintext);

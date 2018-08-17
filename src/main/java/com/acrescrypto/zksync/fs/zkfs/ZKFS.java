@@ -75,7 +75,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeTable.inodeWithId(inodeId);
 		
 		if(followSymlinks && inode.getStat().isSymlink()) {
-			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL);
+			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL, true);
 			String linkPath = new String(symlink.read(MAX_PATH_LEN));
 			symlink.close();
 			return inodeForPath(linkPath, true);
@@ -148,7 +148,7 @@ public class ZKFS extends FS {
 	@Override
 	public ZKFile open(String path, int mode) throws IOException {
 		assertPathIsNotDirectory(path);
-		return new ZKFile(this, path, mode);
+		return new ZKFile(this, path, mode, true);
 	}
 
 	@Override

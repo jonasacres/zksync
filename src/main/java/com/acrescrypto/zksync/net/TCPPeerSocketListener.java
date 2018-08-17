@@ -196,12 +196,14 @@ public class TCPPeerSocketListener {
 		byte[] keyKnowledgeProof = new byte[crypto.symKeyLength()];
 		byte[] staticKeyCiphertext = new byte[crypto.asymPublicDHKeySize() + crypto.symTagLength()];
 		byte[] timeProof = new byte[crypto.hashLength()];
+		byte[] encryptedPortNumber = new byte[2 + crypto.symTagLength()];
 		
 		IOUtils.readFully(in, pubKeyRaw);
 		IOUtils.readFully(in, keyHash);
 		IOUtils.readFully(in, timeProof);
 		IOUtils.readFully(in, keyKnowledgeProof);
 		IOUtils.readFully(in, staticKeyCiphertext);
+		IOUtils.readFully(in, encryptedPortNumber);
 		
 		PublicDHKey pubKey = crypto.makePublicDHKey(pubKeyRaw);
 		TCPPeerAdvertisementListener ad = findMatchingAdvertisement(pubKey, keyHash);
@@ -210,7 +212,8 @@ public class TCPPeerSocketListener {
 		checkProofAgainstReplays(tempSharedSecret, keyKnowledgeProof);
 		
 		Key clientStaticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
-		byte[] clientStaticKeyRaw = clientStaticSymKeyText.decryptUnpadded(new byte[crypto.symIvLength()], staticKeyCiphertext);
+		byte[] clientStaticKeyRaw = clientStaticSymKeyText.decryptUnpadded(crypto.symNonce(0), staticKeyCiphertext);
+		int portNum = ByteBuffer.wrap(clientStaticSymKeyText.decryptUnpadded(crypto.symNonce(1), encryptedPortNumber)).getShort();
 		PublicDHKey clientStaticKey = crypto.makePublicDHKey(clientStaticKeyRaw);
 		byte[] staticSecret = ad.swarm.identityKey.sharedSecret(clientStaticKey);
 		int timeIndex = Integer.MIN_VALUE;
@@ -270,7 +273,7 @@ public class TCPPeerSocketListener {
 		out.write(crypto.authenticate(handshakeProofKey, ad.swarm.config.getAccessor().temporalSeedId(timeIndex)));
 		
 		established = true;
-		return new TCPPeerSocket(ad.swarm, clientStaticKey, peerSocketRaw, sharedSecret, peerType);
+		return new TCPPeerSocket(ad.swarm, clientStaticKey, peerSocketRaw, sharedSecret, peerType, portNum);
 	}
 	
 	protected synchronized TCPPeerAdvertisementListener findMatchingAdvertisement(PublicDHKey pubKey, byte[] keyHash) throws ProtocolViolationException {

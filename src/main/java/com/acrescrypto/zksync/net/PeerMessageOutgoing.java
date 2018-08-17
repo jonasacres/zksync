@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.RejectedExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,26 +54,29 @@ public class PeerMessageOutgoing extends PeerMessage {
 	}
 
 	protected void runTxThread() {
-		if(connection.socket.threadPool.isShutdown()) return;
-		connection.socket.threadPool.submit(() -> {
-			Thread.currentThread().setName("PeerMessageOutgoing tx thread cmd=" + cmd);
-			try {
-				while(!txClosed() && !aborted) {
-					if(queuedSegment != null) queuedSegment.waitForDelivery();
-					accumulateNext();
-					
-					if(connection.isPausable(cmd)) {
-						connection.waitForUnpause();
+		try {
+			connection.socket.threadPool.submit(() -> {
+				Thread.currentThread().setName("PeerMessageOutgoing tx thread cmd=" + cmd);
+				try {
+					while(!txClosed() && !aborted) {
+						if(queuedSegment != null) queuedSegment.waitForDelivery();
+						accumulateNext();
+						
+						if(connection.isPausable(cmd)) {
+							connection.waitForUnpause();
+						}
+						
+						if(queuedSegment != null && !aborted) {
+							sendNext();
+						}
 					}
-					
-					if(queuedSegment != null && !aborted) {
-						sendNext();
-					}
+				} catch(Exception exc) {
+					logger.error("Outgoing message thread to {} caught exception", connection.socket.getAddress(), exc);
 				}
-			} catch(Exception exc) {
-				logger.error("Outgoing message thread to {} caught exception", connection.socket.getAddress(), exc);
-			}
-		});
+			});
+		} catch(RejectedExecutionException exc) {
+			logger.info("Canceled TX thread start because thread pool is shut down");
+		}
 	}
 	
 	protected void accumulateNext() throws IOException {

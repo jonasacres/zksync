@@ -51,6 +51,7 @@ public class InodeTable extends ZKFile {
 	 */
 	public InodeTable(ZKFS fs, RefTag tag) throws IOException {
 		super(fs);
+		this.trusted = false;
 		this.path = INODE_TABLE_PATH;
 		this.mode = O_RDWR;
 		this.inodesByPage = new HashCache<Long,Inode[]>(16, (Long pageNum) -> {

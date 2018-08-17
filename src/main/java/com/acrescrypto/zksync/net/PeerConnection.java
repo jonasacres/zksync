@@ -77,7 +77,7 @@ public class PeerConnection {
 	protected void initialize() throws IOException {
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config);
-		new Thread(()->pageQueueThread()).start();
+		socket.swarm.threadPool.submit(()->pageQueueThread());
 		announceTips();
 		announceTags();
 	}

@@ -30,6 +30,7 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	protected ZKArchiveConfig config;
 	protected byte[] ciphertext;
 	protected byte[] signature;
+	protected boolean validated;
 	
 	public static int sizeForConfig(ZKArchiveConfig config) {
 		return config.refTagSize() + config.getCrypto().asymSignatureSize();
@@ -45,6 +46,7 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 		Key key = config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
 		this.ciphertext = config.getCrypto().encryptCBC(key.getRaw(), new byte[config.getCrypto().symBlockSize()], transform(refTag.getBytes()));
 		this.signature = config.privKey.sign(ciphertext);
+		this.validated = true;
 	}
 	
 	public int ciphertextLength() {
@@ -56,7 +58,8 @@ public class ObfuscatedRefTag implements Comparable<ObfuscatedRefTag> {
 	}
 	
 	public boolean verify() {
-		return config.pubKey.verify(ciphertext, signature);
+		if(validated) return true;
+		return validated = config.pubKey.verify(ciphertext, signature);
 	}
 	
 	public void assertValid() throws InvalidSignatureException {

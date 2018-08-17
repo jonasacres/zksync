@@ -135,6 +135,8 @@ public class RevisionTreeTest {
 		
 		HashSet<RefTag> expected = new HashSet<RefTag>();
 		expected.add(RefTag.blank(mfs.archive));
+		
+		// see where mrevisions is defined for comment as to why we expect these, and only these revisions
 		for(int i = 0; i < mrevisions.length; i++) {
 			if(i <= 2 || i >= mrevisions.length-2) expected.add(mrevisions[i]);
 		}
@@ -153,7 +155,7 @@ public class RevisionTreeTest {
 	@Test
 	public void testCommonAncestorParentChild() throws IOException {
 		RefTag ancestor = tree.commonAncestorOf(new RefTag[] { revisions[NUM_ROOTS], revisions[0] });
-		assertTrue(revisions[0].equals(ancestor));
+		assertEquals(revisions[0], ancestor);
 	}
 	
 	@Test

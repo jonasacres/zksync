@@ -21,20 +21,23 @@ public class ZKFile extends File {
 	protected int mode; /** file access mode bitmask */
 	protected Page bufferedPage; /** buffered page contents (page for current file pointer offset) */
 	protected boolean dirty; /** true if file has been modified since last flush */
+	protected boolean trusted; /** verify page signatures when reading <=> !trusted */
 	
 	public final static int O_LINK_LITERAL = 1 << 16; /** treat symlinks as literal files, needed for lowlevel symlink operations */
 	
 	protected ZKFile(ZKFS fs) {
 		super(fs);
 		this.zkfs = fs;
+		this.trusted = true; // set to false for inode table
 	}
 	
 	/** Open a file handle at a path */
-	public ZKFile(ZKFS fs, String path, int mode) throws IOException {
+	public ZKFile(ZKFS fs, String path, int mode, boolean trusted) throws IOException {
 		super(fs);
 		this.zkfs = fs;
 		this.path = path;
 		this.mode = mode;
+		this.trusted = trusted;
 		
 		if((mode & (O_NOFOLLOW | O_LINK_LITERAL)) == O_LINK_LITERAL) {
 			throw new EINVALException("O_LINK_LITERAL not valid without O_NOFOLLOW");

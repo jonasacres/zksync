@@ -11,6 +11,7 @@ import com.acrescrypto.zksync.crypto.HashContext;
 
 public class Util {
 	static long debugTime = -1;
+	private final static char[] hexArray = "0123456789abcdef".toCharArray();
 	
 	public interface WaitTest {
 		boolean test();
@@ -59,6 +60,7 @@ public class Util {
 	}
 
 	public static byte[] hexToBytes(String s) {
+		// credit: https://stackoverflow.com/questions/140131/convert-a-string-representation-of-a-hex-dump-to-a-byte-array-using-java/140861#140861
 		int len = s.length();
 		byte[] data = new byte[len / 2];
 		for (int i = 0; i < len; i += 2) {
@@ -73,9 +75,14 @@ public class Util {
 	}
 	
 	public static String bytesToHex(byte[] b, int length) {
-		StringBuilder sb = new StringBuilder();
-		for(int i = 0; i < Math.min(b.length, length); i++) sb.append(String.format("%02x", b[i]));
-		return sb.toString();
+		// credit: https://stackoverflow.com/questions/9655181/how-to-convert-a-byte-array-to-a-hex-string-in-java#9855338
+	    char[] hexChars = new char[2*b.length ];
+	    for(int j = 0; j < b.length; j++) {
+	        int v = b[j] & 0xff;
+	        hexChars[2*j] = hexArray[v >>> 4];
+	        hexChars[2*j + 1] = hexArray[v & 0x0f];
+	    }
+	    return new String(hexChars);
 	}
 
 	public static byte[] truncateArray(byte[] array, int length) {

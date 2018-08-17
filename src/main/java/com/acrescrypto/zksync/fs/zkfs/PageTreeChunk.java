@@ -71,9 +71,11 @@ public class PageTreeChunk {
 	}
 	
 	protected void initBlank() {
+		// This is a hot spot. Anything we can do to speed this up will be a big help.
 		int tagsPerChunk = tree.tagsPerChunk(), hashLen = tree.archive.crypto.hashLength();
+		byte[] blankTag = new byte[hashLen];
 		for(int i = 0; i < tagsPerChunk; i++) {
-			tags.add(new byte[hashLen]);
+			tags.add(blankTag);
 		}
 	}
 	
@@ -113,7 +115,8 @@ public class PageTreeChunk {
 	
 	protected void deserialize(ByteBuffer serialized) {
 		tags.clear();
-		while(serialized.remaining() >= tree.archive.crypto.hashLength()) {
+		int hashLength = tree.archive.crypto.hashLength();
+		while(serialized.remaining() >= hashLength) {
 			byte[] tag = new byte[tree.archive.crypto.hashLength()];
 			serialized.get(tag);
 			tags.add(tag);

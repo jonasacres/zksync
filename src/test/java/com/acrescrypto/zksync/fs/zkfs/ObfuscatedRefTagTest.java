@@ -98,6 +98,7 @@ public class ObfuscatedRefTagTest {
 	public void testAssertValidThrowsException() throws InvalidSignatureException {
 		obfTag.assertValid();
 		obfTag.ciphertext[0] ^= 1;
+		obfTag.validated = false;
 		try {
 			obfTag.assertValid();
 			fail();
@@ -114,6 +115,7 @@ public class ObfuscatedRefTagTest {
 	@Test
 	public void testRevealThrowsExceptionWithInvalidSig() {
 		obfTag.ciphertext[1] ^= 3;
+		obfTag.validated = false;
 		try {
 			obfTag.reveal();
 			fail();

@@ -123,7 +123,8 @@ public class TCPPeerSocketListenerTest {
 		byte[] tempSharedSecret = peerKey.sharedSecret(adKey);
 		byte[] staticSecret = swarm.identityKey.sharedSecret(adKey);
 		Key staticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
-		staticKeyCiphertext = staticSymKeyText.encrypt(new byte[crypto.symIvLength()], swarm.identityKey.publicKey().getBytes(), -1);
+		staticKeyCiphertext = staticSymKeyText.encrypt(crypto.symNonce(0), swarm.identityKey.publicKey().getBytes(), -1);
+		byte[] encryptedPortNumber = staticSymKeyText.encrypt(crypto.symNonce(1), Util.serializeShort((short) 0), -1);
 		
 		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize()+crypto.hashLength()+4);
 		keyHashInput.put(peerKey.publicKey().getBytes());
@@ -144,6 +145,7 @@ public class TCPPeerSocketListenerTest {
 		out.write(timeProof);
 		out.write(keyKnowledgeProof);
 		out.write(staticKeyCiphertext);
+		out.write(encryptedPortNumber);
 		
 		return staticSecret;
 	}

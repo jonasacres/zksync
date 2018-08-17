@@ -638,7 +638,7 @@ public class DHTClientTest {
 		
 		MutableBoolean received = new MutableBoolean();
 		clientPeer.findNode(remote.listenClient.id, (peers, isFinal)->{ received.setTrue(); }, (record)->{});
-		Util.waitUntil(MAX_TEST_TIME_MS, ()->received.booleanValue());
+		assertFalse(Util.waitUntil(MAX_MSG_WAIT_TIME_MS, ()->received.booleanValue()));
 	}
 	
 	@Test
@@ -652,7 +652,7 @@ public class DHTClientTest {
 		
 		MutableBoolean received = new MutableBoolean();
 		clientPeer.findNode(remote.listenClient.id, (peers, isFinal)->{ received.setTrue(); }, (record)->{});
-		Util.waitUntil(MAX_TEST_TIME_MS, ()->received.booleanValue());
+		assertFalse(Util.waitUntil(MAX_MSG_WAIT_TIME_MS, ()->received.booleanValue()));
 	}
 	
 	@Test

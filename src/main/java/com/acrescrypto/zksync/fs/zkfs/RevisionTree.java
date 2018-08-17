@@ -18,6 +18,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
+import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionTree {
@@ -29,8 +30,14 @@ public class RevisionTree {
 	protected boolean automerge;
 	private Logger logger = LoggerFactory.getLogger(RevisionTree.class);
 	
+	protected HashCache<RefTag,HashSet<RefTag>> ancestorList; 
+	
 	public RevisionTree(ZKArchiveConfig config) throws IOException {
 		this.config = config;
+		this.ancestorList = new HashCache<RefTag, HashSet<RefTag>>(64, (tag)->{
+			return new HashSet<>(tag.getInfo().getAncestors());
+		}, (tag, ancestors)->{});
+		
 		try {
 			read();
 		} catch(ENOENTException exc) {
@@ -94,16 +101,7 @@ public class RevisionTree {
 	
 	public boolean tagHasAncestor(RefTag tag, RefTag ancestor) throws IOException {
 		if(tag.equals(ancestor)) return true;
-		
-		for(RefTag parent : tag.getInfo().parents) {
-			if(parent.equals(ancestor)) return true;
-		}
-		
-		for(RefTag parent : tag.getInfo().parents) {
-			if(tagHasAncestor(parent, ancestor)) return true;
-		}
-		
-		return false;
+		return ancestorList.get(tag).contains(ancestor);
 	}
 	
 	public boolean tagSupercedes(RefTag tag, RefTag other) throws IOException {
@@ -120,9 +118,7 @@ public class RevisionTree {
 	}
 	
 	public HashSet<RefTag> ancestorsOf(RefTag revision) throws IOException {
-		HashSet<RefTag> set = new HashSet<RefTag>();
-		addAncestorsOf(revision, set);
-		return set;
+		return ancestorList.get(revision);
 	}
 	
 	public synchronized void consolidate() throws IOException {
@@ -139,7 +135,6 @@ public class RevisionTree {
 		
 		for(RefTag obsoleteTag : obsoleted) {
 			removeBranchTip(obsoleteTag);
-			System.out.println(Util.bytesToHex(config.swarm.getPublicIdentityKey().getBytes(), 6) + " pruned " + obsoleteTag.hasFlag(RefTag.FLAG_NO_NEW_CONTENT) + " " + Util.bytesToHex(obsoleteTag.obfuscate().serialize(), 4) + " - " + branchTips.size());
 		}
 	}
 	
