@@ -142,11 +142,6 @@ public class RefTag implements Comparable<RefTag> {
 		return unpadHash(hash);
 	}
 	
-	public RevisionInfo getInfo() throws IOException {
-		if(info == null) info = readOnlyFS().getRevisionInfo();
-		return info;
-	}
-	
 	protected byte[] serialize() {
 		ByteBuffer buf = ByteBuffer.allocate(config.refTagSize());
 		buf.put(hash);
@@ -177,24 +172,6 @@ public class RefTag implements Comparable<RefTag> {
 		this.tag = serialized.clone();
 	}
 	
-	public ZKFS readOnlyFS() throws IOException {
-		if(cacheOnly) {
-			return config.archive.cacheOnlyArchive().readOnlyFilesystems.get(this);
-		} else {
-			return config.archive.readOnlyFilesystems.get(this);
-		}
-	}
-	
-	public RefTag makeCacheOnly() {
-		RefTag tag = new RefTag(config, serialize());
-		tag.cacheOnly = true;
-		return tag;
-	}
-	
-	public ZKFS getFS() throws IOException {
-		return new ZKFS(this);
-	}
-	
 	public int hashCode() {
 		return ByteBuffer.wrap(tag).getInt();
 	}
@@ -205,29 +182,7 @@ public class RefTag implements Comparable<RefTag> {
 	}
 	
 	public int compareTo(RefTag other) {
-		if(this.equals(other)) return 0;
-		
-		try {
-			if(config.getRevisionTree().tagHasAncestor(this, other)) return 1;
-			if(config.getRevisionTree().tagHasAncestor(other, this)) return -1;
-		} catch(Exception exc) {
-			// can't load at least one of the two revisions; proceed to other comparisons
-		}
-		
-		try {
-			if(getInfo() != null && other.getInfo() != null) {
-				int r = (new Long(info.inode.modifiedTime)).compareTo(other.info.inode.modifiedTime);
-				if(r != 0) return r;
-			}
-		} catch (IOException e) {
-		}
-		
-		for(int i = 0; i < tag.length; i++) {
-			int v = Util.unsignByte(tag[i]) - Util.unsignByte(other.tag[i]);
-			if(v != 0) return v;
-		}
-		
-		return 0; // shouldn't be possible since we checked equality at start
+		return Util.compareArrays(tag, other.tag);
 	}
 	
 	public ZKArchiveConfig getConfig() {
@@ -240,9 +195,5 @@ public class RefTag implements Comparable<RefTag> {
 	
 	public String toString() {
 		return "RefTag " + Util.bytesToHex(tag);
-	}
-
-	public ObfuscatedRefTag obfuscate() throws IOException {
-		return new ObfuscatedRefTag(this);
 	}
 }

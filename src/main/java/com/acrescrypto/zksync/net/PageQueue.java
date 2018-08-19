@@ -16,6 +16,7 @@ import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.utility.Shuffler;
@@ -111,10 +112,10 @@ public class PageQueue {
 		PageTree tree;
 		Shuffler shuffler;
 		
-		InodeContentsQueueItem(int priority, RefTag revTag, long inodeId) {
+		InodeContentsQueueItem(int priority, RevisionTag revTag, long inodeId) {
 			super(priority);
 			try {
-				PageTree inodeTableTree = new PageTree(revTag);
+				PageTree inodeTableTree = new PageTree(revTag.getRefTag());
 				inodeTableTree.assertExists();
 				
 				Inode inode = revTag.getFS().getInodeTable().inodeWithId(inodeId);
@@ -158,12 +159,12 @@ public class PageQueue {
 	class RevisionQueueItem extends QueueItem {
 		InodeTable inodeTable;
 		Shuffler shuffler;
-		RefTag revTag;
+		RevisionTag revTag;
 		
-		RevisionQueueItem(int priority, RefTag revTag) {
+		RevisionQueueItem(int priority, RevisionTag revTag) {
 			super(priority);
 			this.revTag = revTag;
-			if(revTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) {
+			if(revTag.getRefTag().getRefType() == RefTag.REF_TYPE_IMMEDIATE) {
 				this.shuffler = Shuffler.fixedShuffler(0);
 				return;
 			}
@@ -260,11 +261,11 @@ public class PageQueue {
 		addItem(new PageQueueItem(priority, config.getArchive(), pageTag));
 	}
 	
-	public void addInodeContents(int priority, RefTag revTag, long inodeId) {
+	public void addInodeContents(int priority, RevisionTag revTag, long inodeId) {
 		addItem(new InodeContentsQueueItem(priority, revTag, inodeId));
 	}
 	
-	public void addRevisionTag(int priority, RefTag revTag) {
+	public void addRevisionTag(int priority, RevisionTag revTag) {
 		addItem(new RevisionQueueItem(priority, revTag));
 	}
 	

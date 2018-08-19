@@ -16,7 +16,6 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
-import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RefTagTest {
@@ -111,11 +110,6 @@ public class RefTagTest {
 	}
 	
 	@Test
-	public void testObfuscation() throws InvalidSignatureException, IOException {
-		assertEquals(tag, tag.obfuscate().reveal());
-	}
-	
-	@Test
 	public void testEqualsMatchesForIdenticalTags() {
 		RefTag clone = new RefTag(tag.config, tag.serialize());
 		assertEquals(tag, clone);
@@ -163,13 +157,15 @@ public class RefTagTest {
 		assertFalse(tag.hasFlag(RefTag.FLAG_NO_NEW_CONTENT));
 	}
 	
+	// TODO DHT: (rewrite tests) RefTag compareTo is totally different now, so tests need to be rewritten.
+	
 	@Test
 	public void testCompareToReturnsPositiveIfLeftIsDescendentOfRight() throws IOException {
 		// fix the timestamp so it is not a consideration
 		Util.setCurrentTimeMillis(1000*60*60*24*365);
 		ZKFS fs = archive.openBlank();
-		RefTag right = fs.commit();
-		RefTag left = fs.commit();
+		RevisionTag right = fs.commit();
+		RevisionTag left = fs.commit();
 		
 		assertTrue(left.compareTo(right) > 0);
 		fs.close();
@@ -180,8 +176,8 @@ public class RefTagTest {
 		// fix the timestamp so it is not a consideration
 		Util.setCurrentTimeMillis(1000*60*60*24*365);
 		ZKFS fs = archive.openBlank();
-		RefTag left = fs.commit();
-		RefTag right = fs.commit();
+		RevisionTag left = fs.commit();
+		RevisionTag right = fs.commit();
 		
 		assertTrue(left.compareTo(right) < 0);
 		fs.close();
@@ -190,11 +186,11 @@ public class RefTagTest {
 	@Test
 	public void testCompareToReturnsNegativeIfLeftIsModifiedBeforeRight() throws IOException {
 		ZKFS fs = archive.openBlank();
-		RefTag left = fs.commit();
+		RevisionTag left = fs.commit();
 		
 		fs.close();
 		fs = archive.openBlank();
-		RefTag right = fs.commit();
+		RevisionTag right = fs.commit();
 		assertTrue(left.compareTo(right) < 0);
 		fs.close();
 	}
@@ -202,11 +198,11 @@ public class RefTagTest {
 	@Test
 	public void testCompareToReturnsPositiveIfRightIsModifiedBeforeLeft() throws IOException {
 		ZKFS fs = archive.openBlank();
-		RefTag right = fs.commit();
+		RevisionTag right = fs.commit();
 		
 		fs.close();
 		fs = archive.openBlank();
-		RefTag left = fs.commit();
+		RevisionTag left = fs.commit();
 		assertTrue(left.compareTo(right) > 0);
 		fs.close();
 	}

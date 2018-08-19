@@ -24,6 +24,7 @@ import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -41,10 +42,10 @@ public class RequestPoolTest {
 	class DummyConnection extends PeerConnection {
 		boolean requestedAll, mockSeedOnly, setPaused, setPausedValue, requestedConfigInfo;
 		int requestedPriority;
-		RefTag requestedRevTag;
+		RevisionTag requestedRevTag;
 		
-		LinkedList<RefTag> requestedRefTags = new LinkedList<>();
-		LinkedList<RefTag> requestedRevisions = new LinkedList<>();
+		LinkedList<RevisionTag> requestedRefTags = new LinkedList<>();
+		LinkedList<RevisionTag> requestedRevisions = new LinkedList<>();
 		LinkedList<Long> requestedPageTags = new LinkedList<>();
 		LinkedList<Long> requestedInodeIds = new LinkedList<>();
 		
@@ -59,14 +60,14 @@ public class RequestPoolTest {
 			requestedPageTags.addAll(pageTags);
 		}
 		
-		@Override public void requestInodes(int priority, RefTag revTag, Collection<Long> inodeIds) throws PeerCapabilityException { 
+		@Override public void requestInodes(int priority, RevisionTag revTag, Collection<Long> inodeIds) throws PeerCapabilityException { 
 			if(mockSeedOnly) throw new PeerCapabilityException();
 			requestedPriority = priority;
 			requestedRevTag = revTag;
 			requestedInodeIds.addAll(inodeIds);
 		}
 		
-		@Override public void requestRevisionContents(int priority, Collection<RefTag> refTags) throws PeerCapabilityException {
+		@Override public void requestRevisionContents(int priority, Collection<RevisionTag> refTags) throws PeerCapabilityException {
 			if(mockSeedOnly) throw new PeerCapabilityException();
 			requestedPriority = priority;
 			requestedRevisions.addAll(refTags);
@@ -138,7 +139,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testAddInode() throws IOException {
-		RefTag refTag = archive.openBlank().commit();
+		RevisionTag refTag = archive.openBlank().commit();
 		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
 		pool.addInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE);
 		assertTrue(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
@@ -146,7 +147,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testAddRevision() throws IOException {
-		RefTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commit();
 		assertFalse(pool.hasRevision(-123456, revTag));
 		pool.addRevision(-123456, revTag);
 		assertTrue(pool.hasRevision(-123456, revTag));
@@ -220,7 +221,8 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testAddRequestsToPeerCallsRequestInodes() {
-		RefTag revTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+		RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		LinkedList<Long> inodeIds = new LinkedList<>();
 		
 		for(int i = 0; i < 16; i++) {
@@ -236,11 +238,12 @@ public class RequestPoolTest {
 
 	@Test
 	public void testAddRequestsToPeerCallsRequestRevisionContents() {
-		LinkedList<RefTag> tags = new LinkedList<>();
+		LinkedList<RevisionTag> tags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
 			RefTag tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
-			tags.add(tag);
-			pool.addRevision(-123, tag);
+			RevisionTag revTag = new RevisionTag(tag, 0, 0);
+			tags.add(revTag);
+			pool.addRevision(-123, revTag);
 		}
 		
 		pool.addRequestsToConnection(conn);
@@ -252,7 +255,8 @@ public class RequestPoolTest {
 	public void testAddRequestsToPeerToleratesSeedOnly() {
 		conn.mockSeedOnly = true;
 		RefTag tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
-		pool.addRevision(0, tag);		
+		RevisionTag revTag = new RevisionTag(tag, 0, 0);
+		pool.addRevision(0, revTag);		
 		pool.addRequestsToConnection(conn);
 		assertTrue(conn.requestedRevisions.isEmpty());
 		// real test here is verifying that no exceptions are thrown
@@ -305,14 +309,15 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testPruneRemovesAcquiredRevisions() throws IOException {
-		RefTag realTag = archive.openBlank().commit();
+		RevisionTag realTag = archive.openBlank().commit();
 
-		LinkedList<RefTag> tags = new LinkedList<>();
+		LinkedList<RevisionTag> tags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
-			RefTag tag;
+			RevisionTag tag;
 			do {
-				tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
-			} while(tag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);
+				RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+				tag = new RevisionTag(refTag, 0, 0);
+			} while(tag.getRefTag().getRefType() == RefTag.REF_TYPE_IMMEDIATE);
 			tags.add(tag);
 			pool.addRevision(i, tag);
 		}
@@ -329,7 +334,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testPruneThreadCallsPrune() throws IOException {
-		RefTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commit();
 		RequestPool.pruneIntervalMs = 10;
 		RequestPool pool2 = new RequestPool(config);
 		pool2.addRevision(0, revTag);
@@ -340,7 +345,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testStopCancelsPruneThread() throws IOException {
-		RefTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commit();
 		RequestPool.pruneIntervalMs = 10;
 		RequestPool pool2 = new RequestPool(config);
 		pool2.addRevision(0, revTag);
@@ -351,9 +356,11 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testSerialization() throws IOException {
-		LinkedList<RefTag> tags = new LinkedList<>();
+		LinkedList<RevisionTag> tags = new LinkedList<>();
 		for(int i = 0; i < 64; i++) {
-			tags.add(new RefTag(archive, crypto.rng(archive.getConfig().refTagSize())));
+			RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+			RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+			tags.add(revTag);
 			
 			if(i % 3 == 0) pool.addPageTag(i, tags.peekLast().getShortHash());
 			if(i % 3 == 1) {

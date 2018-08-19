@@ -5,11 +5,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 import com.acrescrypto.zksync.fs.zkfs.Inode;
-import com.acrescrypto.zksync.fs.zkfs.RefTag;
-import com.acrescrypto.zksync.utility.Util;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 
 public class InodeDiff {
-	protected HashMap<Inode,ArrayList<RefTag>> resolutions = new HashMap<Inode,ArrayList<RefTag>>();
+	protected HashMap<Inode,ArrayList<RevisionTag>> resolutions = new HashMap<Inode,ArrayList<RevisionTag>>();
 	protected long inodeId;
 	protected boolean resolved;
 	protected Inode resolution;
@@ -18,12 +17,12 @@ public class InodeDiff {
 		this.inodeId = inodeId;
 	}
 	
-	public InodeDiff(long inodeId, RefTag[] candidates) throws IOException {
+	public InodeDiff(long inodeId, RevisionTag[] candidates) throws IOException {
 		this.inodeId = inodeId;
-		for(RefTag candidate : candidates) {
+		for(RevisionTag candidate : candidates) {
 			Inode inode = candidate.readOnlyFS().getInodeTable().inodeWithId(inodeId);
 			if(inode.isDeleted()) inode = null;
-			getResolutions().putIfAbsent(inode, new ArrayList<RefTag>());
+			getResolutions().putIfAbsent(inode, new ArrayList<>());
 			getResolutions().get(inode).add(candidate);
 		}
 	}
@@ -36,7 +35,7 @@ public class InodeDiff {
 		return inodeId;
 	}
 
-	public HashMap<Inode,ArrayList<RefTag>> getResolutions() {
+	public HashMap<Inode,ArrayList<RevisionTag>> getResolutions() {
 		return resolutions;
 	}
 	
@@ -57,7 +56,7 @@ public class InodeDiff {
 		return "InodeDiff " + inodeId + " (" + resolutions.size() + " versions)";
 	}
 
-	public void add(Inode newInode, ArrayList<RefTag> tags) {
+	public void add(Inode newInode, ArrayList<RevisionTag> tags) {
 		resolutions.put(newInode, tags);
 	}
 	
@@ -67,7 +66,7 @@ public class InodeDiff {
 			s += "  Inode " + (inode == null ? "null" : inode.getIdentity()) + ": " + resolutions.get(inode).size() + " reftags";
 			if(resolved && resolution.equals(inode)) s += " (SELECTED)";
 			s += "\n   ";
-			for(RefTag tag : resolutions.get(inode)) s += " " + Util.bytesToHex(tag.getShortHashBytes());
+			for(RevisionTag tag : resolutions.get(inode)) s += " " + tag;
 			s += "\n";
 		}
 		return s;

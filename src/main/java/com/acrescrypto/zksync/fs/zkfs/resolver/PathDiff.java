@@ -6,10 +6,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.acrescrypto.zksync.exceptions.ENOENTException;
-import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 
 public class PathDiff implements Comparable<PathDiff> {
-	protected HashMap<Long,ArrayList<RefTag>> resolutions = new HashMap<Long,ArrayList<RefTag>>();
+	protected HashMap<Long,ArrayList<RevisionTag>> resolutions = new HashMap<Long,ArrayList<RevisionTag>>();
 	protected String path;
 	protected boolean resolved;
 	protected Long resolution;
@@ -18,15 +18,15 @@ public class PathDiff implements Comparable<PathDiff> {
 		this.path = path;
 	}
 	
-	public PathDiff(String path, RefTag[] candidates, Map<Long, Map<RefTag, Long>> idMap) throws IOException {
+	public PathDiff(String path, RevisionTag[] candidates, Map<Long, Map<RevisionTag, Long>> idMap) throws IOException {
 		this.path = path;
-		for(RefTag candidate : candidates) {
+		for(RevisionTag candidate : candidates) {
 			Long inodeId = null;
 			try {
 				inodeId = candidate.readOnlyFS().inodeForPath(path).getStat().getInodeId();
 				if(idMap != null && idMap.containsKey(inodeId)) inodeId = idMap.get(inodeId).getOrDefault(candidate, inodeId);
 			} catch (ENOENTException e) {}
-			getResolutions().putIfAbsent(inodeId, new ArrayList<RefTag>());
+			getResolutions().putIfAbsent(inodeId, new ArrayList<>());
 			getResolutions().get(inodeId).add(candidate);
 		}
 	}
@@ -39,7 +39,7 @@ public class PathDiff implements Comparable<PathDiff> {
 		return path;
 	}
 
-	public HashMap<Long,ArrayList<RefTag>> getResolutions() {
+	public HashMap<Long,ArrayList<RevisionTag>> getResolutions() {
 		return resolutions;
 	}
 
@@ -61,8 +61,8 @@ public class PathDiff implements Comparable<PathDiff> {
 		return "PathDiff " + path + " (" + resolutions.size() + " versions)";
 	}
 
-	public void add(Long newInodeId, RefTag tag) {
-		resolutions.putIfAbsent(newInodeId, new ArrayList<RefTag>());
+	public void add(Long newInodeId, RevisionTag tag) {
+		resolutions.putIfAbsent(newInodeId, new ArrayList<RevisionTag>());
 		resolutions.get(newInodeId).add(tag);
 	}
 }

@@ -25,6 +25,7 @@ import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
@@ -38,7 +39,7 @@ public class PageQueueTest {
 	static ZKArchive archive;
 	static ZKMaster master;
 	static Inode inodeImmediate, inodeIndirect, inode2Indirect;
-	static RefTag revTag, secondRevTag;
+	static RevisionTag revTag, secondRevTag;
 	static LinkedList<Inode> inodesInRevision, inodesInSecondRevision;
 	static byte[] pageTag;
 	static int numChunks;
@@ -119,7 +120,7 @@ public class PageQueueTest {
 		return expectedTags;
 	}
 
-	public HashSet<Long> expectedPageTagsForRevTag(RefTag revTag) throws IOException {
+	public HashSet<Long> expectedPageTagsForRevTag(RevisionTag revTag) throws IOException {
 		HashSet<Long> expectedTags = new HashSet<Long>();
 		ZKFS fs = revTag.readOnlyFS();
 		
@@ -575,7 +576,8 @@ public class PageQueueTest {
 		// make a reftag for which we have no data
 		byte[] corruptRaw = revTag.getBytes().clone();
 		corruptRaw[2] ^= 0x20;
-		RefTag corrupt = new RefTag(archive, corruptRaw);
+		RefTag corruptRef = new RefTag(archive, corruptRaw);
+		RevisionTag corrupt = new RevisionTag(corruptRef, 0, 0);
 		
 		// queue it up; shouldn't generate any chunks, or problems
 		queue.addInodeContents(0, corrupt, inodeIndirect.getStat().getInodeId());
@@ -643,7 +645,7 @@ public class PageQueueTest {
 		assertFalse(Arrays.equals(pageTag, nextTag));
 	}
 	
-	public Inode inodeForPageTag(RefTag revTag, byte[] pageTag) throws IOException {
+	public Inode inodeForPageTag(RevisionTag revTag, byte[] pageTag) throws IOException {
 		ZKFS fs = revTag.readOnlyFS();
 		for(int i = 0; i < fs.getInodeTable().nextInodeId; i++) {
 			Inode inode = fs.getInodeTable().inodeWithId(i);
@@ -702,7 +704,8 @@ public class PageQueueTest {
 		// make a revtag that isn't read
 		byte[] corruptRaw = revTag.getBytes().clone();
 		corruptRaw[2] ^= 0x20;
-		RefTag corrupt = new RefTag(archive, corruptRaw);
+		RefTag corruptRef = new RefTag(archive, corruptRaw);
+		RevisionTag corrupt = new RevisionTag(corruptRef, 0, 0);
 		
 		// queue it up; shouldn't generate any chunks, or problems
 		queue.addRevisionTag(0, corrupt);
@@ -723,18 +726,19 @@ public class PageQueueTest {
 	public void testAddRevisionTagToleratesFileRefTags() throws IOException {
 		RefTag[] tags = { inodeImmediate.getRefTag(), inodeIndirect.getRefTag(), inode2Indirect.getRefTag() };
 		for(RefTag tag : tags) {
+			RevisionTag pageRevTag = new RevisionTag(tag, 0, 0);
 			// queue it up with a file reftag; shouldn't generate any chunks, or problems
-			queue.addRevisionTag(0, tag);
+			queue.addRevisionTag(0, pageRevTag);
 			assertFalse(queue.hasNextChunk());
 			
 			// try again, except add a real one after and make sure we still get data
-			queue.addRevisionTag(0, tag);
+			queue.addRevisionTag(0, pageRevTag);
 			queue.addRevisionTag(0, revTag);
 			expectTagsFromQueue(expectedPageTagsForRevTag(revTag));
 			
 			// and again, except the legal one goes first
 			queue.addRevisionTag(0, revTag);
-			queue.addRevisionTag(0, tag);
+			queue.addRevisionTag(0, pageRevTag);
 			expectTagsFromQueue(expectedPageTagsForRevTag(revTag));
 		}
 	}

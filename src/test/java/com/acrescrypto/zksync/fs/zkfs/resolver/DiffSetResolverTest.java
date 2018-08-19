@@ -21,7 +21,7 @@ import com.acrescrypto.zksync.utility.Util;
 public class DiffSetResolverTest {
 	ZKFS fs;
 	ZKArchive archive;
-	RefTag base;
+	RevisionTag base;
 	static ZKMaster master;
 	
 	@BeforeClass
@@ -61,8 +61,8 @@ public class DiffSetResolverTest {
 	public void testMergesInheritFromAllParents() throws IOException, DiffResolutionException {
 		// do merges correctly list all their parents in their RevisionInfo?
 		ZKFS fs = archive.openRevision(base);
-		RefTag parent = fs.commit();
-		RefTag[] children = new RefTag[8];
+		RevisionTag parent = fs.commit();
+		RevisionTag[] children = new RevisionTag[8];
 		
 		for(int i = 0; i < 8; i++) {
 			fs = parent.getFS();
@@ -70,8 +70,8 @@ public class DiffSetResolverTest {
 			children[i] = fs.commit();
 		}
 		
-		ArrayList<RefTag> leaves = fs.getArchive().getConfig().getRevisionTree().plainBranchTips();
-		RefTag[] leavesArray = new RefTag[leaves.size()];
+		ArrayList<RevisionTag> leaves = fs.getArchive().getConfig().getRevisionTree().branchTips();
+		RevisionTag[] leavesArray = new RevisionTag[leaves.size()];
 		for(int i = 0; i < leaves.size(); i++) {
 			leavesArray[i] = leaves.get(i);
 
@@ -79,11 +79,11 @@ public class DiffSetResolverTest {
 		
 		assertEquals(children.length, leaves.size());
 
-		RefTag merge = DiffSetResolver.latestVersionResolver(new DiffSet(leavesArray)).resolve();
-		HashSet<RefTag> mergedParents = new HashSet<RefTag>(merge.getInfo().getParents());
+		RevisionTag merge = DiffSetResolver.latestVersionResolver(new DiffSet(leavesArray)).resolve();
+		HashSet<RevisionTag> mergedParents = new HashSet<RevisionTag>(merge.getInfo().getParents());
 		assertEquals(children.length, mergedParents.size());
-		for(RefTag child : children) assertTrue(mergedParents.contains(child));
-		ArrayList<RefTag> newLeaves = fs.getArchive().getConfig().getRevisionTree().plainBranchTips();
+		for(RevisionTag child : children) assertTrue(mergedParents.contains(child));
+		ArrayList<RevisionTag> newLeaves = fs.getArchive().getConfig().getRevisionTree().branchTips();
 		
 		assertEquals(1, newLeaves.size());
 		assertEquals(merge, newLeaves.get(0));
@@ -92,15 +92,15 @@ public class DiffSetResolverTest {
 	@Test
 	public void testInodeRuleIsApplied() throws IOException, DiffResolutionException {
 		// if the resolver lambda picks an inode to use in the merge, does DiffSetResolver actually honor that?
-		RefTag[] versions = new RefTag[2];
+		RevisionTag[] versions = new RevisionTag[2];
 		int numFiles = 64;
 		
 		// create all the files so we have a common inode id
-		ZKFS baseFs = archive.openRevision(RefTag.blank(archive).getBytes());
+		ZKFS baseFs = archive.openRevision(RevisionTag.blank(archive.getConfig()));
 		for(int i = 0; i < numFiles; i++) {
 			baseFs.write("file" + i, "base version".getBytes());
 		}
-		RefTag baseRev = baseFs.commit();
+		RevisionTag baseRev = baseFs.commit();
 		
 		for(int i = 0; i < versions.length; i++) {
 			ZKFS fs = archive.openRevision(baseRev);
@@ -137,7 +137,7 @@ public class DiffSetResolverTest {
 		DiffSet diffset = new DiffSet(versions);
 		DiffSetResolver resolver = new DiffSetResolver(diffset, inodeResolver, pathResolver);
 		
-		RefTag merge = resolver.resolve();
+		RevisionTag merge = resolver.resolve();
 		assertEquals(numFiles, solutions.size());
 		for(Inode inode : solutions) {
 			Inode mergedVersion = merge.readOnlyFS().getInodeTable().inodeWithId(inode.getStat().getInodeId());
@@ -154,16 +154,16 @@ public class DiffSetResolverTest {
 			ZKFS fs = archive.openBlank();
 			
 			fs.write("file", "now you see me".getBytes());
-			RefTag base = fs.commit();
+			RevisionTag base = fs.commit();
 			
 			fs.unlink("file");
-			RefTag revDeleted = fs.commit();
+			RevisionTag revDeleted = fs.commit();
 			
 			fs.close();
 			fs = archive.openRevision(base);
-			RefTag revNotDeleted = fs.commit();
+			RevisionTag revNotDeleted = fs.commit();
 			
-			DiffSet diffset = new DiffSet(new RefTag[] { revDeleted, revNotDeleted });
+			DiffSet diffset = new DiffSet(new RevisionTag[] { revDeleted, revNotDeleted });
 			InodeDiffResolver inodeResolver = (DiffSetResolver r, InodeDiff diff) -> {
 				if(diff.resolutions.containsKey(null)) return null;
 				for(Inode inode : diff.resolutions.keySet()) return inode;
@@ -176,7 +176,7 @@ public class DiffSetResolverTest {
 				throw new RuntimeException("somehow got a diff with no solutions :(");
 			};
 
-			RefTag tag = diffset.resolver(inodeResolver, pathResolver).resolve();
+			RevisionTag tag = diffset.resolver(inodeResolver, pathResolver).resolve();
 			
 			fs.close();
 			fs = archive.openRevision(tag);
@@ -198,7 +198,7 @@ public class DiffSetResolverTest {
 			child.commit();
 		}
 		
-		RefTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+		RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
 		assertEquals("version " + (numChildren-1), new String(merge.readOnlyFS().read("file")));
 	}
 	
@@ -219,7 +219,7 @@ public class DiffSetResolverTest {
 			child.commit();
 		}
 		
-		RefTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+		RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
 		ZKFS mergeFs = merge.readOnlyFS();
 		long linkedId = mergeFs.inodeForPath("file").getStat().getInodeId(),
 			 expectedId = fs.inodeForPath("file"+(numChildren-1)).getStat().getInodeId();
@@ -235,7 +235,7 @@ public class DiffSetResolverTest {
 			if(i == 1) fs = base.getFS();
 		}
 		
-		RefTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+		RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
 		ZKFS mergeFs = merge.readOnlyFS();
 		
 		for(byte i = 0; i < 4; i++) assertEquals(""+i, new String(mergeFs.read(""+i)));
@@ -301,7 +301,7 @@ public class DiffSetResolverTest {
 			return DiffSetResolver.latestPathResolver().resolve(setResolver, diff);
 		};
 		
-		DiffSetResolver resolver = new DiffSetResolver(DiffSet.withCollection(archive.getConfig().getRevisionTree().plainBranchTips()),
+		DiffSetResolver resolver = new DiffSetResolver(DiffSet.withCollection(archive.getConfig().getRevisionTree().branchTips()),
 				DiffSetResolver.latestInodeResolver(),
 				pathResolver);
 		
@@ -315,7 +315,7 @@ public class DiffSetResolverTest {
 		Util.setCurrentTimeNanos(0);
 		fs.write("file", "foo".getBytes());
 		base = fs.commit();
-		RefTag[] revs = new RefTag[4];
+		RevisionTag[] revs = new RevisionTag[4];
 		
 		for(int j = 0; j < 4; j++) {
 			if(j == 2) fs = base.getFS();
@@ -414,7 +414,7 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testResolverConsistency() throws IOException, DiffResolutionException {
-		RefTag[] revs = new RefTag[2], merges = new RefTag[2];
+		RevisionTag[] revs = new RevisionTag[2], merges = new RevisionTag[2];
 		fs.write("file1", "some data".getBytes());
 		revs[0] = fs.commit();
 		

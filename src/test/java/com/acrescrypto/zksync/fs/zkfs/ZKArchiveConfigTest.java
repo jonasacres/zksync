@@ -48,7 +48,7 @@ public class ZKArchiveConfigTest {
 
 		ZKFS fs = clone.getArchive().openBlank();
 		fs.write("foo", "bar".getBytes());
-		RefTag tag = fs.commit();
+		RevisionTag tag = fs.commit();
 		assertTrue(Arrays.equals("bar".getBytes(), clone.getArchive().openRevision(tag).read("foo")));
 		
 		clone.close();
@@ -164,7 +164,7 @@ public class ZKArchiveConfigTest {
 		assertNotNull(config.getArchive());
 		ZKFS fs = config.getArchive().openBlank();
 		fs.write("foo", "bar".getBytes());
-		RefTag tag = fs.commit();
+		RevisionTag tag = fs.commit();
 		assertTrue(Arrays.equals("bar".getBytes(), config.getArchive().openRevision(tag).read("foo")));
 		fs.close();
 	}

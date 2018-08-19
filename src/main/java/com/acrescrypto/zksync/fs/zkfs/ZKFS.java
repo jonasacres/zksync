@@ -6,19 +6,18 @@ import java.nio.file.Paths;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
 import com.acrescrypto.zksync.utility.HashCache;
-import com.acrescrypto.zksync.utility.Util;
 
 // A ZKSync archive.
 public class ZKFS extends FS {
 	protected InodeTable inodeTable;
 	protected HashCache<String,ZKDirectory> directoriesByPath;
 	ZKArchive archive;
-	protected RefTag baseRevision;
+	protected RevisionTag baseRevision;
 	protected String root;
 		
 	public final static int MAX_PATH_LEN = 65535;
 	
-	public ZKFS(RefTag revision, String root) throws IOException {
+	public ZKFS(RevisionTag revision, String root) throws IOException {
 		this.root = root;
 		this.archive = revision.getArchive();
 		this.directoriesByPath = new HashCache<String,ZKDirectory>(128, (String path) -> {
@@ -31,15 +30,15 @@ public class ZKFS extends FS {
 		this.inodeTable = new InodeTable(this, revision);
 	}
 	
-	public ZKFS(RefTag revision) throws IOException {
+	public ZKFS(RevisionTag revision) throws IOException {
 		this(revision, "/");
 	}
-		
-	public RefTag commit(RefTag[] additionalParents) throws IOException {
+	
+	public RevisionTag commit(RevisionTag[] additionalParents) throws IOException {
 		return commitWithTimestamp(additionalParents, -1);
 	}
 	
-	public RefTag commitWithTimestamp(RefTag[] additionalParents, long timestamp) throws IOException {
+	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) {
 			dir.commit();
 		}
@@ -47,8 +46,8 @@ public class ZKFS extends FS {
 		return baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
 	}
 	
-	public RefTag commit() throws IOException {
-		return commit(new RefTag[0]);
+	public RevisionTag commit() throws IOException {
+		return commit(new RevisionTag[0]);
 	}
 	
 	public Inode inodeForPath(String path) throws IOException {
@@ -326,12 +325,12 @@ public class ZKFS extends FS {
 		return new RevisionInfo(this);
 	}
 
-	public RefTag getBaseRevision() {
+	public RevisionTag getBaseRevision() {
 		return baseRevision;
 	}
 	
 	public void dump() throws IOException {
-		System.out.println("Revision " + Util.bytesToHex(baseRevision.obfuscate().serialize(), 4));
+		System.out.println("Revision " + baseRevision);
 		dump("/", 1);
 	}
 	

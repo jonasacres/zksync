@@ -178,7 +178,7 @@ public class ZKFSTest extends FSTestBase {
 		byte[] content = "there is a house down in new orleans they call the rising sun".getBytes();
 		zkscratch.write("basic-archive-test", content);
 		assertTrue(Arrays.equals(content, zkscratch.read("basic-archive-test")));
-		RefTag rev = zkscratch.commit();
+		RevisionTag rev = zkscratch.commit();
 		
 		ZKFS readFs = rev.readOnlyFS();
 		assertTrue(Arrays.equals(content, readFs.read("basic-archive-test")));
@@ -190,8 +190,8 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testSuccessiveRevisions() throws IOException {
 		int numRevisions = 8;
-		RefTag[] revisions = new RefTag[numRevisions+1];
-		revisions[0] = RefTag.blank(zkscratch.archive);
+		RevisionTag[] revisions = new RevisionTag[numRevisions+1];
+		revisions[0] = RevisionTag.blank(zkscratch.archive.config);
 		
 		for(int i = 0; i < numRevisions; i++) {
 			ZKFS revFs = revisions[i].getFS();
@@ -213,11 +213,11 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testIntensiveRevisions() throws IOException {
 		int numRevisions = 31;
-		RefTag[] revisions = new RefTag[numRevisions];
+		RevisionTag[] revisions = new RevisionTag[numRevisions];
 		
 		for(int i = 0; i < numRevisions; i++) {
-			RefTag parent = null;
-			if(i == 0) parent = RefTag.blank(zkscratch.archive);
+			RevisionTag parent = null;
+			if(i == 0) parent = RevisionTag.blank(zkscratch.archive.config);
 			else parent = revisions[(i-1)/2]; 
 			ZKFS revFs = parent.getFS();
 			revFs.write("intensive-revisions", ("Version " + i).getBytes());
@@ -237,7 +237,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	@Test
 	public void testSinglePageInodeTable() throws IOException {
-		RefTag rev = zkscratch.commit();
+		RevisionTag rev = zkscratch.commit();
 		assertTrue(zkscratch.inodeTable.getStat().getSize() >= zkscratch.archive.crypto.hashLength());
 		assertTrue(zkscratch.inodeTable.getStat().getSize() <= zkscratch.archive.config.pageSize);
 		assertEquals(1, zkscratch.inodeTable.inode.refTag.numPages);
@@ -254,7 +254,7 @@ public class ZKFSTest extends FSTestBase {
 			zkscratch.write(path, "foo".getBytes());
 		}
 		
-		RefTag rev = zkscratch.commit();
+		RevisionTag rev = zkscratch.commit();
 		assertTrue(zkscratch.inodeTable.getStat().getSize() > zkscratch.archive.config.pageSize);
 		ZKFS revFs = rev.readOnlyFS();
 		

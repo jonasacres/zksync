@@ -39,10 +39,10 @@ import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
-import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -507,8 +507,8 @@ public class PeerConnectionTest {
 
 		conn.announceTips();
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TIPS);
-		for(RefTag tag : archive.getConfig().getRevisionTree().plainBranchTips()) {
-			assertReceivedBytes(tag.obfuscate().serialize());
+		for(RevisionTag tag : archive.getConfig().getRevisionTree().branchTips()) {
+			assertReceivedBytes(tag.serialize());
 		}
 		assertFinished();
 	}
@@ -559,7 +559,8 @@ public class PeerConnectionTest {
 	@Test
 	public void testRequestInodes() throws PeerCapabilityException, IOException {
 		int numInodes = 16;
-		RefTag revTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+		RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		ArrayList<Long> inodeIds = new ArrayList<>(numInodes);
 		
 		for(int i = 0; i < numInodes; i++) {
@@ -578,7 +579,8 @@ public class PeerConnectionTest {
 	public void testRequestInodesThrowsExceptionIfNotFullPeer() throws PeerCapabilityException {
 		blindPeer();
 		try {
-			RefTag revTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 			ArrayList<Long> inodeIds = new ArrayList<>(1);
 			inodeIds.add(crypto.defaultPrng().getLong());
 			conn.requestInodes(0, revTag, inodeIds);
@@ -591,16 +593,18 @@ public class PeerConnectionTest {
 	@Test
 	public void testRequestRevisionContents() throws PeerCapabilityException, IOException {
 		int numTags = 16;
-		ArrayList<RefTag> tags = new ArrayList<>(numTags);
+		ArrayList<RevisionTag> tags = new ArrayList<>(numTags);
 		
 		for(int i = 0; i < numTags; i++) {
-			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
+			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			RevisionTag revTag = new RevisionTag(refTag, 0, 0); 
+			tags.add(revTag);
 		}
 		
 		conn.requestRevisionContents(-1, tags);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_REVISION_CONTENTS);
 		assertReceivedBytes(Util.serializeInt(-1));
-		for(RefTag tag : tags) assertReceivedBytes(tag.getBytes());
+		for(RevisionTag tag : tags) assertReceivedBytes(tag.getBytes());
 		assertFinished();
 	}
 	
@@ -608,8 +612,10 @@ public class PeerConnectionTest {
 	public void testRequestRevisionContentsThrowsExceptionIfNotFullPeer() {
 		blindPeer();
 		try {
-			ArrayList<RefTag> tags = new ArrayList<>(1);
-			tags.add(new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1));
+			ArrayList<RevisionTag> tags = new ArrayList<>(1);
+			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+			tags.add(revTag);
 			conn.requestRevisionContents(0, tags);
 			fail();
 		} catch(PeerCapabilityException exc) {
@@ -863,42 +869,41 @@ public class PeerConnectionTest {
 	@Test
 	public void testHandleAnnounceTipsAddsBranchTipsToRevisionTree() throws ProtocolViolationException, IOException {
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TIPS);
-		RefTag[] tags = new RefTag[16];
-		ObfuscatedRefTag[] obfTags = new ObfuscatedRefTag[16];
+		RevisionTag[] tags = new RevisionTag[16];
 
 		for(int i = 0; i < tags.length; i++) {
-			tags[i] = new RefTag(archive, crypto.rng(crypto.hashLength()), RefTag.REF_TYPE_2INDIRECT, 2);
-			obfTags[i] = tags[i].obfuscate();
-			msg.receivedData((byte) 0, obfTags[i].serialize());
-			assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(obfTags[i]));
+			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), RefTag.REF_TYPE_2INDIRECT, 2);
+			tags[i] = new RevisionTag(refTag, 0, 0);
+			msg.receivedData((byte) 0, tags[i].serialize());
+			assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(tags[i]));
 		}
 		
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 		conn.handle(msg);
 		archive.getConfig().getRevisionTree().read();
 		for(int i = 0; i < tags.length; i++) {
-			assertTrue(archive.getConfig().getRevisionTree().plainBranchTips().contains(tags[i]));
-			assertTrue(archive.getConfig().getRevisionTree().branchTips().contains(obfTags[i]));
+			assertTrue(archive.getConfig().getRevisionTree().branchTips().contains(tags[i]));
 		}
 	}
 	
 	@Test
 	public void testHandleAnnounceTipsTriggersViolationWhenForgedRefTagSent() throws ProtocolViolationException, IOException {
-		RefTag fakeTag = new RefTag(archive.getConfig(), crypto.rng(crypto.hashLength()), RefTag.REF_TYPE_2INDIRECT, 2);
-		ObfuscatedRefTag obfTag = fakeTag.obfuscate();
-		byte[] raw = obfTag.serialize();
+		RefTag refTag = new RefTag(archive.getConfig(), crypto.rng(crypto.hashLength()), RefTag.REF_TYPE_2INDIRECT, 2);
+		RevisionTag fakeTag = new RevisionTag(refTag, 0, 0);
+		
+		byte[] raw = fakeTag.serialize();
 		raw[8] ^= 0x40;
-		obfTag = new ObfuscatedRefTag(archive.getConfig(), raw);
+		fakeTag = new RevisionTag(archive.getConfig(), raw);
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TIPS);
-		msg.receivedData(PeerMessage.FLAG_FINAL, obfTag.serialize());
-		assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(obfTag));
+		msg.receivedData(PeerMessage.FLAG_FINAL, fakeTag.serialize());
+		assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(fakeTag));
 		try {
 			conn.handle(msg);
 			fail();
 		} catch(ProtocolViolationException exc) {
 		}
-		assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(obfTag));
+		assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(fakeTag));
 	}
 	
 	@Test
@@ -1072,7 +1077,7 @@ public class PeerConnectionTest {
 	@Test
 	public void testHandleRequestRevisionContentsAddsRequestedRevTagToPageQueue() throws IOException, ProtocolViolationException {
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REVISION_CONTENTS);
-		RefTag[] tags = new RefTag[16];
+		RevisionTag[] tags = new RevisionTag[16];
 		
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 		for(int i = 0; i < tags.length; i++) {
@@ -1085,7 +1090,7 @@ public class PeerConnectionTest {
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 		conn.handle(msg);
 		
-		for(RefTag tag : tags) {
+		for(RevisionTag tag : tags) {
 			assertQueuedItemLike((_item) -> {
 				if(!(_item instanceof RevisionQueueItem)) return false;
 				RevisionQueueItem item = (RevisionQueueItem) _item;
@@ -1103,7 +1108,7 @@ public class PeerConnectionTest {
 	@Test
 	public void testHandleRequestRevisionContentsToleratesNonexistentRevTags() throws IOException, ProtocolViolationException {
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REVISION_CONTENTS);
-		RefTag[] tags = new RefTag[16];
+		RevisionTag[] tags = new RevisionTag[16];
 		
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 		for(int i = 0; i < tags.length; i++) {
@@ -1117,7 +1122,7 @@ public class PeerConnectionTest {
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 		conn.handle(msg);
 		
-		for(RefTag tag : tags) {
+		for(RevisionTag tag : tags) {
 			assertQueuedItemLike((_item) -> {
 				if(!(_item instanceof RevisionQueueItem)) return false;
 				RevisionQueueItem item = (RevisionQueueItem) _item;

@@ -24,6 +24,7 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
@@ -94,7 +95,7 @@ public class PeerSwarmTest {
 		int requestedPriority;
 		boolean requestedAll, requestedAllCancel, requestedPause, requestedPauseValue;
 		long requestedTag, requestedInodeId;
-		RefTag requestedRefTag, requestedRevTag;
+		RevisionTag requestedRefTag, requestedRevTag;
 		
 		public DummyConnection(DummySocket socket) throws IOException {
 			super(socket);
@@ -122,7 +123,7 @@ public class PeerSwarmTest {
 				break;
 			}
 		}
-		@Override public void requestInodes(int priority, RefTag revTag, Collection<Long> inodeIds) {
+		@Override public void requestInodes(int priority, RevisionTag revTag, Collection<Long> inodeIds) {
 			requestedPriority = priority;
 			this.requestedRevTag = revTag;
 			for(Long inodeId : inodeIds) {
@@ -130,9 +131,9 @@ public class PeerSwarmTest {
 				break;
 			}
 		}
-		@Override public void requestRevisionContents(int priority, Collection<RefTag> tips) {
+		@Override public void requestRevisionContents(int priority, Collection<RevisionTag> tips) {
 			requestedPriority = priority;
-			for(RefTag tip : tips) {
+			for(RevisionTag tip : tips) {
 				this.requestedRevTag = tip;
 				break;
 			}
@@ -693,7 +694,8 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestInodeSendsRequestInodeToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
-		RefTag revTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		long inodeId = archive.getCrypto().defaultPrng().getLong();
 		
 		for(int i = 0; i < conns.length; i++) {
@@ -712,12 +714,13 @@ public class PeerSwarmTest {
 	
 	@Test
 	public void testRequestInodeSendsRequestInodeToAllNewPeers() throws IOException {
-		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		long inodeId = archive.getCrypto().defaultPrng().getLong();
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
-		swarm.requestInode(Integer.MAX_VALUE, tag, inodeId);
+		swarm.requestInode(Integer.MAX_VALUE, revTag, inodeId);
 		swarm.openedConnection(conn);
-		assertEquals(tag, conn.requestedRevTag);
+		assertEquals(revTag, conn.requestedRevTag);
 		assertEquals(inodeId, conn.requestedInodeId);
 		assertEquals(Integer.MAX_VALUE, conn.requestedPriority);
 	}
@@ -725,7 +728,8 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestRevisionSendsRequestRevisionContentsToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
-		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
@@ -733,20 +737,21 @@ public class PeerSwarmTest {
 			assertFalse(conns[i].requestedAll);
 		}
 		
-		swarm.requestRevision(Integer.MIN_VALUE, tag);
+		swarm.requestRevision(Integer.MIN_VALUE, revTag);
 		for(DummyConnection conn : conns) {
-			assertEquals(tag, conn.requestedRevTag);
+			assertEquals(revTag, conn.requestedRevTag);
 			assertEquals(Integer.MIN_VALUE, conn.requestedPriority);
 		}
 	}
 
 	@Test
 	public void testRequestRevisionSendsRequestRevisionContentsToAllNewPeers() throws IOException {
-		RefTag tag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
-		swarm.requestRevision(11235813, tag);
+		swarm.requestRevision(11235813, revTag);
 		swarm.openedConnection(conn);
-		assertEquals(tag, conn.requestedRevTag);
+		assertEquals(revTag, conn.requestedRevTag);
 		assertEquals(11235813, conn.requestedPriority);
 	}
 	

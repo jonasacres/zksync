@@ -15,7 +15,7 @@ import org.junit.Test;
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
-import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
@@ -26,11 +26,11 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSet;
 
 public class DiffSetTest {
 	private interface DiffExampleLambda {
-		public int diff(ZKFS fs, RefTag[] revs, String filename) throws IOException;
+		public int diff(ZKFS fs, RevisionTag[] revs, String filename) throws IOException;
 	}
 	
-	RefTag parent;
-	RefTag[] children;
+	RevisionTag parent;
+	RevisionTag[] children;
 	ZKMaster master;
 	char[] password = "zksync".toCharArray();
 	
@@ -57,10 +57,10 @@ public class DiffSetTest {
 		fs.write("modified", "replaceme".getBytes());
 		fs.squash("modified");
 		parent = fs.commit();
-		children = new RefTag[NUM_CHILDREN];
+		children = new RevisionTag[NUM_CHILDREN];
 		
 		for(int i = 0; i < NUM_CHILDREN; i++) {
-			fs = archive.openRevision(parent.getBytes());
+			fs = archive.openRevision(parent);
 			fs.write("modified", "replaced!".getBytes());
 			fs.write("child", ("text " + i).getBytes()); // don't forget -- making this means / is also changed, so factor that in
 			fs.squash("modified");
@@ -78,7 +78,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testDetectsDifferencesBetweenSiblings() throws IOException {
-		RefTag[] list = new RefTag[] { children[0], children[1] };
+		RevisionTag[] list = new RevisionTag[] { children[0], children[1] };
 		DiffSet diffset = new DiffSet(list);
 		
 		assertEquals(3, diffset.inodeDiffs.size()); // root directory, child, modified
@@ -91,8 +91,8 @@ public class DiffSetTest {
 		byte[] buf = new byte[fs.getArchive().getConfig().getPageSize()+1];
 		fs.write("unmodified", buf);
 		fs.write("modified", buf);
-		RefTag parent = fs.commit();
-		RefTag[] children = new RefTag[2];
+		RevisionTag parent = fs.commit();
+		RevisionTag[] children = new RevisionTag[2];
 		
 		for(int i = 0; i < children.length; i++) {
 			buf[0] = (byte) i;
@@ -113,7 +113,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testDetectsParentChildDifferences() throws IOException {
-		RefTag[] list = new RefTag[] { parent, children[0] };
+		RevisionTag[] list = new RevisionTag[] { parent, children[0] };
 		DiffSet diffset = new DiffSet(list);
 		
 		assertEquals(3, diffset.inodeDiffs.size()); // root directory, child, modified
@@ -125,15 +125,15 @@ public class DiffSetTest {
 		/* if we look at the diffs between two of the children, we should see only one diff, because they both
 		 * modify one of the files in the same way.
 		 */
-		assertEquals(3, (new DiffSet(new RefTag[] { children[0], children[1] })).inodeDiffs.size());
+		assertEquals(3, (new DiffSet(new RevisionTag[] { children[0], children[1] })).inodeDiffs.size());
 		
 		/* but if we include the parent, we should see two diffs, because it has the original unmodified file. */
-		assertEquals(4, (new DiffSet(new RefTag[] { parent, children[0], children[1] })).inodeDiffs.size());
+		assertEquals(4, (new DiffSet(new RevisionTag[] { parent, children[0], children[1] })).inodeDiffs.size());
 	}
 	
 	@Test
 	public void testUnlinksAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			revs[0] = fs.commit();
 			fs.unlink(filename);
@@ -143,7 +143,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testCreationsAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			revs[0] = fs.commit();
 			fs.write(filename, "blah".getBytes());
 			return 2;
@@ -152,7 +152,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testMtimesAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -163,7 +163,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testAtimesAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -175,7 +175,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testCtimesAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -188,7 +188,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testModesAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -200,7 +200,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testUidsAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -212,7 +212,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testUsernamesAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -224,7 +224,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testGidsAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -236,7 +236,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testGroupNamesAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -248,7 +248,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testAppendsAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -262,7 +262,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testTruncatesAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -276,7 +276,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testMajorDevsAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.mknod(filename, Stat.TYPE_BLOCK_DEVICE, 0, 0);
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -287,7 +287,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testMinorDevsAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.mknod(filename, Stat.TYPE_BLOCK_DEVICE, 0, 0);
 			fs.setMtime(filename, 0l);
 			revs[0] = fs.commit();
@@ -298,7 +298,7 @@ public class DiffSetTest {
 	
 	@Test
 	public void testFileTypesAreADifference() throws IOException {
-		trivialInodeDiffTest( (ZKFS fs, RefTag[] revs, String filename) -> {
+		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			revs[0] = fs.commit();
 			fs.inodeForPath(filename).getStat().setType(Stat.TYPE_BLOCK_DEVICE);
@@ -310,7 +310,7 @@ public class DiffSetTest {
 	public void testDirectoryEntriesAreADifference() throws IOException {
 		ZKFS fs = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		
-		RefTag[] revs = new RefTag[2];
+		RevisionTag[] revs = new RevisionTag[2];
 		
 		fs.write("file0", "blah".getBytes());
 		fs.write("file1", "blah".getBytes());
@@ -332,7 +332,7 @@ public class DiffSetTest {
 	protected void trivialInodeDiffTest(DiffExampleLambda meat) throws IOException {
 		ZKFS fs = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		
-		RefTag[] revs = new RefTag[2];
+		RevisionTag[] revs = new RevisionTag[2];
 		int numDiffs = meat.diff(fs, revs, "scratch");
 		
 		revs[1] = fs.commit();

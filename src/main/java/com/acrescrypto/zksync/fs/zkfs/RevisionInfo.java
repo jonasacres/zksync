@@ -3,13 +3,12 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 
 /* Stores a revision of the archive. This is needed to bootstrap reading the archive.
  */
 public class RevisionInfo extends ZKFile {
-	HashSet<RefTag> parents = new HashSet<RefTag>();
+	HashSet<RevisionTag> parents = new HashSet<>();
 	long generation; // longest path to this revision from root
 	
 	public static String REVISION_INFO_PATH = "(revision info)";
@@ -42,8 +41,8 @@ public class RevisionInfo extends ZKFile {
 		deserialize(read());
 	}
 	
-	public void addParent(RefTag parent) throws IOException {
-		generation = Math.max(generation, 1+parent.getInfo().generation);
+	public void addParent(RevisionTag parent) throws IOException {
+		generation = Math.max(generation, 1+parent.height);
 		parents.add(parent);
 	}
 	
@@ -70,7 +69,7 @@ public class RevisionInfo extends ZKFile {
 		ByteBuffer buf = ByteBuffer.allocate(len);
 		buf.putLong(generation);
 		buf.putInt(parents.size());
-		for(RefTag parent : parents) buf.put(parent.getBytes());
+		for(RevisionTag parent : parents) buf.put(parent.getBytes());
 		return buf.array();
 	}
 
@@ -89,7 +88,7 @@ public class RevisionInfo extends ZKFile {
 		for(int i = 0; i < numParents; i++) {
 			byte[] parentBytes = new byte[parentTagLength()];
 			buf.get(parentBytes);
-			parents.add(new RefTag(zkfs.archive, parentBytes));
+			parents.add(new RevisionTag(zkfs.archive.config, parentBytes));
 		}
 	}
 
@@ -101,19 +100,7 @@ public class RevisionInfo extends ZKFile {
 		return parents.size();
 	}
 	
-	public ArrayList<RefTag> getParents() {
-		return new ArrayList<RefTag>(parents);
-	}
-	
-	public Collection<RefTag> getAncestors() throws IOException {
-		HashSet<RefTag> ancestors = new HashSet<>();
-		ancestors.add(zkfs.getBaseRevision());
-		ancestors.addAll(parents);
-		
-		for(RefTag parent : parents) {
-			ancestors.addAll(parent.getInfo().getAncestors());
-		}
-		
-		return ancestors;
+	public ArrayList<RevisionTag> getParents() {
+		return new ArrayList<>(parents);
 	}
 }

@@ -7,7 +7,7 @@ import java.util.List;
 
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
-import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -43,7 +43,7 @@ public class DiffSetResolver {
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
 		// TODO DHT: withTangledCollection
-		DiffSet diffSet = DiffSet.withCollection(archive.getConfig().getRevisionTree().plainBranchTips());
+		DiffSet diffSet = DiffSet.withCollection(archive.getConfig().getRevisionTree().branchTips());
 		return latestVersionResolver(diffSet);
 	}
 	
@@ -64,15 +64,18 @@ public class DiffSetResolver {
 	public static PathDiffResolver latestPathResolver() {
 		return (DiffSetResolver setResolver, PathDiff diff) -> {
 			Inode result = null;
-			RefTag ancestorTag = null;
+			RevisionTag ancestorTag = null;
 			Long defaultId = null;
 			
+			for(RevisionTag tag : setResolver.diffset.revisions) {
+				if(ancestorTag == null || ancestorTag.compareTo(tag) > 0) {
+					ancestorTag = tag;
+				}
+			}
 			try {
-				ancestorTag = setResolver.fs.getArchive().getConfig().getRevisionTree().commonAncestorOf(setResolver.diffset.revisions);
 				defaultId = ancestorTag.readOnlyFS().inodeForPath(diff.path).getStat().getInodeId();
 			} catch (IOException exc) {
-				if(ancestorTag == null) throw new RuntimeException("Unable to calculate common ancestor in diff merge");
-				// just ignore it if it came from defaultId
+				// just ignore it
 			}
 			
 			if(diff.getResolutions().size() == 2 && diff.getResolutions().containsKey(null)) {
@@ -112,12 +115,12 @@ public class DiffSetResolver {
 		this.fs = new ZKFS(diffset.latestRevision());
 	}
 	
-	public RefTag resolve() throws IOException, DiffResolutionException {
+	public RevisionTag resolve() throws IOException, DiffResolutionException {
 		if(diffset.revisions.length == 1) return diffset.revisions[0];
 		
 		selectResolutions();
 		applyResolutions();
-		RefTag revTag = fs.commitWithTimestamp(diffset.revisions, 0);
+		RevisionTag revTag = fs.commitWithTimestamp(diffset.revisions, 0);
 		return revTag;
 	}
 	

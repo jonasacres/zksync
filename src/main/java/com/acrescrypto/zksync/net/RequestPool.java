@@ -13,7 +13,7 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
-import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.PeerConnection.PeerCapabilityException;
 import com.acrescrypto.zksync.utility.Util;
@@ -24,8 +24,8 @@ public class RequestPool {
 	
 	boolean dirty;
 	ZKArchiveConfig config;
-	HashMap<Integer,HashMap<RefTag,LinkedList<Long>>> requestedInodes = new HashMap<>();
-	HashMap<Integer,LinkedList<RefTag>> requestedRevisions = new HashMap<>();
+	HashMap<Integer,HashMap<RevisionTag,LinkedList<Long>>> requestedInodes = new HashMap<>();
+	HashMap<Integer,LinkedList<RevisionTag>> requestedRevisions = new HashMap<>();
 	HashMap<Integer,LinkedList<Long>> requestedPageTags = new HashMap<>();
 	
 	boolean requestingEverything, stopped, paused, requestingConfigInfo;
@@ -80,7 +80,7 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void addInode(int priority, RefTag revTag, long inodeId) {
+	public synchronized void addInode(int priority, RevisionTag revTag, long inodeId) {
 		requestedInodes.putIfAbsent(priority, new HashMap<>());
 		requestedInodes.get(priority).putIfAbsent(revTag, new LinkedList<>());
 		requestedInodes.get(priority).get(revTag).add(inodeId);
@@ -97,14 +97,14 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void addRevision(int priority, RefTag revTag) {
+	public synchronized void addRevision(int priority, RevisionTag revTag) {
 		requestedRevisions.putIfAbsent(priority, new LinkedList<>());
 		requestedRevisions.get(priority).add(revTag);
 		dirty = true;
 		
 		if(config.canReceive()) {
 			for(PeerConnection connection : config.getSwarm().getConnections()) {
-				ArrayList<RefTag> list = new ArrayList<>(1);
+				ArrayList<RevisionTag> list = new ArrayList<>(1);
 				list.add(revTag);
 				try {
 					connection.requestRevisionContents(priority, list);
@@ -135,14 +135,14 @@ public class RequestPool {
 				.contains(shortTag);
 	}
 	
-	public boolean hasInode(int priority, RefTag refTag, long inodeId) {
+	public boolean hasInode(int priority, RevisionTag refTag, long inodeId) {
 		return requestedInodes
 				.getOrDefault(priority, new HashMap<>())
 				.getOrDefault(refTag, new LinkedList<>())
 				.contains(inodeId);
 	}
 	
-	public boolean hasRevision(int priority, RefTag revTag) {
+	public boolean hasRevision(int priority, RevisionTag revTag) {
 		return requestedRevisions.getOrDefault(priority, new LinkedList<>()).contains(revTag);
 	}
 
@@ -175,7 +175,7 @@ public class RequestPool {
 		
 		try {
 			for(int priority : requestedInodes.keySet()) {
-				for(RefTag revTag : requestedInodes.get(priority).keySet()) {
+				for(RevisionTag revTag : requestedInodes.get(priority).keySet()) {
 					conn.requestInodes(priority, revTag, requestedInodes.get(priority).get(revTag));
 				}
 			}
@@ -221,9 +221,9 @@ public class RequestPool {
 	
 	protected void pruneRefTags() throws IOException {
 		for(int priority : requestedInodes.keySet()) {
-			HashMap<RefTag,LinkedList<Long>> existing = requestedInodes.get(priority);
-			LinkedList<RefTag> emptyTags = new LinkedList<>();
-			for(RefTag revTag : existing.keySet()) {
+			HashMap<RevisionTag,LinkedList<Long>> existing = requestedInodes.get(priority);
+			LinkedList<RevisionTag> emptyTags = new LinkedList<>();
+			for(RevisionTag revTag : existing.keySet()) {
 				LinkedList<Long> inodeIds = existing.get(revTag);
 				if(inodeIds.isEmpty()) {
 					emptyTags.add(revTag);
@@ -242,7 +242,7 @@ public class RequestPool {
 
 	protected void pruneRevisionTags() throws IOException {
 		for(int priority : requestedRevisions.keySet()) {
-			LinkedList<RefTag> existing = requestedRevisions.get(priority);
+			LinkedList<RevisionTag> existing = requestedRevisions.get(priority);
 			existing.removeIf((revTag)->{
 				try {
 					return config.getArchive().hasRevision(revTag);
@@ -294,11 +294,11 @@ public class RequestPool {
 		
 		pieces.add(Util.serializeInt(requestedInodes.size()));
 		for(int priority : requestedInodes.keySet()) {
-			HashMap<RefTag, LinkedList<Long>> map = requestedInodes.get(priority);
+			HashMap<RevisionTag, LinkedList<Long>> map = requestedInodes.get(priority);
 			pieces.add(Util.serializeInt(priority));
 			pieces.add(Util.serializeInt(map.size()));
 
-			for(RefTag revTag : map.keySet()) {
+			for(RevisionTag revTag : map.keySet()) {
 				LinkedList<Long> inodeIds = map.get(revTag);
 				ByteBuffer buf = ByteBuffer.allocate(config.refTagSize() + 4 + 8*inodeIds.size());
 				buf.put(revTag.getBytes());
@@ -310,11 +310,11 @@ public class RequestPool {
 		
 		pieces.add(Util.serializeInt(requestedRevisions.size()));
 		for(int priority : requestedRevisions.keySet()) {
-			LinkedList<RefTag> list = requestedRevisions.get(priority);
+			LinkedList<RevisionTag> list = requestedRevisions.get(priority);
 			ByteBuffer buf = ByteBuffer.allocate(2*4+config.refTagSize()*list.size());
 			buf.putInt(priority);
 			buf.putInt(list.size());
-			for(RefTag tag : list) buf.put(tag.getBytes());
+			for(RevisionTag tag : list) buf.put(tag.getBytes());
 			pieces.add(buf.array());
 		}
 		
@@ -342,10 +342,10 @@ public class RequestPool {
 			int priority = buf.getInt();
 			int numRevTags = buf.getInt();
 			for(int j = 0; j < numRevTags; j++) {
-				byte[] tagBytes = new byte[config.refTagSize()];
+				byte[] tagBytes = new byte[RevisionTag.sizeForConfig(config)];
 				buf.get(tagBytes);
 				int numInodeIds = buf.getInt();
-				RefTag revTag = new RefTag(config, tagBytes);
+				RevisionTag revTag = new RevisionTag(config, tagBytes);
 				
 				for(int k = 0; k < numInodeIds; k++) {
 					addInode(priority, revTag, buf.getLong());
@@ -358,9 +358,9 @@ public class RequestPool {
 			int priority = buf.getInt();
 			int numEntries = buf.getInt();
 			for(int j = 0; j < numEntries; j++) {
-				byte[] tagBytes = new byte[config.refTagSize()];
+				byte[] tagBytes = new byte[RevisionTag.sizeForConfig(config)];
 				buf.get(tagBytes);
-				RefTag tag = new RefTag(config, tagBytes);
+				RevisionTag tag = new RevisionTag(config, tagBytes);
 				addRevision(priority, tag);
 			}
 		}

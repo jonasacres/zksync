@@ -12,16 +12,14 @@ import java.util.Map;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.PathDiffResolver;
 
 /* Describes a difference between a set of revisions. */
 public class DiffSet {
-	protected RefTag[] revisions; // revisions covered by this DiffSet
-	
-	/** most recent common ancestor of all revisions in this DiffSet */ 
-	RefTag commonAncestor;
+	protected RevisionTag[] revisions; // revisions covered by this DiffSet
 	
 	/** differences in path listings */
 	HashMap<String,PathDiff> pathDiffs = new HashMap<String,PathDiff>();
@@ -30,12 +28,12 @@ public class DiffSet {
 	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>(); // differences in inode table entries
 	
 	// TODO DHT: (test) Test tangled collection
-	public static DiffSet withTangledCollection(Collection<RefTag> revisions) throws IOException {
-		LinkedList<RefTag> finalList = new LinkedList<>();
+	public static DiffSet withTangledCollection(Collection<RevisionTag> revisions) throws IOException {
+		LinkedList<RevisionTag> finalList = new LinkedList<>();
 		while(!revisions.isEmpty()) {
-			LinkedList<RefTag> candidates = new LinkedList<>();
-			for(RefTag revision : revisions) {
-				if(!revision.hasFlag(RefTag.FLAG_NO_NEW_CONTENT)) {
+			LinkedList<RevisionTag> candidates = new LinkedList<>();
+			for(RevisionTag revision : revisions) {
+				if(!revision.getRefTag().hasFlag(RefTag.FLAG_NO_NEW_CONTENT)) {
 					finalList.add(revision);
 					continue;
 				}
@@ -50,30 +48,28 @@ public class DiffSet {
 	}
 	
 	/** build a DiffSet from a collection of RefTags */
-	public static DiffSet withCollection(Collection<RefTag> revisions) throws IOException {
-		RefTag[] array = new RefTag[revisions.size()];
+	public static DiffSet withCollection(Collection<RevisionTag> revisions) throws IOException {
+		RevisionTag[] array = new RevisionTag[revisions.size()];
 		int i = 0;
 		
-		for(RefTag tag : revisions) array[i++] = tag;
+		for(RevisionTag tag : revisions) array[i++] = tag;
 		return new DiffSet(array);
 	}
 	
 	/** build a DiffSet from an array of RefTags */
-	public DiffSet(RefTag[] revisions) throws IOException {
+	public DiffSet(RevisionTag[] revisions) throws IOException {
 		this.revisions = revisions;
 		Arrays.sort(this.revisions);
 		
-		RefTag[] tags = new RefTag[revisions.length];
+		RevisionTag[] tags = new RevisionTag[revisions.length];
 		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i];
 		
-		commonAncestor = revisions[0].getArchive().getConfig().getRevisionTree().commonAncestorOf(tags);
 		findPathDiffs(findInodeDiffs(pickMergeFs()));
 	}
 	
 	/** build a new DiffSet based on an existing one, with some new inode and path diffs */
 	public DiffSet(DiffSet original, ArrayList<InodeDiff> inodeDiffList, ArrayList<PathDiff> pathDiffList) {
 		this.revisions = original.revisions;
-		this.commonAncestor = original.commonAncestor;
 		for(InodeDiff inodeDiff : inodeDiffList) inodeDiffs.put(inodeDiff.inodeId, inodeDiff);
 		for(PathDiff pathDiff : pathDiffList) pathDiffs.put(pathDiff.path, pathDiff);
 	}
@@ -82,7 +78,7 @@ public class DiffSet {
 	public HashSet<Long> allInodes() throws IOException {
 		// TODO: allInodes and allPaths makes merging O(n) with the number of total files, changed or not.
 		HashSet<Long> allInodes = new HashSet<Long>();
-		for(RefTag rev : revisions) {
+		for(RevisionTag rev : revisions) {
 			for(Inode inode : rev.readOnlyFS().getInodeTable().values()) {
 				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_INODE_TABLE) continue;
 				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_REVISION_INFO) continue;
@@ -100,7 +96,7 @@ public class DiffSet {
 		HashSet<String> allPaths = new HashSet<String>();
 		allPaths.add("/");
 		
-		for(RefTag rev : revisions) {
+		for(RevisionTag rev : revisions) {
 			for(String path : rev.readOnlyFS().opendir("/").listRecursive()) {
 				allPaths.add(path);
 			}
@@ -112,8 +108,8 @@ public class DiffSet {
 	 * inode IDs are renumbered as necessary to allow preservation of new files created in parallel and issued identical
 	 * inode IDs.
 	 *  */
-	protected Map<Long,Map<RefTag,Long>> findInodeDiffs(ZKFS mergeFs) throws IOException {
-		Map<Long,Map<RefTag,Long>> idMap = new HashMap<Long,Map<RefTag,Long>>();
+	protected Map<Long,Map<RevisionTag,Long>> findInodeDiffs(ZKFS mergeFs) throws IOException {
+		Map<Long,Map<RevisionTag,Long>> idMap = new HashMap<Long,Map<RevisionTag,Long>>();
 		for(long inodeId : allInodes()) {
 			InodeDiff diff = new InodeDiff(inodeId, revisions);
 			if(!diff.isConflict()) continue;
@@ -124,7 +120,7 @@ public class DiffSet {
 	}
 	
 	/** detect path differences, taking inode renumberings into account. */
-	protected void findPathDiffs(Map<Long,Map<RefTag,Long>> idMap) throws IOException {
+	protected void findPathDiffs(Map<Long,Map<RevisionTag,Long>> idMap) throws IOException {
 		for(String path : allPaths()) {
 			PathDiff diff = new PathDiff(path, revisions, idMap);
 			if(!diff.isConflict()) continue;
@@ -133,12 +129,12 @@ public class DiffSet {
 	}
 	
 	/** array of reftags in this diffset */
-	public RefTag[] getRevisions() {
+	public RevisionTag[] getRevisions() {
 		return revisions;
 	}
 	
 	/** latest revision in this diffset */
-	public RefTag latestRevision() throws IOException {
+	public RevisionTag latestRevision() throws IOException {
 		return revisions[revisions.length-1];
 	}
 	
@@ -155,26 +151,26 @@ public class DiffSet {
 	 * @param idMap maps oldId -> RefTag, newId
 	 * @throws IOException
 	 */
-	protected void renumberInodeDiff(ZKFS fs, InodeDiff diff, Map<Long,Map<RefTag,Long>> idMap) throws IOException {
-		Map<Long,ArrayList<RefTag>> byIdentity = new HashMap<Long,ArrayList<RefTag>>();
+	protected void renumberInodeDiff(ZKFS fs, InodeDiff diff, Map<Long,Map<RevisionTag,Long>> idMap) throws IOException {
+		Map<Long,ArrayList<RevisionTag>> byIdentity = new HashMap<>();
 		long minIdent = Long.MAX_VALUE;
 
 		for(Inode inode : diff.resolutions.keySet()) {
 			if(inode == null) continue;
 			if(inode.getIdentity() < minIdent) minIdent = inode.getIdentity();
-			ArrayList<RefTag> tags = byIdentity.getOrDefault(inode.getIdentity(), null);
+			ArrayList<RevisionTag> tags = byIdentity.getOrDefault(inode.getIdentity(), null);
 			if(tags == null) {
-				tags = new ArrayList<RefTag>();
+				tags = new ArrayList<RevisionTag>();
 				byIdentity.put(inode.getIdentity(), tags);
 			}
 
-			for(RefTag tag : diff.resolutions.get(inode)) tags.add(tag);
+			for(RevisionTag tag : diff.resolutions.get(inode)) tags.add(tag);
 		}
 
 		for(Long identity : byIdentity.keySet()) {
 			long newId = identity.equals(minIdent) ? diff.inodeId : fs.getInodeTable().issueInodeId();
-			idMap.putIfAbsent(diff.inodeId, new HashMap<RefTag,Long>());
-			for(RefTag tag : byIdentity.get(identity)) idMap.get(diff.inodeId).put(tag, newId);
+			idMap.putIfAbsent(diff.inodeId, new HashMap<>());
+			for(RevisionTag tag : byIdentity.get(identity)) idMap.get(diff.inodeId).put(tag, newId);
 			inodeDiffs.put(newId, renumberInodeWithIdentity(fs, diff, newId, identity));
 		}
 	}

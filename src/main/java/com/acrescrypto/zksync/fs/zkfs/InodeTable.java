@@ -49,7 +49,7 @@ public class InodeTable extends ZKFile {
 	 * @param tag tag for revision to be loaded. if blank tag supplied, a blank inode table is created.
 	 * @throws IOException
 	 */
-	public InodeTable(ZKFS fs, RefTag tag) throws IOException {
+	public InodeTable(ZKFS fs, RevisionTag tag) throws IOException {
 		super(fs);
 		this.trusted = false;
 		this.path = INODE_TABLE_PATH;
@@ -60,7 +60,7 @@ public class InodeTable extends ZKFile {
 			commitInodePage(pageNum, inodes);
 		});
 		
-		if(tag.isBlank()) initialize();
+		if(tag.refTag.isBlank()) initialize();
 		else readExisting(tag);
 	}
 	
@@ -81,7 +81,7 @@ public class InodeTable extends ZKFile {
 	 * 
 	 * @return RefTag for the newly created revision
 	 *  */
-	public RefTag commitWithTimestamp(RefTag[] additionalParents, long timestamp) throws IOException {
+	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
 		freelist.commit();
 		updateRevisionInfo(additionalParents);
 		
@@ -102,15 +102,22 @@ public class InodeTable extends ZKFile {
 		syncInodes();
 		updateTree(additionalParents);
 		
-		return inode.refTag;
+		int numParents = additionalParents.length;
+		long baseHeight = -1;
+		if(zkfs.baseRevision != null && !zkfs.baseRevision.refTag.isBlank()) {
+			numParents++;
+			baseHeight = zkfs.baseRevision.height;
+		}
+		
+		return new RevisionTag(inode.refTag, numParents, 1+baseHeight);
 	}
 	
 	/** clear the old revision info and replace with a new one */
-	protected void updateRevisionInfo(RefTag[] additionalParents) throws IOException {
+	protected void updateRevisionInfo(RevisionTag[] additionalParents) throws IOException {
 		 // TODO: figure out if we need to add the current revision tag here
 		RevisionInfo newRevision = new RevisionInfo(zkfs);
 		newRevision.reset();
-		for(RefTag parent : additionalParents) newRevision.addParent(parent);
+		for(RevisionTag parent : additionalParents) newRevision.addParent(parent);
 		newRevision.commit();
 		revision = newRevision;
 	}
@@ -124,18 +131,12 @@ public class InodeTable extends ZKFile {
 	}
 	
 	/** add our new commit to the list of branch tips, and remove our ancestors */
-	protected void updateTree(RefTag[] additionalParents) throws IOException {
-		RefTag tag = inode.getRefTag();
-		if(additionalParents.length > 0) {
-			// TODO DHT: (test) Test setting of no new content flag.
-			// TODO DHT: (redesign) Ensure that we only set this flag if there really is no new content.
-			tag.setFlag(RefTag.FLAG_NO_NEW_CONTENT);
-		}
-		
+	protected void updateTree(RevisionTag[] additionalParents) throws IOException {
+		RevisionTag tag = new RevisionTag(inode.getRefTag(), 1+additionalParents.length, 1+zkfs.baseRevision.height);	
 		RevisionTree tree = zkfs.archive.config.getRevisionTree();
 		tree.addBranchTip(tag);
 		tree.removeBranchTip(zkfs.baseRevision);
-		for(RefTag parent : additionalParents) tree.removeBranchTip(parent);
+		for(RevisionTag parent : additionalParents) tree.removeBranchTip(parent);
 		tree.write();
 		zkfs.archive.config.swarm.announceTips();
 	}
@@ -304,12 +305,12 @@ public class InodeTable extends ZKFile {
 	}
 	
 	/** initialize from existing inode table data, identified by a reftag */
-	private void readExisting(RefTag tag) throws IOException {
-		this.tree = new PageTree(tag);
+	private void readExisting(RevisionTag tag) throws IOException {
+		this.tree = new PageTree(tag.refTag);
 		this.inode = new Inode(zkfs);
-		this.inode.setRefTag(tag);
+		this.inode.setRefTag(tag.refTag);
 		this.inode.setFlags(Inode.FLAG_RETAIN);
-		this.inode.stat.setSize(zkfs.archive.config.pageSize * tag.numPages);
+		this.inode.stat.setSize(zkfs.archive.config.pageSize * tag.refTag.numPages);
 		this.revision = new RevisionInfo(inodeWithId(INODE_ID_REVISION_INFO));
 		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST));
 		nextInodeId = lookupNextInodeId();
@@ -348,7 +349,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	public void dumpInodes() throws IOException {
-		System.out.println("Inode table for " + Util.bytesToHex(zkfs.baseRevision.getHash()));
+		System.out.println("Inode table for " + zkfs.baseRevision);
 		for(int i = 0; i < nextInodeId; i++) {
 			Inode inode = inodeWithId(i);
 			System.out.printf("\tInode %d: tag=%s... refType=%d identity=%x hash=%s\n\t\t%s\n",

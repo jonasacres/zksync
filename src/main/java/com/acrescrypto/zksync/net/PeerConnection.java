@@ -18,9 +18,9 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
-import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.net.PageQueue.ChunkReference;
 import com.acrescrypto.zksync.utility.AppendableInputStream;
@@ -214,7 +214,7 @@ public class PeerConnection {
 		announceTags(archive.allPageTags());
 	}
 	
-	public void announceTip(ObfuscatedRefTag tip) {
+	public void announceTip(RevisionTag tip) {
 		send(CMD_ANNOUNCE_TIPS, tip.serialize());
 	}
 	
@@ -225,9 +225,9 @@ public class PeerConnection {
 			return;
 		}
 		
-		Collection<ObfuscatedRefTag> branchTipsClone = new ArrayList<>(archive.getConfig().getRevisionTree().branchTips());
-		ByteBuffer buf = ByteBuffer.allocate(branchTipsClone.size() * ObfuscatedRefTag.sizeForConfig(socket.swarm.config));
-		for(ObfuscatedRefTag tag : branchTipsClone) {
+		Collection<RevisionTag> branchTipsClone = new ArrayList<>(archive.getConfig().getRevisionTree().branchTips());
+		ByteBuffer buf = ByteBuffer.allocate(branchTipsClone.size() * RevisionTag.sizeForConfig(socket.swarm.config));
+		for(RevisionTag tag : branchTipsClone) {
 			buf.put(tag.serialize());
 		}
 		
@@ -261,7 +261,7 @@ public class PeerConnection {
 	}
 	
 	/** Request encrypted files pertaining to a given inode (including page tree chunks). */
-	public void requestInodes(int priority, RefTag revTag, Collection<Long> inodeIds) throws PeerCapabilityException {
+	public void requestInodes(int priority, RevisionTag revTag, Collection<Long> inodeIds) throws PeerCapabilityException {
 		if(inodeIds.isEmpty()) return;
 		assertPeerCapability(PEER_TYPE_FULL);
 		
@@ -275,10 +275,10 @@ public class PeerConnection {
 		send(CMD_REQUEST_INODES, buf.array());
 	}
 	
-	public void requestRevisionContents(int priority, Collection<RefTag> tips) throws PeerCapabilityException {
+	public void requestRevisionContents(int priority, Collection<RevisionTag> tips) throws PeerCapabilityException {
 		if(tips.isEmpty()) return;
 		assertPeerCapability(PEER_TYPE_FULL);
-		send(CMD_REQUEST_REVISION_CONTENTS, serializeRefTags(priority, tips));
+		send(CMD_REQUEST_REVISION_CONTENTS, serializeRevTags(priority, tips));
 	}
 	
 	public void requestConfigInfo() {
@@ -457,11 +457,11 @@ public class PeerConnection {
 	
 	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
 		Util.blockOn(()->!closed && !socket.swarm.config.hasKey());
-		byte[] obfTagRaw = new byte[ObfuscatedRefTag.sizeForConfig(socket.swarm.config)];
+		byte[] revTagRaw = new byte[RevisionTag.sizeForConfig(socket.swarm.config)];
 		while(msg.rxBuf.hasRemaining()) {
-			msg.rxBuf.get(obfTagRaw);
-			ObfuscatedRefTag obfTag = new ObfuscatedRefTag(socket.swarm.config, obfTagRaw);
-			socket.swarm.config.getRevisionTree().addBranchTip(obfTag);
+			msg.rxBuf.get(revTagRaw);
+			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw);
+			socket.swarm.config.getRevisionTree().addBranchTip(revTag);
 		}
 		
 		socket.swarm.config.getRevisionTree().write();
@@ -483,9 +483,9 @@ public class PeerConnection {
 		ZKArchive archive = socket.swarm.config.getArchive();
 		
 		assertPeerCapability(PEER_TYPE_FULL);
-		byte[] refTagBytes = new byte[archive.getConfig().refTagSize()];
+		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		int priority = msg.rxBuf.getInt();
-		RefTag tag = new RefTag(archive, msg.rxBuf.read(refTagBytes));
+		RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes));
 		
 		while(msg.rxBuf.hasRemaining()) {
 			long inodeId = msg.rxBuf.getLong();
@@ -498,11 +498,11 @@ public class PeerConnection {
 		ZKArchive archive = socket.swarm.config.getArchive();
 
 		assertPeerCapability(PEER_TYPE_FULL);
-		byte[] refTagBytes = new byte[archive.getConfig().refTagSize()];
+		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		int priority = msg.rxBuf.getInt();
 		
 		while(msg.rxBuf.hasRemaining()) {
-			RefTag tag = new RefTag(archive, msg.rxBuf.read(refTagBytes));
+			RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes));
 			sendRevisionContents(priority, tag);
 		}
 	}
@@ -597,11 +597,11 @@ public class PeerConnection {
 		queue.stopSendingEverything();
 	}
 
-	protected void sendRevisionContents(int priority, RefTag refTag) throws IOException {
+	protected void sendRevisionContents(int priority, RevisionTag refTag) throws IOException {
 		queue.addRevisionTag(priority, refTag);
 	}
 	
-	protected void sendInodeContents(int priority, RefTag revTag, long inodeId) throws IOException {
+	protected void sendInodeContents(int priority, RevisionTag revTag, long inodeId) throws IOException {
 		queue.addInodeContents(priority, revTag, inodeId);
 	}
 	
@@ -615,10 +615,10 @@ public class PeerConnection {
 		}
 	}
 
-	protected byte[] serializeRefTags(int priority, Collection<RefTag> tags) {
+	protected byte[] serializeRevTags(int priority, Collection<RevisionTag> tags) {
 		ByteBuffer buf = ByteBuffer.allocate(4 + tags.size() * socket.swarm.config.refTagSize());
 		buf.putInt(priority);
-		for(RefTag tag : tags) buf.put(tag.getBytes());
+		for(RevisionTag tag : tags) buf.put(tag.getBytes());
 		return buf.array();
 	}
 

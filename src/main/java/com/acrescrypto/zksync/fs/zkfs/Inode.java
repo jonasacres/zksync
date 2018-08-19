@@ -46,7 +46,7 @@ public class Inode implements Comparable<Inode> {
 	public Inode(ZKFS fs) {
 		this.fs = fs;
 		this.stat = new Stat();
-		this.changedFrom = fs.baseRevision;
+		this.changedFrom = fs.baseRevision.refTag;
 		this.refTag = RefTag.blank(fs.archive);
 	}
 	

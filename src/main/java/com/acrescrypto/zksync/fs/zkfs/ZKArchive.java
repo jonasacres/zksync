@@ -33,7 +33,7 @@ public class ZKArchive {
 	protected LocalConfig localConfig;
 	protected ZKArchiveConfig config;
 	protected ZKMaster master;
-	protected HashCache<RefTag,ZKFS> readOnlyFilesystems;
+	protected HashCache<RevisionTag,ZKFS> readOnlyFilesystems;
 	protected HashMap<Long,byte[]> allPageTags;
 	
 	protected ZKArchive(ZKArchiveConfig config) throws IOException {
@@ -44,9 +44,9 @@ public class ZKArchive {
 		this.config = config;
 		Key localKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_CONFIG_FILE);
 		this.localConfig = new LocalConfig(config.localStorage, localKey);
-		this.readOnlyFilesystems = new HashCache<RefTag,ZKFS>(64, (RefTag tag) -> {
+		this.readOnlyFilesystems = new HashCache<RevisionTag,ZKFS>(64, (tag) -> {
 			return tag.getFS();
-		}, (RefTag tag, ZKFS fs) -> {});
+		}, (tag, fs) -> {});
 		
 		if(!isCacheOnly()) { // only need the list for non-networked archives, which are not cache-only
 			buildAllPageTagsList();
@@ -72,19 +72,13 @@ public class ZKArchive {
 		return cacheOnly;
 	}
 	
-	public ZKFS openRevision(byte[] revision) throws IOException {
-		assertOpen();
-		return new ZKFS(new RefTag(this, revision));
-	}
-	
-	public ZKFS openRevision(RefTag revision) throws IOException {
-		assertOpen();
-		return openRevision(revision.getBytes());
+	public ZKFS openRevision(RevisionTag revision) throws IOException {
+		return new ZKFS(revision);
 	}
 	
 	public ZKFS openBlank() throws IOException {
 		assertOpen();
-		return new ZKFS(RefTag.blank(this));
+		return new ZKFS(new RevisionTag(RefTag.blank(this), 0, 0));
 	}
 	
 	public ZKFS openLatest() throws IOException {
@@ -139,10 +133,10 @@ public class ZKArchive {
 	}
 	
 	/** Test if we have every page of a given inode cached locally. */
-	public boolean hasInode(RefTag revTag, long inodeId) throws IOException {
+	public boolean hasInode(RevisionTag revTag, long inodeId) throws IOException {
 		assertOpen();
 		if(inodeId < 0) return false;
-		PageTree inodeTableTree = new PageTree(revTag);
+		PageTree inodeTableTree = new PageTree(revTag.getRefTag());
 		if(!inodeTableTree.exists()) return false;
 
 		try {
@@ -158,9 +152,9 @@ public class ZKArchive {
 	
 	/** Test if we have every page of a given revision cached locally. 
 	 * @throws IOException */
-	public boolean hasRevision(RefTag revTag) throws IOException {
+	public boolean hasRevision(RevisionTag revTag) throws IOException {
 		assertOpen();
-		PageTree inodeTableTree = new PageTree(revTag);
+		PageTree inodeTableTree = new PageTree(revTag.getRefTag());
 		if(!inodeTableTree.exists()) return false;
 
 		ZKFS fs = openRevision(revTag);

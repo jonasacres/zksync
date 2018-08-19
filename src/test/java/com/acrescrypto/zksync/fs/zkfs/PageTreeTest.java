@@ -29,7 +29,8 @@ public class PageTreeTest {
 	ZKArchive archive;
 	ZKFS fs;
 	PageTree tree;
-	RefTag immediateTag, indirectTag, doubleIndirectTag, revTag;
+	RefTag immediateTag, indirectTag, doubleIndirectTag;
+	RevisionTag revTag;
 	
 	@BeforeClass
 	public static void beforeAll() {
@@ -71,7 +72,7 @@ public class PageTreeTest {
 	
 	@Test
 	public void testConstructFromRevTagSetsFields() throws IOException {
-		PageTree fromRevTag = new PageTree(revTag);
+		PageTree fromRevTag = new PageTree(revTag.refTag);
 		
 		assertEquals(archive, fromRevTag.archive);
 		assertEquals(revTag, fromRevTag.refTag);

@@ -29,9 +29,8 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
-import com.acrescrypto.zksync.fs.zkfs.ObfuscatedRefTag;
 import com.acrescrypto.zksync.fs.zkfs.Page;
-import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
 import com.acrescrypto.zksync.utility.Util;
@@ -393,7 +392,7 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void announceTip(ObfuscatedRefTag tip) {
+	public void announceTip(RevisionTag tip) {
 		for(PeerConnection connection : getConnections()) {
 			connection.announceTip(tip);
 		}
@@ -407,11 +406,11 @@ public class PeerSwarm implements BlacklistCallback {
 		pool.addPageTag(priority, shortTag);
 	}
 	
-	public void requestInode(int priority, RefTag revTag, long inodeId) {
+	public void requestInode(int priority, RevisionTag revTag, long inodeId) {
 		pool.addInode(priority, revTag, inodeId);
 	}
 	
-	public void requestRevision(int priority, RefTag revTag) {
+	public void requestRevision(int priority, RevisionTag revTag) {
 		pool.addRevision(priority, revTag);
 	}
 	
