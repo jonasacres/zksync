@@ -34,8 +34,12 @@ public class RevisionTag {
 		deserialize(config, serialization);
 	}
 	
-	public ZKArchive getArchive() {
-		return refTag.config.getArchive();
+	public ZKArchive getArchive() throws IOException {
+		ZKArchive archive = refTag.config.getArchive();
+		if(cacheOnly && !archive.isCacheOnly()) {
+			archive = archive.cacheOnlyArchive();
+		}
+		return archive;
 	}
 	
 	public ZKArchiveConfig getConfig() {
@@ -74,6 +78,16 @@ public class RevisionTag {
 	}
 	
 	public byte[] serialize() {
+		/* This is intended to be an obfuscation, and not true encryption. The use of CBC mode with a fixed IV
+		 * creates the possibility of revealing shared prefixes between hashes. However, since we have
+		 * 128-bit blocks, this will happen at an average rate of 1 in 2**64 revtags.
+		 * 
+		 * We do not want randomized IVs, because we want each serialization to be identical so peers know when
+		 * they're looking at the same revtag.
+		 * 
+		 * At this time, there do not seem to be obvious serious consequences to an adversary learning one or more
+		 * revtags. But since we want our adversaries in the dark as much as possible, we obfuscate.
+		 */
 		Key key = refTag.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
 		byte[] ciphertext = key.encryptCBC(new byte[key.getCrypto().symBlockSize()], refTag.serialize());
 		
@@ -99,9 +113,11 @@ public class RevisionTag {
 		buf.get(encryptedRefTag);
 		height = buf.getLong();
 		numParents = buf.getInt();
+		hashCode = ByteBuffer.wrap(serialized).getInt();
+		this.serialized = serialized;
 	
-		assert(height > 0);
-		assert(numParents > 0);
+		assert(height >= 0);
+		assert(numParents >= 0);
 		
 		if(!config.accessor.isSeedOnly()) {
 			Key key = config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
@@ -122,7 +138,7 @@ public class RevisionTag {
 	}
 	
 	public String toString() {
-		return Util.bytesToHex(serialized, 4);
+		return Util.bytesToHex(serialized, 4) + " height=" + height + " numParents=" + numParents;
 	}
 	
 	public int hashCode() {

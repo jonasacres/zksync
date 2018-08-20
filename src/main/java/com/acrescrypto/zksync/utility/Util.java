@@ -76,8 +76,9 @@ public class Util {
 	
 	public static String bytesToHex(byte[] b, int length) {
 		// credit: https://stackoverflow.com/questions/9655181/how-to-convert-a-byte-array-to-a-hex-string-in-java#9855338
-	    char[] hexChars = new char[2*b.length ];
-	    for(int j = 0; j < b.length; j++) {
+		int len = Math.min(length, b.length);
+	    char[] hexChars = new char[2*len];
+	    for(int j = 0; j < len; j++) {
 	        int v = b[j] & 0xff;
 	        hexChars[2*j] = hexArray[v >>> 4];
 	        hexChars[2*j + 1] = hexArray[v & 0x0f];

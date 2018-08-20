@@ -101,10 +101,6 @@ public class RevisionTreeTest {
 		assertEquals(2, mtree.branchTips().size());
 	}
 	
-	@Ignore
-	public void testDefaultRevision() {
-	}
-	
 	@Test
 	public void testBranchTips() {
 		int count = tree.branchTips().size();

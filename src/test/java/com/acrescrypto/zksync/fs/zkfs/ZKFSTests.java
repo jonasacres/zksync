@@ -24,7 +24,8 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetTest;
 	PageTest.class,
 	PageTreeChunkTest.class,
 	PageTreeTest.class,
-	RefTagTest.class
+	RefTagTest.class,
+	RevisionTagTest.class
 })
 
 public class ZKFSTests {

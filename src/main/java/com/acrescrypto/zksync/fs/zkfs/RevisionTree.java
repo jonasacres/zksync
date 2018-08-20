@@ -41,6 +41,7 @@ public class RevisionTree {
 		branchTips.add(newBranch);
 		config.swarm.announceTip(newBranch);
 		updateLatest(newBranch);
+		System.out.println("Added branch " + newBranch.toString());
 	}
 	
 	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
@@ -109,7 +110,7 @@ public class RevisionTree {
 		int i = 0;
 		for(RevisionTag tag : branchTips()) {
 			i++;
-			System.out.println("\t" + i + ": " + tag + ", height=" + tag.height + ", numParents=" + tag.numParents);
+			System.out.println("\t" + i + ": " + tag);
 		}
 	}
 	

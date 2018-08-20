@@ -57,15 +57,11 @@ public class RevisionInfo extends ZKFile {
 		flush();
 	}
 	
-	protected int parentTagLength() {
-		return zkfs.archive.crypto.hashLength()+RefTag.REFTAG_EXTRA_DATA_SIZE;
-	}
-
 	// create plaintext serialized revision data (to be encrypted and written to
 	// storage)
 	protected byte[] serialize() throws IOException {
 		addParent(zkfs.baseRevision);
-		int len = 8 + 4 + parents.size()*parentTagLength();
+		int len = 8 + 4 + parents.size()*RevisionTag.sizeForConfig(zkfs.archive.config);
 		ByteBuffer buf = ByteBuffer.allocate(len);
 		buf.putLong(generation);
 		buf.putInt(parents.size());
@@ -86,7 +82,7 @@ public class RevisionInfo extends ZKFile {
 		
 		int numParents = buf.getInt();
 		for(int i = 0; i < numParents; i++) {
-			byte[] parentBytes = new byte[parentTagLength()];
+			byte[] parentBytes = new byte[RevisionTag.sizeForConfig(zkfs.archive.config)];
 			buf.get(parentBytes);
 			parents.add(new RevisionTag(zkfs.archive.config, parentBytes));
 		}

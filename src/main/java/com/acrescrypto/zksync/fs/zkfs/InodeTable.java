@@ -40,7 +40,7 @@ public class InodeTable extends ZKFile {
 	
 	/** serialized size of an inode for a given archive, in bytes */
 	public static int inodeSize(ZKArchive archive) {
-		return Stat.STAT_SIZE + 2*8 + 1*4 + 1 + 2*(archive.config.refTagSize());		
+		return Stat.STAT_SIZE + 2*8 + 1*4 + 1 + 2*archive.config.refTagSize();		
 	}
 	
 	/** initialize inode table for FS.
