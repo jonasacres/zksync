@@ -8,8 +8,8 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionTag {
 	RefTag refTag;
-	int numParents;
 	long height;
+	long parentHash;
 	byte[] serialized;
 	int hashCode;
 	RevisionInfo info;
@@ -23,10 +23,10 @@ public class RevisionTag {
 		return new RevisionTag(RefTag.blank(config), 0, 0);
 	}
 	
-	public RevisionTag(RefTag refTag, int numParents, long height) {
+	public RevisionTag(RefTag refTag, long parentHash, long height) {
 		this.refTag = refTag;
+		this.parentHash = parentHash;
 		this.height = height;
-		this.numParents = numParents;
 		serialize();
 	}
 	
@@ -68,7 +68,7 @@ public class RevisionTag {
 	}
 	
 	public RevisionTag makeCacheOnly() {
-		RevisionTag tag = new RevisionTag(refTag, numParents, height);
+		RevisionTag tag = new RevisionTag(refTag, height, parentHash);
 		tag.cacheOnly = true;
 		return tag;
 	}
@@ -93,8 +93,8 @@ public class RevisionTag {
 		
 		ByteBuffer buffer = ByteBuffer.allocate(sizeForConfig(refTag.getConfig()));
 		buffer.put(ciphertext);
+		buffer.putLong(parentHash);
 		buffer.putLong(height);
-		buffer.putInt(numParents);
 		buffer.put(refTag.config.privKey.sign(buffer.array(), 0, buffer.position()));
 		
 		serialized = buffer.array();
@@ -111,13 +111,12 @@ public class RevisionTag {
 		
 		byte[] encryptedRefTag = new byte[config.refTagSize()];		
 		buf.get(encryptedRefTag);
+		parentHash = buf.getLong();
 		height = buf.getLong();
-		numParents = buf.getInt();
 		hashCode = ByteBuffer.wrap(serialized).getInt();
 		this.serialized = serialized;
 	
 		assert(height >= 0);
-		assert(numParents >= 0);
 		
 		if(!config.accessor.isSeedOnly()) {
 			Key key = config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
@@ -128,7 +127,6 @@ public class RevisionTag {
 	
 	public int compareTo(RevisionTag other) {
 		if(this.height != other.height) return Long.compare(this.height, other.height);
-		if(this.numParents != other.numParents) return Integer.compare(this.numParents, other.numParents);
 		return refTag.compareTo(other.refTag);
 	}
 	
@@ -138,7 +136,7 @@ public class RevisionTag {
 	}
 	
 	public String toString() {
-		return Util.bytesToHex(serialized, 4) + " height=" + height + " numParents=" + numParents;
+		return Util.bytesToHex(serialized, 4) + " height=" + height + " parentHash=" + parentHash;
 	}
 	
 	public int hashCode() {

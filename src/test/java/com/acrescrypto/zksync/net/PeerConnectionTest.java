@@ -1001,7 +1001,7 @@ public class PeerConnectionTest {
 			if(i != inodes.length/2) {
 				msg.receivedData((byte) 0, Util.serializeLong(inodes[i].getStat().getInodeId()));
 			} else {
-				msg.receivedData((byte) 0, Util.serializeLong(fs.getInodeTable().nextInodeId));
+				msg.receivedData((byte) 0, Util.serializeLong(fs.getInodeTable().nextInodeId()));
 			}
 		}
 		

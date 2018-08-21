@@ -67,7 +67,7 @@ public class RevisionTagTest {
 	public void testBlank() {
 		RevisionTag blank = RevisionTag.blank(config);
 		assertEquals(0, blank.height);
-		assertEquals(0, blank.numParents);
+		assertEquals(0, blank.parentHash);
 		assertTrue(blank.refTag.isBlank());
 	}
 	
@@ -76,7 +76,7 @@ public class RevisionTagTest {
 		RefTag tag = new RefTag(archive, crypto.rng(config.refTagSize()));
 		RevisionTag revTag = new RevisionTag(tag, 1, 2);
 		assertEquals(tag, revTag.refTag);
-		assertEquals(1, revTag.numParents);
+		assertEquals(1, revTag.parentHash);
 		assertEquals(2, revTag.height);
 		assertArrayEquals(revTag.serialized, revTag.serialize());
 		assertFalse(revTag.cacheOnly);
@@ -89,7 +89,7 @@ public class RevisionTagTest {
 		RevisionTag origTag = new RevisionTag(revTag.refTag, 100, 200);
 		RevisionTag cloneTag = new RevisionTag(config, origTag.getBytes());
 		assertEquals(origTag.refTag, cloneTag.refTag);
-		assertEquals(origTag.numParents, cloneTag.numParents);
+		assertEquals(origTag.parentHash, cloneTag.parentHash);
 		assertEquals(origTag.height, cloneTag.height);
 		assertArrayEquals(origTag.getBytes(), cloneTag.serialized);
 		assertFalse(cloneTag.cacheOnly);
@@ -170,7 +170,7 @@ public class RevisionTagTest {
 	
 	@Test
 	public void testEquals() {
-		RevisionTag clone = new RevisionTag(revTag.refTag, revTag.numParents, revTag.height);
+		RevisionTag clone = new RevisionTag(revTag.refTag, revTag.parentHash, revTag.height);
 		assertTrue(clone.equals(revTag));
 		assertTrue(revTag.equals(clone));
 		assertTrue(clone.equals(clone));

@@ -171,8 +171,8 @@ public class PageQueue {
 			
 			try {
 				this.inodeTable = revTag.makeCacheOnly().readOnlyFS().getInodeTable();
-				assert(inodeTable.nextInodeId <= Integer.MAX_VALUE);
-				this.shuffler = Shuffler.fixedShuffler((int) inodeTable.nextInodeId);
+				assert(inodeTable.nextInodeId() <= Integer.MAX_VALUE);
+				this.shuffler = Shuffler.fixedShuffler((int) inodeTable.nextInodeId());
 			} catch(IOException|SecurityException exc) {
 				this.shuffler = Shuffler.fixedShuffler(0);
 			}

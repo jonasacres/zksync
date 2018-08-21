@@ -125,7 +125,7 @@ public class PageQueueTest {
 		ZKFS fs = revTag.readOnlyFS();
 		
 		expectedTags.add(Util.shortTag(fs.getInodeTable().getInode().getRefTag().getHash()));
-		for(int i = 0; i < fs.getInodeTable().nextInodeId; i++) {
+		for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
 			expectedTags.addAll(expectedPageTagsForInode(fs.getInodeTable().inodeWithId(i)));
 		}
 		
@@ -647,7 +647,7 @@ public class PageQueueTest {
 	
 	public Inode inodeForPageTag(RevisionTag revTag, byte[] pageTag) throws IOException {
 		ZKFS fs = revTag.readOnlyFS();
-		for(int i = 0; i < fs.getInodeTable().nextInodeId; i++) {
+		for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
 			Inode inode = fs.getInodeTable().inodeWithId(i);
 			PageTree tree = new PageTree(inode);
 			for(int j = 0; j < tree.numPages(); j++) {

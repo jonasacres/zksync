@@ -117,7 +117,7 @@ public class ZKArchiveTest {
 	@Test
 	public void testHasInodeReturnsFalseIfInodeIsUnissued() throws IOException {
 		ZKFS fs = addMockData(archive);
-		assertFalse(archive.hasInode(fs.baseRevision, fs.getInodeTable().nextInodeId));
+		assertFalse(archive.hasInode(fs.baseRevision, fs.getInodeTable().nextInodeId()));
 	}
 	
 	@Test

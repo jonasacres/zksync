@@ -2,8 +2,11 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 
+import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Stat;
@@ -20,11 +23,8 @@ public class InodeTable extends ZKFile {
 	/** top level directory of filesystem */
 	public final static long INODE_ID_ROOT_DIRECTORY = 1;
 	
-	/** metadata about the current revision such as immediate ancestors and generation number */
-	public final static long INODE_ID_REVISION_INFO = 2;
-	
 	/** freelist of avaialble inode IDs */
-	public final static long INODE_ID_FREELIST = 3;
+	public final static long INODE_ID_FREELIST = 2;
 
 	/** first inode ID issued to actual files */
 	public final static long USER_INODE_ID_START = 16;
@@ -34,7 +34,7 @@ public class InodeTable extends ZKFile {
 	
 	protected RevisionInfo revision; /** current revision metadata */
 	protected FreeList freelist;
-	public long nextInodeId; /** next inode ID to be issued when freelist is exhausted */
+	protected long nextInodeId; /** next inode ID to be issued when freelist is exhausted */
 	
 	protected HashCache<Long,Inode[]> inodesByPage; /** in-memory cache of inode data */
 	
@@ -83,12 +83,13 @@ public class InodeTable extends ZKFile {
 	 *  */
 	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
 		freelist.commit();
-		updateRevisionInfo(additionalParents);
+		ArrayList<RevisionTag> parents = makeParentList(additionalParents);
+		updateRevisionInfo(parents);
+		long parentHash = makeParentHash(parents);
 		
 		if(timestamp >= 0) {
 			Inode[] fixedTimestampInodes = new Inode[] {
 					this.inodeWithId(INODE_ID_ROOT_DIRECTORY),
-					this.inodeWithId(INODE_ID_REVISION_INFO),
 					this.inodeWithId(INODE_ID_FREELIST),
 			};
 			
@@ -102,23 +103,19 @@ public class InodeTable extends ZKFile {
 		syncInodes();
 		updateTree(additionalParents);
 		
-		int numParents = additionalParents.length;
 		long baseHeight = -1;
 		if(zkfs.baseRevision != null && !zkfs.baseRevision.refTag.isBlank()) {
-			numParents++;
 			baseHeight = zkfs.baseRevision.height;
 		}
 		
-		return new RevisionTag(inode.refTag, numParents, 1+baseHeight);
+		return new RevisionTag(inode.refTag, parentHash, 1+baseHeight);
 	}
 	
 	/** clear the old revision info and replace with a new one */
-	protected void updateRevisionInfo(RevisionTag[] additionalParents) throws IOException {
+	protected void updateRevisionInfo(Collection<RevisionTag> parents) throws IOException {
 		 // TODO: figure out if we need to add the current revision tag here
-		RevisionInfo newRevision = new RevisionInfo(zkfs);
+		RevisionInfo newRevision = new RevisionInfo(this, parents, revision.generation+1);
 		newRevision.reset();
-		for(RevisionTag parent : additionalParents) newRevision.addParent(parent);
-		newRevision.commit();
 		revision = newRevision;
 	}
 	
@@ -132,13 +129,33 @@ public class InodeTable extends ZKFile {
 	
 	/** add our new commit to the list of branch tips, and remove our ancestors */
 	protected void updateTree(RevisionTag[] additionalParents) throws IOException {
-		RevisionTag tag = new RevisionTag(inode.getRefTag(), 1+additionalParents.length, 1+zkfs.baseRevision.height);	
+		ArrayList<RevisionTag> parents = makeParentList(additionalParents);
+		long parentHash = makeParentHash(parents);
+		RevisionTag tag = new RevisionTag(inode.getRefTag(), parentHash, 1+zkfs.baseRevision.height);	
 		RevisionTree tree = zkfs.archive.config.getRevisionTree();
 		tree.addBranchTip(tag);
-		tree.removeBranchTip(zkfs.baseRevision);
-		for(RevisionTag parent : additionalParents) tree.removeBranchTip(parent);
+		for(RevisionTag parent : parents) tree.removeBranchTip(parent);
 		tree.write();
 		zkfs.archive.config.swarm.announceTips();
+	}
+	
+	protected ArrayList<RevisionTag> makeParentList(RevisionTag[] additionalParents) {
+		ArrayList<RevisionTag> parents = new ArrayList<>(1+additionalParents.length);
+		parents.add(zkfs.baseRevision);
+		for(RevisionTag parent : additionalParents) {
+			parents.add(parent);
+		}
+		
+		return parents;
+	}
+	
+	protected long makeParentHash(Collection<RevisionTag> parents) {
+		HashContext ctx = zkfs.archive.crypto.startHash();
+		for(RevisionTag parent : parents) {
+			ctx.update(parent.getBytes());
+		}
+		
+		return ByteBuffer.wrap(ctx.finish()).getLong();
 	}
 	
 	/** size of an inode for this table, in bytes */
@@ -157,6 +174,7 @@ public class InodeTable extends ZKFile {
 		if(inodeId <= 1) throw new IllegalArgumentException();
 		
 		Inode inode = inodeWithId(inodeId);
+		if(inode.isDeleted()) return;
 		if(inode.nlink > 0) {
 			throw new EMLINKException(String.format("inode %d", inodeId));
 		}
@@ -170,10 +188,11 @@ public class InodeTable extends ZKFile {
 		return inodesByPage.get(pageNumForInodeId(inodeId))[pageOffsetForInodeId(inodeId)];
 	}
 	
-	/** test if table contains an inode with the given ID */
-	public boolean hasInodeWithId(long inodeId) {
+	/** test if table contains an inode with the given ID 
+	 * @throws IOException */
+	public boolean hasInodeWithId(long inodeId) throws IOException {
 		// TODO: consider checking freelist?
-		return inodeId <= nextInodeId;
+		return inodeId <= nextInodeId();
 	}
 	
 	/** issue next inode ID (draw from freelist if available, or issue next sequential ID if freelist is empty) */
@@ -181,6 +200,7 @@ public class InodeTable extends ZKFile {
 		try {
 			return freelist.issueInodeId();
 		} catch(FreeListExhaustedException exc) {
+			nextInodeId(); // ensure we have nextInodeId loaded
 			return nextInodeId++;
 		}
 	}
@@ -210,12 +230,15 @@ public class InodeTable extends ZKFile {
 	
 	/** array of all inodes stored at a given page number of the inode table */
 	protected Inode[] inodesForPage(long pageNum) throws IOException {
-		Inode[] list = new Inode[inodesPerPage()];
+		if(pageNum == 0) return inodesForFirstPage();
+		Inode[] list = new Inode[numInodesForPage(pageNum)];
+		
 		try {
 			seek(pageNum*zkfs.archive.config.pageSize, SEEK_SET);
 		} catch(IllegalArgumentException exc) {
 			throw new IOException();
 		}
+		
 		ByteBuffer buf = ByteBuffer.wrap(read((int) zkfs.archive.config.pageSize));
 		byte[] serialized = new byte[inodeSize()];
 		int i = 0;
@@ -226,9 +249,39 @@ public class InodeTable extends ZKFile {
 		}
 		
 		while(i < list.length) list[i++] = new Inode(zkfs);
-		if(pageNum == 0) list[0] = inode;
 		
 		return list;
+	}
+	
+	protected Inode[] inodesForFirstPage() throws IOException {
+		Inode[] list = new Inode[numInodesForPage(0)];
+		try {
+			// the first part of the first page is our RevisionInfo
+			seek(RevisionInfo.FIXED_SIZE, SEEK_SET);
+		} catch(IllegalArgumentException exc) {
+			throw new IOException();
+		}
+		
+		// Read the remainder of the first page
+		ByteBuffer buf = ByteBuffer.wrap(read((int) zkfs.archive.config.pageSize - RevisionInfo.FIXED_SIZE));
+		byte[] serialized = new byte[inodeSize()];
+		int i = 0;
+		
+		while(buf.remaining() >= serialized.length && buf.hasRemaining()) {
+			buf.get(serialized);
+			list[i++] = new Inode(zkfs, serialized);
+		}
+		
+		while(i < list.length) list[i++] = new Inode(zkfs);
+		list[0] = inode; // inject our own inode in at index 0
+		
+		return list;
+	}
+	
+	protected RevisionInfo readRevisionInfo() throws IOException {
+		seek(0, SEEK_SET);
+		byte[] serializedRevInfo = read(RevisionInfo.FIXED_SIZE);
+		return new RevisionInfo(this, serializedRevInfo);
 	}
 	
 	/** write an array of inodes to a given page number */
@@ -240,16 +293,37 @@ public class InodeTable extends ZKFile {
 	
 	/** calculate the page number for a given inode id */
 	protected long pageNumForInodeId(long inodeId) {
-		return inodeId/inodesPerPage();
+		if(inodeId < numInodesForPage(0)) {
+			return 0;
+		} else {
+			// all pages except 0 have same number of inodes
+			return 1 + (inodeId - numInodesForPage(0))/numInodesForPage(1);
+		}
 	}
 	
 	/** calculate the index into a page for a given inode id */
 	protected int pageOffsetForInodeId(long inodeId) {
-		return (int) (inodeId % inodesPerPage());
+		if(inodeId < numInodesForPage(0)) {
+			return (int) (inodeId % numInodesForPage(0));
+		} else {
+			return (int) ((inodeId - numInodesForPage(0)) % numInodesForPage(1));
+		}
 	}
 	
-	protected int inodesPerPage() {
-		return zkfs.archive.config.pageSize/inodeSize();
+	protected int numInodesForPage(long pageNum) {
+		if(pageNum == 0) {
+			return (zkfs.archive.config.pageSize - RevisionInfo.FIXED_SIZE)/inodeSize();
+		} else {
+			return zkfs.archive.config.pageSize/inodeSize();
+		}
+	}
+	
+	public long nextInodeId() throws IOException {
+		if(nextInodeId < 0) {
+			nextInodeId = lookupNextInodeId();
+		}
+		
+		return nextInodeId;
 	}
 	
 	/** place an inode into the table, overwriting what's already there (assumes inode id is properly set) */
@@ -279,9 +353,8 @@ public class InodeTable extends ZKFile {
 	
 	/** initialize a blank top-level revision (i.e. one that has no ancestors) */
 	private void makeEmptyRevision() throws IOException {
-		Inode revfile = issueInode(INODE_ID_REVISION_INFO);
-		revfile.setFlags(Inode.FLAG_RETAIN);
-		setInode(revfile);
+		ArrayList<RevisionTag> parents = new ArrayList<>();
+		revision = new RevisionInfo(this, parents, 0);
 	}
 	
 	/** initialize a blank freelist */
@@ -311,9 +384,9 @@ public class InodeTable extends ZKFile {
 		this.inode.setRefTag(tag.refTag);
 		this.inode.setFlags(Inode.FLAG_RETAIN);
 		this.inode.stat.setSize(zkfs.archive.config.pageSize * tag.refTag.numPages);
-		this.revision = new RevisionInfo(inodeWithId(INODE_ID_REVISION_INFO));
-		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST));
-		nextInodeId = lookupNextInodeId();
+		this.revision = readRevisionInfo();
+		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST)); // doesn't actually read anything yet
+		nextInodeId = -1; // causes nextInodeId() to read from table on next invocation
 	}
 	
 	/** apply a resolution to an inode conflict from an InodeDiff */

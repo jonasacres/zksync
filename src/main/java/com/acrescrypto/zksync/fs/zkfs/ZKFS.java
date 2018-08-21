@@ -322,7 +322,7 @@ public class ZKFS extends FS {
 	}
 	
 	public RevisionInfo getRevisionInfo() throws IOException {
-		return new RevisionInfo(this);
+		return inodeTable.revision;
 	}
 
 	public RevisionTag getBaseRevision() {

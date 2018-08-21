@@ -81,7 +81,6 @@ public class DiffSet {
 		for(RevisionTag rev : revisions) {
 			for(Inode inode : rev.readOnlyFS().getInodeTable().values()) {
 				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_INODE_TABLE) continue;
-				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_REVISION_INFO) continue;
 				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_FREELIST) continue;
 				if(inode.isDeleted()) continue;
 				allInodes.add(inode.getStat().getInodeId());

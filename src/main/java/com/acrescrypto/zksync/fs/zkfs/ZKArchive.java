@@ -158,7 +158,7 @@ public class ZKArchive {
 		if(!inodeTableTree.exists()) return false;
 
 		ZKFS fs = openRevision(revTag);
-		for(int i = 0; i < fs.inodeTable.nextInodeId; i++) {
+		for(int i = 0; i < fs.inodeTable.nextInodeId(); i++) {
 			Inode inode = fs.inodeTable.inodeWithId(i);
 			if(inode.isDeleted()) continue;
 			PageTree tree = new PageTree(inode);

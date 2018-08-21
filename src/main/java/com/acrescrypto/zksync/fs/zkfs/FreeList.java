@@ -22,6 +22,9 @@ public class FreeList extends ZKFile {
 	
 	/** initialize freelist from its inode */
 	public FreeList(Inode inode) throws IOException {
+		/* This is instantiated automatically when we load an InodeTable, which shouldn't automatically
+		 * cause further reads. So ensure this never loads any pages in the constructor. 
+		 */
 		super(inode.fs);
 		this.fs = inode.fs;
 		this.path = FREE_LIST_PATH;
@@ -38,7 +41,7 @@ public class FreeList extends ZKFile {
 		return available.pop();
 	}
 	
-	/** adds an inode ID to the freelist */
+	/** adds an inode ID to the freelist. take care to check that an inode is not already deleted! */
 	public void freeInodeId(long inodeId) {
 		dirty = true;
 		available.push(inodeId);
