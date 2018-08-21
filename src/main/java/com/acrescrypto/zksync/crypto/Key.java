@@ -24,12 +24,21 @@ public class Key {
 	}
 	
 	public byte[] encryptCBC(byte[] iv, byte[] plaintext) {
-		return crypto.encryptCBC(raw, iv, plaintext);
+		return crypto.encryptCBC(raw, iv, plaintext, 0, plaintext.length);
+	}
+	
+	public byte[] encryptCBC(byte[] iv, byte[] plaintext, int offset, int length) {
+		return crypto.encryptCBC(raw, iv, plaintext, offset, length);
 	}
 	
 	public byte[] decryptCBC(byte[] iv, byte[] ciphertext) {
-		return crypto.decryptCBC(raw, iv, ciphertext);
+		return crypto.decryptCBC(raw, iv, ciphertext, 0, ciphertext.length);
 	}
+	
+	public byte[] decryptCBC(byte[] iv, byte[] ciphertext, int offset, int length) {
+		return crypto.decryptCBC(raw, iv, ciphertext, offset, length);
+	}
+
 	
 	public byte[] encrypt(byte[] iv, byte[] plaintext, int padSize) {
 		return encrypt(iv, plaintext, 0, plaintext.length, padSize);

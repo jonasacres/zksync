@@ -61,9 +61,6 @@ public class DiffSet {
 		this.revisions = revisions;
 		Arrays.sort(this.revisions);
 		
-		RevisionTag[] tags = new RevisionTag[revisions.length];
-		for(int i = 0; i < revisions.length; i++) tags[i] = revisions[i];
-		
 		findPathDiffs(findInodeDiffs(pickMergeFs()));
 	}
 	

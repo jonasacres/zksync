@@ -194,6 +194,6 @@ public class RefTag implements Comparable<RefTag> {
 	}
 	
 	public String toString() {
-		return "RefTag " + Util.bytesToHex(tag);
+		return "RefTag " + Util.bytesToHex(tag, 8);
 	}
 }

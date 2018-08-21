@@ -101,7 +101,7 @@ public class InodeTable extends ZKFile {
 		}
 
 		syncInodes();
-		updateTree(additionalParents);
+		updateTree(parents);
 		
 		long baseHeight = -1;
 		if(zkfs.baseRevision != null && !zkfs.baseRevision.refTag.isBlank()) {
@@ -115,7 +115,6 @@ public class InodeTable extends ZKFile {
 	protected void updateRevisionInfo(Collection<RevisionTag> parents) throws IOException {
 		 // TODO: figure out if we need to add the current revision tag here
 		RevisionInfo newRevision = new RevisionInfo(this, parents, revision.generation+1);
-		newRevision.reset();
 		revision = newRevision;
 	}
 	
@@ -128,8 +127,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	/** add our new commit to the list of branch tips, and remove our ancestors */
-	protected void updateTree(RevisionTag[] additionalParents) throws IOException {
-		ArrayList<RevisionTag> parents = makeParentList(additionalParents);
+	protected void updateTree(ArrayList<RevisionTag> parents) throws IOException {
 		long parentHash = makeParentHash(parents);
 		RevisionTag tag = new RevisionTag(inode.getRefTag(), parentHash, 1+zkfs.baseRevision.height);	
 		RevisionTree tree = zkfs.archive.config.getRevisionTree();
@@ -143,19 +141,22 @@ public class InodeTable extends ZKFile {
 		ArrayList<RevisionTag> parents = new ArrayList<>(1+additionalParents.length);
 		parents.add(zkfs.baseRevision);
 		for(RevisionTag parent : additionalParents) {
-			parents.add(parent);
+			if(!parents.contains(parent)) {
+				parents.add(parent);
+			}
 		}
 		
 		return parents;
 	}
 	
-	protected long makeParentHash(Collection<RevisionTag> parents) {
+	protected long makeParentHash(ArrayList<RevisionTag> parents) {
+		if(parents.size() == 1) return Util.shortTag(parents.get(0).getBytes());
 		HashContext ctx = zkfs.archive.crypto.startHash();
 		for(RevisionTag parent : parents) {
 			ctx.update(parent.getBytes());
 		}
 		
-		return ByteBuffer.wrap(ctx.finish()).getLong();
+		return Util.shortTag(ctx.finish());
 	}
 	
 	/** size of an inode for this table, in bytes */
@@ -174,11 +175,11 @@ public class InodeTable extends ZKFile {
 		if(inodeId <= 1) throw new IllegalArgumentException();
 		
 		Inode inode = inodeWithId(inodeId);
-		if(inode.isDeleted()) return;
 		if(inode.nlink > 0) {
 			throw new EMLINKException(String.format("inode %d", inodeId));
 		}
 		
+		// TODO: check to ensure we are not already deleted before adding to freelist?
 		inode.markDeleted();
 		freelist.freeInodeId(inodeId);
 	}
@@ -286,9 +287,26 @@ public class InodeTable extends ZKFile {
 	
 	/** write an array of inodes to a given page number */
 	protected void commitInodePage(long pageNum, Inode[] inodes) throws IOException {
+		if(pageNum == 0) {
+			commitFirstInodePage(inodes);
+			return;
+		}
+		
 		seek(pageNum*zkfs.archive.config.pageSize, SEEK_SET);
 		for(Inode inode : inodes) write(inode.serialize());
-		write(new byte[(int) (zkfs.archive.config.pageSize - (offset % zkfs.archive.config.pageSize))]);
+		if(offset % zkfs.archive.config.pageSize != 0) {
+			// pad out the rest of the page if needed
+			write(new byte[(int) (zkfs.archive.config.pageSize - (offset % zkfs.archive.config.pageSize))]);
+		}
+	}
+	
+	protected void commitFirstInodePage(Inode[] inodes) throws IOException {
+		seek(0, SEEK_SET);
+		write(revision.serialize());
+		for(Inode inode : inodes) write(inode.serialize());
+		if(offset < zkfs.archive.config.pageSize) {
+			write(new byte[(int) (zkfs.archive.config.pageSize - (offset % zkfs.archive.config.pageSize))]);
+		}
 	}
 	
 	/** calculate the page number for a given inode id */
@@ -304,7 +322,7 @@ public class InodeTable extends ZKFile {
 	/** calculate the index into a page for a given inode id */
 	protected int pageOffsetForInodeId(long inodeId) {
 		if(inodeId < numInodesForPage(0)) {
-			return (int) (inodeId % numInodesForPage(0));
+			return (int) inodeId;
 		} else {
 			return (int) ((inodeId - numInodesForPage(0)) % numInodesForPage(1));
 		}
@@ -445,7 +463,11 @@ public class InodeTable extends ZKFile {
 				
 				@Override
 				public boolean hasNext() {
-					return nextId < self.nextInodeId;
+					try {
+						return nextId < self.nextInodeId();
+					} catch(IOException exc) {
+						return false;
+					}
 				}
 				
 				@Override

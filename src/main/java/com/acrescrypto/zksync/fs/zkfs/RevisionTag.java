@@ -6,7 +6,7 @@ import java.nio.ByteBuffer;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.utility.Util;
 
-public class RevisionTag {
+public class RevisionTag implements Comparable<RevisionTag> {
 	RefTag refTag;
 	long height;
 	long parentHash;
@@ -16,7 +16,7 @@ public class RevisionTag {
 	boolean cacheOnly;
 
 	public static int sizeForConfig(ZKArchiveConfig config) {
-		return config.refTagSize() + 8 + 4 + config.getCrypto().asymSignatureSize();
+		return config.refTagSize() + 8 + 8 + config.getCrypto().asymSignatureSize();
 	}
 	
 	public static RevisionTag blank(ZKArchiveConfig config) {
@@ -88,31 +88,29 @@ public class RevisionTag {
 		 * At this time, there do not seem to be obvious serious consequences to an adversary learning one or more
 		 * revtags. But since we want our adversaries in the dark as much as possible, we obfuscate.
 		 */
+		ByteBuffer plaintext = ByteBuffer.allocate(sizeForConfig(refTag.config) - refTag.config.getCrypto().asymSignatureSize());
+		plaintext.put(refTag.serialize());
+		plaintext.putLong(parentHash);
+		plaintext.putLong(height);
+
 		Key key = refTag.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
-		byte[] ciphertext = key.encryptCBC(new byte[key.getCrypto().symBlockSize()], refTag.serialize());
+		byte[] ciphertext = key.encryptCBC(new byte[key.getCrypto().symBlockSize()], plaintext.array());
 		
-		ByteBuffer buffer = ByteBuffer.allocate(sizeForConfig(refTag.getConfig()));
-		buffer.put(ciphertext);
-		buffer.putLong(parentHash);
-		buffer.putLong(height);
-		buffer.put(refTag.config.privKey.sign(buffer.array(), 0, buffer.position()));
+		ByteBuffer signedCiphertext = ByteBuffer.allocate(sizeForConfig(refTag.getConfig()));
+		signedCiphertext.put(ciphertext);
+		signedCiphertext.put(refTag.config.privKey.sign(signedCiphertext.array(), 0, signedCiphertext.position()));
 		
-		serialized = buffer.array();
+		serialized = signedCiphertext.array();
 		hashCode = ByteBuffer.wrap(serialized).getInt();
 		return serialized;
 	}
 	
 	public void deserialize(ZKArchiveConfig config, byte[] serialized) {
 		assert(serialized.length == sizeForConfig(config));
-		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		int signedLen = serialized.length - config.getCrypto().asymSignatureSize();
 		config.pubKey.assertValid(serialized, 0, signedLen,
 				serialized, signedLen, config.getCrypto().asymSignatureSize());
 		
-		byte[] encryptedRefTag = new byte[config.refTagSize()];		
-		buf.get(encryptedRefTag);
-		parentHash = buf.getLong();
-		height = buf.getLong();
 		hashCode = ByteBuffer.wrap(serialized).getInt();
 		this.serialized = serialized;
 	
@@ -120,7 +118,13 @@ public class RevisionTag {
 		
 		if(!config.accessor.isSeedOnly()) {
 			Key key = config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
-			byte[] rawRefTag = key.decryptCBC(new byte[key.getCrypto().symBlockSize()], encryptedRefTag);
+			byte[] rawBytes = key.decryptCBC(new byte[key.getCrypto().symBlockSize()],
+					serialized, 0, serialized.length - config.getCrypto().asymSignatureSize());
+			ByteBuffer raw = ByteBuffer.wrap(rawBytes);
+			byte[] rawRefTag = new byte[config.refTagSize()];
+			raw.get(rawRefTag);
+			parentHash = raw.getLong();
+			height = raw.getLong();
 			refTag = new RefTag(config, rawRefTag);
 		}
 	}
@@ -136,7 +140,7 @@ public class RevisionTag {
 	}
 	
 	public String toString() {
-		return Util.bytesToHex(serialized, 4) + " height=" + height + " parentHash=" + parentHash;
+		return Util.bytesToHex(serialized, 4) + " height=" + height + " parentHash=" + String.format("%016x", parentHash);
 	}
 	
 	public int hashCode() {

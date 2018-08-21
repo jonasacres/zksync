@@ -174,8 +174,12 @@ public class CryptoSupport {
 	}
 	
 	public byte[] encryptCBC(byte[] key, byte[] iv, byte[] plaintext) {
+		return encryptCBC(key, iv, plaintext, 0, plaintext.length);
+	}
+	
+	public byte[] encryptCBC(byte[] key, byte[] iv, byte[] plaintext, int offset, int length) {
 		try {
-			return processOrdinaryCipher(true, key, iv, plaintext);
+			return processOrdinaryCipher(true, key, iv, plaintext, offset, length);
 		} catch (Exception exc) {
 			logger.error("Encountered exception encrypting data", exc);
 			System.exit(1);
@@ -184,7 +188,11 @@ public class CryptoSupport {
 	}
 	
 	public byte[] decryptCBC(byte[] key, byte[] iv, byte[] ciphertext) {
-		byte[] paddedPlaintext = processOrdinaryCipher(false, key, iv, ciphertext);
+		return decryptCBC(key, iv, ciphertext, 0, ciphertext.length);
+	}
+	
+	public byte[] decryptCBC(byte[] key, byte[] iv, byte[] ciphertext, int offset, int length) {
+		byte[] paddedPlaintext = processOrdinaryCipher(false, key, iv, ciphertext, offset, length);
 		return paddedPlaintext;
 	}
 	
@@ -217,16 +225,16 @@ public class CryptoSupport {
         return out;
 	}
 	
-	protected static byte[] processOrdinaryCipher(boolean encrypt, byte[] keyBytes, byte[] iv, byte[] in) throws IllegalStateException {
+	protected static byte[] processOrdinaryCipher(boolean encrypt, byte[] keyBytes, byte[] iv, byte[] in, int offset, int length) throws IllegalStateException {
         KeyParameter key = new KeyParameter(keyBytes);
         CipherParameters params = new ParametersWithIV(key, iv);
         BufferedBlockCipher cipher = new BufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
         cipher.init(encrypt, params);
 
-		int offset = 0;
-		byte[] out = new byte[in.length];
-        if(in != null) offset = cipher.processBytes(in, 0, in.length, out, 0);
-        assert(offset == out.length);
+		int processLen = 0;
+		byte[] out = new byte[length];
+        if(in != null) processLen = cipher.processBytes(in, offset, length, out, 0);
+        assert(processLen == out.length);
         
         return out;
 	}

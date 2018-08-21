@@ -75,7 +75,7 @@ public class PageTreeTest {
 		PageTree fromRevTag = new PageTree(revTag.refTag);
 		
 		assertEquals(archive, fromRevTag.archive);
-		assertEquals(revTag, fromRevTag.refTag);
+		assertEquals(revTag.refTag, fromRevTag.refTag);
 		assertEquals(InodeTable.INODE_ID_INODE_TABLE, fromRevTag.inodeId);
 		assertEquals(0, fromRevTag.inodeIdentity);
 		

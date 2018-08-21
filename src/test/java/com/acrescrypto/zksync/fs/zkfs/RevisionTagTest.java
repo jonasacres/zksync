@@ -142,11 +142,11 @@ public class RevisionTagTest {
 	}
 	
 	@Test
-	public void testCompareToComparesNumParents() {
+	public void testCompareToDoesntCompareParentHash() {
 		RevisionTag a = new RevisionTag(revTag.refTag, 100, 1);
 		RevisionTag b = new RevisionTag(revTag.refTag, 101, 1);
-		assertTrue(a.compareTo(b) < 0);
-		assertTrue(b.compareTo(a) > 0);
+		assertTrue(a.compareTo(b) == 0);
+		assertTrue(b.compareTo(a) == 0);
 		assertTrue(a.compareTo(a) == 0);
 		assertTrue(b.compareTo(b) == 0);
 	}

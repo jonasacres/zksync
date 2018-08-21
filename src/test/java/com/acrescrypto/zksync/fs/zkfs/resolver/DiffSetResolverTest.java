@@ -188,7 +188,8 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testDefaultPicksLatestInode() throws IOException, DiffResolutionException {
-		int numChildren = 50, r = (int) (numChildren*Math.random());
+		int numChildren = RevisionInfo.USABLE_SIZE/RevisionTag.sizeForConfig(archive.getConfig()) - 1,
+				r = (int) (numChildren*Math.random());
 		
 		for(int i = 0; i < numChildren; i++) {
 			int n = (i + r) % numChildren;
@@ -266,20 +267,27 @@ public class DiffSetResolverTest {
 	}
 	
 	@Test
-	public void testDefaultAllowsDeletion() throws IOException, DiffResolutionException {
+	public void testDefaultAllowsDeletionWhenDeleteComesSecond() throws IOException, DiffResolutionException {
 		fs.write("file", "foo".getBytes());
 		base = fs.commit();
 		
-		if(Math.random() < 0.5) {
-			fs.unlink("file");
-			fs.commit(); // tip 1 (contains deletion)
-			base.getFS().commit(); // tip 2 (empty)
-		} else {
-			fs.commit(); // tip 1 (empty)
-			fs = base.getFS();
-			fs.unlink("file");
-			fs.commit(); // tip 2 (contains deletion)
-		}
+		fs.commit(); // tip 1 (empty)
+		fs = base.getFS();
+		fs.unlink("file");
+		fs.commit(); // tip 2 (contains deletion)
+		
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		assertFalse(mergeFs.exists("file"));
+	}
+	
+	@Test
+	public void testDefaultAllowsDeletionWhenDeleteComesFirst() throws IOException, DiffResolutionException {
+		fs.write("file", "foo".getBytes());
+		base = fs.commit();
+		
+		fs.unlink("file");
+		fs.commit(); // tip 1 (contains deletion)
+		base.getFS().commit(); // tip 2 (empty)
 		
 		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
 		assertFalse(mergeFs.exists("file"));

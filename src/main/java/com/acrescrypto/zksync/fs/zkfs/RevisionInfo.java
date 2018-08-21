@@ -10,7 +10,8 @@ import com.acrescrypto.zksync.exceptions.TooManyParentsException;
 /* Stores a revision of the archive. This is needed to bootstrap reading the archive.
  */
 public class RevisionInfo {
-	protected final static int FIXED_SIZE = 1024; // serialized length of RevisionInfo, regardless of contents
+	public final static int FIXED_SIZE = 2048; // serialized length of RevisionInfo, regardless of contents
+	public final static int USABLE_SIZE = FIXED_SIZE-8-4;
 	
 	ArrayList<RevisionTag> parents = new ArrayList<>();
 	long generation; // longest path to this revision from root
@@ -23,7 +24,12 @@ public class RevisionInfo {
 		this.parents = new ArrayList<>(parents);
 		this.generation = generation;
 		assert(generation >= 0);
-		if(parents.size() > (FIXED_SIZE-8-4)/inodeTable.zkfs.archive.crypto.hashLength()) {
+		if(parents.size() > USABLE_SIZE/RevisionTag.sizeForConfig(inodeTable.zkfs.archive.config)) {
+			int i = 0;
+			for(RevisionTag parent : parents) {
+				System.out.println((++i) + ": " + parent);
+			}
+			System.out.println(parents.size() + " exceeds " + USABLE_SIZE/inodeTable.zkfs.archive.crypto.hashLength());
 			throw new TooManyParentsException();
 		}
 	}
