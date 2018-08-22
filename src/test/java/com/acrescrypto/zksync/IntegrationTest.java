@@ -104,8 +104,8 @@ public class IntegrationTest {
 		// now see if we can actually get the expected data from each ID
 		for(ZKArchiveConfig config : blankMaster.allConfigs()) {
 			config.finishOpening();
-			assertTrue(Util.waitUntil(3000, ()->config.getRevisionTree().branchTips().size() > 0));
-			ZKFS fs = config.getRevisionTree().branchTips().get(0).getFS();
+			assertTrue(Util.waitUntil(3000, ()->config.getRevisionList().branchTips().size() > 0));
+			ZKFS fs = config.getRevisionList().branchTips().get(0).getFS();
 			
 			byte[] expectedImmediate = crypto.prng(config.getArchiveId()).getBytes(crypto.hashLength()-1);
 			byte[] expected1page = crypto.prng(config.getArchiveId()).getBytes(config.getPageSize()-1);
@@ -180,8 +180,8 @@ public class IntegrationTest {
 		// grab the archive from the network (i.e. the blind peer)
 		ZKArchiveConfig cloneConfig = cloneAccessor.configWithId(archiveId);
 		cloneConfig.finishOpening();
-		Util.waitUntil(3000, ()->cloneConfig.getRevisionTree().branchTips().size() > 0);
-		ZKFS cloneFs = cloneConfig.getArchive().openRevision(cloneConfig.getRevisionTree().branchTips().get(0));
+		Util.waitUntil(3000, ()->cloneConfig.getRevisionList().branchTips().size() > 0);
+		ZKFS cloneFs = cloneConfig.getArchive().openRevision(cloneConfig.getRevisionList().branchTips().get(0));
 		
 		// make sure the data matches up
 		assertArrayEquals(expectedImmediate, fs.read("immediate"));
@@ -208,7 +208,7 @@ public class IntegrationTest {
 			masters[i].activateDHT("127.0.0.1", 0, root);
 			masters[i].getTCPListener().advertise(archives[i].getConfig().getSwarm());
 			archives[i].getConfig().getAccessor().discoverOnDHT();
-			archives[i].getConfig().getRevisionTree().setAutomerge(true);
+			archives[i].getConfig().getRevisionList().setAutomerge(true);
 			
 			fs[i] = archives[i].openBlank();
 			fs[i].write("immediate-"+i, crypto.prng(Util.serializeInt(i)).getBytes(crypto.hashLength()-1));
@@ -223,10 +223,10 @@ public class IntegrationTest {
 		
 		Util.waitUntil(600000, ()->{
 			for(int i = 0; i < masters.length; i++) {
-				if(archives[i].getConfig().getRevisionTree().branchTips().size() > 1) return false;
+				if(archives[i].getConfig().getRevisionList().branchTips().size() > 1) return false;
 				
-				RevisionTag baseTag = archives[0].getConfig().getRevisionTree().branchTips().get(0);
-				RevisionTag tag = archives[i].getConfig().getRevisionTree().branchTips().get(0);
+				RevisionTag baseTag = archives[0].getConfig().getRevisionList().branchTips().get(0);
+				RevisionTag tag = archives[i].getConfig().getRevisionList().branchTips().get(0);
 				if(!tag.equals(baseTag)) return false;
 			}
 			
@@ -235,7 +235,7 @@ public class IntegrationTest {
 
 		for(int i = 0; i < masters.length; i++) {
 			archives[i].getConfig().getSwarm().dumpConnections();
-			archives[i].getConfig().getRevisionTree().dump();
+			archives[i].getConfig().getRevisionList().dump();
 			ZKFS mergedFs = archives[i].openLatest();
 			mergedFs.dump();
 			for(int j = 0; j < masters.length; j++) {

@@ -70,7 +70,7 @@ public class DiffSetResolverTest {
 			children[i] = fs.commit();
 		}
 		
-		ArrayList<RevisionTag> leaves = fs.getArchive().getConfig().getRevisionTree().branchTips();
+		ArrayList<RevisionTag> leaves = fs.getArchive().getConfig().getRevisionList().branchTips();
 		RevisionTag[] leavesArray = new RevisionTag[leaves.size()];
 		for(int i = 0; i < leaves.size(); i++) {
 			leavesArray[i] = leaves.get(i);
@@ -83,7 +83,7 @@ public class DiffSetResolverTest {
 		HashSet<RevisionTag> mergedParents = new HashSet<RevisionTag>(merge.getInfo().getParents());
 		assertEquals(children.length, mergedParents.size());
 		for(RevisionTag child : children) assertTrue(mergedParents.contains(child));
-		ArrayList<RevisionTag> newLeaves = fs.getArchive().getConfig().getRevisionTree().branchTips();
+		ArrayList<RevisionTag> newLeaves = fs.getArchive().getConfig().getRevisionList().branchTips();
 		
 		assertEquals(1, newLeaves.size());
 		assertEquals(merge, newLeaves.get(0));
@@ -309,7 +309,7 @@ public class DiffSetResolverTest {
 			return DiffSetResolver.latestPathResolver().resolve(setResolver, diff);
 		};
 		
-		DiffSetResolver resolver = new DiffSetResolver(DiffSet.withCollection(archive.getConfig().getRevisionTree().branchTips()),
+		DiffSetResolver resolver = new DiffSetResolver(DiffSet.withCollection(archive.getConfig().getRevisionList().branchTips()),
 				DiffSetResolver.latestInodeResolver(),
 				pathResolver);
 		

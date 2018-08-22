@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedList;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,15 +33,17 @@ public class PeerConnection {
 	public final static byte CMD_ANNOUNCE_SELF_AD = 0x02;
 	public final static byte CMD_ANNOUNCE_TAGS = 0x03;
 	public final static byte CMD_ANNOUNCE_TIPS = 0x04;
-	public final static byte CMD_REQUEST_ALL = 0x05;
-	public final static byte CMD_REQUEST_ALL_CANCEL = 0x06;
-	public final static byte CMD_REQUEST_INODES = 0x07;
-	public final static byte CMD_REQUEST_REVISION_CONTENTS = 0x08;
-	public final static byte CMD_REQUEST_PAGE_TAGS = 0x09;
-	public final static byte CMD_SEND_PAGE = 0x0a;
-	public final static byte CMD_SET_PAUSED = 0x0b;
-	public final static byte CMD_REQUEST_CONFIG_INFO = 0x0c;
-	public final static byte CMD_SEND_CONFIG_INFO = 0x0d;
+	public final static byte CMD_ANNOUNCE_REVISION_DETAILS = 0x05;
+	public final static byte CMD_REQUEST_ALL = 0x06;
+	public final static byte CMD_REQUEST_ALL_CANCEL = 0x07;
+	public final static byte CMD_REQUEST_INODES = 0x08;
+	public final static byte CMD_REQUEST_REVISION_CONTENTS = 0x09;
+	public final static byte CMD_REQUEST_REVISION_DETAILS = 0x0a;
+	public final static byte CMD_REQUEST_PAGE_TAGS = 0x0b;
+	public final static byte CMD_SEND_PAGE = 0x0c;
+	public final static byte CMD_SET_PAUSED = 0x0d;
+	public final static byte CMD_REQUEST_CONFIG_INFO = 0x0e;
+	public final static byte CMD_SEND_CONFIG_INFO = 0x0f;
 	
 	public final static int MAX_SUPPORTED_CMD = CMD_SEND_CONFIG_INFO; // update to largest acceptable command code
 	
@@ -220,18 +223,30 @@ public class PeerConnection {
 	
 	public void announceTips() throws IOException {
 		ZKArchive archive = socket.swarm.config.getArchive();
-		if(archive == null || archive.getConfig().getRevisionTree() == null) {
+		if(archive == null || archive.getConfig().getRevisionList() == null) {
 			send(CMD_ANNOUNCE_TIPS, new byte[0]);
 			return;
 		}
 		
-		Collection<RevisionTag> branchTipsClone = new ArrayList<>(archive.getConfig().getRevisionTree().branchTips());
+		Collection<RevisionTag> branchTipsClone = new ArrayList<>(archive.getConfig().getRevisionList().branchTips());
 		ByteBuffer buf = ByteBuffer.allocate(branchTipsClone.size() * RevisionTag.sizeForConfig(socket.swarm.config));
 		for(RevisionTag tag : branchTipsClone) {
 			buf.put(tag.serialize());
 		}
 		
 		send(CMD_ANNOUNCE_TIPS, buf.array());
+	}
+	
+	public void announceRevisionDetails(RevisionTag tag) {
+		if(!socket.swarm.config.getRevisionTree().hasParentsForTag(tag)) return;
+		Collection<RevisionTag> parents = socket.swarm.config.getRevisionTree().parentsForTag(tag);
+		ByteBuffer buf = ByteBuffer.allocate((1+parents.size()) * RevisionTag.sizeForConfig(socket.swarm.config));
+		buf.put(tag.getBytes());
+		for(RevisionTag parent : parents) {
+			buf.put(parent.getBytes());
+		}
+		
+		send(CMD_ANNOUNCE_REVISION_DETAILS, buf.array());
 	}
 	
 	public void requestAll() {
@@ -279,6 +294,18 @@ public class PeerConnection {
 		if(tips.isEmpty()) return;
 		assertPeerCapability(PEER_TYPE_FULL);
 		send(CMD_REQUEST_REVISION_CONTENTS, serializeRevTags(priority, tips));
+	}
+	
+	public void requestRevisionDetails(int priority, RevisionTag revTag) throws PeerCapabilityException {
+		ArrayList<RevisionTag> list = new ArrayList<>();
+		list.add(revTag);
+		requestRevisionDetails(priority, list);
+	}
+	
+	public void requestRevisionDetails(int priority, Collection<RevisionTag> revTags) throws PeerCapabilityException {
+		if(revTags.isEmpty()) return;
+		assertPeerCapability(PEER_TYPE_FULL);
+		send(CMD_REQUEST_REVISION_DETAILS, serializeRevTags(priority, revTags));
 	}
 	
 	public void requestConfigInfo() {
@@ -348,6 +375,9 @@ public class PeerConnection {
 			case CMD_ANNOUNCE_TIPS:
 				handleAnnounceTips(msg);
 				break;
+			case CMD_ANNOUNCE_REVISION_DETAILS:
+				handleAnnounceRevisionDetails(msg);
+				break;
 			case CMD_REQUEST_ALL:
 				handleRequestAll(msg);
 				break;
@@ -359,6 +389,9 @@ public class PeerConnection {
 				break;
 			case CMD_REQUEST_REVISION_CONTENTS:
 				handleRequestRevisionContents(msg);
+				break;
+			case CMD_REQUEST_REVISION_DETAILS:
+				handleRequestRevisionDetails(msg);
 				break;
 			case CMD_REQUEST_PAGE_TAGS:
 				handleRequestPageTags(msg);
@@ -381,7 +414,7 @@ public class PeerConnection {
 			}
 		} catch(EOFException exc) {
 			// ignore these
-		} catch(PeerCapabilityException | IOException | InvalidSignatureException exc) {
+		} catch(PeerCapabilityException | IOException | InvalidSignatureException | SecurityException exc) {
 			/* Arguably, blacklisting people because we had a local IOException is unfair. But, there are two real
 			 * possibilities here:
 			 *   1. They're doing something nasty that's triggering IOExceptions. THey deserve it.
@@ -461,10 +494,26 @@ public class PeerConnection {
 		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(revTagRaw);
 			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw);
-			socket.swarm.config.getRevisionTree().addBranchTip(revTag);
+			socket.swarm.config.getRevisionList().addBranchTip(revTag);
 		}
 		
-		socket.swarm.config.getRevisionTree().write();
+		socket.swarm.config.getRevisionList().write();
+	}
+	
+	protected void handleAnnounceRevisionDetails(PeerMessageIncoming msg) throws PeerCapabilityException, EOFException {
+		waitForFullInit();
+		assertPeerCapability(PEER_TYPE_FULL);
+
+		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(socket.swarm.config)];
+		LinkedList<RevisionTag> parents = new LinkedList<>();
+		RevisionTag revTag = new RevisionTag(socket.swarm.config, msg.rxBuf.read(revTagBytes));
+		
+		while(msg.rxBuf.hasRemaining()) {
+			RevisionTag parent = new RevisionTag(socket.swarm.config, msg.rxBuf.read(revTagBytes));
+			parents.add(parent);
+		}
+		
+		socket.swarm.config.getRevisionTree().addParentsForTag(revTag, parents);
 	}
 	
 	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException, IOException {
@@ -504,6 +553,20 @@ public class PeerConnection {
 		while(msg.rxBuf.hasRemaining()) {
 			RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes));
 			sendRevisionContents(priority, tag);
+		}
+	}
+	
+	protected void handleRequestRevisionDetails(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
+		waitForFullInit();
+		ZKArchive archive = socket.swarm.config.getArchive();
+
+		assertPeerCapability(PEER_TYPE_FULL);
+		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
+		msg.rxBuf.getInt(); // TODO: priority; no prioritization support for this command yet.
+		
+		while(msg.rxBuf.hasRemaining()) {
+			RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes));
+			announceRevisionDetails(tag);
 		}
 	}
 	
@@ -597,8 +660,8 @@ public class PeerConnection {
 		queue.stopSendingEverything();
 	}
 
-	protected void sendRevisionContents(int priority, RevisionTag refTag) throws IOException {
-		queue.addRevisionTag(priority, refTag);
+	protected void sendRevisionContents(int priority, RevisionTag revTag) throws IOException {
+		queue.addRevisionTag(priority, revTag);
 	}
 	
 	protected void sendInodeContents(int priority, RevisionTag revTag, long inodeId) throws IOException {

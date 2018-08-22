@@ -83,7 +83,7 @@ public class ZKArchive {
 	
 	public ZKFS openLatest() throws IOException {
 		assertOpen();
-		return new ZKFS(config.getRevisionTree().latest());
+		return new ZKFS(config.getRevisionList().latest());
 	}
 	
 	public boolean isCacheOnly() {

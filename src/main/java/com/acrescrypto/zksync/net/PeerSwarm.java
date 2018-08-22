@@ -414,6 +414,10 @@ public class PeerSwarm implements BlacklistCallback {
 		pool.addRevision(priority, revTag);
 	}
 	
+	public void requestRevisionDetails(int priority, RevisionTag revTag) {
+		pool.addRevisionDetails(priority, revTag);
+	}
+	
 	public void requestAll() {
 		pool.setRequestingEverything(true);
 	}

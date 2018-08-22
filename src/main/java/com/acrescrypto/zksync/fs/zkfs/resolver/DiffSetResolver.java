@@ -43,7 +43,7 @@ public class DiffSetResolver {
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
 		// TODO DHT: withTangledCollection
-		DiffSet diffSet = DiffSet.withCollection(archive.getConfig().getRevisionTree().branchTips());
+		DiffSet diffSet = DiffSet.withCollection(archive.getConfig().getRevisionList().branchTips());
 		return latestVersionResolver(diffSet);
 	}
 	
@@ -64,25 +64,22 @@ public class DiffSetResolver {
 	public static PathDiffResolver latestPathResolver() {
 		return (DiffSetResolver setResolver, PathDiff diff) -> {
 			Inode result = null;
-			RevisionTag ancestorTag = null;
+			RevisionTag ancestorTag = setResolver.fs.getArchive().getConfig().getRevisionTree().commonAncestor(setResolver.diffset.revisions);
 			Long defaultId = null;
 			
-			for(RevisionTag tag : setResolver.diffset.revisions) {
-				if(ancestorTag == null || ancestorTag.compareTo(tag) > 0) {
-					ancestorTag = tag;
-				}
-			}
 			try {
 				defaultId = ancestorTag.readOnlyFS().inodeForPath(diff.path).getStat().getInodeId();
-			} catch (IOException exc) {
-				// just ignore it
+			} catch(IOException exc) {
 			}
 			
 			if(diff.getResolutions().size() == 2 && diff.getResolutions().containsKey(null)) {
 				// if it's null and one thing, and the one thing is what used to be there, take the null.
 				// else, take the one thing.
+				for(Long inodeId : diff.getResolutions().keySet()) {
+					if(inodeId != null && inodeId != defaultId) return inodeId;
+				}
+				
 				if(defaultId != null) return null;
-				for(Long inodeId : diff.getResolutions().keySet()) if(inodeId != null) return inodeId;
 			}
 			
 			for(Long inodeId : diff.getResolutions().keySet()) {

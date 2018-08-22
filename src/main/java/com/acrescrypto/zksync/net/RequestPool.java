@@ -27,6 +27,7 @@ public class RequestPool {
 	HashMap<Integer,HashMap<RevisionTag,LinkedList<Long>>> requestedInodes = new HashMap<>();
 	HashMap<Integer,LinkedList<RevisionTag>> requestedRevisions = new HashMap<>();
 	HashMap<Integer,LinkedList<Long>> requestedPageTags = new HashMap<>();
+	HashMap<Integer,LinkedList<RevisionTag>> requestedRevisionDetails = new HashMap<>();
 	
 	boolean requestingEverything, stopped, paused, requestingConfigInfo;
 	Logger logger = LoggerFactory.getLogger(RequestPool.class);
@@ -129,6 +130,19 @@ public class RequestPool {
 		addPageTag(priority, Util.shortTag(pageTag));
 	}
 	
+	public synchronized void addRevisionDetails(int priority, RevisionTag revTag) {
+		requestedRevisionDetails.putIfAbsent(priority, new LinkedList<>());
+		requestedRevisionDetails.get(priority).add(revTag);
+		
+		if(config.canReceive()) {
+			for(PeerConnection connection : config.getSwarm().getConnections()) {
+				try {
+					connection.requestRevisionDetails(priority, revTag);
+				} catch(PeerCapabilityException exc) {}
+			}
+		}
+	}
+	
 	public boolean hasPageTag(int priority, long shortTag) {
 		return requestedPageTags
 				.getOrDefault(priority, new LinkedList<>())
@@ -182,6 +196,10 @@ public class RequestPool {
 			
 			for(int priority : requestedRevisions.keySet()) {
 				conn.requestRevisionContents(priority, requestedRevisions.get(priority));
+			}
+			
+			for(int priority : requestedRevisionDetails.keySet()) {
+				conn.requestRevisionContents(priority, requestedRevisionDetails.get(priority));
 			}
 		} catch(PeerCapabilityException exc) {}
 	}

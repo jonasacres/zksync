@@ -1,113 +1,108 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
-import static org.junit.Assert.*;
-
 import java.io.IOException;
-import java.security.Security;
 
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.junit.*;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Before;
+import org.junit.BeforeClass;
 
 import com.acrescrypto.zksync.TestUtils;
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 
 public class RevisionTreeTest {
-	public final static int NUM_REVISIONS = 60;
-	public final static int NUM_ROOTS = 4;
-	static ZKFS fs, mfs;
+	CryptoSupport crypto;
+	ZKMaster master;
+	ZKArchiveConfig config;
+	ZKArchive archive;
+	RevisionTree tree;
 	
-	static RevisionTree tree, mtree;
-	static RevisionTag[] revisions, mrevisions;
-	static ZKMaster singlemaster, multimaster;
-	
-	@BeforeClass	
-	public static void beforeClass() throws IOException {
+	@BeforeClass
+	public static void beforeAll() {
 		ZKFSTest.cheapenArgon2Costs();
-		Security.addProvider(new BouncyCastleProvider());
-		setupSingleParentTest();
-		setupMultipleParentTest();
+	}
+	
+	@Before
+	public void beforeEach() throws IOException {
+		crypto = new CryptoSupport();
+		master = ZKMaster.openBlankTestVolume();
+		archive = master.createDefaultArchive();
+		config = archive.config;
+		tree = config.revisionTree;
+	}
+	
+	@After
+	public void afterEach() {
+		config.close();
+		master.close();
 	}
 	
 	@AfterClass
-	public static void afterAll() throws IOException {
-		fs.archive.close();
-		mfs.archive.close();
-		fs.close();
-		mfs.close();
-		singlemaster.close();
-		multimaster.close();
+	public void afterAll() {
+		ZKFSTest.restoreArgon2Costs();
 		TestUtils.assertTidy();
 	}
 	
-	public static void setupSingleParentTest() throws IOException {
-		singlemaster = ZKMaster.openTestVolume((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/revision-tree-test-single-parent");
-		singlemaster.purge();
-		fs = singlemaster.createArchive(65536, "singlemaster").openBlank();
+	// constructor loads existing tree if exists
+	// constructor scans existing revision list if no tree found
+	// constructor scans existing revision list if tree unreadable
+	// constructor tolerates empty revision list
+	
+	// validateParentList rejects invalid parent lists for single parent revisions
+	// validateParentList rejects empty parent lists for single parent revisions
+	// validateParentList rejects subset parent lists for single parent revisions
+	// validateParentList rejects superset parent lists for single parent revisions
 
-		revisions = new RevisionTag[NUM_REVISIONS];
-		
-		for(int i = 0; i < NUM_REVISIONS; i++) {
-			RevisionTag parent = null;
-			if(i >= NUM_ROOTS) {
-				parent = revisions[parentIndex(i)];
-			}
-			
-			ZKFS revFs = parent != null ? parent.getFS() : fs.archive.openBlank();
-			revisions[i] = revFs.commit();
-		}
-		
-		tree = fs.archive.config.getRevisionTree();
-	}
+	// validateParentList rejects invalid parent lists for multiparent revisions
+	// validateParentList rejects empty parent lists for multiparent revisions
+	// validateParentList rejects subset parent lists for multiparent revisions
+	// validateParentList rejects superset parent lists for multiparent revisions
 	
-	public static void setupMultipleParentTest() throws IOException {
-		multimaster = ZKMaster.openTestVolume((String desc) -> { return "zksync".getBytes(); }, "/tmp/zksync-test/revision-tree-test-multi-parent");
-		multimaster.purge();
-		mfs = multimaster.createArchive(65536, "multimaster").openBlank();
-		
-		// 0 -> 1 -> 2 -> 3 -> ... -> n-3
-		//  \-> n-2 ->  --\-> n-1 (n-1 is child of 2 and n-2, but not 3 ... n-3
-		
-		mrevisions = new RevisionTag[8];
-		
-		for(int i = 0; i < mrevisions.length; i++) {
-			RevisionTag parent = null;
-			if(i == 0) parent = null;
-			else if(i == mrevisions.length-2) parent = mrevisions[0];
-			else parent = mrevisions[i-1];
-			
-			ZKFS revFs = parent != null ? parent.getFS() : mfs;
-			if(i == mrevisions.length-1) {
-				mrevisions[i] = revFs.commit(new RevisionTag[] { mrevisions[2] });
-			} else {
-				mrevisions[i] = revFs.commit();
-			}
-		}
-		
-		mtree = mfs.archive.config.getRevisionTree();
-	}
+	// addParentsForTag validates tag parents
+	// addParentsForTag tolerates multiple calls
+	// addParentsForTag adds parent mapping
+	// addParentsForTag automatically writes when autowrite enabled
+	// addParentsForTag does not automatically write when autowrite not enabled
+	// addParentsForTag unblocks waits for tag
 	
-	public static int parentIndex(int childIndex) {
-		if(childIndex < NUM_ROOTS) return -1;
-		return (childIndex - NUM_ROOTS) >> 1;
-	}
+	// scanRevTag does not block for missing revtags
 	
-	@AfterClass
-	public static void afterClass() {
-		ZKFSTest.restoreArgon2Costs();
-	}
+	// hasParentsForTag returns true if parents known for revtag
+	// hasParentsForTag returns false if parents not known for revtag
 	
-	@Test
-	public void testRevisionCount() {
-		assertEquals((int) (Math.floor(0.5*(NUM_REVISIONS+1))+2), tree.branchTips().size());
-		assertEquals(2, mtree.branchTips().size());
-	}
+	// parentsForTag returns list of parents for tag
+	// parentsForTag blocks until list obtained
+	// parentsForTag returns after timeout
+	// parentsForTag returns null if list not obtained before timeout
+	// parentsForTag blocks without limit if timeout is negative
 	
-	@Test
-	public void testBranchTips() {
-		int count = tree.branchTips().size();
-		
-		// this is probably not gonna work if we don't choose NUM_ROOTS/NUM_REVISIONS to get a full tree, but who cares
-		int tier = (int) (Math.log(NUM_REVISIONS+NUM_ROOTS-1)/Math.log(2) - Math.log(NUM_ROOTS)/Math.log(2));
-		int tierBase = (int) (Math.pow(2, tier+2) - NUM_ROOTS);
-		assertEquals(NUM_REVISIONS - tierBase, count);
-	}	
+	// parentsForTagNonblocking returns null if tag not present
+	// parentsForTagNonblocking returns parents if tag present
+	
+	// commonAncestor returns greatest-height, lowest-value shared ancestor between revisions
+	//   case: one revision, blank
+	//   case: one revision, one parent
+	//   case: one revision, root
+	//   case: two revisions, one parent
+	//   case: two revisions, one shared parent, two distinct
+	//   case: two revisions, multiple shared parents
+	//   case: two revisions, shared grandparent
+	//   case: two revisions, no shared ancestry
+	//   case: many revisions, shared parent
+	//   case: many revisions, multiple partial matches, shared grandparent
+	//   case: many revisions, no shared ancestry
+	//   case: many revisions, distinct heights
+	
+	// descendentOf returns true if revtag has indicated ancestor
+	//   case: revtag and ancestor are the same
+	//   case: ancestor is blank
+	//   case: ancestor is immediate parent in single-parent list
+    //   case: ancestor is immediate parent in multi-parent list
+    //   case: ancestor is grandparent
+    //   case: ancestor is great-grandparent
+
+	// descendentOf returns false if revtag does not have indicated ancestor
+	//   case: revtag is blank
+	//   case: root revtag
+	//   case: non-root revtag
 }

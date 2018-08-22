@@ -8,7 +8,7 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetTest;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-	RevisionTreeTest.class,
+	RevisionListTest.class,
 	ZKFSTest.class,
 	ZKDirectoryTest.class,
 	ZKFileTest.class,

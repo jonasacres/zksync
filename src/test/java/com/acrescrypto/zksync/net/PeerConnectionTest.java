@@ -507,7 +507,7 @@ public class PeerConnectionTest {
 
 		conn.announceTips();
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TIPS);
-		for(RevisionTag tag : archive.getConfig().getRevisionTree().branchTips()) {
+		for(RevisionTag tag : archive.getConfig().getRevisionList().branchTips()) {
 			assertReceivedBytes(tag.serialize());
 		}
 		assertFinished();
@@ -875,14 +875,14 @@ public class PeerConnectionTest {
 			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), RefTag.REF_TYPE_2INDIRECT, 2);
 			tags[i] = new RevisionTag(refTag, 0, 0);
 			msg.receivedData((byte) 0, tags[i].serialize());
-			assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(tags[i]));
+			assertFalse(archive.getConfig().getRevisionList().branchTips().contains(tags[i]));
 		}
 		
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 		conn.handle(msg);
-		archive.getConfig().getRevisionTree().read();
+		archive.getConfig().getRevisionList().read();
 		for(int i = 0; i < tags.length; i++) {
-			assertTrue(archive.getConfig().getRevisionTree().branchTips().contains(tags[i]));
+			assertTrue(archive.getConfig().getRevisionList().branchTips().contains(tags[i]));
 		}
 	}
 	
@@ -897,13 +897,13 @@ public class PeerConnectionTest {
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TIPS);
 		msg.receivedData(PeerMessage.FLAG_FINAL, fakeTag.serialize());
-		assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(fakeTag));
+		assertFalse(archive.getConfig().getRevisionList().branchTips().contains(fakeTag));
 		try {
 			conn.handle(msg);
 			fail();
 		} catch(ProtocolViolationException exc) {
 		}
-		assertFalse(archive.getConfig().getRevisionTree().branchTips().contains(fakeTag));
+		assertFalse(archive.getConfig().getRevisionList().branchTips().contains(fakeTag));
 	}
 	
 	@Test

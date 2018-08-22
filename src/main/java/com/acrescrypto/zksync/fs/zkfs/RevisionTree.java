@@ -4,136 +4,331 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
-import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
-import com.acrescrypto.zksync.utility.Util;
+import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 
 public class RevisionTree {
-	protected ArrayList<RevisionTag> branchTips = new ArrayList<>();
-	protected ZKArchiveConfig config;
-	protected RevisionTag latest;
-	protected boolean automerge;
-	private Logger logger = LoggerFactory.getLogger(RevisionTree.class);
-	
-	public RevisionTree(ZKArchiveConfig config) throws IOException {
-		this.config = config;
+	public final static int DEFAULT_TREE_SEARCH_TIMEOUT_MS = 30000; // when finding ancestors, how long to wait before giving up on a lookup?
+	public final int treeSearchTimeoutMs = DEFAULT_TREE_SEARCH_TIMEOUT_MS;
+
+	class TreeSearchItem {
+		ArrayList<RevisionTag> revTags;
+		HashMap<Long,ArrayList<RevisionTag>> deferred;
+		long height;
 		
-		try {
-			read();
-		} catch(ENOENTException exc) {
-			branchTips = new ArrayList<>();
+		TreeSearchItem(RevisionTag tag) {
+			this.revTags = new ArrayList<>(1);
+			this.height = tag.height;
+			revTags.add(tag);			
+		}
+		
+		boolean hasAncestor(RevisionTag tag) {
+			while(height > 0) {
+				if(revTags.contains(tag)) {
+					return true;
+				}
+				
+				for(ArrayList<RevisionTag> list : deferred.values()) {
+					if(list.contains(tag)) return true;
+				}
+				
+				recurse();
+			}
+			
+			return false;
+		}
+		
+		void recurse() {
+			ArrayList<RevisionTag> newRevTags = new ArrayList<>();
+			height--;
+			
+			if(deferred.containsKey(height)) {
+				newRevTags.addAll(deferred.get(height));
+				deferred.remove(height);
+			}
+			
+			
+			for(RevisionTag revTag : revTags) {
+				threadPool.submit(()->{
+					Collection<RevisionTag> parents = parentsForTag(revTag, treeSearchTimeoutMs);
+					if(parents == null) return;
+					for(RevisionTag parent : parents) {
+						if(parent.height == height) {
+							newRevTags.add(parent);
+						} else {
+							deferred.putIfAbsent(parent.height, new ArrayList<>());
+							deferred.get(parent.height).add(parent);
+						}
+					}
+				});
+			}
+			
+			revTags = newRevTags;
+		}
+		
+		void recurseToLevel(long newHeight) {
+			while(height > newHeight) {
+				recurse();
+			}
 		}
 	}
 	
-	public ArrayList<RevisionTag> branchTips() {
-		return branchTips;
+	class TreeSearch {
+		ArrayList<TreeSearchItem> items;
+		
+		TreeSearch(Collection<RevisionTag> tags) {
+			for(RevisionTag tag : tags) {
+				items.add(new TreeSearchItem(tag));
+			}
+		}
+		
+		TreeSearch(RevisionTag[] tags) {
+			for(RevisionTag tag : tags) {
+				items.add(new TreeSearchItem(tag));
+			}
+		}
+		
+		RevisionTag commonAncestor() {
+			makeFlush();
+			while(true) {
+				RevisionTag common = commonAncestorAtLevel();
+				if(common != null) return common;
+				if(items.get(0).height == 0) return RevisionTag.blank(config);
+				recurse();
+			}
+		}
+		
+		void makeFlush() {
+			// bring all the items down to the height of the lowest item
+			long minHeight = Long.MAX_VALUE;
+			for(TreeSearchItem item : items) {
+				if(minHeight > item.height) minHeight = item.height;
+			}
+			
+			for(TreeSearchItem item : items) {
+				item.recurseToLevel(minHeight);
+			}
+		}
+		
+		void recurse() {
+			for(TreeSearchItem item : items) {
+				item.recurse();
+			}
+		}
+		
+		RevisionTag commonAncestorAtLevel() {
+			HashMap<RevisionTag, Integer> seenTags = new HashMap<>();
+			
+			for(TreeSearchItem item : items) {
+				for(RevisionTag tag : item.revTags) {
+					int count = seenTags.getOrDefault(tag, 0) + 1;
+					seenTags.put(tag, count);
+				}
+			}
+			
+			RevisionTag bestMatch = null;
+			for(RevisionTag tag : seenTags.keySet()) {
+				if(seenTags.get(tag) != items.size()) continue;
+				if(bestMatch == null || tag.compareTo(bestMatch) < 0) {
+					bestMatch = tag;
+				}
+			}
+			
+			return bestMatch;
+		}
 	}
 	
-	public synchronized void addBranchTip(RevisionTag newBranch) throws IOException {
-		// TODO DHT: what about ignoring branch tips that we don't need? (height lower or fewer parents)
-		if(branchTips.contains(newBranch)) return;
-		branchTips.add(newBranch);
-		config.swarm.announceTip(newBranch);
-		updateLatest(newBranch);
-		System.out.println("Added branch " + newBranch.toString());
+	ZKArchiveConfig config;
+	HashMap<RevisionTag, HashSet<RevisionTag>> map = new HashMap<>();
+	boolean autowrite = true;
+	protected ExecutorService threadPool = Executors.newFixedThreadPool(8);
+	protected final Logger logger = LoggerFactory.getLogger(RevisionTree.class); 
+	
+	public RevisionTree(ZKArchiveConfig config) {
+		this.config = config;
+		try {
+			read();
+		} catch(ENOENTException|SecurityException exc) {
+			try {
+				scan();
+			} catch (IOException exc2) {
+				logger.error("Caught exception scanning revision tree from known branches", exc2);
+			}
+		} catch (IOException exc) {
+			logger.error("Caught exception reading revision tree", exc);
+		}
 	}
 	
-	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
-		branchTips.remove(oldBranch);
-		if(latest.equals(oldBranch)) recalculateLatest();
+	public void addParentsForTag(RevisionTag revTag, Collection<RevisionTag> parents) {
+		if(map.containsKey(revTag)) return;
+		validateParentList(revTag, parents);
+		
+		synchronized(this) {
+			map.put(revTag, new HashSet<>());
+			this.notifyAll();
+		}
+		
+		if(autowrite) {
+			try {
+				write();
+			} catch (IOException exc) {
+				logger.error("Caught exception writing revision tree", exc);
+			}
+		}
 	}
 	
-	public String getPath() {
-		return Paths.get(ZKArchive.REVISION_DIR, "branch-tips").toString();
+	/** Walk through all the revisions we know about and add them. */
+	public synchronized void scan() throws IOException {
+		boolean oldAutowrite = autowrite;
+		autowrite = false;
+		if(config.accessor.isSeedOnly()) return;
+		for(RevisionTag tip : config.revisionList.branchTips()) {
+			scanRevTag(tip);
+		}
+		autowrite = oldAutowrite;
 	}
 	
-	public synchronized void write() throws IOException {
+	protected void scanRevTag(RevisionTag revTag) throws IOException {
+		if(revTag.refTag.isBlank()) return;
+		
+		// we're not willing to download pages from the swarm for this, so skip anything we don't have
+		if(!config.archive.hasInode(revTag, InodeTable.INODE_ID_INODE_TABLE)) return;
+		
+		// opening a revtag automatically causes addParentsForTag from InodeTable
+		// don't use readOnlyFS here since that will flood our cache with old revisions
+		for(RevisionTag parent : revTag.getFS().inodeTable.revision.parents) {
+			scanRevTag(parent);
+		}
+	}
+	
+	public boolean hasParentsForTag(RevisionTag revTag) {
+		return map.containsKey(revTag);
+	}
+	
+	public Collection<RevisionTag> parentsForTag(RevisionTag revTag, long timeoutMs) {
+		Collection<RevisionTag> r = parentsForTagNonblocking(revTag);
+		if(r != null) return r;
+		fetchParentsForTag(revTag, timeoutMs);
+		return parentsForTagNonblocking(revTag);
+	}
+	
+	public Collection<RevisionTag> parentsForTagNonblocking(RevisionTag revTag) {
+		return map.getOrDefault(revTag, null);		
+	}
+	
+	public RevisionTag commonAncestor(Collection<RevisionTag> revTags) {
+		return new TreeSearch(revTags).commonAncestor();
+	}
+	
+	public RevisionTag commonAncestor(RevisionTag[] revTags) {
+		return new TreeSearch(revTags).commonAncestor();
+	}
+	
+	public boolean descendentOf(RevisionTag tag, RevisionTag possibleAncestor) {
+		return new TreeSearchItem(tag).hasAncestor(possibleAncestor);
+	}
+	
+	protected void validateParentList(RevisionTag revTag, Collection<RevisionTag> parents) {
+		long parentHash;
+		
+		if(parents.size() == 1) {
+			parentHash = parents.iterator().next().getShortHash();
+		} else {
+			HashContext ctx = config.getCrypto().startHash();
+			for(RevisionTag parent : parents) {
+				ctx.update(parent.getBytes());
+			}
+			parentHash = ByteBuffer.wrap(ctx.finish()).getLong();
+		}
+		
+		if(parentHash != revTag.parentHash) {
+			throw new SecurityException("parent hash does not match");
+		}
+	}
+	
+	protected synchronized void fetchParentsForTag(RevisionTag revTag, long timeoutMs) {
+		// priority just a bit superior to the default for file lookups since these should go fast
+		config.swarm.requestRevisionDetails(SwarmFS.REQUEST_PRIORITY+1, revTag);
+		long endTime = timeoutMs < 0 ? Long.MAX_VALUE : System.currentTimeMillis() + timeoutMs;
+		
+		while(parentsForTagNonblocking(revTag) == null && !config.isClosed() && System.currentTimeMillis() < endTime) {
+			try {
+				this.wait(Math.min(100, endTime - System.currentTimeMillis()));
+			} catch(InterruptedException exc) {}
+		}
+	}
+	
+	public void write() throws IOException {
 		MutableSecureFile
-		  .atPath(config.localStorage, getPath(), branchTipKey())
+		  .atPath(config.localStorage, getPath(), key())
 		  .write(serialize(), 65536);
 	}
 	
-	public synchronized void read() throws IOException {
+	public void read() throws IOException {
 		deserialize(MutableSecureFile
-		  .atPath(config.localStorage, getPath(), branchTipKey())
-		  .read());
+				  .atPath(config.localStorage, getPath(), key())
+				  .read());
 	}
 	
-	protected synchronized void deserialize(byte[] serialized) {
-		branchTips.clear();
-		latest = null;
-		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		byte[] rawTag = new byte[RevisionTag.sizeForConfig(config)];
-		
-		while(buf.remaining() >= rawTag.length) {
-			buf.get(rawTag);
-			try {
-				RevisionTag revTag = new RevisionTag(config, rawTag);
-				branchTips.add(revTag);
-				updateLatest(revTag);
-			} catch (SecurityException exc) {
-				logger.error("Invalid signature on stored revision tag; skipping", exc);
-			}
-		}
-		
-		if(buf.hasRemaining()) throw new InvalidArchiveException("branch tip file appears corrupt: " + getPath());
+	public String getPath() {
+		return Paths.get(ZKArchive.REVISION_DIR, "revision-tree").toString();
 	}
 	
-	protected synchronized byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(RevisionTag.sizeForConfig(config)*branchTips.size());
-		for(RevisionTag tag : branchTips) {
-			buf.put(tag.serialize());
-		}
-		return buf.array();
-	}
-	
-	protected Key branchTipKey() {
+	protected Key key() {
 		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REVISION_TREE);
 	}
 	
-	public void setAutomerge(boolean automerge) {
-		this.automerge = automerge;
-	}
-	
-	public boolean getAutomerge() {
-		return automerge;
-	}
-	
-	public synchronized void dump() {
-		System.out.println(Util.bytesToHex(config.swarm.getPublicIdentityKey().getBytes(), 6) + " Revision tree: " + branchTips.size());
-		int i = 0;
-		for(RevisionTag tag : branchTips()) {
-			i++;
-			System.out.println("\t" + i + ": " + tag);
+	protected synchronized byte[] serialize() {
+		int bytesNeeded = 8;
+		for(RevisionTag revTag : map.keySet()) {
+			bytesNeeded += 4 + (1+map.get(revTag).size())*RevisionTag.sizeForConfig(config);
 		}
-	}
-	
-	public RevisionTag latest() {
-		return latest;
-	}
-	
-	protected void updateLatest(RevisionTag newTip) {
-		if(latest == null || newTip.compareTo(latest) > 0) {
-			latest = newTip;
-		}		
-	}
-	
-	protected void recalculateLatest() {
-		latest = null;
-		for(RevisionTag tip : branchTips) {
-			if(latest == null || tip.compareTo(latest) > 0) {
-				latest = tip;
+		
+		ByteBuffer buf = ByteBuffer.allocate(bytesNeeded);
+		buf.putLong(map.size());
+		for(RevisionTag revTag : map.keySet()) {
+			HashSet<RevisionTag> parents = map.get(revTag);
+			buf.putInt(parents.size());
+			buf.put(revTag.getBytes());
+			for(RevisionTag parent : parents) {
+				buf.put(parent.getBytes());
 			}
 		}
+		
+		assert(buf.remaining() == 0);
+		return buf.array();
 	}
 	
-	protected void executeAutomerge() {
-		// TODO DHT: (implement) executeAutomerge
+	protected synchronized void deserialize(byte[] serialized) {
+		ByteBuffer buf = ByteBuffer.wrap(serialized);
+		long numRevTags = buf.getLong();
+		for(int i = 0; i < numRevTags; i++) {
+			byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(config)];
+			int numParents = buf.getInt();
+			buf.get(revTagBytes);
+			RevisionTag revTag = new RevisionTag(config, revTagBytes);
+			LinkedList<RevisionTag> parents = new LinkedList<>();
+			
+			for(int j = 0; j < numParents; j++) {
+				byte[] parentTagBytes = new byte[RevisionTag.sizeForConfig(config)];
+				buf.get(parentTagBytes);
+				parents.add(new RevisionTag(config, parentTagBytes));
+			}
+			
+			addParentsForTag(revTag, parents);
+		}
 	}
 }

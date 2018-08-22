@@ -101,14 +101,17 @@ public class InodeTable extends ZKFile {
 		}
 
 		syncInodes();
-		updateTree(parents);
+		updateList(parents);
 		
 		long baseHeight = -1;
 		if(zkfs.baseRevision != null && !zkfs.baseRevision.refTag.isBlank()) {
 			baseHeight = zkfs.baseRevision.height;
 		}
 		
-		return new RevisionTag(inode.refTag, parentHash, 1+baseHeight);
+		RevisionTag revTag = new RevisionTag(inode.refTag, parentHash, 1+baseHeight);
+		zkfs.archive.config.revisionTree.addParentsForTag(revTag, parents);
+		
+		return revTag;
 	}
 	
 	/** clear the old revision info and replace with a new one */
@@ -127,13 +130,13 @@ public class InodeTable extends ZKFile {
 	}
 	
 	/** add our new commit to the list of branch tips, and remove our ancestors */
-	protected void updateTree(ArrayList<RevisionTag> parents) throws IOException {
+	protected void updateList(ArrayList<RevisionTag> parents) throws IOException {
 		long parentHash = makeParentHash(parents);
 		RevisionTag tag = new RevisionTag(inode.getRefTag(), parentHash, 1+zkfs.baseRevision.height);	
-		RevisionTree tree = zkfs.archive.config.getRevisionTree();
-		tree.addBranchTip(tag);
-		for(RevisionTag parent : parents) tree.removeBranchTip(parent);
-		tree.write();
+		RevisionList list = zkfs.archive.config.getRevisionList();
+		list.addBranchTip(tag);
+		for(RevisionTag parent : parents) list.removeBranchTip(parent);
+		list.write();
 		zkfs.archive.config.swarm.announceTips();
 	}
 	
@@ -405,6 +408,7 @@ public class InodeTable extends ZKFile {
 		this.revision = readRevisionInfo();
 		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST)); // doesn't actually read anything yet
 		nextInodeId = -1; // causes nextInodeId() to read from table on next invocation
+		zkfs.archive.config.revisionTree.addParentsForTag(tag, revision.parents);
 	}
 	
 	/** apply a resolution to an inode conflict from an InodeDiff */

@@ -50,6 +50,7 @@ public class ZKArchiveConfig {
 	protected String description;
 	protected ZKArchive archive;
 	protected PeerSwarm swarm;
+	protected RevisionList revisionList;
 	protected RevisionTree revisionTree;
 	
 	public static byte[] decryptArchiveId(ArchiveAccessor accessor, byte[] iv, byte[] encryptedArchiveId) {
@@ -94,6 +95,7 @@ public class ZKArchiveConfig {
 		this.writeRoot = writeRoot;
 
 		initStorage();
+		this.revisionList = new RevisionList(this);
 		this.revisionTree = new RevisionTree(this);
 		if(finish) {
 			try {
@@ -117,6 +119,7 @@ public class ZKArchiveConfig {
 		
 		initArchiveSpecific(archiveRoot, writeRoot);
 		initStorage();
+		this.revisionList = new RevisionList(this);
 		this.revisionTree = new RevisionTree(this);
 		this.archive = new ZKArchive(this);
 		this.accessor.discoveredArchiveConfig(this);
@@ -273,6 +276,10 @@ public class ZKArchiveConfig {
 	
 	public byte[] getArchiveFingerprint() {
 		return archiveFingerprint;
+	}
+	
+	public RevisionList getRevisionList() {
+		return revisionList;
 	}
 	
 	public RevisionTree getRevisionTree() {

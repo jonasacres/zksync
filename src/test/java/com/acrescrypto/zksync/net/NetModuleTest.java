@@ -74,8 +74,8 @@ public class NetModuleTest {
 		assertFalse(Util.waitUntil(50, ()->aConfig.getArchive().allPageTags().size() != bConfig.getArchive().allPageTags().size()));
 		assertEquals(aConfig.getArchive().allPageTags().size(), bConfig.getArchive().allPageTags().size());
 		
-		ZKFS fsa = aConfig.getRevisionTree().branchTips().get(0).getFS();
-		ZKFS fsb = bConfig.getRevisionTree().branchTips().get(0).getFS();
+		ZKFS fsa = aConfig.getRevisionList().branchTips().get(0).getFS();
+		ZKFS fsb = bConfig.getRevisionList().branchTips().get(0).getFS();
 		assertArrayEquals(fsa.read("file0"), fsb.read("file0"));
 		assertArrayEquals(fsa.read("file1"), fsb.read("file1"));
 		assertArrayEquals(fsa.read("file2"), fsb.read("file2"));
@@ -110,11 +110,11 @@ public class NetModuleTest {
 		
 		assertTrue(Util.waitUntil(2000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size()));
 		
-		ZKFS fsa = aConfig.getRevisionTree().branchTips().get(0).getFS();
+		ZKFS fsa = aConfig.getRevisionList().branchTips().get(0).getFS();
 		fsa.write("file3", crypto.rng(2*aConfig.getPageSize()));
 		fsa.commit();
 		
-		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionTree().branchTips().contains(aConfig.getRevisionTree().branchTips().get(0))));
+		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionList().branchTips().contains(aConfig.getRevisionList().branchTips().get(0))));
 		Util.waitUntil(2000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size());
 		assertEquals(aConfig.getArchive().allPageTags().size(), bConfig.getArchive().allPageTags().size());
 		RevisionTag tag = DiffSetResolver.canonicalMergeResolver(bConfig.getArchive()).resolve();
@@ -155,11 +155,11 @@ public class NetModuleTest {
 		
 		assertTrue(Util.waitUntil(2000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size()));
 		
-		ZKFS fsb = bConfig.getRevisionTree().branchTips().get(0).getFS();
+		ZKFS fsb = bConfig.getRevisionList().branchTips().get(0).getFS();
 		fsb.write("file3", crypto.rng(2*bConfig.getPageSize()));
 		fsb.commit();
 		
-		assertTrue(Util.waitUntil(1000, ()->aConfig.getRevisionTree().branchTips().contains(bConfig.getRevisionTree().branchTips().get(0))));
+		assertTrue(Util.waitUntil(1000, ()->aConfig.getRevisionList().branchTips().contains(bConfig.getRevisionList().branchTips().get(0))));
 		Util.waitUntil(2000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size());
 		assertEquals(aConfig.getArchive().allPageTags().size(), bConfig.getArchive().allPageTags().size());
 		RevisionTag tag = DiffSetResolver.canonicalMergeResolver(bConfig.getArchive()).resolve();
@@ -205,11 +205,11 @@ public class NetModuleTest {
 		bConfig.getSwarm().requestRevision(0, fsa.getBaseRevision());
 		
 		// we should get a config (1 page), inode table (1 page), revinfo (1 page), the file (2 pages) and its pagetree (1 page). root is literal so no page.
-		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionTree().branchTips().size() == 1));
+		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionList().branchTips().size() == 1));
 		Util.waitUntil(2000, ()->bConfig.getArchive().allPageTags().size() == 6);
 		assertEquals(6, bConfig.getArchive().allPageTags().size());
 				
-		ZKFS fsb = bConfig.getRevisionTree().branchTips().get(0).getFS();
+		ZKFS fsb = bConfig.getRevisionList().branchTips().get(0).getFS();
 		assertArrayEquals(fsb.read("path"), fsa.read("path"));
 		
 		fsa.close();
@@ -247,8 +247,8 @@ public class NetModuleTest {
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 
-		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionTree().branchTips().size() == 1));
-		bConfig.getSwarm().requestInode(0, bConfig.getRevisionTree().branchTips().get(0), inode.getStat().getInodeId());
+		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionList().branchTips().size() == 1));
+		bConfig.getSwarm().requestInode(0, bConfig.getRevisionList().branchTips().get(0), inode.getStat().getInodeId());
 		
 		// we should get a config (1 page), pagetree (1), and file pages (numPages from reftag)
 		Util.waitUntil(2000, ()->bConfig.getArchive().allPageTags().size() == 2 + inode.getRefTag().getNumPages());
@@ -285,7 +285,7 @@ public class NetModuleTest {
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 
-		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionTree().branchTips().size() == 1));
+		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionList().branchTips().size() == 1));
 		bConfig.getSwarm().requestTag(0, requestedTag);
 		
 		// we should get the requested page and the config file
@@ -330,8 +330,8 @@ public class NetModuleTest {
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 
-		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionTree().branchTips().size() == 1));
-		ZKFS fsb = bConfig.getRevisionTree().branchTips().get(0).getFS();
+		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionList().branchTips().size() == 1));
+		ZKFS fsb = bConfig.getRevisionList().branchTips().get(0).getFS();
 		assertArrayEquals(fsa.read("immediate"), fsb.read("immediate"));
 		assertArrayEquals(fsa.read("indirect"), fsb.read("indirect"));
 		assertArrayEquals(fsa.read("2indirect"), fsb.read("2indirect"));
@@ -442,7 +442,7 @@ public class NetModuleTest {
 		
 		for(int i = 0; i < numPeers; i++) {
 			final int ii = i;
-			Util.waitUntil(10000, ()->configs[ii].getRevisionTree().branchTips().size() == numPeers);
+			Util.waitUntil(10000, ()->configs[ii].getRevisionList().branchTips().size() == numPeers);
 //			if(configs[ii].getRevisionTree().plainBranchTips().size() != numPeers) {
 //				for(int j = 0; j < numPeers; j++) {
 //					System.out.println("Dumping " + j);
@@ -450,7 +450,7 @@ public class NetModuleTest {
 //					configs[j].getSwarm().dumpConnections();
 //				}
 //			}
-			assertEquals(numPeers, configs[ii].getRevisionTree().branchTips().size());
+			assertEquals(numPeers, configs[ii].getRevisionList().branchTips().size());
 		}
 		
 		fail();
@@ -459,15 +459,15 @@ public class NetModuleTest {
 		for(int i = 0; i < numPeers; i++) {
 			DiffSetResolver.canonicalMergeResolver(configs[i].getArchive()).resolve();
 			// TODO DHT: (itf) d92b0c30d 7/23/18 linux expected:<1> but was:<9>
-			if(configs[i].getRevisionTree().branchTips().size() != 1) {
-				configs[i].getRevisionTree().dump();
+			if(configs[i].getRevisionList().branchTips().size() != 1) {
+				configs[i].getRevisionList().dump();
 			}
-			assertEquals(1, configs[i].getRevisionTree().branchTips().size());
+			assertEquals(1, configs[i].getRevisionList().branchTips().size());
 			if(i > 0) {
-				assertEquals(configs[i-1].getRevisionTree().branchTips().get(0), configs[i].getRevisionTree().branchTips().get(0));
+				assertEquals(configs[i-1].getRevisionList().branchTips().get(0), configs[i].getRevisionList().branchTips().get(0));
 			}
 			
-			ZKFS fs = configs[i].getRevisionTree().branchTips().get(0).getFS();
+			ZKFS fs = configs[i].getRevisionList().branchTips().get(0).getFS();
 			for(int j = 0; j < numPeers; j++) {
 				assertArrayEquals(crypto.hash(Util.serializeInt(j)), fs.read("immediate-" + j));
 				assertArrayEquals(crypto.prng(crypto.hash(Util.serializeInt(j))).getBytes(configs[j].getPageSize()), fs.read("indirect-" + j));
