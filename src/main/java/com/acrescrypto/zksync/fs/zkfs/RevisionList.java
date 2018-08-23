@@ -41,7 +41,6 @@ public class RevisionList {
 		branchTips.add(newBranch);
 		config.swarm.announceTip(newBranch);
 		updateLatest(newBranch);
-		System.out.println("Added branch " + newBranch.toString());
 	}
 	
 	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
@@ -51,6 +50,11 @@ public class RevisionList {
 	
 	public String getPath() {
 		return Paths.get(ZKArchive.REVISION_DIR, "revision-list").toString();
+	}
+	
+	public void clear() throws IOException {
+		branchTips.clear();
+		write();
 	}
 	
 	public synchronized void write() throws IOException {

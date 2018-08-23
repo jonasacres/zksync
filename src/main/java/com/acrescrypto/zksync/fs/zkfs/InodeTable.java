@@ -82,6 +82,7 @@ public class InodeTable extends ZKFile {
 	 * @return RefTag for the newly created revision
 	 *  */
 	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
+		// TODO: I regret doing these as arrays instead of collections. Refactor.
 		freelist.commit();
 		ArrayList<RevisionTag> parents = makeParentList(additionalParents);
 		updateRevisionInfo(parents);
@@ -103,11 +104,7 @@ public class InodeTable extends ZKFile {
 		syncInodes();
 		updateList(parents);
 		
-		long baseHeight = -1;
-		if(zkfs.baseRevision != null && !zkfs.baseRevision.refTag.isBlank()) {
-			baseHeight = zkfs.baseRevision.height;
-		}
-		
+		long baseHeight = zkfs.baseRevision.height;
 		RevisionTag revTag = new RevisionTag(inode.refTag, parentHash, 1+baseHeight);
 		zkfs.archive.config.revisionTree.addParentsForTag(revTag, parents);
 		
@@ -132,7 +129,8 @@ public class InodeTable extends ZKFile {
 	/** add our new commit to the list of branch tips, and remove our ancestors */
 	protected void updateList(ArrayList<RevisionTag> parents) throws IOException {
 		long parentHash = makeParentHash(parents);
-		RevisionTag tag = new RevisionTag(inode.getRefTag(), parentHash, 1+zkfs.baseRevision.height);	
+		long height = 1 + zkfs.baseRevision.height;
+		RevisionTag tag = new RevisionTag(inode.getRefTag(), parentHash, height);	
 		RevisionList list = zkfs.archive.config.getRevisionList();
 		list.addBranchTip(tag);
 		for(RevisionTag parent : parents) list.removeBranchTip(parent);
@@ -153,8 +151,12 @@ public class InodeTable extends ZKFile {
 	}
 	
 	protected long makeParentHash(ArrayList<RevisionTag> parents) {
-		if(parents.size() == 1) return Util.shortTag(parents.get(0).getBytes());
+		if(parents.size() == 1) {
+			return parents.get(0).getShortHash();
+		}
+		
 		HashContext ctx = zkfs.archive.crypto.startHash();
+		parents.sort(null);
 		for(RevisionTag parent : parents) {
 			ctx.update(parent.getBytes());
 		}

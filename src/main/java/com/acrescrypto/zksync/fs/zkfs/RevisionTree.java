@@ -8,8 +8,12 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,25 +22,26 @@ import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
+import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionTree {
 	public final static int DEFAULT_TREE_SEARCH_TIMEOUT_MS = 30000; // when finding ancestors, how long to wait before giving up on a lookup?
-	public final int treeSearchTimeoutMs = DEFAULT_TREE_SEARCH_TIMEOUT_MS;
-
+	public static int treeSearchTimeoutMs = DEFAULT_TREE_SEARCH_TIMEOUT_MS;
+	
 	class TreeSearchItem {
-		ArrayList<RevisionTag> revTags;
-		HashMap<Long,ArrayList<RevisionTag>> deferred;
+		ArrayList<RevisionTag> revTags = new ArrayList<>();
+		HashMap<Long,ArrayList<RevisionTag>> deferred = new HashMap<>();
 		long height;
 		
 		TreeSearchItem(RevisionTag tag) {
-			this.revTags = new ArrayList<>(1);
 			this.height = tag.height;
 			revTags.add(tag);			
 		}
 		
-		boolean hasAncestor(RevisionTag tag) {
-			while(height > 0) {
+		boolean hasAncestor(RevisionTag tag) throws SearchFailedException {
+			while(height >= 0) {
 				if(revTags.contains(tag)) {
 					return true;
 				}
@@ -45,13 +50,14 @@ public class RevisionTree {
 					if(list.contains(tag)) return true;
 				}
 				
-				recurse();
+				if(height > 0) recurse();
+				else return false;
 			}
 			
 			return false;
 		}
 		
-		void recurse() {
+		void recurse() throws SearchFailedException {
 			ArrayList<RevisionTag> newRevTags = new ArrayList<>();
 			height--;
 			
@@ -60,9 +66,9 @@ public class RevisionTree {
 				deferred.remove(height);
 			}
 			
-			
+			ArrayList<Future<?>> futures = new ArrayList<>();
 			for(RevisionTag revTag : revTags) {
-				threadPool.submit(()->{
+				Future<?> future = threadPool.submit(()->{
 					Collection<RevisionTag> parents = parentsForTag(revTag, treeSearchTimeoutMs);
 					if(parents == null) return;
 					for(RevisionTag parent : parents) {
@@ -74,12 +80,21 @@ public class RevisionTree {
 						}
 					}
 				});
+				
+				futures.add(future);
 			}
 			
+			for(Future<?> future : futures) {
+				try {
+					future.get(treeSearchTimeoutMs+100, TimeUnit.MILLISECONDS);
+				} catch (ExecutionException|TimeoutException | InterruptedException exc) {
+					throw new SearchFailedException();
+				}
+			}
 			revTags = newRevTags;
 		}
 		
-		void recurseToLevel(long newHeight) {
+		void recurseToLevel(long newHeight) throws SearchFailedException {
 			while(height > newHeight) {
 				recurse();
 			}
@@ -87,7 +102,7 @@ public class RevisionTree {
 	}
 	
 	class TreeSearch {
-		ArrayList<TreeSearchItem> items;
+		ArrayList<TreeSearchItem> items = new ArrayList<>();
 		
 		TreeSearch(Collection<RevisionTag> tags) {
 			for(RevisionTag tag : tags) {
@@ -101,17 +116,21 @@ public class RevisionTree {
 			}
 		}
 		
-		RevisionTag commonAncestor() {
+		RevisionTag commonAncestor() throws SearchFailedException {
 			makeFlush();
 			while(true) {
 				RevisionTag common = commonAncestorAtLevel();
-				if(common != null) return common;
-				if(items.get(0).height == 0) return RevisionTag.blank(config);
+				if(common != null) {
+					return common;
+				}
+				if(items.get(0).height == 0) {
+					return RevisionTag.blank(config);
+				}
 				recurse();
 			}
 		}
 		
-		void makeFlush() {
+		void makeFlush() throws SearchFailedException {
 			// bring all the items down to the height of the lowest item
 			long minHeight = Long.MAX_VALUE;
 			for(TreeSearchItem item : items) {
@@ -123,7 +142,7 @@ public class RevisionTree {
 			}
 		}
 		
-		void recurse() {
+		void recurse() throws SearchFailedException {
 			for(TreeSearchItem item : items) {
 				item.recurse();
 			}
@@ -172,12 +191,20 @@ public class RevisionTree {
 		}
 	}
 	
+	public void clear() throws IOException {
+		map.clear();
+		if(autowrite) {
+			write();
+		}
+	}
+	
 	public void addParentsForTag(RevisionTag revTag, Collection<RevisionTag> parents) {
 		if(map.containsKey(revTag)) return;
 		validateParentList(revTag, parents);
 		
 		synchronized(this) {
-			map.put(revTag, new HashSet<>());
+			HashSet<RevisionTag> parentSet = new HashSet<>(parents);
+			map.put(revTag, parentSet);
 			this.notifyAll();
 		}
 		
@@ -207,9 +234,14 @@ public class RevisionTree {
 		// we're not willing to download pages from the swarm for this, so skip anything we don't have
 		if(!config.archive.hasInode(revTag, InodeTable.INODE_ID_INODE_TABLE)) return;
 		
-		// opening a revtag automatically causes addParentsForTag from InodeTable
 		// don't use readOnlyFS here since that will flood our cache with old revisions
-		for(RevisionTag parent : revTag.getFS().inodeTable.revision.parents) {
+		Collection<RevisionTag> parents = revTag.getFS().inodeTable.revision.parents;
+		
+		/* this gets called automatically anyway on the tree in the ZKArchiveConfig -- we want to
+		 * guarantee that the tags get added to this instance, so we'll call again to be safe.
+		 */
+		addParentsForTag(revTag, parents);
+		for(RevisionTag parent : parents) {
 			scanRevTag(parent);
 		}
 	}
@@ -229,37 +261,45 @@ public class RevisionTree {
 		return map.getOrDefault(revTag, null);		
 	}
 	
-	public RevisionTag commonAncestor(Collection<RevisionTag> revTags) {
+	public RevisionTag commonAncestor(Collection<RevisionTag> revTags) throws SearchFailedException {
 		return new TreeSearch(revTags).commonAncestor();
 	}
 	
-	public RevisionTag commonAncestor(RevisionTag[] revTags) {
+	public RevisionTag commonAncestor(RevisionTag[] revTags) throws SearchFailedException {
 		return new TreeSearch(revTags).commonAncestor();
 	}
 	
-	public boolean descendentOf(RevisionTag tag, RevisionTag possibleAncestor) {
+	public boolean descendentOf(RevisionTag tag, RevisionTag possibleAncestor) throws SearchFailedException {
 		return new TreeSearchItem(tag).hasAncestor(possibleAncestor);
+	}
+	
+	public int numRevisions() {
+		return map.size();
 	}
 	
 	protected void validateParentList(RevisionTag revTag, Collection<RevisionTag> parents) {
 		long parentHash;
 		
 		if(parents.size() == 1) {
-			parentHash = parents.iterator().next().getShortHash();
+			RevisionTag parent = parents.iterator().next();
+			parentHash = parent.getShortHash();
 		} else {
+			ArrayList<RevisionTag> sorted = new ArrayList<>(parents);
+			sorted.sort(null);
+			
 			HashContext ctx = config.getCrypto().startHash();
-			for(RevisionTag parent : parents) {
+			for(RevisionTag parent : sorted) {
 				ctx.update(parent.getBytes());
 			}
-			parentHash = ByteBuffer.wrap(ctx.finish()).getLong();
+			parentHash = Util.shortTag(ctx.finish());
 		}
 		
 		if(parentHash != revTag.parentHash) {
-			throw new SecurityException("parent hash does not match");
+			throw new SecurityException("parent hash for " + Util.bytesToHex(revTag.getBytes(), 4) + " does not match; expected " + String.format("%16x", revTag.parentHash) + " got " + String.format("%16x", parentHash));
 		}
 	}
 	
-	protected synchronized void fetchParentsForTag(RevisionTag revTag, long timeoutMs) {
+	protected synchronized boolean fetchParentsForTag(RevisionTag revTag, long timeoutMs) {
 		// priority just a bit superior to the default for file lookups since these should go fast
 		config.swarm.requestRevisionDetails(SwarmFS.REQUEST_PRIORITY+1, revTag);
 		long endTime = timeoutMs < 0 ? Long.MAX_VALUE : System.currentTimeMillis() + timeoutMs;
@@ -269,6 +309,8 @@ public class RevisionTree {
 				this.wait(Math.min(100, endTime - System.currentTimeMillis()));
 			} catch(InterruptedException exc) {}
 		}
+		
+		return parentsForTagNonblocking(revTag) != null;
 	}
 	
 	public void write() throws IOException {

@@ -131,7 +131,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	
 	public int compareTo(RevisionTag other) {
 		if(this.height != other.height) return Long.compare(this.height, other.height);
-		return refTag.compareTo(other.refTag);
+		return Util.compareArrays(serialized, other.serialized);
 	}
 	
 	public boolean equals(Object other) {

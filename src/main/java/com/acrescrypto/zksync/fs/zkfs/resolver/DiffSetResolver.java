@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
+import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
@@ -64,7 +65,13 @@ public class DiffSetResolver {
 	public static PathDiffResolver latestPathResolver() {
 		return (DiffSetResolver setResolver, PathDiff diff) -> {
 			Inode result = null;
-			RevisionTag ancestorTag = setResolver.fs.getArchive().getConfig().getRevisionTree().commonAncestor(setResolver.diffset.revisions);
+			RevisionTag ancestorTag;
+			try {
+				ancestorTag = setResolver.fs.getArchive().getConfig().getRevisionTree().commonAncestor(setResolver.diffset.revisions);
+			} catch (SearchFailedException e) {
+				// TODO DHT: (refactor) Trigger merge failure
+				return null;
+			}
 			Long defaultId = null;
 			
 			try {

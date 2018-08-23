@@ -265,7 +265,7 @@ public class Util {
 	public static int compareArrays(byte[] a, byte[] b) {
 		for(int i = 0; i < Math.min(a.length, b.length); i++) {
 			if(a[i] == b[i]) continue;
-			if(a[i] < b[i]) return -1;
+			if(Util.unsignByte(a[i]) < Util.unsignByte(b[i])) return -1;
 			return 1;
 		}
 		

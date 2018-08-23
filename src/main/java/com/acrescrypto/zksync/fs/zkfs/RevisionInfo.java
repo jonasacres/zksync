@@ -19,17 +19,21 @@ public class RevisionInfo {
 	
 	public static String REVISION_INFO_PATH = "(revision info)";
 	
+	public static int maxParentsForConfig(ZKArchiveConfig config) {
+		return USABLE_SIZE/RevisionTag.sizeForConfig(config);
+	}
+	
 	public RevisionInfo(InodeTable inodeTable, Collection<RevisionTag> parents, long generation) throws TooManyParentsException {
 		this.inodeTable = inodeTable;
 		this.parents = new ArrayList<>(parents);
 		this.generation = generation;
 		assert(generation >= 0);
-		if(parents.size() > USABLE_SIZE/RevisionTag.sizeForConfig(inodeTable.zkfs.archive.config)) {
+		if(parents.size() > maxParentsForConfig(inodeTable.zkfs.archive.config)) {
 			int i = 0;
 			for(RevisionTag parent : parents) {
 				System.out.println((++i) + ": " + parent);
 			}
-			System.out.println(parents.size() + " exceeds " + USABLE_SIZE/inodeTable.zkfs.archive.crypto.hashLength());
+			System.out.println(parents.size() + " exceeds " + maxParentsForConfig(inodeTable.zkfs.archive.config));
 			throw new TooManyParentsException();
 		}
 	}
@@ -38,7 +42,7 @@ public class RevisionInfo {
 		this.inodeTable = inodeTable;
 		deserialize(serialized);
 	}
-
+	
 	public void reset() {
 		parents.clear();
 	}
