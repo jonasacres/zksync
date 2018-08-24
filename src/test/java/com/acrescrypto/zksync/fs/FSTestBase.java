@@ -11,6 +11,7 @@ import org.junit.Test;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.FileTypeNotSupportedException;
+import com.acrescrypto.zksync.utility.Util;
 
 public abstract class FSTestBase {
 	protected FS scratch;
@@ -495,7 +496,7 @@ public abstract class FSTestBase {
 		expectENOENT(()->scoped.chown("../shouldntexist", 0));
 		expectENOENT(()->scoped.chown("../shouldntexist", "root"));
 		expectENOENT(()->scoped.chgrp("../shouldntexist", 0));
-		expectENOENT(()->scoped.chgrp("../shouldntexist", "root"));
+		expectENOENT(()->scoped.chgrp("../shouldntexist", Util.isOSX() ? "wheel" : "root"));
 		expectENOENT(()->scoped.setMtime("../shouldntexist", 12345));
 		expectENOENT(()->scoped.setCtime("../shouldntexist", 12345));
 		expectENOENT(()->scoped.setAtime("../shouldntexist", 12345));
@@ -528,7 +529,7 @@ public abstract class FSTestBase {
 		expectENOENT(()->scoped.chown("/shouldntexist", 0));
 		expectENOENT(()->scoped.chown("/shouldntexist", "root"));
 		expectENOENT(()->scoped.chgrp("/shouldntexist", 0));
-		expectENOENT(()->scoped.chgrp("/shouldntexist", "root"));
+		expectENOENT(()->scoped.chgrp("/shouldntexist", Util.isOSX() ? "wheel" : "root"));
 		expectENOENT(()->scoped.setMtime("/shouldntexist", 12345));
 		expectENOENT(()->scoped.setCtime("/shouldntexist", 12345));
 		expectENOENT(()->scoped.setAtime("/shouldntexist", 12345));
