@@ -226,7 +226,7 @@ public class ZKFile extends File {
 		if(!dirty) return;
 		long now = Util.currentTimeNanos();
 		inode.getStat().setMtime(now);
-		inode.setChangedFrom(zkfs.baseRevision.refTag);
+		inode.setChangedFrom(zkfs.baseRevision);
 		inode.setModifiedTime(now);
 		if(bufferedPage != null) bufferedPage.flush();
 		inode.setRefTag(tree.commit());

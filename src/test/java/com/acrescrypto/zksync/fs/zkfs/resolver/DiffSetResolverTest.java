@@ -366,12 +366,14 @@ public class DiffSetResolverTest {
 	@Test
 	public void testNlinksConsistentWhenAddingLinks() throws IOException, DiffResolutionException {
 		fs.write("file", "foo".getBytes());
+		
 		base = fs.commit();
 		fs.link("file", "link-a");
-		fs.commit();
+		System.out.println(fs.commit());
+		
 		fs = base.getFS();
 		fs.link("file", "link-b");
-		fs.commit();
+		System.out.println(fs.commit());
 		
 		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
 		assertEquals(mergeFs.inodeForPath("file"), mergeFs.inodeForPath("link-a"));

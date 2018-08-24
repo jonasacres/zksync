@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.List;
 
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
-import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
@@ -65,28 +64,29 @@ public class DiffSetResolver {
 	public static PathDiffResolver latestPathResolver() {
 		return (DiffSetResolver setResolver, PathDiff diff) -> {
 			Inode result = null;
-			RevisionTag ancestorTag;
-			try {
-				ancestorTag = setResolver.fs.getArchive().getConfig().getRevisionTree().commonAncestor(setResolver.diffset.revisions);
-			} catch (SearchFailedException e) {
-				// TODO DHT: (refactor) Trigger merge failure
-				return null;
-			}
-			Long defaultId = null;
-			
-			try {
-				defaultId = ancestorTag.readOnlyFS().inodeForPath(diff.path).getStat().getInodeId();
-			} catch(IOException exc) {
-			}
-			
 			if(diff.getResolutions().size() == 2 && diff.getResolutions().containsKey(null)) {
-				// if it's null and one thing, and the one thing is what used to be there, take the null.
-				// else, take the one thing.
-				for(Long inodeId : diff.getResolutions().keySet()) {
-					if(inodeId != null && inodeId != defaultId) return inodeId;
+				/* if we have a null, one side of the merge deleted the file, and the other does not.
+				* if we also have only two version, then it's possible that the other version is the original that
+				* was deleted, and we should keep the delete. but if it's been modified since the branches diverged,
+				* then keep the modified version. 
+				*/
+				RevisionTag ancestorTag;
+				try {
+					ancestorTag = setResolver.fs.getArchive().getConfig().getRevisionTree().commonAncestor(setResolver.diffset.revisions);
+
+					for(Long inodeId : diff.getResolutions().keySet()) {
+						if(inodeId == null) continue;
+						for(RevisionTag revTag : diff.getResolutions().get(inodeId)) {
+							long height = revTag.getFS().getInodeTable().inodeWithId(inodeId).getChangedFrom().getHeight();
+							if(height >= ancestorTag.getHeight()) return inodeId;
+						}
+					}
+				} catch(IOException exc) {
+					// TODO DHT: (refactor) Trigger merge failure
+					return null;
 				}
 				
-				if(defaultId != null) return null;
+				return null;
 			}
 			
 			for(Long inodeId : diff.getResolutions().keySet()) {
@@ -121,6 +121,10 @@ public class DiffSetResolver {
 	
 	public RevisionTag resolve() throws IOException, DiffResolutionException {
 		if(diffset.revisions.length == 1) return diffset.revisions[0];
+		System.out.println("Resolving " + diffset.revisions.length);
+		for(RevisionTag tag : diffset.revisions) {
+			System.out.println("\t" + tag);
+		}
 		
 		selectResolutions();
 		applyResolutions();

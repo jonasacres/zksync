@@ -54,6 +54,10 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		return serialized;
 	}
 	
+	public long getHeight() {
+		return height;
+	}
+	
 	public RevisionInfo getInfo() throws IOException {
 		if(info == null) info = readOnlyFS().getRevisionInfo();
 		return info;
