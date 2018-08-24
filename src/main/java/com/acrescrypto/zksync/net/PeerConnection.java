@@ -510,7 +510,8 @@ public class PeerConnection {
 		RevisionTag revTag = new RevisionTag(socket.swarm.config, msg.rxBuf.read(revTagBytes));
 		
 		while(msg.rxBuf.hasRemaining()) {
-			RevisionTag parent = new RevisionTag(socket.swarm.config, msg.rxBuf.read(revTagBytes));
+			byte[] parentBytes = new byte[revTagBytes.length];
+			RevisionTag parent = new RevisionTag(socket.swarm.config, msg.rxBuf.read(parentBytes));
 			parents.add(parent);
 		}
 		
@@ -680,7 +681,7 @@ public class PeerConnection {
 	}
 
 	protected byte[] serializeRevTags(int priority, Collection<RevisionTag> tags) {
-		ByteBuffer buf = ByteBuffer.allocate(4 + tags.size() * socket.swarm.config.refTagSize());
+		ByteBuffer buf = ByteBuffer.allocate(4 + tags.size() * RevisionTag.sizeForConfig(socket.swarm.config));
 		buf.putInt(priority);
 		for(RevisionTag tag : tags) buf.put(tag.getBytes());
 		return buf.array();

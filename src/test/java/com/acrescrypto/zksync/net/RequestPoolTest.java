@@ -46,6 +46,7 @@ public class RequestPoolTest {
 		
 		LinkedList<RevisionTag> requestedRefTags = new LinkedList<>();
 		LinkedList<RevisionTag> requestedRevisions = new LinkedList<>();
+		LinkedList<RevisionTag> requestedRevisionDetails = new LinkedList<>();
 		LinkedList<Long> requestedPageTags = new LinkedList<>();
 		LinkedList<Long> requestedInodeIds = new LinkedList<>();
 		
@@ -71,6 +72,12 @@ public class RequestPoolTest {
 			if(mockSeedOnly) throw new PeerCapabilityException();
 			requestedPriority = priority;
 			requestedRevisions.addAll(refTags);
+		}
+		
+		@Override public void requestRevisionDetails(int priority, Collection<RevisionTag> refTags) throws PeerCapabilityException {
+			if(mockSeedOnly) throw new PeerCapabilityException();
+			requestedPriority = priority;
+			requestedRevisionDetails.addAll(refTags);
 		}
 		
 		@Override public void requestConfigInfo() {
@@ -252,6 +259,21 @@ public class RequestPoolTest {
 	}
 	
 	@Test
+	public void testAddRequestsToPeerCallsRequestRevisionDetails() {
+		LinkedList<RevisionTag> tags = new LinkedList<>();
+		for(int i = 0; i < 16; i++) {
+			RefTag tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+			RevisionTag revTag = new RevisionTag(tag, 0, 0);
+			tags.add(revTag);
+			pool.addRevisionDetails(-123, revTag);
+		}
+		
+		pool.addRequestsToConnection(conn);
+		assertEquals(tags, conn.requestedRevisionDetails);
+		assertEquals(-123, conn.requestedPriority);
+	}
+	
+	@Test
 	public void testAddRequestsToPeerToleratesSeedOnly() {
 		conn.mockSeedOnly = true;
 		RefTag tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
@@ -330,6 +352,32 @@ public class RequestPoolTest {
 		}
 		
 		assertFalse(pool.hasRevision(-1, realTag));
+	}
+	
+	@Test
+	public void testPruneRemovesAcquiredRevisionDetails() throws IOException {
+		RevisionTag realTag = archive.openBlank().commit();
+
+		LinkedList<RevisionTag> tags = new LinkedList<>();
+		for(int i = 0; i < 16; i++) {
+			RevisionTag tag;
+			do {
+				RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+				tag = new RevisionTag(refTag, 0, 0);
+			} while(tag.getRefTag().getRefType() == RefTag.REF_TYPE_IMMEDIATE);
+			tags.add(tag);
+			pool.addRevisionDetails(i, tag);
+		}
+		
+		pool.addRevisionDetails(-1, realTag);
+		assertTrue(pool.hasRevisionDetails(-1, realTag));
+		pool.prune();
+		
+		for(int i = 0; i < tags.size(); i++) {
+			assertTrue(pool.hasRevisionDetails(i, tags.get(i)));
+		}
+		
+		assertFalse(pool.hasRevisionDetails(-1, realTag));
 	}
 	
 	@Test

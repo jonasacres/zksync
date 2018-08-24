@@ -159,6 +159,10 @@ public class RequestPool {
 	public boolean hasRevision(int priority, RevisionTag revTag) {
 		return requestedRevisions.getOrDefault(priority, new LinkedList<>()).contains(revTag);
 	}
+	
+	public boolean hasRevisionDetails(int priority, RevisionTag revTag) {
+		return requestedRevisionDetails.getOrDefault(priority, new LinkedList<>()).contains(revTag);
+	}
 
 	
 	public synchronized void prune() {
@@ -167,6 +171,7 @@ public class RequestPool {
 			prunePageTags();
 			pruneRefTags();
 			pruneRevisionTags();
+			pruneRevisionDetails();
 		} catch(IOException exc) {
 			logger.error("Caught exception pruning request pool", exc);
 		}
@@ -199,7 +204,7 @@ public class RequestPool {
 			}
 			
 			for(int priority : requestedRevisionDetails.keySet()) {
-				conn.requestRevisionContents(priority, requestedRevisionDetails.get(priority));
+				conn.requestRevisionDetails(priority, requestedRevisionDetails.get(priority));
 			}
 		} catch(PeerCapabilityException exc) {}
 	}
@@ -267,6 +272,15 @@ public class RequestPool {
 				} catch(IOException exc) {
 					return false;
 				}
+			});
+		}
+	}
+	
+	protected void pruneRevisionDetails() throws IOException {
+		for(int priority : requestedRevisionDetails.keySet()) {
+			LinkedList<RevisionTag> existing = requestedRevisionDetails.get(priority);
+			existing.removeIf((revTag)->{
+				return config.getRevisionTree().hasParentsForTag(revTag);
 			});
 		}
 	}

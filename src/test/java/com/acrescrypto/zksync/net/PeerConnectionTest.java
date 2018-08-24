@@ -514,6 +514,16 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
+	public void testAnnounceRevisionDetails() throws IOException {
+		RevisionTag tag = archive.openBlank().commit();
+		conn.announceRevisionDetails(tag);
+		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_REVISION_DETAILS);
+		assertReceivedBytes(tag.serialize());
+		assertReceivedBytes(RevisionTag.blank(archive.getConfig()).getBytes());
+		assertFinished();
+	}
+	
+	@Test
 	public void testRequestAll() throws IOException {
 		conn.requestAll();
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_ALL);
@@ -623,6 +633,54 @@ public class PeerConnectionTest {
 		}
 	}
 	
+	@Test
+	public void testRequestRevisionDetailsSingle() throws PeerCapabilityException, IOException {
+		RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		conn.requestRevisionDetails(10, revTag);
+		assertReceivedCmd(PeerConnection.CMD_REQUEST_REVISION_DETAILS);
+		assertReceivedBytes(Util.serializeInt(10));
+		assertReceivedBytes(revTag.getBytes());
+	}
+	
+	@Test
+	public void testRequestRevisionDetailsSingleThrowsExceptionIfNotFullPeer() throws PeerCapabilityException {
+		blindPeer();
+		try {
+			conn.requestRevisionDetails(10, RevisionTag.blank(archive.getConfig()));
+		} catch(PeerCapabilityException exc) {
+			assertNoMessage();
+		}
+	}
+	
+	@Test
+	public void testRequestRevisionDetailsMultiple() throws PeerCapabilityException, IOException {
+		ArrayList<RevisionTag> tags = new ArrayList<>();
+		for(int i = 0; i < 16; i++) {
+			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			tags.add(new RevisionTag(refTag, 0, 0));
+		}
+		conn.requestRevisionDetails(20, tags);
+		assertReceivedCmd(PeerConnection.CMD_REQUEST_REVISION_DETAILS);
+		assertReceivedBytes(Util.serializeInt(20));
+		for(RevisionTag tag : tags) {
+			assertReceivedBytes(tag.getBytes());
+		}
+	}
+
+	@Test
+	public void testRequestRevisionDetailsMultipleThrowsExceptionIfNotFullPeer() throws PeerCapabilityException {
+		blindPeer();
+		ArrayList<RevisionTag> list = new ArrayList<>();
+		list.add(RevisionTag.blank(archive.getConfig()));
+		
+		try {
+			conn.requestRevisionDetails(10, list);
+		} catch(PeerCapabilityException exc) {
+			assertNoMessage();
+		}
+	}
+
 	@Test
 	public void testSetPausedEnabled() throws IOException {
 		conn.setPaused(true);
@@ -913,6 +971,43 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
+	public void testHandleAnnounceRevisionDetailsAddsInfoToRevisionTree() throws ProtocolViolationException, IOException {
+		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commit().getFS().commit();
+		
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_REVISION_DETAILS);
+		msg.receivedData((byte) 0, tag.getBytes());
+		for(RevisionTag parent : tag.getFS().getRevisionInfo().getParents()) {
+			msg.receivedData((byte) 0, parent.getBytes());
+		}
+		
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		
+		conn.socket.swarm.config.getRevisionTree().clear();
+		assertFalse(conn.socket.swarm.config.getRevisionTree().hasParentsForTag(tag));
+		conn.handle(msg);
+		assertTrue(conn.socket.swarm.config.getRevisionTree().hasParentsForTag(tag));
+	}
+	
+	@Test(expected=ProtocolViolationException.class)
+	public void testHandleAnnounceRevisionDetailsTriggersViolationIfParentsNotCorrect() throws IOException, ProtocolViolationException {
+		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commit().getFS().commit();
+		
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_REVISION_DETAILS);
+		msg.receivedData((byte) 0, tag.getBytes());
+		msg.receivedData(PeerMessage.FLAG_FINAL, RevisionTag.blank(archive.getConfig()).getBytes());
+		conn.socket.swarm.config.getRevisionTree().clear();
+		conn.handle(msg);
+	}
+	
+	@Test(expected=ProtocolViolationException.class)
+	public void testHandleAnnounceRevisionDetailsTriggersViolationIfNotFullPeer() throws ProtocolViolationException {
+		blindPeer();
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_REVISION_DETAILS);
+		msg.receivedData((byte) 0, RevisionTag.blank(archive.getConfig()).getBytes());
+		conn.handle(msg);
+	}
+	
+	@Test
 	public void testHandleRequestAllCausesPageQueueToSendEverything() throws ProtocolViolationException {
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_ALL);
 		assertNoQueuedItemLike((item) -> (item instanceof EverythingQueueItem));
@@ -1190,6 +1285,45 @@ public class PeerConnectionTest {
 	public void testHandleRequestTagsWorksForSeedOnly() throws ProtocolViolationException, IOException {
 		blindPeer();
 		testHandleRequestPageTagsToleratesNonexistentTags();
+	}
+	
+	@Test
+	public void testHandleRequestRevisionDetailsRespondsWithRequestedInformation() throws IOException, ProtocolViolationException {
+		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commit().getFS().commit();
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REVISION_DETAILS);
+		msg.receivedData((byte) 0, Util.serializeInt(0));
+		msg.receivedData(PeerMessage.FLAG_FINAL, tag.getBytes());
+		conn.handle(msg);
+		
+		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_REVISION_DETAILS);
+		assertReceivedBytes(tag.getBytes());
+		assertReceivedBytes(tag.getInfo().getParents().get(0).getBytes());
+		assertFinished();
+	}
+	
+	@Test
+	public void testHandleRequestRevisionDetailsToleratesTruncatedRevTags() throws IOException, ProtocolViolationException {
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REVISION_DETAILS);
+		msg.receivedData((byte) 0, Util.serializeInt(0));
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[RevisionTag.sizeForConfig(archive.getConfig())-1]);
+		conn.handle(msg);
+	}
+	
+	@Test
+	public void testHandleRequestRevisionDetailsIgnoresRequestIfRevisionNotFound() throws IOException, ProtocolViolationException {
+		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commit().getFS().commit();
+		conn.socket.swarm.config.getRevisionTree().clear();
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REVISION_DETAILS);
+		msg.receivedData((byte) 0, Util.serializeInt(0));
+		msg.receivedData(PeerMessage.FLAG_FINAL, tag.getBytes());
+		conn.handle(msg);
+		assertNoMessage();
+	}
+	
+	@Test(expected=ProtocolViolationException.class)
+	public void testHandleRequestRevisionDetailsTriggersViolationIfNotFullPeer() throws IOException, ProtocolViolationException {
+		blindPeer();
+		testHandleRequestRevisionDetailsRespondsWithRequestedInformation();
 	}
 	
 	@Test
