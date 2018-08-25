@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
+import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
@@ -29,17 +30,18 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
 public class DiffSetResolver {
 	public interface InodeDiffResolver {
-		public Inode resolve(DiffSetResolver setResolver, InodeDiff diff);
+		public Inode resolve(DiffSetResolver setResolver, InodeDiff diff) throws IOException;
 	}
 	
 	public interface PathDiffResolver {
-		public Long resolve(DiffSetResolver setResolver, PathDiff diff);
+		public Long resolve(DiffSetResolver setResolver, PathDiff diff) throws IOException;
 	}
 	
 	DiffSet diffset;
 	ZKFS fs;
 	InodeDiffResolver inodeResolver;
 	PathDiffResolver pathResolver;
+	RevisionTag commonAncestor;
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
 		// TODO DHT: withTangledCollection
@@ -57,6 +59,7 @@ public class DiffSetResolver {
 			for(Inode inode : diff.getResolutions().keySet()) {
 				if(result == null || (inode != null && result.compareTo(inode) < 0)) result = inode;
 			}
+			
 			return result;
 		};
 	}
@@ -65,27 +68,52 @@ public class DiffSetResolver {
 		return (DiffSetResolver setResolver, PathDiff diff) -> {
 			Inode result = null;
 			if(diff.getResolutions().size() == 2 && diff.getResolutions().containsKey(null)) {
-				/* if we have a null, one side of the merge deleted the file, and the other does not.
-				* if we also have only two version, then it's possible that the other version is the original that
-				* was deleted, and we should keep the delete. but if it's been modified since the branches diverged,
-				* then keep the modified version. 
-				*/
-				RevisionTag ancestorTag;
-				try {
-					ancestorTag = setResolver.fs.getArchive().getConfig().getRevisionTree().commonAncestor(setResolver.diffset.revisions);
-
-					for(Long inodeId : diff.getResolutions().keySet()) {
-						if(inodeId == null) continue;
-						for(RevisionTag revTag : diff.getResolutions().get(inodeId)) {
-							long height = revTag.getFS().getInodeTable().inodeWithId(inodeId).getChangedFrom().getHeight();
-							if(height >= ancestorTag.getHeight()) return inodeId;
-						}
+				ArrayList<RevisionTag> revsWithPath = null, revsWithoutPath = null;
+				long inodeId = -1, inodeIdentity = -1, originalInodeId = -1;
+				boolean existed;
+				RevisionTag ancestor;
+				
+				for(Long listedInodeId : diff.getResolutions().keySet()) {
+					ArrayList<RevisionTag> revs = diff.getResolutions().get(listedInodeId);
+					if(listedInodeId == null) revsWithoutPath = revs;
+					else {
+						inodeId = listedInodeId;
+						revsWithPath = revs;
 					}
-				} catch(IOException exc) {
-					// TODO DHT: (refactor) Trigger merge failure
-					return null;
 				}
 				
+				inodeIdentity = revsWithPath.get(0).readOnlyFS().inodeForPath(diff.path).getIdentity();
+				
+				try {
+					ancestor = setResolver.commonAncestor();
+				} catch (SearchFailedException exc) {
+					// TODO DHT: merge cannot be completed because we can't get ancestor info
+					throw new RuntimeException("Cannot find common ancestor to resolve merge");
+				}
+				
+				InodeDiff inodeDiff = setResolver.diffset.inodeDiffs.get(inodeId);
+				if(inodeDiff != null) originalInodeId = inodeDiff.originalInodeId;
+				else originalInodeId = inodeId;
+				
+				// TODO: try using revtag height first before counting on having ancestor inode table
+				existed = ancestor.readOnlyFS().exists(diff.path);
+				if(!existed) return inodeId; // the path was created after the fork, so keep it.
+				
+				for(RevisionTag tag : revsWithoutPath) {
+					// if one of the revisions without this path has the same inode, then it must have moved
+					Inode inode = tag.readOnlyFS().getInodeTable().inodeWithId(originalInodeId);
+					if(inode.isDeleted()) continue;
+					if(inode.getIdentity() == inodeIdentity) return null; // we moved the inode
+					// TODO DHT: (analyze) how do we know for sure the other location will be preserved?
+				}
+				
+				// it was created before the fork and no one moved it, so did someone edit it?
+				for(RevisionTag tag : revsWithPath) {
+					long changeHeight = tag.readOnlyFS().inodeForPath(diff.path).getChangedFrom().getHeight() + 1;
+					if(changeHeight > ancestor.getHeight()) return inodeId; // edited; keep the file.
+				}
+				
+				// the file is deleted on one side of the fork, and unchanged on the other. keep the deletion.
 				return null;
 			}
 			
@@ -121,10 +149,6 @@ public class DiffSetResolver {
 	
 	public RevisionTag resolve() throws IOException, DiffResolutionException {
 		if(diffset.revisions.length == 1) return diffset.revisions[0];
-		System.out.println("Resolving " + diffset.revisions.length);
-		for(RevisionTag tag : diffset.revisions) {
-			System.out.println("\t" + tag);
-		}
 		
 		selectResolutions();
 		applyResolutions();
@@ -132,7 +156,7 @@ public class DiffSetResolver {
 		return revTag;
 	}
 	
-	protected void selectResolutions() {
+	protected void selectResolutions() throws IOException {
 		for(InodeDiff diff : diffset.inodeDiffs.values()) {
 			diff.setResolution(inodeResolver.resolve(this, diff));
 		}
@@ -170,6 +194,11 @@ public class DiffSetResolver {
 			if(diff.resolution == null) return false;
 		}
 		return parentExists(dirname);
+	}
+	
+	protected RevisionTag commonAncestor() throws SearchFailedException {
+		if(commonAncestor != null) return commonAncestor;
+		return commonAncestor = fs.getArchive().getConfig().getRevisionTree().commonAncestor(diffset.revisions);
 	}
 	
 	public DiffSet getDiffSet() {

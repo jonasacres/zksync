@@ -338,8 +338,13 @@ public class ZKFS extends FS {
 		String padding = new String(new char[depth]).replace("\0", "  ");
 		ZKDirectory dir = opendir(path);
 		for(String subpath : dir.list()) {
-			System.out.println(padding + subpath);
-			if(stat(Paths.get(path, subpath).toString()).isDirectory()) {
+			Inode inode = inodeForPath(Paths.get(path, subpath).toString());
+			System.out.printf("%s%30s inodeId=%d size=%d\n",
+					padding,
+					subpath,
+					inode.stat.getInodeId(),
+					inode.stat.getSize());
+			if(inode.stat.isDirectory()) {
 				dump(subpath, depth+1);
 			}
 		}

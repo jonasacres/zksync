@@ -68,7 +68,7 @@ public class InodeTable extends ZKFile {
 	protected long lookupNextInodeId() throws IOException {
 		Inode[] inodes = inodesByPage.get(inode.refTag.numPages-1);
 		
-		long maxInodeId = USER_INODE_ID_START;
+		long maxInodeId = USER_INODE_ID_START-1;
 		for(Inode inode : inodes) {
 			if(inode.isDeleted()) continue;
 			maxInodeId = Math.max(maxInodeId, inode.stat.getInodeId());
@@ -446,8 +446,8 @@ public class InodeTable extends ZKFile {
 	}
 	
 	public void dumpInodes() throws IOException {
-		System.out.println("Inode table for " + zkfs.baseRevision);
-		for(int i = 0; i < nextInodeId; i++) {
+		System.out.println("Inode table for " + zkfs.baseRevision + ", nextInodeId=" + nextInodeId());
+		for(int i = 0; i < nextInodeId(); i++) {
 			Inode inode = inodeWithId(i);
 			System.out.printf("\tInode %d: tag=%s... refType=%d identity=%x hash=%s\n\t\t%s\n",
 					i,

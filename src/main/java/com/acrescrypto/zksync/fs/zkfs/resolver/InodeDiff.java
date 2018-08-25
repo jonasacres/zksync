@@ -9,16 +9,17 @@ import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 
 public class InodeDiff {
 	protected HashMap<Inode,ArrayList<RevisionTag>> resolutions = new HashMap<Inode,ArrayList<RevisionTag>>();
-	protected long inodeId;
+	protected long inodeId, originalInodeId;
 	protected boolean resolved;
 	protected Inode resolution;
 	
-	public InodeDiff(long inodeId) {
+	public InodeDiff(long inodeId, long originalInodeId) {
 		this.inodeId = inodeId;
+		this.originalInodeId = originalInodeId;
 	}
 	
 	public InodeDiff(long inodeId, RevisionTag[] candidates) throws IOException {
-		this.inodeId = inodeId;
+		this.inodeId = this.originalInodeId = inodeId;
 		for(RevisionTag candidate : candidates) {
 			Inode inode = candidate.readOnlyFS().getInodeTable().inodeWithId(inodeId);
 			if(inode.isDeleted()) inode = null;

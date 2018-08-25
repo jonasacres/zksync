@@ -75,6 +75,27 @@ public abstract class FS {
 			rmdir(path);
 		}
 	}
+	
+	// TODO DHT: (test) Test FS.mv
+	public void mv(String oldPath, String newPath) throws IOException {
+		link(oldPath, newPath);
+		unlink(oldPath);
+	}
+	
+	// TODO DHT: (test) Test FS.cp
+	public void cp(String oldPath, String newPath) throws IOException {
+		File in = open(oldPath, File.O_RDONLY);
+		File out = open(newPath, File.O_WRONLY);
+		
+		byte[] buf = new byte[(int) Math.min(64*1024, in.getStat().getSize())];
+		while(in.hasData()) {
+			int readLen = in.read(buf, 0, buf.length);
+			out.write(buf, 0, readLen);
+		}
+		
+		in.close();
+		out.close();
+	}
 
 	public String dirname(String path) {
 		if(path.equals("/")) return path;

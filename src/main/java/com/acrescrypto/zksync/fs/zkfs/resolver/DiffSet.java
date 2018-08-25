@@ -27,6 +27,8 @@ public class DiffSet {
 	/** differences in inode listings */
 	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>(); // differences in inode table entries
 	
+	HashSet<Long> issuedInodeIds = new HashSet<Long>();
+	
 	// TODO DHT: (test) Test tangled collection
 	public static DiffSet withTangledCollection(Collection<RevisionTag> revisions) throws IOException {
 		LinkedList<RevisionTag> finalList = new LinkedList<>();
@@ -77,6 +79,7 @@ public class DiffSet {
 		HashSet<Long> allInodes = new HashSet<Long>();
 		for(RevisionTag rev : revisions) {
 			for(Inode inode : rev.readOnlyFS().getInodeTable().values()) {
+				issuedInodeIds.add(inode.getStat().getInodeId());
 				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_INODE_TABLE) continue;
 				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_FREELIST) continue;
 				if(inode.isDeleted()) continue;
@@ -162,9 +165,13 @@ public class DiffSet {
 
 			for(RevisionTag tag : diff.resolutions.get(inode)) tags.add(tag);
 		}
-
-		for(Long identity : byIdentity.keySet()) {
-			long newId = identity.equals(minIdent) ? diff.inodeId : fs.getInodeTable().issueInodeId();
+		
+		ArrayList<Long> sortedIdentities = new ArrayList<Long>();
+		sortedIdentities.addAll(byIdentity.keySet());
+		sortedIdentities.sort(null);
+		
+		for(Long identity : sortedIdentities) {
+			long newId = identity.equals(minIdent) ? diff.inodeId : issueInodeId(fs);
 			idMap.putIfAbsent(diff.inodeId, new HashMap<>());
 			for(RevisionTag tag : byIdentity.get(identity)) idMap.get(diff.inodeId).put(tag, newId);
 			inodeDiffs.put(newId, renumberInodeWithIdentity(fs, diff, newId, identity));
@@ -173,7 +180,7 @@ public class DiffSet {
 	
 	/** assign a new inode ID to a given identity constant in an inode diffset */
 	protected InodeDiff renumberInodeWithIdentity(ZKFS fs, InodeDiff diff, long newId, long identity) {
-		InodeDiff newDiff = new InodeDiff(newId);
+		InodeDiff newDiff = new InodeDiff(newId, diff.inodeId);
 		
 		for(Inode inode : diff.resolutions.keySet()) {
 			if(inode != null && inode.getIdentity() == identity) {
@@ -191,5 +198,14 @@ public class DiffSet {
 	/** deterministically selects a revision within the diffset, and returns a writable ZKFS from that revision */
 	protected ZKFS pickMergeFs() throws IOException {
 		return latestRevision().getFS();
+	}
+	
+	protected long issueInodeId(ZKFS mergeFs) throws IOException {
+		long inodeId = -1;
+		while(inodeId < 0 || issuedInodeIds.contains(inodeId)) {
+			inodeId = mergeFs.getInodeTable().issueInodeId();
+		}
+		
+		return inodeId;
 	}
 }

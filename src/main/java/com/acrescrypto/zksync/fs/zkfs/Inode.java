@@ -154,15 +154,12 @@ public class Inode implements Comparable<Inode> {
 		nlink++;
 	}
 	
-	/** decrement link count. automatically unlink if nlink becomes == 0 and FLAG_RETAIN not set. */ 
-	public void removeLink() {
+	/** decrement link count. automatically unlink if nlink becomes == 0 and FLAG_RETAIN not set. 
+	 * @throws IOException */ 
+	public void removeLink() throws IOException {
 		nlink--;
 		if(isDeleted()) {
-			try {
-				fs.getInodeTable().unlink(stat.getInodeId());
-			} catch (IOException e) {
-				throw new IllegalStateException();
-			}
+			fs.getInodeTable().unlink(stat.getInodeId());
 		}
 	}
 	

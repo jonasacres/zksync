@@ -54,6 +54,18 @@ public class PathDiff implements Comparable<PathDiff> {
 
 	@Override
 	public int compareTo(PathDiff other) {
+		/* we want nulls (path deletions) to go at the end, and short paths to come before long paths.
+		   this makes sure we handle moves without unlinking the file before relinking it, and that
+		   directories are created before children (whose paths must be longer).
+		 */
+		if(resolution == null) {
+			if(other.resolution != null) {
+				return 1;
+			}
+		} else if(other.resolution == null) {
+			return -1;
+		}
+		
 		return path.compareTo(other.path);
 	}
 

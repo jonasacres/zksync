@@ -205,7 +205,8 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testDefaultPicksLatestPathLink() throws IOException, DiffResolutionException {
-		int numChildren = 50, r = (int) (numChildren*Math.random());
+		int numChildren = RevisionInfo.maxParentsForConfig(archive.getConfig()),
+				r = (int) (numChildren*Math.random());
 		
 		for(int i = 0; i < numChildren; i++) {
 			Util.setCurrentTimeNanos(i);
@@ -232,13 +233,13 @@ public class DiffSetResolverTest {
 		for(byte i = 0; i < 4; i++) {
 			fs.write(""+i, (""+i).getBytes());
 			fs.commit();
-
 			if(i == 1) fs = base.getFS();
 		}
 		
 		RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
 		ZKFS mergeFs = merge.readOnlyFS();
 		
+		// TODO DHT: (itf) linux 8/24 296361f8+ ComparisonFailure: expected:<[2]> but was:<[]>
 		for(byte i = 0; i < 4; i++) assertEquals(""+i, new String(mergeFs.read(""+i)));
 	}
 	
@@ -249,7 +250,7 @@ public class DiffSetResolverTest {
 			fs.write("file", "foo".getBytes());
 			base = fs.commit();
 			
-			if(Math.random() < 0.5) {
+			if(i % 2 == 0) {
 				fs.write("file", "bar".getBytes());
 				fs.commit();
 				base.getFS().commit();
@@ -369,11 +370,11 @@ public class DiffSetResolverTest {
 		
 		base = fs.commit();
 		fs.link("file", "link-a");
-		System.out.println(fs.commit());
+		fs.commit();
 		
 		fs = base.getFS();
 		fs.link("file", "link-b");
-		System.out.println(fs.commit());
+		fs.commit();
 		
 		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
 		assertEquals(mergeFs.inodeForPath("file"), mergeFs.inodeForPath("link-a"));
@@ -403,16 +404,112 @@ public class DiffSetResolverTest {
 	}
 	
 	@Test
+	public void testMoveEditedFile() throws IOException, DiffResolutionException {
+		// shared file. A moves, B edits. We want B's edit in A's new location, with the old location gone.
+		fs.write("file", "a".getBytes());
+		base = fs.commit();
+		
+		fs.mv("file", "new");
+		fs.commit();
+		
+		fs = base.getFS();
+		fs.write("file", "bbb".getBytes());
+		fs.commit();
+		
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		assertFalse(mergeFs.exists("file"));
+		assertTrue(mergeFs.exists("new"));
+		assertArrayEquals("bbb".getBytes(), mergeFs.read("new"));
+	}
+	
+	@Test
+	public void testMoveAndUnlinkDoesntUnlinkNewLocation() throws IOException, DiffResolutionException {
+		// shared file. A moves it, B unlinks it. Want the file to exist in A's new location.
+		fs.write("file", "a".getBytes());
+		base = fs.commit();
+		
+		fs.mv("file", "new");
+		fs.commit();
+		
+		fs = base.getFS();
+		fs.unlink("file");
+		fs.commit();
+		
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		assertFalse(mergeFs.exists("file"));
+		assertTrue(mergeFs.exists("new"));
+		assertArrayEquals("a".getBytes(), mergeFs.read("new"));
+	}
+	
+	@Test
+	public void testCompetingMovesCreatesHardlinks() throws IOException, DiffResolutionException {
+		fs.write("file", "a".getBytes());
+		base = fs.commit();
+		
+		fs.mv("file", "newA");
+		fs.commit();
+		
+		fs = base.getFS();
+		fs.mv("file", "newB");
+		fs.commit();
+		
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		assertFalse(mergeFs.exists("file"));
+		assertTrue(mergeFs.exists("newA"));
+		assertTrue(mergeFs.exists("newB"));
+		assertEquals(mergeFs.inodeForPath("newA"), mergeFs.inodeForPath("newB"));
+		assertArrayEquals("a".getBytes(), mergeFs.read("newA"));
+	}
+	
+	@Test
+	public void testWriteOverridesUnlink() throws IOException, DiffResolutionException {
+		fs.write("file", "a".getBytes());
+		base = fs.commit();
+		
+		fs.write("file", "bb".getBytes());
+		fs.commit();
+		
+		fs = base.getFS();
+		fs.unlink("file");
+		fs.commit();
+		
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		assertTrue(mergeFs.exists("file"));
+		assertArrayEquals("bb".getBytes(), mergeFs.read("file"));
+	}
+	
+	@Test
+	public void testRemakeFileOverridesUnlink() throws IOException, DiffResolutionException {
+		fs.write("file", "a".getBytes());
+		base = fs.commit();
+		
+		fs.unlink("file");
+		fs.commit();
+		
+		fs = base.getFS();
+		fs.unlink("file");
+		fs.write("file", "b".getBytes());
+		fs.commit();
+
+		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
+		assertTrue(mergeFs.exists("file"));
+		assertArrayEquals("b".getBytes(), mergeFs.read("file"));
+	}
+	
+	@Test
 	public void testNlinksConsistentWhenMakingMixedChanges() throws IOException, DiffResolutionException {
 		fs.write("file", "foo".getBytes());
 		fs.link("file", "orig-link");
 		base = fs.commit();
+		
 		fs.unlink("orig-link");
 		fs.link("file", "link-a");
 		fs.commit();
+		
 		fs = base.getFS();
 		fs.link("file", "link-b");
 		fs.commit();
+		
 		base.getFS().commit();
 		
 		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
