@@ -40,11 +40,13 @@ public class RevisionList {
 		if(branchTips.contains(newBranch)) return;
 		branchTips.add(newBranch);
 		config.swarm.announceTip(newBranch);
+		System.out.println("Add " + newBranch + " " + branchTips.size());
 		updateLatest(newBranch);
 	}
 	
 	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
 		branchTips.remove(oldBranch);
+		System.out.println("Remove " + oldBranch + " " + branchTips.size());
 		if(latest.equals(oldBranch)) recalculateLatest();
 	}
 	

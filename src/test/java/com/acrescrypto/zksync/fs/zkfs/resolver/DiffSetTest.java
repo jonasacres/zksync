@@ -321,7 +321,7 @@ public class DiffSetTest {
 		revs[1] = fs.commit();
 
 		DiffSet diffset = new DiffSet(revs);
-		assertEquals(2, diffset.inodeDiffs.size()); // file1, /
+		assertEquals(3, diffset.inodeDiffs.size()); // file0, file1, /
 		assertEquals(1, diffset.pathDiffs.size()); // file1
 		assertTrue(diffset.pathDiffs.containsKey("file1"));
 		

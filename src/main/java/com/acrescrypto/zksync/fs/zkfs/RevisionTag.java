@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.utility.Util;
@@ -111,6 +112,13 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	
 	public void deserialize(ZKArchiveConfig config, byte[] serialized) {
 		assert(serialized.length == sizeForConfig(config));
+		if(Arrays.equals(new byte[serialized.length], serialized)) {
+			this.refTag = RefTag.blank(config);
+			this.height = 0;
+			this.parentHash = 0;
+			return;
+		}
+		
 		int signedLen = serialized.length - config.getCrypto().asymSignatureSize();
 		config.pubKey.assertValid(serialized, 0, signedLen,
 				serialized, signedLen, config.getCrypto().asymSignatureSize());
