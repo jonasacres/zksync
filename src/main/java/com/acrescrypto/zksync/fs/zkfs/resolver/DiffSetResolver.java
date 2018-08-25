@@ -171,12 +171,17 @@ public class DiffSetResolver {
 			fs.getInodeTable().replaceInode(diff);
 		}
 		
+		ArrayList<Inode> toUnlink = new ArrayList<>();
 		for(PathDiff diff : sortedPathDiffs()) { // need to sort so we do parent directories before children
 			assert(diff.isResolved());
 			if(!parentExists(diff.path)) continue;
 			ZKDirectory dir = fs.opendir(fs.dirname(diff.path));
-			dir.updateLink(diff.resolution, fs.basename(diff.path));
+			dir.updateLink(diff.resolution, fs.basename(diff.path), toUnlink);
 			dir.close();
+		}
+		
+		for(Inode inode : toUnlink) {
+			inode.removeLink();
 		}
 	}
 	

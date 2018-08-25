@@ -114,12 +114,18 @@ public class ZKDirectory extends ZKFile implements Directory {
 		return inodeForName(comps.length == 0 ? "/" : comps[0]);
 	}
 	
-	public void updateLink(Long inodeId, String link) throws IOException {
+	public void updateLink(Long inodeId, String link, ArrayList<Inode> toUnlink) throws IOException {
 		if(link.length() > MAX_NAME_LEN) throw new EINVALException(link + ": name too long");
 		if(entries.containsKey(link)) {
 			Long existing = entries.get(link);
 			if(existing.equals(inodeId)) return;
-			unlink(link);
+			
+			// we need to remove the old link, but defer action on the inode in case we're relinking this inode somewhere else
+			String fullPath = Paths.get(path, link).toString();
+			toUnlink.add(zkfs.inodeForPath(fullPath));
+			entries.remove(link);
+			zkfs.uncache(fullPath);
+			dirty = true;
 		}
 		
 		if(inodeId == null) return; // above if clause already unlinked

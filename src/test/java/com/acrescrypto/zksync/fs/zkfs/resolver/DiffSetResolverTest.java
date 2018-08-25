@@ -239,8 +239,9 @@ public class DiffSetResolverTest {
 		RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
 		ZKFS mergeFs = merge.readOnlyFS();
 		
-		// TODO DHT: (itf) linux 8/24 296361f8+ ComparisonFailure: expected:<[2]> but was:<[]>
-		for(byte i = 0; i < 4; i++) assertEquals(""+i, new String(mergeFs.read(""+i)));
+		for(byte i = 0; i < 4; i++) {
+			assertEquals(""+i, new String(mergeFs.read(""+i)));	
+		}
 	}
 	
 	@Test
