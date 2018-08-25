@@ -72,8 +72,10 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		}
 	}
 	
-	public RevisionTag makeCacheOnly() {
-		RevisionTag tag = new RevisionTag(refTag, parentHash, height);
+	public RevisionTag makeCacheOnly() throws IOException {
+		if(cacheOnly) return this;
+		RefTag coRefTag = new RefTag(refTag.getArchive().cacheOnlyArchive(), refTag.getBytes());
+		RevisionTag tag = new RevisionTag(coRefTag, parentHash, height);
 		tag.cacheOnly = true;
 		return tag;
 	}

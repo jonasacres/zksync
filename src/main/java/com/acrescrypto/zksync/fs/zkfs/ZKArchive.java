@@ -45,7 +45,11 @@ public class ZKArchive {
 		Key localKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_CONFIG_FILE);
 		this.localConfig = new LocalConfig(config.localStorage, localKey);
 		this.readOnlyFilesystems = new HashCache<RevisionTag,ZKFS>(64, (tag) -> {
-			return tag.getFS();
+			if(this.isCacheOnly() && !tag.cacheOnly) {
+				return tag.makeCacheOnly().getFS();
+			} else {
+				return tag.getFS();
+			}
 		}, (tag, fs) -> {});
 		
 		if(!isCacheOnly()) { // only need the list for non-networked archives, which are not cache-only
@@ -66,6 +70,8 @@ public class ZKArchive {
 	}
 	
 	public ZKArchive cacheOnlyArchive() throws IOException {
+		if(isCacheOnly()) return this;
+		
 		assertOpen();
 		ZKArchive cacheOnly = new ZKArchive(config);
 		cacheOnly.storage = config.getCacheStorage();

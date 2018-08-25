@@ -120,7 +120,7 @@ public class Page {
 	 * @return
 	 */
 	public int read(byte[] buf, int offset, int maxLength) {
-		int readLen = (int) Math.min(maxLength, size-contents.position());
+		int readLen = (int) Math.min(maxLength, Math.max(0, size-contents.position()));
 		contents.get(buf, offset, readLen);
 		return readLen;
 	}
