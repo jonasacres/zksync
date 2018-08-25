@@ -229,6 +229,7 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		byte[] timeProof = crypto.authenticate(tempSharedSecret, Util.serializeInt(timeIndex));
 		
+		// TODO DHT: (refactor) Conceal client eph public key in handshake?
 		out.write(dhPrivateKey.publicKey().getBytes());
 		out.write(keyHash);
 		out.write(timeProof);
@@ -236,6 +237,7 @@ public class TCPPeerSocket extends PeerSocket {
 		out.write(staticKeyCiphertext);
 		out.write(encryptedPortNum);
 		
+		// TODO DHT: (refactor) Conceal server eph public key in handshake?
 		PublicDHKey remoteEphemeralPubKey = crypto.makePublicDHKey(readRaw(crypto.asymPublicDHKeySize()));
 		byte[] ephemeralSecret = dhPrivateKey.sharedSecret(remoteEphemeralPubKey);
 		

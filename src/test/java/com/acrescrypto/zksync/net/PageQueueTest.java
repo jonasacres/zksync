@@ -517,7 +517,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testaddInodeContentsHonorsPrioritySetting() {
+	public void testAddInodeContentsHonorsPrioritySetting() {
 		// queue up low-priority and high-priority reftags
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 		queue.addInodeContents(1, revTag, inodeIndirect.getStat().getInodeId());
@@ -533,7 +533,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testaddInodeContentsSendsPagesInShuffledOrder() {
+	public void testAddInodeContentsSendsPagesInShuffledOrder() {
 		HashMap<Integer,Integer> matchCounts = new HashMap<>();
 		for(int i = 0; i < 50; i++) {
 			// queue up a reftag, note the order the pages come in
@@ -572,9 +572,9 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testaddInodeContentsToleratesNonexistentRevTag() {
+	public void testAddInodeContentsToleratesNonexistentRevTag() {
 		// make a reftag for which we have no data
-		byte[] corruptRaw = revTag.getBytes().clone();
+		byte[] corruptRaw = revTag.getRefTag().getBytes().clone();
 		corruptRaw[2] ^= 0x20;
 		RefTag corruptRef = new RefTag(archive, corruptRaw);
 		RevisionTag corrupt = new RevisionTag(corruptRef, 0, 0);
@@ -595,7 +595,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testaddInodeContentsToleratesImmediateRefTag() {
+	public void testAddInodeContentsToleratesImmediateRefTag() {
 		queue.addInodeContents(0, revTag, inodeImmediate.getStat().getInodeId());
 		assertFalse(queue.hasNextChunk());
 
@@ -609,13 +609,13 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testaddInodeContentsToleratesIndirectRefTag() {
+	public void testAddInodeContentsToleratesIndirectRefTag() {
 		queue.addInodeContents(0, revTag, inodeIndirect.getStat().getInodeId());
 		assertQueueDrainOfSize(numChunks);
 	}
 	
 	@Test
-	public void testaddInodeContentsToleratesDoublyIndirectRefTag() {
+	public void testAddInodeContentsToleratesDoublyIndirectRefTag() {
 		long numDataPages = new PageTree(inode2Indirect).numDataPages();
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 		assertQueueDrainOfSize((int) (numChunks * numDataPages));
@@ -702,7 +702,7 @@ public class PageQueueTest {
 	@Test
 	public void testAddRevisionTagToleratesNonexistentRevisionTags() throws IOException {
 		// make a revtag that isn't read
-		byte[] corruptRaw = revTag.getBytes().clone();
+		byte[] corruptRaw = revTag.getRefTag().getBytes().clone();
 		corruptRaw[2] ^= 0x20;
 		RefTag corruptRef = new RefTag(archive, corruptRaw);
 		RevisionTag corrupt = new RevisionTag(corruptRef, 0, 0);
