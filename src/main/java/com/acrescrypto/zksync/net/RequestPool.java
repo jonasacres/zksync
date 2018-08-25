@@ -332,7 +332,7 @@ public class RequestPool {
 
 			for(RevisionTag revTag : map.keySet()) {
 				LinkedList<Long> inodeIds = map.get(revTag);
-				ByteBuffer buf = ByteBuffer.allocate(config.refTagSize() + 4 + 8*inodeIds.size());
+				ByteBuffer buf = ByteBuffer.allocate(RevisionTag.sizeForConfig(config) + 4 + 8*inodeIds.size());
 				buf.put(revTag.getBytes());
 				buf.putInt(inodeIds.size());
 				for(long inodeId : inodeIds) buf.putLong(inodeId);
@@ -343,7 +343,7 @@ public class RequestPool {
 		pieces.add(Util.serializeInt(requestedRevisions.size()));
 		for(int priority : requestedRevisions.keySet()) {
 			LinkedList<RevisionTag> list = requestedRevisions.get(priority);
-			ByteBuffer buf = ByteBuffer.allocate(2*4+config.refTagSize()*list.size());
+			ByteBuffer buf = ByteBuffer.allocate(2*4+RevisionTag.sizeForConfig(config)*list.size());
 			buf.putInt(priority);
 			buf.putInt(list.size());
 			for(RevisionTag tag : list) buf.put(tag.getBytes());
@@ -359,6 +359,7 @@ public class RequestPool {
 	
 	protected void deserialize(ByteBuffer buf) {
 		requestingEverything = (buf.get() & 0x01) == 0x01;
+		byte[] tagBytes = new byte[RevisionTag.sizeForConfig(config)];
 		
 		int numPageTagPriorities = buf.getInt();
 		for(int i = 0; i < numPageTagPriorities; i++) {
@@ -374,7 +375,6 @@ public class RequestPool {
 			int priority = buf.getInt();
 			int numRevTags = buf.getInt();
 			for(int j = 0; j < numRevTags; j++) {
-				byte[] tagBytes = new byte[RevisionTag.sizeForConfig(config)];
 				buf.get(tagBytes);
 				int numInodeIds = buf.getInt();
 				RevisionTag revTag = new RevisionTag(config, tagBytes);
@@ -390,7 +390,6 @@ public class RequestPool {
 			int priority = buf.getInt();
 			int numEntries = buf.getInt();
 			for(int j = 0; j < numEntries; j++) {
-				byte[] tagBytes = new byte[RevisionTag.sizeForConfig(config)];
 				buf.get(tagBytes);
 				RevisionTag tag = new RevisionTag(config, tagBytes);
 				addRevision(priority, tag);

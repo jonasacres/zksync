@@ -73,7 +73,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public RevisionTag makeCacheOnly() {
-		RevisionTag tag = new RevisionTag(refTag, height, parentHash);
+		RevisionTag tag = new RevisionTag(refTag, parentHash, height);
 		tag.cacheOnly = true;
 		return tag;
 	}
@@ -124,7 +124,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 				serialized, signedLen, config.getCrypto().asymSignatureSize());
 		
 		hashCode = ByteBuffer.wrap(serialized).getInt();
-		this.serialized = serialized;
+		this.serialized = serialized.clone();
 	
 		assert(height >= 0);
 		

@@ -549,9 +549,9 @@ public class PeerConnection {
 		ZKArchive archive = socket.swarm.config.getArchive();
 
 		assertPeerCapability(PEER_TYPE_FULL);
-		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		int priority = msg.rxBuf.getInt();
 		
+		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		while(msg.rxBuf.hasRemaining()) {
 			RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes));
 			sendRevisionContents(priority, tag);
@@ -563,9 +563,9 @@ public class PeerConnection {
 		ZKArchive archive = socket.swarm.config.getArchive();
 
 		assertPeerCapability(PEER_TYPE_FULL);
-		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		msg.rxBuf.getInt(); // TODO: priority; no prioritization support for this command yet.
 		
+		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		while(msg.rxBuf.hasRemaining()) {
 			RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes));
 			announceRevisionDetails(tag);

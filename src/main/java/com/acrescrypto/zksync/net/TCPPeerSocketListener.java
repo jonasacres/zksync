@@ -173,7 +173,6 @@ public class TCPPeerSocketListener {
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(Exception exc) {
-			exc.printStackTrace();
 			logger.error("Caught unexpected exception on connection to peer {}", peerSocketRaw.getInetAddress().toString(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());

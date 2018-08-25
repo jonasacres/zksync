@@ -948,13 +948,10 @@ public class PeerConnectionTest {
 	public void testHandleAnnounceTipsTriggersViolationWhenForgedRefTagSent() throws ProtocolViolationException, IOException {
 		RefTag refTag = new RefTag(archive.getConfig(), crypto.rng(crypto.hashLength()), RefTag.REF_TYPE_2INDIRECT, 2);
 		RevisionTag fakeTag = new RevisionTag(refTag, 0, 0);
-		
-		byte[] raw = fakeTag.serialize();
-		raw[8] ^= 0x40;
-		fakeTag = new RevisionTag(archive.getConfig(), raw);
+		fakeTag.getBytes()[8] ^= 0x40;
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TIPS);
-		msg.receivedData(PeerMessage.FLAG_FINAL, fakeTag.serialize());
+		msg.receivedData(PeerMessage.FLAG_FINAL, fakeTag.getBytes());
 		assertFalse(archive.getConfig().getRevisionList().branchTips().contains(fakeTag));
 		try {
 			conn.handle(msg);
@@ -1117,6 +1114,20 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleRequestInodesToleratesNonexistentRevTags() throws IOException, ProtocolViolationException {
+		RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+		RevisionTag fakeTag = new RevisionTag(refTag, 0, 1);
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_INODES);
+		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array()); // priority
+		msg.receivedData((byte) 0, fakeTag.getBytes());
+		msg.receivedData((byte) 0, crypto.rng(8*16)); // random inode IDs
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		conn.handle(msg);
+		
+		assertNoMessage();
+	}
+	
+	@Test(expected=ProtocolViolationException.class)
+	public void testHandleRequestInodesTriggersViolationOnInvalidRevTags() throws IOException, ProtocolViolationException {
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_INODES);
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array()); // priority
 		msg.receivedData((byte) 0, crypto.rng(archive.getConfig().refTagSize())); // fake revtag
@@ -1211,7 +1222,11 @@ public class PeerConnectionTest {
 			fs.write("file"+i, "content".getBytes());
 			tags[i] = fs.commit();
 			msg.receivedData((byte) 0, tags[i].getBytes());
-			if(i == tags.length/2) msg.receivedData((byte) 0, crypto.rng(tags[i].getBytes().length));
+			if(i == tags.length/2) {
+				RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+				RevisionTag fakeRevTag = new RevisionTag(refTag, 0, 0);
+				msg.receivedData((byte) 0, fakeRevTag.getBytes());
+			}
 		}
 		
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);

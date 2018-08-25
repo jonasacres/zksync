@@ -40,13 +40,11 @@ public class RevisionList {
 		if(branchTips.contains(newBranch)) return;
 		branchTips.add(newBranch);
 		config.swarm.announceTip(newBranch);
-		System.out.println("Add " + newBranch + " " + branchTips.size());
 		updateLatest(newBranch);
 	}
 	
 	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
 		branchTips.remove(oldBranch);
-		System.out.println("Remove " + oldBranch + " " + branchTips.size());
 		if(latest.equals(oldBranch)) recalculateLatest();
 	}
 	
@@ -75,9 +73,9 @@ public class RevisionList {
 		branchTips.clear();
 		latest = null;
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		byte[] rawTag = new byte[RevisionTag.sizeForConfig(config)];
 		
-		while(buf.remaining() >= rawTag.length) {
+		while(buf.remaining() >= RevisionTag.sizeForConfig(config)) {
+			byte[] rawTag = new byte[RevisionTag.sizeForConfig(config)];
 			buf.get(rawTag);
 			try {
 				RevisionTag revTag = new RevisionTag(config, rawTag);

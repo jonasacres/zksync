@@ -556,7 +556,8 @@ public class RevisionTreeTest {
 			RevisionTag child = parents.get(numParents-1).getFS().commitWithTimestamp(revTags, i);
 			children.add(child);
 		}
-		
+	
+		// TODO DHT: (itf) 8/24 linux bdebe5e
 		assertEquals(parents.get(0), tree.commonAncestor(children));
 	}
 	

@@ -13,8 +13,8 @@ public class PRNG {
 	public PRNG(byte[] seed) {
 		try {
 			rng = SecureRandom.getInstance("SHA1PRNG");
-		} catch (NoSuchAlgorithmException e) {
-			e.printStackTrace();
+		} catch (NoSuchAlgorithmException exc) {
+			exc.printStackTrace();
 			System.exit(1);
 		}
 		

@@ -295,7 +295,7 @@ public class RevisionTree {
 		}
 		
 		if(parentHash != revTag.parentHash) {
-			throw new SecurityException("parent hash for " + Util.bytesToHex(revTag.getBytes(), 4) + " does not match; expected " + String.format("%16x", revTag.parentHash) + " got " + String.format("%16x", parentHash));
+			throw new SecurityException("parent hash for " + Util.bytesToHex(revTag.getBytes(), 4) + " does not match; expected " + String.format("%016x", revTag.parentHash) + " got " + String.format("%016x", parentHash));
 		}
 	}
 	
@@ -357,8 +357,8 @@ public class RevisionTree {
 	protected synchronized void deserialize(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		long numRevTags = buf.getLong();
+		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(config)];
 		for(int i = 0; i < numRevTags; i++) {
-			byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(config)];
 			int numParents = buf.getInt();
 			buf.get(revTagBytes);
 			RevisionTag revTag = new RevisionTag(config, revTagBytes);
