@@ -152,8 +152,7 @@ public class InodeTable extends ZKFile {
 	
 	protected long makeParentHash(ArrayList<RevisionTag> parents) {
 		if(parents.size() == 1) {
-			// TODO DHT: (refactor) Would be stronger if this was a hash over the entire serialization.
-			return parents.get(0).getShortHash();
+			return ByteBuffer.wrap(zkfs.archive.crypto.hash(parents.get(0).getBytes())).getLong();
 		}
 		
 		HashContext ctx = zkfs.archive.crypto.startHash();

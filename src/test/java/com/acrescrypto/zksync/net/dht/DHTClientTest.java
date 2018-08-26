@@ -591,6 +591,7 @@ public class DHTClientTest {
 				network.run();
 				
 				// TODO DHT: (itf) 8/25/18 linux 3abb4e3 AssertionError: expected<8> but was:<0>
+				// this seems to happen much more reliably when run from FastTests (2nd try in loop, takes >150 when run solo)
 				assertEquals(DHTSearchOperation.maxResults, numReceived.intValue());
 			}
 		}

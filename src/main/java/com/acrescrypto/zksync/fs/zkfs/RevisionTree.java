@@ -285,7 +285,7 @@ public class RevisionTree {
 		
 		if(parents.size() == 1) {
 			RevisionTag parent = parents.iterator().next();
-			parentHash = parent.getShortHash();
+			parentHash = ByteBuffer.wrap(config.archive.crypto.hash(parent.getBytes())).getLong();
 		} else {
 			ArrayList<RevisionTag> sorted = new ArrayList<>(parents);
 			sorted.sort(null);
