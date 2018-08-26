@@ -8,6 +8,7 @@ import java.util.Arrays;
 
 import org.junit.Test;
 
+import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.FileTypeNotSupportedException;
@@ -343,6 +344,112 @@ public abstract class FSTestBase {
 		ByteBuffer buf = ByteBuffer.allocate(2*text.length);
 		buf.put(text);
 		assertTrue(Arrays.equals(buf.array(), scratch.read("truncate-longer-test")));
+	}
+	
+	@Test
+	public void testMvLinksFileInNewLocation() throws IOException {
+		scratch.write("file", "test".getBytes());
+		scratch.mv("file", "new");
+		assertTrue(scratch.exists("new"));
+		assertFalse(scratch.exists("file"));
+		assertArrayEquals("test".getBytes(), scratch.read("new"));
+	}
+	
+	@Test
+	public void testMvOverwritesIfNewLocationTaken() throws IOException {
+		scratch.write("file1", "test1".getBytes());
+		scratch.write("file2", "test2".getBytes());
+		
+		scratch.mv("file1", "file2");
+		
+		assertFalse(scratch.exists("file1"));
+		assertTrue(scratch.exists("file2"));
+		assertArrayEquals("test1".getBytes(), scratch.read("file2"));
+	}
+	
+	@Test
+	public void testMvMovesFileIntoDirectoryIfDestIsDirectory() throws IOException {
+		scratch.write("file", "test".getBytes());
+		scratch.mkdir("dir");
+		scratch.mv("file", "dir");
+		assertTrue(scratch.exists("dir/file"));
+		assertFalse(scratch.exists("file"));
+		assertArrayEquals("test".getBytes(), scratch.read("dir/file"));
+	}
+	
+	@Test
+	public void testMvThrowsEISDIRIfDestIsDirectoryContainingFilename() throws IOException {
+		scratch.write("file", "test".getBytes());
+		scratch.mkdir("dir");
+		scratch.mkdir("dir/file");
+		try {
+			scratch.mv("file", "dir");
+			fail("expected EISDIRException");
+		} catch(EISDIRException exc) {
+		}
+		
+		assertTrue(scratch.exists("dir/file"));
+		assertTrue(scratch.stat("dir/file").isDirectory());
+		assertTrue(scratch.exists("file"));
+		assertArrayEquals("test".getBytes(), scratch.read("file"));
+	}
+	
+	@Test
+	public void testCpCopiesFileToNewLocation() throws IOException {
+		scratch.write("file", "test".getBytes());
+		scratch.cp("file", "new");
+		assertTrue(scratch.exists("new"));
+		assertTrue(scratch.exists("file"));
+		assertArrayEquals("test".getBytes(), scratch.read("new"));
+		assertArrayEquals("test".getBytes(), scratch.read("file"));
+	}
+	
+	@Test
+	public void testCpDoesNotCreateHardlink() throws IOException {
+		scratch.write("file", "test".getBytes());
+		scratch.cp("file", "new");
+		scratch.write("file", "changed".getBytes());
+		assertArrayEquals("changed".getBytes(), scratch.read("file"));
+		assertArrayEquals("test".getBytes(), scratch.read("new"));
+	}
+	
+	@Test
+	public void testCpOverwritesIfNewLocationTaken() throws IOException {
+		scratch.write("file1", "test1".getBytes());
+		scratch.write("file2", "test2".getBytes());
+		
+		scratch.cp("file1", "file2");
+		
+		assertTrue(scratch.exists("file1"));
+		assertTrue(scratch.exists("file2"));
+		assertArrayEquals("test1".getBytes(), scratch.read("file2"));
+	}
+	
+	@Test
+	public void testCpCopiesFileIntoDirectoryIfDestIsDirectory() throws IOException {
+		scratch.write("file", "test".getBytes());
+		scratch.mkdir("dir");
+		scratch.cp("file", "dir");
+		assertTrue(scratch.exists("dir/file"));
+		assertTrue(scratch.exists("file"));
+		assertArrayEquals("test".getBytes(), scratch.read("dir/file"));
+	}
+	
+	@Test
+	public void testCpThrowsEISDIRIfDestIsDirectoryContainingFIlename() throws IOException {
+		scratch.write("file", "test".getBytes());
+		scratch.mkdir("dir");
+		scratch.mkdir("dir/file");
+		try {
+			scratch.cp("file", "dir");
+			fail("expected EISDIRException");
+		} catch(EISDIRException exc) {
+		}
+		
+		assertTrue(scratch.exists("dir/file"));
+		assertTrue(scratch.stat("dir/file").isDirectory());
+		assertTrue(scratch.exists("file"));
+		assertArrayEquals("test".getBytes(), scratch.read("file"));
 	}
 
 	@Test

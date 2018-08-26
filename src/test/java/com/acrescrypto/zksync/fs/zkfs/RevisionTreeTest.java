@@ -540,16 +540,18 @@ public class RevisionTreeTest {
 		int numParents = RevisionInfo.maxParentsForConfig(config);
 		ArrayList<RevisionTag> parents = new ArrayList<>(numParents);
 		RevisionTag[] revTags = new RevisionTag[numParents-1];
+		
 		for(int i = 0; i < numParents; i++) {
 			RevisionTag revTag = archive.openBlank().commit();
-			if(i < numParents-1) {
-				revTags[i] = revTag;
-			}
 			parents.add(revTag);
 		}
-		parents.sort(null);
 		
+		parents.sort(null);
 		int numChildren = 8;
+		
+		for(int i = 0; i < numParents - 1; i++) {
+			revTags[i] = parents.get(i);
+		}
 		
 		ArrayList<RevisionTag> children = new ArrayList<>(numChildren);
 		for(int i = 0; i < numChildren; i++) {
@@ -557,7 +559,6 @@ public class RevisionTreeTest {
 			children.add(child);
 		}
 	
-		// TODO DHT: (itf) 8/24 linux bdebe5e
 		assertEquals(parents.get(0), tree.commonAncestor(children));
 	}
 	

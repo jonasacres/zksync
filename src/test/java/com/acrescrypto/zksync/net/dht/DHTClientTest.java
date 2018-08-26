@@ -552,40 +552,47 @@ public class DHTClientTest {
 	
 	@Test
 	public void testAddRecordCallsAddRecordOnClosestPeersForID() throws IOException, InvalidBlacklistException {
-		DHTID searchId = client.id.flip(); // ensure that the client is NOT one of the closest results
-		try(TestNetwork network = new TestNetwork(16)) {
-			MutableInt numFindNode = new MutableInt();
-			MutableInt numReceived = new MutableInt();
-			
-			network.setHandlerForClosest(searchId, DHTSearchOperation.maxResults, (remote)->{
-				DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
-				assertArrayEquals(searchId.rawId, findNodeMsg.payload);
-				synchronized(numFindNode) { numFindNode.increment();  }
-				findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, DHTSearchOperation.maxResults)).send();
+		long itr = 0;
+		while(true) {
+			System.out.println("itr=" + itr++);
+			afterEach();
+			beforeEach();
+			DHTID searchId = client.id.flip(); // ensure that the client is NOT one of the closest results
+			try(TestNetwork network = new TestNetwork(16)) {
+				MutableInt numFindNode = new MutableInt();
+				MutableInt numReceived = new MutableInt();
 				
-				DHTMessage addRecordMsg = remote.receivePacket(DHTMessage.CMD_ADD_RECORD);
-				synchronized(numReceived) { numReceived.increment(); }
-				addRecordMsg.assertValidAuthTag();
+				network.setHandlerForClosest(searchId, DHTSearchOperation.maxResults, (remote)->{
+					DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
+					assertArrayEquals(searchId.rawId, findNodeMsg.payload);
+					synchronized(numFindNode) { numFindNode.increment();  }
+					findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, DHTSearchOperation.maxResults)).send();
+					
+					DHTMessage addRecordMsg = remote.receivePacket(DHTMessage.CMD_ADD_RECORD);
+					synchronized(numReceived) { numReceived.increment(); }
+					addRecordMsg.assertValidAuthTag();
+					
+					ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);
+					byte[] id = new byte[client.idLength()];
+					payload.get(id);
+					assertArrayEquals(searchId.rawId, id);
+					
+					byte[] recordBytes = new byte[payload.remaining()];
+					payload.get(recordBytes);
+					assertArrayEquals(makeBogusAd(0).serialize(), recordBytes);
+				});
 				
-				ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);
-				byte[] id = new byte[client.idLength()];
-				payload.get(id);
-				assertArrayEquals(searchId.rawId, id);
+				client.routingTable.reset();
+				for(RemotePeer remote : network.remotes) {
+					client.addPeer(remote.peer);
+				}
 				
-				byte[] recordBytes = new byte[payload.remaining()];
-				payload.get(recordBytes);
-				assertArrayEquals(makeBogusAd(0).serialize(), recordBytes);
-			});
-			
-			client.routingTable.reset();
-			for(RemotePeer remote : network.remotes) {
-				client.addPeer(remote.peer);
+				client.addRecord(searchId, makeBogusAd(0));
+				network.run();
+				
+				// TODO DHT: (itf) 8/25/18 linux 3abb4e3 AssertionError: expected<8> but was:<0>
+				assertEquals(DHTSearchOperation.maxResults, numReceived.intValue());
 			}
-			
-			client.addRecord(searchId, makeBogusAd(0));
-			network.run();
-							
-			assertEquals(DHTSearchOperation.maxResults, numReceived.intValue());
 		}
 	}
 	

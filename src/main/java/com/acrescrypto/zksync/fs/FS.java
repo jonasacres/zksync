@@ -8,6 +8,9 @@ import java.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.EISDIRException;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
+
 public abstract class FS {
 	public abstract Stat stat(String path) throws IOException;
 	public abstract Stat lstat(String path) throws IOException;
@@ -76,16 +79,39 @@ public abstract class FS {
 		}
 	}
 	
-	// TODO DHT: (test) Test FS.mv
 	public void mv(String oldPath, String newPath) throws IOException {
+		try {
+			Stat stat;
+			stat = stat(newPath);
+			if(stat.isDirectory()) {
+				newPath = Paths.get(newPath, basename(oldPath)).toString();
+				stat = stat(newPath);
+				if(stat.isDirectory()) {
+					throw new EISDIRException(newPath);
+				}
+			} else {
+				unlink(newPath);
+			}
+		} catch(ENOENTException exc) {}
+		
 		link(oldPath, newPath);
 		unlink(oldPath);
 	}
 	
-	// TODO DHT: (test) Test FS.cp
 	public void cp(String oldPath, String newPath) throws IOException {
+		try {
+			Stat stat = stat(newPath);
+			if(stat.isDirectory()) {
+				newPath = Paths.get(newPath, basename(oldPath)).toString();
+				stat = stat(newPath);
+				if(stat.isDirectory()) {
+					throw new EISDIRException(newPath);
+				}
+			}
+		} catch(ENOENTException exc) {}
+		
 		File in = open(oldPath, File.O_RDONLY);
-		File out = open(newPath, File.O_WRONLY);
+		File out = open(newPath, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
 		
 		byte[] buf = new byte[(int) Math.min(64*1024, in.getStat().getSize())];
 		while(in.hasData()) {

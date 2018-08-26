@@ -120,12 +120,15 @@ public class RevisionTree {
 			makeFlush();
 			while(true) {
 				RevisionTag common = commonAncestorAtLevel();
+				
 				if(common != null) {
 					return common;
 				}
+				
 				if(items.get(0).height == 0) {
 					return RevisionTag.blank(config);
 				}
+				
 				recurse();
 			}
 		}

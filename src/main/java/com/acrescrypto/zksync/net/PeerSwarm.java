@@ -414,7 +414,6 @@ public class PeerSwarm implements BlacklistCallback {
 		pool.addRevision(priority, revTag);
 	}
 	
-	// TODO DHT: test requestRevisionDetails
 	public void requestRevisionDetails(int priority, RevisionTag revTag) {
 		pool.addRevisionDetails(priority, revTag);
 	}
