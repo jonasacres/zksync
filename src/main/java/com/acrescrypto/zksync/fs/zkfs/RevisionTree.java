@@ -283,19 +283,14 @@ public class RevisionTree {
 	protected void validateParentList(RevisionTag revTag, Collection<RevisionTag> parents) {
 		long parentHash;
 		
-		if(parents.size() == 1) {
-			RevisionTag parent = parents.iterator().next();
-			parentHash = ByteBuffer.wrap(config.archive.crypto.hash(parent.getBytes())).getLong();
-		} else {
-			ArrayList<RevisionTag> sorted = new ArrayList<>(parents);
-			sorted.sort(null);
-			
-			HashContext ctx = config.getCrypto().startHash();
-			for(RevisionTag parent : sorted) {
-				ctx.update(parent.getBytes());
-			}
-			parentHash = Util.shortTag(ctx.finish());
+		ArrayList<RevisionTag> sorted = new ArrayList<>(parents);
+		sorted.sort(null);
+		
+		HashContext ctx = config.getCrypto().startHash();
+		for(RevisionTag parent : sorted) {
+			ctx.update(parent.getBytes());
 		}
+		parentHash = Util.shortTag(ctx.finish());
 		
 		if(parentHash != revTag.parentHash) {
 			throw new SecurityException("parent hash for " + Util.bytesToHex(revTag.getBytes(), 4) + " does not match; expected " + String.format("%016x", revTag.parentHash) + " got " + String.format("%016x", parentHash));

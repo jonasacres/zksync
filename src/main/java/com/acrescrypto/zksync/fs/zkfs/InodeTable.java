@@ -151,10 +151,6 @@ public class InodeTable extends ZKFile {
 	}
 	
 	protected long makeParentHash(ArrayList<RevisionTag> parents) {
-		if(parents.size() == 1) {
-			return ByteBuffer.wrap(zkfs.archive.crypto.hash(parents.get(0).getBytes())).getLong();
-		}
-		
 		HashContext ctx = zkfs.archive.crypto.startHash();
 		parents.sort(null);
 		for(RevisionTag parent : parents) {
