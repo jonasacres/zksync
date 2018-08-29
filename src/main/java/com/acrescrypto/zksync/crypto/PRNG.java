@@ -34,4 +34,8 @@ public class PRNG {
 	public long getLong() {
 		return rng.nextLong();
 	}
+	
+	public int getInt(int bound) {
+		return rng.nextInt(bound);
+	}
 }
