@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
@@ -142,7 +143,7 @@ public class TCPHandshakeContext {
 	int timeIndex;
 	int peerType;
 	byte[] halfEphSecret, staticSecret, ephSecret, random;
-	byte[] clientRequestHash, serverRequestHash;
+	HashContext clientRequestHash, serverResponseHash;
 	boolean seenBootstrap, seenAuth, roleIsClient;
 	
 	InputStream in;
@@ -182,6 +183,9 @@ public class TCPHandshakeContext {
 	public byte[] handshake() throws IOException, ProtocolViolationException {
 		byte[] secret = null;
 		this.timeout = new SnoozeThread(connectionTimeoutMs, false, ()->abort("Handshake failed to complete in " + connectionTimeoutMs + "ms"));
+		this.serverResponseHash = crypto.startHash();
+		this.clientRequestHash = crypto.startHash();
+		
 		try {
 			if(roleIsClient) {
 				secret = performHandshakeAsClient();
@@ -275,8 +279,8 @@ public class TCPHandshakeContext {
 		byte[] material = Util.concat(
 				staticSecret,
 				ephSecret,
-				clientRequestHash,
-				serverRequestHash,
+				clientRequestHash.finish(),
+				serverResponseHash.finish(),
 				swarm.config.getAccessor().getSeedRoot().getRaw(),
 				swarm.config.getArchiveId()
 				);
@@ -300,7 +304,9 @@ public class TCPHandshakeContext {
 		byte[] authentication = assembleClientAuthenticationCiphertext(1, clientRequestKey, RECORD_TYPE_NONE, (short) padding.length);
 		byte[] bootstrap = assembleClientBootstrapCiphertext(0, bootstrapKey, RECORD_TYPE_CLIENT_AUTH, (short) authentication.length);
 		
-		return Util.concat(random, bootstrap, authentication, padding);
+		byte[] clientRequest = Util.concat(random, bootstrap, authentication, padding);
+		clientRequestHash.update(clientRequest);
+		return clientRequest;
 	}
 	
 	protected byte[] assembleClientBootstrapCiphertext(int index, Key key, int nextType, int nextLen) {
@@ -329,7 +335,9 @@ public class TCPHandshakeContext {
 		byte[] padding = assembleRandomPadding();
 		byte[] authentication = assembleServerAuthenticationCiphertext(sendRealProof, 1, serverResponseKey, RECORD_TYPE_NONE, padding.length);
 		byte[] bootstrap = assembleServerBootstrapCiphertext(0, serverResponseKey, RECORD_TYPE_SERVER_AUTH, authentication.length);
-		return Util.concat(bootstrap, authentication);
+		byte[] serverResponse = Util.concat(bootstrap, authentication);
+		serverResponseHash.update(serverResponse);
+		return serverResponse;
 	}
 	
 	protected byte[] assembleServerBootstrapCiphertext(int index, Key key, int nextType, int nextLen) {
@@ -375,6 +383,7 @@ public class TCPHandshakeContext {
 		    expectedLen = (short) crypto.symPaddedCiphertextSize(clientBootstrapPlaintextLen());
 		while(expectedLen > 0) {
 			byte[] rawRecord = IOUtils.readFully(in, expectedLen);
+			clientRequestHash.update(rawRecord);
 			if(expectedType == RECORD_TYPE_CLIENT_BOOTSTRAP) {
 				handleClientBootstrap(rawRecord);
 			} else if(expectedType != RECORD_TYPE_NONE) {
@@ -463,6 +472,7 @@ public class TCPHandshakeContext {
 		    expectedLen = (short) crypto.symPaddedCiphertextSize(serverBootstrapPlaintextLen());
 		while(expectedLen > 0) {
 			byte[] rawRecord = IOUtils.readFully(in, expectedLen);
+			serverResponseHash.update(rawRecord);
 			if(expectedType != RECORD_TYPE_NONE) {
 				ByteBuffer record = ByteBuffer.wrap(serverResponseKey.decrypt(crypto.symNonce(index++), rawRecord));
 				int newExpectedType = Util.unsignShort(record.getShort());
