@@ -1,6 +1,9 @@
 package com.acrescrypto.zksync.crypto;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+
+import com.acrescrypto.zksync.utility.Util;
 
 public class Key {
 	private byte[] raw;
@@ -71,8 +74,26 @@ public class Key {
 	public byte[] getRaw() {
 		return raw;
 	}
+	
+	public void destroy() {
+		if(raw != null) {
+			Util.blank(raw);
+			raw = null;
+		}
+		
+		crypto = null;
+	}
 
 	public CryptoSupport getCrypto() {
 		return crypto;
+	}
+	
+	public boolean equals(Object other) {
+		if(!(other instanceof Key)) return false;
+		return Arrays.equals(raw, ((Key) other).raw);
+	}
+	
+	public String toString() {
+		return "Key fingerprint=" + Util.bytesToHex(crypto.hash(raw), 4);
 	}
 }

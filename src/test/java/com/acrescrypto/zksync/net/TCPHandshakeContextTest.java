@@ -1,5 +1,7 @@
 package com.acrescrypto.zksync.net;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
@@ -13,14 +15,17 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.PassphraseProvider;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.utility.Util;
 
 public class TCPHandshakeContextTest {
 	CryptoSupport crypto;
@@ -30,6 +35,8 @@ public class TCPHandshakeContextTest {
 	PeerSwarm cSwarm, sSwarm;
 	TCPHandshakeContext cHandshake, sHandshake;
 	Socket cSocket, sSocket; // cSocket -> socket held by client (server is remote peer)
+	Exception sException;
+	Key sSecret;
 	
 	class DummyTCPPeerSocketListener extends TCPPeerSocketListener {
 		public DummyTCPPeerSocketListener(ZKMaster master, int port) throws IOException {
@@ -65,7 +72,8 @@ public class TCPHandshakeContextTest {
 	}
 	
 	@Before
-	public void beforeEach() throws IOException {
+	public void beforeEach() throws IOException, InvalidBlacklistException {
+		TCPHandshakeContext.handshakeTimeoutMs = 1000;
 		crypto = new CryptoSupport();
 		
 		cMaster = ZKMaster.openBlankTestVolume("client");
@@ -73,7 +81,7 @@ public class TCPHandshakeContextTest {
 		cConfig = cArchive.getConfig();
 		cSwarm = cConfig.getSwarm();
 		
-		sMaster = DummyMaster.openBlankTestVolume("server");
+		sMaster = new DummyMaster(crypto, RAMFS.volumeWithName("server"), cMaster.getPassphraseProvider());
 		sArchive = sMaster.createDefaultArchive();
 		sConfig = sArchive.getConfig();
 		sSwarm = sConfig.getSwarm();
@@ -84,6 +92,8 @@ public class TCPHandshakeContextTest {
 		sMaster.listenOnTCP(0);
 		sMaster.getTCPListener().advertise(sSwarm);
 		
+		assertTrue(Util.waitUntil(100, ()->sMaster.getTCPListener().port > 0));
+		assertTrue(Util.waitUntil(100, ()->cMaster.getTCPListener().port > 0));
 		cSocket = new Socket("localhost", sMaster.getTCPListener().getPort());
 		cHandshake = new TCPHandshakeContext(cSwarm, cSocket, sSwarm.getPublicIdentityKey());
 	}
@@ -96,10 +106,7 @@ public class TCPHandshakeContextTest {
 		sConfig.close();
 		sMaster.close();
 		
-		TCPHandshakeContext.minPaddingBytes = TCPHandshakeContext.MIN_PADDING_BYTES_DEFAULT;
-		TCPHandshakeContext.maxPaddingBytes = TCPHandshakeContext.MAX_PADDING_BYTES_DEFAULT;
-		TCPHandshakeContext.timesliceExpirationGraceTimeMs = TCPHandshakeContext.TIMESLICE_EXPIRATION_GRACE_TIME_MS_DEFAULT;
-		TCPHandshakeContext.connectionTimeoutMs = TCPHandshakeContext.CONNECTION_TIMEOUT_MS_DEFAULT;
+		TCPHandshakeContext.handshakeTimeoutMs = TCPHandshakeContext.HANDSHAKE_TIMEOUT_MS_DEFAULT;
 	}
 	
 	@AfterClass
@@ -108,10 +115,23 @@ public class TCPHandshakeContextTest {
 		TestUtils.assertTidy();
 	}
 	
+	public void doServerHandshake() {
+		new Thread(()->{
+			try {
+				assertTrue(Util.waitUntil(500, ()->sHandshake != null));
+				sSecret = sHandshake.establishSecret();
+			} catch (IOException | ProtocolViolationException exc) {
+				sException = exc;
+			}
+		}).start();
+	}
+	
 	// TODO: establishes shared secret
 	@Test
 	public void testEstablishesSharedSecret() throws IOException, ProtocolViolationException {
-		cHandshake.handshake();
+		doServerHandshake();
+		Key cSecret = cHandshake.establishSecret();
+		assertEquals(cSecret, sSecret);
 	}
 	
 	// TODO: sets peer type to FULL if both parties have passphrase

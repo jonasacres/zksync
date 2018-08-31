@@ -273,4 +273,10 @@ public class Util {
 		if(a.length < b.length) return -1;
 		return 1;
 	}
+	
+	public static void blank(byte[] array) {
+		for(int i = 0; i < array.length; i++) {
+			array[i] = 0;
+		}
+	}
 }

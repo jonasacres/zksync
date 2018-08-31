@@ -7,11 +7,8 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 
 import org.apache.commons.io.IOUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
-import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
@@ -28,211 +25,380 @@ import com.acrescrypto.zksync.utility.Util;
  * All traffic other than the initial bootstrap message is indistinguishable from random to an
  * observer lacking either the client or server's ephemeral and static keypairs.
  * 
- * Tampering with any of the traffic, even with perfect knowledge, results in a failure to
- * agree upon a shared secret.
+ * Tampering with any of the traffic, even with perfect knowledge of the keys, results in a failure
+ * to arrive at a shared secret. This failure is detectable to one or both legitimate parties.
  * 
  * Handshake requires one request-response cycle.
- * 
- * client_request:
- *   random_salt (plaintext)
- *   client_bootstrap_record (encrypt with bootstrap_key, nonce=0)
- *   client_auth_record (encrypt with client_request_key, nonce=1)
- *   [future records?]  (encrypt with client_request_key, nonce=2, ...)
- *   padding (plaintext)
- * server_response:
- *   server_bootstrap_record (encrypt with server_response_key, nonce=0)
- *   server_auth_record (encrypt with server_response_key, nonce=1)
- *   [future records?] (encrypt with server_response_key, nonce=2, ...)
- *   padding (plaintext)
+ *
+ * Client:
+ *   rng[32]
+ *   bootstrap[fixed, key <- client_bootstrap_key, nonce=0]
+ *     ct_len[2]
+ *     pad_len[2]
+ *     client_eph_pubkey
+ *     zero[16]
+ *   ciphertext[variable, key <- client_handshake_key, nonce=0]
+ *     auth_record
+ *       type[2]
+ *       length[2]
+ *       time_index[4]
+ *       listen_tcp_port[2]
+ *       client_static_pubkey
+ *       key_proof
+ *     future records...
+ *   random padding
  *   
- * random_salt: random bytes, length=RANDOM_SALT_BYTES
- * bootstrap_key: H(seed_root || archive_id || server_static_pubkey || random_salt)
- * client_request_key: H(DH(client_eph_key, server_static_key) || 0)
- * server_response_key: H(DH(client_eph_key, server_static_key) || 1)
+ * Server:
+ *   bootstrap[fixed, key <- server_bootstrap_key, nonce=0]
+ *     ct_len[2]
+ *     pad_len[2]
+ *     server_eph_pubkey
+ *     zero[16]
+ *   ciphertext[variable, key <- server_handshake_key, nonce=0]
+ *     auth_record
+ *       type[2]
+ *       length[2]
+ *       time_index[4]
+ *       listen_tcp_port[2]
+ *       server_static_pubkey
+ *       key_proof
+ *     future records...
+ *   random padding
+ *   secret_confirmation[32]
  * 
+ * client_bootstrap_key: H(server_static || seed_key || archive_id || rng)
+ * client_handshake_key: H(client_bootstrap_key || client_bootstrap_ciphertext || DH(client_eph, server_static) || client_eph_pubkey || server_static_pubkey)
+ * server_bootstrap_key: H(client_handshake_key || client_handshake_ciphertext || client_padding || DH(static) || client_static_pubkey || server_static_pubkey)
+ * server_handshake_key: H(server_bootstrap_key || server_bootstrap_ciphertext || DH(eph) || client_eph_pubkey || server_eph_pubkey)
  * 
- * record_header:
- *   next_type (1 byte, type code of next record)
- *   next_len (2 bytes, length of next record ciphertext)
- * 
- * client_bootstrap_record:
- *   record header
- *   reserved (fix to zero, len=BOOTSTRAP_RESERVED_BYTES)
- *   client_ephemeral_pubkey (public DH key specific to this connection)
- *   (encrypt client_bootstrap_record using bootstrap_key)
- * 
- * client_auth_record:
- *   record_header
- *   port_num (2 bytes, TCP port number client is listening on for inbound connections, or 0 if not listening)
- *   time_index (4 bytes, number of timeslices elapsed since epoch start)
- *   client_static_key (public DH key client uses when accepting connections)
- *   temporal_proof (symmetric key or random, serves as zero-knowledge proof of knowledge of archive passphrase)
- * 
- * server_bootstrap_record:
- *   record_header
- *   reserved (fix to zero, len=BOOTSTRAP_RESERVED_BYTES)
- *   client_static_key (public DH key client uses when accepting connections)
- *   client_temporal_proof (symmetric key or random, serves as zero-knowledge proof of knowledge of archive passphrase)
- *   
- * server_auth_record:
- *   record_header
- *   server_temporal_proof (symmetric key or random, serves as zero-knowledge proof of knowledge of archive passphrase)
- * 
- * padding:
- *   Arbitrary random bytes to create variable message length. Padding size indicated as a final record of type 0 (NONE).
- *   
- * Records sent from client to server have a type code between 0x01 and 0x7f, inclusive.
- * Records sent from server to client have a type code between 0x80 and 0xff, inclusive.
- * 
- * The record type 0 (NONE) is ignored, and must be the next_type indicated in the final record.
- * Bytes for the NONE record are read from the socket, but not decrypted. They are included in the
- * client and server message hashes when generating the secret.
- * 
- * shared_secret: H(DH(static_keys) || DH(eph_keys) || H(client_request) || H(server_response) || seed_root || archive_id)
- * 
- * DH = diffie hellman (x25519 in current implementation)
- * static_keys = static dh key by each peer, listed in advertisement on DHT
- * eph_keys = ephemeral dh key generated by each peer for this connection only
- * seed_root = non-archive-specific secret derived from passphrase hash and given to blind seeds
- * archive_id = archive-specific identifier. never given out to anyone lacking seed root
+ * secret: H(server_handshake_key || server_handshake_ciphertext || server_padding)
+ * secret_confirmation: A(secret, client_key_proof || server_key_proof)
  */
 
 public class TCPHandshakeContext {
-	public final static int RECORD_TYPE_NONE = 0x00; // no record expected
-	public final static int RECORD_TYPE_CLIENT_BOOTSTRAP = 0x01; // never actually referenced but use it as a placeholder
-	public final static int RECORD_TYPE_CLIENT_AUTH = 0x02;
-	public final static int RECORD_TYPE_CLIENT_MIN = RECORD_TYPE_CLIENT_BOOTSTRAP;
-	public final static int RECORD_TYPE_CLIENT_MAX_SUPPORTED = RECORD_TYPE_CLIENT_AUTH;
-	public final static int RECORD_TYPE_CLIENT_MAX_ABSOLUTE = 0x7f;
+	public final static int BOOTSTRAP_RESERVED_LEN = 16;
+	public final static int MAX_HANDSHAKE_ELEMENT_SIZE = 16384;
+	public final static int MAX_PADDING_LEN = 1024;
 	
-	public final static int RECORD_TYPE_SERVER_BOOTSTRAP = 0x80; // never referenced but reserve a type code
-	public final static int RECORD_TYPE_SERVER_AUTH = 0x81;
-	public final static int RECORD_TYPE_SERVER_MIN = RECORD_TYPE_SERVER_BOOTSTRAP;
-	public final static int RECORD_TYPE_SERVER_MAX_SUPPORTED = RECORD_TYPE_SERVER_AUTH;
-	public final static int RECORD_TYPE_SERVER_MAX_ABSOLUTE = 0xff;
+	public final static int HANDSHAKE_TIMEOUT_MS_DEFAULT = 10*10000;
+	public static int handshakeTimeoutMs = HANDSHAKE_TIMEOUT_MS_DEFAULT;
 	
-	public final static int RANDOM_SALT_BYTES = 32;
-	public final static int BOOTSTRAP_RESERVED_BYTES = 16;
-	public final static int RECORD_HEADER_LEN = 1 + 2;
-
-	public final static int TIMESLICE_EXPIRATION_GRACE_TIME_MS_DEFAULT = 10000; // allow timeslices to be accepted this many milliseconds before/after the timeslice actually takes place on our clock
-	public final static int CONNECTION_TIMEOUT_MS_DEFAULT = 10000; // handshakes must complete within this many milliseconds
+	public final static short RECORD_TYPE_AUTH = 0;
 	
-	public final static int MIN_PADDING_BYTES_DEFAULT = 0;
-	public final static int MAX_PADDING_BYTES_DEFAULT = 2048;
-	
-	public static int minPaddingBytes = MIN_PADDING_BYTES_DEFAULT;
-	public static int maxPaddingBytes = MAX_PADDING_BYTES_DEFAULT;
-	public static int timesliceExpirationGraceTimeMs = TIMESLICE_EXPIRATION_GRACE_TIME_MS_DEFAULT;
-	public static int connectionTimeoutMs = CONNECTION_TIMEOUT_MS_DEFAULT;
-
-	protected Logger logger = LoggerFactory.getLogger(TCPHandshakeContext.class);
-	
-	PrivateDHKey localEphKey, localStaticKey;
-	PublicDHKey clientEphKey, clientStaticKey;
-	PublicDHKey serverEphKey, serverStaticKey;
-	Socket socket;
 	PeerSwarm swarm;
+	PublicDHKey remoteStaticKey, remoteEphKey;
+	PrivateDHKey localStaticKey, localEphKey;
+	Key currentKey;
 	CryptoSupport crypto;
 	TCPPeerSocketListener listener;
-	SnoozeThread timeout;
 	
-	Key clientRequestKey, serverResponseKey, bootstrapKey;
-	
-	int clientPortNum;
-	int timeIndex;
-	int peerType;
-	byte[] halfEphSecret, staticSecret, ephSecret, random;
-	HashContext clientRequestHash, serverResponseHash;
-	boolean seenBootstrap, seenAuth, roleIsClient;
-	
+	Socket socket;
 	InputStream in;
 	OutputStream out;
+	SnoozeThread timeout;
 	
-	// TODO DHT: (test) Test this monster
+	byte[] secret, clientProof, serverProof;
+	boolean roleIsClient;
+	int remotePort, peerType;
 	
 	public TCPHandshakeContext(PeerSwarm swarm, Socket socket, PublicDHKey serverStaticKey) throws IOException {
-		this.random = crypto.rng(RANDOM_SALT_BYTES);
-		this.serverStaticKey = serverStaticKey;
+		// act as client
 		this.roleIsClient = true;
-		this.swarm = swarm;
 		this.socket = socket;
-		this.timeIndex = swarm.config.getAccessor().timeSliceIndex();
-		this.clientPortNum = localPortNum();
-		
+		this.crypto = swarm.config.getCrypto();
+		this.remoteStaticKey = serverStaticKey;
+		this.localStaticKey = swarm.identityKey;
+		this.swarm = swarm;
 		initStreams();
-		initAsymKeys();
-		initExchangeKeys();
-
-		this.clientEphKey = localEphKey.publicKey();
-		this.clientStaticKey = localStaticKey.publicKey();
-		this.halfEphSecret = localEphKey.sharedSecret(serverStaticKey);
-		this.bootstrapKey = makeBootstrapKey(swarm, serverStaticKey);
 	}
 	
 	public TCPHandshakeContext(TCPPeerSocketListener listener, Socket socket) throws IOException {
+		// act as server
 		this.listener = listener;
 		this.socket = socket;
-		this.serverStaticKey = localStaticKey.publicKey();
-		this.serverEphKey = localEphKey.publicKey();
-		this.roleIsClient = false;
-		
+		this.crypto = listener.crypto;
 		initStreams();
 	}
 	
-	public byte[] handshake() throws IOException, ProtocolViolationException {
-		byte[] secret = null;
-		this.timeout = new SnoozeThread(connectionTimeoutMs, false, ()->abort("Handshake failed to complete in " + connectionTimeoutMs + "ms"));
-		this.serverResponseHash = crypto.startHash();
-		this.clientRequestHash = crypto.startHash();
-		
-		try {
-			if(roleIsClient) {
-				secret = performHandshakeAsClient();
-			} else {
-				secret = performHandshakeAsServer();
+	public Key establishSecret() throws IOException, ProtocolViolationException {
+		timeout = new SnoozeThread(handshakeTimeoutMs, false, ()->{
+			try {
+				if(!socket.isClosed()) {
+					socket.close();
+				}
+			} catch (IOException exc) {
+				exc.printStackTrace();
 			}
-		} catch(ProtocolViolationException exc) {
-			abort("Encountered protocol violation");
-			throw exc;
-		} finally {
-			timeout.cancel();
-			destroyEphemeralKeys();
+		});
+		
+		if(roleIsClient) {
+			doClientHandshake();
+		} else {
+			doServerHandshake();
 		}
 		
-		return secret;
+		timeout.cancel();
+		
+		remoteEphKey.destroy();
+		localEphKey.destroy();	
+		return currentKey;
 	}
 	
-	public void abort(String reason) {
-		try {
-			socket.close();
-		} catch (IOException exc) {
-			logger.info("Aborted connection to " + socket.getInetAddress().getHostAddress() + ":" + socket.getPort() + " roleIsClient=" + roleIsClient + ", reason=\"" + reason + "\"");
-		}
+	protected void doClientHandshake() throws IOException, ProtocolViolationException {
+		sendClientRequest();
+		receiveServerResponse();
 	}
 	
-	protected Key makeBootstrapKey(PeerSwarm swarm, PublicDHKey staticKey) {
-		return new Key(crypto, crypto.makeSymmetricKey(Util.concat(
+	protected int bootstrapPlaintextLen() {
+		return 2 + 2 + crypto.asymPublicDHKeySize() + BOOTSTRAP_RESERVED_LEN;
+	}
+
+	protected int authRecordPlaintextLen() {
+		return 2 + 2 + 4 + 2 + crypto.asymPublicDHKeySize() + crypto.symKeyLength();
+	}
+
+	protected void sendClientRequest() throws IOException {
+		this.localEphKey = crypto.makePrivateDHKey();
+		byte[] clientRandom = crypto.rng(crypto.hashLength());
+		int ctLen = crypto.symUnpaddedCiphertextSize(authRecordPlaintextLen()),
+				padLen = crypto.defaultPrng().getInt(MAX_PADDING_LEN);
+		updateKey(remoteStaticKey.getBytes(),
 				swarm.config.getAccessor().getSeedRoot().getRaw(),
 				swarm.config.getArchiveId(),
-				staticKey.getBytes(),
-				random)));
+				clientRandom); // client_bootstrap_key
+		byte[] clientBootstrapCiphertext = currentKey.encrypt(crypto.symNonce(0),
+				assembleBootstrapPlaintext(ctLen, padLen),
+				-1);
+		
+		byte[] halfEphSecret = localEphKey.sharedSecret(remoteStaticKey);
+		updateKey(currentKey.getRaw(),
+				clientBootstrapCiphertext,
+				halfEphSecret,
+				localEphKey.publicKey().getBytes(),
+				remoteStaticKey.getBytes()); // client_handshake_key
+		Util.blank(halfEphSecret);
+		
+		byte[] clientAuthCiphertext = currentKey.encrypt(crypto.symNonce(0),
+				assembleAuthPlaintext(),
+				-1);
+		byte[] clientPadding = crypto.rng(padLen);
+		
+		byte[] staticSecret = localStaticKey.sharedSecret(remoteStaticKey);
+		updateKey(currentKey.getRaw(),
+				clientAuthCiphertext,
+				clientPadding,
+				staticSecret,
+				localStaticKey.publicKey().getBytes(),
+				remoteStaticKey.getBytes()); // server_bootstrap_key
+		Util.blank(staticSecret);
+		
+		byte[] payload = Util.concat(clientRandom, clientBootstrapCiphertext, clientAuthCiphertext, clientPadding);
+		out.write(payload);
 	}
 	
-	protected void initExchangeKeys() {
-		this.clientRequestKey = new Key(crypto, crypto.makeSymmetricKey(Util.concat(
-				halfEphSecret,
-				random,
-				new byte[] { 0x00 })));
-		this.serverResponseKey = new Key(crypto, crypto.makeSymmetricKey(Util.concat(
-				halfEphSecret,
-				random,
-				new byte[] { 0x01 })));
-	}
-	
-	protected void initAsymKeys() {
+	protected void sendServerResponse() throws IOException {
 		this.localEphKey = crypto.makePrivateDHKey();
-		this.localStaticKey = swarm.identityKey;
+		int ctLen = crypto.symUnpaddedCiphertextSize(authRecordPlaintextLen()),
+				padLen = crypto.defaultPrng().getInt(MAX_PADDING_LEN);
+		byte[] serverBootstrapCiphertext = currentKey.encrypt(crypto.symNonce(0),
+				assembleBootstrapPlaintext(ctLen, padLen),
+				-1);
+		
+		byte[] ephSecret = localEphKey.sharedSecret(remoteEphKey);
+		updateKey(currentKey.getRaw(),
+				serverBootstrapCiphertext,
+				ephSecret,
+				remoteEphKey.getBytes(),
+				localEphKey.publicKey().getBytes()); // server_handshake_key
+		Util.blank(ephSecret);
+		
+		byte[] serverAuthCiphertext = currentKey.encrypt(crypto.symNonce(0),
+				assembleAuthPlaintext(),
+				-1);
+		byte[] serverPadding = crypto.rng(padLen);
+		updateKey(currentKey.getRaw(),
+				serverAuthCiphertext,
+				serverPadding); // secret
+		byte[] secretConfirmation = currentKey.authenticate(Util.concat(clientProof, serverProof));
+		byte[] payload = Util.concat(serverBootstrapCiphertext, serverAuthCiphertext, serverPadding, secretConfirmation);
+		out.write(payload);
+	}
+
+	protected void receiveClientRequest() throws IOException, ProtocolViolationException {
+		byte[] clientEphKeyRaw = new byte[crypto.asymPublicDHKeySize()];
+		byte[] clientStaticKeyRaw = new byte[crypto.asymPublicDHKeySize()];
+		byte[] clientRandom = IOUtils.readFully(in, crypto.hashLength());
+		byte[] clientBootstrapCiphertext = IOUtils.readFully(in, crypto.symUnpaddedCiphertextSize(bootstrapPlaintextLen()));
+		clientProof = new byte[crypto.symKeyLength()];
+		
+		ByteBuffer clientBootstrapPlaintext = decipherBootstrap(clientBootstrapCiphertext, clientRandom);
+		
+		int ctLen = Util.unsignShort(clientBootstrapPlaintext.getShort());
+		int padLen = Util.unsignShort(clientBootstrapPlaintext.getShort());
+		assertState(ctLen <= MAX_HANDSHAKE_ELEMENT_SIZE && padLen <= MAX_HANDSHAKE_ELEMENT_SIZE);
+		
+		clientBootstrapPlaintext.get(clientEphKeyRaw);
+		remoteEphKey = crypto.makePublicDHKey(clientEphKeyRaw);
+		Util.blank(clientBootstrapPlaintext.array());
+		
+		byte[] halfEphSecret = localStaticKey.sharedSecret(remoteEphKey);
+		updateKey(currentKey.getRaw(),
+				clientBootstrapCiphertext,
+				halfEphSecret,
+				remoteEphKey.getBytes(),
+				localStaticKey.publicKey().getBytes()
+				); // client_handshake_key
+		Util.blank(halfEphSecret);
+		
+		byte[] clientAuthCiphertext = IOUtils.readFully(in, ctLen);
+		ByteBuffer clientAuthPlaintext = ByteBuffer.wrap(currentKey.decryptUnpadded(crypto.symNonce(0), clientAuthCiphertext));
+		assertState(clientAuthPlaintext.remaining() >= authRecordPlaintextLen());
+		assertState(clientAuthPlaintext.getShort() == 0); // first record MUST be auth
+		int length = Util.unsignShort(clientAuthPlaintext.getShort());
+		assertState(length <= clientAuthPlaintext.remaining());
+		
+		int timeslice = clientAuthPlaintext.getInt();
+		assertValidTimeslice(timeslice);
+		
+		remotePort = Util.unsignShort(clientAuthPlaintext.getShort());
+
+		clientAuthPlaintext.get(clientStaticKeyRaw);
+		remoteStaticKey = crypto.makePublicDHKey(clientStaticKeyRaw);
+		
+		clientAuthPlaintext.get(clientProof);
+		byte[] expectedProof = swarm.config.getAccessor().temporalProof(timeslice, 0, currentKey.getRaw());
+		if(Util.safeEquals(clientProof, expectedProof)) {
+			peerType = PeerConnection.PEER_TYPE_FULL;
+		} else {
+			peerType = PeerConnection.PEER_TYPE_BLIND;
+		}
+		
+		Util.blank(clientAuthPlaintext.array());
+
+		byte[] clientPadding = IOUtils.readFully(in, padLen);
+		byte[] staticSecret = localStaticKey.sharedSecret(remoteStaticKey);
+		updateKey(currentKey.getRaw(),
+				clientAuthCiphertext,
+				clientPadding,
+				staticSecret,
+				remoteStaticKey.getBytes(),
+				localStaticKey.publicKey().getBytes()); // server_bootstrap_key
+		Util.blank(staticSecret);
+	}
+	
+	protected void receiveServerResponse() throws IOException, ProtocolViolationException {
+		byte[] serverStaticKeyRaw = new byte[crypto.asymPublicDHKeySize()];
+		serverProof = new byte[crypto.symKeyLength()];
+		byte[] serverBootstrapCiphertext = new byte[crypto.symUnpaddedCiphertextSize(bootstrapPlaintextLen())];
+		byte[] remoteEphKeyRaw = new byte[crypto.asymPublicDHKeySize()];
+		IOUtils.readFully(in, serverBootstrapCiphertext);
+		
+		ByteBuffer serverBootstrapPlaintext = ByteBuffer.wrap(currentKey.decryptUnpadded(crypto.symNonce(0), serverBootstrapCiphertext));
+		int ctLen = Util.unsignShort(serverBootstrapPlaintext.getShort());
+		int padLen = Util.unsignShort(serverBootstrapPlaintext.getShort());
+		serverBootstrapPlaintext.get(remoteEphKeyRaw);
+		remoteEphKey = crypto.makePublicDHKey(remoteEphKeyRaw);
+		Util.blank(serverBootstrapPlaintext.array());
+		
+		assertState(ctLen <= MAX_HANDSHAKE_ELEMENT_SIZE && padLen <= MAX_HANDSHAKE_ELEMENT_SIZE);
+		
+		byte[] ephSecret = localEphKey.sharedSecret(remoteEphKey);
+		updateKey(currentKey.getRaw(),
+				serverBootstrapCiphertext,
+				ephSecret,
+				localEphKey.publicKey().getBytes(),
+				remoteEphKey.getBytes()); // server_handshake_key
+		Util.blank(ephSecret);
+		
+		byte[] serverAuthCiphertext = IOUtils.readFully(in, ctLen);
+		ByteBuffer serverAuthPlaintext = ByteBuffer.wrap(currentKey.decryptUnpadded(crypto.symNonce(0), serverAuthCiphertext));
+		assertState(serverAuthPlaintext.remaining() >= authRecordPlaintextLen());
+		assertState(serverAuthPlaintext.getShort() == 0); // first record MUST be auth
+		int length = Util.unsignShort(serverAuthPlaintext.getShort());
+		assertState(length <= serverAuthPlaintext.remaining());
+		
+		int timeslice = serverAuthPlaintext.getInt();
+		assertValidTimeslice(timeslice);
+		
+		int port = Util.unsignShort(serverAuthPlaintext.getShort());
+		assertState(port == socket.getPort());
+		
+		serverAuthPlaintext.get(serverStaticKeyRaw);
+		assertState(Util.safeEquals(remoteStaticKey.getBytes(), serverStaticKeyRaw));
+		
+		serverAuthPlaintext.get(serverProof);
+		byte[] expectedProof = swarm.config.getAccessor().temporalProof(timeslice, 1, currentKey.getRaw());
+		if(Util.safeEquals(serverProof, expectedProof)) {
+			peerType = PeerConnection.PEER_TYPE_FULL;
+		} else {
+			peerType = PeerConnection.PEER_TYPE_BLIND;
+		}
+
+		Util.blank(serverAuthPlaintext.array());
+		byte[] serverPadding = IOUtils.readFully(in, padLen);
+		updateKey(currentKey.getRaw(), serverAuthCiphertext, serverPadding); // secret
+		
+		byte[] expectedConfirmation = currentKey.authenticate(Util.concat(clientProof, serverProof));
+		byte[] secretConfirmation = IOUtils.readFully(in, crypto.hashLength());
+		assertState(Util.safeEquals(expectedConfirmation, secretConfirmation));
+	}
+	
+	protected byte[] assembleBootstrapPlaintext(int ctLen, int padLen) {
+		ByteBuffer buf = ByteBuffer.allocate(bootstrapPlaintextLen());
+		buf.putShort((short) ctLen);
+		buf.putShort((short) padLen);
+		buf.put(localEphKey.publicKey().getBytes());
+		// reserved section is just zeros
+		return buf.array();
+	}
+	
+	protected byte[] assembleAuthPlaintext() {
+		int timeSlice = swarm.config.getAccessor().timeSliceIndex();
+		byte[] proof = swarm.config.getAccessor().temporalProof(timeSlice,
+				roleIsClient ? 0 : 1,
+				currentKey.getRaw());
+		
+		if(roleIsClient) {
+			clientProof = proof;
+		} else {
+			serverProof = proof;
+		}
+		
+		ByteBuffer buf = ByteBuffer.allocate(authRecordPlaintextLen());
+		buf.putShort((short) RECORD_TYPE_AUTH);
+		buf.putShort((short) (buf.capacity()-4)); // don't count type or length fields to total length
+		buf.putInt(timeSlice);
+		buf.putShort((short) localTCPPort());
+		buf.put(localStaticKey.publicKey().getBytes());
+		buf.put(roleIsClient ? clientProof : serverProof);
+		
+		return buf.array();
+	}
+	
+	protected void doServerHandshake() throws IOException, ProtocolViolationException {
+		receiveClientRequest();
+		sendServerResponse();
+	}
+	
+	protected ByteBuffer decipherBootstrap(byte[] clientBootstrapCiphertext, byte[] clientRandom) throws ProtocolViolationException {
+		for(TCPPeerAdvertisementListener adListener : listener.adListeners) {
+			byte[] material = Util.concat(adListener.swarm.identityKey.publicKey().getBytes(),
+					adListener.swarm.config.getAccessor().getSeedRoot().getRaw(),
+					adListener.swarm.config.getArchiveId(),
+					clientRandom);
+			Key candidateKey = new Key(crypto, crypto.makeSymmetricKey(material));
+			try {
+				byte[] plaintext = candidateKey.decryptUnpadded(crypto.symNonce(0), clientBootstrapCiphertext);
+				this.localStaticKey = adListener.swarm.identityKey;
+				this.swarm = adListener.swarm;
+				currentKey = candidateKey;
+				return ByteBuffer.wrap(plaintext);
+			} catch(SecurityException exc) {
+				// bad decrypt means we're trying the wrong ad
+			}
+		}
+		
+		throw new ProtocolViolationException();
 	}
 	
 	protected void initStreams() throws IOException {
@@ -240,312 +406,37 @@ public class TCPHandshakeContext {
 		out = socket.getOutputStream();
 	}
 	
-	protected void destroyEphemeralKeys() {
-		zeroBuffer(localEphKey.getBytes());
-		zeroBuffer(halfEphSecret);
-		zeroBuffer(ephSecret);
-		zeroBuffer(staticSecret);
-		zeroBuffer(random);
-		zeroBuffer(clientRequestKey.getRaw());
-		zeroBuffer(serverResponseKey.getRaw());
-		zeroBuffer(bootstrapKey.getRaw());
-	}
-	
-	protected void zeroBuffer(byte[] buf) {
-		for(int i = 0; i < buf.length; i++) {
-			buf[i] = 0;
-		}
-	}
-	
-	protected byte[] performHandshakeAsClient() throws IOException, ProtocolViolationException {
-		out.write(assembleClientRequest());
-		processServerResponse();
-		
-		ephSecret = localEphKey.sharedSecret(serverEphKey);
-		staticSecret = localStaticKey.sharedSecret(serverStaticKey);
-		return calculateSecret();
-	}
-	
-	protected byte[] performHandshakeAsServer() throws IOException, ProtocolViolationException {
-		processClientRequest();
-		out.write(assembleServerResponse(peerType == PeerConnection.PEER_TYPE_FULL));
-
-		ephSecret = localEphKey.sharedSecret(clientEphKey);
-		staticSecret = localStaticKey.sharedSecret(clientStaticKey);
-		return calculateSecret();
-	}
-	
-	protected byte[] calculateSecret() {
-		byte[] material = Util.concat(
-				staticSecret,
-				ephSecret,
-				clientRequestHash.finish(),
-				serverResponseHash.finish(),
-				swarm.config.getAccessor().getSeedRoot().getRaw(),
-				swarm.config.getArchiveId()
-				);
-		byte[] secret = crypto.hash(material);
-		zeroBuffer(material);
-		return secret;
-	}
-	
-	/** message assembly */
-	
-	protected int clientBootstrapPlaintextLen() {
-		return RECORD_HEADER_LEN + BOOTSTRAP_RESERVED_BYTES + crypto.asymPublicDHKeySize();
-	}
-	
-	protected int serverBootstrapPlaintextLen() {
-		return RECORD_HEADER_LEN + BOOTSTRAP_RESERVED_BYTES + crypto.asymPublicDHKeySize();
-	}
-	
-	protected byte[] assembleClientRequest() {
-		byte[] padding = assembleRandomPadding();
-		byte[] authentication = assembleClientAuthenticationCiphertext(1, clientRequestKey, RECORD_TYPE_NONE, (short) padding.length);
-		byte[] bootstrap = assembleClientBootstrapCiphertext(0, bootstrapKey, RECORD_TYPE_CLIENT_AUTH, (short) authentication.length);
-		
-		byte[] clientRequest = Util.concat(random, bootstrap, authentication, padding);
-		clientRequestHash.update(clientRequest);
-		return clientRequest;
-	}
-	
-	protected byte[] assembleClientBootstrapCiphertext(int index, Key key, int nextType, int nextLen) {
-		ByteBuffer buf = ByteBuffer.allocate(clientBootstrapPlaintextLen());
-		buf.put((byte) nextType);
-		buf.putShort((short) nextLen);
-		buf.position(BOOTSTRAP_RESERVED_BYTES); // reserved for future use
-		buf.put(clientEphKey.getBytes());
-		assert(!buf.hasRemaining());
-		return key.encrypt(crypto.symNonce(0), buf.array(), -1);
-	}
-	
-	protected byte[] assembleClientAuthenticationCiphertext(int index, Key key, int nextType, int nextLen) {
-		ByteBuffer buf = ByteBuffer.allocate(RECORD_HEADER_LEN + 2 + 4 + crypto.asymPublicDHKeySize() + crypto.symKeyLength());
-		buf.put((byte) nextType);
-		buf.putShort((short) nextLen);
-		buf.putShort((short) clientPortNum);
-		buf.putInt(timeIndex);
-		buf.put(swarm.getPublicIdentityKey().getBytes());
-		buf.put(swarm.config.getAccessor().temporalProof(timeIndex, 0, halfEphSecret));
-		assert(!buf.hasRemaining());
-		return key.encrypt(crypto.symNonce(index), buf.array(), -1);
-	}
-	
-	protected byte[] assembleServerResponse(boolean sendRealProof) {
-		byte[] padding = assembleRandomPadding();
-		byte[] authentication = assembleServerAuthenticationCiphertext(sendRealProof, 1, serverResponseKey, RECORD_TYPE_NONE, padding.length);
-		byte[] bootstrap = assembleServerBootstrapCiphertext(0, serverResponseKey, RECORD_TYPE_SERVER_AUTH, authentication.length);
-		byte[] serverResponse = Util.concat(bootstrap, authentication);
-		serverResponseHash.update(serverResponse);
-		return serverResponse;
-	}
-	
-	protected byte[] assembleServerBootstrapCiphertext(int index, Key key, int nextType, int nextLen) {
-		ByteBuffer buf = ByteBuffer.allocate(serverBootstrapPlaintextLen());
-		buf.put((byte) nextType);
-		buf.putShort((short) nextLen);
-		buf.position(BOOTSTRAP_RESERVED_BYTES); // reserved for future use
-		buf.put(serverEphKey.getBytes());
-		assert(!buf.hasRemaining());
-		return key.encrypt(crypto.symNonce(index), buf.array(), -1);
-	}
-	
-	protected byte[] assembleServerAuthenticationCiphertext(boolean sendReal, int index, Key key, int nextType, int nextLen) {
-		ByteBuffer buf = ByteBuffer.allocate(RECORD_HEADER_LEN + crypto.symKeyLength());
-
-		buf.put((byte) nextType);
-		buf.putShort((short) nextLen);
-		
-		if(sendReal) {
-			buf.put(swarm.config.getAccessor().temporalProof(timeIndex, 1, halfEphSecret));
-		} else {
-			buf.put(crypto.rng(crypto.symKeyLength()));
+	protected Key updateKey(byte[]... elements) {
+		byte[] material = Util.concat(elements);
+		Key newKey = new Key(crypto, crypto.makeSymmetricKey(material));
+		Util.blank(material);
+		if(currentKey != null) {
+			currentKey.destroy();
 		}
 		
-		assert(!buf.hasRemaining());
-		return key.encrypt(crypto.symNonce(index), buf.array(), -1);
+		return currentKey = newKey;
 	}
 	
-	protected byte[] assembleRandomPadding() {
-		int length = crypto.defaultPrng().getInt(maxPaddingBytes-minPaddingBytes) + minPaddingBytes;
-		return crypto.rng(length);
-	}
-	
-	/** tx/rx 
-	 * @throws IOException 
-	 * @throws ProtocolViolationException */
-	
-	protected void processClientRequest() throws IOException, ProtocolViolationException {
-		random = IOUtils.readFully(in, RANDOM_SALT_BYTES);
-		
-		int index = 0;
-		int expectedType = RECORD_TYPE_CLIENT_BOOTSTRAP,
-		    expectedLen = (short) crypto.symPaddedCiphertextSize(clientBootstrapPlaintextLen());
-		while(expectedLen > 0) {
-			byte[] rawRecord = IOUtils.readFully(in, expectedLen);
-			clientRequestHash.update(rawRecord);
-			if(expectedType == RECORD_TYPE_CLIENT_BOOTSTRAP) {
-				handleClientBootstrap(rawRecord);
-			} else if(expectedType != RECORD_TYPE_NONE) {
-				ByteBuffer record = ByteBuffer.wrap(clientRequestKey.decrypt(crypto.symNonce(index++), rawRecord));
-				int newExpectedType = Util.unsignShort(record.getShort());
-				int newExpectedLen = Util.unsignShort(record.getShort());
-				processClientRecord(expectedType, record);
-				expectedType = newExpectedType;
-				expectedLen = newExpectedLen;
-			}
-		}
-		
-		assertState(seenBootstrap);
-		assertState(seenAuth);
-	}
-	
-	protected void processClientRecord(int type, ByteBuffer record) throws ProtocolViolationException {
-		assertState(type >= RECORD_TYPE_CLIENT_MIN && type <= RECORD_TYPE_CLIENT_MAX_ABSOLUTE);
-		switch(type) {
-		case RECORD_TYPE_CLIENT_BOOTSTRAP:
-			throw new ProtocolViolationException(); // already handled this 
-		case RECORD_TYPE_CLIENT_AUTH:
-			assertState(seenBootstrap);
-			handleClientAuth(record);
-			break;
-		}
-	}
-	
-	protected void handleClientBootstrap(byte[] rawRecord) throws ProtocolViolationException {
-		assertState(!seenBootstrap);
-		seenBootstrap = true;
-		byte[] plaintext = null;
-				
-		for(TCPPeerAdvertisementListener adListener : listener.adListeners) {
-			Key candidateKey = makeBootstrapKey(adListener.swarm, adListener.swarm.getPublicIdentityKey());
-			try {
-				plaintext = candidateKey.decrypt(crypto.symNonce(0), rawRecord);
-				this.bootstrapKey = candidateKey;
-				this.swarm = adListener.swarm;
-				break;
-			} catch(SecurityException exc) {
-			}
-		}
-		
-		if(plaintext == null) throw new ProtocolViolationException(); // don't know the ad they're referring to
-		initAsymKeys();
-		this.serverEphKey = localEphKey.publicKey();
-		this.serverStaticKey = localStaticKey.publicKey();
-		handleClientBootstrapPlaintext(ByteBuffer.wrap(plaintext));
-	}
-	
-	protected void handleClientBootstrapPlaintext(ByteBuffer record) {
-		byte[] clientEphKeyBytes = new byte[crypto.asymPublicDHKeySize()];
-		record.position(record.position() + BOOTSTRAP_RESERVED_BYTES);
-		record.get(clientEphKeyBytes);
-		this.clientEphKey = crypto.makePublicDHKey(clientEphKeyBytes);
-		this.halfEphSecret = localStaticKey.sharedSecret(clientEphKey);
-		initExchangeKeys();
-	}
-	
-	protected void handleClientAuth(ByteBuffer record) throws ProtocolViolationException {
-		assertState(!seenAuth);
-		seenAuth = true;
-		
-		byte[] clientStaticKeyBytes = new byte[crypto.asymPublicDHKeySize()];
-		byte[] clientProof = new byte[crypto.symKeyLength()];
-		byte[] expectedProof = swarm.config.getAccessor().temporalProof(timeIndex,01, halfEphSecret);
-
-		this.clientPortNum = Util.unsignShort(record.getShort());
-		this.timeIndex = record.getInt();
-		this.clientStaticKey = crypto.makePublicDHKey(clientStaticKeyBytes);
-		
-		validateTimeIndex();
-		
-		record.get(clientStaticKeyBytes);
-		if(Util.safeEquals(expectedProof, clientProof)) {
-			this.peerType = PeerConnection.PEER_TYPE_FULL;
-		} else {
-			this.peerType = PeerConnection.PEER_TYPE_BLIND;
-		}
-	}
-	
-	protected void processServerResponse() throws IOException, ProtocolViolationException {
-		int index = 0;
-		int expectedType = RECORD_TYPE_SERVER_BOOTSTRAP,
-		    expectedLen = (short) crypto.symPaddedCiphertextSize(serverBootstrapPlaintextLen());
-		while(expectedLen > 0) {
-			byte[] rawRecord = IOUtils.readFully(in, expectedLen);
-			serverResponseHash.update(rawRecord);
-			if(expectedType != RECORD_TYPE_NONE) {
-				ByteBuffer record = ByteBuffer.wrap(serverResponseKey.decrypt(crypto.symNonce(index++), rawRecord));
-				int newExpectedType = Util.unsignShort(record.getShort());
-				int newExpectedLen = Util.unsignShort(record.getShort());
-				processServerRecord(expectedType, record);
-				expectedType = newExpectedType;
-				expectedLen = newExpectedLen;
-			}
-		}
-		
-		assertState(seenBootstrap);
-		assertState(seenAuth);
-	}
-	
-	protected void processServerRecord(int type, ByteBuffer record) throws ProtocolViolationException {
-		assertState(type >= RECORD_TYPE_SERVER_MIN && type <= RECORD_TYPE_SERVER_MAX_ABSOLUTE);
-		switch(type) {
-		case RECORD_TYPE_SERVER_BOOTSTRAP:
-			handleServerBootstrap(record);
-			break;
-		case RECORD_TYPE_SERVER_AUTH:
-			assertState(seenBootstrap);
-			handleServerAuth(record);
-			break;
-		}
-	}
-	
-	protected void handleServerBootstrap(ByteBuffer record) throws ProtocolViolationException {
-		assertState(!seenBootstrap);
-		seenBootstrap = true;
-		
-		byte[] serverEphKeyBytes = new byte[crypto.asymPublicDHKeySize()];
-		record.position(record.position() + BOOTSTRAP_RESERVED_BYTES);
-		record.get(serverEphKeyBytes);
-		this.serverEphKey = crypto.makePublicDHKey(serverEphKeyBytes);
-	}
-	
-	protected void handleServerAuth(ByteBuffer record) throws ProtocolViolationException {
-		assertState(!seenAuth);
-		seenAuth = true;
-		
-		byte[] serverProof = new byte[crypto.symKeyLength()];
-		record.get(serverProof);
-		
-		byte[] expectedProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, halfEphSecret);
-		if(Util.safeEquals(expectedProof, serverProof)) {
-			this.peerType = PeerConnection.PEER_TYPE_FULL;
-		} else {
-			this.peerType = PeerConnection.PEER_TYPE_BLIND;
-		}
-	}
-	
-	protected short localPortNum() {
+	protected int localTCPPort() {
 		try {
-			return (short) swarm.config.getMaster().getTCPListener().port;
+			return swarm.config.getMaster().getTCPListener().getPort();
 		} catch(NullPointerException exc) {
 			return 0;
 		}
 	}
 	
-	protected void validateTimeIndex() throws ProtocolViolationException {
-		assertState(timeIndex > Integer.MIN_VALUE);
-		int diff = timeIndex - swarm.config.getAccessor().timeSliceIndex();
+	protected void assertValidTimeslice(int timeslice) throws ProtocolViolationException {
+		int diff = timeslice - swarm.config.getAccessor().timeSliceIndex();
 		if(diff < 0) {
 			// stated index is in past
-			long expiration = swarm.config.getAccessor().timeSlice(timeIndex) + ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS;
+			long expiration = swarm.config.getAccessor().timeSlice(timeslice) + ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS;
 			long expiredFor = Util.currentTimeMillis() - expiration;
-			assertState(0 <= expiredFor && expiredFor <= timesliceExpirationGraceTimeMs);
+			assertState(0 <= expiredFor && expiredFor <= 10000);
 		} else if(diff > 0) {
 			// stated index is in future
-			long startTime = swarm.config.getAccessor().timeSlice(timeIndex);
+			long startTime = swarm.config.getAccessor().timeSlice(timeslice);
 			long startsIn = startTime - Util.currentTimeMillis();
-			assertState(0 <= startsIn && startsIn <= timesliceExpirationGraceTimeMs);
+			assertState(0 <= startsIn && startsIn <= 10000);
 		}
 	}
 	

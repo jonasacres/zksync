@@ -370,6 +370,10 @@ public class CryptoSupport {
 	public int symPaddedCiphertextSize(int textLen) {
 		return 4 + textLen + symTagLength();
 	}
+	
+	public int symUnpaddedCiphertextSize(int textLen) {
+		return textLen + symTagLength();
+	}
 
 	public byte[] symNonce(long i) {
 		return ByteBuffer.allocate(symIvLength()).putLong(i).array();

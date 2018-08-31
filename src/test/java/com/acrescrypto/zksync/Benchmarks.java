@@ -59,7 +59,15 @@ public class Benchmarks {
 	public static void outputResult(String unit, int numUnits, int duration) {
 		String caller = Thread.currentThread().getStackTrace()[4].getMethodName();
 		double rate = 1000.0 * ((double) numUnits) / duration;
-		output(String.format("\t%50s: %.03f %s/s (%d %s in %d ms)", caller, rate, unit, numUnits, unit, duration));
+		double inverseRate = 1000.0/rate;
+		output(String.format("\t%50s: %.03f %s/s %.02f ms/each (%d %s in %d ms)",
+				caller,
+				rate,
+				unit,
+				inverseRate,
+				numUnits,
+				unit,
+				duration));
 	}
 	
 	public static void finishBenchmarkSuite() {

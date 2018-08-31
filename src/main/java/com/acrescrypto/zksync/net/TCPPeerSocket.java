@@ -97,6 +97,8 @@ public class TCPPeerSocket extends PeerSocket {
 			int writeLen = Math.min(buf.remaining(), MAX_MSG_LEN);
 			byte[] ciphertext = nextLocalMessageKey().encrypt(msgIv, buf.array(), buf.position(), writeLen, 0);
 			buf.position(buf.position() + writeLen);
+			
+			// TODO DHT: (rewrite) VERY BAD, NO, MUST NOT HAVE. Completely distinguishable.
 			out.write(Util.serializeInt(ciphertext.length), 0, 4);
 			out.write(ciphertext);
 		}
@@ -202,83 +204,6 @@ public class TCPPeerSocket extends PeerSocket {
 
 	protected Key makeChainRoot(int index) {
 		return new Key(crypto, crypto.expand(sharedSecret, crypto.symKeyLength(), new byte[] { (byte) index }, "zksync".getBytes()));
-	}
-	
-	protected void sendHandshakeNew(PublicDHKey serverStaticPubKey) throws IOException, ProtocolViolationException {
-		// handshake must complete in maxHandshakeTimeMillis or connection closes.
-		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, 10, ()->peerType >= 0, ()->close());
-		CryptoSupport crypto = swarm.config.getCrypto();
-		
-		PrivateDHKey clientEphKey = crypto.makePrivateDHKey(); 
-		byte[] halfEphSecret = clientEphKey.sharedSecret(serverStaticPubKey);
-		byte[] staticSecret = swarm.identityKey.sharedSecret(serverStaticPubKey);
-		byte[] random = crypto.rng(32);
-		
-		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
-		int port = 0;
-		try {
-			port = swarm.config.getMaster().getTCPListener().getPort();
-		} catch(NullPointerException exc) {}
-
-		Key initKey = new Key(swarm.config.getCrypto(),
-				Util.concat(
-						swarm.config.getAccessor().getSeedRoot().getRaw(),
-						swarm.config.getArchiveId(),
-						serverStaticPubKey.getBytes(),
-						new byte[] { 0x00 },
-						random
-						)
-				);
-		
-		Key halfEphKeyClient = new Key(crypto, Util.concat(halfEphSecret, new byte[] { 0x00 }));
-		Key halfEphKeyServer = new Key(crypto, Util.concat(halfEphSecret, new byte[] { 0x01 }));
-		byte[] keyKnowledgeProof = swarm.config.getAccessor().temporalProof(timeIndex, 0, halfEphSecret);
-		
-		byte[] clientPayloadPlaintext = Util.concat(
-				Util.serializeShort((short) 0),
-				Util.serializeShort((short) 0),
-				Util.serializeShort((short) port),
-				Util.serializeInt(timeIndex),
-				swarm.getPublicIdentityKey().getBytes(),
-				keyKnowledgeProof
-				);
-		
-		byte[] clientPayloadCiphertext = halfEphKeyClient.encrypt(crypto.symNonce(1),
-				clientPayloadPlaintext,
-				-1);
-		
-		byte[] clientBootstrapPlaintext = Util.concat(
-				Util.serializeShort((short) 1), // TODO: define a constant for this
-				Util.serializeShort((short) clientPayloadCiphertext.length),
-				new byte[16], // reserved for future expansion
-				clientEphKey.publicKey().getBytes()
-				);
-		
-		byte[] clientBootstrapCiphertext = initKey.encrypt(crypto.symNonce(0),
-				clientBootstrapPlaintext,
-				-1);
-		
-		byte[] clientRequest = Util.concat(random, clientBootstrapCiphertext, clientPayloadCiphertext);
-		
-		int serverRecordNum = 0;
-		out.write(clientRequest);
-		int serverPayloadBootstrapSize = crypto.symPaddedCiphertextSize(16 + crypto.asymPublicDHKeySize() + 2 + 2);
-		byte[] serverPayloadBootstrapCiphertext = readRaw(serverPayloadBootstrapSize);
-		byte[] serverPayloadBootstrapPlaintext = halfEphKeyServer.decryptUnpadded(crypto.symNonce(serverRecordNum++), serverPayloadBootstrapCiphertext);
-		
-		byte[] serverEphKeyRaw = new byte[crypto.asymPublicDHKeySize()];
-		ByteBuffer sPB = ByteBuffer.wrap(serverPayloadBootstrapPlaintext);
-		int nextRecordType = Util.unsignShort(sPB.getShort()), recordType = nextRecordType;
-		int nextRecordLen = Util.unsignShort(sPB.getShort());
-		sPB.get(serverEphKeyRaw);
-		
-		while(nextRecordLen > 0) {
-			byte[] nextRecordCiphertext = readRaw(nextRecordLen);
-			byte[] nextRecordPlaintext = halfEphKeyServer.decrypt(crypto.symNonce(serverRecordNum++), nextRecordCiphertext);
-			ByteBuffer nRP = ByteBuffer.wrap(nextRecordPlaintext);
-			nextRecordType = Util.unsignShort(nRP.getShort());
-			nextRecordLen = Util.unsignShort(nRP.getShort());
-		}
 	}
 
 	protected void sendHandshake(PublicDHKey remotePubKey) throws IOException, ProtocolViolationException {

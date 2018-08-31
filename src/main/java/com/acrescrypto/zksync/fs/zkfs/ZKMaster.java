@@ -264,4 +264,8 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	public void setDHTClient(DHTClient dhtClient) {
 		this.dhtClient = dhtClient;
 	}
+
+	public PassphraseProvider getPassphraseProvider() {
+		return passphraseProvider;
+	}
 }

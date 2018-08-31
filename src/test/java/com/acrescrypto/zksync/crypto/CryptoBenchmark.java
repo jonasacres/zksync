@@ -154,6 +154,7 @@ public class CryptoBenchmark {
 		PublicDHKey pubKey = crypto.makePrivateDHKey().publicKey();
 		
 		Benchmarks.run("secrets", (i)->{
+			// results may be optimistic due to potential caching in repeated calculation of same secret
 			privKey.sharedSecret(pubKey);
 		});
 	}

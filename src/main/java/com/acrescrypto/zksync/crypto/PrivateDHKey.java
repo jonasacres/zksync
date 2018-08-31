@@ -5,6 +5,8 @@ import java.nio.ByteBuffer;
 import org.bouncycastle.util.Arrays;
 import org.whispersystems.curve25519.Curve25519;
 
+import com.acrescrypto.zksync.utility.Util;
+
 public class PrivateDHKey {
 	protected byte[] privKey;
 	protected Curve25519 curve25519 = Curve25519.getInstance(Curve25519.BEST);
@@ -49,5 +51,17 @@ public class PrivateDHKey {
 	
 	public CryptoSupport getCrypto() {
 		return crypto;
+	}
+	
+	public void destroy() {
+		if(privKey != null) {
+			Util.blank(privKey);
+			privKey = null;
+		}
+		
+		pubKey.destroy();
+		pubKey = null;
+		curve25519 = null;
+		crypto = null;
 	}
 }

@@ -4,6 +4,8 @@ import java.util.Arrays;
 
 import org.whispersystems.curve25519.Curve25519;
 
+import com.acrescrypto.zksync.utility.Util;
+
 public class PublicDHKey {
 	protected byte[] pubKey;
 	protected Curve25519 curve25519 = Curve25519.getInstance(Curve25519.BEST);
@@ -26,5 +28,15 @@ public class PublicDHKey {
 		if(!(other instanceof PublicDHKey)) return false;
 		
 		return Arrays.equals(pubKey, ((PublicDHKey) other).pubKey);
+	}
+
+	public void destroy() {
+		if(pubKey != null) {
+			Util.blank(pubKey);
+			pubKey = null;
+		}
+		
+		curve25519 = null;
+		crypto = null;
 	}
 }
