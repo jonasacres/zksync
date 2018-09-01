@@ -477,6 +477,11 @@ public class ZKArchiveConfig {
 		return accessor;
 	}
 	
+	/** Replace the archive accessor. Used for testing. */
+	public void setAccessor(ArchiveAccessor accessor) {
+		this.accessor = accessor;
+	}
+	
 	public PeerSwarm getSwarm() {
 		return swarm;
 	}

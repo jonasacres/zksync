@@ -18,7 +18,9 @@ import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 
 /**
- * Produces a shared secret in a forward-extensible manner.
+ * Produces a shared secret in a forward-extensible manner. There is purposefully no attempt to foresee/permit
+ * cryptographic algorithm choices, or future choices, as this appears to be a repeated cause of security
+ * issues.
  * 
  * All traffic is indistinguishable from random to an observer lacking the archive seed key.
  * 
@@ -28,7 +30,11 @@ import com.acrescrypto.zksync.utility.Util;
  * Tampering with any of the traffic, even with perfect knowledge of the keys, results in a failure
  * to arrive at a shared secret. This failure is detectable to one or both legitimate parties.
  * 
- * Handshake requires one request-response cycle.
+ * Handshake is 1-RTT.
+ * 
+ * Although this is in service of a p2p protocol where both parties have identical responsibilities,
+ * and either may act as the initiator or responder, we use "client" to refer to the peer initiating the
+ * handshake, and "server" to refer to the responding peer.
  *
  * Client:
  *   rng[32]
@@ -79,6 +85,7 @@ public class TCPHandshakeContext {
 	public final static int BOOTSTRAP_RESERVED_LEN = 16;
 	public final static int MAX_HANDSHAKE_ELEMENT_SIZE = 16384;
 	public final static int MAX_PADDING_LEN = 1024;
+	public final static int TIMESLICE_EXPIRATION_GRACE_MS = 10*1000;
 	
 	public final static int HANDSHAKE_TIMEOUT_MS_DEFAULT = 10*10000;
 	public static int handshakeTimeoutMs = HANDSHAKE_TIMEOUT_MS_DEFAULT;
@@ -122,6 +129,7 @@ public class TCPHandshakeContext {
 	
 	public Key establishSecret() throws IOException, ProtocolViolationException {
 		timeout = new SnoozeThread(handshakeTimeoutMs, false, ()->{
+			scrub();
 			try {
 				if(!socket.isClosed()) {
 					socket.close();
@@ -131,17 +139,41 @@ public class TCPHandshakeContext {
 			}
 		});
 		
-		if(roleIsClient) {
-			doClientHandshake();
-		} else {
-			doServerHandshake();
+		try {
+			try {
+				if(roleIsClient) {
+					doClientHandshake();
+				} else {
+					doServerHandshake();
+				}
+			} catch(SecurityException exc) {
+				throw new ProtocolViolationException();
+			}
+		} catch(IOException exc) {
+			socket.close();
+			throw exc;
+		} catch(ProtocolViolationException exc) {
+			Blacklist blacklist;
+			if(swarm != null) {
+				blacklist = swarm.config.getMaster().getBlacklist();
+			} else {
+				blacklist = listener.master.getBlacklist();
+			}
+			
+			blacklist.add(socket.getInetAddress().getHostAddress(), Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
+			socket.close();
+			throw exc;
+		} finally {
+			scrub();
+			timeout.cancel();
 		}
 		
-		timeout.cancel();
-		
-		remoteEphKey.destroy();
-		localEphKey.destroy();	
 		return currentKey;
+	}
+	
+	protected void scrub() {
+		if(remoteEphKey != null) remoteEphKey.destroy();
+		if(localEphKey != null) localEphKey.destroy();	
 	}
 	
 	protected void doClientHandshake() throws IOException, ProtocolViolationException {
@@ -149,6 +181,11 @@ public class TCPHandshakeContext {
 		receiveServerResponse();
 	}
 	
+	protected void doServerHandshake() throws IOException, ProtocolViolationException {
+		receiveClientRequest();
+		sendServerResponse();
+	}
+
 	protected int bootstrapPlaintextLen() {
 		return 2 + 2 + crypto.asymPublicDHKeySize() + BOOTSTRAP_RESERVED_LEN;
 	}
@@ -375,11 +412,6 @@ public class TCPHandshakeContext {
 		return buf.array();
 	}
 	
-	protected void doServerHandshake() throws IOException, ProtocolViolationException {
-		receiveClientRequest();
-		sendServerResponse();
-	}
-	
 	protected ByteBuffer decipherBootstrap(byte[] clientBootstrapCiphertext, byte[] clientRandom) throws ProtocolViolationException {
 		for(TCPPeerAdvertisementListener adListener : listener.adListeners) {
 			byte[] material = Util.concat(adListener.swarm.identityKey.publicKey().getBytes(),
@@ -419,6 +451,7 @@ public class TCPHandshakeContext {
 	
 	protected int localTCPPort() {
 		try {
+			if(swarm.config.getMaster().getTCPListener().listenerForSwarm(swarm) == null) return 0;
 			return swarm.config.getMaster().getTCPListener().getPort();
 		} catch(NullPointerException exc) {
 			return 0;
@@ -430,13 +463,13 @@ public class TCPHandshakeContext {
 		if(diff < 0) {
 			// stated index is in past
 			long expiration = swarm.config.getAccessor().timeSlice(timeslice) + ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS;
-			long expiredFor = Util.currentTimeMillis() - expiration;
-			assertState(0 <= expiredFor && expiredFor <= 10000);
+			long expiredFor = Math.abs(Util.currentTimeMillis() - expiration);
+			assertState(0 <= expiredFor && expiredFor <= TIMESLICE_EXPIRATION_GRACE_MS);
 		} else if(diff > 0) {
 			// stated index is in future
 			long startTime = swarm.config.getAccessor().timeSlice(timeslice);
-			long startsIn = startTime - Util.currentTimeMillis();
-			assertState(0 <= startsIn && startsIn <= 10000);
+			long startsIn = Math.abs(startTime - Util.currentTimeMillis());
+			assertState(0 <= startsIn && startsIn <= TIMESLICE_EXPIRATION_GRACE_MS);
 		}
 	}
 	

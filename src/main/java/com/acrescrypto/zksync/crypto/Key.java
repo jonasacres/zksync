@@ -76,12 +76,7 @@ public class Key {
 	}
 	
 	public void destroy() {
-		if(raw != null) {
-			Util.blank(raw);
-			raw = null;
-		}
-		
-		crypto = null;
+		Util.blank(raw);
 	}
 
 	public CryptoSupport getCrypto() {

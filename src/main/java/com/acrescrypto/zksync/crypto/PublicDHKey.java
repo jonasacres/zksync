@@ -31,12 +31,6 @@ public class PublicDHKey {
 	}
 
 	public void destroy() {
-		if(pubKey != null) {
-			Util.blank(pubKey);
-			pubKey = null;
-		}
-		
-		curve25519 = null;
-		crypto = null;
+		Util.blank(pubKey);
 	}
 }

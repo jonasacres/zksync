@@ -54,14 +54,7 @@ public class PrivateDHKey {
 	}
 	
 	public void destroy() {
-		if(privKey != null) {
-			Util.blank(privKey);
-			privKey = null;
-		}
-		
+		Util.blank(privKey);
 		pubKey.destroy();
-		pubKey = null;
-		curve25519 = null;
-		crypto = null;
 	}
 }
