@@ -118,7 +118,7 @@ public class TCPPeerSocketTest {
 		PrivateDHKey serverEphKey;
 		ZKArchive peerArchive;
 		Key writeChainKey, readChainKey;
-		byte[] secret;
+		byte[] identifier;
 		
 		DummyConnection(TCPPeerSocket client) {
 			this(archive, client);
@@ -130,10 +130,10 @@ public class TCPPeerSocketTest {
 			this.serverEphKey = crypto.makePrivateDHKey();
 		}
 		
-		DummyConnection(Socket serverSock, TCPPeerSocket client, byte[] secret) {
+		DummyConnection(Socket serverSock, TCPPeerSocket client, byte[] identifier) {
 			this.serverSock = serverSock;
 			this.client = client;
-			this.secret = secret;
+			this.identifier = identifier;
 			initKeys(true);
 		}
 		
@@ -174,10 +174,6 @@ public class TCPPeerSocketTest {
 		}
 		
 		DummyConnection handshake() throws IOException {
-			return handshake(true, true);
-		}
-		
-		DummyConnection handshake(boolean sendValidAuth, boolean sendValidProof) throws IOException {
 			new Thread(()->{
 				Thread.currentThread().setName("TCPPeerSocketTest DummyConnection handshake thread");
 				try {
@@ -194,56 +190,12 @@ public class TCPPeerSocketTest {
 			
 			while(client.socket == null) { try { Thread.sleep(1); } catch(InterruptedException exc) {} }
 			this.serverSock = server.getClientWithPort(client.socket.getLocalPort());
-			PublicDHKey pubKey = crypto.makePublicDHKey(serverReadRaw(crypto.asymPublicDHKeySize()));
-			byte[] tempSecret = serverKey.sharedSecret(pubKey);
-
-			byte[] keyHash = serverReadRaw(crypto.hashLength());
-			byte[] timeProof = serverReadRaw(crypto.hashLength());
-			byte[] keyKnowledgeProof = serverReadRaw(crypto.symKeyLength());
-			int timeIndex = Integer.MIN_VALUE;
-			
-			for(int diff : new int[] { 0, -1, 1}) {
-				int expectedTimeIndex = swarm.config.getAccessor().timeSliceIndex() + diff;
-				byte[] expectedTimeProof = crypto.authenticate(tempSecret, Util.serializeInt(expectedTimeIndex));
-				if(Arrays.equals(expectedTimeProof, timeProof)) {
-					timeIndex = expectedTimeIndex;
-				}
+			TCPHandshakeContext handshake = new TCPHandshakeContext(null, serverSock); // TODO DHT: null was listener, make this thing work
+			try {
+				handshake.establishSecret();
+			} catch(ProtocolViolationException exc) {
+				fail(); // may not be appropriate
 			}
-			
-			byte[] clientStaticKeyCiphertext = serverReadRaw(crypto.asymPrivateDHKeySize() + crypto.symTagLength());
-			serverReadRaw(2 + crypto.symTagLength()); // encrypted port number
-			Key clientStaticKeyText = new Key(crypto, tempSecret).derive(0, new byte[0]);
-			byte[] clientStaticKeyRaw = clientStaticKeyText.decryptUnpadded(new byte[crypto.symIvLength()], clientStaticKeyCiphertext);
-			PublicDHKey clientStaticKey = crypto.makePublicDHKey(clientStaticKeyRaw);
-			
-			byte[] proof = sendValidProof
-					? peerArchive.getConfig().getAccessor().temporalProof(timeIndex, 1, tempSecret)
-					: crypto.rng(crypto.symKeyLength());
-
-			byte[] staticSecret = serverKey.sharedSecret(clientStaticKey);
-			byte[] ephemeralSecret = serverEphKey.sharedSecret(pubKey);
-			byte[] sharedSecretText = Util.concat(pubKey.getBytes(),
-					keyHash,
-					timeProof,
-					keyKnowledgeProof,
-					clientStaticKeyCiphertext,
-					serverEphKey.publicKey().getBytes(),
-					proof,
-					swarm.config.getAccessor().temporalSeedId(timeIndex));
-
-			byte[] secretRoot = crypto.authenticate(Util.concat(staticSecret, ephemeralSecret), sharedSecretText);
-			byte[] handshakeProofKey = crypto.authenticate(secretRoot, Util.serializeInt(1));
-			this.secret = crypto.authenticate(secretRoot, Util.serializeInt(0));
-			
-			byte[] auth = sendValidAuth
-					? crypto.authenticate(handshakeProofKey, swarm.config.getAccessor().temporalSeedId(timeIndex))
-					: crypto.rng(crypto.hashLength());
-			
-			initKeys(false);
-			
-			serverWriteRaw(serverEphKey.publicKey().getBytes());
-			serverWriteRaw(proof);
-			serverWriteRaw(auth);
 			
 			synchronized(this) {
 				try { this.wait(); } catch (InterruptedException e) {}
@@ -259,8 +211,8 @@ public class TCPPeerSocketTest {
 		}
 		
 		void initKeys(boolean localRoleIsClient) {
-			readChainKey = new Key(crypto, crypto.expand(secret, crypto.symKeyLength(), new byte[] { (byte) (localRoleIsClient ? 1 : 0) }, "zksync".getBytes()));
-			writeChainKey = new Key(crypto, crypto.expand(secret, crypto.symKeyLength(), new byte[] { (byte) (localRoleIsClient ? 0 : 1) }, "zksync".getBytes()));
+			readChainKey = new Key(crypto, crypto.expand(identifier, crypto.symKeyLength(), new byte[] { (byte) (localRoleIsClient ? 1 : 0) }, "zksync".getBytes()));
+			writeChainKey = new Key(crypto, crypto.expand(identifier, crypto.symKeyLength(), new byte[] { (byte) (localRoleIsClient ? 0 : 1) }, "zksync".getBytes()));
 		}
 
 		public boolean hasAvailable() {
@@ -282,16 +234,6 @@ public class TCPPeerSocketTest {
 	TCPPeerSocket socket;
 	TCPPeerAdvertisement ad;
 	DummyServer server;
-	
-	void blindHandshake(TCPPeerSocket socket) {
-		new Thread(()-> {
-			Thread.currentThread().setName("TCPPeerSocketTest blindHandshake thread");
-			try {
-				socket.handshake();
-			} catch (ProtocolViolationException | IOException e) {
-			}
-		}).start();
-	}
 	
 	byte[] readBytes(Socket socket, int len) throws IOException {
 		byte[] buf = new byte[len];
@@ -318,14 +260,20 @@ public class TCPPeerSocketTest {
 		PublicDHKey identityKey = crypto.makePrivateDHKey().publicKey();
 		
 		try {
-			byte[] secret = master.getCrypto().rng(master.getCrypto().asymDHSecretSize());
+			byte[] identifier = master.getCrypto().rng(master.getCrypto().asymDHSecretSize());
 			server = new ServerSocket(0);
 			clientSocketRaw = new Socket("localhost", server.getLocalPort());
-			clientSocket = new TCPPeerSocket(swarm, identityKey, clientSocketRaw, secret, PeerConnection.PEER_TYPE_BLIND, 0);
+			
+			TCPHandshakeContext handshake = new TCPHandshakeContext(swarm, clientSocketRaw, identityKey);
+			handshake.peerType = PeerConnection.PEER_TYPE_BLIND;
+			handshake.currentKey = new Key(crypto, crypto.makeSymmetricKey());
+			handshake.identifier = identifier;
+			
+			clientSocket = new TCPPeerSocket(handshake);
 			serverSocket = server.accept();
 			assertEquals(clientSocketRaw, clientSocket.socket);
-			assertTrue(Arrays.equals(secret, clientSocket.getSharedSecret()));
-			callback.callback(serverSocket, clientSocket, secret);
+			assertTrue(Arrays.equals(identifier, clientSocket.getIdentifier()));
+			callback.callback(serverSocket, clientSocket, identifier);
 		} catch(Exception exc) {
 			throw(exc);
 		} finally {
@@ -376,9 +324,9 @@ public class TCPPeerSocketTest {
 	@Test
 	public void testInitializeWithClientSocket() throws Exception {
 		TCPPeerSocket.disableMakeThreads = true;
-		setupServerSocket((serverSocket, clientSocket, secret)->{
+		setupServerSocket((serverSocket, clientSocket, identifier)->{
 			assertEquals(clientSocket, swarm.opened.socket);
-			DummyConnection conn = new DummyConnection(serverSocket, clientSocket, secret);
+			DummyConnection conn = new DummyConnection(serverSocket, clientSocket, identifier);
 			byte[] buf = new byte[5], data = "hello".getBytes();
 			
 			conn.serverWrite(data);
@@ -390,169 +338,6 @@ public class TCPPeerSocketTest {
 			byte[] received = conn.serverReadNext();
 			assertTrue(Arrays.equals(response, received));
 		});
-	}
-	
-	@Test
-	public void testUsesEphemeralKeys() throws IOException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
-		TCPPeerSocket socket2 = new TCPPeerSocket(swarm, ad);
-
-		byte[] pubKeyBufA = new byte[crypto.asymPublicDHKeySize()];
-		byte[] pubKeyBufB = new byte[crypto.asymPublicDHKeySize()];
-		
-		blindHandshake(socket);
-		blindHandshake(socket2);
-		
-		IOUtils.read(server.getClient(0).getInputStream(), pubKeyBufA);
-		IOUtils.read(server.getClient(1).getInputStream(), pubKeyBufB);
-		
-		assertFalse(Arrays.equals(pubKeyBufA, pubKeyBufB));
-	}
-	
-	@Test
-	public void testHandshakeSendsInfo() throws IOException {
-		blindHandshake(socket);
-		
-		byte[] pubKey = readBytes(crypto.asymPublicDHKeySize());
-		byte[] keyHash = readBytes(crypto.hashLength());
-		byte[] timeProof = readBytes(crypto.hashLength());
-		
-		byte[] tempSecret = socket.dhPrivateKey.sharedSecret(ad.pubKey);
-		
-		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+crypto.hashLength()+4);
-		keyHashInput.put(pubKey);
-		keyHashInput.put(ad.pubKey.getBytes());
-		keyHashInput.put(swarm.config.getArchiveId());
-		keyHashInput.putInt(0);
-		byte[] expectedKeyHash = keyHashKey.authenticate(keyHashInput.array());
-		byte[] expectedTimeProof = crypto.authenticate(tempSecret, Util.serializeInt(swarm.config.getAccessor().timeSliceIndex()));
-		
-		assertTrue(Arrays.equals(socket.dhPrivateKey.publicKey().getBytes(), pubKey));
-		assertTrue(Arrays.equals(expectedKeyHash, keyHash));
-		assertArrayEquals(expectedTimeProof, timeProof);
-	}
-	
-	@Test
-	public void testHandshakeSendsRealProofIfArchiveHasReadAccess() throws IOException {
-		blindHandshake(socket);
-		PublicDHKey clientKey = crypto.makePublicDHKey(readBytes(crypto.asymPublicDHKeySize()));
-		readBytes(crypto.hashLength());
-		byte[] timeProof = readBytes(crypto.hashLength());
-		byte[] keyKnowledgeProof = readBytes(crypto.symKeyLength());
-		byte[] tempSecret = serverKey.sharedSecret(clientKey);
-		int timeIndex = Integer.MIN_VALUE;
-		
-		for(int diff : new int[] { 0, -1, 1 }) {
-			int expectedTimeIndex = swarm.config.getAccessor().timeSliceIndex() + diff;
-			byte[] expectedTimeProof = crypto.authenticate(tempSecret, Util.serializeInt(expectedTimeIndex));
-			if(Arrays.equals(expectedTimeProof, timeProof)) {
-				timeIndex = expectedTimeIndex;
-			}
-		}
-		
-		assertTrue(timeIndex > Integer.MIN_VALUE);
-		
-		byte[] expectedKeyKnowledgeProof = swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSecret);
-		
-		assertTrue(Arrays.equals(expectedKeyKnowledgeProof, keyKnowledgeProof));
-	}
-	
-	@Test
-	public void testHandshakeSendsGarbageProofIfArchiveIsSeedOnly() throws IOException, BlacklistedException, ProtocolViolationException {
-		// this test only works if the proof is the last thing the client sends in the handshake.
-		// we're testing that the client sends SOMETHING, even if it does not possess the correct proof.
-		// the check against the expected hash validates that the test was configured correctly.
-		
-		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
-		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
-		DummySwarm roSwarm = new DummySwarm(roConfig);
-		TCPPeerSocket roSocket = new TCPPeerSocket(roSwarm, ad);
-		blindHandshake(roSocket);
-		
-		PublicDHKey clientKey = crypto.makePublicDHKey(readBytes(crypto.asymPublicDHKeySize()));
-		byte[] keyHash = readBytes(crypto.hashLength());
-		int timeIndex = ByteBuffer.wrap(readBytes(4)).getInt();
-		byte[] proof = readBytes(crypto.symKeyLength());
-		
-		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+crypto.hashLength()+4);
-		keyHashInput.put(clientKey.getBytes());
-		keyHashInput.put(ad.pubKey.getBytes());
-		keyHashInput.put(swarm.config.getArchiveId());
-		keyHashInput.putInt(0);
-
-		byte[] expectedKeyHash = keyHashKey.authenticate(keyHashInput.array());
-		byte[] secret = serverKey.sharedSecret(clientKey);
-		byte[] expectedProof = swarm.config.getAccessor().temporalProof(timeIndex, 0, secret);
-
-		assertTrue(Arrays.equals(roSocket.dhPrivateKey.publicKey().getBytes(), clientKey.getBytes()));
-		assertTrue(Arrays.equals(expectedKeyHash, keyHash));
-		assertFalse(Arrays.equals(expectedProof, proof));
-		
-		roSwarm.close();
-		roConfig.getSwarm().close();
-	}
-	
-	@Test
-	public void testHandshakeThrowsExceptionIfAuthHashIsInvalid() throws IOException {
-		assertNotNull(new DummyConnection(socket).handshake(false, true).handshakeException);
-	}
-	
-	@Test
-	public void testHandshakeBlacklistsPeerIfAuthHashIsInvalid() throws IOException {
-		assertFalse(master.getBlacklist().contains(ad.host));
-		new DummyConnection(socket).handshake(false, true);
-		assertTrue(master.getBlacklist().contains(socket.socket.getInetAddress().getHostAddress()));
-	}
-	
-	@Test
-	public void testHandshakeDoesntBlacklistsPeerIfAuthHashAndProofAreValid() throws IOException {
-		assertFalse(master.getBlacklist().contains(ad.host));
-		new DummyConnection(socket).handshake(true, true);
-		assertFalse(master.getBlacklist().contains(socket.socket.getInetAddress().getHostAddress()));
-	}
-
-	@Test
-	public void testHandshakeDoesntBlacklistsPeerIfAuthHashIsValidAndProofIsInvalid() throws IOException {
-		assertFalse(master.getBlacklist().contains(ad.host));
-		new DummyConnection(socket).handshake(true, false);
-		assertFalse(master.getBlacklist().contains(socket.socket.getInetAddress().getHostAddress()));
-	}
-	
-	@Test
-	public void testHandshakeSetsPeerTypeToSeedOnlyIfArchiveHasSeedOnlyAccess() throws IOException, BlacklistedException {
-		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
-		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
-		DummySwarm roSwarm = new DummySwarm(roConfig);
-		TCPPeerSocket roSocket = new TCPPeerSocket(roSwarm, ad);
-		assertNotEquals(PeerConnection.PEER_TYPE_BLIND, roSocket.getPeerType());
-		new DummyConnection(roSocket).handshake(true, true);
-		assertEquals(PeerConnection.PEER_TYPE_BLIND, roSocket.getPeerType());
-		roSwarm.close();
-		roSocket.close();
-		roConfig.getSwarm().close();
-	}
-	
-	@Test
-	public void testHandshakeSetsPeerTypeToSeedOnlyIfServerSendsGarbageProof() throws IOException {
-		assertNotEquals(PeerConnection.PEER_TYPE_BLIND, socket.getPeerType());
-		new DummyConnection(socket).handshake(true, false);
-		assertEquals(PeerConnection.PEER_TYPE_BLIND, socket.getPeerType());
-	}
-	
-	@Test
-	public void testHandshakeSetsPeerTypeToFullIfServerSendsValidProofAndArchiveHasReadAccess() throws IOException {
-		assertNotEquals(PeerConnection.PEER_TYPE_FULL, socket.getPeerType());
-		new DummyConnection(socket).handshake(true, true);
-		assertEquals(PeerConnection.PEER_TYPE_FULL, socket.getPeerType());
-	}
-	
-	@Test
-	public void testHandshakeClosesSocketIfPeerDoesNotCompleteInTime() {
-		TCPPeerSocket.maxHandshakeTimeMillis = 20;
-		blindHandshake(socket);
-		assertFalse(Util.waitUntil(TCPPeerSocket.maxHandshakeTimeMillis-5, ()->socket.isClosed()));
-		assertTrue(Util.waitUntil(100, ()->socket.isClosed()));
 	}
 	
 	@Test
@@ -721,7 +506,7 @@ public class TCPPeerSocketTest {
 	}
 	
 	@Test
-	public void testIsClientReturnsFalseIfConstructedWithSharedSecret() throws Exception {
+	public void testIsClientReturnsFalseIfConstructedWithHandshake() throws Exception {
 		setupServerSocket((serverSocket, clientSocket, secret)->{
 			assertFalse(clientSocket.isLocalRoleClient());
 		});
@@ -755,9 +540,9 @@ public class TCPPeerSocketTest {
 	}
 
 	@Test
-	public void testGetSharedSecretReturnsSharedSecret() throws IOException {
+	public void testGetIdentifierReturnsIdentifier() throws IOException {
 		DummyConnection dummy = new DummyConnection(socket).handshake();
-		assertTrue(Arrays.equals(dummy.secret, socket.sharedSecret));
+		assertTrue(Arrays.equals(dummy.identifier, socket.identifier));
 	}
 	
 	@Test

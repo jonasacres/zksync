@@ -29,6 +29,31 @@ public class CryptoSupportTest  {
 	}
 	
 	@Test
+	public void testSignatureRandomness() {
+		long i = 0;
+		long[] counts = new long[8*crypto.asymSignatureSize()];
+		while(true) {
+			i++;
+			if(i % 10000 == 0) {
+				System.out.println("i=" + i);
+				for(int j = 0; j < counts.length; j++) {
+					double p = (double) counts[j]/i, q = 1 - p;
+					double entropy = (-p*Math.log(p) + -q*Math.log(q))/Math.log(2);
+					System.out.printf("\t%3d: %10d entropy=%.05f\n", j, counts[j], entropy);
+				}
+			}
+			
+			PrivateSigningKey key = crypto.makePrivateSigningKey();
+			byte[] signature = key.sign(new byte[] { 0x00 });
+			for(int j = 0; j < counts.length; j++) {
+				if((signature[j/8] & (1 << j % 8)) != 0) {
+					counts[j]++;
+				}
+			}
+		}
+	}
+	
+	@Test
 	public void testHash() {
 		byte[] digest = crypto.hash("a".getBytes());
 		// BLAKE2b test vector, taken from https://github.com/openssl/openssl/blob/2d0b44126763f989a4cbffbffe9d0c7518158bb7/test/evptests.txt

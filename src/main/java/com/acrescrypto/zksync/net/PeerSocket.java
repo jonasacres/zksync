@@ -44,7 +44,7 @@ public abstract class PeerSocket {
 	public abstract boolean isClosed();
 	public abstract void handshake(PeerConnection conn) throws ProtocolViolationException, IOException;
 	public abstract int getPeerType() throws UnsupportedOperationException;
-	public abstract byte[] getSharedSecret();
+	public abstract byte[] getIdentifier();
 	
 	public void handshake() throws ProtocolViolationException, IOException { handshake(null); }
 	

@@ -31,6 +31,7 @@ public class SignedSecureFile {
 		return crypto.asymSignatureSize() + crypto.symPaddedCiphertextSize(padSize);
 	}
 	
+	// TODO DHT: (refactor) THIS IS NEVER CALLED. WTF.
 	public static boolean verifySignature(byte[] contents, byte[] associatedData, PublicSigningKey pubKey) {
 		int sigOffset = contents.length-pubKey.crypto.asymSignatureSize();
 		int signableLen = sigOffset;
@@ -42,6 +43,8 @@ public class SignedSecureFile {
 			signableLen += associatedData.length;
 			signable = buf.array();
 		}
+		
+		contents[contents.length-1] &= 0x0f; // drop the random bits we wrote
 		return pubKey.verify(signable, 0, signableLen, contents, sigOffset, pubKey.crypto.asymSignatureSize());
 	}
 
@@ -94,6 +97,7 @@ public class SignedSecureFile {
 		try {
 			byte[] ciphertext = textKey.encrypt(fixedIV(), plaintext, padSize);
 			byte[] signature = privKey.sign(ciphertext);
+			signature[signature.length-1] |= privKey.crypto.rng(1)[0] & 0xf0; // these bits are always zero, so randomize
 			
 			ByteBuffer buf = ByteBuffer.allocate(ciphertext.length + signature.length);
 			buf.put(ciphertext);

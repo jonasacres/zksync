@@ -104,7 +104,7 @@ public class PeerConnectionTest {
 		@Override public boolean isClosed() { return closed; }
 		@Override public void handshake(PeerConnection conn) {}
 		@Override public int getPeerType() { return peerType; }
-		@Override public byte[] getSharedSecret() { return null; }
+		@Override public byte[] getIdentifier() { return null; }
 		@Override public String getAddress() { return "127.0.0.1"; }
 		@Override public int getPort() { return 1234; }
 		@Override public synchronized DummyPeerMessageOutgoing makeOutgoingMessage(byte cmd, InputStream stream) {

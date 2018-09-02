@@ -140,7 +140,7 @@ public class TCPHandshakeContextTest {
 	
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
-		TCPHandshakeContext.handshakeTimeoutMs = 60*1000;
+		TCPHandshakeContext.handshakeTimeoutMs = 1000;
 		crypto = new CryptoSupport();
 
 		serverTamperOffset = -1;

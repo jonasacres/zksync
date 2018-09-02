@@ -268,4 +268,10 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	public PassphraseProvider getPassphraseProvider() {
 		return passphraseProvider;
 	}
+
+	/** Test purposes only. */
+	@Deprecated
+	public void setTCPListener(TCPPeerSocketListener listener) {
+		this.listener = listener;		
+	}
 }

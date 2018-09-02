@@ -38,7 +38,7 @@ public class PeerMessageOutgoingTest {
 		@Override public boolean isLocalRoleClient() { return false; }
 		@Override public void _close() {}
 		@Override public boolean isClosed() { return false; }
-		@Override public byte[] getSharedSecret() { return null; }
+		@Override public byte[] getIdentifier() { return null; }
 		@Override public String getAddress() { return "dummy"; }
 		@Override public void handshake(PeerConnection conn) throws ProtocolViolationException, IOException {}
 		@Override public int getPeerType() throws UnsupportedOperationException { return -1; }

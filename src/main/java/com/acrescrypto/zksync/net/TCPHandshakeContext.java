@@ -85,10 +85,13 @@ public class TCPHandshakeContext {
 	public final static int BOOTSTRAP_RESERVED_LEN = 16;
 	public final static int MAX_HANDSHAKE_ELEMENT_SIZE = 16384;
 	public final static int MAX_PADDING_LEN = 1024;
-	public final static int TIMESLICE_EXPIRATION_GRACE_MS = 10*1000;
+	public final static int TIMESLICE_EXPIRATION_GRACE_MS = 60*1000;
 	
 	public final static int HANDSHAKE_TIMEOUT_MS_DEFAULT = 10*10000;
 	public static int handshakeTimeoutMs = HANDSHAKE_TIMEOUT_MS_DEFAULT;
+	
+	public final static int CLOSE_SOCKET_DELAY_MS_DEFAULT = 5*1000;
+	public static int closeSocketDelayMs = CLOSE_SOCKET_DELAY_MS_DEFAULT;
 	
 	public final static short RECORD_TYPE_AUTH = 0;
 	
@@ -104,9 +107,10 @@ public class TCPHandshakeContext {
 	OutputStream out;
 	SnoozeThread timeout;
 	
-	byte[] secret, clientProof, serverProof;
+	byte[] clientProof, serverProof, identifier;
 	boolean roleIsClient;
 	int remotePort, peerType;
+	long startTime;
 	
 	public TCPHandshakeContext(PeerSwarm swarm, Socket socket, PublicDHKey serverStaticKey) throws IOException {
 		// act as client
@@ -116,6 +120,7 @@ public class TCPHandshakeContext {
 		this.remoteStaticKey = serverStaticKey;
 		this.localStaticKey = swarm.identityKey;
 		this.swarm = swarm;
+		this.startTime = System.currentTimeMillis();
 		initStreams();
 	}
 	
@@ -124,33 +129,31 @@ public class TCPHandshakeContext {
 		this.listener = listener;
 		this.socket = socket;
 		this.crypto = listener.crypto;
+		this.startTime = System.currentTimeMillis();
 		initStreams();
 	}
 	
 	public Key establishSecret() throws IOException, ProtocolViolationException {
 		timeout = new SnoozeThread(handshakeTimeoutMs, false, ()->{
 			scrub();
-			try {
-				if(!socket.isClosed()) {
-					socket.close();
-				}
-			} catch (IOException exc) {
-				exc.printStackTrace();
-			}
+			delayedClose();
 		});
 		
 		try {
 			try {
 				if(roleIsClient) {
 					doClientHandshake();
+					identifier = currentKey.authenticate(Util.concat(localEphKey.publicKey().getBytes(), remoteEphKey.getBytes()));
 				} else {
 					doServerHandshake();
+					identifier = currentKey.authenticate(Util.concat(remoteEphKey.getBytes(), localEphKey.publicKey().getBytes()));
 				}
+				
 			} catch(SecurityException exc) {
 				throw new ProtocolViolationException();
 			}
 		} catch(IOException exc) {
-			socket.close();
+			delayedClose();
 			throw exc;
 		} catch(ProtocolViolationException exc) {
 			Blacklist blacklist;
@@ -161,7 +164,7 @@ public class TCPHandshakeContext {
 			}
 			
 			blacklist.add(socket.getInetAddress().getHostAddress(), Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
-			socket.close();
+			delayedClose();
 			throw exc;
 		} finally {
 			scrub();
@@ -169,6 +172,14 @@ public class TCPHandshakeContext {
 		}
 		
 		return currentKey;
+	}
+	
+	protected void delayedClose() {
+		long elapsed = System.currentTimeMillis() - startTime;
+		Util.delay(closeSocketDelayMs - elapsed, ()->{
+			if(socket.isClosed()) return;
+			socket.close();
+		});
 	}
 	
 	protected void scrub() {

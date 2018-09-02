@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.net;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -9,14 +8,12 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.net.ConnectException;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -25,12 +22,9 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
-import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.PrivateDHKey;
-import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
+import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
-import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
@@ -58,8 +52,6 @@ public class TCPPeerSocketListenerTest {
 	
 	TCPPeerSocketListener listener;
 	DummySwarm swarm;
-	PrivateDHKey peerKey;
-	byte[] keyKnowledgeProof, keyHash, staticKeyCiphertext, timeProof;
 	
 	protected Socket connect() throws UnknownHostException, IOException {
 		return connect(listener);
@@ -71,83 +63,26 @@ public class TCPPeerSocketListenerTest {
 		return new Socket("localhost", theListener.port);
 	}
 	
-	protected void assertSocketClosed(Socket socket, boolean immediate) {
-		class Holder { boolean closed; }
-		Holder holder = new Holder();
+	protected void assertSocketClosed(Socket socket, long startTime, int minDelay) {
+		MutableBoolean closed = new MutableBoolean();
 		
 		Thread thread = new Thread(()-> {
 			try {
 				IOUtils.readFully(socket.getInputStream(), new byte[1]);
 			} catch (IOException e) {
-				holder.closed = true;
+				closed.setTrue();
 			}
 		});
 		
-		long startTime = System.currentTimeMillis();
 		thread.start();
 		try {
-			thread.join(TCPPeerSocket.socketCloseDelay+50);
+			thread.join(TCPHandshakeContext.closeSocketDelayMs + 50);
 		} catch (InterruptedException exc) {}
 		
-		if(!immediate) {
-			// we should have waited about as long as the close delay, with a couple seconds knocked off to account for the time to get here
-			assertTrue(System.currentTimeMillis() - startTime >= TCPPeerSocket.socketCloseDelay-2);
-		}
-		assertTrue(holder.closed);
-	}
-	
-	protected byte[] readData(Socket socket, int length) {
-		class Holder { boolean closed; }
-		Holder holder = new Holder();
-		byte[] data = new byte[length];
-
-		Thread thread = new Thread(()-> {
-			try {
-				IOUtils.readFully(socket.getInputStream(), data);
-			} catch (IOException e) {
-				holder.closed = true;
-			}
-		});
+		// we should have waited about as long as the close delay, with a couple milliseconds knocked off to account for the time to get here
+		assertTrue(System.currentTimeMillis() - startTime >= minDelay);
 		
-		thread.start();
-		try {
-			thread.join(10);
-		} catch(InterruptedException exc) {}
-		assertFalse(holder.closed);
-		return data;
-	}
-	
-	protected byte[] sendHandshake(PublicDHKey adKey, Socket socket, int timeSliceOffset, ZKArchiveConfig proofConfig) throws IOException {
-		int timeSlice = swarm.config.getAccessor().timeSliceIndex() + timeSliceOffset;
-
-		byte[] tempSharedSecret = peerKey.sharedSecret(adKey);
-		byte[] staticSecret = swarm.identityKey.sharedSecret(adKey);
-		Key staticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
-		staticKeyCiphertext = staticSymKeyText.encrypt(crypto.symNonce(0), swarm.identityKey.publicKey().getBytes(), -1);
-		byte[] encryptedPortNumber = staticSymKeyText.encrypt(crypto.symNonce(1), Util.serializeShort((short) 0), -1);
-		
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize()+crypto.hashLength()+4);
-		keyHashInput.put(peerKey.publicKey().getBytes());
-		keyHashInput.put(adKey.getBytes());
-		keyHashInput.put(swarm.config.getArchiveId());
-		keyHashInput.putInt(0);
-		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
-		
-		keyHash = keyHashKey.authenticate(keyHashInput.array());
-		if(proofConfig != null) keyKnowledgeProof = proofConfig.getAccessor().temporalProof(timeSlice, 0, tempSharedSecret);
-		else keyKnowledgeProof = crypto.rng(crypto.symKeyLength());
-		
-		timeProof = crypto.authenticate(tempSharedSecret, Util.serializeInt(timeSlice));
-		
-		OutputStream out = socket.getOutputStream();
-		out.write(peerKey.publicKey().getBytes());
-		out.write(keyHash);
-		out.write(timeProof);
-		out.write(keyKnowledgeProof);
-		out.write(staticKeyCiphertext);
-		out.write(encryptedPortNumber);
-		
-		return staticSecret;
+		assertTrue(closed.booleanValue());
 	}
 	
 	@BeforeClass
@@ -155,23 +90,23 @@ public class TCPPeerSocketListenerTest {
 		ZKFSTest.cheapenArgon2Costs();
 		crypto = new CryptoSupport();
 		master = ZKMaster.openBlankTestVolume();
-		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
+		archive = master.createDefaultArchive();
 	}
 	
+	@SuppressWarnings("deprecation")
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
 		master.getBlacklist().clear();
 		TCPPeerSocket.disableMakeThreads = true;
-		TCPPeerSocket.socketCloseDelay = 50;
+		TCPHandshakeContext.closeSocketDelayMs = 100;
 		TCPPeerSocket.maxHandshakeTimeMillis = 250;
 		listener = new TCPPeerSocketListener(master, 0);
+		master.setTCPListener(listener);
 		swarm = new DummySwarm(archive.getConfig());
-		peerKey = crypto.makePrivateDHKey();
 	}
 	
 	@After
 	public void afterEach() throws IOException {
-		Util.waitUntil(10, ()->listener.established);
 		if(swarm.opened != null) {
 			swarm.opened.close();
 		}
@@ -185,7 +120,7 @@ public class TCPPeerSocketListenerTest {
 		archive.close();
 		master.close();
 		TCPPeerSocket.disableMakeThreads = false;
-		TCPPeerSocket.socketCloseDelay = TCPPeerSocket.DEFAULT_SOCKET_CLOSE_DELAY;
+		TCPHandshakeContext.closeSocketDelayMs = TCPHandshakeContext.CLOSE_SOCKET_DELAY_MS_DEFAULT;
 		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
 		ZKFSTest.restoreArgon2Costs();
 		TestUtils.assertTidy();
@@ -310,212 +245,53 @@ public class TCPPeerSocketListenerTest {
 		listener.advertise(swarm);
 		master.getBlacklist().add("127.0.0.1", 60000);
 		Socket socket = connect();
-		assertSocketClosed(socket, true);
+		assertSocketClosed(socket, 0, 0);
 	}
 	
 	@Test
 	public void testDisconnectsPeersBeforeAdvertisedSwarms() throws UnknownHostException, IOException {
 		Socket socket = connect();
-		assertSocketClosed(socket, false);
+		assertSocketClosed(socket, 0, 0);
 		socket.close();
 	}
 	
 	@Test
-	public void testDisconnectsPeersSendingInvalidKeyHash() throws UnknownHostException, IOException {
+	public void testHandshakesWithPeers() throws IOException, ProtocolViolationException {
+		ZKMaster cMaster = ZKMaster.openBlankTestVolume();
+		ZKArchive cArchive = cMaster.createDefaultArchive();
+		PeerSwarm cSwarm = cArchive.getConfig().getSwarm();
 		listener.advertise(swarm);
-		Socket socket = connect();
-		sendHandshake(crypto.makePrivateDHKey().publicKey(), socket, 0, swarm.config);
-		assertSocketClosed(socket, false);
-	}
-	
-	@Test
-	public void testDisconnectsPeersSendingBackdatedTimeDiffs() throws IOException, UnconnectableAdvertisementException {
-		Util.setCurrentTimeNanos(1000l*1000l*1000l*24l*10000l);
-		listener.advertise(swarm);
-		Socket socket = connect();
-		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, -1, swarm.config);
-		assertSocketClosed(socket, false);
-	}
-	
-	@Test
-	public void testDisconnectsPeersSendingPostdatedTimeDiffs() throws IOException, UnconnectableAdvertisementException {
-		Util.setCurrentTimeNanos(1000l*1000l*1000l*24l*10000l);
-		listener.advertise(swarm);
-		Socket socket = connect();
-		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 1, swarm.config);
-		assertSocketClosed(socket, false);
-	}
-	
-	@Test
-	public void testDisconnectsPeersExceedingDeadlineToHandshake() throws UnknownHostException, IOException {
-		TCPPeerSocket.maxHandshakeTimeMillis = 5;
-		listener.advertise(swarm);
-		Socket socket = connect();
-		Util.sleep(TCPPeerSocket.maxHandshakeTimeMillis+20);
-		assertSocketClosed(socket, true);
-	}
-	
-	@Test
-	public void testToleratesPeersSendingBackdatedTimeDiffsWithinGrace() throws IOException, UnconnectableAdvertisementException {
-		ArchiveAccessor accessor = archive.getConfig().getAccessor();
-		Util.setCurrentTimeNanos((accessor.timeSlice(10000) + 10)*1000l*1000l);
-		
-		listener.advertise(swarm);
-		Socket socket = connect();
-		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, -1, swarm.config);
-		readData(socket, 1);
-		socket.close();
-	}
-	
-	@Test
-	public void testToleratesPeersSendingPostdatedTimeDiffsWithinGrace() throws IOException, UnconnectableAdvertisementException {
-		ArchiveAccessor accessor = archive.getConfig().getAccessor();
-		Util.setCurrentTimeNanos((accessor.timeSlice(10001) - 10)*1000l*1000l);
-		
-		listener.advertise(swarm);
-		Socket socket = connect();
-		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 1, swarm.config);
-		readData(socket, 1);
-		socket.close();
-	}
 
-	@Test
-	public void testMarksPeersBlindIfWrongProofSent() throws UnknownHostException, IOException, UnconnectableAdvertisementException {
-		listener.advertise(swarm);
-		Socket socket = connect();
-		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, null);
-		Util.waitUntil(100, ()->swarm.opened != null);
-		assertEquals(PeerConnection.PEER_TYPE_BLIND, swarm.opened.getPeerType());
-		socket.close();
+		Socket socket = connect(); 
+		TCPHandshakeContext clientHandshake = new TCPHandshakeContext(cSwarm,
+				socket,
+				swarm.getPublicIdentityKey());
+		clientHandshake.establishSecret();
+		
+		cArchive.close();
+		cMaster.close();
 	}
 	
 	@Test
-	public void testMarksPeersBlindIfOwnArchiveIsSeedOnly() throws UnknownHostException, IOException, UnconnectableAdvertisementException {
-		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
-		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
-		DummySwarm roSwarm = new DummySwarm(roConfig);
-		
-		listener.advertise(roSwarm);
-		Socket socket = connect();
-		sendHandshake(listener.listenerForSwarm(roSwarm).localAd().pubKey, socket, 0, swarm.config);
-		Util.waitUntil(100, ()->swarm.opened != null);
-		assertEquals(PeerConnection.PEER_TYPE_BLIND, roSwarm.opened.getPeerType());
-		
-		roConfig.close();
-		roSwarm.close();
-		roSwarm.opened.close();
-		socket.close();
-	}
-	
-	@Test
-	public void testMarksPeersFullIfCorrectProofAndArchiveHasReadAccess() throws IOException, UnconnectableAdvertisementException {
+	public void testHandshakeProtocolViolationsTriggersDelayedClose() throws IOException, ProtocolViolationException {
+		ZKMaster cMaster = ZKMaster.openBlankTestVolume();
+		ZKArchive cArchive = cMaster.createDefaultArchive();
+		PeerSwarm cSwarm = cArchive.getConfig().getSwarm();
 		listener.advertise(swarm);
-		Socket socket = connect();
-		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
-		assertTrue(Util.waitUntil(100000, ()->swarm.opened != null));
-		assertEquals(PeerConnection.PEER_TYPE_FULL, swarm.opened.getPeerType());
-	}
-	
-	@Test
-	public void testSendsEphemeralKeyAndProofs() throws UnknownHostException, IOException, UnconnectableAdvertisementException {
-		listener.advertise(swarm);
-		Socket socket = connect();
-		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
-		byte[] staticSecret = sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
-		Util.waitUntil(100, ()->swarm.opened != null);
-		
-		PublicDHKey ephemeral = crypto.makePublicDHKey(readData(socket, crypto.asymPublicDHKeySize()));
-		byte[] responseKeyKnowledgeProof = readData(socket, crypto.symKeyLength());
-		byte[] ephemeralSecret = peerKey.sharedSecret(ephemeral);
-		byte[] sharedSecretText = Util.concat(peerKey.publicKey().getBytes(),
-				keyHash,
-				timeProof,
-				keyKnowledgeProof,
-				staticKeyCiphertext,
-				ephemeral.getBytes(),
-				responseKeyKnowledgeProof,
-				swarm.config.getAccessor().temporalSeedId(timeIndex));
-		byte[] sharedSecretRoot = crypto.authenticate(Util.concat(staticSecret, ephemeralSecret), sharedSecretText);
-		byte[] handshakeProofKey = crypto.authenticate(sharedSecretRoot, Util.serializeInt(1));
-		byte[] handshakeProofHash = readData(socket, crypto.hashLength());
+		long startTime = System.currentTimeMillis();
 
-		byte[] expectedHandshakeProofHash = crypto.authenticate(handshakeProofKey, swarm.config.getAccessor().temporalSeedId(timeIndex));
-		
-		assertTrue(Arrays.equals(expectedHandshakeProofHash, handshakeProofHash));
-	}
-	
-	@Test
-	public void testSendsBogusProofWhenClientProofInvalid() throws UnconnectableAdvertisementException, IOException {
-		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
-		listener.advertise(swarm);
 		Socket socket = connect();
-		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, null);
-		Util.waitUntil(100, ()->swarm.opened != null);
+		TCPHandshakeContext clientHandshake = new TCPHandshakeContext(cSwarm,
+				socket,
+				crypto.makePrivateDHKey().publicKey()); // bad public key will cause protocol violation
+		try {
+			clientHandshake.establishSecret();
+			fail();
+		} catch(Exception exc) {}
 		
-		PublicDHKey ephemeral = crypto.makePublicDHKey(readData(socket, crypto.asymPrivateDHKeySize()));
-		readData(socket, crypto.hashLength());
-		byte[] secret = peerKey.sharedSecret(ephemeral);
+		assertSocketClosed(socket, startTime, TCPHandshakeContext.closeSocketDelayMs);
 		
-		byte[] responseProof = readData(socket, crypto.symKeyLength());
-		byte[] expectedResponseProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, secret);
-		assertFalse(Arrays.equals(expectedResponseProof, responseProof));
-	}
-	
-	@Test
-	public void testSendsBogusProofWhenArchiveIsSeedOnly() throws UnconnectableAdvertisementException, IOException, InvalidBlacklistException {
-		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
-		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
-		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
-		DummySwarm roSwarm = new DummySwarm(roConfig);
-		
-		listener.advertise(roSwarm);
-		Socket socket = connect();
-		sendHandshake(listener.listenerForSwarm(roSwarm).localAd().pubKey, socket, 0, swarm.config);
-		Util.waitUntil(100, ()->roSwarm.opened != null);
-		
-		PublicDHKey ephemeral = crypto.makePublicDHKey(readData(socket, crypto.asymPrivateDHKeySize()));
-		readData(socket, crypto.hashLength());
-		byte[] secret = peerKey.sharedSecret(ephemeral);
-		
-		byte[] responseProof = readData(socket, crypto.symKeyLength());
-		byte[] expectedResponseProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, secret);
-		assertFalse(Arrays.equals(expectedResponseProof, responseProof));
-		
-		roConfig.close();
-		roSwarm.opened.close();
-		roSwarm.close();
-		socket.close();
-	}
-	
-	@Test
-	public void testSendsValidProofWhenClientProofValidAndArchiveHasReadAccess() throws UnconnectableAdvertisementException, IOException {
-		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
-		listener.advertise(swarm);
-		Socket socket = connect();
-		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
-		Util.waitUntil(100, ()->swarm.opened != null);
-		
-		readData(socket, crypto.asymPrivateDHKeySize());
-		byte[] tempSecret = peerKey.sharedSecret(listener.listenerForSwarm(swarm).localAd().pubKey);
-
-		byte[] responseKnowledgeProof = readData(socket, crypto.symKeyLength());
-		byte[] expectedResponseKnowledgeProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, tempSecret);
-		assertTrue(Arrays.equals(expectedResponseKnowledgeProof, responseKnowledgeProof));
-
-		socket.close();
-	}
-	
-	@Test
-	public void testRefusesReplayedConnectionAttempts() throws UnknownHostException, IOException, UnconnectableAdvertisementException {
-		listener.advertise(swarm);
-		Socket socket = connect();
-		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
-		assertTrue(Util.waitUntil(100, ()->swarm.opened != null));
-		socket.close();
-		
-		swarm.opened = null;
-		socket = connect();
-		sendHandshake(listener.listenerForSwarm(swarm).localAd().pubKey, socket, 0, swarm.config);
-		assertFalse(Util.waitUntil(100, ()->swarm.opened != null));
+		cArchive.close();
+		cMaster.close();
 	}
 }

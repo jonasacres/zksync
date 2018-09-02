@@ -12,18 +12,14 @@ import org.apache.commons.io.IOUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
-import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
-import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocket extends PeerSocket {
 	public final static int MAX_MSG_LEN = 65536; // maximum ciphertext length; largest buffer a peer needs to hold in memory at once
 	public final static int DEFAULT_MAX_HANDSHAKE_TIME_MILLIS = 60*1000; // 1 minute
-	public final static int DEFAULT_SOCKET_CLOSE_DELAY = 5*1000; // 5 seconds
 	public static int maxHandshakeTimeMillis = DEFAULT_MAX_HANDSHAKE_TIME_MILLIS; // maximum time to handshake before automatic disconnect
-	public static int socketCloseDelay = DEFAULT_SOCKET_CLOSE_DELAY;
 	protected static boolean disableMakeThreads; // test purposes
 
 	protected Socket socket;
@@ -33,30 +29,10 @@ public class TCPPeerSocket extends PeerSocket {
 	protected CryptoSupport crypto;
 	protected Key localChainKey, remoteChainKey;
 	protected PrivateDHKey dhPrivateKey;
-	protected byte[] sharedSecret;
 	protected ByteBuffer remainingReadData;
 	protected TCPPeerAdvertisement ad;
 	protected int peerType = -1;
-	
-	public TCPPeerSocket(PeerSwarm swarm, PublicDHKey remoteIdentityKey, Socket socket, byte[] sharedSecret, int peerType, int portNum) throws IOException {
-		this(swarm);
-		this.address = socket.getInetAddress().getHostAddress();
-		this.socket = socket;
-		this.isLocalRoleClient = false;
-		this.sharedSecret = sharedSecret;
-		this.peerType = peerType;
-		this.remoteIdentityKey = remoteIdentityKey;
-		
-		if(portNum != 0) {
-			byte[] encryptedArchiveId = swarm.config.getEncryptedArchiveId(remoteIdentityKey.getBytes());
-			this.ad = new TCPPeerAdvertisement(remoteIdentityKey, socket.getInetAddress().getHostAddress(), portNum, encryptedArchiveId);
-		}
-		
-		makeStreams();
-		initKeys();
-		swarm.openedConnection(new PeerConnection(this));
-		makeThreads();
-	}
+	protected byte[] identifier;
 	
 	public TCPPeerSocket(PeerSwarm swarm, TCPPeerAdvertisement ad) throws IOException, BlacklistedException {
 		this(swarm);
@@ -75,10 +51,13 @@ public class TCPPeerSocket extends PeerSocket {
 		this.address = socket.getInetAddress().getHostAddress();
 		makeStreams();
 		try {
-			sendHandshake(ad.pubKey);
+			TCPHandshakeContext handshake = new TCPHandshakeContext(swarm, socket, ad.pubKey);
+			Key secret = handshake.establishSecret();
+			this.identifier = handshake.identifier;
+			initKeys(secret);
+			makeThreads();
 		} catch(ProtocolViolationException exc) {
 			this.violation();
-			throw exc;
 		}
 	}
 	
@@ -86,6 +65,27 @@ public class TCPPeerSocket extends PeerSocket {
 		this.swarm = swarm;
 		this.crypto = swarm.config.getAccessor().getMaster().getCrypto();
 		this.dhPrivateKey = crypto.makePrivateDHKey();
+	}
+	
+	protected TCPPeerSocket(TCPHandshakeContext handshake) throws IOException {
+		this(handshake.swarm);
+		this.socket = handshake.socket;
+		this.address = socket.getInetAddress().getHostAddress();
+		this.socket = handshake.socket;
+		this.isLocalRoleClient = false;
+		this.peerType = handshake.peerType;
+		this.remoteIdentityKey = handshake.remoteStaticKey;
+		this.identifier = handshake.identifier;
+		
+		if(handshake.remotePort != 0) {
+			byte[] encryptedArchiveId = swarm.config.getEncryptedArchiveId(remoteIdentityKey.getBytes());
+			this.ad = new TCPPeerAdvertisement(remoteIdentityKey, socket.getInetAddress().getHostAddress(), handshake.remotePort, encryptedArchiveId);
+		}
+		
+		makeStreams();
+		initKeys(handshake.currentKey);
+		swarm.openedConnection(new PeerConnection(this));
+		makeThreads();
 	}
 	
 	@Override
@@ -151,11 +151,6 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 
 	@Override
-	public byte[] getSharedSecret() {
-		return sharedSecret;
-	}
-	
-	@Override
 	public TCPPeerAdvertisement getAd() {
 		return ad;
 	}
@@ -181,14 +176,16 @@ public class TCPPeerSocket extends PeerSocket {
 		}
 	}
 	
-	protected void initKeys() {
+	protected void initKeys(Key secret) {
 		if(isLocalRoleClient) {
-			localChainKey = makeChainRoot(0);
-			remoteChainKey = makeChainRoot(1);
+			localChainKey = makeChainRoot(secret, 0);
+			remoteChainKey = makeChainRoot(secret, 1);
 		} else {
-			localChainKey = makeChainRoot(1);
-			remoteChainKey = makeChainRoot(0);
+			localChainKey = makeChainRoot(secret, 1);
+			remoteChainKey = makeChainRoot(secret, 0);
 		}
+		
+		secret.destroy();
 	}
 
 	protected void makeStreams() throws IOException {
@@ -202,83 +199,14 @@ public class TCPPeerSocket extends PeerSocket {
 		recvThread();
 	}
 
-	protected Key makeChainRoot(int index) {
-		return new Key(crypto, crypto.expand(sharedSecret, crypto.symKeyLength(), new byte[] { (byte) index }, "zksync".getBytes()));
+	protected Key makeChainRoot(Key secret, int index) {
+		return secret.derive(index, "zksync net chain root".getBytes());
 	}
 
-	protected void sendHandshake(PublicDHKey remotePubKey) throws IOException, ProtocolViolationException {
-		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, 10, ()->peerType >= 0, ()->close());
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicDHKeySize()+crypto.hashLength()+4);
-		keyHashInput.put(dhPrivateKey.publicKey().getBytes());
-		keyHashInput.put(remotePubKey.getBytes());
-		keyHashInput.put(swarm.config.getArchiveId());
-		keyHashInput.putInt(0);
-		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
-		
-		byte[] tempSharedSecret = dhPrivateKey.sharedSecret(remotePubKey);
-		byte[] staticSecret = swarm.identityKey.sharedSecret(remotePubKey);
-		Key staticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
-		
-		int timeIndex = swarm.config.getAccessor().timeSliceIndex();
-		int port = 0;
-		try {
-			port = swarm.config.getMaster().getTCPListener().getPort();
-		} catch(NullPointerException exc) {}
-		byte[] keyKnowledgeProof = swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
-		byte[] keyHash = keyHashKey.authenticate(keyHashInput.array());
-		byte[] staticKeyCiphertext = staticSymKeyText.encrypt(crypto.symNonce(0), swarm.identityKey.publicKey().getBytes(), -1);
-		byte[] encryptedPortNum = staticSymKeyText.encrypt(crypto.symNonce(1), Util.serializeShort((short) port), -1);
-		
-		byte[] timeProof = crypto.authenticate(tempSharedSecret, Util.serializeInt(timeIndex));
-		
-		// TODO DHT: (refactor) Conceal client eph public key in handshake?
-		out.write(dhPrivateKey.publicKey().getBytes());
-		out.write(keyHash);
-		out.write(timeProof);
-		out.write(keyKnowledgeProof);
-		out.write(staticKeyCiphertext);
-		out.write(encryptedPortNum);
-		
-		// TODO DHT: (refactor) Conceal server eph public key in handshake?
-		PublicDHKey remoteEphemeralPubKey = crypto.makePublicDHKey(readRaw(crypto.asymPublicDHKeySize()));
-		byte[] ephemeralSecret = dhPrivateKey.sharedSecret(remoteEphemeralPubKey);
-		
-		byte[] remoteKeyKnowledgeProof = readRaw(crypto.symKeyLength());
-		byte[] handshakeProof = readRaw(crypto.hashLength());
-		
-		byte[] expectedRemoteProof = swarm.config.getAccessor().temporalProof(timeIndex, 1, tempSharedSecret);
-		if(Util.safeEquals(expectedRemoteProof, remoteKeyKnowledgeProof)) {
-			peerType = PeerConnection.PEER_TYPE_FULL;
-		} else {
-			peerType = PeerConnection.PEER_TYPE_BLIND;
-		}
-
-		byte[] sharedSecretText = Util.concat(dhPrivateKey.publicKey().getBytes(),
-				keyHash,
-				timeProof,
-				keyKnowledgeProof,
-				staticKeyCiphertext,
-				remoteEphemeralPubKey.getBytes(),
-				remoteKeyKnowledgeProof,
-				swarm.config.getAccessor().temporalSeedId(timeIndex));
-		byte[] sharedSecretRoot = crypto.authenticate(Util.concat(staticSecret, ephemeralSecret),
-				sharedSecretText);
-		sharedSecret = crypto.authenticate(sharedSecretRoot, Util.serializeInt(0));
-		byte[] handshakeProofKey = crypto.authenticate(sharedSecretRoot, Util.serializeInt(1));
-		byte[] expectedHandshakeProof = crypto.authenticate(handshakeProofKey, swarm.config.getAccessor().temporalSeedId(timeIndex));
-
-		assertState(Util.safeEquals(handshakeProof, expectedHandshakeProof));
-
-		initKeys();
-		makeThreads();
-		if(connection == null) {
-			this.connection = new PeerConnection(this);
-		}
-	}
-	
 	protected Key nextLocalMessageKey() {
 		Key newChainKey = localChainKey.derive(0, new byte[0]);
 		Key msgKey = localChainKey.derive(1, new byte[0]);
+		localChainKey.destroy();
 		localChainKey = newChainKey;
 		return msgKey;
 	}
@@ -286,6 +214,7 @@ public class TCPPeerSocket extends PeerSocket {
 	protected Key nextRemoteMessageKey() {
 		Key newChainKey = remoteChainKey.derive(0, new byte[0]);
 		Key msgKey = remoteChainKey.derive(1, new byte[0]);
+		remoteChainKey.destroy();
 		remoteChainKey = newChainKey;
 		return msgKey;
 	}
@@ -303,5 +232,10 @@ public class TCPPeerSocket extends PeerSocket {
 			numRead += r;
 		}
 		return incoming;
+	}
+	
+	@Override
+	public byte[] getIdentifier() {
+		return identifier;
 	}
 }

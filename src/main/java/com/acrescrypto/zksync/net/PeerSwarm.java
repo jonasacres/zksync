@@ -152,7 +152,7 @@ public class PeerSwarm implements BlacklistCallback {
 				if(existing == connection) continue;
 				if(existing.socket.remoteIdentityKey == null) continue;
 				if(!Arrays.equals(connection.socket.remoteIdentityKey.getBytes(), existing.socket.remoteIdentityKey.getBytes())) continue;
-				boolean existingIsLowOrder = Util.compareArrays(existing.socket.getSharedSecret(), connection.socket.getSharedSecret()) < 0;
+				boolean existingIsLowOrder = Util.compareArrays(existing.socket.getIdentifier(), connection.socket.getIdentifier()) < 0;
 				
 				if(existingIsLowOrder) {
 					connection.close();

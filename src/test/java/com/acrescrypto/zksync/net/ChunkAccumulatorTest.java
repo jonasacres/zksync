@@ -70,7 +70,7 @@ public class ChunkAccumulatorTest {
 			closed = true;
 		}
 		@Override public boolean isClosed() { return closed; }
-		@Override public byte[] getSharedSecret() { return null; }
+		@Override public byte[] getIdentifier() { return null; }
 		@Override public void handshake(PeerConnection conn) throws ProtocolViolationException, IOException { }
 		@Override public int getPeerType() throws UnsupportedOperationException { return -1; }
 		@Override
