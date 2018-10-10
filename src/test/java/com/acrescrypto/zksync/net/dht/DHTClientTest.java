@@ -552,48 +552,45 @@ public class DHTClientTest {
 	
 	@Test
 	public void testAddRecordCallsAddRecordOnClosestPeersForID() throws IOException, InvalidBlacklistException {
-		long itr = 0;
-		while(true) {
-			System.out.println("itr=" + itr++);
-			afterEach();
-			beforeEach();
-			DHTID searchId = client.id.flip(); // ensure that the client is NOT one of the closest results
-			try(TestNetwork network = new TestNetwork(16)) {
-				MutableInt numFindNode = new MutableInt();
-				MutableInt numReceived = new MutableInt();
+		DHTID searchId = client.id.flip(); // ensure that the client is NOT one of the closest results
+		try(TestNetwork network = new TestNetwork(16)) {
+			MutableInt numFindNode = new MutableInt();
+			MutableInt numReceived = new MutableInt();
+			
+			network.setHandlerForClosest(searchId, DHTSearchOperation.maxResults, (remote)->{
+				DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
+				assertArrayEquals(searchId.rawId, findNodeMsg.payload);
+				synchronized(numFindNode) { numFindNode.increment();  }
+				findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, DHTSearchOperation.maxResults)).send();
 				
-				network.setHandlerForClosest(searchId, DHTSearchOperation.maxResults, (remote)->{
-					DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
-					assertArrayEquals(searchId.rawId, findNodeMsg.payload);
-					synchronized(numFindNode) { numFindNode.increment();  }
-					findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, DHTSearchOperation.maxResults)).send();
-					
-					DHTMessage addRecordMsg = remote.receivePacket(DHTMessage.CMD_ADD_RECORD);
-					synchronized(numReceived) { numReceived.increment(); }
-					addRecordMsg.assertValidAuthTag();
-					
-					ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);
-					byte[] id = new byte[client.idLength()];
-					payload.get(id);
-					assertArrayEquals(searchId.rawId, id);
-					
-					byte[] recordBytes = new byte[payload.remaining()];
-					payload.get(recordBytes);
-					assertArrayEquals(makeBogusAd(0).serialize(), recordBytes);
-				});
+				DHTMessage addRecordMsg;
+				do {
+					// TODO DHT: Figure out why we mysteriously get extra CMD_FIND_NODEs if we run a full test suite.
+					addRecordMsg = remote.receivePacket();
+				} while(addRecordMsg.cmd != DHTMessage.CMD_ADD_RECORD);
 				
-				client.routingTable.reset();
-				for(RemotePeer remote : network.remotes) {
-					client.addPeer(remote.peer);
-				}
+				synchronized(numReceived) { numReceived.increment(); }
+				addRecordMsg.assertValidAuthTag();
 				
-				client.addRecord(searchId, makeBogusAd(0));
-				network.run();
+				ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);
+				byte[] id = new byte[client.idLength()];
+				payload.get(id);
+				assertArrayEquals(searchId.rawId, id);
 				
-				// TODO DHT: (itf) 8/25/18 linux 3abb4e3 AssertionError: expected<8> but was:<0>
-				// this seems to happen much more reliably when run from FastTests (2nd try in loop, takes >150 when run solo)
-				assertEquals(DHTSearchOperation.maxResults, numReceived.intValue());
+				byte[] recordBytes = new byte[payload.remaining()];
+				payload.get(recordBytes);
+				assertArrayEquals(makeBogusAd(0).serialize(), recordBytes);
+			});
+			
+			client.routingTable.reset();
+			for(RemotePeer remote : network.remotes) {
+				client.addPeer(remote.peer);
 			}
+			
+			client.addRecord(searchId, makeBogusAd(0));
+			network.run();
+			
+			assertEquals(DHTSearchOperation.maxResults, numReceived.intValue());
 		}
 	}
 	
