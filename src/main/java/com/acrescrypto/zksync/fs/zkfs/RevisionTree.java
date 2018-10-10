@@ -73,7 +73,9 @@ public class RevisionTree {
 					if(parents == null) return;
 					for(RevisionTag parent : parents) {
 						if(parent.height == height) {
-							newRevTags.add(parent);
+							synchronized(newRevTags) {
+								newRevTags.add(parent);
+							}
 						} else {
 							deferred.putIfAbsent(parent.height, new ArrayList<>());
 							deferred.get(parent.height).add(parent);
@@ -88,6 +90,7 @@ public class RevisionTree {
 				try {
 					future.get(treeSearchTimeoutMs+100, TimeUnit.MILLISECONDS);
 				} catch (ExecutionException|TimeoutException | InterruptedException exc) {
+					((ExecutionException) exc).getCause().printStackTrace();
 					throw new SearchFailedException();
 				}
 			}
@@ -276,6 +279,27 @@ public class RevisionTree {
 		return new TreeSearchItem(tag).hasAncestor(possibleAncestor);
 	}
 	
+	public Collection<RevisionTag> minimalSet(Collection<RevisionTag> revTags) throws SearchFailedException {
+		LinkedList<RevisionTag> minimal = new LinkedList<>();
+		for(RevisionTag tag : revTags) {
+			boolean redundant = false;
+			for(RevisionTag other : revTags) {
+				if(other == tag) continue;
+				if(descendentOf(other, tag)) {
+					redundant = true;
+					break;
+				}
+			}
+			
+			if(!redundant) {
+				minimal.add(tag);
+			}
+		}
+		
+		minimal.sort(null);
+		return minimal;
+	}
+	
 	public int numRevisions() {
 		return map.size();
 	}
@@ -311,7 +335,7 @@ public class RevisionTree {
 		return parentsForTagNonblocking(revTag) != null;
 	}
 	
-	public void write() throws IOException {
+	public synchronized void write() throws IOException {
 		MutableSecureFile
 		  .atPath(config.localStorage, getPath(), key())
 		  .write(serialize(), 65536);

@@ -204,10 +204,10 @@ public class NetModuleTest {
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestRevision(0, fsa.getBaseRevision());
 		
-		// we should get a config (1 page), inode table (1 page), revinfo (1 page), the file (2 pages) and its pagetree (1 page). root is literal so no page.
+		// we should get a config (1 page), inode table (1 page), the file (2 pages) and its pagetree (1 page). root is literal so no page.
 		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionList().branchTips().size() == 1));
 		Util.waitUntil(2000, ()->bConfig.getArchive().allPageTags().size() == 6);
-		assertEquals(6, bConfig.getArchive().allPageTags().size());
+		assertEquals(5, bConfig.getArchive().allPageTags().size());
 				
 		ZKFS fsb = bConfig.getRevisionList().branchTips().get(0).getFS();
 		assertArrayEquals(fsb.read("path"), fsa.read("path"));
@@ -443,25 +443,12 @@ public class NetModuleTest {
 		for(int i = 0; i < numPeers; i++) {
 			final int ii = i;
 			Util.waitUntil(10000, ()->configs[ii].getRevisionList().branchTips().size() == numPeers);
-//			if(configs[ii].getRevisionTree().plainBranchTips().size() != numPeers) {
-//				for(int j = 0; j < numPeers; j++) {
-//					System.out.println("Dumping " + j);
-//					configs[j].getRevisionTree().dump();
-//					configs[j].getSwarm().dumpConnections();
-//				}
-//			}
 			assertEquals(numPeers, configs[ii].getRevisionList().branchTips().size());
 		}
 		
-		fail();
-		Util.sleep(1000);
-		
 		for(int i = 0; i < numPeers; i++) {
 			DiffSetResolver.canonicalMergeResolver(configs[i].getArchive()).resolve();
-			// TODO DHT: (itf) d92b0c30d 7/23/18 linux expected:<1> but was:<9>
-			if(configs[i].getRevisionList().branchTips().size() != 1) {
-				configs[i].getRevisionList().dump();
-			}
+			
 			assertEquals(1, configs[i].getRevisionList().branchTips().size());
 			if(i > 0) {
 				assertEquals(configs[i-1].getRevisionList().branchTips().get(0), configs[i].getRevisionList().branchTips().get(0));
@@ -473,6 +460,7 @@ public class NetModuleTest {
 				assertArrayEquals(crypto.prng(crypto.hash(Util.serializeInt(j))).getBytes(configs[j].getPageSize()), fs.read("indirect-" + j));
 				assertArrayEquals(crypto.prng(crypto.hash(Util.serializeLong(j))).getBytes(2*configs[j].getPageSize()), fs.read("2indirect-" + j));
 			}
+			
 			fs.close();
 		}
 		

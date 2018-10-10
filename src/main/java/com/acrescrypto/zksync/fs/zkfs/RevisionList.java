@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +42,16 @@ public class RevisionList {
 		branchTips.add(newBranch);
 		config.swarm.announceTip(newBranch);
 		updateLatest(newBranch);
+	}
+	
+	public synchronized void consolidate(RevisionTag newBranch) throws IOException {
+		Collection<RevisionTag> tips = new ArrayList<>(branchTips);
+		for(RevisionTag tip : tips) {
+			if(tip.equals(newBranch)) continue;
+			if(config.getRevisionTree().descendentOf(newBranch, tip)) {
+				removeBranchTip(tip);
+			}
+		}
 	}
 	
 	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
@@ -112,7 +123,9 @@ public class RevisionList {
 	public synchronized void dump() {
 		System.out.println(Util.bytesToHex(config.swarm.getPublicIdentityKey().getBytes(), 6) + " Revision list: " + branchTips.size());
 		int i = 0;
-		for(RevisionTag tag : branchTips()) {
+		ArrayList<RevisionTag> sortedTips = new ArrayList<>(branchTips());
+		sortedTips.sort(null);
+		for(RevisionTag tag : sortedTips) {
 			i++;
 			System.out.println("\t" + i + ": " + tag);
 		}

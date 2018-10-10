@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs.resolver;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
@@ -45,7 +46,9 @@ public class DiffSetResolver {
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
 		// TODO DHT: withTangledCollection
-		DiffSet diffSet = DiffSet.withCollection(archive.getConfig().getRevisionList().branchTips());
+		Collection<RevisionTag> tips = new ArrayList<>(archive.getConfig().getRevisionList().branchTips());
+		Collection<RevisionTag> minimalTips = archive.getConfig().getRevisionTree().minimalSet(tips);
+		DiffSet diffSet = DiffSet.withCollection(minimalTips);
 		return latestVersionResolver(diffSet);
 	}
 	
@@ -148,11 +151,15 @@ public class DiffSetResolver {
 	}
 	
 	public RevisionTag resolve() throws IOException, DiffResolutionException {
-		if(diffset.revisions.length == 1) return diffset.revisions[0];
+		if(diffset.revisions.length == 1) {
+			fs.getArchive().getConfig().getRevisionList().consolidate(diffset.revisions[0]);
+			return diffset.revisions[0];
+		}
 		
 		selectResolutions();
 		applyResolutions();
 		RevisionTag revTag = fs.commitWithTimestamp(diffset.revisions, 0);
+		fs.getArchive().getConfig().getRevisionList().consolidate(revTag);
 		return revTag;
 	}
 	

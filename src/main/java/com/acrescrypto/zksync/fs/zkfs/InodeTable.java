@@ -132,8 +132,11 @@ public class InodeTable extends ZKFile {
 		long height = 1 + zkfs.baseRevision.height;
 		RevisionTag tag = new RevisionTag(inode.getRefTag(), parentHash, height);	
 		RevisionList list = zkfs.archive.config.getRevisionList();
+		RevisionTree tree = zkfs.archive.config.getRevisionTree();
+		tree.addParentsForTag(tag, parents);		
 		list.addBranchTip(tag);
-		for(RevisionTag parent : parents) list.removeBranchTip(parent);
+		list.consolidate(tag);
+		
 		list.write();
 		zkfs.archive.config.swarm.announceTips();
 	}

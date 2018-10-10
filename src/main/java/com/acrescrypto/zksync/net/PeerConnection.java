@@ -215,7 +215,7 @@ public class PeerConnection {
 			return;
 		}
 		
-		announceTags(archive.allPageTags());
+		announceTags(new ArrayList<>(archive.allPageTags()));
 	}
 	
 	public void announceTip(RevisionTag tip) {
