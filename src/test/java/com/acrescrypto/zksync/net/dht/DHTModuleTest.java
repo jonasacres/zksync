@@ -19,12 +19,27 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTModuleTest {
+	class DummyMaster extends ZKMaster {
+		public DummyMaster()
+				throws IOException, InvalidBlacklistException {
+			super();
+			this.crypto = new CryptoSupport();
+			this.threadGroup = Thread.currentThread().getThreadGroup();
+			this.storage = new RAMFS();
+			this.blacklist = new Blacklist(storage, "blacklist", new Key(crypto));
+		}
+		
+		@Override
+		public void close() {}
+	}
+
 	Blacklist blacklist;
 	CryptoSupport crypto;
 	DHTClient root;
@@ -39,7 +54,7 @@ public class DHTModuleTest {
 		ArrayList<DHTClient> clients = new ArrayList<>();
 		
 		for(int i = 0; i < numClients; i++) {
-			ZKMaster master = ZKMaster.openBlankTestVolume(""+i);
+			DummyMaster master = new DummyMaster();
 			DHTClient client = new DHTClient(new Key(crypto), master);
 			clients.add(client);
 			client.addPeer(makePeer(root, client));
@@ -79,7 +94,7 @@ public class DHTModuleTest {
 	public void beforeEach() throws IOException, InvalidBlacklistException {
 		crypto = new CryptoSupport();
 		master = ZKMaster.openBlankTestVolume();
-		root = new DHTClient(new Key(crypto), master);
+		root = master.getDHTClient();
 		root.listen(null, 0);
 	}
 	
