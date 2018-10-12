@@ -232,6 +232,9 @@ public class PeerConnection {
 		Collection<RevisionTag> branchTipsClone = new ArrayList<>(archive.getConfig().getRevisionList().branchTips());
 		ByteBuffer buf = ByteBuffer.allocate(branchTipsClone.size() * RevisionTag.sizeForConfig(socket.swarm.config));
 		for(RevisionTag tag : branchTipsClone) {
+			if(tag == null) {
+				System.out.println("Got a null tag");
+			}
 			buf.put(tag.serialize());
 		}
 		
@@ -683,7 +686,12 @@ public class PeerConnection {
 	protected byte[] serializeRevTags(int priority, Collection<RevisionTag> tags) {
 		ByteBuffer buf = ByteBuffer.allocate(4 + tags.size() * RevisionTag.sizeForConfig(socket.swarm.config));
 		buf.putInt(priority);
-		for(RevisionTag tag : tags) buf.put(tag.getBytes());
+		for(RevisionTag tag : tags) {
+			if(tag == null) {
+				System.out.println("Got a null tag");
+			}
+			buf.put(tag.getBytes());
+		}
 		return buf.array();
 	}
 
@@ -696,7 +704,7 @@ public class PeerConnection {
 	}
 
 	protected void pageQueueThread() {
-		Thread.currentThread().setName("PeerConnection queue thread");
+		Util.setThreadName("PeerConnection queue thread");
 		byte[] lastTag = new byte[0];
 		AppendableInputStream lastStream = null;
 		

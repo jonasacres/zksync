@@ -66,7 +66,7 @@ public class TCPPeerSocketTest {
 		}
 		
 		void runThread() {
-			Thread.currentThread().setName("DummyServer listen thread " + server.getLocalPort());
+			Util.setThreadName("DummyServer listen thread " + server.getLocalPort());
 			try {
 				while(!server.isClosed()) {
 					Socket client = server.accept();
@@ -179,7 +179,7 @@ public class TCPPeerSocketTest {
 		
 		DummyConnection handshake(boolean sendValidAuth, boolean sendValidProof) throws IOException {
 			new Thread(()->{
-				Thread.currentThread().setName("TCPPeerSocketTest DummyConnection handshake thread");
+				Util.setThreadName("TCPPeerSocketTest DummyConnection handshake thread");
 				try {
 					client.handshake();
 				} catch (ProtocolViolationException | IOException exc) {
@@ -285,7 +285,7 @@ public class TCPPeerSocketTest {
 	
 	void blindHandshake(TCPPeerSocket socket) {
 		new Thread(()-> {
-			Thread.currentThread().setName("TCPPeerSocketTest blindHandshake thread");
+			Util.setThreadName("TCPPeerSocketTest blindHandshake thread");
 			try {
 				socket.handshake();
 			} catch (ProtocolViolationException | IOException e) {

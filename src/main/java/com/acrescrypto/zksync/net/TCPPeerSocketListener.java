@@ -45,7 +45,7 @@ public class TCPPeerSocketListener {
 		this.port = port == 0 ? cachedPort() : port;
 		this.adListeners = new LinkedList<>();
 		this.recentProofs = new LinkedList<>();
-		this.thread = new Thread( ()->listenThread() );
+		this.thread = new Thread(master.getThreadGroup(), ()->listenThread() );
 		this.thread.start();
 	}
 	
@@ -96,7 +96,7 @@ public class TCPPeerSocketListener {
 	}
 	
 	protected void listenThread() {
-		Thread.currentThread().setName("TCPPeerSocketListener listen thread");
+		Util.setThreadName("TCPPeerSocketListener listen thread");
 		while(!closed) {
 			try {
 				checkSocketOpen();
@@ -132,7 +132,7 @@ public class TCPPeerSocketListener {
 		}
 		
 		logger.info("Accepted TCP connection from peer {}", socket.getInetAddress().toString());
-		new Thread( ()->peerThread(socket) ).start();
+		new Thread(master.getThreadGroup(), ()->peerThread(socket) ).start();
 	}
 	
 	protected void openSocket() {

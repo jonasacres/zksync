@@ -273,4 +273,8 @@ public class Util {
 		if(a.length < b.length) return -1;
 		return 1;
 	}
+	
+	public static void setThreadName(String name) {
+		Thread.currentThread().setName(name + " " + String.format("%08x", System.identityHashCode(Thread.currentThread())));
+	}
 }

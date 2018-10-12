@@ -12,7 +12,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
-import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
@@ -49,7 +48,7 @@ public class IntegrationTest {
 	public void beforeEach() throws IOException, InvalidBlacklistException {
 		crypto = new CryptoSupport();
 		ZKMaster master = ZKMaster.openBlankTestVolume();
-		rootClient = new DHTClient(new Key(crypto), master);
+		rootClient = master.getDHTClient();
 		rootClient.listen("127.0.0.1", 0);
 		assertTrue(Util.waitUntil(50, ()->rootClient.getStatus() >= DHTClient.STATUS_QUESTIONABLE));
 		root = rootClient.getLocalPeer();
@@ -214,8 +213,7 @@ public class IntegrationTest {
 			fs[i].write("1page-"+i, crypto.prng(Util.serializeInt(i)).getBytes(archives[i].getConfig().getPageSize()));
 			fs[i].write("multipage-"+i, crypto.prng(Util.serializeInt(i)).getBytes(10*archives[i].getConfig().getPageSize()));
 			RevisionTag tag = fs[i].commit();
-			System.out.println("Instantiated " + (i + 1) + " of " + masters.length + ", index " + i + ", revtag=" + tag);
-			fs[i].dump();
+			System.out.println("Initialized i=" + i);
 		}
 		
 		Util.waitUntil(10000, ()->{
@@ -235,7 +233,6 @@ public class IntegrationTest {
 			ZKFS mergedFs = archives[i].openLatest();
 			
 			for(int j = 0; j < masters.length; j++) {
-				System.out.println(i + ":" + j + " of " + masters.length);
 				final int jj = j;
 				byte[] expectedImmediate = crypto.prng(Util.serializeInt(j)).getBytes(crypto.hashLength()-1);
 				byte[] expected1Page = crypto.prng(Util.serializeInt(j)).getBytes(archives[j].getConfig().getPageSize());

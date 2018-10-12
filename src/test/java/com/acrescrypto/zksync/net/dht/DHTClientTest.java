@@ -154,7 +154,7 @@ public class DHTClientTest {
 		}
 		
 		void listenThread() {
-			Thread.currentThread().setName("DHTClientTest RemotePeer listenThread");
+			Util.setThreadName("DHTClientTest RemotePeer listenThread");
 			byte[] receiveData = new byte[65536];
 			DatagramPacket packet = new DatagramPacket(receiveData, receiveData.length);
 
@@ -232,7 +232,7 @@ public class DHTClientTest {
 			MutableBoolean failed = new MutableBoolean();
 			for(RemotePeer remote : remotes) {
 				Thread t = new Thread(()-> {
-					Thread.currentThread().setName("Remote peer handler " + remote.peer.port);
+					Util.setThreadName("Remote peer handler " + remote.peer.port);
 					try {
 						handlers.get(remote).handle(remote);
 					} catch(Exception exc) {

@@ -178,7 +178,7 @@ public class PeerMessageIncoming extends PeerMessage {
 	protected void processThread() {
 		if(connection.socket.threadPool.isShutdown()) return;
 		connection.socket.threadPool.submit(()->{
-			Thread.currentThread().setName("PeerMessageIncoming process thread");
+			Util.setThreadName("PeerMessageIncoming process thread");
 			try {
 				connection.handle(this);
 			} catch(ProtocolViolationException exc) {

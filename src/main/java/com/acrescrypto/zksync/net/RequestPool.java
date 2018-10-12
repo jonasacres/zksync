@@ -36,7 +36,7 @@ public class RequestPool {
 		this.config = config;
 		
 		setRequestingConfigInfo(!config.canReceive());
-		new Thread(()->pruneThread()).start();
+		new Thread(config.getThreadGroup(), ()->pruneThread()).start();
 	}
 	
 	public synchronized void stop() {
@@ -210,7 +210,7 @@ public class RequestPool {
 	}
 	
 	protected void pruneThread() {
-		Thread.currentThread().setName("RequestPool prune thread");
+		Util.setThreadName("RequestPool prune thread");
 		while(!stopped) {
 			try {
 				synchronized(this) { this.wait(pruneIntervalMs); }

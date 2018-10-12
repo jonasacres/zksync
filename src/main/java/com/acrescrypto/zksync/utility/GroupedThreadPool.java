@@ -33,11 +33,11 @@ public class GroupedThreadPool {
 		ThreadFactory factory = new ThreadFactory() {
 			public Thread newThread(Runnable r) {
                 return new Thread(threadGroup, ()->{
-                	Thread.currentThread().setName(name + " active thread");
+                	Util.setThreadName(name + " active thread");
                 	try {
                 		r.run();
                 	} finally {
-                		Thread.currentThread().setName(name + " idle thread");
+                		Util.setThreadName(name + " idle thread");
                 	}
                 });
             }

@@ -127,7 +127,7 @@ public class DHTRecordStore {
 	}
 	
 	protected void addRecordIfReachable(DHTID id, DHTRecord record) {
-		Thread.currentThread().setName("Add record worker");
+		Util.setThreadName("Add record worker");
 		try {
 			if(!record.isReachable()) return;
 			
@@ -147,7 +147,7 @@ public class DHTRecordStore {
 		} catch(IOException exc) {
 			logger.error("Caught exception adding record to record store", exc);
 		}
-		Thread.currentThread().setName("Idle worker");
+		Util.setThreadName("Idle worker");
 	}
 	
 	protected String path() {

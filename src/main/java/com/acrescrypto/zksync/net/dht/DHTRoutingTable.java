@@ -28,7 +28,7 @@ public class DHTRoutingTable {
 	public DHTRoutingTable(DHTClient client) {
 		this.client = client;
 		read();
-		new Thread(()->freshenThread()).start();
+		new Thread(client.threadGroup, ()->freshenThread()).start();
 	}
 	
 	protected DHTRoutingTable() {}
@@ -144,7 +144,7 @@ public class DHTRoutingTable {
 	}
 	
 	protected void freshenThread() {
-		Thread.currentThread().setName("DHTRoutingTable freshen thread");
+		Util.setThreadName("DHTRoutingTable freshen thread");
 		while(!closed) {
 			try {
 				synchronized(this) { if(!closed) this.wait(freshenIntervalMs); }

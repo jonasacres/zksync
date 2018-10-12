@@ -52,8 +52,8 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	public synchronized void discoverArchives(ArchiveAccessor accessor) {
 		DiscoveryEntry entry = new DiscoveryEntry(accessor);
 		activeDiscoveries.put(accessor, entry);
-		new Thread(()->discoveryThread(entry)).start();
-		new Thread(()->advertisementThread(entry)).start();
+		new Thread(accessor.getThreadGroup(), ()->discoveryThread(entry)).start();
+		new Thread(accessor.getThreadGroup(), ()->advertisementThread(entry)).start();
 	}
 
 	@Override
@@ -62,7 +62,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	}
 
 	protected void discoveryThread(DiscoveryEntry entry) {
-		Thread.currentThread().setName("DHTZKArchiveDiscovery discovery thread");
+		Util.setThreadName("DHTZKArchiveDiscovery discovery thread");
 		while(isDiscovering(entry.accessor)) {
 			try {
 				Util.blockOn(()->isDiscovering(entry.accessor) && !entry.accessor.getMaster().getDHTClient().initialized);
@@ -80,7 +80,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	}
 	
 	protected void advertisementThread(DiscoveryEntry entry) {
-		Thread.currentThread().setName("DHTZKArchiveDiscovery advertisement thread");
+		Util.setThreadName("DHTZKArchiveDiscovery advertisement thread");
 		while(isAdvertising(entry.accessor)) {
 			try {
 				Util.blockOn(()->isAdvertising(entry.accessor) && !entry.accessor.getMaster().getDHTClient().initialized);

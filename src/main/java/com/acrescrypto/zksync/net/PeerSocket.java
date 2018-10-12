@@ -17,6 +17,7 @@ import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
+import com.acrescrypto.zksync.utility.Util;
 
 public abstract class PeerSocket {
 	protected PeerSwarm swarm;
@@ -168,7 +169,7 @@ public abstract class PeerSocket {
 	
 	protected void sendThread() {
 		swarm.threadPool.submit(() -> {
-			Thread.currentThread().setName("PeerSocket send thread port " + getPort());
+			Util.setThreadName("PeerSocket send thread port " + getPort());
 			while(!isClosed()) {
 				try {
 					synchronized(this) {
@@ -192,7 +193,7 @@ public abstract class PeerSocket {
 	
 	protected void recvThread() {
 		swarm.threadPool.submit(() -> {
-			Thread.currentThread().setName("PeerSocket receive thread " + getPort());
+			Util.setThreadName("PeerSocket receive thread " + getPort());
 			try {
 				while(!isClosed()) {
 					ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);

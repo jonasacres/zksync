@@ -47,7 +47,7 @@ public class WaitSupervisor {
 	}
 	
 	protected void monitorThread() {
-		Thread.currentThread().setName("WaitSupervisor");
+		Util.setThreadName("WaitSupervisor");
 		while(!closed) {
 			LinkedList<WaitTask> newTasks = new LinkedList<>();
 			long nextCheck = Long.MAX_VALUE;

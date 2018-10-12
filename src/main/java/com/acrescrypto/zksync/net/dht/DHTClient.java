@@ -85,6 +85,7 @@ public class DHTClient {
 	Key storageKey, tagKey;
 	String bindAddress;
 	Thread socketListenerThread;
+	ThreadGroup threadGroup;
 	GroupedThreadPool threadPool;
 	boolean closed, initialized;
 	DHTStatusCallback statusCallback;
@@ -101,7 +102,8 @@ public class DHTClient {
 	
 	public DHTClient(Key storageKey, ZKMaster master, byte[] networkId) {
 		this.master = master;
-		this.threadPool = GroupedThreadPool.newCachedThreadPool(master.getThreadGroup(), "DHTClient");
+		this.threadGroup = new ThreadGroup(master.getThreadGroup(), "DHTClient");
+		this.threadPool = GroupedThreadPool.newCachedThreadPool(threadGroup, "DHTClient Pool");
 		this.blacklist = master.getBlacklist();
 		this.storageKey = storageKey;
 		this.storage = master.getStorage();
@@ -123,7 +125,7 @@ public class DHTClient {
 		openSocket();
 
 		if(socketListenerThread == null || !socketListenerThread.isAlive()) {
-			socketListenerThread = new Thread(()->socketListener());
+			socketListenerThread = new Thread(threadGroup, ()->socketListener());
 			socketListenerThread.start();
 		}
 		
@@ -158,8 +160,8 @@ public class DHTClient {
 	}
 	
 	public void autoFindPeers() {
-		new Thread(()->{
-			Thread.currentThread().setName("DHTClient autoFindPeers");
+		new Thread(threadGroup, ()->{
+			Util.setThreadName("DHTClient autoFindPeers");
 			while(!closed) {
 				Util.blockOn(()->routingTable.allPeers().isEmpty());
 				findPeers();
@@ -255,7 +257,7 @@ public class DHTClient {
 	}
 	
 	protected void socketListener() {
-		Thread.currentThread().setName("DHTClient socketListener " + Util.bytesToHex(key.publicKey().getBytes(), 4) + " " + getPort());
+		Util.setThreadName("DHTClient socketListener " + Util.bytesToHex(key.publicKey().getBytes(), 4) + " " + getPort());
 		int lastPort = -1;
 		
 		while(!closed) {

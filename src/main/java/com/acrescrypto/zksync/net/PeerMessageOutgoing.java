@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PeerMessageOutgoing extends PeerMessage {
 	protected boolean txEOF, aborted;
@@ -56,7 +57,7 @@ public class PeerMessageOutgoing extends PeerMessage {
 	protected void runTxThread() {
 		try {
 			connection.socket.threadPool.submit(() -> {
-				Thread.currentThread().setName("PeerMessageOutgoing tx thread cmd=" + cmd);
+				Util.setThreadName("PeerMessageOutgoing tx thread cmd=" + cmd);
 				try {
 					while(!txClosed() && !aborted) {
 						if(queuedSegment != null) queuedSegment.waitForDelivery();

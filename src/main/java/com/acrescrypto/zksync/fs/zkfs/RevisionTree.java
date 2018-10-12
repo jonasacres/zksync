@@ -94,8 +94,13 @@ public class RevisionTree {
 						} catch(InterruptedException exc) {}
 					}
 				} catch (ExecutionException|TimeoutException exc) {
-					exc.printStackTrace();
-					exc.getCause().printStackTrace();
+					if(exc instanceof ExecutionException) {
+						exc.printStackTrace();
+						if(exc.getCause() != null) {
+							exc.getCause().printStackTrace();
+						}
+					}
+					
 					throw new SearchFailedException();
 				}
 			}

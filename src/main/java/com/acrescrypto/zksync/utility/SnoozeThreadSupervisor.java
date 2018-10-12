@@ -48,6 +48,7 @@ public class SnoozeThreadSupervisor {
 	}
 	
 	protected void monitorThread() {
+		Util.setThreadName("SnoozeThreadSupervisor monitor");
 		while(!closed) {
 			prune(true);
 			
