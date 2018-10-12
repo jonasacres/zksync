@@ -9,8 +9,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -24,6 +22,7 @@ import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
+import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionTree {
@@ -88,9 +87,15 @@ public class RevisionTree {
 			
 			for(Future<?> future : futures) {
 				try {
-					future.get(treeSearchTimeoutMs+100, TimeUnit.MILLISECONDS);
-				} catch (ExecutionException|TimeoutException | InterruptedException exc) {
-					((ExecutionException) exc).getCause().printStackTrace();
+					while(true) {
+						try {
+							future.get(treeSearchTimeoutMs+100, TimeUnit.MILLISECONDS);
+							break;
+						} catch(InterruptedException exc) {}
+					}
+				} catch (ExecutionException|TimeoutException exc) {
+					exc.printStackTrace();
+					exc.getCause().printStackTrace();
 					throw new SearchFailedException();
 				}
 			}
@@ -179,11 +184,12 @@ public class RevisionTree {
 	ZKArchiveConfig config;
 	HashMap<RevisionTag, HashSet<RevisionTag>> map = new HashMap<>();
 	boolean autowrite = true;
-	protected ExecutorService threadPool = Executors.newFixedThreadPool(8);
+	protected GroupedThreadPool threadPool;
 	protected final Logger logger = LoggerFactory.getLogger(RevisionTree.class); 
 	
 	public RevisionTree(ZKArchiveConfig config) {
 		this.config = config;
+		threadPool = GroupedThreadPool.newFixedThreadPool(config.getThreadGroup(), "RevisionTree lookup", 8);
 		try {
 			read();
 		} catch(ENOENTException|SecurityException exc) {

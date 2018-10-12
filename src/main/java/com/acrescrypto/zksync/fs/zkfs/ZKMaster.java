@@ -40,6 +40,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected TCPPeerSocketListener listener;
 	protected DHTClient dhtClient;
 	protected DHTZKArchiveDiscovery dhtDiscovery;
+	protected ThreadGroup threadGroup;
 	protected long debugTime = -1;
 	
 	public static ZKMaster openTestVolume() throws IOException {
@@ -73,14 +74,17 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		}
 	}
 	
+	protected ZKMaster() {}
+	
 	public ZKMaster(CryptoSupport crypto, FS storage, PassphraseProvider passphraseProvider) throws IOException, InvalidBlacklistException {
 		this.crypto = crypto;
 		this.storage = storage;
 		this.passphraseProvider = passphraseProvider;
+		this.threadGroup = new ThreadGroup("ZKMaster " + System.identityHashCode(this));
 		getLocalKey();
 		this.storedAccess = new StoredAccess(this);
 		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive(ArchiveAccessor.KEY_INDEX_BLACKLIST, "blacklist".getBytes()));
-		this.dhtClient = new DHTClient(localKey.derive(ArchiveAccessor.KEY_INDEX_DHT_STORAGE, "dht-storage".getBytes()), blacklist);
+		this.dhtClient = new DHTClient(localKey.derive(ArchiveAccessor.KEY_INDEX_DHT_STORAGE, "dht-storage".getBytes()), this);
 		this.dhtDiscovery = new DHTZKArchiveDiscovery();
 		loadStoredAccessors();
 	}
@@ -263,5 +267,9 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	@Deprecated // test purposes only
 	public void setDHTClient(DHTClient dhtClient) {
 		this.dhtClient = dhtClient;
+	}
+
+	public ThreadGroup getThreadGroup() {
+		return threadGroup;
 	}
 }

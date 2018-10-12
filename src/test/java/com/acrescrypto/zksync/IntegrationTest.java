@@ -2,7 +2,6 @@ package com.acrescrypto.zksync;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import java.io.IOException;
 
@@ -15,7 +14,6 @@ import org.junit.Test;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
-import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
@@ -23,7 +21,6 @@ import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
-import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
 import com.acrescrypto.zksync.net.dht.DHTSearchOperation;
@@ -32,6 +29,7 @@ import com.acrescrypto.zksync.utility.Util;
 public class IntegrationTest {
 	DHTPeer root;
 	DHTClient rootClient;
+	ZKMaster master;
 	CryptoSupport crypto;
 	
 	public byte[] readFile(ZKFS fs, String path) {
@@ -50,8 +48,8 @@ public class IntegrationTest {
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
 		crypto = new CryptoSupport();
-		Blacklist blacklist = new Blacklist(new RAMFS(), "blacklist", new Key(crypto));
-		rootClient = new DHTClient(new Key(crypto), blacklist);
+		ZKMaster master = ZKMaster.openBlankTestVolume();
+		rootClient = new DHTClient(new Key(crypto), master);
 		rootClient.listen("127.0.0.1", 0);
 		assertTrue(Util.waitUntil(50, ()->rootClient.getStatus() >= DHTClient.STATUS_QUESTIONABLE));
 		root = rootClient.getLocalPeer();
@@ -61,6 +59,7 @@ public class IntegrationTest {
 	public void afterEach() {
 		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
 		rootClient.close();
+		master.close();
 	}
 	
 	@AfterClass
@@ -214,14 +213,13 @@ public class IntegrationTest {
 			fs[i].write("immediate-"+i, crypto.prng(Util.serializeInt(i)).getBytes(crypto.hashLength()-1));
 			fs[i].write("1page-"+i, crypto.prng(Util.serializeInt(i)).getBytes(archives[i].getConfig().getPageSize()));
 			fs[i].write("multipage-"+i, crypto.prng(Util.serializeInt(i)).getBytes(10*archives[i].getConfig().getPageSize()));
-			fs[i].commit();
-			System.out.println("Instantiated " + i + " of " + masters.length);
+			RevisionTag tag = fs[i].commit();
+			System.out.println("Instantiated " + (i + 1) + " of " + masters.length + ", index " + i + ", revtag=" + tag);
+			fs[i].dump();
 		}
 		
-		Util.sleep(30000);
-		fail();
-		
-		Util.waitUntil(600000, ()->{
+		Util.waitUntil(10000, ()->{
+			// wait for everyone to merge to the same revtag
 			for(int i = 0; i < masters.length; i++) {
 				if(archives[i].getConfig().getRevisionList().branchTips().size() > 1) return false;
 				
@@ -232,12 +230,10 @@ public class IntegrationTest {
 			
 			return true;
 		});
-
+		
 		for(int i = 0; i < masters.length; i++) {
-			archives[i].getConfig().getSwarm().dumpConnections();
-			archives[i].getConfig().getRevisionList().dump();
 			ZKFS mergedFs = archives[i].openLatest();
-			mergedFs.dump();
+			
 			for(int j = 0; j < masters.length; j++) {
 				System.out.println(i + ":" + j + " of " + masters.length);
 				final int jj = j;
@@ -249,6 +245,7 @@ public class IntegrationTest {
 				assertArrayEquals(expected1Page, readFile(mergedFs, "1page-"+jj));
 				assertArrayEquals(expectedMultipage, readFile(mergedFs, "multipage-"+jj));
 			}
+			
 			mergedFs.close();
 		}
 		

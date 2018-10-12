@@ -1,3 +1,4 @@
+
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
@@ -9,8 +10,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -33,6 +32,7 @@ import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
+import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerSwarm implements BlacklistCallback {
@@ -50,7 +50,7 @@ public class PeerSwarm implements BlacklistCallback {
 	protected HashMap<PeerAdvertisement,Long> adEmbargoes = new HashMap<PeerAdvertisement,Long>();
 	protected RequestPool pool;
 	protected PrivateDHKey identityKey;
-	protected ExecutorService threadPool = Executors.newCachedThreadPool();
+	protected GroupedThreadPool threadPool;
 	
 	protected Lock pageWaitLock = new ReentrantLock();
 	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
@@ -64,6 +64,7 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	public PeerSwarm(ZKArchiveConfig config) throws IOException {
 		this.config = config;
+		this.threadPool = GroupedThreadPool.newCachedThreadPool(config.getThreadGroup(), "PeerSwarm");
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
 		connectionThread();
 		initIdentity();
@@ -499,7 +500,7 @@ public class PeerSwarm implements BlacklistCallback {
 		System.out.println("\tConnections: " + connections.size());
 		int i = 0;
 		for(PeerConnection connection : connections) {
-			System.out.println("\t\tConnection " + (i++) + ": " + Util.bytesToHex(connection.socket.remoteIdentityKey.getBytes()) + " " + (connection.socket.isLocalRoleClient() ? "client" : "server"));
+			System.out.printf("\t\tConnection %2d: %s\n", i++, Util.bytesToHex(connection.socket.remoteIdentityKey.getBytes()) + " " + (connection.socket.isLocalRoleClient() ? "client" : "server"));
 		}
 	}
 }

@@ -42,6 +42,7 @@ import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
@@ -51,6 +52,20 @@ import com.acrescrypto.zksync.utility.Util;
 public class DHTClientTest {
 	final static int MAX_TEST_TIME_MS = 2000;
 	final static int MAX_MSG_WAIT_TIME_MS = 500;
+	
+	class DummyMaster extends ZKMaster {
+		public DummyMaster()
+				throws IOException, InvalidBlacklistException {
+			super();
+			this.crypto = new CryptoSupport();
+			this.threadGroup = Thread.currentThread().getThreadGroup();
+			this.storage = new RAMFS();
+			this.blacklist = new Blacklist(storage, "blacklist", new Key(crypto));
+		}
+		
+		@Override
+		public void close() {}
+	}
 	
 	class DummyRecord extends DHTRecord {
 		byte[] contents;
@@ -109,8 +124,10 @@ public class DHTClientTest {
 		
 		public void initListenClient() {
 			try {
-				listenClient = new DHTClient(new Key(crypto), new Blacklist(new RAMFS(), "blacklist", new Key(crypto)));
+				ZKMaster master = new DummyMaster();
+				listenClient = new DHTClient(new Key(crypto), master);
 			} catch(Exception exc) {
+				exc.printStackTrace();
 				fail();
 			}
 
@@ -185,6 +202,7 @@ public class DHTClientTest {
 		
 		public void close() {
 			listenClient.close();
+			listenClient.master.close();
 			socket.close();
 		}
 	}
@@ -306,8 +324,8 @@ public class DHTClientTest {
 	}
 
 	CryptoSupport crypto;
-	Blacklist blacklist;
 	Key storageKey;
+	DummyMaster master;
 	DHTClient client;
 	DHTPeer clientPeer;
 	
@@ -332,10 +350,10 @@ public class DHTClientTest {
 		DHTClient.socketOpenFailCycleDelayMs = 20;
 		
 		crypto = new CryptoSupport();
-
-		blacklist = new Blacklist(new RAMFS(), "blacklist", new Key(crypto));
+		
+		master = new DummyMaster();
 		storageKey = new Key(crypto);
-		client = new DHTClient(storageKey, blacklist);
+		client = new DHTClient(storageKey, master);
 		remote = new RemotePeer();
 		
 		client.addPeer(remote.peer);
@@ -347,7 +365,8 @@ public class DHTClientTest {
 	@After
 	public void afterEach() {
 		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
-
+		
+		master.close();
 		remote.close();
 		client.close();
 		Util.setCurrentTimeNanos(-1);
@@ -367,9 +386,9 @@ public class DHTClientTest {
 	
 	@Test
 	public void testConstructorWithoutExistingData() {
-		assertEquals(blacklist, client.blacklist);
+		assertEquals(master.getBlacklist(), client.blacklist);
 		assertEquals(storageKey, client.storageKey);
-		assertEquals(blacklist.getFS(), client.storage);
+		assertEquals(master.getBlacklist().getFS(), client.storage);
 		assertEquals(crypto, client.crypto);
 		assertNotNull(client.routingTable);
 		assertNotNull(client.store);
@@ -377,11 +396,11 @@ public class DHTClientTest {
 	
 	@Test
 	public void testConstructorWithExistingData() {
-		DHTClient client1 = new DHTClient(storageKey, blacklist);
+		DHTClient client1 = new DHTClient(storageKey, master);
 
-		assertEquals(blacklist, client1.blacklist);
+		assertEquals(master.getBlacklist(), client1.blacklist);
 		assertEquals(storageKey, client1.storageKey);
-		assertEquals(blacklist.getFS(), client1.storage);
+		assertEquals(master.getBlacklist().getFS(), client1.storage);
 		assertEquals(crypto, client1.crypto);
 		assertNotNull(client1.routingTable);
 		assertNotNull(client1.store);

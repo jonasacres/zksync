@@ -10,8 +10,6 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,8 +22,10 @@ import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
+import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTClient {
@@ -76,6 +76,7 @@ public class DHTClient {
 
 	DatagramSocket socket;
 	Blacklist blacklist;
+	ZKMaster master;
 	DHTRecordStore store;
 	CryptoSupport crypto;
 	DHTID id;
@@ -84,7 +85,7 @@ public class DHTClient {
 	Key storageKey, tagKey;
 	String bindAddress;
 	Thread socketListenerThread;
-	ExecutorService threadPool = Executors.newCachedThreadPool();
+	GroupedThreadPool threadPool;
 	boolean closed, initialized;
 	DHTStatusCallback statusCallback;
 	int bindPort;
@@ -94,14 +95,16 @@ public class DHTClient {
 	
 	ArrayList<DHTMessageStub> pendingRequests;
 	
-	public DHTClient(Key storageKey, Blacklist blacklist) {
-		this(storageKey, blacklist, new byte[storageKey.getCrypto().hashLength()]);
+	public DHTClient(Key storageKey, ZKMaster master) {
+		this(storageKey, master, new byte[storageKey.getCrypto().hashLength()]);
 	}
 	
-	public DHTClient(Key storageKey, Blacklist blacklist, byte[] networkId) {
-		this.blacklist = blacklist;
+	public DHTClient(Key storageKey, ZKMaster master, byte[] networkId) {
+		this.master = master;
+		this.threadPool = GroupedThreadPool.newCachedThreadPool(master.getThreadGroup(), "DHTClient");
+		this.blacklist = master.getBlacklist();
 		this.storageKey = storageKey;
-		this.storage = blacklist.getFS();
+		this.storage = master.getStorage();
 		this.crypto = storageKey.getCrypto();
 		this.pendingRequests = new ArrayList<>();
 		this.networkId = networkId;

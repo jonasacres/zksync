@@ -11,8 +11,10 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
+import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionList {
@@ -36,12 +38,22 @@ public class RevisionList {
 		return branchTips;
 	}
 	
-	public synchronized void addBranchTip(RevisionTag newBranch) throws IOException {
+	public void addBranchTip(RevisionTag newBranch) throws IOException {
 		// TODO DHT: what about ignoring branch tips that we don't need? (height lower or fewer parents)
-		if(branchTips.contains(newBranch)) return;
-		branchTips.add(newBranch);
-		config.swarm.announceTip(newBranch);
-		updateLatest(newBranch);
+		synchronized(this) {
+			if(branchTips.contains(newBranch)) return;
+			branchTips.add(newBranch);
+			config.swarm.announceTip(newBranch);
+			updateLatest(newBranch);
+		}
+		
+		if(getAutomerge()) {
+			try {
+				executeAutomerge();
+			} catch (DiffResolutionException exc) {
+				logger.error("Unable to automerge with new branch " + newBranch + ": ", exc);
+			}
+		}
 	}
 	
 	public synchronized void consolidate(RevisionTag newBranch) throws IOException {
@@ -150,7 +162,7 @@ public class RevisionList {
 		}
 	}
 	
-	protected void executeAutomerge() {
-		// TODO DHT: (implement) executeAutomerge
+	protected RevisionTag executeAutomerge() throws IOException, DiffResolutionException {
+		return DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
 	}
 }

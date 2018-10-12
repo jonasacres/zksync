@@ -537,4 +537,8 @@ public class ZKArchiveConfig {
 		
 		return false;
 	}
+	
+	public ThreadGroup getThreadGroup() {
+		return accessor.getThreadGroup();
+	}
 }

@@ -2,15 +2,13 @@ package com.acrescrypto.zksync.utility;
 
 import java.util.Collection;
 import java.util.LinkedList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class SnoozeThreadSupervisor {
 	static SnoozeThreadSupervisor shared;
 	
 	protected LinkedList<SnoozeThread> items = new LinkedList<>();
 	protected SnoozeThread nextExpiredItem;
-	protected ExecutorService threadPool = Executors.newFixedThreadPool(4);
+	protected GroupedThreadPool threadPool = GroupedThreadPool.newFixedThreadPool("SnoozeThreadSupervisor", 4);
 	protected boolean closed;
 	
 	public static SnoozeThreadSupervisor shared() {
@@ -50,7 +48,6 @@ public class SnoozeThreadSupervisor {
 	}
 	
 	protected void monitorThread() {
-		Thread.currentThread().setName("SnoozeThreadSupervisor");
 		while(!closed) {
 			prune(true);
 			
@@ -73,9 +70,7 @@ public class SnoozeThreadSupervisor {
 	protected void runCallback(SnoozeThread item) {
 		if(threadPool.isShutdown()) return;
 		threadPool.submit(()->{
-			Thread.currentThread().setName("SnoozeThreadSupervisor active worker");
 			item.runTask();
-			Thread.currentThread().setName("SnoozeThreadSupervisor idle worker");
 		});
 	}
 	

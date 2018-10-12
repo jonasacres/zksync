@@ -53,6 +53,7 @@ public class ChunkAccumulatorTest {
 		boolean violated, closed;
 		
 		public DummySocket(int index, PeerSwarm swarm) {
+			super(swarm);
 			this.index = index;
 			this.swarm = swarm;
 		}

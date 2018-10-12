@@ -20,12 +20,14 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTRecordStoreTest {
 	class DummyClient extends DHTClient {
 		public DummyClient() {
 			this.storage = new RAMFS();
+			this.threadPool = GroupedThreadPool.newCachedThreadPool(Thread.currentThread().getThreadGroup(), "DummyClient");
 			this.crypto = new CryptoSupport();
 			this.storageKey = new Key(crypto);
 		}

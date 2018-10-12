@@ -62,6 +62,7 @@ public class ArchiveAccessor {
 	protected HashSet<ArchiveDiscovery> discoveryMethods = new HashSet<ArchiveDiscovery>();
 	protected ArrayList<ZKArchiveConfig> knownArchiveConfigs = new ArrayList<ZKArchiveConfig>();
 	protected ArrayList<ArchiveAccessorDiscoveryCallback> callbacks = new ArrayList<ArchiveAccessorDiscoveryCallback>();
+	protected ThreadGroup threadGroup;
 	
 	public interface ArchiveDiscovery {
 		void discoverArchives(ArchiveAccessor accessor);
@@ -75,6 +76,8 @@ public class ArchiveAccessor {
 	public ArchiveAccessor(ZKMaster master, Key root, int type) {
 		this.master = master;
 		this.type = type;
+		this.threadGroup = new ThreadGroup(master.threadGroup, "ArchiveAccessor " + System.identityHashCode(this));
+		
 		switch(type) {
 		case KEY_ROOT_PASSPHRASE:
 			deriveFromPassphraseRoot(root);
@@ -249,5 +252,9 @@ public class ArchiveAccessor {
 		}
 		
 		return null;
+	}
+	
+	public ThreadGroup getThreadGroup() {
+		return threadGroup;
 	}
 }

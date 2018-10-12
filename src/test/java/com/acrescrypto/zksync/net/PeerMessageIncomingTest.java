@@ -29,7 +29,7 @@ import com.acrescrypto.zksync.utility.Util;
 public class PeerMessageIncomingTest {
 	class DummySocket extends PeerSocket {
 		boolean violated, finished;
-		public DummySocket(PeerSwarm swarm) { this.swarm = swarm; }
+		public DummySocket(PeerSwarm swarm) { super(swarm); }
 		@Override public PeerAdvertisement getAd() { return null; }
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }

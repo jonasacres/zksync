@@ -83,6 +83,7 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	protected TCPPeerSocket(PeerSwarm swarm) throws IOException {
+		super(swarm);
 		this.swarm = swarm;
 		this.crypto = swarm.config.getAccessor().getMaster().getCrypto();
 		this.dhPrivateKey = crypto.makePrivateDHKey();

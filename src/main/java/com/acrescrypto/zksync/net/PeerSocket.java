@@ -8,8 +8,6 @@ import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +16,7 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.utility.GroupedThreadPool;
 
 public abstract class PeerSocket {
 	protected PeerSwarm swarm;
@@ -26,7 +25,7 @@ public abstract class PeerSocket {
 	protected LinkedList<PeerMessageOutgoing> outgoing = new LinkedList<PeerMessageOutgoing>();
 	protected LinkedList<MessageSegment> ready = new LinkedList<MessageSegment>();	
 	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
-	protected ExecutorService threadPool = Executors.newFixedThreadPool(4);
+	protected GroupedThreadPool threadPool = GroupedThreadPool.newFixedThreadPool("PeerSocket", 4);
 	
 	protected int nextSendMessageId, maxReceivedMessageId = Integer.MIN_VALUE;
 	protected final Logger logger = LoggerFactory.getLogger(PeerSocket.class);
@@ -47,6 +46,11 @@ public abstract class PeerSocket {
 	public abstract byte[] getSharedSecret();
 	
 	public void handshake() throws ProtocolViolationException, IOException { handshake(null); }
+	
+	protected PeerSocket(PeerSwarm swarm) {
+		this.swarm = swarm;
+		threadPool = GroupedThreadPool.newFixedThreadPool(swarm != null ? swarm.config.getThreadGroup() : Thread.currentThread().getThreadGroup(), "PeerSocket", 4);
+	}
 	
 	public final void close() throws IOException {
 		if(isClosed()) return;
@@ -164,7 +168,7 @@ public abstract class PeerSocket {
 	
 	protected void sendThread() {
 		swarm.threadPool.submit(() -> {
-			Thread.currentThread().setName("TCPPeerSocket send thread port " + getPort());
+			Thread.currentThread().setName("PeerSocket send thread port " + getPort());
 			while(!isClosed()) {
 				try {
 					synchronized(this) {

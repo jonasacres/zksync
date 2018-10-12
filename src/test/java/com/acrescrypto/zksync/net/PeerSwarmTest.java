@@ -72,6 +72,7 @@ public class PeerSwarmTest {
 		protected String address = "dummy";
 		protected DummyAdvertisement ad;
 		public DummySocket(String address, PeerSwarm swarm) {
+			super(swarm);
 			this.address = address;
 			this.swarm = swarm;
 			synchronized(connectedAddresses) { connectedAddresses.add(address); }

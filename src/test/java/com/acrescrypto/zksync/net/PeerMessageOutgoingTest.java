@@ -32,6 +32,8 @@ public class PeerMessageOutgoingTest {
 		
 		int total;
 		
+		public DummySocket() { super(null); }
+		
 		@Override public PeerAdvertisement getAd() { return null; }
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }

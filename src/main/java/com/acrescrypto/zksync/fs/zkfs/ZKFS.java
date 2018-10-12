@@ -6,6 +6,7 @@ import java.nio.file.Paths;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
 import com.acrescrypto.zksync.utility.HashCache;
+import com.acrescrypto.zksync.utility.Util;
 
 // A ZKSync archive.
 public class ZKFS extends FS {
@@ -339,11 +340,12 @@ public class ZKFS extends FS {
 		ZKDirectory dir = opendir(path);
 		for(String subpath : dir.list()) {
 			Inode inode = inodeForPath(Paths.get(path, subpath).toString());
-			System.out.printf("%s%30s inodeId=%d size=%d\n",
+			System.out.printf("%s%30s inodeId=%d size=%d ref=%s\n",
 					padding,
 					subpath,
 					inode.stat.getInodeId(),
-					inode.stat.getSize());
+					inode.stat.getSize(),
+					Util.bytesToHex(inode.getRefTag().getHash(), 8) + "...");
 			if(inode.stat.isDirectory()) {
 				dump(subpath, depth+1);
 			}

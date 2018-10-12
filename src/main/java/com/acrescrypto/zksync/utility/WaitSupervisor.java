@@ -2,8 +2,6 @@ package com.acrescrypto.zksync.utility;
 
 import java.util.Collection;
 import java.util.LinkedList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import com.acrescrypto.zksync.utility.Util.AnonymousCallback;
 import com.acrescrypto.zksync.utility.Util.WaitTest;
@@ -35,7 +33,7 @@ public class WaitSupervisor {
 		return shared;
 	}
 	
-	protected ExecutorService threadPool = Executors.newFixedThreadPool(4);
+	protected GroupedThreadPool threadPool = GroupedThreadPool.newFixedThreadPool("WaitSupervisor", 4);
 	LinkedList<WaitTask> tasks = new LinkedList<>();
 	boolean closed;
 	
@@ -67,9 +65,7 @@ public class WaitSupervisor {
 						if(task.expire <= now) {
 							threadPool.submit(()->{
 								try {
-									Thread.currentThread().setName("WaitSupervisor active worker");
 									task.action.cb();
-									Thread.currentThread().setName("WaitSupervisor idle worker");
 								} catch (Exception e) {}
 							});
 							continue;

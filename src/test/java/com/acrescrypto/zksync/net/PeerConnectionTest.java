@@ -95,7 +95,7 @@ public class PeerConnectionTest {
 		LinkedList<DummyPeerMessageOutgoing> messages = new LinkedList<DummyPeerMessageOutgoing>();
 		boolean closed;
 		
-		public DummySocket(DummySwarm swarm) { this.swarm = swarm; }
+		public DummySocket(DummySwarm swarm) { super(swarm); }
 		@Override public PeerAdvertisement getAd() { return null; }
 		@Override public void write(byte[] data, int offset, int length) {}
 		@Override public int read(byte[] data, int offset, int length) { return 0; }

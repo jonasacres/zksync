@@ -85,6 +85,11 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public byte[] serialize() {
+		if(refTag == null) {
+			// no plaintext, so we must have read this as a seed-only peer; serialization will be set
+			return serialized;
+		}
+		
 		/* This is intended to be an obfuscation, and not true encryption. The use of CBC mode with a fixed IV
 		 * creates the possibility of revealing shared prefixes between hashes. However, since we have
 		 * 128-bit blocks, this will happen at an average rate of 1 in 2**64 revtags.

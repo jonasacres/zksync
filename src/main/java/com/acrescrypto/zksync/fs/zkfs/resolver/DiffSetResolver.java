@@ -151,6 +151,10 @@ public class DiffSetResolver {
 	}
 	
 	public RevisionTag resolve() throws IOException, DiffResolutionException {
+		for(RevisionTag tag : diffset.revisions) {
+			System.out.println("\t" + tag);			
+		}
+		
 		if(diffset.revisions.length == 1) {
 			fs.getArchive().getConfig().getRevisionList().consolidate(diffset.revisions[0]);
 			return diffset.revisions[0];
