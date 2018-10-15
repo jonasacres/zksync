@@ -576,4 +576,6 @@ public class DiffSetResolverTest {
 			fs.close();
 		}
 	}
+	
+	// TODO DHT: test resolveExcessive
 }
