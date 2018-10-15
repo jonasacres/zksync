@@ -35,8 +35,11 @@ public class RevisionTree {
 		long height;
 		
 		TreeSearchItem(RevisionTag tag) {
+			if(tag == null) {
+				System.out.println("Initialized with null");
+			}
 			this.height = tag.height;
-			revTags.add(tag);			
+			revTags.add(tag);
 		}
 		
 		boolean hasAncestor(RevisionTag tag) throws SearchFailedException {
@@ -68,9 +71,16 @@ public class RevisionTree {
 			ArrayList<Future<?>> futures = new ArrayList<>();
 			for(RevisionTag revTag : revTags) {
 				Future<?> future = threadPool.submit(()->{
+					if(revTag == null) {
+						System.out.println("WELCOME TO THE JUNGLE");
+					}
 					Collection<RevisionTag> parents = parentsForTag(revTag, treeSearchTimeoutMs);
 					if(parents == null) return;
 					for(RevisionTag parent : parents) {
+						if(parent == null) {
+							System.out.println("NULL PARENT");
+						}
+						
 						if(parent.height == height) {
 							synchronized(newRevTags) {
 								newRevTags.add(parent);
@@ -309,6 +319,22 @@ public class RevisionTree {
 		
 		minimal.sort(null);
 		return minimal;
+	}
+	
+	public Collection<RevisionTag> canonicalBases(Collection<RevisionTag> revTags) throws SearchFailedException {
+		HashSet<RevisionTag> bases = new HashSet<>();
+		LinkedList<RevisionTag> toProcess = new LinkedList<>(revTags);
+		while(!toProcess.isEmpty()) {
+			RevisionTag current = toProcess.pop();
+			Collection<RevisionTag> parents = parentsForTag(current, treeSearchTimeoutMs);
+			if(parents.size() > 1) {
+				toProcess.addAll(parents);
+			} else {
+				bases.add(current);
+			}
+		}
+		
+		return bases;
 	}
 	
 	public int numRevisions() {

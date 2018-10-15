@@ -28,7 +28,6 @@ import com.acrescrypto.zksync.utility.Util;
 public class IntegrationTest {
 	DHTPeer root;
 	DHTClient rootClient;
-	ZKMaster master;
 	CryptoSupport crypto;
 	
 	public byte[] readFile(ZKFS fs, String path) {
@@ -58,7 +57,6 @@ public class IntegrationTest {
 	public void afterEach() {
 		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
 		rootClient.close();
-		master.close();
 	}
 	
 	@AfterClass
@@ -194,7 +192,7 @@ public class IntegrationTest {
 	@Test
 	public void testDefaultArchiveIntegration() throws IOException {
 		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
-		ZKMaster[] masters = new ZKMaster[16];
+		ZKMaster[] masters = new ZKMaster[3];
 		ZKArchive[] archives = new ZKArchive[masters.length];
 		ZKFS[] fs = new ZKFS[masters.length];
 		
@@ -216,7 +214,8 @@ public class IntegrationTest {
 			System.out.println("Initialized i=" + i);
 		}
 		
-		Util.waitUntil(10000, ()->{
+		System.out.println("Waiting for merges");
+		boolean passed = Util.waitUntil(10000, ()->{
 			// wait for everyone to merge to the same revtag
 			for(int i = 0; i < masters.length; i++) {
 				if(archives[i].getConfig().getRevisionList().branchTips().size() > 1) return false;
@@ -226,9 +225,17 @@ public class IntegrationTest {
 				if(!tag.equals(baseTag)) return false;
 			}
 			
+			System.out.println("Merged");
 			return true;
 		});
 		
+		for(int i = 0; i < masters.length; i++) {
+			System.out.println("Master " + i);
+			archives[i].getConfig().getRevisionList().dump();
+		}
+		assertTrue(passed);
+		
+		System.out.println("Testing");
 		for(int i = 0; i < masters.length; i++) {
 			ZKFS mergedFs = archives[i].openLatest();
 			

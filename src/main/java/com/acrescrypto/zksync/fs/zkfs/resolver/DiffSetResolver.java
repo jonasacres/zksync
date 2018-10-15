@@ -45,10 +45,10 @@ public class DiffSetResolver {
 	RevisionTag commonAncestor;
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
-		// TODO DHT: withTangledCollection
 		Collection<RevisionTag> tips = new ArrayList<>(archive.getConfig().getRevisionList().branchTips());
 		Collection<RevisionTag> minimalTips = archive.getConfig().getRevisionTree().minimalSet(tips);
-		DiffSet diffSet = DiffSet.withCollection(minimalTips);
+		Collection<RevisionTag> baseTips = archive.getConfig().getRevisionTree().canonicalBases(minimalTips);
+		DiffSet diffSet = DiffSet.withCollection(baseTips);
 		return latestVersionResolver(diffSet);
 	}
 	

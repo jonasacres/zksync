@@ -26,7 +26,7 @@ public abstract class PeerSocket {
 	protected LinkedList<PeerMessageOutgoing> outgoing = new LinkedList<PeerMessageOutgoing>();
 	protected LinkedList<MessageSegment> ready = new LinkedList<MessageSegment>();	
 	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
-	protected GroupedThreadPool threadPool = GroupedThreadPool.newFixedThreadPool("PeerSocket", 4);
+	protected GroupedThreadPool threadPool;
 	
 	protected int nextSendMessageId, maxReceivedMessageId = Integer.MIN_VALUE;
 	protected final Logger logger = LoggerFactory.getLogger(PeerSocket.class);
@@ -168,7 +168,8 @@ public abstract class PeerSocket {
 	}
 	
 	protected void sendThread() {
-		swarm.threadPool.submit(() -> {
+		if(threadPool.isShutdown()) return;
+		threadPool.submit(() -> {
 			Util.setThreadName("PeerSocket send thread port " + getPort());
 			while(!isClosed()) {
 				try {
@@ -192,7 +193,8 @@ public abstract class PeerSocket {
 	}
 	
 	protected void recvThread() {
-		swarm.threadPool.submit(() -> {
+		if(threadPool.isShutdown()) return;
+		threadPool.submit(() -> {
 			Util.setThreadName("PeerSocket receive thread " + getPort());
 			try {
 				while(!isClosed()) {

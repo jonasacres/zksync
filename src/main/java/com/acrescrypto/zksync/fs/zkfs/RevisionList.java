@@ -56,11 +56,24 @@ public class RevisionList {
 		}
 	}
 	
-	public synchronized void consolidate(RevisionTag newBranch) throws IOException {
-		Collection<RevisionTag> tips = new ArrayList<>(branchTips);
+	public void consolidate(RevisionTag newBranch) throws IOException {
+		Collection<RevisionTag> tips;
+		ArrayList<RevisionTag> toRemove = new ArrayList<>();
+		
+		synchronized(this) {
+			tips = new ArrayList<>(branchTips);
+		}
+		
+		
 		for(RevisionTag tip : tips) {
 			if(tip.equals(newBranch)) continue;
 			if(config.getRevisionTree().descendentOf(newBranch, tip)) {
+				toRemove.add(tip);
+			}
+		}
+		
+		synchronized(this) {
+			for(RevisionTag tip : toRemove) {
 				removeBranchTip(tip);
 			}
 		}

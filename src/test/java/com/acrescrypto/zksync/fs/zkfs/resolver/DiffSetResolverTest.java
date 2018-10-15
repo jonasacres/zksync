@@ -188,6 +188,7 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testDefaultPicksLatestInode() throws IOException, DiffResolutionException {
+		// if a merge conflict between siblings, we should pick the latest version of an inode (by timestamp)
 		int numChildren = RevisionInfo.USABLE_SIZE/RevisionTag.sizeForConfig(archive.getConfig()) - 1,
 				r = (int) (numChildren*Math.random());
 		
@@ -205,6 +206,7 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testDefaultPicksLatestPathLink() throws IOException, DiffResolutionException {
+		// in a merge conflict between siblings, we should pick the latest version of a path
 		int numChildren = RevisionInfo.maxParentsForConfig(archive.getConfig()),
 				r = (int) (numChildren*Math.random());
 		
@@ -230,6 +232,7 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testDirectoriesMergeContents() throws IOException, DiffResolutionException {
+		// Make /a in one rev, /b in another. Merge them. Should have /a and /b in a merged directory.
 		for(byte i = 0; i < 4; i++) {
 			fs.write(""+i, (""+i).getBytes());
 			fs.commit();
@@ -246,6 +249,7 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testDefaultPrefersPathExistence() throws IOException, DiffResolutionException {
+		// Prefer to keep a path in a merge conflict vs. deleting it
 		for(int i = 0; i < 8; i++) {
 			fs = archive.openBlank();
 			fs.write("file", "foo".getBytes());
@@ -270,6 +274,7 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testDefaultAllowsDeletionWhenDeleteComesSecond() throws IOException, DiffResolutionException {
+		// If a file is created then deleted, and merged with a branch that never had the file, it should not be created
 		fs.write("file", "foo".getBytes());
 		base = fs.commit();
 		
@@ -284,6 +289,7 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testDefaultAllowsDeletionWhenDeleteComesFirst() throws IOException, DiffResolutionException {
+		// If a file is created, then deleted from a branch, then another branch is created with the original file the merge should not have the file 
 		fs.write("file", "foo".getBytes());
 		base = fs.commit();
 		
@@ -297,6 +303,7 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testParentDeletionPreemptsChildren() throws IOException, DiffResolutionException {
+		// if a merge deletes a directory, it should also delete the children of that directory
 		fs.mkdir("dir");
 		base = fs.commit();
 		
@@ -537,5 +544,36 @@ public class DiffSetResolverTest {
 		}
 		
 		assertEquals(merges[0], merges[1]);
+	}
+	
+	@Test
+	public void testMergeObjectivity() throws IOException, DiffResolutionException {
+		/* Let S be a set of revtags.
+		 * Let A be a subset of S, and merge(X) be a function returning the revtag of the merge of set X of revtags.
+		 * Then, for any decomposition A = A1 u A2, merge(A1, A2) = merge(A).
+		 */
+		
+		ZKArchive archive = master.createDefaultArchive();
+		ArrayList<RevisionTag> directTags = new ArrayList<>();
+		
+		for(int i = 0; i < 8; i++) {
+			ZKFS fs = archive.openBlank();
+			fs.write("file"+i, ("contents " + i).getBytes());
+			directTags.add(fs.commit());
+			fs.close();
+			
+			RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+			DiffSet directSet = DiffSet.withCollection(directTags);
+			RevisionTag directTag = DiffSetResolver.latestVersionResolver(directSet).resolve();
+			assertEquals(directTag, merge);
+			
+			fs = merge.getFS();
+			for(int j = 0; j <= i; j++) {
+				assertArrayEquals(("contents " + i).getBytes(), fs.read("file" + i));
+			}
+			
+			assertFalse(fs.exists("file"+(i+1)));
+			fs.close();
+		}
 	}
 }
