@@ -270,6 +270,7 @@ public class TCPPeerSocket extends PeerSocket {
 
 		initKeys();
 		makeThreads();
+		
 		if(connection == null) {
 			this.connection = new PeerConnection(this);
 		}

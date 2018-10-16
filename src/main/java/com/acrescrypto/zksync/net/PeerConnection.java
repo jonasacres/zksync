@@ -81,7 +81,7 @@ public class PeerConnection {
 	protected void initialize() throws IOException {
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config);
-		socket.swarm.threadPool.submit(()->pageQueueThread());
+		socket.threadPool.submit(()->pageQueueThread());
 		announceTips();
 		announceTags();
 	}
@@ -232,9 +232,6 @@ public class PeerConnection {
 		Collection<RevisionTag> branchTipsClone = new ArrayList<>(archive.getConfig().getRevisionList().branchTips());
 		ByteBuffer buf = ByteBuffer.allocate(branchTipsClone.size() * RevisionTag.sizeForConfig(socket.swarm.config));
 		for(RevisionTag tag : branchTipsClone) {
-			if(tag == null) {
-				System.out.println("Got a null tag");
-			}
 			buf.put(tag.serialize());
 		}
 		
@@ -498,7 +495,11 @@ public class PeerConnection {
 		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(revTagRaw);
 			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw);
-			socket.swarm.config.getRevisionList().addBranchTip(revTag);
+			try {
+				socket.swarm.config.getRevisionList().addBranchTip(revTag);
+			} catch(IOException exc) {
+				exc.printStackTrace();				
+			}
 		}
 		
 		socket.swarm.config.getRevisionList().write();
@@ -687,9 +688,6 @@ public class PeerConnection {
 		ByteBuffer buf = ByteBuffer.allocate(4 + tags.size() * RevisionTag.sizeForConfig(socket.swarm.config));
 		buf.putInt(priority);
 		for(RevisionTag tag : tags) {
-			if(tag == null) {
-				System.out.println("Got a null tag");
-			}
 			buf.put(tag.getBytes());
 		}
 		return buf.array();

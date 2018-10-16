@@ -50,7 +50,7 @@ public abstract class PeerSocket {
 	
 	protected PeerSocket(PeerSwarm swarm) {
 		this.swarm = swarm;
-		threadPool = GroupedThreadPool.newFixedThreadPool(swarm != null ? swarm.config.getThreadGroup() : Thread.currentThread().getThreadGroup(), "PeerSocket", 4);
+		threadPool = GroupedThreadPool.newCachedThreadPool(swarm != null ? swarm.threadPool.threadGroup : Thread.currentThread().getThreadGroup(), "PeerSocket");
 	}
 	
 	public final void close() throws IOException {
@@ -60,7 +60,7 @@ public abstract class PeerSocket {
 		closeAllOutgoing();
 		threadPool.shutdownNow();
 	}
-
+	
 	/** Immediately close socket and blacklist due to a clear protocol violation. 
 	 * @throws IOException */
 	public void violation() {

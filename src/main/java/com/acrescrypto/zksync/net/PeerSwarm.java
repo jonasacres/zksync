@@ -64,10 +64,10 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	public PeerSwarm(ZKArchiveConfig config) throws IOException {
 		this.config = config;
-		this.threadPool = GroupedThreadPool.newCachedThreadPool(config.getThreadGroup(), "PeerSwarm");
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
-		connectionThread();
 		initIdentity();
+		this.threadPool = GroupedThreadPool.newCachedThreadPool(config.getThreadGroup(), "PeerSwarm " + Util.bytesToHex(identityKey.publicKey().getBytes(), 3));
+		connectionThread();
 		pool = new RequestPool(config);
 		pool.read();
 	}

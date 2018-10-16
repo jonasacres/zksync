@@ -277,6 +277,10 @@ public class RevisionTree {
 		return map.containsKey(revTag);
 	}
 	
+	public Collection<RevisionTag> parentsForTag(RevisionTag revTag) {
+		return parentsForTag(revTag, treeSearchTimeoutMs);
+	}
+	
 	public Collection<RevisionTag> parentsForTag(RevisionTag revTag, long timeoutMs) {
 		Collection<RevisionTag> r = parentsForTagNonblocking(revTag);
 		if(r != null) return r;
@@ -335,6 +339,32 @@ public class RevisionTree {
 		}
 		
 		return bases;
+	}
+	
+	/** Do we already have a revtag superceding all the data in this revtag? 
+	 * @throws SearchFailedException */
+	public boolean isSuperceded(RevisionTag revTag) throws SearchFailedException {
+		// TODO DHT: (test) Test isSuperceded
+		ArrayList<RevisionTag> tips = new ArrayList<>(config.getRevisionList().branchTips());
+		Collection<RevisionTag> parents = parentsForTag(revTag);
+		if(parents == null) {
+			throw new SearchFailedException();
+		}
+		
+		for(RevisionTag tip : tips) {
+			if(tip.equals(revTag)) continue;
+			if(descendentOf(tip, revTag)) {
+				return true; // we have a tip that descends from this tag
+			}
+			if(parents.size() > 1) {
+				// if this is a merge, do we already have a merge including everything this one does?
+				if(parentsForTag(tip).containsAll(parents)) {
+					return true;
+				}
+			}
+		}
+		
+		return false;
 	}
 	
 	public int numRevisions() {

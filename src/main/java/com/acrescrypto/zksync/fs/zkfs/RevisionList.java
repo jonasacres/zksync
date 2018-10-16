@@ -39,7 +39,11 @@ public class RevisionList {
 	}
 	
 	public void addBranchTip(RevisionTag newBranch) throws IOException {
-		// TODO DHT: what about ignoring branch tips that we don't need? (height lower or fewer parents)
+		/* TODO DHT: Handle a SearchFailedException more gracefully. Should we store the tag for
+		 * later parent lookup? Accept it provisionally?
+		 */
+		if(config.revisionTree.isSuperceded(newBranch)) return;
+		
 		synchronized(this) {
 			if(branchTips.contains(newBranch)) return;
 			branchTips.add(newBranch);
@@ -57,17 +61,20 @@ public class RevisionList {
 	}
 	
 	public void consolidate(RevisionTag newBranch) throws IOException {
-		Collection<RevisionTag> tips;
+		Collection<RevisionTag> tips, parents;
 		ArrayList<RevisionTag> toRemove = new ArrayList<>();
+		RevisionTree tree = config.getRevisionTree();
+		parents = tree.parentsForTag(newBranch, RevisionTree.treeSearchTimeoutMs);
 		
 		synchronized(this) {
 			tips = new ArrayList<>(branchTips);
 		}
 		
-		
 		for(RevisionTag tip : tips) {
 			if(tip.equals(newBranch)) continue;
-			if(config.getRevisionTree().descendentOf(newBranch, tip)) {
+			if(tree.descendentOf(newBranch, tip)) {
+				toRemove.add(tip);
+			} else if(parents.containsAll(tree.parentsForTag(tip, RevisionTree.treeSearchTimeoutMs))) {
 				toRemove.add(tip);
 			}
 		}
