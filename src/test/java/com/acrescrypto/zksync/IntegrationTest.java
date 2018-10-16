@@ -192,7 +192,7 @@ public class IntegrationTest {
 	@Test
 	public void testDefaultArchiveIntegration() throws IOException {
 		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
-		ZKMaster[] masters = new ZKMaster[3];
+		ZKMaster[] masters = new ZKMaster[8];
 		ZKArchive[] archives = new ZKArchive[masters.length];
 		ZKFS[] fs = new ZKFS[masters.length];
 		
@@ -214,7 +214,7 @@ public class IntegrationTest {
 			fs[i].commit();
 		}
 		
-		boolean passed = Util.waitUntil(10000, ()->{
+		assertTrue(Util.waitUntil(30000, ()->{
 			// wait for everyone to merge to the same revtag
 			for(int i = 0; i < masters.length; i++) {
 				if(archives[i].getConfig().getRevisionList().branchTips().size() > 1) return false;
@@ -225,14 +225,10 @@ public class IntegrationTest {
 			}
 			
 			return true;
-		});
+		}));
 		
 		for(int i = 0; i < masters.length; i++) {
-			archives[i].getConfig().getRevisionList().dump();
-		}
-		assertTrue(passed);
-		
-		for(int i = 0; i < masters.length; i++) {
+			// can everyone get a correct copy of every file?
 			ZKFS mergedFs = archives[i].openLatest();
 			
 			for(int j = 0; j < masters.length; j++) {

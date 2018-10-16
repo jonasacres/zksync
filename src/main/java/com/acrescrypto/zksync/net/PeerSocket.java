@@ -195,36 +195,37 @@ public abstract class PeerSocket {
 	}
 	
 	protected void recvThread() {
-		if(threadPool.isShutdown()) return;
-		threadPool.submit(() -> {
-			Util.setThreadName("PeerSocket receive thread " + getPort());
-			try {
-				while(!isClosed()) {
-					ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
-					read(buf.array(), 0, PeerMessageIncoming.HEADER_LENGTH);
-					
-					int msgId = buf.getInt();
-					int len = buf.getInt();
-					byte cmd = buf.get();
-					byte flags = buf.get();
-					
-					assertState(0 <= len && len <= maxPayloadSize());
-					
-					byte[] payload = new byte[len];
-					if(len > 0) {
-						read(payload, 0, payload.length);
+		try {
+			threadPool.submit(() -> {
+				Util.setThreadName("PeerSocket receive thread " + getPort());
+				try {
+					while(!isClosed()) {
+						ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
+						read(buf.array(), 0, PeerMessageIncoming.HEADER_LENGTH);
+						
+						int msgId = buf.getInt();
+						int len = buf.getInt();
+						byte cmd = buf.get();
+						byte flags = buf.get();
+						
+						assertState(0 <= len && len <= maxPayloadSize());
+						
+						byte[] payload = new byte[len];
+						if(len > 0) {
+							read(payload, 0, payload.length);
+						}
+						
+						processMessage(msgId, cmd, flags, payload);
 					}
-					
-					processMessage(msgId, cmd, flags, payload);
+				} catch(ProtocolViolationException exc) {
+					violation();
+				} catch(SocketException|EOFException exc) { // socket closed; just ignore it
+				} catch(Exception exc) {
+					logger.error("Socket receive thread for {} caught exception", getAddress(), exc);
+					violation();
 				}
-			} catch(ProtocolViolationException exc) {
-				violation();
-			} catch(SocketException|EOFException exc) { // socket closed; just ignore it
-			} catch(Exception exc) {
-				logger.error("Socket receive thread for {} caught exception", getAddress(), exc);
-				violation();
-			}
-		});
+			});
+		} catch(RejectedExecutionException exc) {} // socket was shut down, so nothing to receive anyway
 	}
 	
 	protected void processMessage(int msgId, byte cmd, byte flags, byte[] payload) throws IOException {
