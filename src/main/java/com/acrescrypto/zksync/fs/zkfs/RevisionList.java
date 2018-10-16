@@ -74,8 +74,11 @@ public class RevisionList {
 			if(tip.equals(newBranch)) continue;
 			if(tree.descendentOf(newBranch, tip)) {
 				toRemove.add(tip);
-			} else if(parents.containsAll(tree.parentsForTag(tip, RevisionTree.treeSearchTimeoutMs))) {
-				toRemove.add(tip);
+			} else {
+				Collection<RevisionTag> tipParents = tree.parentsForTag(tip, RevisionTree.treeSearchTimeoutMs);
+				if(parents.size() > tipParents.size() && parents.containsAll(tipParents)) {
+					toRemove.add(tip);
+				}
 			}
 		}
 		

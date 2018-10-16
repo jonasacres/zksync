@@ -336,20 +336,27 @@ public class RevisionTree {
 	public boolean isSuperceded(RevisionTag revTag) throws SearchFailedException {
 		// TODO DHT: (test) Test isSuperceded
 		ArrayList<RevisionTag> tips = new ArrayList<>(config.getRevisionList().branchTips());
-		Collection<RevisionTag> parents = parentsForTag(revTag);
-		if(parents == null) {
-			throw new SearchFailedException();
-		}
-		
+
 		for(RevisionTag tip : tips) {
 			if(tip.equals(revTag)) continue;
 			if(descendentOf(tip, revTag)) {
 				return true; // we have a tip that descends from this tag
 			}
+		}
+		
+		if(revTag.height > 1) { // this micro-optimization helps simplify test-writing (no need to provide parent lists for revtags of height 1)
+			Collection<RevisionTag> parents = parentsForTag(revTag);
+			if(parents == null) {
+				throw new SearchFailedException();
+			}
+			
 			if(parents.size() > 1) {
-				// if this is a merge, do we already have a merge including everything this one does?
-				if(parentsForTag(tip).containsAll(parents)) {
-					return true;
+				for(RevisionTag tip : tips) {
+					if(tip.equals(revTag)) continue;
+					// if this is a merge, do we already have a merge including everything this one does?
+					if(parentsForTag(tip).containsAll(parents)) {
+						return true;
+					}
 				}
 			}
 		}

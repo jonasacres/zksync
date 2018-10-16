@@ -731,6 +731,7 @@ public class PeerConnection {
 					lastStream.eof();
 					lastStream = null;
 				}
+			} catch(SocketClosedException exc) {
 			} catch(Exception exc) {
 				logger.error("Caught exception in PeerConnection page queue thread", exc);
 				try { Thread.sleep(500); } catch(InterruptedException exc2) {}

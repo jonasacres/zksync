@@ -8,6 +8,7 @@ import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.concurrent.RejectedExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -168,28 +169,29 @@ public abstract class PeerSocket {
 	}
 	
 	protected void sendThread() {
-		if(threadPool.isShutdown()) return;
-		threadPool.submit(() -> {
-			Util.setThreadName("PeerSocket send thread port " + getPort());
-			while(!isClosed()) {
-				try {
-					synchronized(this) {
-						while(!ready.isEmpty()) {
-							sendMessage(ready.remove());
-						}
-					}
-					
+		try {
+			threadPool.submit(() -> {
+				Util.setThreadName("PeerSocket send thread port " + getPort());
+				while(!isClosed()) {
 					try {
-						synchronized(outgoing) { outgoing.wait(100); }
-					} catch (InterruptedException e) {}
-				} catch(EOFException exc) {
-				} catch (IOException exc) {
-					ioexception(exc);
-				} catch(Exception exc) {
-					logger.error("Socket send thread for peer {} caught exception", getAddress(), exc);
+						synchronized(this) {
+							while(!ready.isEmpty()) {
+								sendMessage(ready.remove());
+							}
+						}
+						
+						try {
+							synchronized(outgoing) { outgoing.wait(100); }
+						} catch (InterruptedException e) {}
+					} catch(EOFException exc) {
+					} catch (IOException exc) {
+						ioexception(exc);
+					} catch(Exception exc) {
+						logger.error("Socket send thread for peer {} caught exception", getAddress(), exc);
+					}
 				}
-			}
-		});
+			});
+		} catch(RejectedExecutionException exc) {} // thread pool closed -> socket is shut down, no need to send after all
 	}
 	
 	protected void recvThread() {
