@@ -35,9 +35,6 @@ public class RevisionTree {
 		long height;
 		
 		TreeSearchItem(RevisionTag tag) {
-			if(tag == null) {
-				System.out.println("Initialized with null");
-			}
 			this.height = tag.height;
 			revTags.add(tag);
 		}
@@ -71,16 +68,9 @@ public class RevisionTree {
 			ArrayList<Future<?>> futures = new ArrayList<>();
 			for(RevisionTag revTag : revTags) {
 				Future<?> future = threadPool.submit(()->{
-					if(revTag == null) {
-						System.out.println("WELCOME TO THE JUNGLE");
-					}
 					Collection<RevisionTag> parents = parentsForTag(revTag, treeSearchTimeoutMs);
 					if(parents == null) return;
 					for(RevisionTag parent : parents) {
-						if(parent == null) {
-							System.out.println("NULL PARENT");
-						}
-						
 						if(parent.height == height) {
 							synchronized(newRevTags) {
 								newRevTags.add(parent);

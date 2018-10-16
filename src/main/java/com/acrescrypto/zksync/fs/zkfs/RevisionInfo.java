@@ -29,11 +29,6 @@ public class RevisionInfo {
 		this.generation = generation;
 		assert(generation >= 0);
 		if(parents.size() > maxParentsForConfig(inodeTable.zkfs.archive.config)) {
-			int i = 0;
-			for(RevisionTag parent : parents) {
-				System.out.println((++i) + ": " + parent);
-			}
-			System.out.println(parents.size() + " exceeds " + maxParentsForConfig(inodeTable.zkfs.archive.config));
 			throw new TooManyParentsException();
 		}
 	}

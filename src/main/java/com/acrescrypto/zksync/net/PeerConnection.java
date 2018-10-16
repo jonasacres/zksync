@@ -700,7 +700,7 @@ public class PeerConnection {
 	protected void assertState(boolean state) throws ProtocolViolationException {
 		if(!state) throw new ProtocolViolationException();
 	}
-
+	
 	protected void pageQueueThread() {
 		Util.setThreadName("PeerConnection queue thread");
 		byte[] lastTag = new byte[0];

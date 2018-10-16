@@ -205,16 +205,15 @@ public class IntegrationTest {
 			masters[i].getTCPListener().advertise(archives[i].getConfig().getSwarm());
 			archives[i].getConfig().getAccessor().discoverOnDHT();
 			archives[i].getConfig().getRevisionList().setAutomerge(true);
+			archives[i].getConfig().getSwarm().requestAll();
 			
 			fs[i] = archives[i].openBlank();
 			fs[i].write("immediate-"+i, crypto.prng(Util.serializeInt(i)).getBytes(crypto.hashLength()-1));
 			fs[i].write("1page-"+i, crypto.prng(Util.serializeInt(i)).getBytes(archives[i].getConfig().getPageSize()));
 			fs[i].write("multipage-"+i, crypto.prng(Util.serializeInt(i)).getBytes(10*archives[i].getConfig().getPageSize()));
-			RevisionTag tag = fs[i].commit();
-			System.out.println("Initialized i=" + i);
+			fs[i].commit();
 		}
 		
-		System.out.println("Waiting for merges");
 		boolean passed = Util.waitUntil(10000, ()->{
 			// wait for everyone to merge to the same revtag
 			for(int i = 0; i < masters.length; i++) {
@@ -225,17 +224,14 @@ public class IntegrationTest {
 				if(!tag.equals(baseTag)) return false;
 			}
 			
-			System.out.println("Merged");
 			return true;
 		});
 		
 		for(int i = 0; i < masters.length; i++) {
-			System.out.println("Master " + i);
 			archives[i].getConfig().getRevisionList().dump();
 		}
 		assertTrue(passed);
 		
-		System.out.println("Testing");
 		for(int i = 0; i < masters.length; i++) {
 			ZKFS mergedFs = archives[i].openLatest();
 			
