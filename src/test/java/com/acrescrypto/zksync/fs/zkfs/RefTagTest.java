@@ -157,32 +157,6 @@ public class RefTagTest {
 		assertFalse(tag.hasFlag(RefTag.FLAG_NO_NEW_CONTENT));
 	}
 	
-	// TODO DHT: (rewrite tests) RefTag compareTo is totally different now, so tests need to be rewritten.
-	
-	@Test
-	public void testCompareToReturnsPositiveIfLeftIsGreaterHeightThanRight() throws IOException {
-		// fix the timestamp so it is not a consideration
-		Util.setCurrentTimeMillis(1000*60*60*24*365);
-		ZKFS fs = archive.openBlank();
-		RevisionTag right = fs.commit();
-		RevisionTag left = fs.commit();
-		
-		assertTrue(left.compareTo(right) > 0);
-		fs.close();
-	}
-	
-	@Test
-	public void testCompareToReturnsNegativeIfRightIsGreaterHeightThanLeft() throws IOException {
-		// fix the timestamp so it is not a consideration
-		Util.setCurrentTimeMillis(1000*60*60*24*365);
-		ZKFS fs = archive.openBlank();
-		RevisionTag left = fs.commit();
-		RevisionTag right = fs.commit();
-		
-		assertTrue(left.compareTo(right) < 0);
-		fs.close();
-	}
-	
 	@Test
 	public void testCompareToReturnsNegativeIfLeftHasLowerTagThanRight() {
 		RefTag left = new RefTag(archive, tag.serialize());
@@ -196,6 +170,14 @@ public class RefTagTest {
 		RefTag right = new RefTag(archive, tag.serialize());
 		assertTrue(left.compareTo(right) < 0);
 	}
+	
+	@Test
+	public void testCompareToReturnsZeroIfLeftEqualsRight() {
+		RefTag left = new RefTag(archive, tag.serialize());
+		RefTag right = new RefTag(archive, tag.serialize());
+		assertTrue(left.compareTo(right) == 0);
+	}
+
 	
 	@Test
 	public void testCompareToReturnsPositiveIfRightHasLowerTagThanLeft() {

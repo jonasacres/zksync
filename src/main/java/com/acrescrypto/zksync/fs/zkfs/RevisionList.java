@@ -20,7 +20,7 @@ import com.acrescrypto.zksync.utility.Util;
 public class RevisionList {
 	protected ArrayList<RevisionTag> branchTips = new ArrayList<>();
 	protected ZKArchiveConfig config;
-	protected RevisionTag latest;
+	protected RevisionTag latest; // "latest" tip; understood to mean tip with greatest height, using hash comparison as tiebreaker.
 	protected boolean automerge;
 	private Logger logger = LoggerFactory.getLogger(RevisionList.class);
 	
@@ -100,6 +100,7 @@ public class RevisionList {
 	
 	public void clear() throws IOException {
 		branchTips.clear();
+		latest = null;
 		write();
 	}
 	

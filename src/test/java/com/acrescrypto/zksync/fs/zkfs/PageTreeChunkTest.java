@@ -21,6 +21,8 @@ import org.junit.Test;
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.crypto.PrivateSigningKey;
+import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PageTreeChunkTest {
@@ -253,5 +255,28 @@ public class PageTreeChunkTest {
 		assertFalse(Arrays.equals(chunk.textKey().getRaw(), chunk2.textKey().getRaw()));
 	}
 	
-	// TODO DHT: (test) Test trusted chunks
+	@Test
+	public void validatesChunkSignatureIfInitializedWithVerifyTrue() throws IOException {
+		byte[] data = chunk.serialize();
+		PrivateSigningKey fakeKey = crypto.makePrivateSigningKey();
+		byte[] tag = SignedSecureFile
+				  .withParams(tree.archive.storage, chunk.textKey(), chunk.authKey(), fakeKey)
+				  .write(data, tree.archive.config.pageSize);
+
+		try {
+			new PageTreeChunk(tree, tag, chunk.index, true);
+			fail("Expected SecurityException");
+		} catch(SecurityException exc) {}
+	}
+	
+	@Test
+	public void doesNotValidateChunkSignatureIfInitializedWithVerifyFalse() throws IOException {
+		byte[] data = chunk.serialize();
+		PrivateSigningKey fakeKey = crypto.makePrivateSigningKey();
+		byte[] tag = SignedSecureFile
+				  .withParams(tree.archive.storage, chunk.textKey(), chunk.authKey(), fakeKey)
+				  .write(data, tree.archive.config.pageSize);
+
+		new PageTreeChunk(chunk.tree, tag, chunk.index, false);
+	}
 }
