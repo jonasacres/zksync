@@ -151,6 +151,8 @@ public class InodeTable extends ZKFile {
 			}
 		}
 		
+		parents.sort(null);
+		
 		return parents;
 	}
 	

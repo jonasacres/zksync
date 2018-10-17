@@ -119,6 +119,7 @@ public class DHTModuleTest {
 	
 	@Test
 	public void testPeerDiscovery() throws IOException, InvalidBlacklistException {
+		// TODO DHT: (itf) 61e8dda7 linux 10/17/18 (times out waiting for client.isInitialized)
 		ArrayList<DHTClient> clients = makeClients(256);
 		DHTID id = new DHTID(crypto.rng(crypto.hashLength()));
 		DHTRecord ad = makeBogusAd(0);

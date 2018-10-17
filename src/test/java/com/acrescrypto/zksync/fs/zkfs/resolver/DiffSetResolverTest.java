@@ -5,7 +5,9 @@ import static org.junit.Assert.*;
 import java.io.IOException;
 import java.security.Security;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedList;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.Arrays;
@@ -577,5 +579,89 @@ public class DiffSetResolverTest {
 		}
 	}
 	
-	// TODO DHT: test resolveExcessive
+	@Test
+	public void testMergeParentsAppearInSortedOrder() throws IOException, DiffResolutionException {
+		LinkedList<RevisionTag> revs = new LinkedList<>();
+		int max = RevisionInfo.maxParentsForConfig(archive.getConfig());
+		for(int i = 0; i < max; i++) {
+			revs.add(archive.openBlank().commit());
+		}
+		
+		revs.sort((a,b)->b.compareTo(a));
+		DiffSet diffset = DiffSet.withCollection(revs);
+		
+		DiffSetResolver resolver = new DiffSetResolver(diffset,
+				DiffSetResolver.latestInodeResolver(),
+				DiffSetResolver.latestPathResolver());
+		RevisionTag merge = resolver.resolve();
+		
+		revs.sort(null);
+		assertEquals(2, merge.getHeight());
+		assertEquals(revs, merge.getInfo().getParents());
+	}
+	
+	@Test
+	public void testResolveCreatesPartialRevisionsIfParentListDoesNotFitIntoInfoSection() throws IOException, DiffResolutionException {
+		LinkedList<RevisionTag> revs = new LinkedList<>();
+		int max = RevisionInfo.maxParentsForConfig(archive.getConfig());
+		for(int i = 0; i < 2*max; i++) {
+			revs.add(archive.openBlank().commit());
+		}
+		
+		DiffSet diffset = DiffSet.withCollection(revs);
+		
+		DiffSetResolver resolver = new DiffSetResolver(diffset,
+				DiffSetResolver.latestInodeResolver(),
+				DiffSetResolver.latestPathResolver());
+		RevisionTag merge = resolver.resolve();
+		
+		revs.sort(null);
+		LinkedList<LinkedList<RevisionTag>> halves = new LinkedList<>();
+		for(int i = 0; i < 2; i++) {
+			LinkedList<RevisionTag> half = new LinkedList<>();
+			halves.add(half);
+			for(int j = i*max; j < (i+1)*max; j++) {
+				half.add(revs.get(j));
+			}
+		}
+		
+		assertEquals(2, merge.getInfo().getNumParents());
+		assertEquals(3, merge.getHeight());
+		for(RevisionTag parent : merge.getInfo().getParents()) {
+			Collection<RevisionTag> grandparents = parent.getInfo().getParents();
+			for(LinkedList<RevisionTag> half : halves) {
+				if(half.equals(grandparents)) {
+					halves.remove(half);
+					break;
+				}
+			}
+		}
+		
+		assertEquals(0, halves.size());
+	}
+	
+	@Test
+	public void testResolveCreatesMultipleTiersOfPartialRevisionsIfNeeded() throws IOException, DiffResolutionException {
+		ZKArchive archive = master.createArchive(4096, "unit test");
+		LinkedList<RevisionTag> revs = new LinkedList<>();
+		int max = RevisionInfo.maxParentsForConfig(archive.getConfig());
+		for(int i = 0; i < max*(max+1); i++) {
+			revs.add(archive.openBlank().commit());
+		}
+		
+		DiffSet diffset = DiffSet.withCollection(revs);
+		
+		DiffSetResolver resolver = new DiffSetResolver(diffset,
+				DiffSetResolver.latestInodeResolver(),
+				DiffSetResolver.latestPathResolver());
+		RevisionTag merge = resolver.resolve();
+		
+		revs.sort(null);
+		assertEquals(4, merge.getHeight());
+		assertEquals(2, merge.getInfo().getNumParents());
+		for(RevisionTag tag : revs) {
+			assertTrue(archive.getConfig().getRevisionTree().descendentOf(merge, tag));
+		}
+		archive.close();
+	}
 }
