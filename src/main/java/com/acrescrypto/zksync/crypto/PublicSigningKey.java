@@ -35,11 +35,10 @@ public class PublicSigningKey {
 	
 	public boolean verify(byte[] message, int msgOffset, int msgLen, byte[] signature, int sigOffset, int sigLen) {
 		EdDSAEngine engine = new EdDSAEngine();
-		byte[] hash = crypto.hash(message, msgOffset, msgLen);
 		try {
 			engine.setParameter(EdDSAEngine.ONE_SHOT_MODE);
 			engine.initVerify(pubKey);
-			return engine.verifyOneShot(hash, 0, hash.length, signature, sigOffset, sigLen);
+			return engine.verifyOneShot(message, msgOffset, msgLen, signature, sigOffset, sigLen);
 		} catch (SignatureException | InvalidKeyException | InvalidAlgorithmParameterException exc) {
 			logger.warn("Error in verifying message", exc);
 			return false;

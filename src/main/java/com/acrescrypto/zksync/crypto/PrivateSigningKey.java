@@ -34,11 +34,10 @@ public class PrivateSigningKey {
 	
 	public byte[] sign(byte[] message, int offset, int length) {
 		EdDSAEngine engine = new EdDSAEngine();
-		byte[] hash = crypto.hash(message, offset, length);
 		try {
 			engine.setParameter(EdDSAEngine.ONE_SHOT_MODE);
 			engine.initSign(privKey);
-			return engine.signOneShot(hash);
+			return engine.signOneShot(message, offset, length);
 		} catch (SignatureException | InvalidKeyException | InvalidAlgorithmParameterException exc) {
 			// This just plain shouldn't happen.
 			logger.error("Error in signing message", exc);

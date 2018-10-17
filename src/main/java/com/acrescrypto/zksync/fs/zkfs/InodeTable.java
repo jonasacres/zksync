@@ -82,6 +82,7 @@ public class InodeTable extends ZKFile {
 	 * @return RefTag for the newly created revision
 	 *  */
 	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
+		// TODO: Objective merge logic breaks down if we have additional parents AND we had changes to the filesystem. Throw an exception if someone tries to do that.
 		// TODO: I regret doing these as arrays instead of collections. Refactor.
 		freelist.commit();
 		ArrayList<RevisionTag> parents = makeParentList(additionalParents);

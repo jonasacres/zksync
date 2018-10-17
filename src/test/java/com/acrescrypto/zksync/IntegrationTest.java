@@ -251,4 +251,8 @@ public class IntegrationTest {
 			masters[i].close();
 		}
 	}
+	
+	// TODO: 2 peers develop an archive with several revisions. A third peer connects and syncs.
+	// TODO: 2 peers develop an archive with several revisions. A third peer develops its own revision chain before connecting to the swarm. All 3 peers merge.
+	// TODO: N peers randomly commit to an archive. At the end of the test, all N peers should converge to a common revision.
 }

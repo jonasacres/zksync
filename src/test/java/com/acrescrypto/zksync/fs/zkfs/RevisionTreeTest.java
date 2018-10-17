@@ -659,4 +659,121 @@ public class RevisionTreeTest {
 		assertFalse(tree.descendentOf(revTagB, revTagA));
 		assertFalse(tree.descendentOf(revTagA, revTagB));
 	}
+	
+	@Test
+	public void testIsSupercededReturnsTrueIfTagIsBlankAndArchiveIsNonempty() throws IOException {
+		ZKFS fs = archive.openBlank();
+		RevisionTag blank = fs.baseRevision;
+		fs.commit();
+		assertTrue(tree.isSuperceded(blank));
+	}
+	
+	@Test
+	public void testIsSupercededReturnsFalseIfTagIsBlankAndArchiveIsEmpty() throws IOException {
+		RevisionTag blank = archive.openBlank().baseRevision;
+		assertFalse(tree.isSuperceded(blank));
+	}
+	
+	@Test
+	public void testIsSupercededReturnsTrueIfListContainsDescendentOfTag() throws IOException {
+		ZKFS fs = archive.openBlank();
+		RevisionTag base = null;
+		
+		for(int j = 0; j < 8; j++) {
+			base = fs.commit(); // allow for 8 separate branch tips
+			for(int i = 0; i < 8; i++) {
+				fs.write("a", (""+i).getBytes());
+				fs.commit(); // each tip has a history 8 deep
+			}
+		}
+		
+		// the first revision in the last tip ought to have been superceded
+		assertTrue(tree.isSuperceded(base));
+	}
+	
+	@Test
+	public void testIsSupercededReturnsTrueIfASiblingTagIncludesSameParents() throws IOException {
+		int numParents = 8;
+		RevisionTag baseParent = null;
+		RevisionTag[] basicTags = new RevisionTag[numParents-2], extendedTags = new RevisionTag[numParents-1];
+		
+		for(int i = 0; i < numParents; i++) {
+			ZKFS fs = archive.openBlank();
+			fs.write("file"+i, ("contents"+i).getBytes());
+			RevisionTag tag = fs.commit();
+			if(i == 0) {
+				baseParent = tag;
+			} else {
+				if(i < numParents-1) basicTags[i-1] = tag;
+				extendedTags[i-1] = tag;
+			}
+		}
+		
+		RevisionTag a = baseParent.getFS().commit(basicTags),
+				    b = baseParent.getFS().commit(extendedTags);
+		assertTrue(tree.isSuperceded(a));
+		assertFalse(tree.isSuperceded(b));
+	}
+	
+	@Test
+	public void testIsSupercededReturnsTrueIfACousinTagIncludesSameParents() throws IOException {
+		int numParents = 8;
+		RevisionTag baseParent = null;
+		RevisionTag[] basicTags = new RevisionTag[numParents-2], extendedTags = new RevisionTag[numParents-1];
+		
+		for(int i = 0; i < numParents; i++) {
+			ZKFS fs = archive.openBlank();
+			fs.write("file"+i, ("contents"+i).getBytes());
+			RevisionTag tag = fs.commit();
+			if(i == 0) {
+				baseParent = tag;
+			} else {
+				if(i < numParents-1) basicTags[i-1] = tag;
+				extendedTags[i-1] = tag;
+			}
+		}
+		
+		RevisionTag a = baseParent.getFS().commit(basicTags),
+				    b = baseParent.getFS().commit().getFS().commit(extendedTags);
+		assertTrue(tree.isSuperceded(a));
+		assertFalse(tree.isSuperceded(b));
+	}
+	
+	@Test
+	public void testIsSupercededReturnsTrueIfANonBranchtipSiblingTagIncludesSameParents() throws IOException {
+		int numParents = 8;
+		RevisionTag baseParent = null;
+		RevisionTag[] basicTags = new RevisionTag[numParents-2], extendedTags = new RevisionTag[numParents-1];
+		
+		for(int i = 0; i < numParents; i++) {
+			ZKFS fs = archive.openBlank();
+			fs.write("file"+i, ("contents"+i).getBytes());
+			RevisionTag tag = fs.commit();
+			if(i == 0) {
+				baseParent = tag;
+			} else {
+				if(i < numParents-1) basicTags[i-1] = tag;
+				extendedTags[i-1] = tag;
+			}
+		}
+		
+		RevisionTag a = baseParent.getFS().commit(basicTags),
+				    b = baseParent.getFS().commit(extendedTags).getFS().commit();
+		assertTrue(tree.isSuperceded(a));
+		assertFalse(tree.isSuperceded(b));
+	}
+	
+	@Test
+	public void testIsSupercededReturnsFalseIfTagIsABranchTip() throws IOException {
+		RevisionTag tag = archive.openBlank().commit().getFS().commit();
+		assertFalse(tree.isSuperceded(tag));
+	}
+	
+	@Test(expected=SearchFailedException.class)
+	public void testIsSupercededThrowsSearchFailedExceptionIfLookupTimedOut() throws IOException {
+		RevisionTree.treeSearchTimeoutMs = 1;
+		RevisionTag tag = archive.openBlank().commit().getFS().commit();
+		tree.clear();
+		tree.isSuperceded(tag);
+	}
 }

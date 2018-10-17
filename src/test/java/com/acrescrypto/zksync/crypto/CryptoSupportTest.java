@@ -8,7 +8,6 @@ import java.util.Arrays;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -280,8 +279,7 @@ public class CryptoSupportTest  {
 		assertFalse(Arrays.equals(secret02, secret12));
 	}
 	
-	// TODO DHT: (test redesign) Now that we hash input data and sign the hash, we won't match test vectors.
-	@Test @Ignore
+	@Test
 	public void testEd25519SigningTestVectors() {
 		{ // RFC 8032 7.1, Test 1
 			byte[] rawKey = Util.hexToBytes("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");

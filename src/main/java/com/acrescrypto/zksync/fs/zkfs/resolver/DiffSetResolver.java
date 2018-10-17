@@ -17,21 +17,6 @@ import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
-/* TODO DHT: (design) Remerges
- * Problem: Order matters when merging multiple simultaneous revisions. If there are 3 revisions,
- * r1, r2 and r3, then ((r1 + r2) + r3) produces a different reftag from (r1 + (r2 + r3)). In p2p syncing,
- * any permutation of merge orders might happen for a given peer. Each permutation is then shared
- * and merged, creating an endless cycle of merging.
- * 
- * Idea: label merges as "pure merges." A pure merge has a flag set somewhere (e.g. RevisionInfo) indicating
- * that no writes, deletions or other changes have been made to the filesystem, and all versions of
- * the data are to be found in at least one of the named parents.
- * 
- * When "pure merges" are merged, the resulting merge lists the parents of the pure merges together,
- * and does NOT list the pure merges themselves as parents. But how to ensure that inode reallocation is
- * done consistently, without requiring clients to reacquire the original parents?
- */
-
 public class DiffSetResolver {
 	public interface InodeDiffResolver {
 		public Inode resolve(DiffSetResolver setResolver, InodeDiff diff) throws IOException;

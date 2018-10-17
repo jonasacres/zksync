@@ -334,7 +334,6 @@ public class RevisionTree {
 	/** Do we already have a revtag superceding all the data in this revtag? 
 	 * @throws SearchFailedException */
 	public boolean isSuperceded(RevisionTag revTag) throws SearchFailedException {
-		// TODO DHT: (test) Test isSuperceded
 		ArrayList<RevisionTag> tips = new ArrayList<>(config.getRevisionList().branchTips());
 
 		for(RevisionTag tip : tips) {
@@ -357,6 +356,16 @@ public class RevisionTree {
 					if(parentsForTag(tip).containsAll(parents)) {
 						return true;
 					}
+					
+					boolean containsParents = true;
+					for(RevisionTag parent : parents) {
+						if(!descendentOf(tip, parent)) {
+							containsParents = false;
+							break;
+						}
+					}
+					
+					if(containsParents) return true;
 				}
 			}
 		}

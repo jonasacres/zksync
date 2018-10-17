@@ -29,26 +29,6 @@ public class DiffSet {
 	
 	HashSet<Long> issuedInodeIds = new HashSet<Long>();
 	
-	// TODO DHT: (test) Test tangled collection
-	public static DiffSet withTangledCollection(Collection<RevisionTag> revisions) throws IOException {
-		LinkedList<RevisionTag> finalList = new LinkedList<>();
-		while(!revisions.isEmpty()) {
-			LinkedList<RevisionTag> candidates = new LinkedList<>();
-			for(RevisionTag revision : revisions) {
-				if(!revision.getRefTag().hasFlag(RefTag.FLAG_NO_NEW_CONTENT)) {
-					finalList.add(revision);
-					continue;
-				}
-				
-				candidates.addAll(revision.getInfo().getParents());
-			}
-			
-			revisions = candidates;
-		}
-		
-		return DiffSet.withCollection(finalList);
-	}
-	
 	/** build a DiffSet from a collection of RefTags */
 	public static DiffSet withCollection(Collection<RevisionTag> revisions) throws IOException {
 		RevisionTag[] array = new RevisionTag[revisions.size()];
