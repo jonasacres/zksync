@@ -199,7 +199,10 @@ public class ZKArchive {
 	public void addPageTag(byte[] tag) {
 		long shortTag = Util.shortTag(tag);
 		if(allPageTags != null && !allPageTags.containsKey(shortTag)) {
-			allPageTags.put(shortTag, tag);
+			synchronized(this) {
+				allPageTags.put(shortTag, tag);
+			}
+			
 			config.swarm.announceTag(tag);
 		}		
 	}

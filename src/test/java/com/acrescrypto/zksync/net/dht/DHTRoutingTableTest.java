@@ -294,7 +294,6 @@ public class DHTRoutingTableTest {
 		Util.setCurrentTimeMillis(DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
 		assert(client.lookupIds.isEmpty());
 		table = new DHTRoutingTable(client);
-		// TODO DHT: (itf) 36f41e8ef0f610757176a0e3a3ad0021a5a7c36b linux 10/10/18 AssertionError
-		assertTrue(Util.waitUntil(2*DHTRoutingTable.freshenIntervalMs, ()->!client.lookupIds.isEmpty()));
+		assertTrue(Util.waitUntil(50, ()->!client.lookupIds.isEmpty()));
 	}
 }

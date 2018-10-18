@@ -251,6 +251,7 @@ public class PageQueue {
 	
 	public void addPageTag(int priority, long shortTag) {
 		try {
+			// TODO: 10/18/18 commit after f9ba5e26, AllTests, Linux... Somehow, one of the tests got a NullPointedException on the next line, from PeerMessageIncoming.processThread() (but the test still passed)
 			addPageTag(priority, config.getArchive().expandShortTag(shortTag));
 		} catch (IOException exc) {
 			logger.error("Caught exception queuing short tag {}", String.format("%16x", shortTag), exc);
