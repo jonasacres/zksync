@@ -61,7 +61,7 @@ public class DHTModuleTest {
 			client.listen(null, 0);
 			client.findPeers();
 		}
-
+		
 		for(DHTClient client : clients) {
 			assertTrue(Util.waitUntil(2000, ()->client.isInitialized()));
 		}
@@ -83,7 +83,7 @@ public class DHTModuleTest {
 	public static void beforeAll() {
 		TCPPeerAdvertisement.disableReachabilityTest = true;
 		// DHTRoutingTable.freshenIntervalMs = 400;
-		DHTClient.messageExpirationTimeMs = 100;
+		DHTClient.messageExpirationTimeMs = 500;
 		DHTClient.messageRetryTimeMs = 50;
 		DHTClient.socketCycleDelayMs = 50;
 		DHTClient.socketOpenFailCycleDelayMs = 100;
@@ -120,7 +120,6 @@ public class DHTModuleTest {
 	
 	@Test
 	public void testPeerDiscovery() throws IOException, InvalidBlacklistException {
-		// TODO DHT: (itf) 61e8dda7 linux 10/17/18 (times out waiting for client.isInitialized)... possibly resolved 10/18/18, commit after 2c45303
 		ArrayList<DHTClient> clients = makeClients(256);
 		DHTID id = new DHTID(crypto.rng(crypto.hashLength()));
 		DHTRecord ad = makeBogusAd(0);

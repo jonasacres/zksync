@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.net;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.RejectedExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -176,19 +177,20 @@ public class PeerMessageIncoming extends PeerMessage {
 	}
 	
 	protected void processThread() {
-		if(connection.socket.threadPool.isShutdown()) return;
-		connection.socket.threadPool.submit(()->{
-			Util.setThreadName("PeerMessageIncoming process thread");
-			try {
-				connection.handle(this);
-			} catch(ProtocolViolationException exc) {
-				logger.warn("Peer message handler for {} encountered protocol violation", connection.socket.getAddress(), exc);
-				connection.socket.violation();
-			} catch(Exception exc) {
-				logger.error("Peer message handler thread for {} encountered exception", connection.socket.getAddress(), exc);
-			}
-			
-			markFinished();
-		});
+		try {
+			connection.socket.threadPool.submit(()->{
+				Util.setThreadName("PeerMessageIncoming process thread");
+				try {
+					connection.handle(this);
+				} catch(ProtocolViolationException exc) {
+					logger.warn("Peer message handler for {} encountered protocol violation", connection.socket.getAddress(), exc);
+					connection.socket.violation();
+				} catch(Exception exc) {
+					logger.error("Peer message handler thread for {} encountered exception", connection.socket.getAddress(), exc);
+				}
+				
+				markFinished();
+			});
+		} catch(RejectedExecutionException exc) {}
 	}
 }

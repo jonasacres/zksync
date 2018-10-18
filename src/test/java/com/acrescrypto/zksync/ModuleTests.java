@@ -8,8 +8,8 @@ import com.acrescrypto.zksync.net.dht.DHTModuleTest;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
+	NetModuleTest.class,
 	DHTModuleTest.class,
-	NetModuleTest.class
 })
 
 public class ModuleTests {

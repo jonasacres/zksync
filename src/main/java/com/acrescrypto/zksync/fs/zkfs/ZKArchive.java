@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 
@@ -191,8 +192,8 @@ public class ZKArchive {
 		return config.equals(((ZKArchive) other).config);
 	}
 
-	public Collection<byte[]> allPageTags() {
-		return allPageTags.values();
+	public synchronized Collection<byte[]> allPageTags() {
+		return new ArrayList<>(allPageTags.values());
 	}
 	
 	public void addPageTag(byte[] tag) {
