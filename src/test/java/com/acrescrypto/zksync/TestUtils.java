@@ -44,10 +44,12 @@ public class TestUtils {
 		Map<Thread,StackTraceElement[]> traces = Thread.getAllStackTraces();
 		boolean success = true;
 		
-		for(SnoozeThread snoozeThread : SnoozeThreadSupervisor.shared().getItems()) {
-			if(knownSnoozeThreads.contains(snoozeThread) || snoozeThread.isCancelled()) continue;
-			knownSnoozeThreads.add(snoozeThread);
-			success = false;
+		synchronized(SnoozeThreadSupervisor.shared()) {
+			for(SnoozeThread snoozeThread : SnoozeThreadSupervisor.shared().getItems()) {
+				if(knownSnoozeThreads.contains(snoozeThread) || snoozeThread.isCancelled()) continue;
+				knownSnoozeThreads.add(snoozeThread);
+				success = false;
+			}
 		}
 		
 		for(WaitTask waitTask : WaitSupervisor.shared().getTasks()) {

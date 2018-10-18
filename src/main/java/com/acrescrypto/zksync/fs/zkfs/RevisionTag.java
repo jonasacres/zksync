@@ -159,15 +159,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public String toString() {
-		// TODO DHT: remove number of parents from dump string after debugging merges
 		return Util.bytesToHex(serialized, 4) + " height=" + height + " parentHash=" + String.format("%016x", parentHash);
-//		try {
-//			return Util.bytesToHex(serialized, 4) + " height=" + height + " parentHash=" + String.format("%016x", parentHash) + " numParents=" + getInfo().parents.size();
-//		} catch (IOException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//			return "oh fuck";
-//		}
 	}
 	
 	public int hashCode() {
