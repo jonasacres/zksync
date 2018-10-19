@@ -571,7 +571,8 @@ public class PeerConnection {
 		ZKArchive archive = socket.swarm.config.getArchive();
 
 		assertPeerCapability(PEER_TYPE_FULL);
-		msg.rxBuf.getInt(); // TODO: priority; no prioritization support for this command yet.
+		// TODO Someday: (implement) honor prioritization requests for revision details
+		msg.rxBuf.getInt(); // this is a priority value, which we don't actually implement support for yet
 		
 		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		while(msg.rxBuf.hasRemaining()) {

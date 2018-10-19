@@ -567,7 +567,7 @@ public class PageQueueTest {
 			assertTrue(pagesSeen == seenPageTags.size());
 		}
 		
-		// TODO: this is a perennially error-prone test. Need a better way to see that these are "random enough" without failing randomly.
+		// TODO FormalTests: (test) this is a perennially error-prone test. Need a better way to see that these are "random enough" without failing randomly.
 		assertTrue(matchCounts.get(0) + matchCounts.get(1) >= 28);
 		assertTrue(matchCounts.get(2) >= 2);
 	}

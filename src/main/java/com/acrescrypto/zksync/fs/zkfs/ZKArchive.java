@@ -27,7 +27,7 @@ public class ZKArchive {
 	
 	public final static int DEFAULT_PAGE_SIZE = 65536;
 
-	// TODO: it'll hurt, but crypto and storage need to go away and everyone needs to access through config
+	// TODO Someday: (refactor) it'll hurt, but crypto and storage need to go away and everyone needs to access through config
 	protected CryptoSupport crypto;
 	protected FS storage;
 

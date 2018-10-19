@@ -85,7 +85,7 @@ public class StoredAccess implements ArchiveDiscovery {
 	}
 	
 	protected byte[] serialize() {
-		/* TODO Someday: (review), ensure serialize() methods consistently return either plaintext and are wrapped by
+		/* TODO Someday: (review) ensure serialize() methods consistently return either plaintext and are wrapped by
 		 * an encryption method as needed so we can rely on serialize() always returning plaintext.
 		 */
 		byte[][] recordBufs = new byte[records.size()][];

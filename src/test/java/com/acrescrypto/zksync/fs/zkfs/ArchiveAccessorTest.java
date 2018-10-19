@@ -138,7 +138,7 @@ public class ArchiveAccessorTest {
 	
 	@Test @Ignore
 	public void testDeriveKeyMatchesTestVectors() {
-		// TODO: test vectors
+		// TODO FormalTests: (test) Key derivation test vectors
 	}
 	
 	@Test

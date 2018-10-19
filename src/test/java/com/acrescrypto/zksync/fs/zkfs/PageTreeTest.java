@@ -435,7 +435,7 @@ public class PageTreeTest {
 		 * We continue the original lookup operation, overwriting the in-memory copy (dirtied with the changes of the child) with a blank
 		 */
 		
-		// TODO Someday: (review) If page size is 512, chunk cache has a capacity of 8, and the tree depth is 6, this fails.
+		// TODO Someday: (bug) If page size is 512, chunk cache has a capacity of 8, and the tree depth is 6, this fails.
 		ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
 		ZKFS smallPageFs = smallPageArchive.openBlank();
 		smallPageFs.write("test", new byte[0]);

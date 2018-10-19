@@ -25,7 +25,7 @@ public class FileTestBase {
 	@Test(expected=EACCESException.class)
 	public void testOpenForReadingDoesntAllowWriting() throws IOException {
 		scratch.write("read-doesnt-allow-write", "text".getBytes());
-		File file = scratch.open("read-doesnt-allow-write", File.O_RDONLY); // TODO: LocalFile passed this with File.O_WRONLY... check that out.
+		File file = scratch.open("read-doesnt-allow-write", File.O_RDONLY);
 		file.write("and more".getBytes());
 	}
 

@@ -310,7 +310,6 @@ public class ZKFS extends FS {
 	
 	@Override
 	public ZKFS scopedFS(String subpath) {
-		// TODO: This is gonna be a pain. Supporting it would allow nested archives... dunno if that's a good thing!
 		throw new UnsupportedOperationException();
 	}
 	

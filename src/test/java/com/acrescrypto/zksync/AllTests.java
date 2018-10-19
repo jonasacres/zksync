@@ -5,7 +5,7 @@ import org.junit.runners.Suite;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-	FastTests.class,
+	UnitTests.class,
 	ModuleTests.class,
 	IntegrationTest.class
 })

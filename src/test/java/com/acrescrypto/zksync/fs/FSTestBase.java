@@ -87,7 +87,7 @@ public abstract class FSTestBase {
 		assertTrue(stat.isRegularFile());
 		assertEquals(stat.getMode(), 0664);
 		assertEquals(22, stat.getSize());
-		// TODO: need a good way to test UID/GID stuff
+		// TODO DHT: (test) need a good way to test UID/GID stuff
 		assertTrue(stat.getCtime() > 0);
 		assertTrue(stat.getAtime() > 0);
 		assertTrue(stat.getMtime() > 0);
@@ -98,7 +98,7 @@ public abstract class FSTestBase {
 		Stat stat = scratch.stat("directory");
 		assertTrue(stat.isDirectory());
 		assertEquals(0755, stat.getMode());
-		// TODO: need a good way to test UID/GID stuff
+		// TODO DHT: (test) need a good way to test UID/GID stuff
 		assertTrue(stat.getCtime() > 0);
 		assertTrue(stat.getAtime() > 0);
 		assertTrue(stat.getMtime() > 0);
@@ -121,7 +121,6 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testStatIdentifiesFifos() throws IOException {
-		// TODO: skip on windows for LocalFS.
 		Stat fifo = scratch.stat("fifo");
 		assertTrue(fifo.isFifo());
 	}

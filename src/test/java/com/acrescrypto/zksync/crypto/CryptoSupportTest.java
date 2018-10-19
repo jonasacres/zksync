@@ -48,7 +48,7 @@ public class CryptoSupportTest  {
 	
 	@Test
 	public void testExpandWithSalt() {
-		// TODO: more blake2-based test vectors, including some without salt
+		// TODO FormalTests: (test) more blake2-based test vectors, including some without salt
 		byte[][][] vectors = blake2ExpansionTestVectors();
 		
 		for(byte[][] vector : vectors) {
@@ -336,7 +336,8 @@ public class CryptoSupportTest  {
 	
 	@Test
 	public void testCurve25519DHTestVectors() {
-		/* TODO: So, I got these test vectors from https://github.com/signalapp/curve25519-java/blob/master/tests/src/main/java/org/whispersystems/curve25519/Curve25519Test.java
+		/* TODO FormalTests: (review) Validate these Curve25519 test vectors
+		* I got these test vectors from https://github.com/signalapp/curve25519-java/blob/master/tests/src/main/java/org/whispersystems/curve25519/Curve25519Test.java
 		* aka, from the library I'm using! I don't like that. Googling these numbers turns up nothing. Last commit to that
 		* file was Moxie Marlinspike, and so I'm disinclined to believe they come from nowhere.
 		* 
@@ -488,7 +489,7 @@ public class CryptoSupportTest  {
 				Util.hexToBytes("00010203"),
 				Util.hexToBytes("d820eb9cc67b17cb03661d29bef941acd98446db6b168593c791d8e3973888d74ad86f3b25a385ea0252bf1d04135aa31230949824a990c7d81ebd70fdc4fef15a8fdd6c82c7c88f5feef365b84a04d39d284d3389a34be691d0697526978ab737bda9705f81db2d646c1fa6048b43273cae4ffae8b4fe6aad1fdec2aacde2c9")
 			},
-			// TODO: more examples, people will need these to validate implementations
+			// TODO FormalTests: (test) more blake2 examples, people will need these to validate implementations
 		};
 	}
 	

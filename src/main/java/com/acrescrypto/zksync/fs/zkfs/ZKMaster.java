@@ -60,7 +60,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		try {
 			return new ZKMaster(new CryptoSupport(), RAMFS.volumeWithName(name), ppProvider);
 		} catch (InvalidBlacklistException e) {
-			// TODO: refactoring all the tests to catch InBlEx would be annoying, so this is an alternative... But probably a bandaid.
+			// InvalidBlacklistException masked as a runtime to avoid having to add a bunch of throws InBlEx to a zillion tests
 			throw new RuntimeException();
 		}
 	}
@@ -69,7 +69,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		try {
 			return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
 		} catch (InvalidBlacklistException e) {
-			// TODO: refactoring all the tests to catch InBlEx would be annoying, so this is an alternative... But probably a bandaid.
+			// InvalidBlacklistException masked as a runtime to avoid having to add a bunch of throws InBlEx to a zillion tests
 			throw new RuntimeException();
 		}
 	}
@@ -256,7 +256,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 				return false;
 			}
 		} else {
-			// TODO: it'd be nice to ask for a passphrase confirmation here...
+			// TODO Someday: (design) it'd be nice to ask for a passphrase confirmation here...
 			logger.info("No keyfile found; creating...");
 			localKey = new Key(crypto, crypto.rng(crypto.symKeyLength()));
 			keyFile.write(localKey.getRaw(), 512);

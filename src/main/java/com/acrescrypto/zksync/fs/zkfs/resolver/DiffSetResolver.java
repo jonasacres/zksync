@@ -85,7 +85,7 @@ public class DiffSetResolver {
 				if(inodeDiff != null) originalInodeId = inodeDiff.originalInodeId;
 				else originalInodeId = inodeId;
 				
-				// TODO: try using revtag height first before counting on having ancestor inode table
+				// TODO Someday: (refactor) try using revtag height first before counting on having ancestor inode table
 				existed = ancestor.readOnlyFS().exists(diff.path);
 				if(!existed) return inodeId; // the path was created after the fork, so keep it.
 				

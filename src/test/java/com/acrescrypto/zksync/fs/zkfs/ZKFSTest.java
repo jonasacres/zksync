@@ -206,7 +206,7 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	// ---- cut here ----
-	// TODO: everything after this should probably go into its own test class (revision, inode table) 
+	// TODO Someday: (refactor) everything after this should probably go into its own test class (revision, inode table) 
 	
 	@Test
 	public void testSuccessiveRevisions() throws IOException {
@@ -348,11 +348,7 @@ public class ZKFSTest extends FSTestBase {
 	@Override @Test @Ignore public void testScopedMakesDirectory() { }
 	@Override @Test @Ignore public void testScopedPurge() { }
 	
-	// TODO: modes, directories, hardlinks, symlinks, fifos, sockets, chardevs, blockdevs
-	// TODO: open default revision
-	// TODO: open non-default revision
-	// TODO: test alternative page size
-	
+	// TODO DHT: (test) test alternative page size
 	
 	protected byte[] generateFileData(String key, int length) {
 		ByteBuffer buf = ByteBuffer.allocate(4);

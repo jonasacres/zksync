@@ -82,8 +82,8 @@ public class InodeTable extends ZKFile {
 	 * @return RefTag for the newly created revision
 	 *  */
 	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
-		// TODO: Objective merge logic breaks down if we have additional parents AND we had changes to the filesystem. Throw an exception if someone tries to do that.
-		// TODO: I regret doing these as arrays instead of collections. Refactor.
+		// TODO Someday: (design) Objective merge logic breaks down if we have additional parents AND we had changes to the filesystem. Throw an exception if someone tries to do that.
+		// TODO Someday: (refactor) I regret doing these as arrays instead of collections. Refactor.
 		freelist.commit();
 		ArrayList<RevisionTag> parents = makeParentList(additionalParents);
 		updateRevisionInfo(parents);
@@ -114,7 +114,6 @@ public class InodeTable extends ZKFile {
 	
 	/** clear the old revision info and replace with a new one */
 	protected void updateRevisionInfo(Collection<RevisionTag> parents) throws IOException {
-		 // TODO: figure out if we need to add the current revision tag here
 		RevisionInfo newRevision = new RevisionInfo(this, parents, revision.generation+1);
 		revision = newRevision;
 	}
@@ -225,7 +224,7 @@ public class InodeTable extends ZKFile {
 	public Inode issueInode(long inodeId) throws IOException {
 		Inode inode = inodeWithId(inodeId);
 		long now = Util.currentTimeNanos();
-		inode.setIdentity(ByteBuffer.wrap(zkfs.archive.crypto.rng(8)).getLong()); // TODO: the new last gasp of non-determinism...
+		inode.setIdentity(ByteBuffer.wrap(zkfs.archive.crypto.rng(8)).getLong()); // TODO Release: (review) the new last gasp of non-determinism...
 		inode.getStat().setInodeId(inodeId);
 		inode.getStat().setCtime(now);
 		inode.getStat().setAtime(now);

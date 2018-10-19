@@ -41,5 +41,5 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 		TestUtils.assertTidy();
 	}
 	
-	// TODO: test that invalid directories cause an appropriate exception
+	// TODO DHT: (test) test that invalid directories cause an appropriate exception
 }

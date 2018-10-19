@@ -113,7 +113,7 @@ public class Util {
 	}
 
 	public static boolean isWindows() {
-		return false; // TODO: implement
+		return System.getProperty("os.name").toLowerCase().contains("windows");
 	}
 
 	public static boolean isOSX() {

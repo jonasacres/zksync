@@ -16,7 +16,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class LocalFSTest extends FSTestBase {
 
-	// TODO: this is going to break on Windows
+	// TODO Release: (test) this is going to break on Windows
 	public final static String SCRATCH_DIR = "/tmp/zksync-test/localfs";
 
 	@Before
@@ -54,24 +54,30 @@ public class LocalFSTest extends FSTestBase {
 			assertEquals(devNull.getDevMinor(), 2);
 		}
 	}
+	
+	@Test @Override
+	public void testStatIdentifiesFifos() throws IOException {
+		if(Util.isWindows()) return;
+		super.testStatIdentifiesFifos();
+	}
 
 	@Test @Ignore @Override
 	public void testMknodCharacterDevice() throws IOException {
-		// TODO: Implement... but what to do about superuser privileges?
+		// TODO PrivilegedOperations: (test) mknod chardev. needs superuser privileges
 	}
 
 	@Test @Ignore @Override
 	public void testMknodBlockDevice() throws IOException {
-		// TODO: Implement... but what to do about superuser privileges?
+		// TODO PrivilegedOperation: (test) mknod blockdev. needs superuser privileges
 	}
 
 	@Test @Ignore @Override
 	public void testChown() {
-		// TODO: Implement... still needs superuser though
+		// TODO PrivilegedOperation: (test) chown. needs superuser privileges
 	}
 
 	@Test @Ignore @Override
 	public void testChgrp() {
-		// TODO: Implement, needs super
+		// TODO PrivilegedOperation: (test) chgrp. needs superuser privileges
 	}
 }

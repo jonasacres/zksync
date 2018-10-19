@@ -6,9 +6,9 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Queue;
 
-// TODO: having IOException thrown here is a necessary evil... or is it?
 public class HashCache<K,V> {
 	public interface CacheLookup<K,V> {
+		// not wild about having the IOException, an alternative would be nice
 		public V getValue(K key) throws IOException;
 	}
 

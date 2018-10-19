@@ -584,7 +584,7 @@ public class DHTClientTest {
 				
 				DHTMessage addRecordMsg;
 				do {
-					// TODO: Figure out why we mysteriously get extra CMD_FIND_NODEs if we run a full test suite.
+					// TODO Someday: (bug) Figure out why we mysteriously get extra CMD_FIND_NODEs if we run a full test suite.
 					// For now, we'll just discard them and move on.
 					addRecordMsg = remote.receivePacket();
 				} while(addRecordMsg.cmd != DHTMessage.CMD_ADD_RECORD);

@@ -108,7 +108,7 @@ public class DirectoryTestBase {
 		for(String expectedItem : expected) assertTrue(listSet.contains(expectedItem));
 	}
 	
-	// TODO: recursive list include . ..
+	// TODO DHT: (test) recursive list include . ..
 
 	@Test
 	public void testMkdir() throws IOException {

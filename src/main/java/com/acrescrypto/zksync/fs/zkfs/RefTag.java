@@ -11,7 +11,7 @@ import com.acrescrypto.zksync.utility.Util;
  * for the inode table itself identifies a revision in the archive. RefTags contain certain metadata to indicate
  * how the content is stored. */
 public class RefTag implements Comparable<RefTag> {
-	public final static byte FLAG_NO_NEW_CONTENT = 1 << 0; // TODO: unused. consider deleting (but it's also used in test code for flag logic...)
+	public final static byte FLAG_PLACEHOLDER = 1 << 0; // TODO Release: (review) Implement a useful flag or ditch the field
 	
 	protected ZKArchiveConfig config;
 	protected RevisionInfo info;

@@ -93,7 +93,7 @@ public class RefTagTest {
 	
 	@Test
 	public void testSerialization() {
-		tag.setFlag(RefTag.FLAG_NO_NEW_CONTENT);
+		tag.setFlag(RefTag.FLAG_PLACEHOLDER);
 		
 		byte[] serialized = tag.serialize();
 		RefTag tag2 = new RefTag(archive, serialized);
@@ -142,19 +142,19 @@ public class RefTagTest {
 	@Test
 	public void testEqualsRegistersDifferenceForFlags() {
 		RefTag clone = new RefTag(tag.config, tag.getHash(), tag.getRefType(), tag.getNumPages());
-		tag.setFlag(RefTag.FLAG_NO_NEW_CONTENT);
+		tag.setFlag(RefTag.FLAG_PLACEHOLDER);
 		assertNotEquals(tag, clone);
 	}
 	
 	@Test
 	public void testHasFlagReturnsTrueIfFlagSet() {
-		tag.setFlag(RefTag.FLAG_NO_NEW_CONTENT);
-		assertTrue(tag.hasFlag(RefTag.FLAG_NO_NEW_CONTENT));
+		tag.setFlag(RefTag.FLAG_PLACEHOLDER);
+		assertTrue(tag.hasFlag(RefTag.FLAG_PLACEHOLDER));
 	}
 	
 	@Test
 	public void testHasFlagReturnsTrueIfFlagNotSet() {
-		assertFalse(tag.hasFlag(RefTag.FLAG_NO_NEW_CONTENT));
+		assertFalse(tag.hasFlag(RefTag.FLAG_PLACEHOLDER));
 	}
 	
 	@Test

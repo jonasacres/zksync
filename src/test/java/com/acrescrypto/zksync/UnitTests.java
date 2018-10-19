@@ -18,5 +18,5 @@ import com.acrescrypto.zksync.utility.UtilityTests;
 	UtilityTests.class,
 })
 
-public class FastTests {
+public class UnitTests {
 }

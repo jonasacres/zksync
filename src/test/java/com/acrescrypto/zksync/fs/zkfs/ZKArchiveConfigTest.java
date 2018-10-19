@@ -425,7 +425,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test @Ignore
 	public void testDeriveKeyForArchiveRootMatchesTestVectors() {
-		// TODO: test vectors
+		// TODO FormalTests: (test) Key derivation test vectors
 	}
 	
 	@Test
