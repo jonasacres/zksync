@@ -8,7 +8,10 @@ import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class StoredAccessRecord {
-	protected ZKArchive archive;
+	private ZKArchive archive;
+	private ArchiveAccessor accessor;
+	private Key writeKey;
+	protected byte[] archiveId;
 	protected boolean seedOnly, locallyInstantiated;
 	
 	public StoredAccessRecord(ZKArchive archive, boolean seedOnly) {
@@ -24,7 +27,11 @@ public class StoredAccessRecord {
 		if(locallyInstantiated) archive.close();
 	}
 	
-	public ZKArchive getArchive() {
+	public synchronized ZKArchive getArchive() throws IOException {
+		if(archive == null) {
+			ZKArchiveConfig config = ZKArchiveConfig.openExisting(accessor, archiveId, true, writeKey);
+			archive = config.getArchive();
+		}
 		return archive;
 	}
 	
@@ -71,18 +78,21 @@ public class StoredAccessRecord {
 		byte[] writeKeyRaw = new byte[master.crypto.symKeyLength()];
 		buf.get(writeKeyRaw);
 		
-		byte[] archiveId = new byte[master.crypto.hashLength()];
+		archiveId = new byte[master.crypto.hashLength()];
 		buf.get(archiveId);
 		
 		this.seedOnly = type != 0;
 		Key seedKey = new Key(master.crypto, seedKeyRaw);
 		Key passphraseKey = isBlank(passphraseKeyRaw) ? null : new Key(master.crypto, passphraseKeyRaw);
-		Key writeKey = isBlank(writeKeyRaw) ? null : new Key(master.crypto, writeKeyRaw);
 		
-		ArchiveAccessor accessor = master.makeAccessorForRoot(seedOnly ? seedKey : passphraseKey, seedOnly);
-		// TODO DHT: (review) This is a blocking P2P network operation if we don't have the config on hand. Refactor? And what about write keys?
-		ZKArchiveConfig config = ZKArchiveConfig.openExisting(accessor, archiveId, true, writeKey);
-		archive = config.getArchive();
+		writeKey = isBlank(writeKeyRaw) ? null : new Key(master.crypto, writeKeyRaw);
+		accessor = master.makeAccessorForRoot(seedOnly ? seedKey : passphraseKey, seedOnly);
+		ZKArchiveConfig config = ZKArchiveConfig.openExisting(accessor, archiveId, false, writeKey);
+		if(config.haveConfigLocally()) {
+			config.finishOpening();
+			archive = config.getArchive();
+		}
+		
 		locallyInstantiated = true;
 	}
 }

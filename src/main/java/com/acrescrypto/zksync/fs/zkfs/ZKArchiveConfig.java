@@ -168,6 +168,10 @@ public class ZKArchiveConfig {
 		if(archive != null) archive.addPageTag(tag());
 	}
 	
+	public boolean haveConfigLocally() {
+		return storage.exists(Page.pathForTag(tag()));
+	}
+	
 	public void read() throws IOException {
 		try {
 			ByteBuffer contents = ByteBuffer.wrap(storage.read(Page.pathForTag(tag())));

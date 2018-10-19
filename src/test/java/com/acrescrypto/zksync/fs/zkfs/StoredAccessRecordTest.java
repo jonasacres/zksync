@@ -47,9 +47,9 @@ public class StoredAccessRecordTest {
 		StoredAccessRecord record = new StoredAccessRecord(archive, false);
 		StoredAccessRecord deserialized = new StoredAccessRecord(master, ByteBuffer.wrap(record.serialize()));
 		assertFalse(deserialized.seedOnly);
-		assertTrue(Arrays.equals(archive.getConfig().getArchiveId(), deserialized.archive.getConfig().getArchiveId()));
-		assertTrue(Arrays.equals(archive.getConfig().getAccessor().passphraseRoot.getRaw(), deserialized.archive.getConfig().getAccessor().passphraseRoot.getRaw()));
-		assertTrue(Arrays.equals(archive.getConfig().getAccessor().seedRoot.getRaw(), deserialized.archive.getConfig().getAccessor().seedRoot.getRaw()));
+		assertTrue(Arrays.equals(archive.getConfig().getArchiveId(), deserialized.getArchive().getConfig().getArchiveId()));
+		assertTrue(Arrays.equals(archive.getConfig().getAccessor().passphraseRoot.getRaw(), deserialized.getArchive().getConfig().getAccessor().passphraseRoot.getRaw()));
+		assertTrue(Arrays.equals(archive.getConfig().getAccessor().seedRoot.getRaw(), deserialized.getArchive().getConfig().getAccessor().seedRoot.getRaw()));
 		deserialized.close();
 	}
 	
@@ -59,10 +59,10 @@ public class StoredAccessRecordTest {
 		StoredAccessRecord record = new StoredAccessRecord(archive, false);
 		StoredAccessRecord deserialized = new StoredAccessRecord(master, ByteBuffer.wrap(record.serialize()));
 		assertTrue(deserialized.seedOnly);
-		assertTrue(Arrays.equals(archive.getConfig().getArchiveId(), deserialized.archive.getConfig().getArchiveId()));
-		assertTrue(Arrays.equals(archive.getConfig().getAccessor().seedRoot.getRaw(), deserialized.archive.getConfig().getAccessor().seedRoot.getRaw()));
+		assertTrue(Arrays.equals(archive.getConfig().getArchiveId(), deserialized.getArchive().getConfig().getArchiveId()));
+		assertTrue(Arrays.equals(archive.getConfig().getAccessor().seedRoot.getRaw(), deserialized.getArchive().getConfig().getAccessor().seedRoot.getRaw()));
 		assertEquals(archive.getConfig().getAccessor().passphraseRoot, null);
-		assertEquals(deserialized.archive.getConfig().getAccessor().passphraseRoot, null);
+		assertEquals(deserialized.getArchive().getConfig().getAccessor().passphraseRoot, null);
 		deserialized.close();
 	}
 	
@@ -71,12 +71,12 @@ public class StoredAccessRecordTest {
 		StoredAccessRecord record = new StoredAccessRecord(archive, true);
 		StoredAccessRecord deserialized = new StoredAccessRecord(master, ByteBuffer.wrap(record.serialize()));
 		assertTrue(deserialized.seedOnly);
-		assertTrue(Arrays.equals(archive.getConfig().getArchiveId(), deserialized.archive.getConfig().getArchiveId()));
-		assertTrue(Arrays.equals(archive.getConfig().getAccessor().seedRoot.getRaw(), deserialized.archive.getConfig().getAccessor().seedRoot.getRaw()));
+		assertTrue(Arrays.equals(archive.getConfig().getArchiveId(), deserialized.getArchive().getConfig().getArchiveId()));
+		assertTrue(Arrays.equals(archive.getConfig().getAccessor().seedRoot.getRaw(), deserialized.getArchive().getConfig().getAccessor().seedRoot.getRaw()));
 		assertNotEquals(archive.getConfig().getAccessor().passphraseRoot, null);
-		assertEquals(deserialized.archive.getConfig().getAccessor().passphraseRoot, null);
-		assertEquals(deserialized.archive.config.writeRoot, null);
-		assertEquals(deserialized.archive.config.archiveRoot, null);
+		assertEquals(deserialized.getArchive().getConfig().getAccessor().passphraseRoot, null);
+		assertEquals(deserialized.getArchive().config.writeRoot, null);
+		assertEquals(deserialized.getArchive().config.archiveRoot, null);
 		deserialized.close();
 	}
 	
@@ -87,10 +87,10 @@ public class StoredAccessRecordTest {
 		StoredAccessRecord record = new StoredAccessRecord(config.archive, false);
 		StoredAccessRecord deserialized = new StoredAccessRecord(master, ByteBuffer.wrap(record.serialize()));
 		
-		assertArrayEquals(config.archiveId, deserialized.archive.config.archiveId);
-		assertArrayEquals(config.accessor.passphraseRoot.getRaw(), deserialized.archive.config.accessor.passphraseRoot.getRaw());
-		assertArrayEquals(config.archiveRoot.getRaw(), deserialized.archive.config.archiveRoot.getRaw());
-		assertArrayEquals(config.writeRoot.getRaw(), deserialized.archive.config.writeRoot.getRaw());
+		assertArrayEquals(config.archiveId, deserialized.getArchive().config.archiveId);
+		assertArrayEquals(config.accessor.passphraseRoot.getRaw(), deserialized.getArchive().config.accessor.passphraseRoot.getRaw());
+		assertArrayEquals(config.archiveRoot.getRaw(), deserialized.getArchive().config.archiveRoot.getRaw());
+		assertArrayEquals(config.writeRoot.getRaw(), deserialized.getArchive().config.writeRoot.getRaw());
 		
 		config.archive.close();
 	}

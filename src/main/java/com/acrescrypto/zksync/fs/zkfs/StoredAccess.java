@@ -24,7 +24,7 @@ public class StoredAccess implements ArchiveDiscovery {
 	
 	public void storeArchiveAccess(ZKArchive archive, boolean forceSeedOnly) throws IOException {
 		for(StoredAccessRecord record : records) {
-			if(Arrays.equals(record.archive.config.archiveId, archive.config.archiveId)) {
+			if(Arrays.equals(record.getArchive().config.archiveId, archive.config.archiveId)) {
 				if(record.seedOnly == forceSeedOnly) return;
 				records.remove(record);
 				break;
@@ -38,7 +38,7 @@ public class StoredAccess implements ArchiveDiscovery {
 	public void deleteArchiveAccess(ZKArchive archive) throws IOException {
 		StoredAccessRecord killableRecord = null;
 		for(StoredAccessRecord record : records) {
-			if(Arrays.equals(record.archive.config.archiveId, archive.config.archiveId)) {
+			if(Arrays.equals(record.getArchive().config.archiveId, archive.config.archiveId)) {
 				killableRecord = record;
 				break;
 			}
@@ -54,7 +54,7 @@ public class StoredAccess implements ArchiveDiscovery {
 	
 	public void purge() throws IOException {
 		for(StoredAccessRecord record : records) {
-			master.removedArchiveConfig(record.archive.config);
+			master.removedArchiveConfig(record.getArchive().config);
 		}
 		
 		records.clear();
