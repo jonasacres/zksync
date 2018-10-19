@@ -34,8 +34,8 @@ public class RevisionList {
 		}
 	}
 	
-	public ArrayList<RevisionTag> branchTips() {
-		return branchTips;
+	public synchronized ArrayList<RevisionTag> branchTips() {
+		return new ArrayList<>(branchTips);
 	}
 	
 	public void addBranchTip(RevisionTag newBranch) throws IOException {
@@ -159,7 +159,7 @@ public class RevisionList {
 	public synchronized void dump() {
 		System.out.println(Util.bytesToHex(config.swarm.getPublicIdentityKey().getBytes(), 6) + " Revision list: " + branchTips.size());
 		int i = 0;
-		ArrayList<RevisionTag> sortedTips = new ArrayList<>(branchTips());
+		ArrayList<RevisionTag> sortedTips = branchTips();
 		sortedTips.sort(null);
 		for(RevisionTag tag : sortedTips) {
 			i++;

@@ -33,7 +33,7 @@ public class DiffSetResolver {
 	RevisionTag commonAncestor;
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
-		Collection<RevisionTag> tips = new ArrayList<>(archive.getConfig().getRevisionList().branchTips());
+		Collection<RevisionTag> tips = archive.getConfig().getRevisionList().branchTips();
 		Collection<RevisionTag> minimalTips = archive.getConfig().getRevisionTree().minimalSet(tips);
 		Collection<RevisionTag> baseTips = archive.getConfig().getRevisionTree().canonicalBases(minimalTips);
 		DiffSet diffSet = DiffSet.withCollection(baseTips);

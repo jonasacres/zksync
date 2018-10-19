@@ -229,7 +229,7 @@ public class PeerConnection {
 			return;
 		}
 		
-		Collection<RevisionTag> branchTipsClone = new ArrayList<>(archive.getConfig().getRevisionList().branchTips());
+		Collection<RevisionTag> branchTipsClone = archive.getConfig().getRevisionList().branchTips();
 		ByteBuffer buf = ByteBuffer.allocate(branchTipsClone.size() * RevisionTag.sizeForConfig(socket.swarm.config));
 		for(RevisionTag tag : branchTipsClone) {
 			buf.put(tag.serialize());
@@ -355,10 +355,11 @@ public class PeerConnection {
 		return announcedTags.contains(shortTag);
 	}
 	
-	protected void waitForFullInit() {
+	protected void waitForFullInit() throws EOFException {
 		Util.blockOn(()->!closed && !socket.swarm.config.canReceive());
 		Util.blockOn(()->!closed && !socket.swarm.config.hasKey() && !socket.swarm.config.getAccessor().isSeedOnly());
 		Util.blockOn(()->!closed && socket.swarm.config.getArchive() == null);
+		if(closed) throw new EOFException(); // maybe not best exception, but we just want to stop processing without triggering a blacklist
 	}
 	
 	public boolean handle(PeerMessageIncoming msg) throws ProtocolViolationException {

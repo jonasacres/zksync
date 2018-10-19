@@ -334,7 +334,7 @@ public class RevisionTree {
 	/** Do we already have a revtag superceding all the data in this revtag? 
 	 * @throws SearchFailedException */
 	public boolean isSuperceded(RevisionTag revTag) throws SearchFailedException {
-		ArrayList<RevisionTag> tips = new ArrayList<>(config.getRevisionList().branchTips());
+		ArrayList<RevisionTag> tips = config.getRevisionList().branchTips();
 
 		for(RevisionTag tip : tips) {
 			if(tip.equals(revTag)) continue;

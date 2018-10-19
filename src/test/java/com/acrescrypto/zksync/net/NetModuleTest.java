@@ -381,7 +381,6 @@ public class NetModuleTest {
 		// give everyone time to connect. We could have duplicate connections early on, so the connections might be higher than desired for a moment.
 		for(int i = 0; i < numPeers; i++) {
 			final int ii = i;
-			// TODO DHT: (itf) 9579456 linux ModuleTests Assertion error on next line. Hard to reproduce. Also got RejectedExecutionException. 
 			assertTrue(Util.waitUntil(2000, ()->configs[ii].getSwarm().connections.size() >= numPeers-1));
 		}
 		
