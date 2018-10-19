@@ -16,6 +16,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
@@ -498,8 +499,10 @@ public class PeerConnection {
 			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw);
 			try {
 				socket.swarm.config.getRevisionList().addBranchTip(revTag);
+			} catch(SearchFailedException exc) {
+				/* placeholder if we ever want to do something about getting a branch tip we can't get info about
+				** kinda weird that we didn't learn anything, since the peer who told us about it ought to have info...*/ 
 			} catch(IOException exc) {
-				exc.printStackTrace();				
 			}
 		}
 		

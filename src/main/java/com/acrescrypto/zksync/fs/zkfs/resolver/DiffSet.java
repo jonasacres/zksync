@@ -6,12 +6,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.Map;
 
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
-import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;

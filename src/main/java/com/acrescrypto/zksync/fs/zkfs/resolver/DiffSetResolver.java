@@ -19,11 +19,11 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
 public class DiffSetResolver {
 	public interface InodeDiffResolver {
-		public Inode resolve(DiffSetResolver setResolver, InodeDiff diff) throws IOException;
+		public Inode resolve(DiffSetResolver setResolver, InodeDiff diff) throws IOException, DiffResolutionException;
 	}
 	
 	public interface PathDiffResolver {
-		public Long resolve(DiffSetResolver setResolver, PathDiff diff) throws IOException;
+		public Long resolve(DiffSetResolver setResolver, PathDiff diff) throws IOException, DiffResolutionException;
 	}
 	
 	DiffSet diffset;
@@ -78,8 +78,7 @@ public class DiffSetResolver {
 				try {
 					ancestor = setResolver.commonAncestor();
 				} catch (SearchFailedException exc) {
-					// TODO DHT: merge cannot be completed because we can't get ancestor info
-					throw new RuntimeException("Cannot find common ancestor to resolve merge");
+					throw new DiffResolutionException("Cannot find common ancestor to resolve merge");
 				}
 				
 				InodeDiff inodeDiff = setResolver.diffset.inodeDiffs.get(inodeId);
@@ -187,7 +186,7 @@ public class DiffSetResolver {
 		return partialResolver.resolve();
 	}
 	
-	protected void selectResolutions() throws IOException {
+	protected void selectResolutions() throws IOException, DiffResolutionException {
 		for(InodeDiff diff : diffset.inodeDiffs.values()) {
 			diff.setResolution(inodeResolver.resolve(this, diff));
 		}

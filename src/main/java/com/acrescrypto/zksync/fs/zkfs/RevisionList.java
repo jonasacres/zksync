@@ -39,9 +39,6 @@ public class RevisionList {
 	}
 	
 	public void addBranchTip(RevisionTag newBranch) throws IOException {
-		/* TODO DHT: Handle a SearchFailedException more gracefully. Should we store the tag for
-		 * later parent lookup? Accept it provisionally?
-		 */
 		if(config.revisionTree.isSuperceded(newBranch)) return;
 		
 		synchronized(this) {
