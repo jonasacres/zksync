@@ -16,7 +16,7 @@ import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKDirectory extends ZKFile implements Directory {
-	// TODO: Allow partial reads of directories
+	// TODO Someday: (design) Allow partial reads of directories
 	HashMap<String,Long> entries;
 	boolean dirty;
 	

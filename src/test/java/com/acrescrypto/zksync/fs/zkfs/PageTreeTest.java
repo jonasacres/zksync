@@ -435,13 +435,13 @@ public class PageTreeTest {
 		 * We continue the original lookup operation, overwriting the in-memory copy (dirtied with the changes of the child) with a blank
 		 */
 		
-		// TODO DHT: (review) If page size is 512, chunk cache has a capacity of 8, and the tree depth is 6, this fails.
+		// TODO Someday: (review) If page size is 512, chunk cache has a capacity of 8, and the tree depth is 6, this fails.
 		ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
 		ZKFS smallPageFs = smallPageArchive.openBlank();
 		smallPageFs.write("test", new byte[0]);
 		PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
 		
-		int max = (int) Math.pow(smallPageTree.tagsPerChunk(), 4);
+		int max = (int) Math.pow(smallPageTree.tagsPerChunk(), 4); // exponent is tree depth
 		
 		for(int i = 0; i < max; i++) {
 			smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));

@@ -185,10 +185,12 @@ public class InodeTable extends ZKFile {
 		if(inode.nlink > 0) {
 			throw new EMLINKException(String.format("inode %d", inodeId));
 		}
-		
-		// TODO: check to ensure we are not already deleted before adding to freelist?
-		inode.markDeleted();
-		freelist.freeInodeId(inodeId);
+
+		// no point in adding to the freelist if we're already in it
+		if(inode.identity != 0 || !inode.refTag.isBlank() || inode.flags != 0) {
+			inode.markDeleted();
+			freelist.freeInodeId(inodeId);
+		}
 	}
 	
 	/** return an inode with a given ID */
@@ -199,8 +201,9 @@ public class InodeTable extends ZKFile {
 	/** test if table contains an inode with the given ID 
 	 * @throws IOException */
 	public boolean hasInodeWithId(long inodeId) throws IOException {
-		// TODO: consider checking freelist?
-		return inodeId <= nextInodeId();
+		if(inodeId > nextInodeId()) return false;
+		if(freelist.available.contains(inodeId)) return false;
+		return true;
 	}
 	
 	/** issue next inode ID (draw from freelist if available, or issue next sequential ID if freelist is empty) */

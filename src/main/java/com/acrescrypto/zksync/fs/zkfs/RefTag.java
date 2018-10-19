@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.utility.Util;
 
-// TODO: (refactor) Confused terminology... "tag" can refer either to the bare hash, or this more fluent "RefTag".
+// TODO Someday: (refactor) Confused terminology... "tag" can refer either to the bare hash, or this more fluent "RefTag".
 /** Encodes a reference to file data. These are stored inside inodes to allow retrieval of file contents. The RefTag
  * for the inode table itself identifies a revision in the archive. RefTags contain certain metadata to indicate
  * how the content is stored. */

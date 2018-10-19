@@ -66,12 +66,22 @@ public class HashCache<K,V> {
 	}
 	
 	public synchronized void removeAll() throws IOException {
-		// TODO: better hope we don't get an ioexception on the second element or later, or we will have an inconsistent state 
-		for(K key : cache.keySet()) {
-			evict.evict(key, cache.get(key));
+		LinkedList<K> toRemove = new LinkedList<>();
+		try {
+			for(K key : cache.keySet()) {
+				evict.evict(key, cache.get(key));
+				toRemove.add(key);
+			}
+			
+			cache.clear();
+		} catch(IOException exc) {
+			// remove the stuff we successfully evicted before re-raising the exception
+			for(K key : toRemove) {
+				cache.remove(key);
+			}
+			
+			throw exc;
 		}
-		
-		cache.clear();
 	}
 	
 	protected void resetKey(K key) {

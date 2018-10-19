@@ -156,7 +156,7 @@ public class ZKFSTest extends FSTestBase {
 			for(int writeLength: writeLengths) {
 				byte[] writeData = new byte[writeLength];
 				testBuf.get(writeData);
-				testFile.write(writeData);
+				testFile.write(writeData, 0, writeLength);
 				testFile.flush();
 				
 				assertEquals(testFile.pos(), testFile.getInode().getStat().getSize());
@@ -171,7 +171,28 @@ public class ZKFSTest extends FSTestBase {
 		}
 	}
 	
-	// TODO: boundary truncations
+	@Test
+	public void testPageBoundaryTruncations() throws IOException {
+		int pageCount = 5;
+		int pageSize = zkscratch.getArchive().config.pageSize;
+		ZKFile testFile = zkscratch.open("page-boundary-extension-test", File.O_RDWR|File.O_CREAT);
+		byte[] testData = generateFileData("page-boundary", pageCount*pageSize);
+		
+		testFile.write(testData);
+		for(int page = pageCount - 1; page >= 0; page--) {
+			for(int i = 1; i >= -1; i--) {
+				int size = page*pageSize + i;
+				if(size < 0) continue;
+				
+				byte[] expectedData = new byte[size];
+				System.arraycopy(testData, 0, expectedData, 0, size);
+				testFile.truncate(size);
+				assertEquals(size, testFile.getInode().getStat().getSize());
+				testFile.seek(0, File.SEEK_SET);
+				assertArrayEquals(expectedData, testFile.read());
+			}
+		}
+	}
 	
 	@Test
 	public void testBasicArchiveWrite() throws IOException {

@@ -10,7 +10,7 @@ import java.util.HashSet;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.utility.Util;
 
-/** TODO Signing: Add the concept of a write passphrase, which derives the private signing key for the archive. 
+/** TODO Signing: (design) Add the concept of a write passphrase, which derives the private signing key for the archive. 
  */
 
 public class ArchiveAccessor {

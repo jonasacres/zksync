@@ -16,10 +16,10 @@ import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.utility.Util;
 
-/** TODO: Refactor bigly.
+/** TODO Someday: (refactor) Refactor ZKArchiveConfig/ZKArchive/ArchiveAccessor into a more convenient/straightforward model.
  * 
  * I'm not thrilled with the way the ArchiveAccessor/ZKArchiveConfig/ZKArchive division has played out in
- * real life. The process of bootstrapping an archive is painful, confusing and delicate. My deeply-help suspicion
+ * real life. The process of bootstrapping an archive is painful, confusing and delicate. My deeply-held suspicion
  * is that this will be a bottomless well of bugs.
  * 
  * Config should deal only with the config file. Archive should deal only with managing storage and retrieval of data.
