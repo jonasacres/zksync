@@ -81,10 +81,16 @@ public class RAMDirectory implements Directory {
 			Set<String> keys = new HashSet<>(fs.inodesByPath.keySet());
 			for(String path : keys) {
 				if(!path.startsWith(prefix) || path.equals(prefix)) continue;
-				if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(fs.scopedPath(path)).isDirectory()) continue;
+				boolean isDir = fs.stat(fs.scopedPath(path)).isDirectory();
+				if(isDir && (opts & LIST_OPT_OMIT_DIRECTORIES) != 0) continue;
+				
 				path = path.substring(prefix.length());
 				if(path.startsWith("/")) path = path.substring(1);
 				matches.add(path);
+				if(isDir && (opts & LIST_OPT_INCLUDE_DOT_DOTDOT) != 0) {
+					matches.add(path + "/.");
+					matches.add(path + "/..");
+				}
 			}
 		}
 		

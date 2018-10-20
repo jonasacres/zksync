@@ -64,6 +64,7 @@ public class DirectoryTestBase {
 		Directory dir = scratch.opendir("list-.-..-test");
 		ArrayList<String> entries = new ArrayList<String>();
 		for(String entry : dir.list(Directory.LIST_OPT_INCLUDE_DOT_DOTDOT)) entries.add(entry);
+
 		assertEquals(6, entries.size());
 		assertTrue(entries.contains("."));
 		assertTrue(entries.contains(".."));
@@ -108,7 +109,22 @@ public class DirectoryTestBase {
 		for(String expectedItem : expected) assertTrue(listSet.contains(expectedItem));
 	}
 	
-	// TODO DHT: (test) recursive list include . ..
+	@Test
+	public void testListRecursiveIncludesDotAndDotDot() throws IOException {
+		String[] files = { "listr/files/a/1", "listr/files/a/2", "listr/files/a/3", "listr/files/b/1", "listr/files/b/2", "listr/files/b/3" };
+		String[] expected = { ".", "..", "files", "files/.", "files/..", "files/a", "files/a/.", "files/a/..", "files/a/1", "files/a/2", "files/a/3", "files/b", "files/b/.", "files/b/..", "files/b/1", "files/b/2", "files/b/3" };
+		
+		for(String file : files) {
+			scratch.write(file, "foo".getBytes());
+		}
+		
+		String[] listed = scratch.opendir("listr").listRecursive(Directory.LIST_OPT_INCLUDE_DOT_DOTDOT);
+		Set<String> listSet = new HashSet<String>();
+		for(String listItem : listed) listSet.add(listItem);
+		
+		assertEquals(expected.length, listSet.size());
+		for(String expectedItem : expected) assertTrue(listSet.contains(expectedItem));
+	}
 
 	@Test
 	public void testMkdir() throws IOException {

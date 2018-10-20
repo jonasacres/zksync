@@ -38,6 +38,40 @@ public class IntegrationTest {
 		}
 	}
 	
+	ZKArchive createPeeredArchive(ZKMaster master) throws IOException {
+		ZKArchive archive = master.createDefaultArchive();
+
+		master.listenOnTCP(0);
+		master.activateDHT("127.0.0.1", 0, root);
+		master.getTCPListener().advertise(archive.getConfig().getSwarm());
+		archive.getConfig().getAccessor().discoverOnDHT();
+		archive.getConfig().getRevisionList().setAutomerge(true);
+		archive.getConfig().getSwarm().requestAll();
+		
+		return archive;
+	}
+	
+	RevisionTag createInitialCommit(ZKArchive archive, int i) throws IOException {
+		ZKFS fs = archive.openBlank();
+		fs.write("immediate-"+i, crypto.prng(Util.serializeInt(i)).getBytes(crypto.hashLength()-1));
+		fs.write("1page-"+i, crypto.prng(Util.serializeInt(i)).getBytes(archive.getConfig().getPageSize()));
+		fs.write("multipage-"+i, crypto.prng(Util.serializeInt(i)).getBytes(10*archive.getConfig().getPageSize()));
+		RevisionTag tag = fs.commit();
+		fs.close();
+		
+		return tag;
+	}
+	
+	void expectCommitData(ZKFS fs, int i) {
+		byte[] expectedImmediate = crypto.prng(Util.serializeInt(i)).getBytes(crypto.hashLength()-1);
+		byte[] expected1Page = crypto.prng(Util.serializeInt(i)).getBytes(fs.getArchive().getConfig().getPageSize());
+		byte[] expectedMultipage = crypto.prng(Util.serializeInt(i)).getBytes(10*fs.getArchive().getConfig().getPageSize());
+		
+		assertArrayEquals(expectedImmediate, readFile(fs, "immediate-"+i));
+		assertArrayEquals(expected1Page, readFile(fs, "1page-"+i));
+		assertArrayEquals(expectedMultipage, readFile(fs, "multipage-"+i));
+	}
+	
 	@BeforeClass
 	public static void beforeAll() {
 		ZKFSTest.cheapenArgon2Costs();
@@ -191,30 +225,21 @@ public class IntegrationTest {
 	
 	@Test
 	public void testDefaultArchiveIntegration() throws IOException {
+		/* peers 1 ... k each commit to the archive
+		 * each peer then discovers each other via the DHT and syncs via p2p
+		 * all peers should converge to a common revision with a merge of all commits
+		 */
 		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
 		ZKMaster[] masters = new ZKMaster[8];
 		ZKArchive[] archives = new ZKArchive[masters.length];
-		ZKFS[] fs = new ZKFS[masters.length];
 		
 		for(int i = 0; i < masters.length; i++) {
 			masters[i] = ZKMaster.openBlankTestVolume(""+i);
-			archives[i] = masters[i].createDefaultArchive();
-
-			masters[i].listenOnTCP(0);
-			masters[i].activateDHT("127.0.0.1", 0, root);
-			masters[i].getTCPListener().advertise(archives[i].getConfig().getSwarm());
-			archives[i].getConfig().getAccessor().discoverOnDHT();
-			archives[i].getConfig().getRevisionList().setAutomerge(true);
-			archives[i].getConfig().getSwarm().requestAll();
-			
-			fs[i] = archives[i].openBlank();
-			fs[i].write("immediate-"+i, crypto.prng(Util.serializeInt(i)).getBytes(crypto.hashLength()-1));
-			fs[i].write("1page-"+i, crypto.prng(Util.serializeInt(i)).getBytes(archives[i].getConfig().getPageSize()));
-			fs[i].write("multipage-"+i, crypto.prng(Util.serializeInt(i)).getBytes(10*archives[i].getConfig().getPageSize()));
-			fs[i].commit();
+			archives[i] = createPeeredArchive(masters[i]);
+			createInitialCommit(archives[i], i);
 		}
 		
-		assertTrue(Util.waitUntil(30000, ()->{
+		assertTrue(Util.waitUntil(10000, ()->{
 			// wait for everyone to merge to the same revtag
 			for(int i = 0; i < masters.length; i++) {
 				if(archives[i].getConfig().getRevisionList().branchTips().size() > 1) return false;
@@ -232,27 +257,129 @@ public class IntegrationTest {
 			ZKFS mergedFs = archives[i].openLatest();
 			
 			for(int j = 0; j < masters.length; j++) {
-				final int jj = j;
-				byte[] expectedImmediate = crypto.prng(Util.serializeInt(j)).getBytes(crypto.hashLength()-1);
-				byte[] expected1Page = crypto.prng(Util.serializeInt(j)).getBytes(archives[j].getConfig().getPageSize());
-				byte[] expectedMultipage = crypto.prng(Util.serializeInt(j)).getBytes(10*archives[j].getConfig().getPageSize());
-				
-				assertArrayEquals(expectedImmediate, readFile(mergedFs, "immediate-"+jj));
-				assertArrayEquals(expected1Page, readFile(mergedFs, "1page-"+jj));
-				assertArrayEquals(expectedMultipage, readFile(mergedFs, "multipage-"+jj));
+				expectCommitData(mergedFs, j);
 			}
 			
 			mergedFs.close();
 		}
 		
 		for(int i = 0; i < masters.length; i++) {
-			fs[i].close();
 			archives[i].close();
 			masters[i].close();
 		}
 	}
 	
-	// TODO DHT: (test) 2 peers develop an archive with several revisions. A third peer connects and syncs.
-	// TODO DHT: (test) 2 peers develop an archive with several revisions. A third peer develops its own revision chain before connecting to the swarm. All 3 peers merge.
+	@Test
+	public void testDefaultIntegrationWithDelayedUndevelopedPeer() throws IOException {
+		/* peers 1 ... k-1 each commit and sync
+		 * peer k then syncs (having no commits of its own) after everyone else converged
+		 * peer k should get the common revision
+		 */
+		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
+		ZKMaster[] masters = new ZKMaster[8];
+		ZKArchive[] archives = new ZKArchive[masters.length];
+		
+		for(int i = 0; i < masters.length; i++) {
+			masters[i] = ZKMaster.openBlankTestVolume(""+i);
+			archives[i] = createPeeredArchive(masters[i]);
+			createInitialCommit(archives[i], i);
+		}
+		
+		assertTrue(Util.waitUntil(10000, ()->{
+			// wait for everyone to merge to the same revtag
+			for(int i = 0; i < masters.length; i++) {
+				if(archives[i].getConfig().getRevisionList().branchTips().size() > 1) return false;
+				
+				RevisionTag baseTag = archives[0].getConfig().getRevisionList().branchTips().get(0);
+				RevisionTag tag = archives[i].getConfig().getRevisionList().branchTips().get(0);
+				if(!tag.equals(baseTag)) return false;
+			}
+			
+			return true;
+		}));
+		
+		RevisionTag mergeTag = archives[0].getConfig().getRevisionList().branchTips().get(0);
+		ZKMaster delayed = ZKMaster.openBlankTestVolume("delayed");
+		ZKArchive delayedArchive = createPeeredArchive(delayed);
+		assertTrue(Util.waitUntil(3000, ()->mergeTag.equals(delayedArchive.getConfig().getRevisionList().latest())));
+		delayedArchive.close();
+		delayed.close();
+		
+		for(int i = 0; i < masters.length; i++) {
+			archives[i].close();
+			masters[i].close();
+		}
+	}
+	
+	@Test
+	public void testDefaultIntegrationWithSeparatelyDevelopedPeer() throws IOException {
+		/* peers 1 ... k-1 each commit and sync
+		 * peek k commits, waits to sync
+		 * peer k then syncs after everyone else converged
+		 * everyone should converge to a new common revision.
+		 */
+		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
+		ZKMaster[] masters = new ZKMaster[8];
+		ZKArchive[] archives = new ZKArchive[masters.length];
+		
+		for(int i = 0; i < masters.length; i++) {
+			masters[i] = ZKMaster.openBlankTestVolume(""+i);
+			archives[i] = createPeeredArchive(masters[i]);
+			createInitialCommit(archives[i], i);
+		}
+		
+		assertTrue(Util.waitUntil(10000, ()->{
+			// wait for everyone to merge to the same revtag
+			for(int i = 0; i < masters.length; i++) {
+				if(archives[i].getConfig().getRevisionList().branchTips().size() > 1) return false;
+				
+				RevisionTag baseTag = archives[0].getConfig().getRevisionList().branchTips().get(0);
+				RevisionTag tag = archives[i].getConfig().getRevisionList().branchTips().get(0);
+				if(!tag.equals(baseTag)) return false;
+			}
+			
+			return true;
+		}));
+		
+		RevisionTag mergeTag = archives[0].getConfig().getRevisionList().branchTips().get(0);
+		ZKMaster separate = ZKMaster.openBlankTestVolume("delayed");
+		ZKArchive separateArch = separate.createDefaultArchive();
+		createInitialCommit(separateArch, masters.length);
+		
+		separate.listenOnTCP(0);
+		separate.activateDHT("127.0.0.1", 0, root);
+		separate.getTCPListener().advertise(separateArch.getConfig().getSwarm());
+		separateArch.getConfig().getAccessor().discoverOnDHT();
+		separateArch.getConfig().getRevisionList().setAutomerge(true);
+		separateArch.getConfig().getSwarm().requestAll();
+
+		assertTrue(Util.waitUntil(30000, ()->{
+			RevisionTag firstLatest = archives[0].getConfig().getRevisionList().latest();
+			for(ZKArchive archive : archives) {
+				if(!archive.getConfig().getRevisionList().latest().equals(firstLatest)) {
+					return false;
+				}
+			}
+			
+			RevisionTag sepLatest = separateArch.getConfig().getRevisionList().latest();
+			if(sepLatest.equals(mergeTag)) return false;
+			return sepLatest.equals(firstLatest);
+		}));
+		
+		ZKFS mergedFs = separateArch.openLatest();
+		for(int i = 0; i <= masters.length; i++) {
+			expectCommitData(mergedFs, i);
+		}
+		mergedFs.close();
+		
+		separateArch.close();
+		separate.close();
+		
+		for(int i = 0; i < masters.length; i++) {
+			archives[i].close();
+			masters[i].close();
+		}
+	}
+	
 	// TODO DHT: (test) N peers randomly commit to an archive. At the end of the test, all N peers should converge to a common revision.
 }

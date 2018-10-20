@@ -15,6 +15,7 @@ import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -299,7 +300,9 @@ public class TCPPeerSocket extends PeerSocket {
 		byte[] incoming = new byte[expectedLen];
 		while(numRead < expectedLen) {
 			int r = in.read(incoming, numRead, incoming.length - numRead);
-			assertState(r > 0);
+			if(r <= 0) {
+				throw new SocketClosedException();
+			}
 			numRead += r;
 		}
 		return incoming;

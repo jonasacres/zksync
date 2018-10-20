@@ -17,6 +17,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.utility.Util;
 
 public class ZKFSTest extends FSTestBase {
 	int oldDefaultTimeCost, oldDefaultParallelism, oldDefaultMemoryCost;
@@ -344,11 +345,50 @@ public class ZKFSTest extends FSTestBase {
 		zkscratch.assertDirectoryIsEmpty("nonemptydir");
 	}
 	
-	@Override @Test @Ignore public void testScopedFS() { }
-	@Override @Test @Ignore public void testScopedMakesDirectory() { }
-	@Override @Test @Ignore public void testScopedPurge() { }
+	// no scoping on ZKFS, so disable these tests
+	@Override @Test public void testScopedFS() { }
+	@Override @Test public void testScopedMakesDirectory() { }
+	@Override @Test public void testScopedPurge() { }
 	
-	// TODO DHT: (test) test alternative page size
+	@Test
+	public void testAlternativePageSizes() throws IOException {
+		// let's try some different page sizes to see if we can gum things up.
+		CryptoSupport crypto = new CryptoSupport();
+		
+		int[] pageSizes = {
+				RevisionInfo.FIXED_SIZE >> 1,
+				RevisionInfo.FIXED_SIZE,
+				RevisionInfo.FIXED_SIZE << 1,
+				59049, // power of 3
+				50625, // power of 3*5
+				131071, // mersenne prime
+				ZKArchive.DEFAULT_PAGE_SIZE >> 1,
+				ZKArchive.DEFAULT_PAGE_SIZE << 1,
+				2000000, // big page, power of 10
+			};
+		for(int pageSize : pageSizes) {
+			ZKArchive archive = master.createArchive(pageSize, "archive " + pageSize);
+			ZKFS fs = archive.openBlank();
+			byte[] immediateData = crypto.prng(Util.serializeInt(pageSize+0)).getBytes(crypto.hashLength()-1);
+			byte[] onePageData = crypto.prng(Util.serializeInt(pageSize+1)).getBytes(pageSize-1);
+			byte[] twoPageData = crypto.prng(Util.serializeInt(pageSize+2)).getBytes(2*pageSize-1);
+			byte[] tenPageData = crypto.prng(Util.serializeInt(pageSize+3)).getBytes(10*pageSize-1);
+			
+			fs.write("immediate", immediateData);
+			fs.write("1page", onePageData);
+			fs.write("2page", twoPageData);
+			fs.write("10page", tenPageData);
+			RevisionTag rev = fs.commit();
+			fs.close();
+			
+			fs = rev.getFS();
+			assertArrayEquals(immediateData, fs.read("immediate"));
+			assertArrayEquals(onePageData, fs.read("1page"));
+			assertArrayEquals(twoPageData, fs.read("2page"));
+			assertArrayEquals(tenPageData, fs.read("10page"));
+			archive.close();
+		}
+	}
 	
 	protected byte[] generateFileData(String key, int length) {
 		ByteBuffer buf = ByteBuffer.allocate(4);

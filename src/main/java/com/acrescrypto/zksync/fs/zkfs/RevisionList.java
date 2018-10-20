@@ -48,7 +48,7 @@ public class RevisionList {
 			updateLatest(newBranch);
 		}
 		
-		if(getAutomerge()) {
+		if(getAutomerge() && branchTips.size() > 1) {
 			try {
 				executeAutomerge();
 			} catch (DiffResolutionException exc) {

@@ -25,6 +25,7 @@ import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
@@ -297,7 +298,7 @@ public class PeerSwarm implements BlacklistCallback {
 				}
 			} catch (BlacklistedException exc) {
 				logger.debug("Ignoring ad for blacklisted peer {}", ad);
-			} catch(SocketException exc) {
+			} catch(SocketException|SocketClosedException exc) {
 				logger.info("Caught network exception connecting to peer {}", ad);
 			} catch(Exception exc) {
 				logger.error("Caught exception connecting to peer {}", ad, exc);
