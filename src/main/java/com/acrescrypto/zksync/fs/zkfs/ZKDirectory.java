@@ -234,7 +234,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		dirty = false;
 	}
 	
-	private byte[] serialize() throws IOException {
+	protected byte[] serialize() throws IOException {
 		int size = 0;
 		for(String path : entries.keySet()) {
 			size += 8 + 2 + path.length(); // inode number + path_len + path 

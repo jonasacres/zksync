@@ -63,7 +63,7 @@ public class LocalFSTest extends FSTestBase {
 
 	@Test @Ignore @Override
 	public void testMknodCharacterDevice() throws IOException {
-		// TODO PrivilegedOperations: (test) mknod chardev. needs superuser privileges
+		// TODO PrivilegedOperation: (test) mknod chardev. needs superuser privileges
 	}
 
 	@Test @Ignore @Override

@@ -87,7 +87,7 @@ public abstract class FSTestBase {
 		assertTrue(stat.isRegularFile());
 		assertEquals(stat.getMode(), 0664);
 		assertEquals(22, stat.getSize());
-		// TODO DHT: (test) need a good way to test UID/GID stuff
+		// TODO PrivilegedOperation: (test) need a good way to test UID/GID stuff
 		assertTrue(stat.getCtime() > 0);
 		assertTrue(stat.getAtime() > 0);
 		assertTrue(stat.getMtime() > 0);
@@ -98,7 +98,7 @@ public abstract class FSTestBase {
 		Stat stat = scratch.stat("directory");
 		assertTrue(stat.isDirectory());
 		assertEquals(0755, stat.getMode());
-		// TODO DHT: (test) need a good way to test UID/GID stuff
+		// TODO PrivilegedOperation: (test) need a good way to test UID/GID stuff
 		assertTrue(stat.getCtime() > 0);
 		assertTrue(stat.getAtime() > 0);
 		assertTrue(stat.getMtime() > 0);
