@@ -2,13 +2,16 @@ package com.acrescrypto.zksync;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.util.LinkedList;
 
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
@@ -23,6 +26,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
 import com.acrescrypto.zksync.net.dht.DHTSearchOperation;
+import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
 public class IntegrationTest {
@@ -378,6 +382,63 @@ public class IntegrationTest {
 		for(int i = 0; i < masters.length; i++) {
 			archives[i].close();
 			masters[i].close();
+		}
+	}
+	
+	@Test
+	public void testDefaultRandomIntegration() throws InterruptedException {
+		/* N peers swarm up and just randomly commit stuff for a while.
+		 * They should converge to a common revision.
+		 */
+		int workers = 8;
+		LinkedList<Thread> threads = new LinkedList<>();
+		ZKMaster[] masters = new ZKMaster[8];
+		ZKArchive[] archives = new ZKArchive[8];
+		long endTime = Util.currentTimeMillis() + 30*1000;
+		
+		for(int i = 0; i < workers; i++) {
+			final int ii = i;
+			Thread thread = new Thread(()->{
+				try {
+					ZKMaster master = masters[ii] = ZKMaster.openBlankTestVolume(""+ii);
+					ZKArchive archive = archives[ii] = createPeeredArchive(master);
+					while(Util.currentTimeMillis() < endTime) {
+						long timeLeft = endTime - Util.currentTimeMillis();
+						Util.sleep(Math.min(timeLeft, crypto.defaultPrng().getInt() % 1000));
+						ZKFS fs = archive.openLatest();
+						fs.write("file"+(crypto.defaultPrng().getInt() % 4), crypto.rng(32));
+						fs.commit();
+						fs.close();
+					}
+					System.out.println("Thread " + ii + " complete");
+				} catch (IOException e) {
+					e.printStackTrace();
+					fail();
+				}
+			});
+			threads.add(thread);
+			thread.start();
+		}
+		
+		for(Thread thread : threads) {
+			thread.join();
+		}
+		
+		System.out.println("All threads complete; merging");
+		
+		assertTrue(Util.waitUntil(10000, ()->{
+			RevisionTag firstLatest = archives[0].getConfig().getRevisionList().latest();
+			for(ZKArchive archive : archives) {
+				if(!firstLatest.equals(archive.getConfig().getRevisionList().latest())) return false;
+			}
+			return true;
+		}));
+		
+		System.out.println("Merge complete; closing");
+		
+		for(ZKArchive archive : archives) {
+			archive.close();
+			archive.getMaster().close();
 		}
 	}
 	

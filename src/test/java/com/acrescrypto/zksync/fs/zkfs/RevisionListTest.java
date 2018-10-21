@@ -199,11 +199,11 @@ public class RevisionListTest {
 	}
 	
 	@Test
-	public void testClearSetsLatestTagToNull() throws IOException {
+	public void testClearSetsLatestTagToBlank() throws IOException {
 		setupFakeRevisions(16);
 		assertNotNull(list.latest());
 		list.clear();
-		assertNull(list.latest());
+		assertTrue(list.latest().equals(RevisionTag.blank(config)));
 	}
 	
 	@Test
