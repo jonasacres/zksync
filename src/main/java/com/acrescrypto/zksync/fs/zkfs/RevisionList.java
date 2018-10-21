@@ -165,7 +165,7 @@ public class RevisionList {
 	}
 	
 	public RevisionTag latest() {
-		return latest;
+		return latest == null ? RevisionTag.blank(config) : latest;
 	}
 	
 	protected void updateLatest(RevisionTag newTip) {

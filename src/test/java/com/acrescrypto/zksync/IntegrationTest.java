@@ -385,7 +385,7 @@ public class IntegrationTest {
 		}
 	}
 	
-	@Test
+	@Test @Ignore
 	public void testDefaultRandomIntegration() throws InterruptedException {
 		/* N peers swarm up and just randomly commit stuff for a while.
 		 * They should converge to a common revision.
