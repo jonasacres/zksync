@@ -191,10 +191,6 @@ public class RevisionList {
 	}
 	
 	protected void queueAutomerge() throws IOException, DiffResolutionException {
-		/* want:
-		 *   - takes at least N seconds from first request
-		 *   - each successive request resets clock, unless max time is reached
-		 */
 		if(automergeSnoozeThread == null || automergeSnoozeThread.isCancelled()) {
 			automergeSnoozeThread = new SnoozeThread(automergeDelayMs, maxAutomergeDelayMs, true, ()-> {
 				try {

@@ -38,6 +38,7 @@ public class FreeList extends ZKFile {
 	public synchronized long issueInodeId() throws IOException {
 		if(available.isEmpty()) loadNextPage();
 		dirty = true;
+		if(available.isEmpty()) throw new FreeListExhaustedException();
 		return available.pop();
 	}
 	

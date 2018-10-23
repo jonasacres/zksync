@@ -272,4 +272,8 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	public ThreadGroup getThreadGroup() {
 		return threadGroup;
 	}
+	
+	public DHTZKArchiveDiscovery getDHTDiscovery() {
+		return dhtDiscovery;
+	}
 }

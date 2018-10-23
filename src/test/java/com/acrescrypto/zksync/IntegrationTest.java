@@ -32,6 +32,7 @@ public class IntegrationTest {
 	DHTPeer root;
 	DHTClient rootClient;
 	CryptoSupport crypto;
+	ZKMaster rootMaster;
 	
 	public byte[] readFile(ZKFS fs, String path) {
 		try {
@@ -85,8 +86,8 @@ public class IntegrationTest {
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
 		crypto = new CryptoSupport();
-		ZKMaster master = ZKMaster.openBlankTestVolume();
-		rootClient = master.getDHTClient();
+		rootMaster = ZKMaster.openBlankTestVolume();
+		rootClient = rootMaster.getDHTClient();
 		rootClient.listen("127.0.0.1", 0);
 		assertTrue(Util.waitUntil(50, ()->rootClient.getStatus() >= DHTClient.STATUS_QUESTIONABLE));
 		root = rootClient.getLocalPeer();
@@ -96,6 +97,7 @@ public class IntegrationTest {
 	public void afterEach() {
 		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
 		rootClient.close();
+		rootMaster.close();
 	}
 	
 	@AfterClass
@@ -389,7 +391,7 @@ public class IntegrationTest {
 	}
 	
 	@Test
-	public void testDefaultRandomIntegration() throws InterruptedException {
+	public void testDefaultRandomIntegration() throws InterruptedException, IOException, InvalidBlacklistException {
 		/* N peers swarm up and just randomly commit stuff for a while.
 		 * They should converge to a common revision.
 		 */
@@ -408,6 +410,7 @@ public class IntegrationTest {
 					ZKMaster master = masters[ii] = ZKMaster.openBlankTestVolume(""+ii);
 					ZKArchive archive = archives[ii] = createPeeredArchive(master);
 					while(Util.currentTimeMillis() < endTime) {
+						master.getDHTDiscovery().forceUpdate(archive.getConfig().getAccessor());
 						long timeLeft = endTime - Util.currentTimeMillis();
 						Util.sleep(Math.min(timeLeft, prng.getInt(1000)));
 						ZKFS fs = archive.openLatest();
@@ -434,7 +437,8 @@ public class IntegrationTest {
 		assertTrue(Util.waitUntil(10000, ()->{
 			RevisionTag firstLatest = archives[0].getConfig().getRevisionList().latest();
 			for(ZKArchive archive : archives) {
-				if(!firstLatest.equals(archive.getConfig().getRevisionList().latest())) return false;
+				RevisionTag archLatest = archive.getConfig().getRevisionList().latest();
+				if(!firstLatest.equals(archLatest)) return false;
 			}
 			return true;
 		}));
