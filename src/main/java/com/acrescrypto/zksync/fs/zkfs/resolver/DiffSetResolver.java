@@ -94,7 +94,6 @@ public class DiffSetResolver {
 					Inode inode = tag.readOnlyFS().getInodeTable().inodeWithId(originalInodeId);
 					if(inode.isDeleted()) continue;
 					if(inode.getIdentity() == inodeIdentity) return null; // we moved the inode
-					// TODO DHT: (analyze) how do we know for sure the other location will be preserved?
 				}
 				
 				// it was created before the fork and no one moved it, so did someone edit it?

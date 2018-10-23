@@ -214,6 +214,7 @@ public class RevisionTree {
 	}
 	
 	ZKArchiveConfig config;
+	// TODO Efficiency: (redesign) This consumes an unbounded amount of RAM.
 	HashMap<RevisionTag, HashSet<RevisionTag>> map = new HashMap<>();
 	boolean autowrite = true;
 	protected GroupedThreadPool threadPool;
