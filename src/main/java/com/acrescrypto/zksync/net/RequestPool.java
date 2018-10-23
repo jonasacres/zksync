@@ -377,7 +377,7 @@ public class RequestPool {
 			for(int j = 0; j < numRevTags; j++) {
 				buf.get(tagBytes);
 				int numInodeIds = buf.getInt();
-				RevisionTag revTag = new RevisionTag(config, tagBytes);
+				RevisionTag revTag = new RevisionTag(config, tagBytes, false);
 				
 				for(int k = 0; k < numInodeIds; k++) {
 					addInode(priority, revTag, buf.getLong());
@@ -391,7 +391,7 @@ public class RequestPool {
 			int numEntries = buf.getInt();
 			for(int j = 0; j < numEntries; j++) {
 				buf.get(tagBytes);
-				RevisionTag tag = new RevisionTag(config, tagBytes);
+				RevisionTag tag = new RevisionTag(config, tagBytes, false);
 				addRevision(priority, tag);
 			}
 		}

@@ -15,13 +15,20 @@ import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
+import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionList {
+	public final static long DEFAULT_AUTOMERGE_DELAY_MS = 10000;
+	public final static long DEFAULT_MAX_AUTOMERGE_DELAY_MS = 60000;
+	
 	protected ArrayList<RevisionTag> branchTips = new ArrayList<>();
 	protected ZKArchiveConfig config;
 	protected RevisionTag latest; // "latest" tip; understood to mean tip with greatest height, using hash comparison as tiebreaker.
 	protected boolean automerge;
+	protected SnoozeThread automergeSnoozeThread;
+	public long automergeDelayMs = DEFAULT_AUTOMERGE_DELAY_MS;
+	public long maxAutomergeDelayMs = DEFAULT_MAX_AUTOMERGE_DELAY_MS;
 	private Logger logger = LoggerFactory.getLogger(RevisionList.class);
 	
 	public RevisionList(ZKArchiveConfig config) throws IOException {
@@ -50,7 +57,7 @@ public class RevisionList {
 		
 		if(getAutomerge() && branchTips.size() > 1) {
 			try {
-				executeAutomerge();
+				queueAutomerge();
 			} catch (DiffResolutionException exc) {
 				logger.error("Unable to automerge with new branch " + newBranch + ": ", exc);
 			}
@@ -88,7 +95,7 @@ public class RevisionList {
 	
 	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
 		branchTips.remove(oldBranch);
-		if(latest.equals(oldBranch)) recalculateLatest();
+		if(latest != null && latest.equals(oldBranch)) recalculateLatest();
 	}
 	
 	public String getPath() {
@@ -122,7 +129,7 @@ public class RevisionList {
 			byte[] rawTag = new byte[RevisionTag.sizeForConfig(config)];
 			buf.get(rawTag);
 			try {
-				RevisionTag revTag = new RevisionTag(config, rawTag);
+				RevisionTag revTag = new RevisionTag(config, rawTag, false);
 				branchTips.add(revTag);
 				updateLatest(revTag);
 			} catch (SecurityException exc) {
@@ -183,7 +190,21 @@ public class RevisionList {
 		}
 	}
 	
-	protected RevisionTag executeAutomerge() throws IOException, DiffResolutionException {
-		return DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
+	protected void queueAutomerge() throws IOException, DiffResolutionException {
+		/* want:
+		 *   - takes at least N seconds from first request
+		 *   - each successive request resets clock, unless max time is reached
+		 */
+		if(automergeSnoozeThread == null || automergeSnoozeThread.isCancelled()) {
+			automergeSnoozeThread = new SnoozeThread(automergeDelayMs, maxAutomergeDelayMs, true, ()-> {
+				try {
+					DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
+				} catch (IOException|DiffResolutionException exc) {
+					logger.error("Error performing automerge", exc);
+				}
+			});
+		} else {
+			automergeSnoozeThread.snooze();
+		}
 	}
 }

@@ -201,7 +201,8 @@ public class InodeTable extends ZKFile {
 	 * @throws IOException */
 	public boolean hasInodeWithId(long inodeId) throws IOException {
 		if(inodeId > nextInodeId()) return false;
-		if(freelist.available.contains(inodeId)) return false;
+		// TODO: (refactor) not reliable, freelist can only say if cached listings are present
+		if(freelist.contains(inodeId)) return false;
 		return true;
 	}
 	

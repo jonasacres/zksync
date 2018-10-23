@@ -1126,8 +1126,8 @@ public class PeerConnectionTest {
 		assertNoMessage();
 	}
 	
-	@Test(expected=ProtocolViolationException.class)
-	public void testHandleRequestInodesTriggersViolationOnInvalidRevTags() throws IOException, ProtocolViolationException {
+	@Test
+	public void testHandleRequestInodesDoesntTriggerViolationOnInvalidRevTags() throws IOException, ProtocolViolationException {
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_INODES);
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array()); // priority
 		msg.receivedData((byte) 0, crypto.rng(archive.getConfig().refTagSize())); // fake revtag

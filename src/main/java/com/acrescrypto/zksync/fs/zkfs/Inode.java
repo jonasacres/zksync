@@ -145,7 +145,7 @@ public class Inode implements Comparable<Inode> {
 		
 		byte[] revisionTagBytes = new byte[RevisionTag.sizeForConfig(fs.archive.config)];
 		buf.get(revisionTagBytes);
-		this.changedFrom = new RevisionTag(fs.archive.config, revisionTagBytes);
+		this.changedFrom = new RevisionTag(fs.archive.config, revisionTagBytes, false);
 	}
 	
 	/** increment link count */

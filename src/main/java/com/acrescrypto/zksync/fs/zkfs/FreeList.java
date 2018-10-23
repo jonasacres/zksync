@@ -35,20 +35,20 @@ public class FreeList extends ZKFile {
 	}
 	
 	/** returns an available inode ID and removes it from the freelist */
-	public long issueInodeId() throws IOException {
+	public synchronized long issueInodeId() throws IOException {
 		if(available.isEmpty()) loadNextPage();
 		dirty = true;
 		return available.pop();
 	}
 	
 	/** adds an inode ID to the freelist. take care to check that an inode is not already deleted! */
-	public void freeInodeId(long inodeId) {
+	public synchronized void freeInodeId(long inodeId) {
 		dirty = true;
 		available.push(inodeId);
 	}
 	
 	/** serialize freelist and write into zkfs */ 
-	public void commit() throws IOException {
+	public synchronized void commit() throws IOException {
 		if(!dirty) return;
 		long offset = Math.max(0, (lastReadPage-1)*zkfs.archive.config.pageSize);
 		truncate(offset);
@@ -76,5 +76,9 @@ public class FreeList extends ZKFile {
 		seek(pageNum*zkfs.archive.config.pageSize, SEEK_SET);
 		ByteBuffer buf = ByteBuffer.wrap(read((int) zkfs.archive.config.pageSize));
 		while(buf.remaining() >= 8) available.push(buf.getLong()); // 8 == sizeof inodeId 
+	}
+
+	public synchronized boolean contains(long inodeId) {
+		return available.contains(inodeId);
 	}
 }

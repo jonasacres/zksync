@@ -496,7 +496,7 @@ public class PeerConnection {
 		byte[] revTagRaw = new byte[RevisionTag.sizeForConfig(socket.swarm.config)];
 		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(revTagRaw);
-			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw);
+			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw, true);
 			try {
 				socket.swarm.config.getRevisionList().addBranchTip(revTag);
 			} catch(SearchFailedException exc) {
@@ -515,11 +515,11 @@ public class PeerConnection {
 
 		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(socket.swarm.config)];
 		LinkedList<RevisionTag> parents = new LinkedList<>();
-		RevisionTag revTag = new RevisionTag(socket.swarm.config, msg.rxBuf.read(revTagBytes));
+		RevisionTag revTag = new RevisionTag(socket.swarm.config, msg.rxBuf.read(revTagBytes), true);
 		
 		while(msg.rxBuf.hasRemaining()) {
 			byte[] parentBytes = new byte[revTagBytes.length];
-			RevisionTag parent = new RevisionTag(socket.swarm.config, msg.rxBuf.read(parentBytes));
+			RevisionTag parent = new RevisionTag(socket.swarm.config, msg.rxBuf.read(parentBytes), true);
 			parents.add(parent);
 		}
 		
@@ -544,7 +544,7 @@ public class PeerConnection {
 		assertPeerCapability(PEER_TYPE_FULL);
 		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		int priority = msg.rxBuf.getInt();
-		RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes));
+		RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes), false);
 		
 		while(msg.rxBuf.hasRemaining()) {
 			long inodeId = msg.rxBuf.getLong();
@@ -561,7 +561,7 @@ public class PeerConnection {
 		
 		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		while(msg.rxBuf.hasRemaining()) {
-			RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes));
+			RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes), false);
 			sendRevisionContents(priority, tag);
 		}
 	}
@@ -576,7 +576,7 @@ public class PeerConnection {
 		
 		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		while(msg.rxBuf.hasRemaining()) {
-			RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes));
+			RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes), false);
 			announceRevisionDetails(tag);
 		}
 	}

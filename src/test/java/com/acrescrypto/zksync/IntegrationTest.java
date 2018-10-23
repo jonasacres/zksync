@@ -11,10 +11,10 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
@@ -26,7 +26,6 @@ import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
 import com.acrescrypto.zksync.net.dht.DHTSearchOperation;
-import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
 public class IntegrationTest {
@@ -48,6 +47,8 @@ public class IntegrationTest {
 		master.listenOnTCP(0);
 		master.activateDHT("127.0.0.1", 0, root);
 		master.getTCPListener().advertise(archive.getConfig().getSwarm());
+		archive.getConfig().getRevisionList().automergeDelayMs = 5;
+		archive.getConfig().getRevisionList().maxAutomergeDelayMs = 100;
 		archive.getConfig().getAccessor().discoverOnDHT();
 		archive.getConfig().getRevisionList().setAutomerge(true);
 		archive.getConfig().getSwarm().requestAll();
@@ -354,6 +355,8 @@ public class IntegrationTest {
 		separate.activateDHT("127.0.0.1", 0, root);
 		separate.getTCPListener().advertise(separateArch.getConfig().getSwarm());
 		separateArch.getConfig().getAccessor().discoverOnDHT();
+		separateArch.getConfig().getRevisionList().automergeDelayMs = archives[0].getConfig().getRevisionList().automergeDelayMs;
+		separateArch.getConfig().getRevisionList().maxAutomergeDelayMs = archives[0].getConfig().getRevisionList().maxAutomergeDelayMs;
 		separateArch.getConfig().getRevisionList().setAutomerge(true);
 		separateArch.getConfig().getSwarm().requestAll();
 
@@ -385,32 +388,33 @@ public class IntegrationTest {
 		}
 	}
 	
-	@Test @Ignore
+	@Test
 	public void testDefaultRandomIntegration() throws InterruptedException {
 		/* N peers swarm up and just randomly commit stuff for a while.
 		 * They should converge to a common revision.
 		 */
-		int workers = 8;
+		int workers = 4;
 		LinkedList<Thread> threads = new LinkedList<>();
-		ZKMaster[] masters = new ZKMaster[8];
-		ZKArchive[] archives = new ZKArchive[8];
-		long endTime = Util.currentTimeMillis() + 30*1000;
+		ZKMaster[] masters = new ZKMaster[workers];
+		ZKArchive[] archives = new ZKArchive[workers];
+		final long endTime = Util.currentTimeMillis() + 30*1000;
+		long[] maxHeights = new long[workers];
 		
 		for(int i = 0; i < workers; i++) {
 			final int ii = i;
 			Thread thread = new Thread(()->{
+				PRNG prng = new PRNG();
 				try {
 					ZKMaster master = masters[ii] = ZKMaster.openBlankTestVolume(""+ii);
 					ZKArchive archive = archives[ii] = createPeeredArchive(master);
 					while(Util.currentTimeMillis() < endTime) {
 						long timeLeft = endTime - Util.currentTimeMillis();
-						Util.sleep(Math.min(timeLeft, crypto.defaultPrng().getInt() % 1000));
+						Util.sleep(Math.min(timeLeft, prng.getInt(1000)));
 						ZKFS fs = archive.openLatest();
-						fs.write("file"+(crypto.defaultPrng().getInt() % 4), crypto.rng(32));
-						fs.commit();
+						fs.write("file"+(prng.getInt(4)), crypto.rng(prng.getInt(3*archive.getConfig().getPageSize())));
+						maxHeights[ii] = fs.commit().getHeight();
 						fs.close();
 					}
-					System.out.println("Thread " + ii + " complete");
 				} catch (IOException e) {
 					e.printStackTrace();
 					fail();
@@ -424,7 +428,8 @@ public class IntegrationTest {
 			thread.join();
 		}
 		
-		System.out.println("All threads complete; merging");
+		long maxHeight = 0;
+		for(long h : maxHeights) maxHeight = Math.max(h, maxHeight);
 		
 		assertTrue(Util.waitUntil(10000, ()->{
 			RevisionTag firstLatest = archives[0].getConfig().getRevisionList().latest();
@@ -434,13 +439,10 @@ public class IntegrationTest {
 			return true;
 		}));
 		
-		System.out.println("Merge complete; closing");
-		
 		for(ZKArchive archive : archives) {
+			assertTrue(maxHeight <= archive.getConfig().getRevisionList().latest().getHeight());
 			archive.close();
 			archive.getMaster().close();
 		}
 	}
-	
-	// TODO DHT: (test) N peers randomly commit to an archive. At the end of the test, all N peers should converge to a common revision.
 }

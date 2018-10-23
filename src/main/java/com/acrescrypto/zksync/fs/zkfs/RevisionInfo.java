@@ -69,7 +69,7 @@ public class RevisionInfo {
 		byte[] parentBytes = new byte[revTagSize];
 		for(int i = 0; i < numParents; i++) {
 			buf.get(parentBytes);
-			parents.add(new RevisionTag(inodeTable.zkfs.archive.config, parentBytes));
+			parents.add(new RevisionTag(inodeTable.zkfs.archive.config, parentBytes, false));
 		}
 	}
 

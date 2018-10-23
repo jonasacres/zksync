@@ -16,7 +16,6 @@ import org.junit.Test;
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.fs.DirectoryTestBase;
-import com.acrescrypto.zksync.utility.Util;
 
 public class ZKDirectoryTest extends DirectoryTestBase {
 	ZKFS zkscratch;

@@ -31,8 +31,8 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		serialize();
 	}
 	
-	public RevisionTag(ZKArchiveConfig config, byte[] serialization) {
-		deserialize(config, serialization);
+	public RevisionTag(ZKArchiveConfig config, byte[] serialization, boolean verifySignature) {
+		deserialize(config, serialization, verifySignature);
 	}
 	
 	public ZKArchive getArchive() throws IOException {
@@ -117,7 +117,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		return serialized;
 	}
 	
-	public void deserialize(ZKArchiveConfig config, byte[] serialized) {
+	public void deserialize(ZKArchiveConfig config, byte[] serialized, boolean verifySignature) {
 		assert(serialized.length == sizeForConfig(config));
 		if(Arrays.equals(new byte[serialized.length], serialized)) {
 			this.refTag = RefTag.blank(config);
@@ -127,8 +127,10 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		}
 		
 		int signedLen = serialized.length - config.getCrypto().asymSignatureSize();
-		config.pubKey.assertValid(serialized, 0, signedLen,
-				serialized, signedLen, config.getCrypto().asymSignatureSize());
+		if(verifySignature) {
+			config.pubKey.assertValid(serialized, 0, signedLen,
+					serialized, signedLen, config.getCrypto().asymSignatureSize());
+		}
 		
 		hashCode = ByteBuffer.wrap(serialized).getInt();
 		this.serialized = serialized.clone();

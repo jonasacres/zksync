@@ -87,7 +87,7 @@ public class RevisionTagTest {
 	@Test
 	public void testConstructFromSerialization() {
 		RevisionTag origTag = new RevisionTag(revTag.refTag, 100, 200);
-		RevisionTag cloneTag = new RevisionTag(config, origTag.getBytes());
+		RevisionTag cloneTag = new RevisionTag(config, origTag.getBytes(), true);
 		assertEquals(origTag.refTag, cloneTag.refTag);
 		assertEquals(origTag.parentHash, cloneTag.parentHash);
 		assertEquals(origTag.height, cloneTag.height);
@@ -106,7 +106,7 @@ public class RevisionTagTest {
 			
 			raw[index] ^= mask;
 			try {
-				new RevisionTag(config, raw);
+				new RevisionTag(config, raw, true);
 				fail("expected security exception");
 			} catch(SecurityException exc) {
 			}

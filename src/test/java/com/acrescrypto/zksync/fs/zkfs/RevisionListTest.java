@@ -13,6 +13,7 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
+import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionListTest {
 	ZKMaster master;
@@ -105,12 +106,16 @@ public class RevisionListTest {
 	}
 	
 	@Test
-	public void testAddBranchTipAutomaticallyMergesBranchTipsIfAutomergeEnabled() throws IOException {
+	public void testAddBranchTipAutomaticallyMergesBranchTipsOnDelayIfAutomergeEnabled() throws IOException {
 		list.setAutomerge(true);
-		RevisionTag a = archive.openBlank().commit(),
-				    b = archive.openBlank().commit(),
-				    m = list.branchTips().get(0);
+		list.automergeDelayMs = 10;
+		list.maxAutomergeDelayMs = 3*list.automergeDelayMs;
 		
+		RevisionTag a = archive.openBlank().commit(),
+				    b = archive.openBlank().commit();
+		assertEquals(2, list.branchTips().size());
+		Util.sleep(2*list.automergeDelayMs + 100);
+		RevisionTag m = list.branchTips().get(0);
 		assertEquals(1, list.branchTips().size());
 		assertNotEquals(a, m);
 		assertNotEquals(b, m);
@@ -122,15 +127,17 @@ public class RevisionListTest {
 	@Test
 	public void testAddBranchTipDoesNotAutomaticallyMergesBranchTipsIfAutomergeDisabled() throws IOException {
 		list.setAutomerge(false);
+		list.automergeDelayMs = 1;
+		list.maxAutomergeDelayMs = list.automergeDelayMs;
+		
 		RevisionTag a = archive.openBlank().commit(),
 				    b = archive.openBlank().commit();
+		Util.sleep(5*list.maxAutomergeDelayMs + 100);
 		
 		assertEquals(2, list.branchTips().size());
 		assertTrue(list.branchTips().contains(a));
 		assertTrue(list.branchTips().contains(b));
 	}
-	// addBranchTip automatically merges branch tips if automerge enabled
-	// addBranchTip does not automatically merge branch tips if automerge disabled
 	
 	@Test
 	public void testConsolidateRemovesAnyTipsAncestralToSpecifiedBranch() throws IOException {

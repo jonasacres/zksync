@@ -11,6 +11,7 @@ public class GroupedThreadPool {
 	
 	public final static int MODE_FIXED = 0;
 	public final static int MODE_CACHED = 1;
+	public final static int MODE_WORK_STEALING = 2;
 
 	public static GroupedThreadPool newFixedThreadPool(String name, int maxThreads) {
 		return newFixedThreadPool(Thread.currentThread().getThreadGroup(), name, maxThreads);
@@ -19,7 +20,11 @@ public class GroupedThreadPool {
 	public static GroupedThreadPool newFixedThreadPool(ThreadGroup parent, String name, int maxThreads) {
 		return new GroupedThreadPool(parent, name, maxThreads, MODE_FIXED);
 	}
-	
+
+	public static GroupedThreadPool newWorkStealingThreadPool(ThreadGroup parent, String name) {
+		return new GroupedThreadPool(parent, name, 0, MODE_WORK_STEALING);
+	}
+
 	public static GroupedThreadPool newCachedThreadPool(String name) {
 		return newCachedThreadPool(Thread.currentThread().getThreadGroup(), name);
 	}
@@ -49,6 +54,9 @@ public class GroupedThreadPool {
 			break;
 		case MODE_CACHED:
 			executor = Executors.newCachedThreadPool(factory);
+			break;
+		case MODE_WORK_STEALING:
+			executor = maxThreads == 0 ? Executors.newWorkStealingPool() : Executors.newWorkStealingPool(maxThreads);
 			break;
 		default:
 			throw new RuntimeException("Invalid GroupedThreadPool mode");

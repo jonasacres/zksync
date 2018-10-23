@@ -32,6 +32,7 @@ public class RevisionTree {
 	class TreeSearchItem {
 		ArrayList<RevisionTag> revTags = new ArrayList<>();
 		HashMap<Long,ArrayList<RevisionTag>> deferred = new HashMap<>();
+		HashSet<RevisionTag> seen = new HashSet<>();
 		long height;
 		
 		TreeSearchItem(RevisionTag tag) {
@@ -45,8 +46,10 @@ public class RevisionTree {
 					return true;
 				}
 				
-				for(ArrayList<RevisionTag> list : deferred.values()) {
-					if(list.contains(tag)) return true;
+				synchronized(this) {
+					for(ArrayList<RevisionTag> list : deferred.values()) {
+						if(list.contains(tag)) return true;
+					}
 				}
 				
 				if(height > 0) recurse();
@@ -58,26 +61,48 @@ public class RevisionTree {
 		
 		void recurse() throws SearchFailedException {
 			ArrayList<RevisionTag> newRevTags = new ArrayList<>();
+			ArrayList<RevisionTag> lookups = new ArrayList<>();
 			height--;
 			
-			if(deferred.containsKey(height)) {
-				newRevTags.addAll(deferred.get(height));
-				deferred.remove(height);
+			synchronized(this) {
+				if(deferred.containsKey(height)) {
+					newRevTags.addAll(deferred.get(height));
+					deferred.remove(height);
+					newRevTags.removeIf((tag)->seen.contains(tag));
+				}
+				
+				for(RevisionTag revTag : revTags) {
+					if(seen.contains(revTag)) continue;
+					seen.add(revTag);
+					Collection<RevisionTag> parents = parentsForTagNonblocking(revTag);
+					if(parents == null) {
+						lookups.add(revTag);
+					} else {
+						for(RevisionTag parent : parents) {
+							if(parent.height == height) {
+								newRevTags.add(parent);
+							} else {
+								deferred.putIfAbsent(parent.height, new ArrayList<>());
+								deferred.get(parent.height).add(parent);
+							}
+						}
+					}
+				}
 			}
 			
 			ArrayList<Future<?>> futures = new ArrayList<>();
-			for(RevisionTag revTag : revTags) {
+			for(RevisionTag revTag : lookups) {
 				Future<?> future = threadPool.submit(()->{
 					Collection<RevisionTag> parents = parentsForTag(revTag, treeSearchTimeoutMs);
 					if(parents == null) return;
-					for(RevisionTag parent : parents) {
-						if(parent.height == height) {
-							synchronized(newRevTags) {
+					synchronized(this) {
+						for(RevisionTag parent : parents) {
+							if(parent.height == height) {
 								newRevTags.add(parent);
+							} else {
+								deferred.putIfAbsent(parent.height, new ArrayList<>());
+								deferred.get(parent.height).add(parent);
 							}
-						} else {
-							deferred.putIfAbsent(parent.height, new ArrayList<>());
-							deferred.get(parent.height).add(parent);
 						}
 					}
 				});
@@ -95,10 +120,12 @@ public class RevisionTree {
 					}
 				} catch (ExecutionException|TimeoutException exc) {
 					if(exc instanceof ExecutionException) {
-						exc.printStackTrace();
-						if(exc.getCause() != null) {
-							exc.getCause().printStackTrace();
+						Throwable e = exc;
+						while(e instanceof ExecutionException && e.getCause() != null) {
+							e = e.getCause();
 						}
+						
+						e.printStackTrace();
 					}
 					
 					throw new SearchFailedException();
@@ -194,7 +221,7 @@ public class RevisionTree {
 	
 	public RevisionTree(ZKArchiveConfig config) {
 		this.config = config;
-		threadPool = GroupedThreadPool.newFixedThreadPool(config.getThreadGroup(), "RevisionTree lookup", 8);
+		threadPool = GroupedThreadPool.newWorkStealingThreadPool(config.getThreadGroup(), "RevisionTree lookup");
 		try {
 			read();
 		} catch(ENOENTException|SecurityException exc) {
@@ -456,13 +483,13 @@ public class RevisionTree {
 		for(int i = 0; i < numRevTags; i++) {
 			int numParents = buf.getInt();
 			buf.get(revTagBytes);
-			RevisionTag revTag = new RevisionTag(config, revTagBytes);
+			RevisionTag revTag = new RevisionTag(config, revTagBytes, false);
 			LinkedList<RevisionTag> parents = new LinkedList<>();
 			
 			for(int j = 0; j < numParents; j++) {
 				byte[] parentTagBytes = new byte[RevisionTag.sizeForConfig(config)];
 				buf.get(parentTagBytes);
-				parents.add(new RevisionTag(config, parentTagBytes));
+				parents.add(new RevisionTag(config, parentTagBytes, false));
 			}
 			
 			addParentsForTag(revTag, parents);
