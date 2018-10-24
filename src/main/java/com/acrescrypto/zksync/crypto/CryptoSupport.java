@@ -38,6 +38,7 @@ public class CryptoSupport {
 	
 	public final static byte[] PASSPHRASE_SALT = "zksync-salt".getBytes();
 	
+	// TODO Someday: (refactor) Make this constructor protected. Everyone constructs through static defaultCrypto().
 	public CryptoSupport() {
 		defaultPrng = new PRNG();
 		curve25519 = Curve25519.getInstance(Curve25519.BEST);
