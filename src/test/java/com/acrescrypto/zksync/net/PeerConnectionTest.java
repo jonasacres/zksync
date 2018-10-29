@@ -980,6 +980,7 @@ public class PeerConnectionTest {
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 		
 		conn.socket.swarm.config.getRevisionTree().clear();
+		conn.socket.swarm.config.getCacheStorage().purge();
 		assertFalse(conn.socket.swarm.config.getRevisionTree().hasParentsForTag(tag));
 		conn.handle(msg);
 		assertTrue(conn.socket.swarm.config.getRevisionTree().hasParentsForTag(tag));
@@ -1328,6 +1329,7 @@ public class PeerConnectionTest {
 	public void testHandleRequestRevisionDetailsIgnoresRequestIfRevisionNotFound() throws IOException, ProtocolViolationException {
 		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commit().getFS().commit();
 		conn.socket.swarm.config.getRevisionTree().clear();
+		conn.socket.swarm.config.getCacheStorage().purge();
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REVISION_DETAILS);
 		msg.receivedData((byte) 0, Util.serializeInt(0));
 		msg.receivedData(PeerMessage.FLAG_FINAL, tag.getBytes());

@@ -49,11 +49,14 @@ public class HashCache<K,V> {
 	protected synchronized V add(K key) throws IOException {
 		V result = lookup.getValue(key);
 		if(result == null) return null;
-		
+		return add(key, result);
+	}
+	
+	public synchronized V add(K key, V value) throws IOException {
 		resetKey(key);
-		cache.put(key, result);
+		cache.put(key, value);
 		enforceCapacityLimit();
-		return result;
+		return value;
 	}
 	
 	public synchronized V remove(K key) throws IOException {
@@ -108,7 +111,11 @@ public class HashCache<K,V> {
 		return cache.keySet();
 	}
 
-	public boolean hasCached(long key) {
+	public boolean hasCached(K key) {
 		return cache.containsKey(key);
+	}
+
+	public int cachedSize() {
+		return cache.size();
 	}
 }

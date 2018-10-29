@@ -1,8 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -17,12 +15,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.HashContext;
-import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.MutableSecureFile;
-import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
+import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionTree {
@@ -61,7 +57,7 @@ public class RevisionTree {
 		
 		void recurse() throws SearchFailedException {
 			ArrayList<RevisionTag> newRevTags = new ArrayList<>();
-			ArrayList<RevisionTag> lookups = new ArrayList<>();
+			HashSet<RevisionTag> lookups = new HashSet<>();
 			height--;
 			
 			synchronized(this) {
@@ -74,7 +70,7 @@ public class RevisionTree {
 				for(RevisionTag revTag : revTags) {
 					if(seen.contains(revTag)) continue;
 					seen.add(revTag);
-					Collection<RevisionTag> parents = parentsForTagNonblocking(revTag);
+					Collection<RevisionTag> parents = parentsForTagLocal(revTag);
 					if(parents == null) {
 						lookups.add(revTag);
 					} else {
@@ -90,7 +86,7 @@ public class RevisionTree {
 				}
 			}
 			
-			ArrayList<Future<?>> futures = new ArrayList<>();
+			HashMap<RevisionTag, Future<?>> futures = new HashMap<>();
 			for(RevisionTag revTag : lookups) {
 				Future<?> future = threadPool.submit(()->{
 					Collection<RevisionTag> parents = parentsForTag(revTag, treeSearchTimeoutMs);
@@ -107,10 +103,11 @@ public class RevisionTree {
 					}
 				});
 				
-				futures.add(future);
+				futures.put(revTag, future);
 			}
 			
-			for(Future<?> future : futures) {
+			for(RevisionTag revTag : futures.keySet()) {
+				Future<?> future = futures.get(revTag);
 				try {
 					while(true) {
 						try {
@@ -128,7 +125,7 @@ public class RevisionTree {
 						e.printStackTrace();
 					}
 					
-					throw new SearchFailedException();
+					throw new SearchFailedException(revTag);
 				}
 			}
 			revTags = newRevTags;
@@ -214,85 +211,47 @@ public class RevisionTree {
 	}
 	
 	ZKArchiveConfig config;
-	// TODO Efficiency: (redesign) This consumes an unbounded amount of RAM.
-	HashMap<RevisionTag, HashSet<RevisionTag>> map = new HashMap<>();
-	boolean autowrite = true;
+	HashCache<RevisionTag, HashSet<RevisionTag>> map = new HashCache<>(256,
+			(tag)->new HashSet<>(parentsForTag(tag)),
+			(tag,parents)->{});
 	protected GroupedThreadPool threadPool;
 	protected final Logger logger = LoggerFactory.getLogger(RevisionTree.class); 
 	
 	public RevisionTree(ZKArchiveConfig config) {
 		this.config = config;
 		threadPool = GroupedThreadPool.newWorkStealingThreadPool(config.getThreadGroup(), "RevisionTree lookup");
-		try {
-			read();
-		} catch(ENOENTException|SecurityException exc) {
-			try {
-				scan();
-			} catch (IOException exc2) {
-				logger.error("Caught exception scanning revision tree from known branches", exc2);
-			}
-		} catch (IOException exc) {
-			logger.error("Caught exception reading revision tree", exc);
-		}
 	}
 	
 	public void clear() throws IOException {
-		map.clear();
-		if(autowrite) {
-			write();
-		}
+		map.removeAll();
 	}
 	
 	public void addParentsForTag(RevisionTag revTag, Collection<RevisionTag> parents) {
-		if(map.containsKey(revTag)) return;
+		if(map.hasCached(revTag)) return;
 		validateParentList(revTag, parents);
 		
 		synchronized(this) {
 			HashSet<RevisionTag> parentSet = new HashSet<>(parents);
-			map.put(revTag, parentSet);
-			this.notifyAll();
-		}
-		
-		if(autowrite) {
 			try {
-				write();
-			} catch (IOException exc) {
-				logger.error("Caught exception writing revision tree", exc);
+				map.add(revTag, parentSet);
+				this.notifyAll();
+			} catch(IOException exc) {
+				logger.error("Caught exception adding parents for tag", exc);
 			}
 		}
 	}
-	
-	/** Walk through all the revisions we know about and add them. */
-	public synchronized void scan() throws IOException {
-		boolean oldAutowrite = autowrite;
-		autowrite = false;
-		if(config.accessor.isSeedOnly()) return;
-		for(RevisionTag tip : config.revisionList.branchTips()) {
-			scanRevTag(tip);
-		}
-		autowrite = oldAutowrite;
-	}
-	
-	protected void scanRevTag(RevisionTag revTag) throws IOException {
-		if(revTag.refTag.isBlank()) return;
-		
-		// we're not willing to download pages from the swarm for this, so skip anything we don't have
-		if(!config.archive.hasInode(revTag, InodeTable.INODE_ID_INODE_TABLE)) return;
-		
-		// don't use readOnlyFS here since that will flood our cache with old revisions
-		Collection<RevisionTag> parents = revTag.getFS().inodeTable.revision.parents;
-		
-		/* this gets called automatically anyway on the tree in the ZKArchiveConfig -- we want to
-		 * guarantee that the tags get added to this instance, so we'll call again to be safe.
-		 */
-		addParentsForTag(revTag, parents);
-		for(RevisionTag parent : parents) {
-			scanRevTag(parent);
-		}
-	}
-	
+
 	public boolean hasParentsForTag(RevisionTag revTag) {
-		return map.containsKey(revTag);
+		try {
+			if(map.hasCached(revTag)) return true;
+			// TODO Someday: (implement) we're insisting on having the whole inode table, but we only need the first page
+			if(config.archive.isClosed()) return false;
+			if(config.archive.hasInode(revTag, InodeTable.INODE_ID_INODE_TABLE)) return true;
+		} catch(IOException exc) {
+			logger.error("Caught IOException checking status of revTag", exc);
+		}
+		
+		return false;
 	}
 	
 	public Collection<RevisionTag> parentsForTag(RevisionTag revTag) {
@@ -300,14 +259,22 @@ public class RevisionTree {
 	}
 	
 	public Collection<RevisionTag> parentsForTag(RevisionTag revTag, long timeoutMs) {
-		Collection<RevisionTag> r = parentsForTagNonblocking(revTag);
+		Collection<RevisionTag> r = parentsForTagLocal(revTag);
 		if(r != null) return r;
 		fetchParentsForTag(revTag, timeoutMs);
-		return parentsForTagNonblocking(revTag);
+		return parentsForTagLocal(revTag);
 	}
 	
-	public Collection<RevisionTag> parentsForTagNonblocking(RevisionTag revTag) {
-		return map.getOrDefault(revTag, null);		
+	public Collection<RevisionTag> parentsForTagLocal(RevisionTag revTag) {
+		if(hasParentsForTag(revTag)) {
+			try {
+				return map.get(revTag);
+			} catch (IOException exc) {
+				logger.error("Encountered IOException looking up cached revTag", exc);
+			}
+		}
+		
+		return null;
 	}
 	
 	public RevisionTag commonAncestor(Collection<RevisionTag> revTags) throws SearchFailedException {
@@ -374,7 +341,7 @@ public class RevisionTree {
 		if(revTag.height > 1) { // this micro-optimization helps simplify test-writing (no need to provide parent lists for revtags of height 1)
 			Collection<RevisionTag> parents = parentsForTag(revTag);
 			if(parents == null) {
-				throw new SearchFailedException();
+				throw new SearchFailedException(revTag);
 			}
 			
 			if(parents.size() > 1) {
@@ -401,10 +368,6 @@ public class RevisionTree {
 		return false;
 	}
 	
-	public int numRevisions() {
-		return map.size();
-	}
-	
 	protected void validateParentList(RevisionTag revTag, Collection<RevisionTag> parents) {
 		long parentHash;
 		
@@ -427,73 +390,12 @@ public class RevisionTree {
 		config.swarm.requestRevisionDetails(SwarmFS.REQUEST_PRIORITY+1, revTag);
 		long endTime = timeoutMs < 0 ? Long.MAX_VALUE : System.currentTimeMillis() + timeoutMs;
 		
-		while(parentsForTagNonblocking(revTag) == null && !config.isClosed() && System.currentTimeMillis() < endTime) {
+		while(parentsForTagLocal(revTag) == null && !config.isClosed() && System.currentTimeMillis() < endTime) {
 			try {
 				this.wait(Math.min(100, endTime - System.currentTimeMillis()));
 			} catch(InterruptedException exc) {}
 		}
 		
-		return parentsForTagNonblocking(revTag) != null;
-	}
-	
-	public synchronized void write() throws IOException {
-		MutableSecureFile
-		  .atPath(config.localStorage, getPath(), key())
-		  .write(serialize(), 65536);
-	}
-	
-	public void read() throws IOException {
-		deserialize(MutableSecureFile
-				  .atPath(config.localStorage, getPath(), key())
-				  .read());
-	}
-	
-	public String getPath() {
-		return Paths.get(ZKArchive.REVISION_DIR, "revision-tree").toString();
-	}
-	
-	protected Key key() {
-		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REVISION_TREE);
-	}
-	
-	protected synchronized byte[] serialize() {
-		int bytesNeeded = 8;
-		for(RevisionTag revTag : map.keySet()) {
-			bytesNeeded += 4 + (1+map.get(revTag).size())*RevisionTag.sizeForConfig(config);
-		}
-		
-		ByteBuffer buf = ByteBuffer.allocate(bytesNeeded);
-		buf.putLong(map.size());
-		for(RevisionTag revTag : map.keySet()) {
-			HashSet<RevisionTag> parents = map.get(revTag);
-			buf.putInt(parents.size());
-			buf.put(revTag.getBytes());
-			for(RevisionTag parent : parents) {
-				buf.put(parent.getBytes());
-			}
-		}
-		
-		assert(buf.remaining() == 0);
-		return buf.array();
-	}
-	
-	protected synchronized void deserialize(byte[] serialized) {
-		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		long numRevTags = buf.getLong();
-		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(config)];
-		for(int i = 0; i < numRevTags; i++) {
-			int numParents = buf.getInt();
-			buf.get(revTagBytes);
-			RevisionTag revTag = new RevisionTag(config, revTagBytes, false);
-			LinkedList<RevisionTag> parents = new LinkedList<>();
-			
-			for(int j = 0; j < numParents; j++) {
-				byte[] parentTagBytes = new byte[RevisionTag.sizeForConfig(config)];
-				buf.get(parentTagBytes);
-				parents.add(new RevisionTag(config, parentTagBytes, false));
-			}
-			
-			addParentsForTag(revTag, parents);
-		}
+		return parentsForTagLocal(revTag) != null;
 	}
 }

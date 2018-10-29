@@ -10,8 +10,6 @@ import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.junit.After;
@@ -109,56 +107,10 @@ public class RevisionTreeTest {
 	}
 	
 	@Test
-	public void testConstructorLoadsExistingTreeIfExists() throws IOException {
-		buildSimpleTree(RevisionTag.blank(config), 2, 2);
-		config.revisionList.clear();
-		RevisionTree tree2 = new RevisionTree(config);
-		assertEquals(tree.map, tree2.map);
-	}
-	
-	@Test
-	public void testConstructorScansRevisionListIfNoTreeFound() throws IOException {
-		buildSimpleTree(RevisionTag.blank(config), 2, 2);
-		HashMap<RevisionTag, HashSet<RevisionTag>> oldMap = new HashMap<>(tree.map);
-		config.localStorage.unlink(tree.getPath());
-		RevisionTree tree2 = new RevisionTree(config);
-		assertTrue(oldMap.equals(tree2.map));
-	}
-	
-	@Test
-	public void testConstructorScansRevisionListIfTreeUnreadable() throws IOException {
-		buildSimpleTree(RevisionTag.blank(config), 2, 2);
-		HashMap<RevisionTag, HashSet<RevisionTag>> oldMap = new HashMap<>(tree.map);
-		byte[] data = config.getLocalStorage().read(tree.getPath());
-		data[0] ^= 0x01; // twiddling any bit will cause the tree to be unreadable
-		config.getLocalStorage().write(tree.getPath(), data);
-		try {
-			// check and make sure we really did corrupt the file
-			tree.read();
-			fail();
-		} catch(SecurityException exc) {}
-		
-		RevisionTree tree2 = new RevisionTree(config);
-		assertEquals(oldMap, tree2.map);
-	}
-	
-	@Test
-	public void testAutowriteDefaultsTrue() {
-		assertTrue(tree.autowrite);
-	}
-	
-	@Test
 	public void testConstructorToleratesEmptyRevisionList() {
 		// we're already constructing from an empty list when we initialize the archive
 		assertNotNull(tree);
 		assertEquals(config, tree.config);
-		assertEquals(0, tree.numRevisions());
-	}
-	
-	@Test
-	public void testNumRevisionsCountsRevisions() throws IOException {
-		buildSimpleTree(RevisionTag.blank(config), 4, 2);
-		assertEquals(30, tree.numRevisions()); // 2 + 4 + 8 + 16 = 30
 	}
 	
 	@Test
@@ -298,36 +250,13 @@ public class RevisionTreeTest {
 		ArrayList<RevisionTag> parents = new ArrayList<>();
 		RevisionTag child = buildMultiparentRevision(2, parents);
 		tree.clear();
+		archive.config.getCacheStorage().unlink(Page.pathForTag(child.getRefTag().getHash()));
 		assertFalse(tree.hasParentsForTag(child));
 		tree.addParentsForTag(child, parents);
 		assertTrue(tree.hasParentsForTag(child));
-		assertNotEquals(parents, tree.parentsForTagNonblocking(child));
-		assertEquals(parents.size(), tree.parentsForTagNonblocking(child).size());
-		assertTrue(parents.containsAll(tree.parentsForTagNonblocking(child)));
-	}
-	
-	@Test
-	public void testAddParentsForTagAutomaticallyWritesWhenAutowriteEnabled() throws IOException {
-		tree.autowrite = true;
-		buildSimpleTree(RevisionTag.blank(config), 1, 4); // automatically calls addParentsForTag
-		assertEquals(4, tree.numRevisions());
-		tree.autowrite = false; // don't want clear to erase written file
-		tree.clear();
-		assertEquals(0, tree.numRevisions());
-		tree.read();
-		assertEquals(4, tree.numRevisions());
-	}
-	
-	@Test
-	public void testAddParentsForTagDoesNotAutomaticallyWRiteWhenAutowriteNotEnabled() throws IOException {
-		tree.autowrite = false;
-		tree.write(); // make sure file exists; i find this more aesthetically pleasing than catching enoent
-		buildSimpleTree(RevisionTag.blank(config), 1, 4); // automatically calls addParentsForTag
-		assertEquals(4, tree.numRevisions());
-		tree.clear();
-		assertEquals(0, tree.numRevisions());
-		tree.read();
-		assertEquals(0, tree.numRevisions());
+		assertNotEquals(parents, tree.parentsForTagLocal(child));
+		assertEquals(parents.size(), tree.parentsForTagLocal(child).size());
+		assertTrue(parents.containsAll(tree.parentsForTagLocal(child)));
 	}
 	
 	@Test
@@ -335,20 +264,12 @@ public class RevisionTreeTest {
 		ArrayList<RevisionTag> parents = new ArrayList<>();
 		RevisionTag tag = buildMultiparentRevision(2, parents);
 		tree.clear();
+		config.getCacheStorage().purge();
 		assertFalse(tree.fetchParentsForTag(tag, 1)); // make sure it blocks and fails
 		new Thread(()->{
 			tree.addParentsForTag(tag, parents);
 		}).start();
 		assertTrue(tree.fetchParentsForTag(tag, 1000));
-	}
-	
-	@Test
-	public void testScanRevTagDoesNotBlockForMissingRevTags() throws IOException {
-		ArrayList<RevisionTag> parents = new ArrayList<>();
-		RevisionTag tag = buildMultiparentRevision(2, parents);
-		config.archive.config.getStorage().purge();
-		tree.clear();
-		tree.scanRevTag(tag);
 	}
 	
 	@Test
@@ -361,6 +282,7 @@ public class RevisionTreeTest {
 	public void testHasParentsForTagReturnsFalseIfParentsNotKnownForRevtag() throws IOException {
 		RevisionTag tag = buildMultiparentRevision(1, null);
 		tree.clear();
+		archive.config.getCacheStorage().unlink(Page.pathForTag(tag.getRefTag().getHash()));
 		assertFalse(tree.hasParentsForTag(tag));
 	}
 	
@@ -378,6 +300,7 @@ public class RevisionTreeTest {
 		ArrayList<RevisionTag> parents = new ArrayList<>();
 		RevisionTag tag = buildMultiparentRevision(1, parents);
 		tree.clear();
+		config.getCacheStorage().purge();
 		new Thread(()->{
 			gotTag.setValue(tree.parentsForTag(tag, 3000) != null);
 		}).start();
@@ -391,6 +314,7 @@ public class RevisionTreeTest {
 	public void testParentsForTagReturnsAfterTimeout() throws IOException {
 		RevisionTag tag = buildMultiparentRevision(1, null);
 		tree.clear();
+		config.getCacheStorage().purge();
 		long time = System.currentTimeMillis(), delay = 100;
 		tree.parentsForTag(tag, delay);
 		assertTrue(System.currentTimeMillis() >= time + delay);
@@ -400,6 +324,7 @@ public class RevisionTreeTest {
 	public void testParentsForTagReturnsNullIfTimeoutReached() throws IOException {
 		RevisionTag tag = buildMultiparentRevision(1, null);
 		tree.clear();
+		config.getCacheStorage().purge();
 		assertNull(tree.parentsForTag(tag, 1));
 	}
 	
@@ -409,6 +334,7 @@ public class RevisionTreeTest {
 		ArrayList<RevisionTag> parents = new ArrayList<>();
 		RevisionTag tag = buildMultiparentRevision(1, parents);
 		tree.clear();
+		config.getCacheStorage().purge();
 		new Thread(()->{
 			gotTag.setValue(tree.parentsForTag(tag, -1) != null);
 		}).start();
@@ -423,6 +349,7 @@ public class RevisionTreeTest {
 	public void testParentsForTagRequestsRevisionDetailsFromSwarmIfNotPresent() throws IOException {
 		RevisionTag tag = buildMultiparentRevision(1, null);
 		tree.clear();
+		config.getCacheStorage().purge();
 		assertNull(swarm.requestedTag);
 		tree.parentsForTag(tag, 1);
 		assertEquals(tag, swarm.requestedTag);
@@ -440,7 +367,8 @@ public class RevisionTreeTest {
 	public void testParentsForTagNonblockingReturnsNullIfTagNotPresent() throws IOException {
 		RevisionTag tag = buildMultiparentRevision(1, null);
 		tree.clear();
-		assertNull(tree.parentsForTagNonblocking(tag));
+		config.getCacheStorage().purge();
+		assertNull(tree.parentsForTagLocal(tag));
 	}
 	
 	@Test
@@ -448,7 +376,7 @@ public class RevisionTreeTest {
 		RevisionTag tag = buildMultiparentRevision(1, null);
 		tree.clear();
 		assertNull(swarm.requestedTag);
-		tree.parentsForTagNonblocking(tag);
+		tree.parentsForTagLocal(tag);
 		assertNull(swarm.requestedTag);
 	}
 	
@@ -456,8 +384,8 @@ public class RevisionTreeTest {
 	public void testParentsForTagNonblockingReturnsParentsIfTagPresent() throws IOException {
 		ArrayList<RevisionTag> parents = new ArrayList<>();
 		RevisionTag tag = buildMultiparentRevision(1, parents);
-		assertEquals(parents.size(), tree.parentsForTagNonblocking(tag).size());
-		assertTrue(parents.containsAll(tree.parentsForTagNonblocking(tag)));
+		assertEquals(parents.size(), tree.parentsForTagLocal(tag).size());
+		assertTrue(parents.containsAll(tree.parentsForTagLocal(tag)));
 	}
 	
 	@Test
@@ -774,6 +702,7 @@ public class RevisionTreeTest {
 		RevisionTree.treeSearchTimeoutMs = 1;
 		RevisionTag tag = archive.openBlank().commit().getFS().commit();
 		tree.clear();
+		config.getCacheStorage().purge();
 		tree.isSuperceded(tag);
 	}
 }
