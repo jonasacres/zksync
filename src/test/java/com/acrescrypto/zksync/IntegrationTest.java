@@ -392,6 +392,7 @@ public class IntegrationTest {
 	
 	@Test
 	public void testDefaultRandomIntegration() throws InterruptedException, IOException, InvalidBlacklistException {
+		// TODO Urgent: (itf) This test has been stalling since refactoring RevisionTree. 272f6036 linux AllTests 10/29/18
 		/* N peers swarm up and just randomly commit stuff for a while.
 		 * They should converge to a common revision.
 		 */

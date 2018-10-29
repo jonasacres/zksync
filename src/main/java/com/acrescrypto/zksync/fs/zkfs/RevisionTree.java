@@ -57,7 +57,7 @@ public class RevisionTree {
 		
 		void recurse() throws SearchFailedException {
 			ArrayList<RevisionTag> newRevTags = new ArrayList<>();
-			HashSet<RevisionTag> lookups = new HashSet<>();
+			ArrayList<RevisionTag> lookups = new ArrayList<>();
 			height--;
 			
 			synchronized(this) {
@@ -86,7 +86,7 @@ public class RevisionTree {
 				}
 			}
 			
-			HashMap<RevisionTag, Future<?>> futures = new HashMap<>();
+			ArrayList<Future<?>> futures = new ArrayList<>();
 			for(RevisionTag revTag : lookups) {
 				Future<?> future = threadPool.submit(()->{
 					Collection<RevisionTag> parents = parentsForTag(revTag, treeSearchTimeoutMs);
@@ -103,11 +103,10 @@ public class RevisionTree {
 					}
 				});
 				
-				futures.put(revTag, future);
+				futures.add(future);
 			}
 			
-			for(RevisionTag revTag : futures.keySet()) {
-				Future<?> future = futures.get(revTag);
+			for(Future<?> future : futures) {
 				try {
 					while(true) {
 						try {
@@ -125,7 +124,7 @@ public class RevisionTree {
 						e.printStackTrace();
 					}
 					
-					throw new SearchFailedException(revTag);
+					throw new SearchFailedException();
 				}
 			}
 			revTags = newRevTags;
@@ -265,7 +264,7 @@ public class RevisionTree {
 		return parentsForTagLocal(revTag);
 	}
 	
-	public Collection<RevisionTag> parentsForTagLocal(RevisionTag revTag) {
+	public synchronized Collection<RevisionTag> parentsForTagLocal(RevisionTag revTag) {
 		if(hasParentsForTag(revTag)) {
 			try {
 				return map.get(revTag);
@@ -341,7 +340,7 @@ public class RevisionTree {
 		if(revTag.height > 1) { // this micro-optimization helps simplify test-writing (no need to provide parent lists for revtags of height 1)
 			Collection<RevisionTag> parents = parentsForTag(revTag);
 			if(parents == null) {
-				throw new SearchFailedException(revTag);
+				throw new SearchFailedException();
 			}
 			
 			if(parents.size() > 1) {

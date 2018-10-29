@@ -347,12 +347,12 @@ public class TCPPeerSocketTest {
 	public void beforeEach() throws IOException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
 		TCPPeerSocket.maxHandshakeTimeMillis = 400;
 		TCPPeerSocket.disableMakeThreads = true;
-		master.getBlacklist().clear();
 		swarm = new DummySwarm(archive.getConfig());
 		server = new DummyServer();
 		serverKey = swarm.identityKey;
 		byte[] encryptedArchiveId = archive.getConfig().getEncryptedArchiveId(serverKey.publicKey().getBytes());
 		ad = new TCPPeerAdvertisement(serverKey.publicKey(), "localhost", server.getPort(), encryptedArchiveId).resolve();
+		master.getBlacklist().clear();
 		socket = new TCPPeerSocket(swarm, ad);
 	}
 	

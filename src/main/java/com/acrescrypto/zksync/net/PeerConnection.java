@@ -23,7 +23,6 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
-import com.acrescrypto.zksync.fs.zkfs.RevisionTree;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.net.PageQueue.ChunkReference;
 import com.acrescrypto.zksync.utility.AppendableInputStream;
@@ -240,8 +239,9 @@ public class PeerConnection {
 	}
 	
 	public void announceRevisionDetails(RevisionTag tag) {
-		if(!socket.swarm.config.getRevisionTree().hasParentsForTag(tag)) return;
-		Collection<RevisionTag> parents = socket.swarm.config.getRevisionTree().parentsForTag(tag, RevisionTree.treeSearchTimeoutMs);
+		Collection<RevisionTag> parents = socket.swarm.config.getRevisionTree().parentsForTagLocal(tag);
+		if(parents == null) return;
+		
 		ByteBuffer buf = ByteBuffer.allocate((1+parents.size()) * RevisionTag.sizeForConfig(socket.swarm.config));
 		buf.put(tag.getBytes());
 		for(RevisionTag parent : parents) {
