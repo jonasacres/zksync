@@ -392,7 +392,6 @@ public class IntegrationTest {
 	
 	@Test
 	public void testDefaultRandomIntegration() throws InterruptedException, IOException, InvalidBlacklistException {
-		// TODO Urgent: (itf) This test has been stalling since refactoring RevisionTree. 272f6036 linux AllTests 10/29/18
 		/* N peers swarm up and just randomly commit stuff for a while.
 		 * They should converge to a common revision.
 		 */
@@ -435,22 +434,14 @@ public class IntegrationTest {
 		long maxHeight = 0;
 		for(long h : maxHeights) maxHeight = Math.max(h, maxHeight);
 		
-		if(!Util.waitUntil(20000, ()->{
+		assertTrue(Util.waitUntil(20000, ()->{
 			RevisionTag firstLatest = archives[0].getConfig().getRevisionList().latest();
 			for(ZKArchive archive : archives) {
 				RevisionTag archLatest = archive.getConfig().getRevisionList().latest();
 				if(!firstLatest.equals(archLatest)) return false;
 			}
 			return true;
-		})) {
-			for(ZKArchive archive : archives) {
-				System.out.println("\n\n\n=======");
-				archive.getConfig().getSwarm().dumpConnections();
-				archive.getConfig().getRevisionList().dump();
-			}
-			
-			fail();
-		}
+		}));
 		
 		for(ZKArchive archive : archives) {
 			assertTrue(maxHeight <= archive.getConfig().getRevisionList().latest().getHeight());
