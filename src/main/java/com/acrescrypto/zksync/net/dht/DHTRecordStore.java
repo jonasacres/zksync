@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.concurrent.ExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,6 +82,15 @@ public class DHTRecordStore {
 	public DHTRecordStore(DHTClient client) {
 		this.client = client;
 		read();
+	}
+	
+	public void addRecordForIdBlocking(DHTID id, DHTRecord record) throws IOException {
+		if(!hasRoomForRecord(id, record)) return;
+		try {
+			client.threadPool.submit(()->addRecordIfReachable(id, record)).get();
+		} catch (InterruptedException | ExecutionException exc) {
+			logger.error("Exception waiting for record insertion", exc);
+		}
 	}
 	
 	public void addRecordForId(DHTID id, DHTRecord record) throws IOException {

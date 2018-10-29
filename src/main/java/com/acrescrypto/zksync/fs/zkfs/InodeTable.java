@@ -415,7 +415,7 @@ public class InodeTable extends ZKFile {
 		this.revision = readRevisionInfo();
 		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST)); // doesn't actually read anything yet
 		nextInodeId = -1; // causes nextInodeId() to read from table on next invocation
-		zkfs.archive.config.revisionTree.addParentsForTag(tag, revision.parents);
+		// zkfs.archive.config.revisionTree.addParentsForTag(tag, revision.parents);
 	}
 	
 	/** apply a resolution to an inode conflict from an InodeDiff */

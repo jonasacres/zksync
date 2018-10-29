@@ -211,7 +211,18 @@ public class RevisionTree {
 	
 	ZKArchiveConfig config;
 	HashCache<RevisionTag, HashSet<RevisionTag>> map = new HashCache<>(256,
-			(tag)->new HashSet<>(parentsForTag(tag)),
+			(tag)->{
+				if(hasParentsForTag(tag)) {
+					return new HashSet<>(tag.getInfo().parents);
+				} else {
+					Collection<RevisionTag> parents = parentsForTag(tag);
+					if(parents == null) {
+						throw new SearchFailedException();
+					}
+					
+					return new HashSet<>(parents);
+				}
+			},
 			(tag,parents)->{});
 	protected GroupedThreadPool threadPool;
 	protected final Logger logger = LoggerFactory.getLogger(RevisionTree.class); 
@@ -221,7 +232,7 @@ public class RevisionTree {
 		threadPool = GroupedThreadPool.newWorkStealingThreadPool(config.getThreadGroup(), "RevisionTree lookup");
 	}
 	
-	public void clear() throws IOException {
+	public synchronized void clear() throws IOException {
 		map.removeAll();
 	}
 	
@@ -268,6 +279,9 @@ public class RevisionTree {
 		if(hasParentsForTag(revTag)) {
 			try {
 				return map.get(revTag);
+			} catch(SearchFailedException exc) {
+				if(config.isClosed()) return null;
+				logger.error("Encountered IOException looking up cached revTag", exc);
 			} catch (IOException exc) {
 				logger.error("Encountered IOException looking up cached revTag", exc);
 			}
@@ -347,7 +361,8 @@ public class RevisionTree {
 				for(RevisionTag tip : tips) {
 					if(tip.equals(revTag)) continue;
 					// if this is a merge, do we already have a merge including everything this one does?
-					if(parentsForTag(tip).containsAll(parents)) {
+					Collection<RevisionTag> tipParents = parentsForTagLocal(tip);
+					if(tipParents != null && tipParents.containsAll(parents)) {
 						return true;
 					}
 					

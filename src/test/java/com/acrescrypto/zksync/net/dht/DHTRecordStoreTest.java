@@ -193,7 +193,7 @@ public class DHTRecordStoreTest {
 			}
 			
 			DummyRecord record = new DummyRecord(i);
-			store.addRecordForId(id, record);
+			store.addRecordForIdBlocking(id, record);
 		}
 		
 		Util.sleep(5);
@@ -222,7 +222,7 @@ public class DHTRecordStoreTest {
 		for(int i = 0; i < numRecords; i++) {
 			DHTRecord record = new DummyRecord(i);
 			records.add(record);
-			store.addRecordForId(id, record);
+			store.addRecordForIdBlocking(id, record);
 		}
 		
 		assertTrue(Util.waitUntil(100, ()->numRecords == store.recordsForId(id).size()));
@@ -250,10 +250,10 @@ public class DHTRecordStoreTest {
 			}
 			
 			DummyRecord record = new DummyRecord(i);
-			store.addRecordForId(id, record);
+			store.addRecordForIdBlocking(id, record);
 		}
 		
-		Util.sleep(5);
+		Util.sleep(10);
 		
 		DHTRecordStore store1 = new DHTRecordStore(client);
 		for(DHTID idd : ids) {

@@ -435,14 +435,22 @@ public class IntegrationTest {
 		long maxHeight = 0;
 		for(long h : maxHeights) maxHeight = Math.max(h, maxHeight);
 		
-		assertTrue(Util.waitUntil(10000, ()->{
+		if(!Util.waitUntil(20000, ()->{
 			RevisionTag firstLatest = archives[0].getConfig().getRevisionList().latest();
 			for(ZKArchive archive : archives) {
 				RevisionTag archLatest = archive.getConfig().getRevisionList().latest();
 				if(!firstLatest.equals(archLatest)) return false;
 			}
 			return true;
-		}));
+		})) {
+			for(ZKArchive archive : archives) {
+				System.out.println("\n\n\n=======");
+				archive.getConfig().getSwarm().dumpConnections();
+				archive.getConfig().getRevisionList().dump();
+			}
+			
+			fail();
+		}
 		
 		for(ZKArchive archive : archives) {
 			assertTrue(maxHeight <= archive.getConfig().getRevisionList().latest().getHeight());
