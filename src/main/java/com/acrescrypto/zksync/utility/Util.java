@@ -120,6 +120,15 @@ public class Util {
 		return System.getProperty("os.name").equals("Mac OS X");
 	}
 	
+	public static boolean isSuperuser() {
+		if(isLinux()) {
+			// not reliable, but at the moment we're only using this to decide whether to test FS stuff
+			return System.getProperty("user.name").equals("root");
+		} else {
+			return false;
+		}
+	}
+	
 	public static boolean waitUntil(int maxDelay, WaitTest test) {
 		long endTime = maxDelay <= 0 ? Long.MAX_VALUE : System.currentTimeMillis() + maxDelay;
 		while(System.currentTimeMillis() < endTime && !test.test()) {

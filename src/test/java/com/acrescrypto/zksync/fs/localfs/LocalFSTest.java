@@ -3,10 +3,12 @@ package com.acrescrypto.zksync.fs.localfs;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.io.InputStream;
 
 import org.junit.*;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.FSTestBase;
@@ -32,12 +34,41 @@ public class LocalFSTest extends FSTestBase {
 		deleteFiles();
 		TestUtils.assertTidy();
 	}
+	
+	protected static int getCurrentId(char type) {
+		try {
+		    String userName = System.getProperty("user.name");
+		    String command = "id -" + type + " "+userName;
+		    Process child = Runtime.getRuntime().exec(command);
+
+		    // Get the input stream and read from it
+		    InputStream in = child.getInputStream();
+		    int uid = Integer.parseInt(new String(IOUtils.toByteArray(in)).replaceAll("\n", ""));
+		    in.close();
+		    return uid;
+		} catch (IOException e) {
+			return -1;
+		}
+	}
 
 	protected static void deleteFiles() {
-		java.io.File scratchDir = new java.io.File(SCRATCH_DIR);
 		try {
+			java.io.File scratchDir = new java.io.File(SCRATCH_DIR);
 			FileUtils.deleteDirectory(scratchDir);
-		} catch (IOException e) {}
+			scratchDir.delete();
+		} catch (IOException exc) {
+			exc.printStackTrace();
+		}
+	}
+	
+	@Override
+	public int expectedUid() {
+		return getCurrentId('u');
+	}
+
+	@Override
+	public int expectedGid() {
+		return getCurrentId('g');
 	}
 
 	@Test
@@ -61,23 +92,27 @@ public class LocalFSTest extends FSTestBase {
 		super.testStatIdentifiesFifos();
 	}
 
-	@Test @Ignore @Override
+	@Test @Override
 	public void testMknodCharacterDevice() throws IOException {
-		// TODO PrivilegedOperation: (test) mknod chardev. needs superuser privileges
+		if(!Util.isSuperuser()) return;
+		super.testMknodCharacterDevice();
 	}
 
-	@Test @Ignore @Override
+	@Test @Override
 	public void testMknodBlockDevice() throws IOException {
-		// TODO PrivilegedOperation: (test) mknod blockdev. needs superuser privileges
+		if(!Util.isSuperuser()) return;
+		super.testMknodBlockDevice();
 	}
 
-	@Test @Ignore @Override
-	public void testChown() {
-		// TODO PrivilegedOperation: (test) chown. needs superuser privileges
+	@Test @Override
+	public void testChown() throws IOException {
+		if(!Util.isSuperuser()) return;
+		super.testChown();
 	}
 
-	@Test @Ignore @Override
-	public void testChgrp() {
-		// TODO PrivilegedOperation: (test) chgrp. needs superuser privileges
+	@Test @Override
+	public void testChgrp() throws IOException {
+		if(!Util.isSuperuser()) return;
+		super.testChgrp();
 	}
 }

@@ -354,6 +354,7 @@ public class RevisionTree {
 		if(revTag.height > 1) { // this micro-optimization helps simplify test-writing (no need to provide parent lists for revtags of height 1)
 			Collection<RevisionTag> parents = parentsForTag(revTag);
 			if(parents == null) {
+				if(config.isClosed()) return false; // avoid needless log spam
 				throw new SearchFailedException();
 			}
 			

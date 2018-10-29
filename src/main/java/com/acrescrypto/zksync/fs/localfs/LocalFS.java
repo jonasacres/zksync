@@ -224,7 +224,7 @@ public class LocalFS extends FS {
 		}
 		
 		try {
-			runCommand(new String[] { "mknod", typeStr, expandPath(path), String.format("%d", major), String.format("%d", minor) });
+			runCommand(new String[] { "mknod", expandPath(path), typeStr, String.format("%d", major), String.format("%d", minor) });
 		} catch(CommandFailedException exc) {
 			// ugly how we're doing this, but communicate that we can't do this on this system/user
 			throw new UnsupportedOperationException();

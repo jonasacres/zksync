@@ -28,6 +28,7 @@ public class LocalDirectoryTest extends DirectoryTestBase {
 	
 	@AfterClass
 	public static void afterAll() {
+		LocalFSTest.deleteFiles();
 		TestUtils.assertTidy();
 	}
 }

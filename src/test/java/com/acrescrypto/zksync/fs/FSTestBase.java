@@ -81,16 +81,25 @@ public abstract class FSTestBase {
 		examplesPrepared = true;
 	}
 	
+	public int expectedUid() {
+		return 0;
+	}
+	
+	public int expectedGid() {
+		return 0;
+	}
+	
 	@Test
 	public void testStatRegularFile() throws IOException {
 		Stat stat = scratch.stat("regularfile");
 		assertTrue(stat.isRegularFile());
 		assertEquals(stat.getMode(), 0664);
 		assertEquals(22, stat.getSize());
-		// TODO PrivilegedOperation: (test) need a good way to test UID/GID stuff
 		assertTrue(stat.getCtime() > 0);
 		assertTrue(stat.getAtime() > 0);
 		assertTrue(stat.getMtime() > 0);
+		assertEquals(expectedUid(), stat.getUid());
+		assertEquals(expectedGid(), stat.getGid());
 	}
 	
 	@Test
@@ -98,10 +107,11 @@ public abstract class FSTestBase {
 		Stat stat = scratch.stat("directory");
 		assertTrue(stat.isDirectory());
 		assertEquals(0755, stat.getMode());
-		// TODO PrivilegedOperation: (test) need a good way to test UID/GID stuff
 		assertTrue(stat.getCtime() > 0);
 		assertTrue(stat.getAtime() > 0);
 		assertTrue(stat.getMtime() > 0);
+		assertEquals(expectedUid(), stat.getUid());
+		assertEquals(expectedGid(), stat.getGid());
 	}
 	
 	@Test
@@ -268,7 +278,7 @@ public abstract class FSTestBase {
 		scratch.chown("chown", "root");
 		assertEquals("root", scratch.stat("chown").getUser());
 		scratch.chown("chown", System.getProperty("user.name"));
-		assertEquals("jonas", scratch.stat("chown").getUser());
+		assertEquals(System.getProperty("user.name"), scratch.stat("chown").getUser());
 	}
 
 	@Test
@@ -277,7 +287,7 @@ public abstract class FSTestBase {
 		scratch.chgrp("chgrp", "root");
 		assertEquals("root", scratch.stat("chgrp").getGroup());
 		scratch.chgrp("chgrp", System.getProperty("user.name"));
-		assertEquals("jonas", scratch.stat("chgrp").getGroup());
+		assertEquals(System.getProperty("user.name"), scratch.stat("chgrp").getGroup());
 	}
 
 	@Test

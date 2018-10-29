@@ -28,6 +28,7 @@ public class LocalFileTest extends FileTestBase {
 	
 	@AfterClass
 	public static void afterAll() {
+		LocalFSTest.deleteFiles();
 		TestUtils.assertTidy();
 	}
 }
