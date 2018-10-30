@@ -39,7 +39,7 @@
     <dependency>
       <groupId>org.bouncycastle</groupId>
       <artifactId>bcprov-ext-jdk15on</artifactId>
-      <version>1.58</version>
+      <version>1.60</version>
     </dependency>
 
     <dependency>
@@ -76,12 +76,6 @@
 		<groupId>ch.qos.logback</groupId>
 		<artifactId>logback-classic</artifactId>
 		<version>1.2.3</version>
-	</dependency>
-	
-	<dependency>
-  		<groupId>org.whispersystems</groupId>
-  		<artifactId>curve25519-java</artifactId>
-  		<version>0.5.0</version>
 	</dependency>
   </dependencies>
 </project>

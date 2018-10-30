@@ -16,8 +16,6 @@ import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.params.ParametersWithIV;
 
 import org.slf4j.LoggerFactory;
-import org.whispersystems.curve25519.Curve25519;
-import org.whispersystems.curve25519.Curve25519KeyPair;
 import org.slf4j.Logger;
 
 import de.mkammerer.argon2.Argon2Factory;
@@ -29,7 +27,6 @@ public class CryptoSupport {
 	private PRNG defaultPrng;
 	private Logger logger = LoggerFactory.getLogger(CryptoSupport.class);
 	
-	protected Curve25519 curve25519;
 	public static boolean cheapArgon2; // set to true for tests, false otherwise
 	
 	public final static int ARGON2_TIME_COST = 4;
@@ -41,7 +38,6 @@ public class CryptoSupport {
 	// TODO Someday: (refactor) Make this constructor protected. Everyone constructs through static defaultCrypto().
 	public CryptoSupport() {
 		defaultPrng = new PRNG();
-		curve25519 = Curve25519.getInstance(Curve25519.BEST);
 	}
 	
 	public byte[] deriveKeyFromPassphrase(byte[] passphrase, byte[] salt) {
@@ -308,8 +304,7 @@ public class CryptoSupport {
 	}
 	
 	public PrivateDHKey makePrivateDHKey() {
-		Curve25519KeyPair keyPair = curve25519.generateKeyPair();
-		return new PrivateDHKey(this, keyPair.getPrivateKey(), keyPair.getPublicKey());
+		return new PrivateDHKey(this);
 	}
 	
 	public PrivateDHKey makePrivateDHKeyPair(byte[] privKey, byte[] pubKey) {
@@ -353,15 +348,15 @@ public class CryptoSupport {
 	}
 
 	public int asymPrivateDHKeySize() {
-		return 256/8;
+		return PublicDHKey.KEY_SIZE;
 	}
 	
 	public int asymPublicDHKeySize() {
-		return 256/8;
+		return PublicDHKey.KEY_SIZE;
 	}
 	
 	public int asymDHSecretSize() {
-		return 256/8;
+		return PrivateDHKey.RAW_SECRET_SIZE;
 	}
 	
 	public int symPadToReachSize(int paddedLen) {

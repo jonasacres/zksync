@@ -335,26 +335,14 @@ public class CryptoSupportTest  {
 	}
 	
 	@Test
-	public void testCurve25519DHTestVectors() {
-		/* TODO FormalTests: (review) Validate these Curve25519 test vectors
-		* I got these test vectors from https://github.com/signalapp/curve25519-java/blob/master/tests/src/main/java/org/whispersystems/curve25519/Curve25519Test.java
-		* aka, from the library I'm using! I don't like that. Googling these numbers turns up nothing. Last commit to that
-		* file was Moxie Marlinspike, and so I'm disinclined to believe they come from nowhere.
-		* 
-		* Still, these need to be replaced with test vectors with some verifiable pedigree, like appearance in a standard
-		* or something. Or even failing that, vectors produced by some other library, just to validate it.
-		* 
-		* In the meantime... here's a test to prove that the wrapper matches the library, and to check if we ever break
-		* backwards compatibility.
-		* 
-		* I feel marginally better since DH keys aren't used in the filesystem at this time.
-		**/
-		byte[] alicePubKey = Util.hexToBytes("1bb75966f2e93a3691dfff942bb2a466a1c08b8d78ca3f4d6df8b8bfa2e4ee28");
-		byte[] alicePrivKey = Util.hexToBytes("c806439dc9d2c476ffed8f2580c0888d58ab406bf7ae3698879021b96bb4bf59");
-		byte[] bobPubKey = Util.hexToBytes("653614993d2b15ee9e5fd3d86ce719ef4ec1daae1886a87b3f5fa9565a27a22f");
-		byte[] bobPrivKey = Util.hexToBytes("b03b34c33a1c44f225b662d2bf4859b8135411fa7b0386d45fb75dc5b91b4466");
-		byte[] expectedSecret = Util.hexToBytes("325f239328941ced6e673b86ba41017448e99b649a9c3806c1dd7ca4c477e629");
-		
+	public void testX25519DHTestVectors() {
+		// RFC 7748 https://tools.ietf.org/html/rfc7748.html#page-14
+		byte[] alicePubKey = Util.hexToBytes("8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a");
+		byte[] alicePrivKey = Util.hexToBytes("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a");
+		byte[] bobPubKey = Util.hexToBytes("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f");
+		byte[] bobPrivKey = Util.hexToBytes("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb");
+		byte[] expectedSecret = Util.hexToBytes("4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742");
+
 		PrivateDHKey alice = crypto.makePrivateDHKeyPair(alicePrivKey, alicePubKey);
 		PrivateDHKey bob = crypto.makePrivateDHKeyPair(bobPrivKey, bobPubKey);
 		
