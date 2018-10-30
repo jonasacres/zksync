@@ -16,6 +16,7 @@ import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.params.ParametersWithIV;
 
 import org.slf4j.LoggerFactory;
+
 import org.slf4j.Logger;
 
 import de.mkammerer.argon2.Argon2Factory;
@@ -96,10 +97,10 @@ public class CryptoSupport {
 	
 	public byte[] expand(byte[] ikm, int length, byte[] salt, byte[] info) {
 		/* 
-		 * This is HKDF as described in RFC 5869, with the critical difference that we use BLAKE2's built-in support
-		 * for keyed hashes in place of HMAC. Because that feature of BLAKE2 requires keys to be no greater than 64
-		 * bytes, we first compute the BLAKE2b hash of the supplied salt to get a key that is guaranteed to be
-		 * 64 bytes long.
+		 * This is a modification of HKDF as described in RFC 5869, with the critical difference that we use BLAKE2's
+		 * built-in support for keyed hashes in place of HMAC. Because that feature of BLAKE2 requires keys to be no
+		 * greater than 64 bytes, we first compute the BLAKE2b hash of the supplied salt to get a key that is guaranteed
+		 * to be 64 bytes long.
 		 * 
 		 * The decision not to use HKDF was based purely on implementation concerns. I was unable to find test
 		 * vectors for HKDF based on BLAKE2b, and I was having difficulty replicating results in separate
@@ -332,7 +333,7 @@ public class CryptoSupport {
 	}
 	
 	public int hashLength() {
-		return 512/8; // 512-bit hashes
+		return HashContext.HASH_SIZE;
 	}
 	
 	public int asymPrivateSigningKeySize() {

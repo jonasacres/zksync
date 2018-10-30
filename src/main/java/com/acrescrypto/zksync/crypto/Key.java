@@ -20,7 +20,7 @@ public class Key {
 		ByteBuffer saltBuf = ByteBuffer.allocate(data.length+4);
 		saltBuf.put(data);
 		saltBuf.putInt(index);
-		return new Key(crypto, crypto.expand(raw, crypto.symKeyLength(), saltBuf.array(), "zksync".getBytes()));
+		return new Key(crypto, crypto.expand(raw, raw.length, saltBuf.array(), "zksync".getBytes()));
 	}
 	
 	public byte[] encryptCBC(byte[] iv, byte[] plaintext) {

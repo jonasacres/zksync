@@ -15,7 +15,6 @@ import java.util.Arrays;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -136,9 +135,57 @@ public class ArchiveAccessorTest {
 		assertFalse(Arrays.equals(accessor.deriveKey(0, 0, 0).getRaw(), accessor.deriveKey(0, 0, 1).getRaw()));
 	}
 	
-	@Test @Ignore
+	@Test
 	public void testDeriveKeyMatchesTestVectors() {
-		// TODO FormalTests: (test) Key derivation test vectors
+		class ArchiveKeyDerivationExample {
+			public Key key;
+			public byte[] expectedResult, tweak;
+			public int type, index;
+			
+			public ArchiveKeyDerivationExample(String keyStr, int type, int index, String tweakStr, String expectedResultStr) {
+				this.key = new Key(accessor.getMaster().getCrypto(), Util.hexToBytes(keyStr));
+				this.type = type;
+				this.index = index;
+				this.tweak = Util.hexToBytes(tweakStr);
+				this.expectedResult = Util.hexToBytes(expectedResultStr);
+			}
+			
+			public void validate() {
+				int[] roots = {
+						ArchiveAccessor.KEY_ROOT_PASSPHRASE,
+						ArchiveAccessor.KEY_ROOT_SEED,
+						ArchiveAccessor.KEY_ROOT_LOCAL,
+				};
+				
+				for(int root : roots) {
+					accessor.passphraseRoot = accessor.seedRoot = accessor.localRoot = null;
+					switch(root) {
+					case ArchiveAccessor.KEY_ROOT_PASSPHRASE:
+						accessor.passphraseRoot = key;
+						break;
+					case ArchiveAccessor.KEY_ROOT_SEED:
+						accessor.seedRoot = key;
+						break;
+					case ArchiveAccessor.KEY_ROOT_LOCAL:
+						accessor.localRoot = key;
+						break;
+					default:
+						fail();
+					}
+					
+					Key derived = accessor.deriveKey(root, type, index, tweak);
+					assertArrayEquals(expectedResult, derived.getRaw());
+				}
+			}
+		}
+		
+		new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0, 0, "", "7b631364edb74ad050f72914790f9ded649379120b8ae8ba80f43748714b946a").validate();
+	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 1, 0, "", "dd45557dbc6cbd60db505fbb19c1f609e9df1d78214ba9af6155552ff58ca49e").validate();
+	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 2, 0, "", "5fe9d3cd188c4627e6d97f5d026203b1f0c02d208ee13718559767e99f274e7a").validate();
+	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0, 1, "", "7b0ae3920ec7d24eddf74411d0e77be1f564216ab08965f6f0d04a6854b8ef46").validate();
+	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0, 0xffff, "", "749011256450328dd2eece13243f773f0d4ba701d1c7c776a6f8f7dec40d35c6").validate();
+	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0, 0, "10111213", "636688f05d98667950861b405cd097f33585899f50e63ae37dd53e1e150f1be3").validate();
+	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0x5555, 0x8888, "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf", "8bc66d27bb9b7af2d7b425e0434c8db03bbcbde69676ef6daec056d4e2b1d1bf").validate();
 	}
 	
 	@Test

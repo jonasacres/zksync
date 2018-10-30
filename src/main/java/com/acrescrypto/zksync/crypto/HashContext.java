@@ -4,7 +4,8 @@ import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
 
 public class HashContext {
-	private Digest digest = new Blake2bDigest(64*8);
+	public final static int HASH_SIZE = 64;
+	private Digest digest = new Blake2bDigest(8*HASH_SIZE);
 	
 	public HashContext(byte[] data) {
 		update(data);

@@ -86,6 +86,4 @@ public class PRNGTest {
 		
 		if(!(0.45*bits <= ones && ones <= 0.55*bits)) fail(); 
 	}
-	
-	// TODO FormalTests: (test) match prng test vector output
 }
