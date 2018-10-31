@@ -102,6 +102,16 @@ public class PageQueueTest {
 		TestUtils.assertTidy();
 	}
 	
+	public void checkMatchRange(int runs, int[] matches) {
+		double p = Math.exp(-1);
+		double r = runs;
+		double f = 1;
+		for(int i = 0; i < 4; i++) {
+			if(i > 1) f /= i;
+			assertTrue(Math.abs(matches[i]/r - p*f) < 0.05);
+		}
+	}
+	
 	public HashSet<Long> expectedPageTagsForInode(Inode inode) throws IOException {
 		HashSet<Long> expectedTags = new HashSet<Long>();
 		if(inode.getRefTag().getRefType() == RefTag.REF_TYPE_IMMEDIATE) return expectedTags;
@@ -289,9 +299,10 @@ public class PageQueueTest {
 	
 	@Test
 	public void testEverythingSendsInShuffledOrder() throws IOException {
-		HashMap<Integer,Integer> matchCounts = new HashMap<>();
+		int[] matchCounts = new int[1024];
+		int n = 500;
 		
-		for(int i = 0; i < 50; i++) {
+		for(int i = 0; i < n; i++) {
 			LinkedList<Long> seenTags = new LinkedList<Long>();
 			
 			// send everything, note the order we get tags in
@@ -316,15 +327,14 @@ public class PageQueueTest {
 			}
 			
 			// should be mostly different
-			matchCounts.put(matches, 1 + matchCounts.getOrDefault(matches, 0));
+			matchCounts[matches]++;
 		}
 		
 		/* Admittedly, I started with the base numbers expected from the distribution, and fine-tuned until the false positives stopped.
 		 * It'd be worth designing a better test sometime, but for now, I'm convinced the shuffler works well enough for the purposes of ensuring
 		 * peers don't flood each other with the exact same pages and chunks.
-		 * */ 
-		assertTrue(matchCounts.get(0) + matchCounts.get(1) >= 26);
-		assertTrue(matchCounts.get(2) >= 2);
+		 * */
+		checkMatchRange(n, matchCounts);
 	}
 	
 	@Test
@@ -455,9 +465,7 @@ public class PageQueueTest {
 		}
 		
 		// make sure the observed results roughly follow the expected probability distribution
-		assertTrue(matchCounts[0] + matchCounts[1] > 2*numIterations/3);
-		assertTrue(Math.abs(((double) matchCounts[1])/matchCounts[2] - 2.0) < 0.5);
-		assertTrue(Math.abs(((double) matchCounts[2])/matchCounts[3] - 3.0) < 1);
+		checkMatchRange(numIterations, matchCounts);
 	}
 	
 	@Test
@@ -534,8 +542,9 @@ public class PageQueueTest {
 	
 	@Test
 	public void testAddInodeContentsSendsPagesInShuffledOrder() {
-		HashMap<Integer,Integer> matchCounts = new HashMap<>();
-		for(int i = 0; i < 50; i++) {
+		int n = 500;
+		int[] matchCounts = new int[1024];
+		for(int i = 0; i < n; i++) {
 			// queue up a reftag, note the order the pages come in
 			LinkedList<Long> seenPageTags = new LinkedList<Long>();
 			queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
@@ -563,13 +572,11 @@ public class PageQueueTest {
 				}
 			}
 			
-			matchCounts.put(matches, 1 + matchCounts.getOrDefault(matches, 0));
+			matchCounts[matches]++;
 			assertTrue(pagesSeen == seenPageTags.size());
 		}
 		
-		// TODO Someday: (test) this is a perennially error-prone test. Need a better way to see that these are "random enough" without failing randomly.
-		assertTrue(matchCounts.get(0) + matchCounts.get(1) >= 28);
-		assertTrue(matchCounts.get(2) >= 2);
+		checkMatchRange(n, matchCounts);
 	}
 	
 	@Test
