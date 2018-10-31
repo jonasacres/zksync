@@ -11,12 +11,10 @@ import com.acrescrypto.zksync.utility.Util;
  * for the inode table itself identifies a revision in the archive. RefTags contain certain metadata to indicate
  * how the content is stored. */
 public class RefTag implements Comparable<RefTag> {
-	public final static byte FLAG_PLACEHOLDER = 1 << 0; // TODO Release: (review) Implement a useful flag or ditch the field
-	
 	protected ZKArchiveConfig config;
 	protected RevisionInfo info;
 	protected byte[] tag, hash;
-	protected byte archiveType, versionMajor, versionMinor, flags;
+	protected byte archiveType, versionMajor, versionMinor;
 	protected int refType;	
 	protected long numPages;
 	protected boolean cacheOnly;
@@ -36,7 +34,7 @@ public class RefTag implements Comparable<RefTag> {
 	// 2 bytes version
 	// 1 byte ref type
 	// 8 bytes num chunks
-	// 1 byte flags
+	// rest is zero
 	
 	public static int REFTAG_SHORT_SIZE = 8;
 	
@@ -71,19 +69,6 @@ public class RefTag implements Comparable<RefTag> {
 		
 		this.config = config;
 		deserialize(tag);
-	}
-	
-	public boolean hasFlag(byte flag) {
-		return (flags & flag) != 0;
-	}
-	
-	public void setFlag(byte flag) {
-		flags |= flag;
-		this.tag = serialize();
-	}
-	
-	public byte getFlags() {
-		return flags;
 	}
 	
 	public byte[] padHash(byte[] hash) {
@@ -150,8 +135,7 @@ public class RefTag implements Comparable<RefTag> {
 		buf.put(versionMinor);
 		buf.put((byte) (this.refType & 0x03));
 		buf.putLong(numPages);
-		buf.put(flags);
-		buf.put(new byte[REFTAG_EXTRA_DATA_SIZE-2-8-1-1-1]);
+		buf.put(new byte[REFTAG_EXTRA_DATA_SIZE-2-8-1-1]);
 		
 		assert(!buf.hasRemaining());
 		return buf.array();
@@ -168,7 +152,6 @@ public class RefTag implements Comparable<RefTag> {
 		this.versionMinor = buf.get();
 		this.refType = buf.get() & 0x03;
 		this.numPages = buf.getLong();
-		this.flags = buf.get();
 		this.tag = serialized.clone();
 	}
 	

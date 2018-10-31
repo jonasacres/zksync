@@ -254,9 +254,8 @@ public class RevisionTree {
 	public boolean hasParentsForTag(RevisionTag revTag) {
 		try {
 			if(map.hasCached(revTag)) return true;
-			// TODO Someday: (implement) we're insisting on having the whole inode table, but we only need the first page
 			if(config.archive.isClosed()) return false;
-			if(config.archive.hasInode(revTag, InodeTable.INODE_ID_INODE_TABLE)) return true;
+			if(config.archive.hasInodeTableFirstPage(revTag)) return true;
 		} catch(IOException exc) {
 			logger.error("Caught IOException checking status of revTag", exc);
 		}

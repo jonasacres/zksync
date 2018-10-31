@@ -105,6 +105,25 @@ public class PageTree {
 		}
 	}
 	
+	public boolean pageExists(long pageNum) throws IOException {
+		if(numPages < 0) return false;
+		if(pageNum < 0) return false;
+		
+		switch(refTag.getRefType()) {
+		case RefTag.REF_TYPE_IMMEDIATE: return pageNum == 0;
+		case RefTag.REF_TYPE_INDIRECT:
+			if(pageNum != 0) return false;
+			return archive.config.getCacheStorage().exists(Page.pathForTag(refTag.getHash()));
+		case RefTag.REF_TYPE_2INDIRECT:
+			if(numChunks <= 0 || numPages <= pageNum) return false;
+			if(!archive.config.getCacheStorage().exists(Page.pathForTag(tagForChunk(chunkIndexForPageNum(pageNum))))) return false;
+			byte[] tag = getPageTag(pageNum);
+			return archive.config.getCacheStorage().exists(Page.pathForTag(tag));
+		default:
+			return false;
+		}
+	}
+	
 	public void assertExists() throws IOException {
 		if(!exists()) {
 			throw new ENOENTException("PageTree for " + Util.bytesToHex(refTag.getBytes()));
@@ -295,7 +314,7 @@ public class PageTree {
 		return true;
 	}
 	
-	protected boolean hasChunkLocally(int index) throws IOException {
+	protected boolean hasChunkLocally(long index) throws IOException {
 		if(!archive.config.getCacheStorage().exists(Page.pathForTag(tagForChunk(index)))) return false;
 		PageTreeChunk chunk = loadChunkAtIndex(index);
 		for(int i = 0; i < tagsPerChunk(); i++) {

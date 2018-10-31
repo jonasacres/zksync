@@ -257,7 +257,7 @@ public class LocalFS extends FS {
 		if((mode & 0002) != 0) modeSet.add(PosixFilePermission.OTHERS_WRITE);
 		if((mode & 0004) != 0) modeSet.add(PosixFilePermission.OTHERS_READ);
 		
-		// TODO Release: (test) Test get/set sticky, setuid, setgid
+		// TODO Someday: (implement) Add setuid/setgid/sticky bit support
 		
 		try {
 			Files.setPosixFilePermissions(qualifiedPath(path), modeSet);

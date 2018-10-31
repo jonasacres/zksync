@@ -17,8 +17,6 @@ import com.acrescrypto.zksync.utility.Util;
 
 
 public class LocalFSTest extends FSTestBase {
-
-	// TODO Release: (test) this is going to break on Windows
 	public final static String SCRATCH_DIR = "/tmp/zksync-test/localfs";
 
 	@Before

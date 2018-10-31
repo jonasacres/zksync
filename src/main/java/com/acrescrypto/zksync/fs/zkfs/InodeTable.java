@@ -225,7 +225,9 @@ public class InodeTable extends ZKFile {
 	public Inode issueInode(long inodeId) throws IOException {
 		Inode inode = inodeWithId(inodeId);
 		long now = Util.currentTimeNanos();
-		inode.setIdentity(ByteBuffer.wrap(zkfs.archive.crypto.rng(8)).getLong()); // TODO Release: (review) the new last gasp of non-determinism...
+		/* The identity field in an inode is the only source of nondeterminism in a zksync archive,
+		 * at least as of this writing (10/30/18). */
+		inode.setIdentity(ByteBuffer.wrap(zkfs.archive.crypto.rng(8)).getLong());
 		inode.getStat().setInodeId(inodeId);
 		inode.getStat().setCtime(now);
 		inode.getStat().setAtime(now);

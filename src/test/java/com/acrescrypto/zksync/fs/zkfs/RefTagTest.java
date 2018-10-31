@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -93,8 +92,6 @@ public class RefTagTest {
 	
 	@Test
 	public void testSerialization() {
-		tag.setFlag(RefTag.FLAG_PLACEHOLDER);
-		
 		byte[] serialized = tag.serialize();
 		RefTag tag2 = new RefTag(archive, serialized);
 		
@@ -104,7 +101,6 @@ public class RefTagTest {
 		assertEquals(tag.versionMinor, tag2.versionMinor);
 		assertEquals(tag.refType, tag2.refType);
 		assertEquals(tag.numPages, tag2.numPages);
-		assertEquals(tag.flags, tag2.flags);
 		assertEquals(tag.config, tag2.config);
 		assertArrayEquals(serialized, tag2.serialize());
 	}
@@ -137,24 +133,6 @@ public class RefTagTest {
 	public void testEqualsRegistersDifferenceForNumPages() {
 		RefTag clone = new RefTag(tag.config, tag.getHash(), tag.getRefType(), 1 + tag.getNumPages());
 		assertNotEquals(tag, clone);
-	}
-	
-	@Test
-	public void testEqualsRegistersDifferenceForFlags() {
-		RefTag clone = new RefTag(tag.config, tag.getHash(), tag.getRefType(), tag.getNumPages());
-		tag.setFlag(RefTag.FLAG_PLACEHOLDER);
-		assertNotEquals(tag, clone);
-	}
-	
-	@Test
-	public void testHasFlagReturnsTrueIfFlagSet() {
-		tag.setFlag(RefTag.FLAG_PLACEHOLDER);
-		assertTrue(tag.hasFlag(RefTag.FLAG_PLACEHOLDER));
-	}
-	
-	@Test
-	public void testHasFlagReturnsTrueIfFlagNotSet() {
-		assertFalse(tag.hasFlag(RefTag.FLAG_PLACEHOLDER));
 	}
 	
 	@Test

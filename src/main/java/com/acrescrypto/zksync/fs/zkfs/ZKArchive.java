@@ -157,6 +157,13 @@ public class ZKArchive {
 		}
 	}
 	
+	/** Test if we have the first page of a given revision inode table. */
+	public boolean hasInodeTableFirstPage(RevisionTag revTag) throws IOException {
+		assertOpen();
+		PageTree inodeTableTree = new PageTree(revTag.getRefTag());
+		return inodeTableTree.pageExists(0);
+	}
+	
 	/** Test if we have every page of a given revision cached locally. 
 	 * @throws IOException */
 	public boolean hasRevision(RevisionTag revTag) throws IOException {

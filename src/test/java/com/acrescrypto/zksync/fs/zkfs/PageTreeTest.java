@@ -158,6 +158,67 @@ public class PageTreeTest {
 	}
 	
 	@Test
+	public void testPageExistsReturnsTrueIfImmediateAndPageIsZero() throws IOException {
+		assertTrue(new PageTree(fs.inodeForPath("indirect")).pageExists(0));
+	}
+	
+	@Test
+	public void testPageExistsReturnsFalseIfImmediateAndPageIsNonzero() throws IOException {
+		assertFalse(new PageTree(fs.inodeForPath("indirect")).pageExists(1));
+	}
+	
+	@Test
+	public void testPageExistsReturnsTrueIfIndirectAndPagePresent() throws IOException {
+		assertTrue(new PageTree(fs.inodeForPath("indirect")).pageExists(0));
+	}
+	
+	@Test
+	public void testPageExistsReturnsFalseIfIndirectAndPageIsNonzero() throws IOException {
+		assertFalse(new PageTree(fs.inodeForPath("indirect")).pageExists(1));
+	}
+	
+	@Test
+	public void testPageExistsReturnsFalseIfIndirectAndPageNotPresent() throws IOException {
+		PageTree tree = new PageTree(fs.inodeForPath("indirect"));
+		archive.getStorage().unlink(Page.pathForTag(tree.getPageTag(0)));
+		assertFalse(tree.pageExists(0));
+	}
+	
+	@Test
+	public void testPageExistsReturnsFalseIfDoubleIndirectAndChunkNotPresent() throws IOException {
+		archive.storage.unlink(Page.pathForTag(tree.chunkForPageNum(0).chunkTag));
+		for(int i = 0; i < tree.numPages; i++) {
+			assertFalse(tree.pageExists(i));
+		}
+	}
+
+	@Test
+	public void testPageExistsReturnsFalseIfDoubleIndirectAndPageNotPresent() throws IOException {
+		for(int i = 0; i < tree.numPages; i++) {
+			assertTrue(tree.pageExists(i));
+			archive.storage.unlink(Page.pathForTag(tree.getPageTag(i)));
+			assertFalse(tree.pageExists(i));
+		}
+	}
+	
+	@Test
+	public void testPageExistsReturnsFalseIfDoubleIndirectAndPageExcessive() throws IOException {
+		assertFalse(tree.pageExists(tree.numPages + 1));
+	}
+	
+	@Test
+	public void testPageExistsReturnsFalseIfDoubleIndirectAndPageNegative() throws IOException {
+		assertFalse(tree.pageExists(-1));
+	}
+	
+	@Test
+	public void testPageExistsReturnsTrueIfDoubleIndirectWithChunkAndPagePresent() throws IOException {
+		for(int i = 0; i < tree.numPages; i++) {
+			assertTrue(tree.pageExists(i));
+		}
+	}
+	
+	@Test
 	public void testAssertExistsDoesNotThrowExceptionIfExistsReturnsTrue() throws IOException {
 		tree.assertExists();
 	}
