@@ -53,7 +53,7 @@ public class DiffSet {
 	
 	/** all inode IDs differing in the revisions of this set, excluding inode table, revision info and freelist */
 	public HashSet<Long> allInodes() throws IOException {
-		// TODO Someday: (refactor) Make merges O(n) with number of changed files instead of all files, changed or not. Use of allInodes and allPaths makes merging O(n) with total files.
+		// TODO Release: (design) Can merges be O(n) with number of changes? Right now, O(n) with number of files.
 		HashSet<Long> allInodes = new HashSet<Long>();
 		for(RevisionTag rev : revisions) {
 			for(Inode inode : rev.readOnlyFS().getInodeTable().values()) {

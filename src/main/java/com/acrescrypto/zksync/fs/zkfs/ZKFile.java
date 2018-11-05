@@ -54,6 +54,7 @@ public class ZKFile extends File {
 		}
 		
 		this.tree = new PageTree(this.inode);
+		if((mode & O_WRONLY) != 0 && zkfs.archive.config.isReadOnly()) throw new EACCESException("cannot open files with write access when archive is opened read-only");
 		if((mode & O_TRUNC) != 0) truncate(0);
 		if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();
 	}

@@ -133,7 +133,6 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	
 	protected void advertise(DiscoveryEntry entry) {
 		for(ZKArchiveConfig config : entry.accessor.knownArchiveConfigs()) {
-			if(!config.canReceive()) continue;
 			if(entry.accessor.getMaster().getTCPListener() == null) continue;
 			TCPPeerAdvertisementListener listener = entry.accessor.getMaster().getTCPListener().listenerForSwarm(config.getSwarm());
 			if(listener == null) continue;
@@ -144,6 +143,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 			} catch (UnconnectableAdvertisementException e) {
 				return; // socket not bound yet
 			}
+			
 			DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(entry.accessor.getMaster().getCrypto(), ad);
 			
 			for(int i = -1; i <= 1; i++) {

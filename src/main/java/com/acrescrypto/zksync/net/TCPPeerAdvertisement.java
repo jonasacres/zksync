@@ -72,7 +72,7 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 
 	@Override
 	public byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(1 + 4 + 2 + encryptedArchiveId.length + 2 + pubKey.getBytes().length + 2 + host.length() + 2);
+		ByteBuffer buf = ByteBuffer.allocate(1 + 4 + 2 + encryptedArchiveId.length + 2 + pubKey.getBytes().length + 2 + host.getBytes().length + 2);
 		
 		buf.put(getType());
 		buf.putInt(version);
@@ -83,7 +83,7 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 		buf.putShort((short) pubKey.getBytes().length);
 		buf.put(pubKey.getBytes());
 		
-		buf.putShort((short) host.length());
+		buf.putShort((short) host.getBytes().length);
 		buf.put(host.getBytes());
 		
 		buf.putShort((short) port);
@@ -126,7 +126,7 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	public int hashCode() {
 		if(hash != 0) return hash;
 		String portStr = ""+port;
-		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length + host.length() + portStr.length() + encryptedArchiveId.length + 4);
+		ByteBuffer buf = ByteBuffer.allocate(pubKey.getBytes().length + host.getBytes().length + portStr.getBytes().length + encryptedArchiveId.length + 4);
 		buf.put(pubKey.getBytes());
 		buf.put(host.getBytes());
 		buf.put(portStr.getBytes());

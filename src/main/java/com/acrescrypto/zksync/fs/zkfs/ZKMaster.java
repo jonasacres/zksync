@@ -43,8 +43,16 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected ThreadGroup threadGroup;
 	protected long debugTime = -1;
 	
+	// TODO Someday: (refactor) this is really test code, which shouldn't be in here.
+	public static PassphraseProvider demoPassphraseProvider() {
+		return (String reason) -> {
+			if(reason.contains("writing")) return "write".getBytes();
+			return "zksync".getBytes();
+		};
+	}
+	
 	public static ZKMaster openTestVolume() throws IOException {
-		return openTestVolume((String reason) -> { return "zksync".getBytes(); }, TEST_VOLUME);
+		return openTestVolume(demoPassphraseProvider(), TEST_VOLUME);
 	}
 	
 	public static ZKMaster openBlankTestVolume() throws IOException {
@@ -53,7 +61,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public static ZKMaster openBlankTestVolume(String name) throws IOException {
 		RAMFS.removeVolume(name);
-		return openTestVolume((String reason) -> { return "zksync".getBytes(); }, name);
+		return openTestVolume(demoPassphraseProvider(), name);
 	}
 	
 	public static ZKMaster openTestVolume(PassphraseProvider ppProvider, String name) throws IOException {
@@ -152,6 +160,23 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive '" + description + "'");
 		ArchiveAccessor accessor = makeAccessorForPassphrase(passphrase);
 		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, description, pageSize);
+		return config.archive;
+	}
+	
+	public ZKArchive createArchiveWithWriteRoot(int pageSize, String description) throws IOException {
+		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for reading new archive '" + description + "'");
+		byte[] writePassphrase = passphraseProvider.requestPassphrase("Passphrase for writing new archive '" + description + "'");
+		Key writeRoot = new Key(crypto, crypto.deriveKeyFromPassphrase(writePassphrase));
+		
+		ArchiveAccessor accessor = makeAccessorForPassphrase(passphrase);
+		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, description, pageSize, accessor.passphraseRoot, writeRoot);
+		return config.archive;
+	}
+	
+	public ZKArchive createArchiveWithWriteRoot(int pageSize, String description, Key writeRoot) throws IOException {
+		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for reading new archive '" + description + "'");
+		ArchiveAccessor accessor = makeAccessorForPassphrase(passphrase);
+		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, description, pageSize, accessor.passphraseRoot, writeRoot);
 		return config.archive;
 	}
 	

@@ -10,9 +10,6 @@ import java.util.HashSet;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.utility.Util;
 
-/** TODO Signing: (design) Add the concept of a write passphrase, which derives the private signing key for the archive. 
- */
-
 public class ArchiveAccessor {
 	public final static int TEMPORAL_SEED_KEY_INTERVAL_MS = 1000*60*60*3; // Rotate temporal seed IDs every 3 hours
 
@@ -71,7 +68,7 @@ public class ArchiveAccessor {
 	
 	public interface ArchiveAccessorDiscoveryCallback {
 		void discoveredArchiveConfig(ZKArchiveConfig config);
-	}	
+	}
 
 	public ArchiveAccessor(ZKMaster master, Key root, int type) {
 		this.master = master;
@@ -90,6 +87,14 @@ public class ArchiveAccessor {
 		}
 	}
 	
+	// useful for building test cases
+	public ArchiveAccessor(ZKMaster master, ArchiveAccessor existing) {
+		this.master = master;
+		this.type = existing.type;
+		this.threadGroup = new ThreadGroup(master.threadGroup, "ArchiveAccessor " + System.identityHashCode(this));
+		deriveFromPassphraseRoot(existing.passphraseRoot);
+	}
+	
 	public ArchiveAccessor discoverOnDHT() {
 		master.dhtDiscovery.discoverArchives(this);
 		return this;
@@ -100,7 +105,7 @@ public class ArchiveAccessor {
 			if(Arrays.equals(config.archiveId, archiveId)) return config;
 		}
 		
-		ZKArchiveConfig config = new ZKArchiveConfig(this, archiveId, false, null);
+		ZKArchiveConfig config = new ZKArchiveConfig(this, archiveId, false, Key.blank(master.crypto));
 		discoveredArchiveConfig(config);
 		
 		return config;

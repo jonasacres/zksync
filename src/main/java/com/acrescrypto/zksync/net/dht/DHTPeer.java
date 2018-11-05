@@ -140,8 +140,8 @@ public class DHTPeer implements Sendable {
 
 	@Override
 	public byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(2 + address.length() + 2 + 2 + key.getBytes().length);
-		buf.putShort((short) address.length());
+		ByteBuffer buf = ByteBuffer.allocate(2 + address.getBytes().length + 2 + 2 + key.getBytes().length);
+		buf.putShort((short) address.getBytes().length);
 		buf.put(address.getBytes());
 		buf.putShort((short) port);
 		buf.putShort((short) key.getBytes().length);

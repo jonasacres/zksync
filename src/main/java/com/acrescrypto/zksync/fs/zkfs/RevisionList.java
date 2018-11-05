@@ -93,6 +93,27 @@ public class RevisionList {
 		}
 	}
 	
+	public void consolidate() throws IOException {
+		ArrayList<RevisionTag> tips, toRemove = new ArrayList<>();
+		RevisionTree tree = config.getRevisionTree();
+
+		synchronized(this) {
+			tips = new ArrayList<>(branchTips);
+		}
+		
+		for(RevisionTag tip : tips) {
+			if(tree.isSuperceded(tip)) {
+				toRemove.add(tip);
+			}
+		}
+		
+		synchronized(this) {
+			for(RevisionTag tip : toRemove) {
+				removeBranchTip(tip);
+			}
+		}
+	}
+	
 	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
 		branchTips.remove(oldBranch);
 		if(latest != null && latest.equals(oldBranch)) recalculateLatest();
@@ -143,7 +164,7 @@ public class RevisionList {
 	protected synchronized byte[] serialize() {
 		ByteBuffer buf = ByteBuffer.allocate(RevisionTag.sizeForConfig(config)*branchTips.size());
 		for(RevisionTag tag : branchTips) {
-			buf.put(tag.serialize());
+			buf.put(tag.getBytes());
 		}
 		return buf.array();
 	}
@@ -172,6 +193,7 @@ public class RevisionList {
 	}
 	
 	public RevisionTag latest() {
+		// TODO WriteKey: (redesign) Can't create a blank tag if we're read-only.
 		return latest == null ? RevisionTag.blank(config) : latest;
 	}
 	
@@ -194,7 +216,14 @@ public class RevisionList {
 		if(automergeSnoozeThread == null || automergeSnoozeThread.isCancelled()) {
 			automergeSnoozeThread = new SnoozeThread(automergeDelayMs, maxAutomergeDelayMs, true, ()-> {
 				try {
-					DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
+					if(config.isReadOnly()) {
+						/* obviously we're not doing any merging if we don't have the write key, so
+						 * let's just consolidate instead.
+						 */
+						consolidate();
+					} else {
+						DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
+					}
 				} catch (IOException|DiffResolutionException exc) {
 					logger.error("Error performing automerge", exc);
 				}

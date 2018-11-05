@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -14,6 +15,7 @@ import org.junit.Test;
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.exceptions.EACCESException;
 
 public class ZKArchiveTest {
 	CryptoSupport crypto;
@@ -178,4 +180,80 @@ public class ZKArchiveTest {
 		assertFalse(archive.hasRevision(revTag));
 		fs.close();
 	}
+	
+	@Test
+	public void testNondefaultArchive() throws IOException {
+		Key writeKey = new Key(crypto);
+		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
+		ZKArchive archive = config.getArchive();
+		ZKFS fs = archive.openBlank();
+		String str = "contents!";
+		fs.write("filename", str.getBytes());
+		assertArrayEquals(str.getBytes(), fs.commit().getFS().read("filename"));
+		fs.close();
+		config.close();
+	}
+	
+	@Test
+	public void testReadOnlyArchiveAllowsReads() throws IOException {
+		Key writeKey = new Key(crypto);
+		
+		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
+		ZKArchive archive = config.getArchive();
+		ZKFS fs = archive.openBlank();
+		byte[] data = "some data".getBytes();
+		fs.write("filename", data);
+		RevisionTag revTag = fs.commit();
+		config.close();
+		
+		ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null);
+		fs = ro.getArchive().openRevision(revTag);
+		assertArrayEquals(data, fs.read("filename"));
+	}
+	
+	@Test(expected=EACCESException.class)
+	public void testReadOnlyArchiveThrowsExceptionOnWrites() throws IOException {
+		Key writeKey = new Key(crypto);
+		
+		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
+		ZKArchive archive = config.getArchive();
+		ZKFS fs = archive.openBlank();
+		byte[] data = "some data".getBytes();
+		fs.write("filename", data);
+		RevisionTag revTag = fs.commit();
+		config.close();
+		
+		master.allConfigs.clear();
+		master.accessors.clear();
+		ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null);
+		archive = ro.getArchive();
+		RevisionTag transplantTag = new RevisionTag(ro, revTag.serialize(), false);
+		
+		fs = ro.getArchive().openRevision(transplantTag);
+		fs.write("filename", data);
+		fs.commit();
+	}
+	
+	@Test(expected=EACCESException.class)
+	public void testReadOnlyArchiveThrowsExceptionOnCommits() throws IOException {
+		Key writeKey = new Key(crypto);
+		
+		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
+		ZKArchive archive = config.getArchive();
+		ZKFS fs = archive.openBlank();
+		byte[] data = "some data".getBytes();
+		fs.write("filename", data);
+		RevisionTag revTag = fs.commit();
+		config.close();
+		
+		master.allConfigs.clear();
+		master.accessors.clear();
+		ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null);
+		archive = ro.getArchive();
+		RevisionTag transplantTag = new RevisionTag(ro, revTag.serialize(), false);
+		
+		fs = ro.getArchive().openRevision(transplantTag);
+		fs.commit();
+	}
+
 }

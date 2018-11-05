@@ -78,7 +78,7 @@ public class ZKArchiveConfig {
 	}
 	
 	public static ZKArchiveConfig openExisting(ArchiveAccessor accessor, byte[] archiveId) throws IOException {
-		return openExisting(accessor, archiveId, true, null);
+		return openExisting(accessor, archiveId, true, Key.blank(accessor.master.crypto));
 	}
 	
 	public static ZKArchiveConfig openExisting(ArchiveAccessor accessor, byte[] archiveId, boolean finish, Key writeRoot) throws IOException {
@@ -95,8 +95,7 @@ public class ZKArchiveConfig {
 		this.writeRoot = writeRoot;
 
 		initStorage();
-		this.revisionList = new RevisionList(this);
-		this.revisionTree = new RevisionTree(this);
+		this.accessor.discoveredArchiveConfig(this);
 		if(finish) {
 			try {
 				finishOpening();
@@ -105,6 +104,8 @@ public class ZKArchiveConfig {
 				throw exc;
 			}
 		}
+		this.revisionList = new RevisionList(this);
+		this.revisionTree = new RevisionTree(this);
 	}
 	
 	/** Create a new archive. 
@@ -431,7 +432,12 @@ public class ZKArchiveConfig {
 	}
 	
 	protected void deriveKeypair() {
-		if(writeRoot == null) writeRoot = archiveRoot;
+		if(writeRoot == null) return;
+		
+		if(writeRoot.isBlank()) {
+			writeRoot = archiveRoot;
+		}
+		
 		privKey = accessor.master.crypto.makePrivateSigningKey(writeRoot.getRaw());
 		if(pubKey != null) {
 			assertState(Arrays.equals(pubKey.getBytes(), privKey.publicKey().getBytes()));
@@ -544,5 +550,9 @@ public class ZKArchiveConfig {
 	
 	public ThreadGroup getThreadGroup() {
 		return accessor.getThreadGroup();
+	}
+
+	public boolean isReadOnly() {
+		return writeRoot == null;
 	}
 }

@@ -219,7 +219,7 @@ public class PeerConnection {
 	}
 	
 	public void announceTip(RevisionTag tip) {
-		send(CMD_ANNOUNCE_TIPS, tip.serialize());
+		send(CMD_ANNOUNCE_TIPS, tip.getBytes());
 	}
 	
 	public void announceTips() throws IOException {
@@ -232,7 +232,7 @@ public class PeerConnection {
 		Collection<RevisionTag> branchTipsClone = archive.getConfig().getRevisionList().branchTips();
 		ByteBuffer buf = ByteBuffer.allocate(branchTipsClone.size() * RevisionTag.sizeForConfig(socket.swarm.config));
 		for(RevisionTag tag : branchTipsClone) {
-			buf.put(tag.serialize());
+			buf.put(tag.getBytes());
 		}
 		
 		send(CMD_ANNOUNCE_TIPS, buf.array());

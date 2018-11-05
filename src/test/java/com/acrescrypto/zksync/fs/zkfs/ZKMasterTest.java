@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -98,6 +99,37 @@ public class ZKMasterTest {
 		archive.close();
 	}
 	
+	@Test
+	public void testCreateArchiveCreatesArchiveWithMatchedWriteRoot() throws IOException {
+		String desc = "happy archive";
+		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, desc);
+		assertArrayEquals(archive.getConfig().archiveRoot.getRaw(), archive.getConfig().writeRoot.getRaw());
+		archive.close();
+	}
+	
+	@Test
+	public void testCreateArchiveWithPromptedWriteRootCreatesArchiveAppropriately() throws IOException {
+		String desc = "happy archive";
+		int size = 12345;
+		ZKArchive archive = master.createArchiveWithWriteRoot(size, desc);
+		assertEquals(size, archive.getConfig().getPageSize());
+		assertEquals(desc, archive.getConfig().getDescription());
+		assertFalse(Arrays.equals(archive.getConfig().archiveRoot.getRaw(), archive.getConfig().writeRoot.getRaw()));
+		archive.close();
+	}
+
+	@Test
+	public void testCreateArchiveWithWriteRootCreatesArchiveAppropriately() throws IOException {
+		String desc = "happy archive";
+		int size = 12345;
+		Key writeRoot = new Key(master.crypto);
+		ZKArchive archive = master.createArchiveWithWriteRoot(size, desc, writeRoot);
+		assertEquals(size, archive.getConfig().getPageSize());
+		assertEquals(desc, archive.getConfig().getDescription());
+		assertArrayEquals(writeRoot.getRaw(), archive.getConfig().writeRoot.getRaw());
+		archive.close();
+	}
+
 	@Test
 	public void testStoragePathForArchiveIdReturnsPathSpecificToArchiveId() throws IOException {
 		ZKArchive arch0 = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");

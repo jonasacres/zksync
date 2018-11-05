@@ -23,7 +23,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public final static int MAX_NAME_LEN = 255;
 	
 	public ZKDirectory(ZKFS fs, String path) throws IOException {
-		super(fs, path, O_RDWR, true);
+		super(fs, path, fs.archive.config.isReadOnly() ? O_RDONLY : O_RDWR, true);
 		entries = new HashMap<String,Long>();
 		byte[] contents = read((int) inode.getStat().getSize());
 		deserialize(contents);
@@ -115,7 +115,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	public void updateLink(Long inodeId, String link, ArrayList<Inode> toUnlink) throws IOException {
-		if(link.length() > MAX_NAME_LEN) throw new EINVALException(link + ": name too long");
+		if(!isValidName(link)) throw new EINVALException(link + ": invalid name");
 		if(entries.containsKey(link)) {
 			Long existing = entries.get(link);
 			if(existing.equals(inodeId)) return;
@@ -133,7 +133,8 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 
 	public void link(Inode inode, String link) throws IOException {
-		if(link.length() > MAX_NAME_LEN) throw new EINVALException(link + ": name too long");
+		assertWritable();
+		if(!isValidName(link)) throw new EINVALException(link + ": invalid filename");
 		if(entries.containsKey(link)) {
 			throw new EEXISTSException(Paths.get(path, link).toString());
 		}
@@ -153,8 +154,23 @@ public class ZKDirectory extends ZKFile implements Directory {
 		link(zkfile.getInode(), link);
 	}
 	
+	public boolean isValidName(String name) {
+		String illegalChars[] = new String[] {
+				"/",
+				"\\",
+				"\0"
+			};
+		if(name.getBytes().length > MAX_NAME_LEN) return false;
+		for(String c : illegalChars) {
+			if(name.indexOf(c) >= 0) return false;
+		}
+		
+		return true;
+	}
+
 	@Override
 	public void unlink(String name) throws IOException {
+		assertWritable();
 		if(name.equals(".") || name.equals("..")) throw new EINVALException("cannot unlink " + name);
 		
 		String fullPath = Paths.get(path, name).toString();
@@ -172,6 +188,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	public void rmdir() throws IOException {
+		assertWritable();
 		if(!entries.get("..").equals(this.getStat().getInodeId())) {
 			ZKDirectory parent = zkfs.opendir(fs.dirname(this.path));
 			parent.getInode().removeLink();
@@ -202,6 +219,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	public void commit() throws IOException {
 		if(!dirty) return;
+		assertWritable();
 		rewind();
 		truncate(0);
 		
@@ -228,7 +246,19 @@ public class ZKDirectory extends ZKFile implements Directory {
 			buf.get(pathBuf);
 			
 			String path = new String(pathBuf);
-			entries.put(path, inodeId);
+			if(isValidName(path)) {
+				/* Don't let maliciously-crafted directories deserialize evil paths.
+				 * It does mean we have non-unlinkable files, but we're already dealing with
+				 * an archive manually created by bad people, so who knows what else is going on?
+				 * 
+				 * Because of that, I considered maybe throwing an exception here, but there's
+				 * also no guarantee that someone opens the directory, and potentially a form
+				 * of attack in which an attacker sabotages a directory the user is depending on
+				 * being able to read. Not entirely sure this is the right way to go, but...
+				 * seemed like a good idea at the time. :p 
+				 * */
+				entries.put(path, inodeId);
+			}
 		}
 		
 		dirty = false;
@@ -237,17 +267,21 @@ public class ZKDirectory extends ZKFile implements Directory {
 	protected byte[] serialize() throws IOException {
 		int size = 0;
 		for(String path : entries.keySet()) {
-			size += 8 + 2 + path.length(); // inode number + path_len + path 
+			size += 8 + 2 + path.getBytes().length; // inode number + path_len + path 
 		}
 		
 		ByteBuffer buf = ByteBuffer.allocate(size);
 		
 		for(String path : list(LIST_OPT_INCLUDE_DOT_DOTDOT)) {
 			buf.putLong(entries.get(path));
-			buf.putShort((short) path.length());
+			buf.putShort((short) path.getBytes().length);
 			buf.put(path.getBytes());
 		}
 		
 		return buf.array();
+	}
+	
+	protected void assertWritable() throws EACCESException {
+		if(zkfs.archive.config.isReadOnly()) throw new EACCESException("cannot modify directories when archive is opened read-only");
 	}
 }

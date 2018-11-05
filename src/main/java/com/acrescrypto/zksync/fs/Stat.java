@@ -18,9 +18,9 @@ public class Stat {
 	public final static int TYPE_CHARACTER_DEVICE = 4;
 	public final static int TYPE_FIFO = 5;
 	
-	// int gid, uid, mode, typeFlags, devMajor, devMinor:      6*4  = 24
-	// String group, user:                                    2*32  = 64
-	// long atime, mtime, ctime, size, inodeId;                5*8  = 40
+	// int gid, uid, mode, typeFlags, devMajor, devMinor:      6*4  =  24
+	// String group, user:                                    2*32  =  64
+	// long atime, mtime, ctime, size, inodeId;                5*8  =  40
 	// total:                                                         128
 	public final static int STAT_SIZE = 128; // size of serialized inode in bytes
 	public final static int MAX_GROUP_LEN = 32;
@@ -163,9 +163,9 @@ public class Stat {
 		buf.putInt(getDevMinor());
 		
 		buf.put(user.getBytes());
-		buf.put(new byte[MAX_USER_LEN-user.length()]);
+		buf.put(new byte[MAX_USER_LEN-user.getBytes().length]);
 		buf.put(group.getBytes());
-		buf.put(new byte[MAX_GROUP_LEN-group.length()]);
+		buf.put(new byte[MAX_GROUP_LEN-group.getBytes().length]);
 		
 		return buf.array();
 	}

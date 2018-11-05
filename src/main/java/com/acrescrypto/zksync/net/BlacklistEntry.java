@@ -18,9 +18,9 @@ public class BlacklistEntry {
 	}
 	
 	protected byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(8 + 2 + address.length());
+		ByteBuffer buf = ByteBuffer.allocate(8 + 2 + address.getBytes().length);
 		buf.putLong(expiration);
-		buf.putShort((short) this.address.length());
+		buf.putShort((short) this.address.getBytes().length);
 		buf.put(address.getBytes());
 		return buf.array();
 	}

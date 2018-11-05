@@ -6,6 +6,10 @@ public class Key {
 	private byte[] raw;
 	protected CryptoSupport crypto;
 	
+	public static Key blank(CryptoSupport crypto) {
+		return new Key(crypto, new byte[crypto.symKeyLength()]);
+	}
+	
 	public Key(CryptoSupport crypto) {
 		this.crypto = crypto;
 		this.raw = crypto.makeSymmetricKey();
@@ -70,6 +74,15 @@ public class Key {
 	
 	public byte[] getRaw() {
 		return raw;
+	}
+	
+	public boolean isBlank() {
+		byte c = 0;
+		for(byte b : raw) {
+			c |= b;
+		}
+		
+		return c == 0;
 	}
 
 	public CryptoSupport getCrypto() {

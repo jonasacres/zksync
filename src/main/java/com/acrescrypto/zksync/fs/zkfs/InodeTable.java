@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.Iterator;
 
 import com.acrescrypto.zksync.crypto.HashContext;
+import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Stat;
@@ -84,6 +85,7 @@ public class InodeTable extends ZKFile {
 	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
 		// TODO Someday: (design) Objective merge logic breaks down if we have additional parents AND we had changes to the filesystem. Throw an exception if someone tries to do that.
 		// TODO Someday: (refactor) I regret doing these as arrays instead of collections. Refactor.
+		if(zkfs.archive.config.isReadOnly()) throw new EACCESException("cannot commit new revisions when archive is opened read-only");
 		freelist.commit();
 		ArrayList<RevisionTag> parents = makeParentList(additionalParents);
 		updateRevisionInfo(parents);
@@ -202,6 +204,9 @@ public class InodeTable extends ZKFile {
 	public boolean hasInodeWithId(long inodeId) throws IOException {
 		if(inodeId > nextInodeId()) return false;
 		// TODO Someday: (refactor) not reliable, freelist can only say if cached listings are present
+		/* Right now, we don't care because hasInodeWithId is only checked during unlink,
+		 * which gracefully handles unlinking inodes that are already in the freelist.
+		 */
 		if(freelist.contains(inodeId)) return false;
 		return true;
 	}

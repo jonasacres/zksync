@@ -85,6 +85,9 @@ public class ZKArchive {
 	
 	public ZKFS openBlank() throws IOException {
 		assertOpen();
+		if(config.isReadOnly()) {
+			
+		}
 		return new ZKFS(new RevisionTag(RefTag.blank(this), 0, 0));
 	}
 	

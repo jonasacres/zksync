@@ -79,7 +79,7 @@ public class ZKArchiveConfigTest {
 	}
 	
 	public void writeModifiedPageSize(int newSize) throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
 			@Override
 			protected byte[] serializeSecurePortion() {
 				byte[] descString = description.getBytes();
@@ -212,7 +212,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testRefuseBadMagic() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
 			@Override
 			protected byte[] serializeSecurePortion() {
 				byte[] serialized = super.serializeSecurePortion();
@@ -228,7 +228,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testRefuseBadArchivePubKey() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
 			@Override
 			protected byte[] serializeSeedPortion() {
 				byte[] fakePubKey = accessor.master.crypto.makePrivateSigningKey(new byte[32]).publicKey().getBytes();
@@ -243,7 +243,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testRefuseBadIV() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
 			@Override
 			public void write() throws IOException {
 				configFileIv[0] ^= 0x01;
@@ -258,7 +258,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testRefuseCorruptedIVWriteSide() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
 			@Override
 			public void write() throws IOException {
 				configFileIv[0] ^= 0x01;
@@ -278,7 +278,7 @@ public class ZKArchiveConfigTest {
 
 	@Test
 	public void testRefuseCorruptedIVReadSide() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, null) {
+		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
 			@Override
 			public void write() throws IOException {
 				super.write();
@@ -706,5 +706,20 @@ public class ZKArchiveConfigTest {
 		int offset = configData.length-1;
 		configData[offset] ^= 0x01;
 		assertFalse(config.verify(configData));
+	}
+	
+	@Test
+	public void testNondefaultWriteKeyGeneratesUniqueArchiveId() throws IOException {
+		Key writeKey = new Key(master.crypto);
+		ZKArchiveConfig wConfig = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, accessor.passphraseRoot, writeKey);
+		assertFalse(Arrays.equals(wConfig.getArchiveId(), config.getArchiveId()));
+	}
+	
+	@Test
+	public void testArchiveIdDeterministicWithWriteKey() throws IOException {
+		Key writeKey = new Key(master.crypto);
+		ZKArchiveConfig wConfig1 = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, accessor.passphraseRoot, writeKey);
+		ZKArchiveConfig wConfig2 = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, accessor.passphraseRoot, writeKey);
+		assertArrayEquals(wConfig1.getArchiveId(), wConfig2.getArchiveId());
 	}
 }

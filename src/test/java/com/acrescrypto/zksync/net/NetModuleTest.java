@@ -64,7 +64,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, Key.blank(crypto));
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
@@ -103,7 +103,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, Key.blank(crypto));
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
@@ -147,7 +147,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, Key.blank(crypto));
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestAll();
@@ -199,7 +199,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, Key.blank(crypto));
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 		bConfig.getSwarm().requestRevision(0, fsa.getBaseRevision());
@@ -243,7 +243,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, Key.blank(crypto));
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 
@@ -281,7 +281,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, Key.blank(crypto));
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 
@@ -326,7 +326,7 @@ public class NetModuleTest {
 		
 		ZKMaster bMaster = ZKMaster.openBlankTestVolume("copy2");
 		ArchiveAccessor bAccessor = bMaster.makeAccessorForRoot(rootKey, false);
-		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, null);
+		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, Key.blank(crypto));
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 
@@ -367,7 +367,7 @@ public class NetModuleTest {
 				configs[i] = ZKArchiveConfig.createDefault(accessor);
 				masters[i].getTCPListener().advertise(configs[i].getSwarm());
 			} else {
-				configs[i] = ZKArchiveConfig.openExisting(accessor, configs[0].getArchiveId(), false, null);
+				configs[i] = ZKArchiveConfig.openExisting(accessor, configs[0].getArchiveId(), false, Key.blank(crypto));
 				masters[i].getTCPListener().advertise(configs[i].getSwarm());
 				configs[i].getSwarm().addPeerAdvertisement(ads[i-1]);
 				configs[i].finishOpening();
@@ -423,7 +423,7 @@ public class NetModuleTest {
 				configs[i] = ZKArchiveConfig.createDefault(accessor);
 				masters[i].getTCPListener().advertise(configs[i].getSwarm());
 			} else {
-				configs[i] = ZKArchiveConfig.openExisting(accessor, configs[0].getArchiveId(), false, null);
+				configs[i] = ZKArchiveConfig.openExisting(accessor, configs[0].getArchiveId(), false, Key.blank(crypto));
 				masters[i].getTCPListener().advertise(configs[i].getSwarm());
 				configs[i].getSwarm().addPeerAdvertisement(ads[i-1]);
 				configs[i].finishOpening();

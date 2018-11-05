@@ -44,19 +44,41 @@ public class IntegrationTest {
 	
 	ZKArchive createPeeredArchive(ZKMaster master) throws IOException {
 		ZKArchive archive = master.createDefaultArchive();
+		activateDHT(master, archive.getConfig());
+		return archive;
+	}
 
-		master.listenOnTCP(0);
-		master.activateDHT("127.0.0.1", 0, root);
-		master.getTCPListener().advertise(archive.getConfig().getSwarm());
-		archive.getConfig().getRevisionList().automergeDelayMs = 5;
-		archive.getConfig().getRevisionList().maxAutomergeDelayMs = 100;
-		archive.getConfig().getAccessor().discoverOnDHT();
-		archive.getConfig().getRevisionList().setAutomerge(true);
-		archive.getConfig().getSwarm().requestAll();
-		
+	ZKArchive createPeeredWriteKeyArchive(ZKMaster master) throws IOException {
+		ZKArchive archive = master.createArchiveWithWriteRoot(ZKArchive.DEFAULT_PAGE_SIZE >> 1, "write key test");
+		activateDHT(master, archive.getConfig());
 		return archive;
 	}
 	
+	ZKArchive joinPeeredWriteKeyArchiveAsReader(ZKMaster master, ZKArchive existing) throws IOException {
+		// TODO Release: (refactor) We need a better way to join an existing archive than this.
+		ArchiveAccessor accessor = new ArchiveAccessor(master, existing.getConfig().getAccessor());
+		ZKArchiveConfig config = ZKArchiveConfig.openExisting(accessor, existing.getConfig().getArchiveId(), false, null);
+		activateDHT(master, config);
+		assertTrue(Util.waitUntil(5000, ()->{
+			Util.sleep(100);
+			master.getDHTDiscovery().forceUpdate(config.getAccessor());
+			return config.getSwarm().getConnections().size() > 0;
+		}));
+		config.finishOpening();
+		return config.getArchive();
+	}
+	
+	void activateDHT(ZKMaster master, ZKArchiveConfig config) throws IOException {
+		master.listenOnTCP(0);
+		master.activateDHT("127.0.0.1", 0, root);
+		master.getTCPListener().advertise(config.getSwarm());
+		config.getRevisionList().automergeDelayMs = 5;
+		config.getRevisionList().maxAutomergeDelayMs = 100;
+		config.getAccessor().discoverOnDHT();
+		config.getRevisionList().setAutomerge(true);
+		config.getSwarm().requestAll();
+	}
+
 	RevisionTag createInitialCommit(ZKArchive archive, int i) throws IOException {
 		ZKFS fs = archive.openBlank();
 		fs.write("immediate-"+i, crypto.prng(Util.serializeInt(i)).getBytes(crypto.hashLength()-1));
@@ -442,6 +464,83 @@ public class IntegrationTest {
 			}
 			return true;
 		}));
+		
+		for(ZKArchive archive : archives) {
+			assertTrue(maxHeight <= archive.getConfig().getRevisionList().latest().getHeight());
+			archive.close();
+			archive.getMaster().close();
+		}
+	}
+	
+	@Test
+	public void testWriteKeyIntegration() throws InterruptedException, IOException, InvalidBlacklistException {
+		/* N peers swarm up and just randomly commit stuff for a while.
+		 * They should converge to a common revision.
+		 */
+		int writers = 2;
+		int readers = 4;
+		int workers = writers + readers;
+		
+		LinkedList<Thread> threads = new LinkedList<>();
+		ZKMaster[] masters = new ZKMaster[workers];
+		ZKArchive[] archives = new ZKArchive[workers];
+		final long endTime = Util.currentTimeMillis() + 10*1000;
+		long[] maxHeights = new long[workers];
+		
+		for(int i = 0; i < workers; i++) {
+			final int ii = i;
+			Thread thread = new Thread(()->{
+				PRNG prng = new PRNG();
+				try {
+					ZKMaster master = masters[ii] = ZKMaster.openBlankTestVolume(""+ii);
+					ZKArchive archive;
+					if(ii < writers) {
+						 archive = archives[ii] = createPeeredWriteKeyArchive(master);
+					} else {
+						assertTrue(Util.waitUntil(1000, ()->archives[0] != null));
+						archive = archives[ii] = joinPeeredWriteKeyArchiveAsReader(master, archives[0]);
+						return;
+					}
+					
+					while(Util.currentTimeMillis() < endTime) {
+						master.getDHTDiscovery().forceUpdate(archive.getConfig().getAccessor());
+						long timeLeft = endTime - Util.currentTimeMillis();
+						Util.sleep(Math.min(timeLeft, prng.getInt(1000)));
+						ZKFS fs = archive.openLatest();
+						fs.write("file"+(prng.getInt(4)), crypto.rng(prng.getInt(3*archive.getConfig().getPageSize())));
+						maxHeights[ii] = fs.commit().getHeight();
+						fs.close();
+					}
+				} catch (IOException e) {
+					e.printStackTrace();
+					fail();
+				}
+			});
+			threads.add(thread);
+			thread.start();
+		}
+		
+		for(Thread thread : threads) {
+			thread.join();
+		}
+		
+		long maxHeight = 0;
+		for(long h : maxHeights) maxHeight = Math.max(h, maxHeight);
+		
+		if(!Util.waitUntil(20000, ()->{
+			RevisionTag firstLatest = archives[0].getConfig().getRevisionList().latest();
+			for(ZKArchive archive : archives) {
+				RevisionTag archLatest = archive.getConfig().getRevisionList().latest();
+				if(!firstLatest.equals(archLatest)) return false;
+			}
+			return true;
+		})) {
+			for(ZKArchive archive : archives) {
+				archive.getConfig().getRevisionList().dump();
+				archive.getConfig().getSwarm().dumpConnections();
+			}
+			System.exit(1);
+		}
 		
 		for(ZKArchive archive : archives) {
 			assertTrue(maxHeight <= archive.getConfig().getRevisionList().latest().getHeight());
