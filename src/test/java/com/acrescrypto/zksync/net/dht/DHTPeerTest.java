@@ -34,6 +34,7 @@ public class DHTPeerTest {
 		DummyMessage msg;
 		DHTPeer reqPeer;
 		DHTID reqId;
+		Key reqKey;
 		DHTRecord reqRecord;
 		DummyRoutingTable routingTable;
 		
@@ -52,9 +53,10 @@ public class DHTPeerTest {
 		}
 		
 		@Override
-		protected DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, DHTMessageCallback callback) {
+		protected DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, Key lookupKey, DHTMessageCallback callback) {
 			reqId = id;
 			reqPeer = recipient;
+			reqKey = lookupKey;
 			return msg = new DummyMessage(recipient, DHTMessage.CMD_FIND_NODE, id.rawId, callback);
 		}
 		
@@ -267,12 +269,14 @@ public class DHTPeerTest {
 	public void testFindNodeSendsFindNodeRequestToPeer() {
 		DHTPeer peer = makeTestPeer();
 		DHTID id = makeId();
+		Key lookupKey = new Key(crypto);
 		
-		peer.findNode(id, (results, isFinal)->{}, (record)->{});
+		peer.findNode(id, lookupKey, (results, isFinal)->{}, (record)->{});
 		assertNotNull(client.msg);
 		assertEquals(peer, client.reqPeer);
 		assertEquals(DHTMessage.CMD_FIND_NODE, client.msg.cmd);
 		assertEquals(id, client.reqId);
+		assertEquals(lookupKey, client.reqKey);
 		assertTrue(client.msg.sent);
 	}
 	
@@ -293,7 +297,7 @@ public class DHTPeerTest {
 			response.put(newPeer.serialize());
 		}
 		
-		peer.findNode(id, (results, isFinal)->{}, (record)->{});
+		peer.findNode(id, new Key(crypto), (results, isFinal)->{}, (record)->{});
 		client.msg.callback.responseReceived(makeResponse(response.array()));
 		for(DHTPeer respPeer : respPeers) {
 			assertTrue(client.routingTable.suggestedPeers.contains(respPeer));
@@ -307,6 +311,7 @@ public class DHTPeerTest {
 		MutableBoolean receivedCallback = new MutableBoolean();
 		DHTPeer peer = makeTestPeer();
 		DHTID id = makeId();
+		Key lookupKey = new Key(crypto);
 		ArrayList<DHTPeer> respPeers = new ArrayList<>(numRecords);
 		
 		ByteBuffer response = ByteBuffer.allocate(numRecords*(1+2+peer.serialize().length));
@@ -318,7 +323,7 @@ public class DHTPeerTest {
 			response.put(newPeer.serialize());
 		}
 		
-		peer.findNode(id, (results, isFinal)->{
+		peer.findNode(id, lookupKey, (results, isFinal)->{
 			assert(results.size() == numRecords);
 			receivedCallback.setTrue();
 			for(DHTPeer result : results) {
@@ -337,6 +342,7 @@ public class DHTPeerTest {
 
 		DHTPeer peer = makeTestPeer();
 		DHTID id = makeId();
+		Key lookupKey = new Key(crypto);
 		ArrayList<DummyRecord> respRecords = new ArrayList<>(numRecords);
 		
 		ByteBuffer response = ByteBuffer.allocate(numRecords*(1+2+new DummyRecord(0).serialize().length));
@@ -348,7 +354,7 @@ public class DHTPeerTest {
 			response.put(record.serialize());
 		}
 		
-		peer.findNode(id, (results, isFinal)->{}, (record)->{
+		peer.findNode(id, lookupKey, (results, isFinal)->{}, (record)->{
 			if(record == null) return;
 			assertTrue(respRecords.contains(record));
 			respRecords.remove(record);
@@ -364,6 +370,7 @@ public class DHTPeerTest {
 
 		DHTPeer peer = makeTestPeer();
 		DHTID id = makeId();
+		Key lookupKey = new Key(crypto);
 		MutableBoolean sawNull = new MutableBoolean();
 		
 		ByteBuffer response = ByteBuffer.allocate(numRecords*(1+2+new DummyRecord(0).serialize().length));
@@ -374,7 +381,7 @@ public class DHTPeerTest {
 			response.put(record.serialize());
 		}
 		
-		peer.findNode(id, (results, isFinal)->{}, (record)->{
+		peer.findNode(id, lookupKey, (results, isFinal)->{}, (record)->{
 			assertFalse(sawNull.booleanValue());
 			if(record == null) {
 				sawNull.setTrue();
@@ -391,6 +398,7 @@ public class DHTPeerTest {
 
 		DHTPeer peer = makeTestPeer();
 		DHTID id = makeId();
+		Key lookupKey = new Key(crypto);
 		ArrayList<DummyRecord> respRecords = new ArrayList<>(numRecords);
 		
 		ByteBuffer response = ByteBuffer.allocate(numRecords*(1+2+new DummyRecord(0).serialize().length) + (1 + 2 + bogusRecordSize));
@@ -409,7 +417,7 @@ public class DHTPeerTest {
 			response.put(record.serialize());
 		}
 		
-		peer.findNode(id, (results, isFinal)->{}, (record)->{
+		peer.findNode(id, lookupKey, (results, isFinal)->{}, (record)->{
 			if(record == null) return;
 			assertTrue(respRecords.contains(record));
 			respRecords.remove(record);
@@ -423,13 +431,14 @@ public class DHTPeerTest {
 	public void testFindNodeThrowsProtocolViolationExceptionIfRecordCantDeserialize() throws ProtocolViolationException {
 		DHTPeer peer = makeTestPeer();
 		DHTID id = makeId();
+		Key lookupKey = new Key(crypto);
 		
 		ByteBuffer response = ByteBuffer.allocate(2+peer.serialize().length-1);
 		DHTPeer newPeer = makeTestPeer(1);
 		response.putShort((short) newPeer.serialize().length);
 		response.put(newPeer.serialize(), 0, response.remaining());
 		
-		peer.findNode(id, (results, isFinal)->{}, (record)->{});
+		peer.findNode(id, lookupKey, (results, isFinal)->{}, (record)->{});
 		client.msg.callback.responseReceived(makeResponse(response.array()));
 	}
 	
@@ -437,13 +446,14 @@ public class DHTPeerTest {
 	public void testFindNodeThrowsProtocolViolationIfRecordDoesntDeserializeInExpectedLength() throws ProtocolViolationException {
 		DHTPeer peer = makeTestPeer();
 		DHTID id = makeId();
+		Key lookupKey = new Key(crypto);
 		
 		ByteBuffer response = ByteBuffer.allocate(2+peer.serialize().length);
 		DHTPeer newPeer = makeTestPeer(1);
 		response.putShort((short) (newPeer.serialize().length+1));
 		response.put(newPeer.serialize(), 0, response.remaining());
 		
-		peer.findNode(id, (results, isFinal)->{}, (record)->{});
+		peer.findNode(id, lookupKey, (results, isFinal)->{}, (record)->{});
 		try {
 			client.msg.callback.responseReceived(makeResponse(response.array()));
 			fail();
@@ -454,7 +464,7 @@ public class DHTPeerTest {
 		response.putShort((short) (newPeer.serialize().length-1));
 		response.put(newPeer.serialize(), 0, response.remaining());
 		
-		peer.findNode(id, (results, isFinal)->{}, (record)->{});
+		peer.findNode(id, lookupKey, (results, isFinal)->{}, (record)->{});
 		try {
 			client.msg.callback.responseReceived(makeResponse(response.array()));
 			fail();
@@ -466,6 +476,7 @@ public class DHTPeerTest {
 	public void testFindNodeThrowsProtocolViolationIfRecordHasZeroLength() throws ProtocolViolationException {
 		DHTPeer peer = makeTestPeer();
 		DHTID id = makeId();
+		Key lookupKey = new Key(crypto);
 		
 		DHTPeer newPeer = makeTestPeer(1);
 		ByteBuffer response = ByteBuffer.allocate(2+newPeer.serialize().length+2);
@@ -473,7 +484,7 @@ public class DHTPeerTest {
 		response.put(newPeer.serialize());
 		response.putShort((short) 0);
 		
-		peer.findNode(id, (results, isFinal)->{}, (record)->{});
+		peer.findNode(id, lookupKey, (results, isFinal)->{}, (record)->{});
 		client.msg.callback.responseReceived(makeResponse(response.array()));
 	}
 	
@@ -482,7 +493,9 @@ public class DHTPeerTest {
 		MutableBoolean callbackReceived = new MutableBoolean();
 		DHTPeer peer = makeTestPeer();
 		DHTID id = makeId();
-		peer.findNode(id, (results, isFinal)->{
+		Key lookupKey = new Key(crypto);
+		
+		peer.findNode(id, lookupKey, (results, isFinal)->{
 			assertFalse(isFinal);
 			callbackReceived.setTrue();
 		}, (record)->{});
@@ -497,7 +510,9 @@ public class DHTPeerTest {
 		MutableBoolean callbackReceived = new MutableBoolean();
 		DHTPeer peer = makeTestPeer();
 		DHTID id = makeId();
-		peer.findNode(id, (results, isFinal)->{
+		Key lookupKey = new Key(crypto);
+		
+		peer.findNode(id, lookupKey, (results, isFinal)->{
 			assertTrue(isFinal);
 			callbackReceived.setTrue();
 		}, (record)->{});

@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.TreeSet;
 
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 
 public class DHTSearchOperation {
@@ -30,12 +31,14 @@ public class DHTSearchOperation {
 	SearchOperationPeerCallback peerCallback;
 	SearchOperationRecordCallback recordCallback;
 	SnoozeThread timeout;
+	Key lookupKey;
 	
-	public DHTSearchOperation(DHTClient client, DHTID searchId, SearchOperationPeerCallback peerCallback, SearchOperationRecordCallback recordCallback) {
+	public DHTSearchOperation(DHTClient client, DHTID searchId, Key lookupKey, SearchOperationPeerCallback peerCallback, SearchOperationRecordCallback recordCallback) {
 		this.client = client;
 		this.searchId = searchId;
 		this.peerCallback = peerCallback;
 		this.recordCallback = recordCallback;
+		this.lookupKey = lookupKey;
 	}
 	
 	public synchronized void run() {
@@ -67,7 +70,7 @@ public class DHTSearchOperation {
 	protected synchronized void requestNodes(DHTPeer peer) {
 		queried.add(peer);
 		activeQueries++;
-		peer.findNode(searchId, (peers, isFinal)->{
+		peer.findNode(searchId, lookupKey, (peers, isFinal)->{
 			handleFindNodeResults(peers, isFinal);
 		}, (record)->{
 			recordCallback.searchOperationDiscoveredRecord(record);

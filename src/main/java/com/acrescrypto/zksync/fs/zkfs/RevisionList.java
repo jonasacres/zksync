@@ -193,8 +193,7 @@ public class RevisionList {
 	}
 	
 	public RevisionTag latest() {
-		// TODO WriteKey: (redesign) Can't create a blank tag if we're read-only.
-		return latest == null ? RevisionTag.blank(config) : latest;
+		return latest == null && !config.isReadOnly() ? RevisionTag.blank(config) : latest;
 	}
 	
 	protected void updateLatest(RevisionTag newTip) {

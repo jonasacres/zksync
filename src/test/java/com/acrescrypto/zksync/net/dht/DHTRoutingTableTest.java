@@ -36,7 +36,7 @@ public class DHTRoutingTableTest {
 		}
 		
 		@Override
-		public void lookup(DHTID id, LookupCallback callback) {
+		public void lookup(DHTID id, Key lookupKey, LookupCallback callback) {
 			lookupIds.add(id);
 		}
 		

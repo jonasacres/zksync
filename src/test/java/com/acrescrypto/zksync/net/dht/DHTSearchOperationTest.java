@@ -17,6 +17,7 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
@@ -110,7 +111,7 @@ public class DHTSearchOperationTest {
 		}
 		
 		@Override
-		public void findNode(DHTID id, DHTFindNodePeerCallback peerCallback, DHTFindNodeRecordCallback recordCallback) {
+		public void findNode(DHTID id, Key lookupKey, DHTFindNodePeerCallback peerCallback, DHTFindNodeRecordCallback recordCallback) {
 			if(knownPeers == null) {
 				knownPeers = client.peerSample(512);
 			}
@@ -149,6 +150,7 @@ public class DHTSearchOperationTest {
 	CryptoSupport crypto;
 	DHTID searchId;
 	DHTSearchOperation op;
+	Key lookupKey;
 	Collection<DHTPeer> results;
 	ArrayList<DHTRecord> records;
 	boolean sendResponses = true;
@@ -191,8 +193,10 @@ public class DHTSearchOperationTest {
 		searchId = new DHTID(crypto.rng(crypto.hashLength()));
 		results = null;
 		records = new ArrayList<>();
+		lookupKey = new Key(crypto);
 		op = new DHTSearchOperation(client,
 				searchId,
+				lookupKey,
 				(results)->this.results = results,
 				(record)->this.records.add(record));
 	}

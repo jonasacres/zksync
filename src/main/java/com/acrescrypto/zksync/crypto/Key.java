@@ -84,6 +84,19 @@ public class Key {
 		
 		return c == 0;
 	}
+	
+	@Override
+	public boolean equals(Object _other) {
+		if(!(_other instanceof Key)) return false;
+		Key other = (Key) _other;
+		int c = raw.length ^ other.raw.length;
+		
+		for(int i = 0; i < raw.length; i++) {
+			 c |= raw[i] ^ other.raw[i];
+		}
+		
+		return c == 0;
+	}
 
 	public CryptoSupport getCrypto() {
 		return crypto;

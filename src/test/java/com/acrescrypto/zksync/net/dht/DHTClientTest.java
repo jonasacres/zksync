@@ -441,7 +441,7 @@ public class DHTClientTest {
 	@Test
 	public void testLookupTriggersSearchOperationForRequestedId() throws IOException, ProtocolViolationException {
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
-		client.lookup(searchId, (resp)->{});
+		client.lookup(searchId, new Key(crypto), (resp)->{});
 		DHTMessage msg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
 		assertArrayEquals(searchId.rawId, msg.payload);
 	}
@@ -450,9 +450,10 @@ public class DHTClientTest {
 	public void testLookupInvokesCallbackWithEachReceivedRecord() throws IOException, ProtocolViolationException {
 		MutableBoolean seenNull = new MutableBoolean();
 		ArrayList<DHTRecord> records = new ArrayList<>();
-
+		Key lookupKey = new Key(crypto);
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
-		client.lookup(searchId, (record)->{
+
+		client.lookup(searchId, lookupKey, (record)->{
 			assertFalse(seenNull.booleanValue());
 			if(record == null) {
 				seenNull.setTrue();
@@ -472,6 +473,9 @@ public class DHTClientTest {
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->seenNull.booleanValue()));
 		assertEquals(0, records.size());
 	}
+	
+	// TODO SecureDHT: (test) testLookupSendsTokenBasedOnLookupKey
+	// TODO SecureDHT: (test) testLookupDoesNotInvokeCallbackIfInvalidLookupKeySupplied
 
 	@Test
 	public void testLookupInvokesCallbackWithNullIfNoResponseReceivedInTime() throws IOException, ProtocolViolationException {
@@ -480,7 +484,7 @@ public class DHTClientTest {
 		DHTSearchOperation.searchQueryTimeoutMs = 50;
 
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
-		client.lookup(searchId, (record)->{
+		client.lookup(searchId, new Key(crypto), (record)->{
 			assertFalse(seenNull.booleanValue());
 			assertNull(record);
 			seenNull.setTrue();
@@ -500,7 +504,7 @@ public class DHTClientTest {
 		DHTSearchOperation.searchQueryTimeoutMs = 50;
 
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
-		client.lookup(searchId, (resp)->{
+		client.lookup(searchId, new Key(crypto), (resp)->{
 			assertFalse(seenNull.booleanValue());
 			if(resp == null) {
 				seenNull.setTrue();
@@ -542,7 +546,7 @@ public class DHTClientTest {
 		for(RemotePeer r : remotes) peers.add(r.peer);
 
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
-		client.lookup(searchId, (resp)->{
+		client.lookup(searchId, new Key(crypto), (resp)->{
 			assertFalse(seenNull.booleanValue());
 			if(resp == null) {
 				seenNull.setTrue();
@@ -607,7 +611,7 @@ public class DHTClientTest {
 				client.addPeer(remote.peer);
 			}
 			
-			client.addRecord(searchId, makeBogusAd(0));
+			client.addRecord(searchId, new Key(crypto), makeBogusAd(0));
 			network.run();
 			
 			assertEquals(DHTSearchOperation.maxResults, numReceived.intValue());
@@ -619,7 +623,7 @@ public class DHTClientTest {
 		ArrayList<DHTPeer> list = new ArrayList<>(1);
 		list.add(clientPeer);
 		
-		client.addRecord(client.id, makeBogusAd(0));
+		client.addRecord(client.id, new Key(crypto), makeBogusAd(0));
 		remote.receivePacket().makeResponse(list).send();
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->client.store.recordsForId(client.id).size() > 0));
 	}
@@ -662,7 +666,7 @@ public class DHTClientTest {
 		Util.sleep(10);
 		
 		MutableBoolean received = new MutableBoolean();
-		clientPeer.findNode(remote.listenClient.id, (peers, isFinal)->{ received.setTrue(); }, (record)->{});
+		clientPeer.findNode(remote.listenClient.id, new Key(crypto), (peers, isFinal)->{ received.setTrue(); }, (record)->{});
 		assertFalse(Util.waitUntil(MAX_MSG_WAIT_TIME_MS, ()->received.booleanValue()));
 	}
 	
@@ -676,7 +680,7 @@ public class DHTClientTest {
 		Util.sleep(10);
 		
 		MutableBoolean received = new MutableBoolean();
-		clientPeer.findNode(remote.listenClient.id, (peers, isFinal)->{ received.setTrue(); }, (record)->{});
+		clientPeer.findNode(remote.listenClient.id, new Key(crypto), (peers, isFinal)->{ received.setTrue(); }, (record)->{});
 		assertFalse(Util.waitUntil(MAX_MSG_WAIT_TIME_MS, ()->received.booleanValue()));
 	}
 	
@@ -745,7 +749,7 @@ public class DHTClientTest {
 	
 	@Test
 	public void testFindNodeIgnoresTruncatedID() throws IOException, ProtocolViolationException {
-		DHTMessage req = remote.listenClient.findNodeMessage(clientPeer, clientPeer.id, null);
+		DHTMessage req = remote.listenClient.findNodeMessage(clientPeer, clientPeer.id, new Key(crypto), null);
 		req.payload = crypto.rng(req.payload.length-1);
 		req.send();
 		
@@ -757,7 +761,7 @@ public class DHTClientTest {
 	
 	@Test
 	public void testFindNodeIgnoresOverlyLongID() throws IOException, ProtocolViolationException {
-		DHTMessage req = remote.listenClient.findNodeMessage(clientPeer, clientPeer.id, null);
+		DHTMessage req = remote.listenClient.findNodeMessage(clientPeer, clientPeer.id, new Key(crypto), null);
 		req.payload = crypto.rng(req.payload.length+1);
 		req.send();
 		
@@ -777,7 +781,7 @@ public class DHTClientTest {
 		DHTID searchId = remote.peer.id;
 		ArrayList<DHTPeer> results = new ArrayList<>(DHTSearchOperation.maxResults);
 		int numReceived = 0;
-		clientPeer.findNode(searchId, (resp, isFinal)->{}, (record)->{});
+		clientPeer.findNode(searchId, new Key(crypto), (resp, isFinal)->{}, (record)->{});
 		
 		while(true) {
 			DHTMessage resp = remote.receivePacket();
@@ -826,7 +830,7 @@ public class DHTClientTest {
 		DHTID searchId = remote.peer.id;
 		ArrayList<DHTPeer> results = new ArrayList<>(DHTSearchOperation.maxResults);
 		int numReceived = 0;
-		clientPeer.findNode(searchId, (resp, isFinal)->{}, (record)->{});
+		clientPeer.findNode(searchId, new Key(crypto), (resp, isFinal)->{}, (record)->{});
 		
 		while(true) {
 			DHTMessage resp = remote.receivePacket();
@@ -851,6 +855,7 @@ public class DHTClientTest {
 		DHTID searchId = remote.peer.id;
 		int numRecords = 16;
 		ArrayList<DHTRecord> records = new ArrayList<>(numRecords);
+		Key lookupKey = new Key(crypto);
 		
 		for(int i = 0; i < numRecords; i++) {
 			DHTRecord record = new DummyRecord(i);
@@ -859,7 +864,7 @@ public class DHTClientTest {
 		}
 		
 		int numReceived = 0;
-		clientPeer.findNode(searchId, (resp, isFinal)->{}, (record)->{});
+		clientPeer.findNode(searchId, lookupKey, (resp, isFinal)->{}, (record)->{});
 		
 		while(true) {
 			DHTMessage resp = remote.receivePacket();
@@ -892,7 +897,8 @@ public class DHTClientTest {
 		}
 		
 		DHTID searchId = remote.peer.id;
-		clientPeer.findNode(searchId, (resp, isFinal)->{}, (record)->{});
+		Key lookupKey = new Key(crypto);
+		clientPeer.findNode(searchId, lookupKey, (resp, isFinal)->{}, (record)->{});
 		int numReceived = 0;
 		
 		while(true) {
@@ -978,12 +984,14 @@ public class DHTClientTest {
 	public void testFindNodeMessageConstructsAppropriateFindNodeMessages() {
 		DHTMessageCallback callback = (resp)->{};
 		DHTID id = new DHTID(crypto.rng(client.idLength()));
-		DHTMessage findNode = client.findNodeMessage(remote.peer, id, callback);
+		Key lookupKey = new Key(crypto);
+		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, remote.peer.key.getBytes()));
+		DHTMessage findNode = client.findNodeMessage(remote.peer, id, lookupKey, callback);
 		assertNotEquals(0, findNode.msgId); // admittedly there's a 1 in 2**32 chance of this failing randomly
 		assertEquals(callback, findNode.callback);
 		assertEquals(DHTMessage.CMD_FIND_NODE, findNode.cmd);
 		assertEquals(remote.peer, findNode.peer);
-		assertArrayEquals(id.rawId, findNode.payload);
+		assertArrayEquals(Util.concat(id.rawId, token), findNode.payload);
 		assertEquals(0, findNode.flags);
 	}
 	
@@ -991,18 +999,20 @@ public class DHTClientTest {
 	public void testAddRecordMessageConstructsAppropriateAddRecordMessages() {
 		DHTMessageCallback callback = (resp)->{};
 		DHTID id = new DHTID(crypto.rng(client.idLength()));
+		Key lookupKey = new Key(crypto);
+		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, remote.peer.key.getBytes()));
 		DHTRecord record = makeBogusAd(0);
 		DHTMessage addRecord = client.addRecordMessage(remote.peer, id, record, callback);
 		
-		ByteBuffer expectedPayload = ByteBuffer.allocate(id.rawId.length + record.serialize().length);
-		expectedPayload.put(id.rawId);
-		expectedPayload.put(record.serialize());
-		
+		byte[] expected = Util.concat(
+				id.rawId,
+				token,
+				record.serialize());
 		assertNotEquals(0, addRecord.msgId); // admittedly there's a 1 in 2**32 chance of this failing randomly
 		assertEquals(callback, addRecord.callback);
 		assertEquals(DHTMessage.CMD_ADD_RECORD, addRecord.cmd);
 		assertEquals(remote.peer, addRecord.peer);
-		assertArrayEquals(expectedPayload.array(), addRecord.payload);
+		assertArrayEquals(expected, addRecord.payload);
 		assertEquals(0, addRecord.flags);
 	}
 	
@@ -1029,7 +1039,7 @@ public class DHTClientTest {
 		client.lastStatus = -1; // we're already in a questionable state, so clear this
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.routingTable.reset();
-		client.lookup(clientPeer.id, (record)->{});
+		client.lookup(clientPeer.id, new Key(crypto), (record)->{});
 		
 		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_QUESTIONABLE == receivedStatus.intValue()));
 	}
@@ -1040,7 +1050,7 @@ public class DHTClientTest {
 		client.lastStatus = -1; // we're already in a questionable state, so clear this
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.routingTable.reset();
-		client.addRecord(clientPeer.id, makeBogusAd(0));
+		client.addRecord(clientPeer.id, new Key(crypto), makeBogusAd(0));
 		
 		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_QUESTIONABLE == receivedStatus.intValue()));
 	}

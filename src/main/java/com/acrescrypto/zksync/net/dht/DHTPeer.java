@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
@@ -70,8 +71,8 @@ public class DHTPeer implements Sendable {
 		client.pingMessage(this, null).send();
 	}
 	
-	public void findNode(DHTID nodeId, DHTFindNodePeerCallback peerCallback, DHTFindNodeRecordCallback recordCallback) {
-		client.findNodeMessage(this, nodeId, (resp)->{
+	public void findNode(DHTID nodeId, Key lookupKey, DHTFindNodePeerCallback peerCallback, DHTFindNodeRecordCallback recordCallback) {
+		client.findNodeMessage(this, nodeId, lookupKey, (resp)->{
 			ArrayList<DHTPeer> receivedPeers = new ArrayList<>();
 			this.remoteAuthTag = resp.authTag;
 			ByteBuffer buf = ByteBuffer.wrap(resp.payload);

@@ -17,6 +17,7 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
@@ -40,13 +41,13 @@ public class DHTZKArchiveDiscoveryTest {
 		public void close() {}
 		
 		@Override
-		public void lookup(DHTID searchId, LookupCallback callback) {
+		public void lookup(DHTID searchId, Key lookupKey, LookupCallback callback) {
 			this.searchId = searchId;
 			this.callback = callback;
 		}
 		
 		@Override
-		public void addRecord(DHTID recordId, DHTRecord record) {
+		public void addRecord(DHTID recordId, Key lookupKey, DHTRecord record) {
 			records.put(recordId, record);
 		}
 	}

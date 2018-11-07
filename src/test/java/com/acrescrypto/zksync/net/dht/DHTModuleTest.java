@@ -123,15 +123,16 @@ public class DHTModuleTest {
 		ArrayList<DHTClient> clients = makeClients(256);
 		DHTID id = new DHTID(crypto.rng(crypto.hashLength()));
 		DHTRecord ad = makeBogusAd(0);
+		Key lookupKey = new Key(crypto);
 		
 		for(int i = 0; i < 16; i++) {
-			clients.get(i).addRecord(id, ad);
+			clients.get(i).addRecord(id, lookupKey, ad);
 		}
 		
 		MutableBoolean finished = new MutableBoolean(), found = new MutableBoolean();
 		
 		for(int i = 0; i < 32; i++) {
-			clients.get(i).lookup(id, (result)->{
+			clients.get(i).lookup(id, lookupKey, (result)->{
 				if(result == null) {
 					finished.setTrue();
 				} else {

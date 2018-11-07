@@ -147,7 +147,7 @@ public class DHTClient {
 	}
 	
 	public void findPeers() {
-		new DHTSearchOperation(this, id, (peers)->{
+		new DHTSearchOperation(this, id, new Key(crypto), (peers)->{
 			// no need to do anything; just doing the search populates the routing table
 			if(peers == null || peers.isEmpty()) {
 				updateStatus(STATUS_QUESTIONABLE);
@@ -170,8 +170,14 @@ public class DHTClient {
 		}).start();
 	}
 	
-	public void lookup(DHTID searchId, LookupCallback callback) {
-		new DHTSearchOperation(this, searchId, (peers)->{
+	public void lookup(DHTID searchId, Key lookupKey, LookupCallback callback) {
+		// TODO SecureDHT: (redesign) Add some sort of tweak to prevent people from capturing searchIds, looking them up and logging the IPs.
+		/* Lookups should have an auth token derived from:
+		 *   - recipient's key
+		 *   - seed key
+		 * Only values matching both the request ID and auth token can be sent.
+		 */
+		new DHTSearchOperation(this, searchId, lookupKey, (peers)->{
 			if(peers == null || peers.isEmpty()) {
 				updateStatus(STATUS_QUESTIONABLE);
 			}
@@ -186,8 +192,8 @@ public class DHTClient {
 		routingTable.suggestPeer(peer);
 	}
 	
-	public void addRecord(DHTID searchId, DHTRecord record) {
-		new DHTSearchOperation(this, searchId, (peers)->{
+	public void addRecord(DHTID searchId, Key lookupKey, DHTRecord record) {
+		new DHTSearchOperation(this, searchId, lookupKey, (peers)->{
 			if(peers == null || peers.isEmpty()) {
 				updateStatus(STATUS_QUESTIONABLE);
 			}
@@ -458,8 +464,11 @@ public class DHTClient {
 		return "dht-client-info-"+Util.bytesToHex(truncated.array());
 	}
 	
-	protected DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, DHTMessageCallback callback) {
-		return new DHTMessage(recipient, DHTMessage.CMD_FIND_NODE, id.rawId, callback);
+	protected DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, Key lookupKey, DHTMessageCallback callback) {
+		ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + lookupKey.getCrypto().hashLength());
+		buf.put(id.rawId);
+		buf.put(lookupKey.authenticate(Util.concat(id.rawId, recipient.key.getBytes())));
+		return new DHTMessage(recipient, DHTMessage.CMD_FIND_NODE, buf.array(), callback);
 	}
 	
 	protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, DHTRecord record, DHTMessageCallback callback) {

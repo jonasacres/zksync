@@ -10,6 +10,7 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.EINVALException;
@@ -60,7 +61,7 @@ public class DHTRoutingTable {
 		for(DHTBucket bucket : buckets) {
 			bucket.prune();
 			if(!bucket.needsFreshening()) continue;
-			client.lookup(bucket.randomIdInRange(), (results)->{}); // can ignore results; just doing search freshens routing table
+			client.lookup(bucket.randomIdInRange(), new Key(client.crypto), (results)->{}); // can ignore results; just doing search freshens routing table
 		}
 	}
 	

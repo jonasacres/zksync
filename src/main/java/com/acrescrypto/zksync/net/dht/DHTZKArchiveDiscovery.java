@@ -6,6 +6,7 @@ import java.util.HashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveDiscovery;
@@ -114,8 +115,11 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	}
 	
 	protected void discover(DiscoveryEntry entry) {
+		Key lookupKey = entry.accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
+				ArchiveAccessor.KEY_TYPE_AUTH,
+				ArchiveAccessor.KEY_INDEX_DHT_LOOKUP);
 		DHTID searchId = new DHTID(entry.accessor.temporalSeedId(0));
-		entry.accessor.getMaster().getDHTClient().lookup(searchId, (record)->{
+		entry.accessor.getMaster().getDHTClient().lookup(searchId, lookupKey, (record)->{
 			if(!(record instanceof DHTAdvertisementRecord)) return;
 			DHTAdvertisementRecord adRecord = (DHTAdvertisementRecord) record;
 			if(!(adRecord.ad instanceof TCPPeerAdvertisement)) return;
@@ -145,10 +149,13 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 			}
 			
 			DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(entry.accessor.getMaster().getCrypto(), ad);
+			Key lookupKey = entry.accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
+					ArchiveAccessor.KEY_TYPE_AUTH,
+					ArchiveAccessor.KEY_INDEX_DHT_LOOKUP);
 			
 			for(int i = -1; i <= 1; i++) {
 				DHTID searchId = new DHTID(entry.accessor.temporalSeedId(i));
-				entry.accessor.getMaster().getDHTClient().addRecord(searchId, adRecord);
+				entry.accessor.getMaster().getDHTClient().addRecord(searchId, lookupKey, adRecord);
 			}
 		}
 	}
