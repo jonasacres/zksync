@@ -109,10 +109,11 @@ public class DHTZKArchiveDiscoveryTest {
 	}
 	
 	@Test
-	public void testDiscoveryThreadTerminatesWhenStopDiscoveringArchivesCalled() {
+	public void testDiscoveryThreadTerminatesWhenStopDiscoveringArchivesCalled() throws IOException {
 		discovery.discoverArchives(archive.getConfig().getAccessor());
 		assertTrue(Util.waitUntil(50, ()->client.searchId != null));
 		discovery.stopDiscoveringArchives(archive.getConfig().getAccessor());
+		Util.sleep(10);
 		client.searchId = null;
 		assertFalse(Util.waitUntil(50, ()->client.searchId != null));
 	}

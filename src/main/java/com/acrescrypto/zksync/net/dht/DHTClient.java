@@ -171,12 +171,6 @@ public class DHTClient {
 	}
 	
 	public void lookup(DHTID searchId, Key lookupKey, LookupCallback callback) {
-		// TODO SecureDHT: (redesign) Add some sort of tweak to prevent people from capturing searchIds, looking them up and logging the IPs.
-		/* Lookups should have an auth token derived from:
-		 *   - recipient's key
-		 *   - seed key
-		 * Only values matching both the request ID and auth token can be sent.
-		 */
 		new DHTSearchOperation(this, searchId, lookupKey, (peers)->{
 			if(peers == null || peers.isEmpty()) {
 				updateStatus(STATUS_QUESTIONABLE);

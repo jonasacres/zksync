@@ -456,7 +456,7 @@ public class DHTClientTest {
 		assertArrayEquals(searchId.rawId, rxId);
 		assertArrayEquals(token, rxToken);
 	}
-	
+
 	@Test
 	public void testLookupInvokesCallbackWithEachReceivedRecord() throws IOException, ProtocolViolationException {
 		MutableBoolean seenNull = new MutableBoolean();
@@ -485,9 +485,6 @@ public class DHTClientTest {
 		assertEquals(0, records.size());
 	}
 	
-	// TODO SecureDHT: (test) testLookupSendsTokenBasedOnLookupKey
-	// TODO SecureDHT: (test) testLookupDoesNotInvokeCallbackIfInvalidLookupKeySupplied
-
 	@Test
 	public void testLookupInvokesCallbackWithNullIfNoResponseReceivedInTime() throws IOException, ProtocolViolationException {
 		MutableBoolean seenNull = new MutableBoolean();
@@ -869,7 +866,7 @@ public class DHTClientTest {
 	}
 	
 	@Test
-	public void testRespondsToFindNodeWithListOfRecords() throws IOException, ProtocolViolationException, UnsupportedProtocolException {
+	public void testRespondsToFindNodeWithListOfRecordsIfTokenCorrect() throws IOException, ProtocolViolationException, UnsupportedProtocolException {
 		DHTID searchId = remote.peer.id;
 		int numRecords = 16;
 		ArrayList<DHTRecord> records = new ArrayList<>(numRecords);
@@ -908,7 +905,39 @@ public class DHTClientTest {
 		assertEquals(0, records.size());
 	}
 	
-	// TODO SecureDHT: (test) Doesn't give results if token doesn't match
+	@Test
+	public void testRespondsToFindNodeWithoutRecordsIfTokenIncorrect() throws IOException, ProtocolViolationException, UnsupportedProtocolException {
+		DHTID searchId = remote.peer.id;
+		int numRecords = 16;
+		Key lookupKey = new Key(crypto);
+		byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, client.getLocalPeer().key.getBytes()));
+		
+		for(int i = 0; i < numRecords; i++) {
+			DHTRecord record = new DummyRecord(i);
+			client.store.addRecordForId(searchId, token, record);
+		}
+		
+		int numReceived = 0;
+		clientPeer.findNode(searchId, new Key(crypto), (resp, isFinal)->{}, (record)->{});
+		
+		while(true) {
+			DHTMessage resp = remote.receivePacket();
+			numReceived++;
+			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
+			
+			while(buf.hasRemaining()) {
+				int listIndex = buf.get();
+				int itemSize = buf.getShort(); // item length
+				if(listIndex == 1) {
+					fail();
+				} else {
+					buf.position(buf.position() + itemSize);
+				}
+			}
+			
+			if(resp.numExpected == numReceived) break;
+		}
+	}
 
 	@Test
 	public void testFindNodeResponseIncludesNoRecordsIfNoRecordsForId() throws IOException, ProtocolViolationException, UnsupportedProtocolException {

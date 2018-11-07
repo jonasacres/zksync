@@ -223,6 +223,7 @@ public class DHTRecordStoreTest {
 	
 	@Test
 	public void testRecordsForIdReturnsAllRecordsForIdMatchingToken() throws IOException {
+		// also tests that nonmatching tokens are excluded
 		int numRecords = DHTRecordStore.MAX_RECORDS_PER_ID-1;
 		ArrayList<DHTRecord> records = new ArrayList<>(numRecords);
 		DHTID id = makeId();
@@ -234,10 +235,12 @@ public class DHTRecordStoreTest {
 			store.addRecordForIdBlocking(id, token, record);
 		}
 		
+		// also add in one with a mismatched token; it should not appear in the result set!
 		store.addRecordForIdBlocking(id, client.crypto.hash(Util.serializeInt(0)), new DummyRecord(numRecords));
 		
 		assertTrue(Util.waitUntil(100, ()->numRecords == store.recordsForId(id, token).size()));
 		assertTrue(records.containsAll(store.recordsForId(id, token)));
+		assertEquals(records.size(), store.recordsForId(id, token).size());
 	}
 	
 	@Test
