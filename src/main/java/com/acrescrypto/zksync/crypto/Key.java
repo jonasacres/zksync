@@ -91,7 +91,7 @@ public class Key {
 		Key other = (Key) _other;
 		int c = raw.length ^ other.raw.length;
 		
-		for(int i = 0; i < raw.length; i++) {
+		for(int i = 0; i < Math.min(raw.length, other.raw.length); i++) {
 			 c |= raw[i] ^ other.raw[i];
 		}
 		

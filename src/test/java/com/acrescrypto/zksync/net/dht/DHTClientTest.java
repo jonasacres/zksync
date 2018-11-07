@@ -874,7 +874,7 @@ public class DHTClientTest {
 		int numRecords = 16;
 		ArrayList<DHTRecord> records = new ArrayList<>(numRecords);
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, remote.peer.key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, client.getLocalPeer().key.getBytes()));
 		
 		for(int i = 0; i < numRecords; i++) {
 			DHTRecord record = new DummyRecord(i);
@@ -993,7 +993,7 @@ public class DHTClientTest {
 		Key lookupKey = new Key(crypto);
 		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getLocalPeer().key.getBytes()));
 
-		DHTMessage msg = remote.listenClient.addRecordMessage(clientPeer, id, new Key(crypto), makeBogusAd(0), null);
+		DHTMessage msg = remote.listenClient.addRecordMessage(clientPeer, id, lookupKey, makeBogusAd(0), null);
 		msg.authTag = remote.peer.localAuthTag();
 		msg.send();
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->client.store.recordsForId(id, token).size() > 0));

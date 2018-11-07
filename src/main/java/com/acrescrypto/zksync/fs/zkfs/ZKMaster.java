@@ -212,7 +212,9 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public synchronized ArchiveAccessor makeAccessorForRoot(Key rootKey, boolean isSeed) {
 		ArchiveAccessor accessor = accessorForRoot(rootKey);
-		if(accessor != null) return accessor;
+		if(accessor != null && isSeed == accessor.isSeedOnly()) {
+			return accessor;
+		}
 		
 		accessor = new ArchiveAccessor(this, rootKey, isSeed ? ArchiveAccessor.KEY_ROOT_SEED : ArchiveAccessor.KEY_ROOT_PASSPHRASE);
 		accessor.addCallback(this);

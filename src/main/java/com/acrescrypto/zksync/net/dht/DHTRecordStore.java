@@ -112,7 +112,10 @@ public class DHTRecordStore {
 		Collection<StoreEntry> entries = entriesById.getOrDefault(id, new ArrayList<>(0));
 		
 		for(StoreEntry entry : entries) {
-			if(!Util.safeEquals(token, entry.token)) continue;
+			if(!Util.safeEquals(token, entry.token)) {
+				continue;
+			}
+			
 			records.add(entry.record);
 		}
 		
