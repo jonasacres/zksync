@@ -119,8 +119,8 @@ public class DHTPeer implements Sendable {
 		}).send();
 	}
 	
-	public void addRecord(DHTID recordId, DHTRecord record) {
-		client.addRecordMessage(this, recordId, record, null).send();
+	public void addRecord(DHTID recordId, Key lookupKey, DHTRecord record) {
+		client.addRecordMessage(this, recordId, lookupKey, record, null).send();
 	}
 	
 	public boolean equals(Object o) {

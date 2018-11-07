@@ -24,10 +24,12 @@ public class DHTRecordStore {
 	
 	class StoreEntry {
 		DHTRecord record;
+		byte[] token;
 		long expirationTime;
 		
-		public StoreEntry(DHTRecord record) {
+		public StoreEntry(DHTRecord record, byte[] token) {
 			this.record = record;
+			this.token = token;
 			this.expirationTime = Util.currentTimeMillis() + EXPIRATION_TIME_MS;
 		}
 		
@@ -41,8 +43,10 @@ public class DHTRecordStore {
 		
 		public byte[] serialize() {
 			byte[] recordSer = record.serialize();
-			ByteBuffer buf = ByteBuffer.allocate(8+2+recordSer.length);
+			ByteBuffer buf = ByteBuffer.allocate(8+2+2+recordSer.length+token.length);
 			buf.putLong(expirationTime);
+			buf.putShort((short) token.length);
+			buf.put(token);
 			buf.putShort((short) recordSer.length);
 			buf.put(recordSer);
 			return buf.array();
@@ -50,6 +54,11 @@ public class DHTRecordStore {
 		
 		public void deserialize(ByteBuffer serialized) throws UnsupportedProtocolException {
 			this.expirationTime = serialized.getLong();
+			int tokenLen = serialized.getShort();
+			assert(tokenLen >= 0);
+			this.token = new byte[tokenLen];
+			serialized.get(token);
+			
 			int expectedPos = serialized.getShort() + serialized.position();
 			
 			try {
@@ -84,25 +93,26 @@ public class DHTRecordStore {
 		read();
 	}
 	
-	public void addRecordForIdBlocking(DHTID id, DHTRecord record) throws IOException {
+	public void addRecordForIdBlocking(DHTID id, byte[] token, DHTRecord record) throws IOException {
 		if(!hasRoomForRecord(id, record)) return;
 		try {
-			client.threadPool.submit(()->addRecordIfReachable(id, record)).get();
+			client.threadPool.submit(()->addRecordIfReachable(id, token, record)).get();
 		} catch (InterruptedException | ExecutionException exc) {
 			logger.error("Exception waiting for record insertion", exc);
 		}
 	}
 	
-	public void addRecordForId(DHTID id, DHTRecord record) throws IOException {
+	public void addRecordForId(DHTID id, byte[] token, DHTRecord record) throws IOException {
 		if(!hasRoomForRecord(id, record)) return;
-		client.threadPool.submit(()->addRecordIfReachable(id, record));
+		client.threadPool.submit(()->addRecordIfReachable(id, token, record));
 	}
 	
-	public synchronized Collection<DHTRecord> recordsForId(DHTID id) {
+	public synchronized Collection<DHTRecord> recordsForId(DHTID id, byte[] token) {
 		LinkedList<DHTRecord> records = new LinkedList<>();
 		Collection<StoreEntry> entries = entriesById.getOrDefault(id, new ArrayList<>(0));
 		
 		for(StoreEntry entry : entries) {
+			if(!Util.safeEquals(token, entry.token)) continue;
 			records.add(entry.record);
 		}
 		
@@ -136,7 +146,7 @@ public class DHTRecordStore {
 		return true;
 	}
 	
-	protected void addRecordIfReachable(DHTID id, DHTRecord record) {
+	protected void addRecordIfReachable(DHTID id, byte[] token, DHTRecord record) {
 		Util.setThreadName("Add record worker");
 		try {
 			if(!record.isReachable()) return;
@@ -151,7 +161,7 @@ public class DHTRecordStore {
 				ArrayList<StoreEntry> entriesForId = entriesById.get(id);
 				if(entriesForId.size() >= MAX_RECORDS_PER_ID) prune();
 				if(entriesForId.size() >= MAX_RECORDS_PER_ID) return;
-				entriesForId.add(new StoreEntry(record));
+				entriesForId.add(new StoreEntry(record, token));
 				write();
 			}
 		} catch(IOException exc) {

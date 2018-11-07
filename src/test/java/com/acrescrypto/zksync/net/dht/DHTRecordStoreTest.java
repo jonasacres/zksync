@@ -109,68 +109,75 @@ public class DHTRecordStoreTest {
 	public void testAddRecordForIdAddsRecordIfReachableAndAvailable() throws IOException {
 		DHTID id = makeId();
 		DummyRecord record = new DummyRecord(0);
-		store.addRecordForId(id, record);
-		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id).contains(record)));
+		byte[] token = client.crypto.hash(new byte[1]);
+		store.addRecordForId(id, token, record);
+		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id, token).contains(record)));
 	}
 	
 	@Test
 	public void testAddRecordForIdIgnoresTheRecordIfNoRoomForNewIds() throws IOException {
+		byte[] token = client.crypto.hash(new byte[1]);
 		for(int i = 0; i < DHTRecordStore.MAX_IDS; i++) {
 			DHTID id = makeId();
 			DummyRecord record = new DummyRecord(i);
-			store.addRecordForId(id, record);
+			store.addRecordForId(id, token, record);
 		}
 		
 		assertTrue(Util.waitUntil(50, ()->store.entriesById.size() == DHTRecordStore.MAX_IDS));
 		
 		DHTID id = makeId();
-		store.addRecordForId(id, new DummyRecord(DHTRecordStore.MAX_IDS));
-		assertFalse(Util.waitUntil(50, ()->store.recordsForId(id).size() != 0));
+		store.addRecordForId(id, token, new DummyRecord(DHTRecordStore.MAX_IDS));
+		assertFalse(Util.waitUntil(50, ()->store.recordsForId(id, token).size() != 0));
 	}
 	
 	@Test
 	public void testAddRecordForIdIgnoresTheRecordIfIdIsFull() throws IOException {
 		DHTID id = makeId();
+		byte[] token = client.crypto.hash(new byte[1]);
+		
 		for(int i = 0; i < DHTRecordStore.MAX_RECORDS_PER_ID; i++) {
 			DummyRecord record = new DummyRecord(i);
-			store.addRecordForId(id, record);
+			store.addRecordForId(id, token, record);
 		}
 		
-		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id).size() == DHTRecordStore.MAX_RECORDS_PER_ID));
+		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id, token).size() == DHTRecordStore.MAX_RECORDS_PER_ID));
 		
 		DummyRecord record = new DummyRecord(DHTRecordStore.MAX_RECORDS_PER_ID);
-		store.addRecordForId(id, record);
-		assertFalse(Util.waitUntil(50, ()->store.recordsForId(id).contains(record)));
+		store.addRecordForId(id, token, record);
+		assertFalse(Util.waitUntil(50, ()->store.recordsForId(id, token).contains(record)));
 	}
 	
 	@Test
 	public void testAddRecordForIdIgnoresTheRecordIfUnreachable() throws IOException {
 		DHTID id = makeId();
 		DummyRecord record = new DummyRecord(0);
+		byte[] token = client.crypto.hash(new byte[1]);
 		record.reachable = false;
-		store.addRecordForId(id, record);
-		assertFalse(Util.waitUntil(50, ()->store.recordsForId(id).contains(record)));
+		store.addRecordForId(id, token, record);
+		assertFalse(Util.waitUntil(50, ()->store.recordsForId(id, token).contains(record)));
 	}
 	
 	@Test
 	public void testAddRecordForIdIgnoresRecordIfAlreadyPresent() throws IOException {
 		DHTID id = makeId();
-		store.addRecordForId(id, new DummyRecord(0));
-		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id).size() == 1));
+		byte[] token = client.crypto.hash(new byte[1]);
+		store.addRecordForId(id, token, new DummyRecord(0));
+		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id, token).size() == 1));
 
-		store.addRecordForId(id, new DummyRecord(0));
-		assertFalse(Util.waitUntil(50, ()->store.recordsForId(id).size() != 1));
+		store.addRecordForId(id, token, new DummyRecord(0));
+		assertFalse(Util.waitUntil(50, ()->store.recordsForId(id, token).size() != 1));
 	}
 	
 	@Test
 	public void testAddRecordForIdAllowsRecordAtMultipleIDs() throws IOException {
 		DHTID id0 = makeId(), id1 = makeId();
+		byte[] token = client.crypto.hash(new byte[1]);
 		
-		store.addRecordForId(id0, new DummyRecord(0));
-		store.addRecordForId(id1, new DummyRecord(0));
+		store.addRecordForId(id0, token, new DummyRecord(0));
+		store.addRecordForId(id1, token, new DummyRecord(0));
 		
-		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id0).contains(new DummyRecord(0))));
-		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id1).contains(new DummyRecord(0))));
+		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id0, token).contains(new DummyRecord(0))));
+		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id1, token).contains(new DummyRecord(0))));
 	}
 	
 	@Test
@@ -178,6 +185,7 @@ public class DHTRecordStoreTest {
 		int numRecords = 64, numPrunable = 12;
 		ArrayList<DHTID> ids = new ArrayList<>();
 		DHTID id = null;
+		byte[] token = client.crypto.hash(new byte[1]);
 		
 		Util.setCurrentTimeNanos(0);
 		
@@ -193,7 +201,7 @@ public class DHTRecordStoreTest {
 			}
 			
 			DummyRecord record = new DummyRecord(i);
-			store.addRecordForIdBlocking(id, record);
+			store.addRecordForIdBlocking(id, token, record);
 		}
 		
 		Util.sleep(5);
@@ -202,7 +210,7 @@ public class DHTRecordStoreTest {
 		
 		int numRemaining = 0;
 		for(DHTID idd : ids) {
-			numRemaining += store.recordsForId(idd).size();
+			numRemaining += store.recordsForId(idd, token).size();
 		}
 		
 		assertEquals(numRecords-numPrunable, numRemaining);
@@ -210,23 +218,26 @@ public class DHTRecordStoreTest {
 	
 	@Test
 	public void testRecordsForIdReturnsEmptyListIfIdNotPresent() {
-		assertEquals(0, store.recordsForId(makeId()).size());
+		assertEquals(0, store.recordsForId(makeId(), client.crypto.hash(new byte[1])).size());
 	}
 	
 	@Test
-	public void testRecordsForIdReturnsAllRecordsForId() throws IOException {
-		int numRecords = DHTRecordStore.MAX_RECORDS_PER_ID;
+	public void testRecordsForIdReturnsAllRecordsForIdMatchingToken() throws IOException {
+		int numRecords = DHTRecordStore.MAX_RECORDS_PER_ID-1;
 		ArrayList<DHTRecord> records = new ArrayList<>(numRecords);
 		DHTID id = makeId();
+		byte[] token = client.crypto.hash(new byte[1]);
 		
 		for(int i = 0; i < numRecords; i++) {
 			DHTRecord record = new DummyRecord(i);
 			records.add(record);
-			store.addRecordForIdBlocking(id, record);
+			store.addRecordForIdBlocking(id, token, record);
 		}
 		
-		assertTrue(Util.waitUntil(100, ()->numRecords == store.recordsForId(id).size()));
-		assertTrue(records.containsAll(store.recordsForId(id)));
+		store.addRecordForIdBlocking(id, client.crypto.hash(Util.serializeInt(0)), new DummyRecord(numRecords));
+		
+		assertTrue(Util.waitUntil(100, ()->numRecords == store.recordsForId(id, token).size()));
+		assertTrue(records.containsAll(store.recordsForId(id, token)));
 	}
 	
 	@Test
@@ -235,6 +246,7 @@ public class DHTRecordStoreTest {
 		int numRecords = 64, numPrunable = 12;
 		ArrayList<DHTID> ids = new ArrayList<>();
 		DHTID id = null;
+		byte[] token = client.crypto.hash(new byte[1]);
 		
 		Util.setCurrentTimeNanos(0);
 		
@@ -250,22 +262,22 @@ public class DHTRecordStoreTest {
 			}
 			
 			DummyRecord record = new DummyRecord(i);
-			store.addRecordForIdBlocking(id, record);
+			store.addRecordForIdBlocking(id, token, record);
 		}
 		
 		Util.sleep(10);
 		
 		DHTRecordStore store1 = new DHTRecordStore(client);
 		for(DHTID idd : ids) {
-			assertEquals(store.recordsForId(idd).size(), store1.recordsForId(idd).size());
-			assertTrue(store.recordsForId(idd).containsAll(store1.recordsForId(idd)));
+			assertEquals(store.recordsForId(idd, token).size(), store1.recordsForId(idd, token).size());
+			assertTrue(store.recordsForId(idd, token).containsAll(store1.recordsForId(idd, token)));
 		}
 		
 		Util.setCurrentTimeNanos(1000l*1000l*DHTRecordStore.EXPIRATION_TIME_MS);
 		store1.prune();
 		int numRemaining = 0;
 		for(DHTID idd : ids) {
-			numRemaining += store1.recordsForId(idd).size();
+			numRemaining += store1.recordsForId(idd, token).size();
 		}
 		
 		assertEquals(numRecords-numPrunable, numRemaining);
@@ -274,7 +286,9 @@ public class DHTRecordStoreTest {
 	@Test
 	public void testInitWithCorruptedFile() throws IOException {
 		DHTID id = makeId();
-		store.addRecordForId(id, new DummyRecord(0));
+		byte[] token = client.crypto.hash(new byte[1]);
+	
+		store.addRecordForId(id, token, new DummyRecord(0));
 		assertTrue(Util.waitUntil(100, ()->client.storage.exists(store.path())));
 
 		byte[] data = client.storage.read(store.path());
@@ -282,6 +296,6 @@ public class DHTRecordStoreTest {
 		client.storage.write(store.path(), data);
 		
 		DHTRecordStore store1 = new DHTRecordStore(client);
-		assertEquals(0, store1.recordsForId(id).size());
+		assertEquals(0, store1.recordsForId(id, token).size());
 	}
 }

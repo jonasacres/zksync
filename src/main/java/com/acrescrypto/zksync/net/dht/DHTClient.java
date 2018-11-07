@@ -201,12 +201,13 @@ public class DHTClient {
 			for(DHTPeer peer : peers) {
 				if(Arrays.equals(key.publicKey().getBytes(), peer.key.getBytes())) {
 					try {
-						store.addRecordForId(searchId, record);
+						byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, peer.key.getBytes()));
+						store.addRecordForId(searchId, token, record);
 					} catch (IOException exc) {
 						logger.error("Encountered exception adding record", exc);
 					}
 				} else {
-					peer.addRecord(searchId, record);
+					peer.addRecord(searchId, lookupKey, record);
 				}
 			}
 		}, (existingRecord)->{
@@ -409,11 +410,17 @@ public class DHTClient {
 	}
 	
 	protected void processRequestFindNode(DHTMessage message) throws ProtocolViolationException, UnsupportedProtocolException {
-		assertSupportedState(message.payload.length == idLength());
-		DHTID id = new DHTID(message.payload);
+		assertSupportedState(message.payload.length == idLength() + crypto.hashLength());
+		ByteBuffer buf = ByteBuffer.wrap(message.payload);
+		byte[] idBytes = new byte[idLength()];
+		byte[] token = new byte[crypto.hashLength()];
+		buf.get(idBytes);
+		buf.get(token);
+		
+		DHTID id = new DHTID(idBytes);
 		
 		DHTMessage response = message.makeResponse(routingTable.closestPeers(id, DHTSearchOperation.maxResults));
-		response.addItemList(store.recordsForId(id));
+		response.addItemList(store.recordsForId(id, token));
 		response.send();
 	}
 	
@@ -423,8 +430,10 @@ public class DHTClient {
 		assertSupportedState(validAuthTag(message.peer, message.authTag));
 		
 		byte[] idRaw = new byte[idLength()];
-		assertSupportedState(buf.remaining() > idRaw.length);
+		byte[] token = new byte[crypto.hashLength()];
+		assertSupportedState(buf.remaining() > idRaw.length + crypto.hashLength());
 		buf.get(idRaw);
+		buf.get(token);
 		DHTID id = new DHTID(idRaw);
 		
 		assertSupportedState(buf.remaining() > 0);
@@ -433,7 +442,7 @@ public class DHTClient {
 		assertSupportedState(record.isValid());
 		
 		try {
-			store.addRecordForId(id, record);
+			store.addRecordForId(id, token, record);
 		} catch(IOException exc) {
 			logger.error("Encountered exception adding record from {}", message.peer.address, exc);
 		}
@@ -471,10 +480,11 @@ public class DHTClient {
 		return new DHTMessage(recipient, DHTMessage.CMD_FIND_NODE, buf.array(), callback);
 	}
 	
-	protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, DHTRecord record, DHTMessageCallback callback) {
+	protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, Key lookupKey, DHTRecord record, DHTMessageCallback callback) {
 		byte[] serializedRecord = record.serialize();
-		ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + serializedRecord.length);
+		ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + crypto.hashLength() + serializedRecord.length);
 		buf.put(id.rawId);
+		buf.put(lookupKey.authenticate(Util.concat(id.rawId, recipient.key.getBytes())));
 		buf.put(record.serialize());
 		return new DHTMessage(recipient, DHTMessage.CMD_ADD_RECORD, buf.array(), callback);
 	}

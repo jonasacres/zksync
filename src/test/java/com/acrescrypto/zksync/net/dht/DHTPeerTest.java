@@ -61,10 +61,11 @@ public class DHTPeerTest {
 		}
 		
 		@Override
-		protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, DHTRecord record, DHTMessageCallback callback) {
+		protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, Key lookupKey, DHTRecord record, DHTMessageCallback callback) {
 			reqId = id;
 			reqRecord = record;
 			reqPeer = recipient;
+			reqKey = lookupKey;
 			
 			byte[] serializedRecord = record.serialize();
 			ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + serializedRecord.length + recipient.remoteAuthTag.length);
@@ -526,14 +527,16 @@ public class DHTPeerTest {
 	public void testAddRecordSendsAddRecordRequestToPeer() {
 		DHTPeer peer = makeTestPeer();
 		DHTID id = makeId();
+		Key lookupKey = new Key(crypto);
 		DummyRecord record = makeAdRecord(0);
 		peer.remoteAuthTag = crypto.rng(crypto.hashLength());
 		
-		peer.addRecord(id, record);
+		peer.addRecord(id, lookupKey, record);
 		assertNotNull(client.msg);
 		assertEquals(peer, client.reqPeer);
 		assertEquals(DHTMessage.CMD_ADD_RECORD, client.msg.cmd);
 		assertEquals(id, client.reqId);
+		assertEquals(lookupKey, client.reqKey);
 		assertEquals(record, client.reqRecord);
 		assertTrue(client.msg.sent);
 	}
