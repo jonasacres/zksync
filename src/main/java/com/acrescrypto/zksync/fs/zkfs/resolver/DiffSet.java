@@ -53,7 +53,12 @@ public class DiffSet {
 	
 	/** all inode IDs differing in the revisions of this set, excluding inode table, revision info and freelist */
 	public HashSet<Long> allInodes() throws IOException {
-		// TODO Release: (design) Can merges be O(n) with number of changes? Right now, O(n) with number of files.
+		/* This is murderous on archives with huge numbers of inodes, and could likely be avoided
+		 * with a more thoughtful means of comparing the revision set.
+		 * 
+		 * Merges in general are expensive on such archives, since they're O(n) with the total
+		 * number of inodes. This is an opportunity for considerable improvement...
+		 */
 		HashSet<Long> allInodes = new HashSet<Long>();
 		for(RevisionTag rev : revisions) {
 			for(Inode inode : rev.readOnlyFS().getInodeTable().values()) {
