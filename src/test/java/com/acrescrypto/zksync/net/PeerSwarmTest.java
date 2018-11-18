@@ -416,18 +416,18 @@ public class PeerSwarmTest {
 	@Test
 	public void testStopsConnectingToAdsWhenMaxSocketCountReached() throws InterruptedException {
 		int initial = connectedAddresses.size();
-		for(int i = 0; i < 2*swarm.maxSocketCount; i++) {
+		for(int i = 0; i < 2*swarm.getMaxSocketCount(); i++) {
 			swarm.addPeerAdvertisement(new DummyAdvertisement("ad-"+i));
 		}
 		
-		Util.waitUntil(2000, ()->connectedAddresses.size() - initial >= swarm.maxSocketCount);
-		assertEquals(swarm.maxSocketCount, connectedAddresses.size() - initial);
+		Util.waitUntil(2000, ()->connectedAddresses.size() - initial >= swarm.getMaxSocketCount());
+		assertEquals(swarm.getMaxSocketCount(), connectedAddresses.size() - initial);
 	}
 	
 	@Test
 	public void testDoesNotDuplicateConnectionsToAds() throws InterruptedException {
 		int initial = connectedAddresses.size();
-		for(int i = 0; i < swarm.maxSocketCount; i++) {
+		for(int i = 0; i < swarm.getMaxSocketCount(); i++) {
 			swarm.addPeerAdvertisement(new DummyAdvertisement("ad-1"));
 		}
 		

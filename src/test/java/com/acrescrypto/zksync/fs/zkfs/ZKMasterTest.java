@@ -122,8 +122,9 @@ public class ZKMasterTest {
 	public void testCreateArchiveWithWriteRootCreatesArchiveAppropriately() throws IOException {
 		String desc = "happy archive";
 		int size = 12345;
+		Key readRoot = new Key(master.crypto);
 		Key writeRoot = new Key(master.crypto);
-		ZKArchive archive = master.createArchiveWithWriteRoot(size, desc, writeRoot);
+		ZKArchive archive = master.createArchiveWithWriteRoot(size, desc, readRoot, writeRoot);
 		assertEquals(size, archive.getConfig().getPageSize());
 		assertEquals(desc, archive.getConfig().getDescription());
 		assertArrayEquals(writeRoot.getRaw(), archive.getConfig().writeRoot.getRaw());

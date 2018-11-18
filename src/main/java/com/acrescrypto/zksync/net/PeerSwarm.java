@@ -41,6 +41,8 @@ public class PeerSwarm implements BlacklistCallback {
 	public final static int EMBARGO_SOFT_EXPIRE_TIME_MS = 1000; // wait 1s before retrying an ad before it is classified as consistently unconnectable
 	public final static int EMBARGO_FAIL_COUNT_THRESHOLD = 3; // how many times do we try an ad before deeming it consistently unconnectable?
 	public final static int DEFAULT_WAIT_PAGE_RETRY_TIME_MS = 5000; // how often should waitForPage retry requests for the page it is waiting in?
+	public final static int DEFAULT_MAX_SOCKET_COUNT = 128;
+	public final static int DEFAULT_MAX_PEER_LIST_SIZE = 1024;
 	
 	protected ArrayList<PeerConnection> connections = new ArrayList<PeerConnection>();
 	protected HashSet<PeerAdvertisement> knownAds = new HashSet<PeerAdvertisement>();
@@ -54,13 +56,15 @@ public class PeerSwarm implements BlacklistCallback {
 	protected GroupedThreadPool threadPool;
 	
 	protected Lock pageWaitLock = new ReentrantLock();
+	protected Lock connectionWaitLock = new ReentrantLock();
+	protected Condition connectionWaitCondition = connectionWaitLock.newCondition();
 	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
 	
 	protected boolean closed;
 	protected int activeSockets;
 	
-	int maxSocketCount = 128;
-	int maxPeerListSize = 1024;
+	private int maxSocketCount = DEFAULT_MAX_SOCKET_COUNT;
+	int maxPeerListSize = DEFAULT_MAX_PEER_LIST_SIZE;
 	int waitPageRetryTimeMs = DEFAULT_WAIT_PAGE_RETRY_TIME_MS;
 	
 	public PeerSwarm(ZKArchiveConfig config) throws IOException {
@@ -170,6 +174,13 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 		
 		pool.addRequestsToConnection(connection);
+		
+		connectionWaitLock.lock();
+		try {
+			connectionWaitCondition.signal();
+		} finally {
+			connectionWaitLock.unlock();
+		}
 	}
 	
 	public synchronized void closedConnection(PeerConnection connection) {
@@ -225,7 +236,7 @@ public class PeerSwarm implements BlacklistCallback {
 			Util.setThreadName("PeerSwarm connection thread");
 			while(!closed) {
 				PeerAdvertisement ad = selectConnectionAd();
-				if(ad == null || activeSockets >= maxSocketCount) {
+				if(ad == null || activeSockets >= getMaxSocketCount()) {
 					Util.sleep(100);
 					continue;
 				}
@@ -315,6 +326,24 @@ public class PeerSwarm implements BlacklistCallback {
 				}
 			}
 		});
+	}
+	
+	public void waitForPeers(long timeoutMs) {
+		// TODO API: (test) waitForPeers
+		if(timeoutMs <= 0) timeoutMs = Long.MAX_VALUE;
+		
+		long timeStart = System.currentTimeMillis(), deadline = timeStart + timeoutMs;
+		
+		if(connections.size() > 0) return;
+		connectionWaitLock.lock();
+		try {
+			while(connections.size() == 0 && !closed && System.currentTimeMillis() < deadline) {
+				connectionWaitCondition.await(1, TimeUnit.MILLISECONDS);
+			}
+		} catch (InterruptedException e) {
+		} finally {
+			connectionWaitLock.unlock();
+		}
 	}
 	
 	public void waitForPage(int priority, byte[] tag) {
@@ -431,6 +460,11 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
+	public boolean isRequestingAll() {
+		// TODO API (test) isRequestingAll
+		return pool.requestingEverything; 
+	}
+
 	public void setPaused(boolean paused) {
 		pool.setPaused(paused);
 		for(PeerConnection connection : getConnections()) {
@@ -503,5 +537,14 @@ public class PeerSwarm implements BlacklistCallback {
 		for(PeerConnection connection : connections) {
 			System.out.printf("\t\tConnection %2d: %s\n", i++, Util.bytesToHex(connection.socket.remoteIdentityKey.getBytes()) + " " + (connection.socket.isLocalRoleClient() ? "client" : "server"));
 		}
+	}
+
+	public int getMaxSocketCount() {
+		return maxSocketCount;
+	}
+
+	public void setMaxSocketCount(int maxSocketCount) {
+		// TODO API: (implement) Drop peers to enforce new max socket count if necesssary
+		this.maxSocketCount = maxSocketCount;
 	}
 }

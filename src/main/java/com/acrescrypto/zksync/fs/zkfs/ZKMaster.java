@@ -149,16 +149,24 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		if(storage.exists("/")) storage.rmrf("/");
 	}
 	
-	public ZKArchive createDefaultArchive() throws IOException {
-		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive");
+	public ZKArchive createDefaultArchive(byte[] passphrase) throws IOException {
 		ArchiveAccessor accessor = makeAccessorForPassphrase(passphrase);
 		ZKArchiveConfig config = ZKArchiveConfig.createDefault(accessor);
 		return config.archive;
 	}
 	
+	public ZKArchive createDefaultArchive() throws IOException {
+		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive");
+		return createDefaultArchive(passphrase);
+	}
+	
 	public ZKArchive createArchive(int pageSize, String description) throws IOException {
 		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for new archive '" + description + "'");
-		ArchiveAccessor accessor = makeAccessorForPassphrase(passphrase);
+		return createArchiveWithPassphrase(pageSize, description, passphrase);
+	}
+	
+	public ZKArchive createArchiveWithPassphrase(int pageSize, String description, byte[] readPassphrase) throws IOException {
+		ArchiveAccessor accessor = makeAccessorForPassphrase(readPassphrase);
 		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, description, pageSize);
 		return config.archive;
 	}
@@ -173,9 +181,15 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		return config.archive;
 	}
 	
-	public ZKArchive createArchiveWithWriteRoot(int pageSize, String description, Key writeRoot) throws IOException {
-		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for reading new archive '" + description + "'");
-		ArchiveAccessor accessor = makeAccessorForPassphrase(passphrase);
+	public ZKArchive createArchiveWithPassphrase(int pageSize, String description, byte[] readPassphrase, byte[] writePassphrase) throws IOException {
+		// TODO API: (test) test this
+		Key writeRoot = new Key(crypto, crypto.deriveKeyFromPassphrase(writePassphrase));
+		Key readRoot = new Key(crypto, crypto.deriveKeyFromPassphrase(readPassphrase));
+		return createArchiveWithWriteRoot(pageSize, description, readRoot, writeRoot);
+	}
+	
+	public ZKArchive createArchiveWithWriteRoot(int pageSize, String description, Key readRoot, Key writeRoot) throws IOException {
+		ArchiveAccessor accessor = makeAccessorForRoot(readRoot, false);
 		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, description, pageSize, accessor.passphraseRoot, writeRoot);
 		return config.archive;
 	}

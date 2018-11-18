@@ -127,6 +127,15 @@ public class ZKArchiveConfig {
 		write();
 	}
 	
+	public ZKArchiveConfig finishOpeningFromSwarm(long timeoutMs) throws IOException {
+		// TODO API: (test) finishOpeningFromSwarm
+		accessor.master.getTCPListener().advertise(swarm);
+		getAccessor().discoverOnDHT();
+		swarm.waitForPeers(timeoutMs);
+		this.finishOpening();
+		return this;
+	}
+	
 	public ZKArchiveConfig finishOpening() throws IOException {
 		if(archive != null) return this;
 		
@@ -554,5 +563,11 @@ public class ZKArchiveConfig {
 
 	public boolean isReadOnly() {
 		return writeRoot == null;
+	}
+	
+	public boolean usesWriteKey() {
+		if(archiveRoot == null) return true;
+		PrivateSigningKey key = accessor.master.crypto.makePrivateSigningKey(archiveRoot.getRaw());
+		return !Util.safeEquals(key.publicKey().getBytes(), pubKey.getBytes());
 	}
 }
