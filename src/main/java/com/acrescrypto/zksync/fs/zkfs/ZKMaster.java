@@ -73,6 +73,14 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		}
 	}
 	
+	public static ZKMaster open(PassphraseProvider ppProvider, FS storage) throws IOException {
+		try {
+			return new ZKMaster(new CryptoSupport(), storage, ppProvider);
+		} catch (InvalidBlacklistException e) {
+			throw new RuntimeException();
+		}
+	}
+	
 	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) throws IOException {
 		try {
 			return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
@@ -94,6 +102,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive(ArchiveAccessor.KEY_INDEX_BLACKLIST, "blacklist".getBytes()));
 		this.dhtClient = new DHTClient(localKey.derive(ArchiveAccessor.KEY_INDEX_DHT_STORAGE, "dht-storage".getBytes()), this);
 		this.dhtDiscovery = new DHTZKArchiveDiscovery();
+		listener = new TCPPeerSocketListener(this);
 		loadStoredAccessors();
 	}
 	
@@ -105,7 +114,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	// Expect this to be deprecated someday.
 	public void listenOnTCP(int port) throws IOException {
-		listener = new TCPPeerSocketListener(this, port);
+		listener.startListening(port);
 	}
 	
 	public void getLocalKey() throws IOException {
@@ -219,7 +228,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 	
 	public ArchiveAccessor makeAccessorForPassphrase(byte[] passphrase) {
-		byte[] passphraseRootRaw = crypto.deriveKeyFromPassphrase("zksync".getBytes());
+		byte[] passphraseRootRaw = crypto.deriveKeyFromPassphrase(passphrase);
 		Key passphraseRoot = new Key(crypto, passphraseRootRaw);
 		return makeAccessorForRoot(passphraseRoot, false);
 	}
@@ -283,7 +292,11 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		} catch (IOException e) {
 		}
 	}
-
+	
+	public StoredAccess storedAccess() {
+		return storedAccess;
+	}
+	
 	protected boolean attemptPassphraseKey(Key ppKey) throws IOException {
 		MutableSecureFile keyFile = MutableSecureFile.atPath(storage, KEYFILE, ppKey);
 		if(storage.exists(KEYFILE)) {

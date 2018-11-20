@@ -232,4 +232,20 @@ public abstract class FS {
 			}
 		}
 	}
+	
+	public long storageSize(String path) throws IOException {
+		// TODO API: test FS.storageSize
+		long totalSize = 0;
+		
+		Stat s = stat(path);
+		if(s.isDirectory()) {
+			for(String item : opendir(path).listRecursive(0)) {
+				totalSize += stat(item).size;
+			}
+		} else if(s.isRegularFile() || s.isSymlink()) {
+			totalSize = s.size;
+		}
+		
+		return totalSize;
+	}
 }

@@ -25,7 +25,9 @@ public class TCPPeerAdvertisementListener {
 		this.crypto = swarm.config.getAccessor().getMaster().getCrypto();
 		this.listener = listener;
 		this.version = 0;
-		announce();
+		if(listener.isListening()) {
+			announce();
+		}
 	}
 	
 	public boolean matchesKeyHash(PublicDHKey remotePubKey, byte[] keyHash) {

@@ -21,9 +21,20 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	
 	class DiscoveryEntry {
 		ArchiveAccessor accessor;
+		int count;
 		
 		public DiscoveryEntry(ArchiveAccessor accessor) {
 			this.accessor = accessor;
+		}
+		
+		public synchronized boolean increment() {
+			count++;
+			return count == 1;
+		}
+		
+		public synchronized boolean decrement() {
+			count--;
+			return count <= 0;
 		}
 		
 		@Override
@@ -51,15 +62,25 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 
 	@Override
 	public synchronized void discoverArchives(ArchiveAccessor accessor) {
-		DiscoveryEntry entry = new DiscoveryEntry(accessor);
-		activeDiscoveries.put(accessor, entry);
-		new Thread(accessor.getThreadGroup(), ()->discoveryThread(entry)).start();
-		new Thread(accessor.getThreadGroup(), ()->advertisementThread(entry)).start();
+		if(!activeDiscoveries.containsKey(accessor)) {
+			activeDiscoveries.put(accessor, new DiscoveryEntry(accessor));
+		}
+		
+		DiscoveryEntry entry = activeDiscoveries.get(accessor);
+		if(entry.increment()) {
+			new Thread(accessor.getThreadGroup(), ()->discoveryThread(entry)).start();
+			new Thread(accessor.getThreadGroup(), ()->advertisementThread(entry)).start();
+		}
 	}
 
 	@Override
 	public synchronized void stopDiscoveringArchives(ArchiveAccessor accessor) {
-		activeDiscoveries.remove(accessor);
+		DiscoveryEntry entry = activeDiscoveries.get(accessor);
+		if(entry == null) return;
+		if(entry.decrement()) {
+			// TODO API: (test) Test increment/decrement-based deletions
+			activeDiscoveries.remove(accessor);
+		}
 	}
 
 	protected void discoveryThread(DiscoveryEntry entry) {
@@ -136,8 +157,9 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	}
 	
 	protected void advertise(DiscoveryEntry entry) {
+		if(!entry.accessor.getMaster().getTCPListener().isListening()) return;
 		for(ZKArchiveConfig config : entry.accessor.knownArchiveConfigs()) {
-			if(entry.accessor.getMaster().getTCPListener() == null) continue;
+			if(!config.isAdvertising()) continue;
 			TCPPeerAdvertisementListener listener = entry.accessor.getMaster().getTCPListener().listenerForSwarm(config.getSwarm());
 			if(listener == null) continue;
 			

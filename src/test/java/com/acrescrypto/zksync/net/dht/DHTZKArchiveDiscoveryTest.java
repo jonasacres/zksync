@@ -187,9 +187,9 @@ public class DHTZKArchiveDiscoveryTest {
 		Util.setCurrentTimeMillis(100*ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS);
 		
 		master.listenOnTCP(0);
-		master.getTCPListener().advertise(archive.getConfig().getSwarm());
+		archive.getConfig().advertise();
 		discovery.discoverArchives(archive.getConfig().getAccessor());
-		assertTrue(Util.waitUntil(50, ()->client.records.size() > 0));
+		assertTrue(Util.waitUntil(100, ()->client.records.size() > 0));
 		
 		for(int i = -1; i <= 1; i++) {
 			DHTID id = new DHTID(archive.getConfig().getAccessor().temporalSeedId(i));
@@ -206,8 +206,8 @@ public class DHTZKArchiveDiscoveryTest {
 	@Test
 	public void testAdvertisementThreadWaitsIntervalBetweenListings() throws IOException {
 		master.listenOnTCP(0);
-		master.getTCPListener().advertise(archive.getConfig().getSwarm());
 		discovery.advertisementIntervalMs = 50;
+		archive.getConfig().advertise();
 		discovery.discoverArchives(archive.getConfig().getAccessor());
 		assertTrue(Util.waitUntil(discovery.advertisementIntervalMs, ()->!client.records.isEmpty()));
 		
@@ -237,6 +237,7 @@ public class DHTZKArchiveDiscoveryTest {
 	
 	@Test
 	public void testAdvertisementThreadActivatesIfSwarmListenerAddedAfterLaunch() throws IOException {
+		archive.getConfig().advertise();
 		discovery.discoverArchives(archive.getConfig().getAccessor());
 		assertFalse(Util.waitUntil(50, ()->client.records.size() > 0));
 		master.listenOnTCP(0);
@@ -247,7 +248,7 @@ public class DHTZKArchiveDiscoveryTest {
 	@Test
 	public void testForceUpdateTriggersImmediateAdvertisement() throws IOException {
 		master.listenOnTCP(0);
-		master.getTCPListener().advertise(archive.getConfig().getSwarm());
+		archive.getConfig().advertise();
 		discovery.advertisementIntervalMs = 1000;
 		discovery.discoverArchives(archive.getConfig().getAccessor());
 		assertTrue(Util.waitUntil(50, ()->!client.records.isEmpty()));
@@ -259,7 +260,7 @@ public class DHTZKArchiveDiscoveryTest {
 	@Test
 	public void testForceUpdateTriggersImmediateDiscovery() throws IOException {
 		master.listenOnTCP(0);
-		master.getTCPListener().advertise(archive.getConfig().getSwarm());
+		archive.getConfig().advertise();
 		discovery.discoveryIntervalMs = 1000;
 		discovery.discoverArchives(archive.getConfig().getAccessor());
 		assertTrue(Util.waitUntil(discovery.discoveryIntervalMs, ()->client.searchId != null));

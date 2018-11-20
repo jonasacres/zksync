@@ -67,13 +67,6 @@ public class ZKMasterTest {
 	}
 	
 	@Test
-	public void testGetTCPListenerReturnsTCPListener() throws IOException {
-		assertNull(master.getTCPListener());
-		master.listenOnTCP(0);
-		assertNotNull(master.getTCPListener());
-	}
-	
-	@Test
 	public void testGetCryptoReturnsCryptoSupport() {
 		assertNotNull(master.getCrypto());
 	}

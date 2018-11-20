@@ -8,15 +8,17 @@ import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class StoredAccessRecord {
-	private ZKArchive archive;
+	private ZKArchiveConfig config;
 	private ArchiveAccessor accessor;
 	private Key writeKey;
 	protected byte[] archiveId;
-	protected boolean seedOnly, locallyInstantiated;
+	protected boolean locallyInstantiated;
+	protected int accessLevel;
 	
-	public StoredAccessRecord(ZKArchive archive, boolean seedOnly) {
-		this.seedOnly = seedOnly;
-		this.archive = archive;
+	public StoredAccessRecord(ZKArchiveConfig config, int accessLevel) {
+		this.config = config;
+		this.archiveId = config.getArchiveId();
+		this.accessLevel = accessLevel;
 	}
 	
 	public StoredAccessRecord(ZKMaster master, ByteBuffer buf) throws IOException {
@@ -24,33 +26,34 @@ public class StoredAccessRecord {
 	}
 	
 	public void close() {
-		if(locallyInstantiated) archive.close();
+		if(locallyInstantiated) config.close();
 	}
 	
-	public synchronized ZKArchive getArchive() throws IOException {
-		if(archive == null) {
-			ZKArchiveConfig config = ZKArchiveConfig.openExisting(accessor, archiveId, true, writeKey);
-			archive = config.getArchive();
+	public synchronized ZKArchiveConfig getConfig() throws IOException {
+		if(config == null) {
+			config = ZKArchiveConfig.openExisting(accessor, archiveId, true, writeKey);
 		}
-		return archive;
+		
+		return config;
 	}
 	
 	protected byte[] serialize() {
-		boolean writeAsSeed = seedOnly || archive.config.accessor.isSeedOnly();
-		int type = writeAsSeed ? 1 : 0;
+		boolean writeSeedKey = accessLevel >= StoredAccess.ACCESS_LEVEL_SEED;
+		boolean writeReadKey = accessLevel >= StoredAccess.ACCESS_LEVEL_READ && !config.getAccessor().isSeedOnly();
+		boolean writeWriteKey = accessLevel >= StoredAccess.ACCESS_LEVEL_READWRITE && !config.isReadOnly();
 		
 		return Util.concat(
-				Util.serializeShort((short) 0), // version
-				new byte[] { (byte) type },
-				archive.config.accessor.seedRoot.getRaw(),
-				keyIfDesired(!writeAsSeed, archive.config.accessor.passphraseRoot),
-				keyIfDesired(!writeAsSeed, archive.config.writeRoot),
-				archive.config.archiveId
+				Util.serializeInt(0), // reserved
+				Util.serializeInt(accessLevel),
+				keyIfDesired(writeSeedKey, config.accessor.seedRoot),
+				keyIfDesired(writeReadKey, config.accessor.passphraseRoot),
+				keyIfDesired(writeWriteKey, config.writeRoot),
+				config.archiveId
 				);
 	}
 	
 	protected byte[] keyIfDesired(boolean desired, Key key) {
-		if(!desired || key == null) return new byte[archive.crypto.symKeyLength()];
+		if(!desired || key == null) return new byte[config.getCrypto().symKeyLength()];
 		return key.getRaw();
 	}
 	
@@ -63,11 +66,11 @@ public class StoredAccessRecord {
 	}
 	
 	protected void deserialize(ZKMaster master, ByteBuffer buf) throws IOException {
-		int version = Util.unsignShort(buf.getShort());
+		int version = buf.getInt();
 		if(version != 0) throw new EINVALException("unsupported version");
 		
-		byte type = buf.get();
-		if(type > 1) throw new EINVALException("unsupported record type");
+		accessLevel = buf.getInt();
+		if(accessLevel > StoredAccess.ACCESS_LEVEL_READWRITE) throw new EINVALException("unsupported record type");
 		
 		byte[] seedKeyRaw = new byte[master.crypto.symKeyLength()];
 		buf.get(seedKeyRaw);
@@ -81,18 +84,25 @@ public class StoredAccessRecord {
 		archiveId = new byte[master.crypto.hashLength()];
 		buf.get(archiveId);
 		
-		this.seedOnly = type != 0;
 		Key seedKey = new Key(master.crypto, seedKeyRaw);
 		Key passphraseKey = isBlank(passphraseKeyRaw) ? null : new Key(master.crypto, passphraseKeyRaw);
 		
 		writeKey = isBlank(writeKeyRaw) ? null : new Key(master.crypto, writeKeyRaw);
+		boolean seedOnly = accessLevel <= StoredAccess.ACCESS_LEVEL_SEED || isBlank(passphraseKeyRaw);
 		accessor = master.makeAccessorForRoot(seedOnly ? seedKey : passphraseKey, seedOnly);
-		ZKArchiveConfig config = ZKArchiveConfig.openExisting(accessor, archiveId, false, writeKey);
+		config = ZKArchiveConfig.openExisting(accessor, archiveId, false, writeKey);
 		if(config.haveConfigLocally()) {
 			config.finishOpening();
-			archive = config.getArchive();
 		}
 		
 		locallyInstantiated = true;
+	}
+	
+	public byte[] getArchiveId() {
+		return archiveId;
+	}
+	
+	public int getAccessLevel() {
+		return accessLevel;
 	}
 }

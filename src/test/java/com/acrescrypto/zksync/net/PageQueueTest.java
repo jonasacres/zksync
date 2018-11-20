@@ -108,7 +108,7 @@ public class PageQueueTest {
 		double f = 1;
 		for(int i = 0; i < 4; i++) {
 			if(i > 1) f /= i;
-			assertTrue(Math.abs(matches[i]/r - p*f) < 0.065);
+			assertTrue(Math.abs(matches[i]/r - p*f) < 0.07);
 		}
 	}
 	

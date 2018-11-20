@@ -45,6 +45,7 @@ public class TCPPeerAdvertisementListenerTest {
 		}
 		
 		@Override protected void listenThread() {}
+		@Override public boolean isListening() { return true; }
 	}
 	
 	static ZKMaster master;

@@ -17,6 +17,7 @@ public class ArchiveAccessor {
 	public final static int KEY_ROOT_ARCHIVE = 1;
 	public final static int KEY_ROOT_SEED = 2;
 	public final static int KEY_ROOT_LOCAL = 3;
+	public final static int KEY_ROOT_WRITE = 4;
 	
 	public final static int KEY_TYPE_CIPHER = 0;
 	public final static int KEY_TYPE_AUTH = 1;
@@ -175,6 +176,14 @@ public class ArchiveAccessor {
 		passphraseRoot = null;
 		configFileKey = null;
 		type = KEY_ROOT_SEED;
+	}
+	
+	public void setPassphraseRoot(Key passphraseRoot) {
+		deriveFromPassphraseRoot(passphraseRoot);
+	}
+	
+	public void setSeedRoot(Key seedRoot) {
+		deriveFromSeedRoot(seedRoot);
 	}
 
 	public Key deriveKey(int root, int type, int index, byte[] tweak) {

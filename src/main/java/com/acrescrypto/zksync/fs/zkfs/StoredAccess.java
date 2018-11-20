@@ -13,6 +13,11 @@ import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveDiscovery;
 import com.acrescrypto.zksync.utility.Util;
 
 public class StoredAccess implements ArchiveDiscovery {
+	public final static int ACCESS_LEVEL_NONE = 0;
+	public final static int ACCESS_LEVEL_SEED = 1;
+	public final static int ACCESS_LEVEL_READ = 2;
+	public final static int ACCESS_LEVEL_READWRITE = 3;
+	
 	protected ArrayList<StoredAccessRecord> records = new ArrayList<StoredAccessRecord>();
 	protected ZKMaster master;
 	protected Key storageKey;
@@ -22,23 +27,31 @@ public class StoredAccess implements ArchiveDiscovery {
 		storageKey = master.localKey.derive(ArchiveAccessor.KEY_INDEX_STORED_ACCESS, new byte[0]);
 	}
 	
-	public void storeArchiveAccess(ZKArchive archive, boolean forceSeedOnly) throws IOException {
+	public void storeArchiveAccess(ZKArchiveConfig config, int accessLevel) throws IOException {
 		for(StoredAccessRecord record : records) {
-			if(Arrays.equals(record.getArchive().config.archiveId, archive.config.archiveId)) {
-				if(record.seedOnly == forceSeedOnly) return;
+			if(Arrays.equals(config.archiveId, record.archiveId)) {
+				if(record.accessLevel == accessLevel) return;
 				records.remove(record);
 				break;
 			}
 		}
 		
-		records.add(new StoredAccessRecord(archive, forceSeedOnly));
+		records.add(new StoredAccessRecord(config, accessLevel));
 		write();
 	}
 	
-	public void deleteArchiveAccess(ZKArchive archive) throws IOException {
+	public StoredAccessRecord recordForArchiveId(byte[] archiveId) {
+		for(StoredAccessRecord record : records) {
+			if(Arrays.equals(record.archiveId, archiveId)) return record;
+		}
+		
+		return null;
+	}
+	
+	public void deleteArchiveAccess(ZKArchiveConfig config) throws IOException {
 		StoredAccessRecord killableRecord = null;
 		for(StoredAccessRecord record : records) {
-			if(Arrays.equals(record.getArchive().config.archiveId, archive.config.archiveId)) {
+			if(Arrays.equals(record.getConfig().archiveId, config.archiveId)) {
 				killableRecord = record;
 				break;
 			}
@@ -49,12 +62,12 @@ public class StoredAccess implements ArchiveDiscovery {
 			write();
 		}
 		
-		master.removedArchiveConfig(archive.config);
+		master.removedArchiveConfig(config);
 	}
 	
 	public void purge() throws IOException {
 		for(StoredAccessRecord record : records) {
-			master.removedArchiveConfig(record.getArchive().config);
+			master.removedArchiveConfig(record.getConfig());
 		}
 		
 		records.clear();

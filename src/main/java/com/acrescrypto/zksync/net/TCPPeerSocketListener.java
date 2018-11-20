@@ -37,14 +37,23 @@ public class TCPPeerSocketListener {
 	protected LinkedList<Long> recentProofs;
 	protected boolean closed, established;
 	
-	public TCPPeerSocketListener(ZKMaster master, int port) throws IOException {
+	public TCPPeerSocketListener(ZKMaster master) throws IOException {
 		this.crypto = master.getCrypto();
 		this.blacklist = master.getBlacklist();
-		this.requestedPort = port;
 		this.master = master;
-		this.port = port == 0 ? cachedPort() : port;
 		this.adListeners = new LinkedList<>();
 		this.recentProofs = new LinkedList<>();
+	}
+	
+	public TCPPeerSocketListener(ZKMaster master, int port) throws IOException {
+		this(master);
+		startListening(port);
+	}
+	
+	public void startListening(int port) {
+		this.requestedPort = port;
+		this.port = port == 0 ? cachedPort() : port;
+		closed = false;
 		this.thread = new Thread(master.getThreadGroup(), ()->listenThread() );
 		this.thread.start();
 	}
@@ -64,6 +73,11 @@ public class TCPPeerSocketListener {
 	public synchronized void advertise(PeerSwarm swarm) {
 		adListeners.add(new TCPPeerAdvertisementListener(swarm, this));
 		swarm.config.getAccessor().forceAdvertisement();
+	}
+	
+	public synchronized void stopAdvertising(PeerSwarm swarm) {
+		// TODO API: (test) stopAdvertising
+		adListeners.removeIf((listener)->listener.swarm == swarm);
 	}
 	
 	public synchronized TCPPeerAdvertisementListener listenerForSwarm(PeerSwarm swarm) {
@@ -298,5 +312,9 @@ public class TCPPeerSocketListener {
 		while(recentProofs.size() > MAX_RECENT_PROOFS) {
 			recentProofs.removeFirst();
 		}
+	}
+
+	public boolean isListening() {
+		return listenSocket != null && !closed;
 	}
 }

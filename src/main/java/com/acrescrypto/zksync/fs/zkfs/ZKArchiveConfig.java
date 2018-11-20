@@ -10,6 +10,7 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateSigningKey;
 import com.acrescrypto.zksync.crypto.PublicSigningKey;
 import com.acrescrypto.zksync.crypto.SignedSecureFile;
+import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
@@ -52,6 +53,7 @@ public class ZKArchiveConfig {
 	protected PeerSwarm swarm;
 	protected RevisionList revisionList;
 	protected RevisionTree revisionTree;
+	protected boolean advertising;
 	
 	public static byte[] decryptArchiveId(ArchiveAccessor accessor, byte[] iv, byte[] encryptedArchiveId) {
 		Key key = accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_AD_ARCHIVE_ID);
@@ -128,11 +130,14 @@ public class ZKArchiveConfig {
 	}
 	
 	public ZKArchiveConfig finishOpeningFromSwarm(long timeoutMs) throws IOException {
-		// TODO API: (test) finishOpeningFromSwarm
-		accessor.master.getTCPListener().advertise(swarm);
-		getAccessor().discoverOnDHT();
+		advertise();
+		if(haveConfigLocally()) return this;
 		swarm.waitForPeers(timeoutMs);
-		this.finishOpening();
+		if(swarm.getConnections().size() > 0) {
+			this.finishOpening();
+		} else {
+			throw new SearchFailedException(); // TODO: this is probably not a great exception for this
+		}
 		return this;
 	}
 	
@@ -179,7 +184,7 @@ public class ZKArchiveConfig {
 	}
 	
 	public boolean haveConfigLocally() {
-		return storage.exists(Page.pathForTag(tag()));
+		return storage.getCacheFS().exists(Page.pathForTag(tag()));
 	}
 	
 	public void read() throws IOException {
@@ -257,6 +262,7 @@ public class ZKArchiveConfig {
 	
 	public void close() {
 		swarm.close();
+		stopAdvertising();
 	}
 	
 	public boolean isClosed() {
@@ -264,8 +270,14 @@ public class ZKArchiveConfig {
 	}
 	
 	public Key deriveKey(int root, int type, int index, byte[] tweak) {
-		if(root != ArchiveAccessor.KEY_ROOT_ARCHIVE) return accessor.deriveKey(root, type, index, tweak);
-		return archiveRoot.derive(((type & 0xFFFF) << 16) | (index & 0xFFFF), tweak);
+		int modifier = ((type & 0xFFFF) << 16) | (index & 0xFFFF);
+		if(root == ArchiveAccessor.KEY_ROOT_ARCHIVE) { 
+			return archiveRoot.derive(modifier, tweak);
+		} else if(root == ArchiveAccessor.KEY_ROOT_WRITE) {
+			return writeRoot.derive(modifier, tweak);
+		} else {
+			return accessor.deriveKey(root, type, index, tweak);
+		}
 	}
 	
 	public Key deriveKey(int root, int type, int index) {
@@ -569,5 +581,31 @@ public class ZKArchiveConfig {
 		if(archiveRoot == null) return true;
 		PrivateSigningKey key = accessor.master.crypto.makePrivateSigningKey(archiveRoot.getRaw());
 		return !Util.safeEquals(key.publicKey().getBytes(), pubKey.getBytes());
+	}
+	
+	public void setWriteRoot(Key writeRoot) {
+		this.writeRoot = writeRoot;
+	}
+	
+	public void clearWriteRoot() {
+		this.writeRoot = null;
+	}
+	
+	public void advertise() {
+		if(isAdvertising()) return;
+		advertising = true;
+		accessor.discoverOnDHT();
+		accessor.master.getTCPListener().advertise(swarm);
+	}
+	
+	public void stopAdvertising() {
+		if(!isAdvertising()) return;
+		advertising = false;
+		accessor.master.getTCPListener().stopAdvertising(swarm);
+		getMaster().getDHTDiscovery().stopDiscoveringArchives(accessor);
+	}
+
+	public boolean isAdvertising() {
+		return advertising;
 	}
 }

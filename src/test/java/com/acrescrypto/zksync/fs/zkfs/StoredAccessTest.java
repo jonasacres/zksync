@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.security.Security;
+import java.util.Arrays;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.After;
@@ -43,78 +44,99 @@ public class StoredAccessTest {
 	
 	@Test
 	public void testStoreArchive() throws IOException {
-		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
-		master.storedAccess.storeArchiveAccess(archive, false);
-		assertTrue(master.allConfigs().contains(archive.config));
+		ZKArchiveConfig config = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").config;
+		master.storedAccess.storeArchiveAccess(config, StoredAccess.ACCESS_LEVEL_READWRITE);
+		assertTrue(master.allConfigs().contains(config));
 		
 		ZKMaster clone = ZKMaster.openTestVolume();
-		assertTrue(clone.allConfigs().contains(archive.config));
+		assertTrue(clone.allConfigs().contains(config));
 		assertEquals(1, clone.allConfigs.size());
 		assertFalse(clone.allConfigs.getLast().accessor.isSeedOnly());
 		
-		archive.close();
+		config.close();
 		clone.close();
 	}
 	
 	@Test
 	public void testStoreSeedOnly() throws IOException {
-		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
-		ArchiveAccessor roAccessor = archive.config.accessor.makeSeedOnly();
-		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.config.archiveId);
-		ZKArchive roArchive = roConfig.getArchive();
+		ZKArchiveConfig config = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").config;
+		ArchiveAccessor roAccessor = config.accessor.makeSeedOnly();
+		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, config.archiveId);
 
-		master.storedAccess.storeArchiveAccess(archive, true);
-		assertTrue(master.allConfigs().contains(archive.config));
+		master.storedAccess.storeArchiveAccess(config, StoredAccess.ACCESS_LEVEL_SEED);
+		assertTrue(master.allConfigs().contains(config));
 		
 		ZKMaster clone = ZKMaster.openTestVolume();
-		assertTrue(clone.allConfigs().contains(roArchive.config));
+		assertTrue(clone.allConfigs().contains(roConfig));
 		assertEquals(1, clone.allConfigs.size());
 		assertTrue(clone.allConfigs.getLast().accessor.isSeedOnly());
 		
-		archive.close();
-		roArchive.close();
+		config.close();
+		roConfig.close();
+		clone.close();
+	}
+	
+	@Test
+	public void testStoreReadOnly() throws IOException {
+		ZKArchiveConfig config = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").config;
+		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(config.accessor, config.archiveId);
+		roConfig.clearWriteRoot();
+
+		master.storedAccess.storeArchiveAccess(config, StoredAccess.ACCESS_LEVEL_READ);
+		assertTrue(master.allConfigs().contains(config));
+		
+		ZKMaster clone = ZKMaster.openTestVolume();
+		assertTrue(clone.allConfigs().contains(roConfig));
+		assertEquals(1, clone.allConfigs.size());
+		assertFalse(clone.allConfigs.getLast().accessor.isSeedOnly());
+		assertTrue(clone.allConfigs.getLast().isReadOnly());
+		
+		config.close();
+		roConfig.close();
 		clone.close();
 	}
 	
 	@Test
 	public void testDeleteArchiveAccess() throws IOException {
-		ZKArchive archiveA = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
-		ZKArchive archiveB = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
-		master.storedAccess.storeArchiveAccess(archiveA, false);
-		master.storedAccess.storeArchiveAccess(archiveB, false);
-		assertTrue(master.allConfigs().contains(archiveA.config));
-		assertTrue(master.allConfigs().contains(archiveB.config));
+		ZKArchiveConfig configA = master.createArchiveWithPassphrase(ZKArchive.DEFAULT_PAGE_SIZE, "", "pp0".getBytes()).config;
+		ZKArchiveConfig configB = master.createArchiveWithPassphrase(ZKArchive.DEFAULT_PAGE_SIZE, "", "pp1".getBytes()).config;
+		
+		assertFalse(Arrays.equals(configA.getArchiveId(), configB.getArchiveId()));
+		master.storedAccess.storeArchiveAccess(configA, StoredAccess.ACCESS_LEVEL_READWRITE);
+		master.storedAccess.storeArchiveAccess(configB, StoredAccess.ACCESS_LEVEL_READWRITE);
+		assertTrue(master.allConfigs().contains(configA));
+		assertTrue(master.allConfigs().contains(configB));
 		
 		ZKMaster clone = ZKMaster.openTestVolume();
-		assertTrue(clone.allConfigs().contains(archiveA.config));
+		assertTrue(clone.allConfigs().contains(configA));
 		assertEquals(2, clone.allConfigs.size());
 		
-		master.storedAccess.deleteArchiveAccess(archiveA);
-		assertFalse(master.allConfigs().contains(archiveA.config));
-		assertTrue(master.allConfigs().contains(archiveB.config));
+		master.storedAccess.deleteArchiveAccess(configA);
+		assertFalse(master.allConfigs().contains(configA));
+		assertTrue(master.allConfigs().contains(configB));
 		
 		clone.close();
 		clone = ZKMaster.openTestVolume();
-		assertFalse(clone.allConfigs().contains(archiveA.config));
-		assertTrue(clone.allConfigs().contains(archiveB.config));
+		assertFalse(clone.allConfigs().contains(configA));
+		assertTrue(clone.allConfigs().contains(configB));
 		
 		clone.close();
-		archiveA.close();
-		archiveB.close();
+		configA.close();
+		configB.close();
 	}
 	
 	@Test
 	public void testPurge() throws IOException {
-		ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
-		master.storedAccess.storeArchiveAccess(archive, false);
-		assertTrue(master.allConfigs().contains(archive.config));
+		ZKArchiveConfig config = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").config;
+		master.storedAccess.storeArchiveAccess(config, StoredAccess.ACCESS_LEVEL_READWRITE);
+		assertTrue(master.allConfigs().contains(config));
 		master.storedAccess.purge();
-		assertFalse(master.allConfigs().contains(archive.config));
+		assertFalse(master.allConfigs().contains(config));
 
 		ZKMaster clone = ZKMaster.openTestVolume();
-		assertFalse(clone.allConfigs().contains(archive.config));
+		assertFalse(clone.allConfigs().contains(config));
 		
-		archive.close();
+		config.close();
 		clone.close();
 }
 }

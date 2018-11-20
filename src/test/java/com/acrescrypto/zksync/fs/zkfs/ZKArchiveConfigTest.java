@@ -20,6 +20,7 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
@@ -721,5 +722,94 @@ public class ZKArchiveConfigTest {
 		ZKArchiveConfig wConfig1 = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, accessor.passphraseRoot, writeKey);
 		ZKArchiveConfig wConfig2 = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, accessor.passphraseRoot, writeKey);
 		assertArrayEquals(wConfig1.getArchiveId(), wConfig2.getArchiveId());
+	}
+	
+	@Test
+	public void testFinishOpeningFromSwarmCausesAdvertisementIfNoConfigFileStoredLocally() throws IOException {
+		config.getStorage().purge();
+		ZKArchiveConfig sConfig = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), false, null);
+		try {
+			sConfig.finishOpeningFromSwarm(1);
+			fail();
+		} catch(SearchFailedException exc) {}
+		assertTrue(sConfig.isAdvertising());
+	}
+	
+	@Test
+	public void testFinishOpeningFromSwarmCausesAdvertisementIfConfigFileIsStoredLocally() throws IOException {
+		ZKArchiveConfig sConfig = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), false, null);
+		sConfig.finishOpeningFromSwarm(1);
+		assertTrue(sConfig.isAdvertising());
+	}
+
+	@Test
+	public void testFinishOpeningFromSwarmBlocksUntilPeersAreConnectedIfNoConfigFileStoredLocally() throws IOException {
+		config.getStorage().purge();
+		ZKArchiveConfig sConfig = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), false, null);
+		long expectedTs = System.currentTimeMillis() + 100;
+		try {
+			sConfig.finishOpeningFromSwarm(100);
+			fail();
+		} catch(SearchFailedException exc) {}
+		assertTrue(System.currentTimeMillis() >= expectedTs);
+	}
+	
+	@Test
+	public void testFinishOpeningFromSwarmDoesNotBlockIfConfigFileStoredLocally() throws IOException {
+		ZKArchiveConfig sConfig = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), false, null);
+		long ts = System.currentTimeMillis();
+		sConfig.finishOpeningFromSwarm(100);
+		assertTrue(System.currentTimeMillis() <= ts+5);
+	}
+	
+	@Test
+	public void testFinishOpeningFromSwarmThrowsSearchFailedExceptionIfNoPeersFoundWithinTimeout() throws IOException {
+		config.getStorage().purge();
+		ZKArchiveConfig sConfig = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), false, null);
+		long expectedTs = System.currentTimeMillis() + 100;
+		try {
+			sConfig.finishOpeningFromSwarm(100);
+			fail();
+		} catch(SearchFailedException exc) {
+			assertTrue(System.currentTimeMillis() >= expectedTs);
+		}
+	}
+
+	// TODO API: (test) finishOpeningFromSwarm() returns if config file obtained from swarm
+	
+	// TODO API: (test) advertise() causes accessor to be discovered on DHT
+	// TODO API: (test) advertise() causes TCP listener to advertise swarm
+	// TODO API: (test) advertise() is idempotent
+	
+	@Test
+	public void testIsAdvertisingReturnsTrueWhenAdvertising() {
+		config.advertise();
+		assertTrue(config.isAdvertising());
+	}
+	
+	@Test
+	public void testIsAdvertisingReturnsFalseWhenNotAdvertising() {
+		// doubles as a check that we're not advertising by default
+		assertFalse(config.isAdvertising());
+	}
+	
+	// TODO API: (test) stopAdvertising() causes accessor to no longer be advertised on DHT
+	// TODO API: (test) stopAdvertising() causes TCP listener to no longer advertise swarm
+	
+	@Test
+	public void testStopAdvertisingCausesIsAdvertisingToReturnFalse() {
+		config.advertise();
+		assertTrue(config.isAdvertising());
+		config.stopAdvertising();
+		assertFalse(config.isAdvertising());
+	}
+	
+	// TODO API: (test) stopAdvertising() is idempotent
+	
+	@Test
+	public void testCloseCausesAdvertisingToStop() {
+		config.advertise();
+		config.close();
+		assertFalse(config.isAdvertising());
 	}
 }

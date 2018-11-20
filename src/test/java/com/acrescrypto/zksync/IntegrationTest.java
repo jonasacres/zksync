@@ -71,7 +71,7 @@ public class IntegrationTest {
 	void activateDHT(ZKMaster master, ZKArchiveConfig config) throws IOException {
 		master.listenOnTCP(0);
 		master.activateDHT("127.0.0.1", 0, root);
-		master.getTCPListener().advertise(config.getSwarm());
+		config.advertise();
 		config.getRevisionList().automergeDelayMs = 5;
 		config.getRevisionList().maxAutomergeDelayMs = 100;
 		config.getAccessor().discoverOnDHT();
@@ -139,8 +139,7 @@ public class IntegrationTest {
 			archives[i] = masters[i].createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "test"+i);
 			masters[i].listenOnTCP(0);
 			masters[i].activateDHT("127.0.0.1", 0, root);
-			masters[i].getTCPListener().advertise(archives[i].getConfig().getSwarm());
-			archives[i].getConfig().getAccessor().discoverOnDHT();
+			archives[i].getConfig().advertise();
 			
 			ZKFS fs = archives[i].openBlank();
 			fs.write("immediate", crypto.prng(archives[i].getConfig().getArchiveId()).getBytes(crypto.hashLength()-1));
@@ -192,8 +191,7 @@ public class IntegrationTest {
 		ZKArchive originalArchive = originalMaster.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "an archive");
 		originalMaster.listenOnTCP(0);
 		originalMaster.activateDHT("127.0.0.1", 0, root);
-		originalArchive.getConfig().getAccessor().discoverOnDHT();
-		originalMaster.getTCPListener().advertise(originalArchive.getConfig().getSwarm());
+		originalArchive.getConfig().advertise();
 		byte[] archiveId = originalArchive.getConfig().getArchiveId();
 
 		byte[] expectedImmediate = crypto.prng(originalArchive.getConfig().getArchiveId()).getBytes(crypto.hashLength()-1);
@@ -218,10 +216,9 @@ public class IntegrationTest {
 		
 		// grab everything from the original
 		ZKArchiveConfig seedConfig = seedAccessor.configWithId(archiveId);
-		seedConfig.finishOpening();
+		seedConfig.finishOpeningFromSwarm(3000);
 		seedConfig.getSwarm().requestAll();
 		assertTrue(Util.waitUntil(3000, ()->seedConfig.getArchive().allPageTags().size() == originalArchive.allPageTags().size()));
-		seedMaster.getTCPListener().advertise(seedConfig.getSwarm());
 		
 		// original goes offline; now the seed is the only place to get data
 		originalArchive.close();
@@ -238,7 +235,7 @@ public class IntegrationTest {
 		
 		// grab the archive from the network (i.e. the blind peer)
 		ZKArchiveConfig cloneConfig = cloneAccessor.configWithId(archiveId);
-		cloneConfig.finishOpening();
+		cloneConfig.finishOpeningFromSwarm(3000);
 		Util.waitUntil(3000, ()->cloneConfig.getRevisionList().branchTips().size() > 0);
 		ZKFS cloneFs = cloneConfig.getArchive().openRevision(cloneConfig.getRevisionList().branchTips().get(0));
 		

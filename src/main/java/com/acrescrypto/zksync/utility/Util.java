@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.utility;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -286,5 +287,17 @@ public class Util {
 	
 	public static void setThreadName(String name) {
 		Thread.currentThread().setName(name + " " + String.format("%08x", System.identityHashCode(Thread.currentThread())));
+	}
+	
+	public byte[] decode64(String base64) {
+		return Base64.getDecoder().decode(fromWebSafeBase64(base64));
+	}
+	
+	public static String fromWebSafeBase64(String base64) {
+		return base64.replaceAll("\\.", "+").replaceAll("_", "/");
+	}
+	
+	public static String toWebSafeBase64(String base64) {
+		return base64.replaceAll("\\+", ".").replaceAll("/", "_");
 	}
 }
