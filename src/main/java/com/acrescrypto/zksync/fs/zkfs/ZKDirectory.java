@@ -141,6 +141,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		entries.put(link, inode.getStat().getInodeId());
 		inode.addLink();
 		dirty = true;
+		zkfs.markDirty();
 	}
 	
 	@Override
@@ -185,6 +186,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		entries.remove(name);
 		zkfs.uncache(fullPath);
 		dirty = true;
+		zkfs.markDirty();
 	}
 	
 	public void rmdir() throws IOException {

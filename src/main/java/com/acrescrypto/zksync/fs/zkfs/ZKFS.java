@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.LinkedList;
 
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
@@ -10,11 +11,17 @@ import com.acrescrypto.zksync.utility.Util;
 
 // A ZKSync archive.
 public class ZKFS extends FS {
+	public interface ZKFSDirtyMonitor {
+		public void notifyDirty(ZKFS fs);
+	}
+	
 	protected InodeTable inodeTable;
 	protected HashCache<String,ZKDirectory> directoriesByPath;
 	protected ZKArchive archive;
 	protected RevisionTag baseRevision;
 	protected String root;
+	protected boolean dirty;
+	protected LinkedList<ZKFSDirtyMonitor> dirtyMonitors = new LinkedList<>();
 		
 	public final static int MAX_PATH_LEN = 65535;
 	
@@ -36,7 +43,9 @@ public class ZKFS extends FS {
 			dir.commit();
 		}
 		
-		return baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
+		baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
+		dirty = false;
+		return baseRevision;
 	}
 	
 	public RevisionTag commit() throws IOException {
@@ -256,48 +265,56 @@ public class ZKFS extends FS {
 	public void chmod(String path, int mode) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setMode(mode);
+		markDirty();
 	}
 
 	@Override
 	public void chown(String path, int uid) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setUid(uid);
+		markDirty();
 	}
 
 	@Override
 	public void chown(String path, String name) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setUser(name);
+		markDirty();
 	}
 
 	@Override
 	public void chgrp(String path, int gid) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setGid(gid);
+		markDirty();
 	}
 
 	@Override
 	public void chgrp(String path, String group) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setGroup(group);
+		markDirty();
 	}
 
 	@Override
 	public void setMtime(String path, long mtime) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setMtime(mtime);
+		markDirty();
 	}
 
 	@Override
 	public void setCtime(String path, long ctime) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setCtime(ctime);
+		markDirty();
 	}
 
 	@Override
 	public void setAtime(String path, long atime) throws IOException {
 		Inode inode = inodeForPath(path);
 		inode.getStat().setAtime(atime);
+		markDirty();
 	}
 	
 	@Override
@@ -343,7 +360,7 @@ public class ZKFS extends FS {
 		}
 	}
 
-	public void rebase(RevisionTag revision) {
+	public void rebase(RevisionTag revision) throws IOException {
 		this.archive = revision.getArchive();
 		this.directoriesByPath = new HashCache<String,ZKDirectory>(128, (String path) -> {
 			assertPathIsDirectory(path);
@@ -353,5 +370,25 @@ public class ZKFS extends FS {
 		});
 		this.baseRevision = revision;
 		this.inodeTable = new InodeTable(this, revision);
+		this.dirty = false;
+	}
+	
+	public void addMonitor(ZKFSDirtyMonitor monitor) {
+		dirtyMonitors.add(monitor);
+	}
+	
+	public void removeMonitor(ZKFSDirtyMonitor monitor) {
+		dirtyMonitors.remove(monitor);
+	}
+
+	public boolean isDirty() {
+		return dirty;
+	}
+	
+	public void markDirty() {
+		this.dirty = true;
+		for(ZKFSDirtyMonitor monitor : dirtyMonitors) {
+			monitor.notifyDirty(this);
+		}
 	}
 }

@@ -6,12 +6,14 @@ import java.io.IOException;
 import java.security.Security;
 import java.util.LinkedList;
 
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
+import com.acrescrypto.zksync.fs.zkfs.RevisionList.RevisionMonitor;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -228,5 +230,36 @@ public class RevisionListTest {
 		RevisionList newList = new RevisionList(config);
 		assertEquals(revTags, list.branchTips());
 		assertEquals(revTags, newList.branchTips());
+	}
+	
+	@Test
+	public void testMonitorsReceiveNotificationForNewRevtags() throws IOException {
+		MutableBoolean receivedTag = new MutableBoolean();
+		RefTag refTag = new RefTag(archive, crypto.rng(config.refTagSize()));
+		RevisionTag expectedTag = new RevisionTag(refTag, 0, 1);
+		list.addMonitor((revTag)->receivedTag.setValue(revTag.equals(expectedTag)));
+		list.addBranchTip(expectedTag);
+		assertTrue(receivedTag.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsDoNotReceiveNotificationForSupercededRevtags() throws IOException {
+		tree.supercede = true;
+		MutableBoolean receivedTag = new MutableBoolean();
+		list.addMonitor((revTag)->receivedTag.setValue(true));
+		setupFakeRevisions(1).get(0);
+		assertFalse(receivedTag.booleanValue());
+	}
+	
+	@Test
+	public void testRemovedMonitorsDoNotReceiveNotificationForNewRevtags() throws IOException {
+		MutableBoolean receivedTag = new MutableBoolean();
+		RefTag refTag = new RefTag(archive, crypto.rng(config.refTagSize()));
+		RevisionTag expectedTag = new RevisionTag(refTag, 0, 1);
+		RevisionMonitor monitor = (revTag)->receivedTag.setValue(revTag.equals(expectedTag));
+		list.addMonitor(monitor);
+		list.removeMonitor(monitor);
+		list.addBranchTip(expectedTag);
+		assertFalse(receivedTag.booleanValue());
 	}
 }

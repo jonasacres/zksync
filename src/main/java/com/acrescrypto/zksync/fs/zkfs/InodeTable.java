@@ -366,6 +366,7 @@ public class InodeTable extends ZKFile {
 		Inode existing = inodeWithId(inode.getStat().getInodeId());
 		if(existing == inode) return; // inode is already set
 		existing.deserialize(inode.serialize());
+		zkfs.markDirty();
 	}
 	
 	/** initialize an empty root directory */

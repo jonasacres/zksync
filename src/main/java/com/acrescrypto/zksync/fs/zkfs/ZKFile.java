@@ -232,6 +232,7 @@ public class ZKFile extends File {
 		if(bufferedPage != null) bufferedPage.flush();
 		inode.setRefTag(tree.commit());
 		zkfs.inodeTable.setInode(inode);
+		zkfs.markDirty();
 		dirty = false;
 	}
 

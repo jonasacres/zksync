@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
 import java.security.Security;
 import java.util.Arrays;
 
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.*;
 
@@ -17,6 +18,8 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS.ZKFSDirtyMonitor;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKFSTest extends FSTestBase {
@@ -388,6 +391,250 @@ public class ZKFSTest extends FSTestBase {
 			assertArrayEquals(tenPageData, fs.read("10page"));
 			archive.close();
 		}
+	}
+	
+	@Test
+	public void testRebaseUpdatesBaseRevision() throws IOException {
+		RevisionTag rev1 = zkscratch.commit();
+		zkscratch.commit();
+		assertNotEquals(rev1, zkscratch.baseRevision);
+		zkscratch.rebase(rev1);
+		assertEquals(rev1, zkscratch.baseRevision);
+	}
+	
+	@Test
+	public void testRebaseResetsFilesystem() throws IOException {
+		String[] paths = new String[] { "dir/1", "dir/2", "dir/3", "a", "b", "c" };
+
+		for(String path : paths) {
+			zkscratch.write(path, path.getBytes());
+		}
+		zkscratch.mkdir("deaddir");
+		RevisionTag revtag = zkscratch.commit();
+		
+		for(String path : paths) {
+			zkscratch.write(path, (path + "modified").getBytes());
+		}
+		zkscratch.rmdir("deaddir");
+		zkscratch.commit();
+		
+		zkscratch.rebase(revtag);
+		for(String path : paths) {
+			assertArrayEquals(path.getBytes(), zkscratch.read(path));
+		}
+		assertTrue(zkscratch.stat("deaddir").isDirectory());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForFileCreation() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.write("newfile", "some data".getBytes());
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForFileModification() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("newfile", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.write("newfile", "different data".getBytes());
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForFileUnlink() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("newfile", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.unlink("newfile");
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForSymlink() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("origin", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.symlink("origin", "destination");
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForHardlink() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("origin", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.link("origin", "destination");
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForMkfifo() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.mkfifo("somefifo");
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForMknod() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.mknod("somenode", Stat.TYPE_CHARACTER_DEVICE, 0, 0);
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForMkdir() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.mkdir("somedir");
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForRmdir() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.mkdir("somedir");
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.rmdir("somedir");
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForChmod() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("somefile", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.chmod("somefile", 0);
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForChownWithUid() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("somefile", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.chown("somefile", 1234);
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForChownWithUsername() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("somefile", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.chown("somefile", "someguy");
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForChgrpWithGid() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("somefile", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.chgrp("somefile", 1234);
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForChgrpWithGroupname() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("somefile", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.chgrp("somefile", "somegroup");
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForSetMtime() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("somefile", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.setMtime("somefile", 123456);
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForSetAtime() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("somefile", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.setAtime("somefile", 123456);
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testMonitorsReceiveDirtyMessagesForSetCtime() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		zkscratch.write("somefile", "some data".getBytes());
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.setCtime("somefile", 123456);
+		assertTrue(notified.booleanValue());
+	}
+	
+	@Test
+	public void testRemovedMonitorsDoNotReceiveDirtyMessages() throws IOException {
+		MutableBoolean notified = new MutableBoolean();
+		ZKFSDirtyMonitor monitor = (f)->notified.setTrue();
+		zkscratch.addMonitor(monitor);
+		zkscratch.removeMonitor(monitor);
+		
+		assertFalse(notified.booleanValue());
+		zkscratch.write("somefile", "bytes".getBytes());
+		assertFalse(notified.booleanValue());
 	}
 	
 	protected byte[] generateFileData(String key, int length) {

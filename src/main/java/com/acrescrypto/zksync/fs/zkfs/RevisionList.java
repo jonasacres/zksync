@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedList;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,10 +20,15 @@ import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionList {
+	public interface RevisionMonitor {
+		public void notifyNewRevision(RevisionTag revTag);
+	}
+	
 	public final static long DEFAULT_AUTOMERGE_DELAY_MS = 10000;
 	public final static long DEFAULT_MAX_AUTOMERGE_DELAY_MS = 60000;
 	
 	protected ArrayList<RevisionTag> branchTips = new ArrayList<>();
+	protected LinkedList<RevisionMonitor> monitors = new LinkedList<>();
 	protected ZKArchiveConfig config;
 	protected RevisionTag latest; // "latest" tip; understood to mean tip with greatest height, using hash comparison as tiebreaker.
 	protected boolean automerge;
@@ -45,6 +51,14 @@ public class RevisionList {
 		return new ArrayList<>(branchTips);
 	}
 	
+	public void addMonitor(RevisionMonitor monitor) {
+		this.monitors.add(monitor);
+	}
+	
+	public void removeMonitor(RevisionMonitor monitor) {
+		this.monitors.remove(monitor);
+	}
+	
 	public void addBranchTip(RevisionTag newBranch) throws IOException {
 		if(config.revisionTree.isSuperceded(newBranch)) return;
 		
@@ -53,6 +67,10 @@ public class RevisionList {
 			branchTips.add(newBranch);
 			config.swarm.announceTip(newBranch);
 			updateLatest(newBranch);
+		}
+		
+		for(RevisionMonitor monitor : monitors) {
+			monitor.notifyNewRevision(newBranch);
 		}
 		
 		if(getAutomerge() && branchTips.size() > 1) {

@@ -5,18 +5,32 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.fs.zkfs.RevisionList.RevisionMonitor;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS.ZKFSDirtyMonitor;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 
 public class ZKFSManager {
-	private int autocommitInterval;
-	private boolean autocommit;
-	private boolean autofollow;
-	private ZKFS fs;
-	private SnoozeThread autocommitTimer;
-	private Logger logger = LoggerFactory.getLogger(ZKFSManager.class);
+	protected int autocommitIntervalMs;
+	protected boolean autocommit;
+	protected boolean autofollow;
+	protected ZKFS fs;
+	protected SnoozeThread autocommitTimer;
+	protected Logger logger = LoggerFactory.getLogger(ZKFSManager.class);
+	protected RevisionMonitor revMonitor;
+	protected ZKFSDirtyMonitor fsMonitor;
 	
 	public ZKFSManager(ZKFS fs) {
 		this.fs = fs;
+		this.fsMonitor = (f)->notifyLocalChanges();
+		this.revMonitor = (revTag)->notifyNewRevtag(revTag);
+		
+		fs.addMonitor(fsMonitor);
+		fs.getArchive().getConfig().getRevisionList().addMonitor(revMonitor);
+	}
+	
+	public void close() {
+		fs.removeMonitor(fsMonitor);
+		fs.getArchive().getConfig().getRevisionList().removeMonitor(revMonitor);
 	}
 	
 	public void notifyLocalChanges() {
@@ -26,21 +40,28 @@ public class ZKFSManager {
 	}
 	
 	public void notifyNewRevtag(RevisionTag revtag) {
-		fs.rebase(fs.archive.config.revisionList.latest());
+		RevisionTag latest = fs.archive.config.revisionList.latest();
+		if(autofollow && !fs.isDirty() && !fs.baseRevision.equals(latest)) {
+			try {
+				fs.rebase(latest);
+			} catch (IOException exc) {
+				logger.error("Unable to rebase to revtag", exc);
+			}
+		}
 	}
 
-	public int getAutocommitInterval() {
-		return autocommitInterval;
+	public int getAutocommitIntervalMs() {
+		return autocommitIntervalMs;
 	}
 
-	public void setAutocommitInterval(int autocommitInterval) {
-		if(this.autocommitInterval == autocommitInterval) return;
-		this.autocommitInterval = autocommitInterval;
+	public void setAutocommitIntervalMs(int autocommitIntervalMs) {
+		if(this.autocommitIntervalMs == autocommitIntervalMs) return;
+		this.autocommitIntervalMs = autocommitIntervalMs;
 		setupAutocommitTimer();
 		
 	}
 
-	public boolean isAutocommit() {
+	public boolean isAutocommiting() {
 		return autocommit;
 	}
 
@@ -50,7 +71,7 @@ public class ZKFSManager {
 		setupAutocommitTimer();
 	}
 
-	public boolean isAutofollow() {
+	public boolean isAutofollowing() {
 		return autofollow;
 	}
 
@@ -59,7 +80,7 @@ public class ZKFSManager {
 	}
 	
 	protected void setupAutocommitTimer() {
-		if(!autocommit || autocommitInterval <= 0) {
+		if(!autocommit || autocommitIntervalMs <= 0) {
 			if(autocommitTimer != null) {
 				autocommitTimer.cancel();
 				autocommitTimer = null;
@@ -68,7 +89,11 @@ public class ZKFSManager {
 			return;
 		}
 		
-		autocommitTimer = new SnoozeThread(autocommitInterval, false, ()->{
+		if(autocommitTimer != null) {
+			autocommitTimer.cancel();
+		}
+		
+		autocommitTimer = new SnoozeThread(autocommitIntervalMs, false, ()->{
 			try {
 				if(fs.isDirty()) {
 					fs.commit();
