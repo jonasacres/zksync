@@ -12,7 +12,7 @@ import com.acrescrypto.zksync.utility.Util;
 public class ZKFS extends FS {
 	protected InodeTable inodeTable;
 	protected HashCache<String,ZKDirectory> directoriesByPath;
-	ZKArchive archive;
+	protected ZKArchive archive;
 	protected RevisionTag baseRevision;
 	protected String root;
 		
@@ -20,15 +20,7 @@ public class ZKFS extends FS {
 	
 	public ZKFS(RevisionTag revision, String root) throws IOException {
 		this.root = root;
-		this.archive = revision.getArchive();
-		this.directoriesByPath = new HashCache<String,ZKDirectory>(128, (String path) -> {
-			assertPathIsDirectory(path);
-			return new ZKDirectory(this, path);
-		}, (String path, ZKDirectory dir) -> {
-			dir.commit();
-		});
-		this.baseRevision = revision;
-		this.inodeTable = new InodeTable(this, revision);
+		rebase(revision);
 	}
 	
 	public ZKFS(RevisionTag revision) throws IOException {
@@ -349,5 +341,17 @@ public class ZKFS extends FS {
 				dump(subpath, depth+1);
 			}
 		}
+	}
+
+	public void rebase(RevisionTag revision) {
+		this.archive = revision.getArchive();
+		this.directoriesByPath = new HashCache<String,ZKDirectory>(128, (String path) -> {
+			assertPathIsDirectory(path);
+			return new ZKDirectory(this, path);
+		}, (String path, ZKDirectory dir) -> {
+			dir.commit();
+		});
+		this.baseRevision = revision;
+		this.inodeTable = new InodeTable(this, revision);
 	}
 }
