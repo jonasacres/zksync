@@ -28,6 +28,14 @@ public class ZKFSManager {
 		fs.getArchive().getConfig().getRevisionList().addMonitor(revMonitor);
 	}
 	
+	public ZKFSManager(ZKFS fs, ZKFSManager manager) {
+		this(fs);
+		
+		setAutocommit(manager.autocommit);
+		setAutofollow(manager.autofollow);
+		setAutocommitIntervalMs(manager.autocommitIntervalMs);
+	}
+
 	public void close() {
 		fs.removeMonitor(fsMonitor);
 		fs.getArchive().getConfig().getRevisionList().removeMonitor(revMonitor);
