@@ -25,6 +25,7 @@ public class Blacklist {
 	protected Key key;
 	protected final Logger logger = LoggerFactory.getLogger(Blacklist.class);
 	protected LinkedList<BlacklistCallback> callbacks = new LinkedList<BlacklistCallback>();
+	protected boolean enabled;
 	
 	protected interface BlacklistCallback {
 		void disconnectAddress(String address, long durationMs);
@@ -34,6 +35,7 @@ public class Blacklist {
 		this.fs = fs;
 		this.path = path;
 		this.key = key;
+		this.enabled = true;
 		read();
 	}
 	
@@ -50,6 +52,12 @@ public class Blacklist {
 	
 	public void add(String address, long durationMs) throws IOException {
 		add(new BlacklistEntry(address, durationMs));
+	}
+
+	public void addWithAbsoluteTime(String address, long expTime) throws IOException {
+		BlacklistEntry entry = new BlacklistEntry(address, 0);
+		entry.setExpiration(expTime);
+		add(entry);
 	}
 	
 	public void add(BlacklistEntry entry) throws IOException {
@@ -120,13 +128,16 @@ public class Blacklist {
 	}
 	
 	public synchronized byte[] serialize() {
-		int len = 0;
+		int len = 1;
 		prune();
+		
+		// TODO API: (implement) Test enabled serialization/deserialization
 		for(BlacklistEntry entry : blockedAddresses.values()) {
 			len += entry.serialize().length;
 		}
 		
 		ByteBuffer buf = ByteBuffer.allocate(len);
+		buf.put(enabled ? (byte) 1 : (byte) 0);
 		for(BlacklistEntry entry : blockedAddresses.values()) {
 			buf.put(entry.serialize());
 		}
@@ -137,6 +148,7 @@ public class Blacklist {
 	public void deserialize(byte[] serialized) throws InvalidBlacklistException {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		blockedAddresses.clear();
+		enabled = buf.get() != 0;
 		while(buf.hasRemaining()) {
 			assertState(buf.remaining() >= 10);
 			buf.position(buf.position() + 8);
@@ -158,5 +170,26 @@ public class Blacklist {
 	
 	public FS getFS() {
 		return fs;
+	}
+
+	// TODO API: (test) Test Blacklist get/remove
+	public BlacklistEntry get(String ip) {
+		return blockedAddresses.get(ip);
+	}
+	
+	public boolean remove(String ip) throws IOException {
+		boolean removed = blockedAddresses.remove(ip) != null;
+		write();
+		return removed;
+	}
+	
+	public boolean isEnabled() {
+		return enabled;
+	}
+	
+	public void setEnabled(boolean enabled) throws IOException {
+		if(this.enabled == enabled) return;
+		this.enabled = enabled;
+		write();
 	}
 }
