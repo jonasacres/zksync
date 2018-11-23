@@ -49,7 +49,7 @@ public class Blacklist {
 	}
 	
 	public void add(String address, long durationMs) throws IOException {
-		add(new BlacklistEntry(address, System.currentTimeMillis() + durationMs));
+		add(new BlacklistEntry(address, durationMs));
 	}
 	
 	public void add(BlacklistEntry entry) throws IOException {
