@@ -101,7 +101,7 @@ public class BlacklistTest {
 		for(int i = 1; i < 16; i++) {
 			String address = "127.0.0." + i;
 			assertTrue(clone.contains(address));
-			int difference = (int) Math.abs(1000*i + startTime - clone.blockedAddresses.get(address).expiration);
+			int difference = (int) Math.abs(1000*i + startTime - clone.blockedAddresses.get(address).getExpiration());
 			assertTrue(difference <= 1 + margin);
 		}
 	}
@@ -113,7 +113,7 @@ public class BlacklistTest {
 		int durationMs = 1000;
 		HoldGuy holder = new HoldGuy();
 		blacklist.addCallback(new BlacklistCallback() {
-			public void disconnectAddress(String cbAddress, int cbDurationMs) {
+			public void disconnectAddress(String cbAddress, long cbDurationMs) {
 				assertEquals(address, cbAddress);
 				assertEquals(durationMs, cbDurationMs);
 				holder.passed = true;
@@ -131,7 +131,7 @@ public class BlacklistTest {
 		HoldGuy holder = new HoldGuy();
 		holder.passed = true;
 		BlacklistCallback callback = new BlacklistCallback() {
-			public void disconnectAddress(String cbAddress, int cbDurationMs) {
+			public void disconnectAddress(String cbAddress, long cbDurationMs) {
 				holder.passed = false;
 			}
 		};

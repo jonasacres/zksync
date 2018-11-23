@@ -5,11 +5,11 @@ import java.nio.ByteBuffer;
 import com.acrescrypto.zksync.utility.Util;
 
 public class BlacklistEntry {
-	protected String address;
-	protected long expiration;
+	private String address;
+	private long expiration;
 	
-	public BlacklistEntry(String address, int durationMs) {
-		this.address = address;
+	public BlacklistEntry(String address, long durationMs) {
+		this.setAddress(address);
 		update(durationMs);
 	}
 	
@@ -18,30 +18,46 @@ public class BlacklistEntry {
 	}
 	
 	protected byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(8 + 2 + address.getBytes().length);
-		buf.putLong(expiration);
-		buf.putShort((short) this.address.getBytes().length);
-		buf.put(address.getBytes());
+		ByteBuffer buf = ByteBuffer.allocate(8 + 2 + getAddress().getBytes().length);
+		buf.putLong(getExpiration());
+		buf.putShort((short) this.getAddress().getBytes().length);
+		buf.put(getAddress().getBytes());
 		return buf.array();
 	}
 	
 	protected void deserialize(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		this.expiration = buf.getLong();
+		this.setExpiration(buf.getLong());
 		byte[] addressBytes = new byte[Util.unsignShort(buf.getShort())];
 		buf.get(addressBytes);
-		this.address = new String(addressBytes);
+		this.setAddress(new String(addressBytes));
 	}
 	
 	public boolean isExpired() {
-		return System.currentTimeMillis() >= expiration;
+		return System.currentTimeMillis() >= getExpiration();
 	}
 	
-	public void update(int newDurationMs) {
-		if(newDurationMs == Integer.MAX_VALUE) {
-			this.expiration = Long.MAX_VALUE;
+	public void update(long durationMs) {
+		if(durationMs == Integer.MAX_VALUE) {
+			this.setExpiration(Long.MAX_VALUE);
 		} else {
-			this.expiration = System.currentTimeMillis() + newDurationMs;
+			this.setExpiration(System.currentTimeMillis() + durationMs);
 		}
+	}
+
+	public String getAddress() {
+		return address;
+	}
+
+	public void setAddress(String address) {
+		this.address = address;
+	}
+
+	public long getExpiration() {
+		return expiration;
+	}
+
+	public void setExpiration(long expiration) {
+		this.expiration = expiration;
 	}
 }

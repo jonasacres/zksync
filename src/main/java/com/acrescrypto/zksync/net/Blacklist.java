@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -26,7 +27,7 @@ public class Blacklist {
 	protected LinkedList<BlacklistCallback> callbacks = new LinkedList<BlacklistCallback>();
 	
 	protected interface BlacklistCallback {
-		void disconnectAddress(String address, int durationMs);
+		void disconnectAddress(String address, long durationMs);
 	}
 	
 	public Blacklist(FS fs, String path, Key key) throws IOException, InvalidBlacklistException {
@@ -47,34 +48,44 @@ public class Blacklist {
 		MutableSecureFile.atPath(fs, path, key).write(serialize(), padLen);
 	}
 	
-	public void add(String address, int durationMs) throws IOException {
+	public void add(String address, long durationMs) throws IOException {
+		add(new BlacklistEntry(address, System.currentTimeMillis() + durationMs));
+	}
+	
+	public void add(BlacklistEntry entry) throws IOException {
 		Collection<BlacklistCallback> callbackList;
+		long durationMs = entry.getExpiration() - System.currentTimeMillis();
+
 		synchronized(this) {
-			BlacklistEntry entry = blockedAddresses.getOrDefault(address, null);
-			if(entry != null) {
-				logger.warn("Renewing blacklist entry for {} for {}ms", address, durationMs);
-				entry.update(durationMs);
+			BlacklistEntry existing = blockedAddresses.getOrDefault(entry.getAddress(), null);
+			if(existing != null) {
+				logger.warn("Renewing blacklist entry for {} for {}ms", existing.getAddress(), durationMs);
+				existing.update(durationMs);
 			} else {
-				logger.warn("Adding blacklist entry for {} for {}ms", address, durationMs);
-				entry = new BlacklistEntry(address, durationMs);
-				blockedAddresses.put(address, entry);
+				logger.warn("Adding blacklist entry for {} for {}ms", entry.getAddress(), durationMs);
+				blockedAddresses.put(entry.getAddress(), entry);
 			}
+			
 			write();
 			
 			callbackList = new LinkedList<>(callbacks);
 		}
 		
 		for(BlacklistCallback callback : callbackList) {
-			callback.disconnectAddress(address, durationMs);
+			callback.disconnectAddress(entry.getAddress(), durationMs);
 		}
 	}
-	
+
 	public synchronized void addCallback(BlacklistCallback callback) {
 		callbacks.add(callback);
 	}
 	
 	public synchronized void removeCallback(BlacklistCallback callback) {
 		callbacks.remove(callback);
+	}
+	
+	public synchronized ArrayList<BlacklistEntry> allEntries() {
+		return new ArrayList<BlacklistEntry>(blockedAddresses.values());
 	}
 	
 	public void read() throws IOException, InvalidBlacklistException {
@@ -91,7 +102,7 @@ public class Blacklist {
 		if(entry == null) return false;
 		if(!entry.isExpired()) return true;
 		
-		blockedAddresses.remove(entry.address);
+		blockedAddresses.remove(entry.getAddress());
 		return false;
 	}
 	
@@ -137,7 +148,7 @@ public class Blacklist {
 			buf.get(serializedEntry);
 			BlacklistEntry entry = new BlacklistEntry(serializedEntry);
 			if(entry.isExpired()) continue;
-			blockedAddresses.put(entry.address, entry);
+			blockedAddresses.put(entry.getAddress(), entry);
 		}
 	}
 	

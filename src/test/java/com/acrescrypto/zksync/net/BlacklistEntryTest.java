@@ -20,17 +20,17 @@ public class BlacklistEntryTest {
 		String address = "127.0.0.1";
 		int durationMs = 100;
 		BlacklistEntry entry = new BlacklistEntry(address, durationMs);
-		assertEquals(address, entry.address);
-		assertTrue(entry.expiration >= System.currentTimeMillis() + durationMs - 1);
-		assertTrue(entry.expiration <= System.currentTimeMillis() + durationMs);
+		assertEquals(address, entry.getAddress());
+		assertTrue(entry.getExpiration() >= System.currentTimeMillis() + durationMs - 1);
+		assertTrue(entry.getExpiration() <= System.currentTimeMillis() + durationMs);
 	}
 	
 	@Test
 	public void testSerialization() {
 		BlacklistEntry entry = new BlacklistEntry("127.0.0.1", 100);
 		BlacklistEntry deserialized = new BlacklistEntry(entry.serialize());
-		assertEquals(entry.address, deserialized.address);
-		assertEquals(entry.expiration, deserialized.expiration);
+		assertEquals(entry.getAddress(), deserialized.getAddress());
+		assertEquals(entry.getExpiration(), deserialized.getExpiration());
 	}
 	
 	@Test
@@ -38,7 +38,7 @@ public class BlacklistEntryTest {
 		BlacklistEntry entry = new BlacklistEntry("127.0.0.1", 2);
 		assertFalse(entry.isExpired());
 		
-		while(System.currentTimeMillis() < entry.expiration) {
+		while(System.currentTimeMillis() < entry.getExpiration()) {
 			try {
 				Thread.sleep(2);
 			} catch(InterruptedException exc) {}
@@ -51,14 +51,14 @@ public class BlacklistEntryTest {
 	public void testUpdate() {
 		BlacklistEntry entry = new BlacklistEntry("127.0.0.1", 1);
 		entry.update(100);
-		assertTrue(entry.expiration >= System.currentTimeMillis() + 99);
-		assertTrue(entry.expiration <= System.currentTimeMillis() + 100);
+		assertTrue(entry.getExpiration() >= System.currentTimeMillis() + 99);
+		assertTrue(entry.getExpiration() <= System.currentTimeMillis() + 100);
 	}
 	
 	@Test
 	public void testUpdateToForever() {
 		BlacklistEntry entry = new BlacklistEntry("127.0.0.1", 1);
 		entry.update(Integer.MAX_VALUE);
-		assertEquals(Long.MAX_VALUE, entry.expiration);
+		assertEquals(Long.MAX_VALUE, entry.getExpiration());
 	}
 }

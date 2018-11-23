@@ -108,7 +108,7 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	@Override
-	public synchronized void disconnectAddress(String address, int durationMs) {
+	public synchronized void disconnectAddress(String address, long durationMs) {
 		LinkedList<PeerConnection> toRemoveConnections = new LinkedList<PeerConnection>();
 		LinkedList<PeerAdvertisement> toRemoveAds = new LinkedList<PeerAdvertisement>();
 		
