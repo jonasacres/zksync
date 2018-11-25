@@ -461,7 +461,7 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public boolean isRequestingAll() {
-		// TODO API (test) isRequestingAll
+		// TODO API: (test) isRequestingAll
 		return pool.requestingEverything; 
 	}
 

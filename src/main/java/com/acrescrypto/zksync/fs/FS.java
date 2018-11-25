@@ -234,7 +234,7 @@ public abstract class FS {
 	}
 	
 	public long storageSize(String path) throws IOException {
-		// TODO API: test FS.storageSize
+		// TODO API: (test) FS.storageSize
 		long totalSize = 0;
 		
 		Stat s = stat(path);
