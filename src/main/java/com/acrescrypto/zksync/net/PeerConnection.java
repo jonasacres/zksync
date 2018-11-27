@@ -545,7 +545,12 @@ public class PeerConnection {
 		assertPeerCapability(PEER_TYPE_FULL);
 		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		int priority = msg.rxBuf.getInt();
-		RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes), false);
+		RevisionTag tag;
+		try {
+			tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes), false);
+		} catch(SecurityException exc) {
+			return;
+		}
 		
 		while(msg.rxBuf.hasRemaining()) {
 			long inodeId = msg.rxBuf.getLong();

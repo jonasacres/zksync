@@ -62,8 +62,6 @@ public class StoredAccess implements ArchiveDiscovery {
 			records.remove(killableRecord);
 			write();
 		}
-		
-		master.removedArchiveConfig(config);
 	}
 	
 	public void purge() throws IOException {

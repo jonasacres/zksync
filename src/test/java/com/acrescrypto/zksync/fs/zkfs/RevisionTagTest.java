@@ -28,6 +28,7 @@ public class RevisionTagTest {
 	ZKArchive archive;
 	ZKFS fs;
 	RevisionTag revTag;
+	RevisionTag packed;
 	
 	@BeforeClass
 	public static void beforeAll() {
@@ -56,6 +57,14 @@ public class RevisionTagTest {
 	public static void afterAll() {
 		ZKFSTest.restoreArgon2Costs();
 		TestUtils.assertTidy();
+	}
+	
+	public void setupPacked(boolean finish) throws IOException {
+		ZKArchiveConfig config2 = ZKArchiveConfig.openExisting(config.accessor, config.getArchiveId(), false, config.writeRoot);
+		config.close();
+		config = config2;
+		packed = new RevisionTag(config, revTag.serialize(), false);
+		if(finish) config.finishOpening();
 	}
 	
 	@Test
@@ -176,5 +185,43 @@ public class RevisionTagTest {
 	@Test
 	public void testGetShortHash() {
 		assertEquals(Util.shortTag(revTag.serialize()), revTag.getShortHash());
+	}
+	
+	@Test
+	public void testRevTagGetHeightUnpacks() throws IOException {
+		setupPacked(true);
+		assertFalse(packed.isUnpacked());
+		assertEquals(revTag.getHeight(), packed.getHeight());
+		assertTrue(packed.isUnpacked());
+	}
+	
+	@Test
+	public void testRevTagGetHeightReturnsNegativeOneIfPacked() throws IOException {
+		setupPacked(false);
+		assertEquals(-1, packed.getHeight());
+		assertFalse(packed.isUnpacked());
+	}
+
+	@Test
+	public void testRevTagGetParentHashUnpacks() throws IOException {
+		setupPacked(true);
+		assertFalse(packed.isUnpacked());
+		assertEquals(revTag.getParentHash(), packed.getParentHash());
+		assertTrue(packed.isUnpacked());
+	}
+	
+	@Test
+	public void testRevTagGetParentHashReturnsNegativeOneIfPacked() throws IOException {
+		setupPacked(false);
+		assertEquals(-1, packed.getParentHash());
+		assertFalse(packed.isUnpacked());
+	}
+
+	@Test
+	public void testRevTagGetRefTagUnpacks() throws IOException {
+		setupPacked(true);
+		assertFalse(packed.isUnpacked());
+		assertArrayEquals(revTag.getRefTag().getBytes(), packed.getRefTag().getBytes());
+		assertTrue(packed.isUnpacked());
 	}
 }

@@ -9,8 +9,8 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionTag implements Comparable<RevisionTag> {
 	private RefTag refTag;
-	private long height;
-	private long parentHash;
+	private long height = -1;
+	private long parentHash = -1;
 	byte[] serialized;
 	int hashCode;
 	RevisionInfo info;
@@ -150,7 +150,6 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		hashCode = ByteBuffer.wrap(serialized).getInt();
 		this.serialized = serialized.clone();
 	
-		assert(height >= 0);
 		unpack();
 	}
 	
@@ -168,6 +167,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		parentHash = raw.getLong();
 		height = raw.getLong();
 		refTag = new RefTag(config, rawRefTag);
+		if(height < 0) throw new SecurityException();
 	}
 	
 	public int compareTo(RevisionTag other) {
