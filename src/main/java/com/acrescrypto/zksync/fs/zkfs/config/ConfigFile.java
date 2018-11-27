@@ -11,6 +11,7 @@ public abstract class ConfigFile {
 	protected FS storage;
 	protected boolean dirty;
 	
+	// TODO API: (refactor) This base class probably isn't even useful now.
 	public ConfigFile() {
 		this(null, null);
 	}

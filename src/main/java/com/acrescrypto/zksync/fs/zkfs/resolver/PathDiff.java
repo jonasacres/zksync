@@ -72,9 +72,4 @@ public class PathDiff implements Comparable<PathDiff> {
 	public String toString() {
 		return "PathDiff " + path + " (" + resolutions.size() + " versions)";
 	}
-
-	public void add(Long newInodeId, RevisionTag tag) {
-		resolutions.putIfAbsent(newInodeId, new ArrayList<RevisionTag>());
-		resolutions.get(newInodeId).add(tag);
-	}
 }

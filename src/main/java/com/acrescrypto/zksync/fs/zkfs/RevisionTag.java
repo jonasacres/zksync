@@ -8,13 +8,14 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionTag implements Comparable<RevisionTag> {
-	RefTag refTag;
-	long height;
-	long parentHash;
+	private RefTag refTag;
+	private long height;
+	private long parentHash;
 	byte[] serialized;
 	int hashCode;
 	RevisionInfo info;
 	boolean cacheOnly;
+	ZKArchiveConfig config;
 
 	public static int sizeForConfig(ZKArchiveConfig config) {
 		return config.refTagSize() + 8 + 8 + config.getCrypto().asymSignatureSize();
@@ -28,11 +29,13 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		this.refTag = refTag;
 		this.parentHash = parentHash;
 		this.height = height;
+		this.config = refTag.config;
 		serialize();
 	}
 	
 	public RevisionTag(ZKArchiveConfig config, byte[] serialization, boolean verifySignature) {
-		deserialize(config, serialization, verifySignature);
+		this.config = config;
+		deserialize(serialization, verifySignature);
 	}
 	
 	public ZKArchive getArchive() throws IOException {
@@ -44,10 +47,15 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public ZKArchiveConfig getConfig() {
-		return refTag.config;
+		return config;
+	}
+	
+	public boolean isUnpacked() {
+		return refTag != null;
 	}
 	
 	public RefTag getRefTag() {
+		unpack();
 		return refTag;
 	}
 	
@@ -56,7 +64,13 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public long getHeight() {
+		unpack();
 		return height;
+	}
+	
+	public long getParentHash() {
+		unpack();
+		return parentHash;
 	}
 	
 	public RevisionInfo getInfo() throws IOException {
@@ -86,6 +100,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	
 	public byte[] serialize() {
 		if(refTag == null) {
+			// TODO API: (coverage) branch
 			// no plaintext, so we must have read this as a seed-only peer; serialization will be set
 			return serialized;
 		}
@@ -117,7 +132,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		return serialized;
 	}
 	
-	public void deserialize(ZKArchiveConfig config, byte[] serialized, boolean verifySignature) {
+	public void deserialize(byte[] serialized, boolean verifySignature) {
 		assert(serialized.length == sizeForConfig(config));
 		if(Arrays.equals(new byte[serialized.length], serialized)) {
 			this.refTag = RefTag.blank(config);
@@ -136,18 +151,23 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		this.serialized = serialized.clone();
 	
 		assert(height >= 0);
+		unpack();
+	}
+	
+	protected void unpack() {
+		if(refTag != null) return;
+		if(config.accessor.isSeedOnly()) return;
+		if(config.archiveRoot == null) return;
 		
-		if(!config.accessor.isSeedOnly()) {
-			Key key = config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
-			byte[] rawBytes = key.decryptCBC(new byte[key.getCrypto().symBlockSize()],
-					serialized, 0, serialized.length - config.getCrypto().asymSignatureSize());
-			ByteBuffer raw = ByteBuffer.wrap(rawBytes);
-			byte[] rawRefTag = new byte[config.refTagSize()];
-			raw.get(rawRefTag);
-			parentHash = raw.getLong();
-			height = raw.getLong();
-			refTag = new RefTag(config, rawRefTag);
-		}
+		Key key = config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
+		byte[] rawBytes = key.decryptCBC(new byte[key.getCrypto().symBlockSize()],
+				serialized, 0, serialized.length - config.getCrypto().asymSignatureSize());
+		ByteBuffer raw = ByteBuffer.wrap(rawBytes);
+		byte[] rawRefTag = new byte[config.refTagSize()];
+		raw.get(rawRefTag);
+		parentHash = raw.getLong();
+		height = raw.getLong();
+		refTag = new RefTag(config, rawRefTag);
 	}
 	
 	public int compareTo(RevisionTag other) {

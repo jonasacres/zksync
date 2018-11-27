@@ -215,10 +215,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 		return dir;
 	}
 	
-	public boolean isEmpty() {
-		return entries.size() == 2;
-	}
-	
 	public void commit() throws IOException {
 		if(!dirty) return;
 		assertWritable();

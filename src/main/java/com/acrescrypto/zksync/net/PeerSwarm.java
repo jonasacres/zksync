@@ -473,12 +473,14 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 
 	public void announceTips() throws IOException {
+		// TODO API: (coverage) method... seems weird it's not called
 		for(PeerConnection connection : getConnections()) {
 			connection.announceTips();
 		}
 	}
 	
 	public void announcePeer(PeerAdvertisement ad) {
+		// TODO API: (coverage) method... seems weird it's not called
 		for(PeerConnection connection : getConnections()) {
 			connection.announcePeer(ad);
 		}

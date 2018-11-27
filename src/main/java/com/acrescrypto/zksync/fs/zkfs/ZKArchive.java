@@ -118,17 +118,9 @@ public class ZKArchive {
 	public LocalConfig getLocalConfig() {
 		return localConfig;
 	}
-
-	public void setLocalConfig(LocalConfig localConfig) {
-		this.localConfig = localConfig;
-	}
 	
 	public static String dataDirForArchiveId(byte[] archiveId) {
 		return GLOBAL_DATA_DIR + Util.bytesToHex(archiveId);
-	}
-
-	public String dataDir() {
-		return dataDirForArchiveId(config.archiveId);
 	}
 
 	public ZKArchiveConfig getConfig() {

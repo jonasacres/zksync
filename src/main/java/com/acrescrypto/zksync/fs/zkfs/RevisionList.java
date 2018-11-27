@@ -237,6 +237,7 @@ public class RevisionList {
 						/* obviously we're not doing any merging if we don't have the write key, so
 						 * let's just consolidate instead.
 						 */
+						// TODO API: (coverage) branch
 						consolidate();
 					} else {
 						DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();

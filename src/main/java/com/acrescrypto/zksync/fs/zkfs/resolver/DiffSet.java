@@ -44,13 +44,6 @@ public class DiffSet {
 		findPathDiffs(findInodeDiffs(pickMergeFs()));
 	}
 	
-	/** build a new DiffSet based on an existing one, with some new inode and path diffs */
-	public DiffSet(DiffSet original, ArrayList<InodeDiff> inodeDiffList, ArrayList<PathDiff> pathDiffList) {
-		this.revisions = original.revisions;
-		for(InodeDiff inodeDiff : inodeDiffList) inodeDiffs.put(inodeDiff.inodeId, inodeDiff);
-		for(PathDiff pathDiff : pathDiffList) pathDiffs.put(pathDiff.path, pathDiff);
-	}
-	
 	/** all inode IDs differing in the revisions of this set, excluding inode table, revision info and freelist */
 	public HashSet<Long> allInodes() throws IOException {
 		/* This is murderous on archives with huge numbers of inodes, and could likely be avoided

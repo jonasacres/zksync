@@ -104,6 +104,7 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	@Override
 	public boolean isReachable() {
 		if(disableReachabilityTest) return true;
+		// TODO API: (coverage) method
 		
 		try {
 			Socket socket = new Socket(host, port);

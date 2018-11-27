@@ -85,6 +85,7 @@ public class PeerMessageOutgoing extends PeerMessage {
 		try {
 			startingSize = Math.min(maxPayloadBufferSize(), Math.max(startingSize, txPayload.available()));
 		} catch(IOException exc) {
+			// TODO API: (coverage) branch coverage
 			txEOF = true;
 		}
 		
@@ -141,6 +142,7 @@ public class PeerMessageOutgoing extends PeerMessage {
 	}
 	
 	public boolean equals(Object other) {
+		// TODO API: (coverage) method / consider if necessary
 		if(other instanceof Integer) {
 			return other.equals(msgId);
 		}

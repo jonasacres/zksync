@@ -19,6 +19,7 @@ public class LocalConfig extends ConfigFile {
 	private int uid = 0, gid = 0;
 	private String user = "root", group = "root";
 	
+	// TODO API: (coverage) method
 	public LocalConfig(FS storage, Key cipherKey) {
 		super(storage, cipherKey);
 	}

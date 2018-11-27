@@ -106,6 +106,7 @@ public class ZKArchiveConfig {
 				throw exc;
 			}
 		}
+		
 		this.revisionList = new RevisionList(this);
 		this.revisionTree = new RevisionTree(this);
 	}
@@ -578,6 +579,7 @@ public class ZKArchiveConfig {
 	}
 	
 	public boolean usesWriteKey() {
+		// TODO API: (coverage) coverage...
 		if(archiveRoot == null) return true;
 		PrivateSigningKey key = accessor.master.crypto.makePrivateSigningKey(archiveRoot.getRaw());
 		return !Util.safeEquals(key.publicKey().getBytes(), pubKey.getBytes());

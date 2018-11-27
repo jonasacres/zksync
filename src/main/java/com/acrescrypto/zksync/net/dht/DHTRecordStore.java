@@ -76,6 +76,7 @@ public class DHTRecordStore {
 				return record.equals(other);
 			}
 			
+			// TODO API: (refactor) this branch never actually happens in tests, consider if we even need it
 			if(other instanceof StoreEntry) {
 				return record.equals(((StoreEntry) other).record);
 			}

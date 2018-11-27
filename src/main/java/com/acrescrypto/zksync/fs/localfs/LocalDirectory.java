@@ -84,6 +84,7 @@ public class LocalDirectory implements Directory {
 			file = new java.io.File(fs.expandPath(Paths.get(path, entry).toString()));
 			return file.exists();
 		} catch (ENOENTException e) {
+			// TODO API: (coverage) exception
 			return false;
 		}
 	}

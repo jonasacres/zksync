@@ -38,10 +38,6 @@ public class RevisionInfo {
 		deserialize(serialized);
 	}
 	
-	public void reset() {
-		parents.clear();
-	}
-	
 	// create plaintext serialized revision data (to be encrypted and written to
 	// storage)
 	protected byte[] serialize() throws IOException {

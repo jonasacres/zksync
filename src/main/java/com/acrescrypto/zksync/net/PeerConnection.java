@@ -147,6 +147,7 @@ public class PeerConnection {
 		if(adListener == null) return;
 		
 		try {
+			// TODO API: (coverage) branch coverage
 			announceSelf(adListener.localAd());
 		} catch(UnconnectableAdvertisementException exc) {
 			logger.error("Unable to announce local ad", exc);

@@ -31,20 +31,6 @@ public class SignedSecureFile {
 		return crypto.asymSignatureSize() + crypto.symPaddedCiphertextSize(padSize);
 	}
 	
-	public static boolean verifySignature(byte[] contents, byte[] associatedData, PublicSigningKey pubKey) {
-		int sigOffset = contents.length-pubKey.crypto.asymSignatureSize();
-		int signableLen = sigOffset;
-		byte[] signable = contents;
-		if(associatedData != null) {
-			ByteBuffer buf = ByteBuffer.allocate(associatedData.length + sigOffset);
-			buf.put(associatedData);
-			buf.put(contents, 0, sigOffset);
-			signableLen += associatedData.length;
-			signable = buf.array();
-		}
-		return pubKey.verify(signable, 0, signableLen, contents, sigOffset, pubKey.crypto.asymSignatureSize());
-	}
-
 	public SignedSecureFile(FS fs, Key textKey, Key authKey, PrivateSigningKey privKey) {
 		this.fs = fs;
 		this.textKey = textKey;

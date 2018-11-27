@@ -163,7 +163,7 @@ public class ZKArchiveTest {
 	@Test
 	public void testHasRevisionReturnsFalseIfPagesMissingFromInodeTable() throws IOException {
 		ZKFS fs = addMockData(archive);
-		PageTree tree = new PageTree(fs.baseRevision.refTag);
+		PageTree tree = new PageTree(fs.baseRevision.getRefTag());
 		archive.storage.unlink(Page.pathForTag(tree.getPageTag(0)));
 		assertFalse(archive.hasRevision(fs.baseRevision));
 		fs.close();
@@ -174,8 +174,8 @@ public class ZKArchiveTest {
 		ZKFS fs = addMockData(archive);
 		for(int i = 0; i < 1024; i++) fs.write(""+i, "".getBytes());
 		RevisionTag revTag = fs.commit();
-		assertTrue(revTag.refTag.numPages > 1);
-		PageTree tree = new PageTree(revTag.refTag);
+		assertTrue(revTag.getRefTag().numPages > 1);
+		PageTree tree = new PageTree(revTag.getRefTag());
 		archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
 		assertFalse(archive.hasRevision(revTag));
 		fs.close();

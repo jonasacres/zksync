@@ -259,18 +259,8 @@ public class ZKFile extends File {
 		inode.getStat().setMode(file.getStat().getMode());
 	}
 		
-	/** Set the inode size field based on the actual size of the current file contents. */
-	protected void inferSize(RefTag tag) throws IOException {
-		if(tag.getRefType() == RefTag.REF_TYPE_IMMEDIATE) {
-			inode.getStat().setSize(tag.getHash().length - tag.getHash()[tag.getHash().length-1]-1);
-			return;
-		}
-		
-		bufferPage((int) (tag.numPages-1));
-		inode.getStat().setSize((tag.numPages-1)*zkfs.archive.config.pageSize + bufferedPage.size);
-	}
-	
 	public int available() throws IOException {
+		// TODO DHT: (test) coverage on this...
 		if(bufferedPage == null) return 0;
 		return bufferedPage.remaining();
 	}

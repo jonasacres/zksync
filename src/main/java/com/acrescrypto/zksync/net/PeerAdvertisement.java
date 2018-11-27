@@ -55,6 +55,7 @@ public abstract class PeerAdvertisement {
 	}
 	
 	public boolean equals(Object _other) {
+		// TODO API: (coverage) method / consider if necessary
 		if(!(_other instanceof PeerAdvertisement)) return false;
 		PeerAdvertisement other = (PeerAdvertisement) _other;
 		

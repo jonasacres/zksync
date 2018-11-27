@@ -518,7 +518,7 @@ public class RevisionTreeTest {
 			revTags.add(revTag);
 		}
 		
-		assertTrue(tree.commonAncestor(revTags).refTag.isBlank());
+		assertTrue(tree.commonAncestor(revTags).getRefTag().isBlank());
 	}
 	
 	@Test

@@ -72,10 +72,10 @@ public class PageTreeTest {
 	
 	@Test
 	public void testConstructFromRevTagSetsFields() throws IOException {
-		PageTree fromRevTag = new PageTree(revTag.refTag);
+		PageTree fromRevTag = new PageTree(revTag.getRefTag());
 		
 		assertEquals(archive, fromRevTag.archive);
-		assertEquals(revTag.refTag, fromRevTag.refTag);
+		assertEquals(revTag.getRefTag(), fromRevTag.refTag);
 		assertEquals(InodeTable.INODE_ID_INODE_TABLE, fromRevTag.inodeId);
 		assertEquals(0, fromRevTag.inodeIdentity);
 		

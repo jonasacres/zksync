@@ -172,7 +172,7 @@ public class RevisionListTest {
 		baseTags.add(archive.openBlank().commit());
 		RevisionTag largeMerge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
 		
-		assertEquals(smallMerge.height, largeMerge.height);
+		assertEquals(smallMerge.getHeight(), largeMerge.getHeight());
 		list.addBranchTip(smallMerge);
 		assertEquals(2, list.branchTips().size());
 		assertTrue(list.branchTips().contains(smallMerge));

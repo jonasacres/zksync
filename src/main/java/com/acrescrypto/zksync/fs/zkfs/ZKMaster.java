@@ -191,7 +191,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 	
 	public ZKArchive createArchiveWithPassphrase(int pageSize, String description, byte[] readPassphrase, byte[] writePassphrase) throws IOException {
-		// TODO API: (test) test this
+		// TODO API: (test) createArchiveWithPassphrase
 		Key writeRoot = new Key(crypto, crypto.deriveKeyFromPassphrase(writePassphrase));
 		Key readRoot = new Key(crypto, crypto.deriveKeyFromPassphrase(readPassphrase));
 		return createArchiveWithWriteRoot(pageSize, description, readRoot, writeRoot);
@@ -306,6 +306,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 				logger.info("Successfully decrypted key file with passphrase");
 				return true;
 			} catch(SecurityException exc) {
+				// TODO API: (coverage) branch
 				logger.warn("Supplied passphrase did not match key file");
 				return false;
 			}

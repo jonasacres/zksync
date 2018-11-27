@@ -31,6 +31,7 @@ public class StoredAccessRecord {
 	
 	public synchronized ZKArchiveConfig getConfig() throws IOException {
 		if(config == null) {
+			// TODO API: (coverage) branch
 			config = ZKArchiveConfig.openExisting(accessor, archiveId, true, writeKey);
 		}
 		

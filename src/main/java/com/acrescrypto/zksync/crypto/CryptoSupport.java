@@ -176,13 +176,7 @@ public class CryptoSupport {
 	}
 	
 	public byte[] encryptCBC(byte[] key, byte[] iv, byte[] plaintext, int offset, int length) {
-		try {
-			return processOrdinaryCipher(true, key, iv, plaintext, offset, length);
-		} catch (Exception exc) {
-			logger.error("Encountered exception encrypting data", exc);
-			System.exit(1);
-			return null; // unreachable, but it makes the compiler happy
-		}
+		return processOrdinaryCipher(true, key, iv, plaintext, offset, length);
 	}
 	
 	public byte[] decryptCBC(byte[] key, byte[] iv, byte[] ciphertext) {

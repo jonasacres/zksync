@@ -101,6 +101,7 @@ public class ChunkAccumulator {
 		boolean add = true;
 		for(PeerChunkInfo peerInfo : peersByIndex.get(index)) {
 			if(peerInfo.peer == peer) {
+				// TODO API: (coverage) branch
 				if(peerInfo.version.matches(chunk)) {
 					add = false;
 					break;

@@ -316,6 +316,7 @@ public class DHTClient {
 				socket.send(packet);
 				break;
 			} catch (IOException exc) {
+				// TODO API: (coverage) exception
 				if(closed) return;
 				if(i == 0) {
 					logger.warn("Encountered exception sending on DHT socket; retrying", exc);

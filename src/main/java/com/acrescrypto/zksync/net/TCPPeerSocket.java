@@ -49,6 +49,7 @@ public class TCPPeerSocket extends PeerSocket {
 		this.remoteIdentityKey = remoteIdentityKey;
 		
 		if(portNum != 0) {
+			// TODO API: (coverage) branch coverage
 			byte[] encryptedArchiveId = swarm.config.getEncryptedArchiveId(remoteIdentityKey.getBytes());
 			this.ad = new TCPPeerAdvertisement(remoteIdentityKey, socket.getInetAddress().getHostAddress(), portNum, encryptedArchiveId);
 		}
@@ -111,6 +112,7 @@ public class TCPPeerSocket extends PeerSocket {
 			remainingReadData.get(data, offset, readLen);
 			if(readLen == length) return readLen;
 			
+			// TODO API: (coverage) branch coverage
 			offset += readLen;
 			length -= readLen;
 		}

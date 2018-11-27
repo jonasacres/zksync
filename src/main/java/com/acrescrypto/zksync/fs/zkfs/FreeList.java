@@ -15,11 +15,6 @@ public class FreeList extends ZKFile {
 		private static final long serialVersionUID = 4057105931778047274L;
 	}
 	
-	/** initialize freelist object for filesystem */
-	public FreeList(ZKFS fs) throws IOException {
-		this(fs.inodeTable.inodeWithId(InodeTable.INODE_ID_FREELIST));
-	}
-	
 	/** initialize freelist from its inode */
 	public FreeList(Inode inode) throws IOException {
 		/* This is instantiated automatically when we load an InodeTable, which shouldn't automatically

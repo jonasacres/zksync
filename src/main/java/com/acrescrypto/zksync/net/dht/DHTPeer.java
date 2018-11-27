@@ -83,9 +83,6 @@ public class DHTPeer implements Sendable {
 				int nextLen = Util.unsignShort(buf.getShort());
 				if(nextLen <= 0 || nextLen > buf.remaining()) throw new ProtocolViolationException();
 				int expectedPos = buf.position() + nextLen;
-				if(listIndex < 0 || listIndex > 1) {
-					continue;
-				}
 				
 				switch(listIndex) {
 				case 0: // peer list item
@@ -111,6 +108,7 @@ public class DHTPeer implements Sendable {
 					}
 					break;
 				default:
+					// TODO API: (coverage) conditional
 					buf.position(expectedPos);
 				}				
 			}

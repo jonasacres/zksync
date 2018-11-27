@@ -107,6 +107,7 @@ public class ArchiveAccessor {
 			if(Arrays.equals(config.archiveId, archiveId)) return config;
 		}
 		
+		// TODO API: (coverage) branch
 		ZKArchiveConfig config = new ZKArchiveConfig(this, archiveId, false, Key.blank(master.crypto));
 		discoveredArchiveConfig(config);
 		

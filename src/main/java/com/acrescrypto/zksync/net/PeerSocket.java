@@ -116,6 +116,7 @@ public abstract class PeerSocket {
 		PeerMessageOutgoing msg = new PeerMessageOutgoing(connection, cmd, txPayload);
 		synchronized(outgoing) {
 			if(isClosed()) {
+				// TODO API: (coverage) branch
 				msg.abort();
 			} else {
 				outgoing.add(msg);

@@ -79,6 +79,7 @@ public class StoredAccessTest {
 	@Test
 	public void testStoreReadOnly() throws IOException {
 		ZKArchiveConfig config = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").config;
+		config.getArchive().openBlank().commit(); // we want a revtag since that's caused crashes in the past
 		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(config.accessor, config.archiveId);
 		roConfig.clearWriteRoot();
 

@@ -40,6 +40,7 @@ public class PublicSigningKey {
 			engine.initVerify(pubKey);
 			return engine.verifyOneShot(message, msgOffset, msgLen, signature, sigOffset, sigLen);
 		} catch (SignatureException | InvalidKeyException | InvalidAlgorithmParameterException exc) {
+			// this doesn't mean the sig is bad, it means something stops us from verifying signatures period
 			logger.warn("Error in verifying message", exc);
 			return false;
 		}

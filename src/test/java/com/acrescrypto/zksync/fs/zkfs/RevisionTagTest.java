@@ -66,18 +66,18 @@ public class RevisionTagTest {
 	@Test
 	public void testBlank() {
 		RevisionTag blank = RevisionTag.blank(config);
-		assertEquals(0, blank.height);
-		assertEquals(0, blank.parentHash);
-		assertTrue(blank.refTag.isBlank());
+		assertEquals(0, blank.getHeight());
+		assertEquals(0, blank.getParentHash());
+		assertTrue(blank.getRefTag().isBlank());
 	}
 	
 	@Test
 	public void testConstructFromRefTag() {
 		RefTag tag = new RefTag(archive, crypto.rng(config.refTagSize()));
 		RevisionTag revTag = new RevisionTag(tag, 1, 2);
-		assertEquals(tag, revTag.refTag);
-		assertEquals(1, revTag.parentHash);
-		assertEquals(2, revTag.height);
+		assertEquals(tag, revTag.getRefTag());
+		assertEquals(1, revTag.getParentHash());
+		assertEquals(2, revTag.getHeight());
 		assertArrayEquals(revTag.serialized, revTag.serialize());
 		assertFalse(revTag.cacheOnly);
 		assertNull(revTag.info);
@@ -86,11 +86,11 @@ public class RevisionTagTest {
 	
 	@Test
 	public void testConstructFromSerialization() {
-		RevisionTag origTag = new RevisionTag(revTag.refTag, 100, 200);
+		RevisionTag origTag = new RevisionTag(revTag.getRefTag(), 100, 200);
 		RevisionTag cloneTag = new RevisionTag(config, origTag.getBytes(), true);
-		assertEquals(origTag.refTag, cloneTag.refTag);
-		assertEquals(origTag.parentHash, cloneTag.parentHash);
-		assertEquals(origTag.height, cloneTag.height);
+		assertEquals(origTag.getRefTag(), cloneTag.getRefTag());
+		assertEquals(origTag.getParentHash(), cloneTag.getParentHash());
+		assertEquals(origTag.getHeight(), cloneTag.getHeight());
 		assertArrayEquals(origTag.getBytes(), cloneTag.serialized);
 		assertFalse(cloneTag.cacheOnly);
 		assertNull(cloneTag.info);
@@ -133,8 +133,8 @@ public class RevisionTagTest {
 	
 	@Test
 	public void testCompareToComparesHeight() {
-		RevisionTag a = new RevisionTag(revTag.refTag, 100, 1);
-		RevisionTag b = new RevisionTag(revTag.refTag, 50, 2);
+		RevisionTag a = new RevisionTag(revTag.getRefTag(), 100, 1);
+		RevisionTag b = new RevisionTag(revTag.getRefTag(), 50, 2);
 		assertTrue(a.compareTo(b) < 0);
 		assertTrue(b.compareTo(a) > 0);
 		assertTrue(a.compareTo(a) == 0);
@@ -160,7 +160,7 @@ public class RevisionTagTest {
 	
 	@Test
 	public void testEquals() {
-		RevisionTag clone = new RevisionTag(revTag.refTag, revTag.parentHash, revTag.height);
+		RevisionTag clone = new RevisionTag(revTag.getRefTag(), revTag.getParentHash(), revTag.getHeight());
 		assertTrue(clone.equals(revTag));
 		assertTrue(revTag.equals(clone));
 		assertTrue(clone.equals(clone));

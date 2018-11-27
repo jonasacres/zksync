@@ -39,6 +39,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		
 		@Override
 		public boolean equals(Object o) {
+			// TODO API: (coverage) method / check if this is even necessary
 			if(o instanceof DiscoveryEntry) {
 				return accessor.equals(((DiscoveryEntry) o).accessor);
 			}

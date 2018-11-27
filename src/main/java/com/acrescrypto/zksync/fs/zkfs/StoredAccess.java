@@ -30,6 +30,7 @@ public class StoredAccess implements ArchiveDiscovery {
 	public void storeArchiveAccess(ZKArchiveConfig config, int accessLevel) throws IOException {
 		for(StoredAccessRecord record : records) {
 			if(Arrays.equals(config.archiveId, record.archiveId)) {
+				// TODO API: (coverage) branch
 				if(record.accessLevel == accessLevel) return;
 				records.remove(record);
 				break;

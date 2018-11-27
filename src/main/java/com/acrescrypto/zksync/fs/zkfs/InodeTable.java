@@ -61,7 +61,7 @@ public class InodeTable extends ZKFile {
 			commitInodePage(pageNum, inodes);
 		});
 		
-		if(tag.refTag.isBlank()) initialize();
+		if(tag.getRefTag().isBlank()) initialize();
 		else readExisting(tag);
 	}
 	
@@ -107,7 +107,7 @@ public class InodeTable extends ZKFile {
 		syncInodes();
 		updateList(parents);
 		
-		long baseHeight = zkfs.baseRevision.height;
+		long baseHeight = zkfs.baseRevision.getHeight();
 		RevisionTag revTag = new RevisionTag(inode.refTag, parentHash, 1+baseHeight);
 		zkfs.archive.config.revisionTree.addParentsForTag(revTag, parents);
 		
@@ -131,7 +131,7 @@ public class InodeTable extends ZKFile {
 	/** add our new commit to the list of branch tips, and remove our ancestors */
 	protected void updateList(ArrayList<RevisionTag> parents) throws IOException {
 		long parentHash = makeParentHash(parents);
-		long height = 1 + zkfs.baseRevision.height;
+		long height = 1 + zkfs.baseRevision.getHeight();
 		RevisionTag tag = new RevisionTag(inode.getRefTag(), parentHash, height);	
 		RevisionList list = zkfs.archive.config.getRevisionList();
 		RevisionTree tree = zkfs.archive.config.getRevisionTree();
@@ -415,11 +415,11 @@ public class InodeTable extends ZKFile {
 	
 	/** initialize from existing inode table data, identified by a reftag */
 	private void readExisting(RevisionTag tag) throws IOException {
-		this.tree = new PageTree(tag.refTag);
+		this.tree = new PageTree(tag.getRefTag());
 		this.inode = new Inode(zkfs);
-		this.inode.setRefTag(tag.refTag);
+		this.inode.setRefTag(tag.getRefTag());
 		this.inode.setFlags(Inode.FLAG_RETAIN);
-		this.inode.stat.setSize(zkfs.archive.config.pageSize * tag.refTag.numPages);
+		this.inode.stat.setSize(zkfs.archive.config.pageSize * tag.getRefTag().numPages);
 		this.revision = readRevisionInfo();
 		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST)); // doesn't actually read anything yet
 		nextInodeId = -1; // causes nextInodeId() to read from table on next invocation
@@ -446,6 +446,7 @@ public class InodeTable extends ZKFile {
 					duplicated.stat.setSize(existing.stat.getSize());
 				}
 			} else {
+				// TODO API: (coverage) branch
 				duplicated.nlink = 0;
 				if(duplicated.stat.isDirectory()) {
 					duplicated.refTag = RefTag.blank(zkfs.archive);

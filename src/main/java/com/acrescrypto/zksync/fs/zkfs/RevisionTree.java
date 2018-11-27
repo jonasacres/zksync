@@ -32,7 +32,7 @@ public class RevisionTree {
 		long height;
 		
 		TreeSearchItem(RevisionTag tag) {
-			this.height = tag.height;
+			this.height = tag.getHeight();
 			revTags.add(tag);
 		}
 		
@@ -75,17 +75,18 @@ public class RevisionTree {
 						lookups.add(revTag);
 					} else {
 						for(RevisionTag parent : parents) {
-							if(parent.height == height) {
+							if(parent.getHeight() == height) {
 								newRevTags.add(parent);
 							} else {
-								deferred.putIfAbsent(parent.height, new ArrayList<>());
-								deferred.get(parent.height).add(parent);
+								deferred.putIfAbsent(parent.getHeight(), new ArrayList<>());
+								deferred.get(parent.getHeight()).add(parent);
 							}
 						}
 					}
 				}
 			}
 			
+			// TODO API: (coverage) branch (it's worrying that this is never called)
 			ArrayList<Future<?>> futures = new ArrayList<>();
 			for(RevisionTag revTag : lookups) {
 				Future<?> future = threadPool.submit(()->{
@@ -93,11 +94,11 @@ public class RevisionTree {
 					if(parents == null) return;
 					synchronized(this) {
 						for(RevisionTag parent : parents) {
-							if(parent.height == height) {
+							if(parent.getHeight() == height) {
 								newRevTags.add(parent);
 							} else {
-								deferred.putIfAbsent(parent.height, new ArrayList<>());
-								deferred.get(parent.height).add(parent);
+								deferred.putIfAbsent(parent.getHeight(), new ArrayList<>());
+								deferred.get(parent.getHeight()).add(parent);
 							}
 						}
 					}
@@ -350,7 +351,7 @@ public class RevisionTree {
 			}
 		}
 		
-		if(revTag.height > 1) { // this micro-optimization helps simplify test-writing (no need to provide parent lists for revtags of height 1)
+		if(revTag.getHeight() > 1) { // this micro-optimization helps simplify test-writing (no need to provide parent lists for revtags of height 1)
 			Collection<RevisionTag> parents = parentsForTag(revTag);
 			if(parents == null) {
 				if(config.isClosed()) return false; // avoid needless log spam
@@ -394,8 +395,8 @@ public class RevisionTree {
 		}
 		parentHash = Util.shortTag(ctx.finish());
 		
-		if(parentHash != revTag.parentHash) {
-			throw new SecurityException("parent hash for " + Util.bytesToHex(revTag.getBytes(), 4) + " does not match; expected " + String.format("%016x", revTag.parentHash) + " got " + String.format("%016x", parentHash));
+		if(parentHash != revTag.getParentHash()) {
+			throw new SecurityException("parent hash for " + Util.bytesToHex(revTag.getBytes(), 4) + " does not match; expected " + String.format("%016x", revTag.getParentHash()) + " got " + String.format("%016x", parentHash));
 		}
 	}
 	
