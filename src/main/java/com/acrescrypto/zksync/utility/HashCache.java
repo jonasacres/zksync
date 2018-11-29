@@ -39,8 +39,7 @@ public class HashCache<K,V> {
 		V result = cache.getOrDefault(key, null);
 		if(result == null) {
 			result = add(key);
-		}
-		else {
+		} else {
 			resetKey(key);
 		}
 		return result;

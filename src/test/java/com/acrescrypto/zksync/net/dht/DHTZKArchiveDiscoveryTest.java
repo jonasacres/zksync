@@ -266,6 +266,7 @@ public class DHTZKArchiveDiscoveryTest {
 		assertTrue(Util.waitUntil(discovery.discoveryIntervalMs, ()->client.searchId != null));
 		client.searchId = null;
 		discovery.forceUpdate(archive.getConfig().getAccessor());
+		// TODO API: (itf) a215023+ linux 11/29/18 AllTests, assertion failed
 		assertTrue(Util.waitUntil(50, ()->client.searchId != null));
 	}
 }
