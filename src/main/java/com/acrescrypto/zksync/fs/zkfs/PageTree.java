@@ -1,10 +1,12 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Queue;
 
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -16,6 +18,10 @@ public class PageTree {
 	protected long inodeId, inodeIdentity;
 	protected long numChunks, maxNumPages, numPages;
 	protected boolean trusted; // if true, do not validate public key signature on each page chunk
+	
+	public class PageTreeStats {
+		public long numCachedPages, numCachedChunks, totalPages, totalChunks;
+	}
 	
 	/* Open a revtag, which is a reftag to an inode table */ 
 	public PageTree(RefTag revTag) throws IOException {
@@ -151,11 +157,49 @@ public class PageTree {
 		return numPages;
 	}
 	
+	protected long numPieces() {
+		return numPages() + numChunks();
+	}
+	
 	public long numChunks() {
 		return numChunks;
 	}
 	
+	public PageTreeStats getStats() throws IOException {
+		PageTreeStats stats = new PageTreeStats();
+		if(refTag.refType == RefTag.REF_TYPE_IMMEDIATE) {
+			stats.totalPages = stats.numCachedPages = 1; // make life easy for percentage-calculations (no division by zero)
+			stats.totalChunks = stats.numCachedChunks = 1;
+			return stats;
+		}
+		
+		stats.totalChunks = numChunks;
+		stats.totalPages = numPages;
+		HashSet<Long> foundChunks = new HashSet<>();
+		
+		for(long i = 0; i < numChunks; i++) {
+			if(i != 0 && !foundChunks.contains(indexForParent(i))) continue;
+			try {
+				tagForChunk(i);
+				foundChunks.add(i);
+			} catch(InaccessibleStorageException exc) {}
+		}
+		
+		stats.numCachedChunks = foundChunks.size();
+		
+		for(long i = 0; i < numPages; i++) {
+			if(!foundChunks.contains(chunkIndexForPageNum(i))) continue;
+			String path = Page.pathForTag(getPageTag(i));
+			if(archive.getConfig().getCacheStorage().exists(path)) {
+				stats.numCachedPages++;
+			}
+		}
+		
+		return stats;
+	}
+	
 	public long numDataPages() {
+		// TODO API: (deprecate) replace with numPieces
 		return numPages + (refTag.getRefType() == RefTag.REF_TYPE_2INDIRECT ? numChunks : 0);
 	}
 	
@@ -226,7 +270,10 @@ public class PageTree {
 			return refTag.getHash();
 		}
 		
-		return chunkAtIndex(index).chunkTag;
+		long parentIndex = indexForParent(index);
+		long offsetInParent = (index - 1) % tagsPerChunk();
+
+		return chunkAtIndex(parentIndex).getTag(offsetInParent);
 	}
 	
 	public ZKArchive getArchive() {
@@ -274,7 +321,7 @@ public class PageTree {
 			// it's possible that finding the parent triggered a separate search operation for this index, due to evictions
 			return chunkCache.get(index);
 		}
-
+		
 		return new PageTreeChunk(this, chunkTag, index, !trusted);
 	}
 	
@@ -308,13 +355,13 @@ public class PageTree {
 	protected boolean hasTreeContentsLocally() throws IOException {
 		if(numChunks <= 0 || numPages <= 0) return false;
 		for(int i = 0; i < numChunks; i++) {
-			if(!hasChunkLocally(i)) return false;
+			if(!hasChunkContentsLocally(i)) return false;
 		}
 		
 		return true;
 	}
 	
-	protected boolean hasChunkLocally(long index) throws IOException {
+	protected boolean hasChunkContentsLocally(long index) throws IOException {
 		if(!archive.config.getCacheStorage().exists(Page.pathForTag(tagForChunk(index)))) return false;
 		PageTreeChunk chunk = loadChunkAtIndex(index);
 		for(int i = 0; i < tagsPerChunk(); i++) {
@@ -356,6 +403,11 @@ public class PageTree {
 	
 	protected long chunkIdAtPosition(long level, long offset) {
 		return (long) (1-Math.pow(tagsPerChunk(), level))/(1-tagsPerChunk()) + offset;
+	}
+	
+	protected boolean hasTagLocally(byte[] tag) {
+		String path = Page.pathForTag(tag);
+		return archive.getConfig().getCacheStorage().exists(path);
 	}
 
 	public long getInodeId() {

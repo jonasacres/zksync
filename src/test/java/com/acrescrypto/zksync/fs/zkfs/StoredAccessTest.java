@@ -113,7 +113,7 @@ public class StoredAccessTest {
 		assertEquals(2, clone.allConfigs.size());
 		
 		master.storedAccess.deleteArchiveAccess(configA);
-		assertFalse(master.allConfigs().contains(configA));
+		assertTrue(master.allConfigs().contains(configA));
 		assertTrue(master.allConfigs().contains(configB));
 		
 		clone.close();

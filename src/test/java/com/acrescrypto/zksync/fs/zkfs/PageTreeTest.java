@@ -20,6 +20,7 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.fs.zkfs.PageTree.PageTreeStats;
 import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -268,6 +269,100 @@ public class PageTreeTest {
 		assertEquals(tree.numChunks, tree.numChunks());
 		tree.setPageTag(tree.tagsPerChunk(), new byte[crypto.hashLength()]);
 		assertEquals(tree.numChunks, tree.numChunks());
+	}
+	
+	@Test
+	public void testGetStatsReturnsNumChunksCachedForImmediates() throws IOException {
+		PageTree immTree = new PageTree(immediateTag);
+		assertEquals(1, immTree.getStats().numCachedChunks);
+	}
+	
+	@Test
+	public void testGetStatsReturnsNumPagesCachedForImmediates() throws IOException {
+		PageTree immTree = new PageTree(immediateTag);
+		assertEquals(1, immTree.getStats().numCachedPages);
+	}
+	
+	@Test
+	public void testGetStatsReturnsNumChunksCachedForIndirects() throws IOException {
+		PageTree indTree = new PageTree(indirectTag);
+		assertEquals(1, indTree.getStats().numCachedPages);
+	}
+	
+	@Test
+	public void testGetStatsReturnsNumPagesCachedForIndirects() throws IOException {
+		PageTree indTree = new PageTree(indirectTag);
+		assertEquals(1, indTree.getStats().numCachedPages);
+		
+		indirectTag.getConfig().getCacheStorage().unlink(Page.pathForTag(indTree.getPageTag(0)));
+		assertEquals(0, indTree.getStats().numCachedPages);
+	}
+	
+	@Test
+	public void testGetStatsReturnsPagesCachedForDoubleIndirects() throws IOException {
+		ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
+		ZKFS smallPageFs = smallPageArchive.openBlank();
+		int size = 512*1024;
+		smallPageFs.write("test", new byte[size]);
+		assertArrayEquals(new byte[size], smallPageFs.read("test"));
+		
+		PageTree diTree = new PageTree(smallPageFs.inodeForPath("test"));
+		PageTreeStats stats = diTree.getStats();
+		
+		assertEquals(diTree.numPages, stats.totalPages);
+		assertEquals(diTree.numPages, stats.numCachedPages);
+		long expected = diTree.numPages;
+		
+		for(long i = 0; i < diTree.numPages; i++) {
+			if(i % 2 == 0) continue;
+			try {
+				String path = Page.pathForTag(diTree.getPageTag(i));
+				smallPageArchive.getConfig().getCacheStorage().unlink(path);
+				expected--;
+			} catch(ENOENTException exc) {
+				// some chunks are blank so they don't really exist
+			}
+		}
+		
+		smallPageArchive.rescanPageTags();
+		
+		stats = diTree.getStats();
+		assertEquals(diTree.numPages, stats.totalPages);
+		assertEquals(expected, stats.numCachedPages);
+	}
+
+	@Test
+	public void testGetStatsReturnsChunksCachedForDoubleIndirects() throws IOException {
+		ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
+		ZKFS smallPageFs = smallPageArchive.openBlank();
+		int size = 512*1024;
+		smallPageFs.write("test", new byte[size]);
+		assertArrayEquals(new byte[size], smallPageFs.read("test"));
+		
+		PageTree diTree = new PageTree(smallPageFs.inodeForPath("test"));
+		PageTreeStats stats = diTree.getStats();
+		
+		assertEquals(diTree.numChunks, stats.totalChunks);
+		assertEquals(diTree.numChunks, stats.numCachedChunks);
+		long expected = diTree.numChunks;
+		long levelSize = (long) (Math.log(stats.totalChunks)/Math.log(smallPageArchive.getConfig().tagsPerChunk));
+		
+		for(long i = diTree.numChunks - levelSize + 1; i < diTree.numChunks; i++) {
+			if(i % 2 == 0) continue;
+			try {
+				String path = Page.pathForTag(diTree.tagForChunk(i));
+				smallPageArchive.getConfig().getCacheStorage().unlink(path);
+				expected--;
+			} catch(ENOENTException exc) {
+				// some chunks are blank so they don't really exist
+			}
+		}
+		
+		smallPageArchive.rescanPageTags();
+		
+		stats = diTree.getStats();
+		assertEquals(diTree.numChunks, stats.totalChunks);
+		assertEquals(expected, stats.numCachedChunks);
 	}
 	
 	@Test

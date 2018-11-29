@@ -54,7 +54,7 @@ public class ZKArchive {
 		}, (tag, fs) -> {});
 		
 		if(!isCacheOnly()) { // only need the list for non-networked archives, which are not cache-only
-			buildAllPageTagsList();
+			rescanPageTags();
 		}
 	}
 	
@@ -211,7 +211,8 @@ public class ZKArchive {
 		}		
 	}
 	
-	protected void buildAllPageTagsList() throws IOException {
+	public void rescanPageTags() throws IOException {
+		allPageTags.clear();
 		DirectoryTraverser traverser = new DirectoryTraverser(storage, storage.opendir("/"));
 		while(traverser.hasNext()) {
 			byte[] tag = Page.tagForPath(traverser.next());
