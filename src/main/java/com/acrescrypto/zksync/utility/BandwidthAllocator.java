@@ -21,8 +21,12 @@ public class BandwidthAllocator {
 		
 		public BandwidthAllocation() {}
 		
+		public void expect(long expectation) {
+			bytesRemaining += requestBytes(expectation);
+		}
+		
 		public long requestBytes(long requestSize) {
-			if(bytesRemaining <= 0 || System.currentTimeMillis() >= expirationTime) {
+			if(bytesRemaining <= 0 || Util.currentTimeMillis() >= expirationTime) {
 				renew(requestSize);
 			}
 			
@@ -32,16 +36,22 @@ public class BandwidthAllocator {
 			}
 			
 			bytesRemaining -= allowed;
-			return bytesRemaining;
+			return allowed;
 		}
 		
 		public void renew(long requested) {
 			renewAllocation(this, requested);
 		}
 		
-		public void relinquish() {
-			if(bytesRemaining <= 0) return;
-			relinquishAllocation(this);
+		public long getBytesRemaining() {
+			if(Util.currentTimeMillis() >= expirationTime) {
+				bytesRemaining = 0;
+			}
+			return bytesRemaining;
+		}
+		
+		public long getExpirationTime() {
+			return expirationTime;
 		}
 	}
 	
@@ -69,12 +79,15 @@ public class BandwidthAllocator {
 				} catch (InterruptedException e) {}
 			} else {
 				// first thread to renew their allocation is responsible for calling reallocate()
-				willReallocate = true;
+				willReallocate = reallocating = true;
 			}
 		}
 		
 		if(willReallocate) {
-			Util.sleep(reallocationTime - System.currentTimeMillis());
+			while(Util.currentTimeMillis() < reallocationTime) {
+				Util.sleep(reallocationTime - Util.currentTimeMillis());
+			}
+			
 			reallocate();
 		}
 	}
@@ -89,14 +102,10 @@ public class BandwidthAllocator {
 		return allocation;
 	}
 	
-	protected synchronized void relinquishAllocation(BandwidthAllocation allocation) {
-		allocationPool += allocation.bytesRemaining;
-	}
-	
 	protected synchronized void reallocate() {
-		allocationPool = (long) (bytesPerSecond/1000.0 * allocationIntervalMs);
+		allocationPool = bytesPerInterval();
 		MutableInt remaining = new MutableInt(pendingAllocations.size());
-		reallocationTime = System.currentTimeMillis() + allocationIntervalMs;
+		reallocationTime = Util.currentTimeMillis() + allocationIntervalMs;
 		
 		while(allocationPool > 0 && remaining.intValue() > 0) {
 			long averagePortion = allocationPool / remaining.intValue();
@@ -112,6 +121,7 @@ public class BandwidthAllocator {
 			});
 		}
 		
+		pendingAllocations.clear();
 		reallocating = false;
 		this.notifyAll();
 	}
@@ -120,7 +130,23 @@ public class BandwidthAllocator {
 		return allocationIntervalMs;
 	}
 	
+	public void setBytesPerSecond(double bytesPerSecond) {
+		this.bytesPerSecond = bytesPerSecond;
+	}
+	
 	public double getBytesPerSecond() {
 		return bytesPerSecond;
+	}
+	
+	public void setReallocationTime(long reallocationTime) {
+		this.reallocationTime = reallocationTime;
+	}
+
+	public long getReallocationTime() {
+		return reallocationTime;
+	}
+	
+	public long bytesPerInterval() {
+		return (long) (bytesPerSecond/1000.0 * allocationIntervalMs);
 	}
 }
