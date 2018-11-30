@@ -127,4 +127,11 @@ public class BandwidthMonitorTest {
 		assertEquals(2048.0, p1.getBytesPerSecond(), 1e-5);
 		assertEquals(1024.0, p2.getBytesPerSecond(), 1e-5);
 	}
+	
+	@Test
+	public void testObserveTrafficReturnsByteCount() {
+		for(long i : new long[] { 0, 1, Long.MAX_VALUE }) {
+			assertEquals(i, monitor.observeTraffic(i));
+		}
+	}
 }

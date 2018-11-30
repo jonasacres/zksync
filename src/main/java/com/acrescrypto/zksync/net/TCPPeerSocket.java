@@ -1,8 +1,6 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
@@ -17,6 +15,8 @@ import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
+import com.acrescrypto.zksync.utility.RateLimitedOutputStream;
+import com.acrescrypto.zksync.utility.RateLimitedInputStream;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocket extends PeerSocket {
@@ -28,8 +28,8 @@ public class TCPPeerSocket extends PeerSocket {
 	protected static boolean disableMakeThreads; // test purposes
 
 	protected Socket socket;
-	protected OutputStream out;
-	protected InputStream in;
+	protected RateLimitedOutputStream out;
+	protected RateLimitedInputStream in;
 	protected boolean isLocalRoleClient;
 	protected CryptoSupport crypto;
 	protected Key localChainKey, remoteChainKey;
@@ -194,8 +194,12 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 
 	protected void makeStreams() throws IOException {
-		this.out = socket.getOutputStream();
-		this.in = socket.getInputStream();
+		this.out = new RateLimitedOutputStream(socket.getOutputStream(),
+				swarm.getBandwidthAllocatorTx(),
+				swarm.getBandwidthMonitorTx());
+		this.in = new RateLimitedInputStream(socket.getInputStream(),
+				swarm.getBandwidthAllocatorRx(),
+				swarm.getBandwidthMonitorRx());
 	}
 
 	protected void makeThreads() {

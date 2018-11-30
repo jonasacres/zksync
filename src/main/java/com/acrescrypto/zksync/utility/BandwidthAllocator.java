@@ -26,6 +26,7 @@ public class BandwidthAllocator {
 		}
 		
 		public long requestBytes(long requestSize) {
+			if(isUnlimited()) return requestSize;
 			if(bytesRemaining <= 0 || Util.currentTimeMillis() >= expirationTime) {
 				renew(requestSize);
 			}
@@ -92,6 +93,10 @@ public class BandwidthAllocator {
 		}
 	}
 	
+	public long extraBytesAvailable() {
+		return allocationPool;
+	}
+	
 	protected boolean hasExtra() {
 		return allocationPool > 0;
 	}
@@ -147,6 +152,11 @@ public class BandwidthAllocator {
 	}
 	
 	public long bytesPerInterval() {
+		if(isUnlimited()) return Long.MAX_VALUE;
 		return (long) (bytesPerSecond/1000.0 * allocationIntervalMs);
+	}
+	
+	public boolean isUnlimited() {
+		return Double.isInfinite(bytesPerSecond);
 	}
 }

@@ -7,7 +7,8 @@ import org.junit.runners.Suite;
 @Suite.SuiteClasses({
 	ShufflerTest.class,
 	AppendableInputStreamTest.class,
-	BandwidthMonitorTest.class
+	BandwidthMonitorTest.class,
+	BandwidthAllocatorTest.class
 })
 
 public class UtilityTests {

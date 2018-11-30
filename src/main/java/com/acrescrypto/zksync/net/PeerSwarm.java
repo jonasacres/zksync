@@ -33,6 +33,8 @@ import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
+import com.acrescrypto.zksync.utility.BandwidthAllocator;
+import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -54,6 +56,7 @@ public class PeerSwarm implements BlacklistCallback {
 	protected RequestPool pool;
 	protected PrivateDHKey identityKey;
 	protected GroupedThreadPool threadPool;
+	private BandwidthMonitor bandwidthMonitorTx, bandwidthMonitorRx;
 	
 	protected Lock pageWaitLock = new ReentrantLock();
 	protected Lock connectionWaitLock = new ReentrantLock();
@@ -72,6 +75,10 @@ public class PeerSwarm implements BlacklistCallback {
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
 		initIdentity();
 		this.threadPool = GroupedThreadPool.newCachedThreadPool(config.getThreadGroup(), "PeerSwarm " + Util.bytesToHex(identityKey.publicKey().getBytes(), 3));
+		this.bandwidthMonitorTx = new BandwidthMonitor(100, 3000);
+		this.bandwidthMonitorRx = new BandwidthMonitor(100, 3000);
+		this.bandwidthMonitorTx.addParent(config.getMaster().getBandwidthMonitorTx());
+		this.bandwidthMonitorRx.addParent(config.getMaster().getBandwidthMonitorRx());
 		connectionThread();
 		pool = new RequestPool(config);
 		pool.read();
@@ -548,5 +555,29 @@ public class PeerSwarm implements BlacklistCallback {
 	public void setMaxSocketCount(int maxSocketCount) {
 		// TODO API: (implement) Drop peers to enforce new max socket count if necesssary
 		this.maxSocketCount = maxSocketCount;
+	}
+
+	public BandwidthMonitor getBandwidthMonitorTx() {
+		return bandwidthMonitorTx;
+	}
+
+	public void setBandwidthMonitorTx(BandwidthMonitor bandwidthMonitor) {
+		this.bandwidthMonitorTx = bandwidthMonitor;
+	}
+
+	public BandwidthAllocator getBandwidthAllocatorRx() {
+		return config.getMaster().getBandwidthAllocatorRx();
+	}
+
+	public BandwidthAllocator getBandwidthAllocatorTx() {
+		return config.getMaster().getBandwidthAllocatorTx();
+	}
+
+	public BandwidthMonitor getBandwidthMonitorRx() {
+		return bandwidthMonitorRx;
+	}
+
+	public void setBandwidthMonitorRx(BandwidthMonitor bandwidthMonitorRx) {
+		this.bandwidthMonitorRx = bandwidthMonitorRx;
 	}
 }

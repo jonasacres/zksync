@@ -22,6 +22,8 @@ import com.acrescrypto.zksync.net.TCPPeerSocketListener;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
 import com.acrescrypto.zksync.net.dht.DHTZKArchiveDiscovery;
+import com.acrescrypto.zksync.utility.BandwidthAllocator;
+import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
@@ -42,6 +44,11 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected DHTZKArchiveDiscovery dhtDiscovery;
 	protected ThreadGroup threadGroup;
 	protected long debugTime = -1;
+	
+	private BandwidthMonitor bandwidthMonitorTx = new BandwidthMonitor(100, 3000);
+	private BandwidthMonitor bandwidthMonitorRx = new BandwidthMonitor(100, 3000);
+	private BandwidthAllocator bandwidthAllocatorTx = new BandwidthAllocator(Double.POSITIVE_INFINITY);
+	private BandwidthAllocator bandwidthAllocatorRx = new BandwidthAllocator(Double.POSITIVE_INFINITY);
 	
 	// TODO Someday: (refactor) this is really test code, which shouldn't be in here.
 	public static PassphraseProvider demoPassphraseProvider() {
@@ -330,5 +337,37 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public DHTZKArchiveDiscovery getDHTDiscovery() {
 		return dhtDiscovery;
+	}
+
+	public BandwidthMonitor getBandwidthMonitorTx() {
+		return bandwidthMonitorTx;
+	}
+
+	public void setBandwidthMonitorTx(BandwidthMonitor bandwidthMonitorTx) {
+		this.bandwidthMonitorTx = bandwidthMonitorTx;
+	}
+
+	public BandwidthMonitor getBandwidthMonitorRx() {
+		return bandwidthMonitorRx;
+	}
+
+	public void setBandwidthMonitorRx(BandwidthMonitor bandwidthMonitorRx) {
+		this.bandwidthMonitorRx = bandwidthMonitorRx;
+	}
+
+	public BandwidthAllocator getBandwidthAllocatorTx() {
+		return bandwidthAllocatorTx;
+	}
+
+	public void setBandwidthAllocatorTx(BandwidthAllocator bandwidthAllocatorTx) {
+		this.bandwidthAllocatorTx = bandwidthAllocatorTx;
+	}
+
+	public BandwidthAllocator getBandwidthAllocatorRx() {
+		return bandwidthAllocatorRx;
+	}
+
+	public void setBandwidthAllocatorRx(BandwidthAllocator bandwidthAllocatorRx) {
+		this.bandwidthAllocatorRx = bandwidthAllocatorRx;
 	}
 }

@@ -44,7 +44,9 @@ public class BandwidthMonitor {
 		this.startTime = Util.currentTimeMillis();
 	}
 	
-	public void observeTraffic(long bytes) {
+	public long observeTraffic(long bytes) {
+		if(bytes <= 0) return bytes; // passthrough without doing anything
+		if(sampleDurationMs == -1 && sampleExpirationMs == -1) return bytes;
 		LinkedList<BandwidthMonitor> parentClone;
 		synchronized(this) {
 			parentClone = new LinkedList<>(parents);
@@ -59,6 +61,8 @@ public class BandwidthMonitor {
 		for(BandwidthMonitor parent : parentClone) {
 			parent.observeTraffic(bytes);
 		}
+		
+		return bytes;
 	}
 	
 	protected synchronized void recalculate() {
