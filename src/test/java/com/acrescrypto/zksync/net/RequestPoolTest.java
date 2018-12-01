@@ -136,12 +136,30 @@ public class RequestPoolTest {
 	}
 	
 	@Test
+	public void testAddPageTagShortAllowsReprioritization() {
+		pool.addPageTag(12, 1234l);
+		pool.addPageTag(123, 1234l);
+		assertFalse(pool.hasPageTag(12, 1234l));
+		assertTrue(pool.hasPageTag(123, 1234l));
+	}
+	
+	@Test
 	public void testAddPageTagBytes() {
 		byte[] pageTag = crypto.rng(crypto.hashLength());
 		long shortTag = Util.shortTag(pageTag);
 		assertFalse(pool.hasPageTag(19, shortTag));
 		pool.addPageTag(19, pageTag);
 		assertTrue(pool.hasPageTag(19, shortTag));
+	}
+	
+	@Test
+	public void testAddPageTagBytesAllowsReprioritization() {
+		byte[] pageTag = crypto.rng(crypto.hashLength());
+		long shortTag = Util.shortTag(pageTag);
+		pool.addPageTag(19, pageTag);
+		pool.addPageTag(18, pageTag);
+		assertTrue(pool.hasPageTag(18, shortTag));
+		assertFalse(pool.hasPageTag(19, shortTag));
 	}
 	
 	@Test
@@ -153,11 +171,46 @@ public class RequestPoolTest {
 	}
 	
 	@Test
+	public void testAddInodeAllowsReprioritization() throws IOException {
+		RevisionTag refTag = archive.openBlank().commit();
+		pool.addInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE);
+		pool.addInode(314159265, refTag, InodeTable.INODE_ID_INODE_TABLE);
+		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
+		assertTrue(pool.hasInode(314159265, refTag, InodeTable.INODE_ID_INODE_TABLE));
+	}
+	
+	@Test
 	public void testAddRevision() throws IOException {
 		RevisionTag revTag = archive.openBlank().commit();
 		assertFalse(pool.hasRevision(-123456, revTag));
 		pool.addRevision(-123456, revTag);
 		assertTrue(pool.hasRevision(-123456, revTag));
+	}
+	
+	@Test
+	public void testAddRevisionAllowsReprioritization() throws IOException {
+		RevisionTag revTag = archive.openBlank().commit();
+		pool.addRevision(-123456, revTag);
+		pool.addRevision(-654321, revTag);
+		assertFalse(pool.hasRevision(-123456, revTag));
+		assertTrue(pool.hasRevision(-654321, revTag));
+	}
+	
+	@Test
+	public void testAddRevisionDetails() throws IOException {
+		RevisionTag revTag = archive.openBlank().commit();
+		assertFalse(pool.hasRevisionDetails(-123456, revTag));
+		pool.addRevisionDetails(-123456, revTag);
+		assertTrue(pool.hasRevisionDetails(-123456, revTag));
+	}
+	
+	@Test
+	public void testAddRevisionDefailtsAllowsReprioritization() throws IOException {
+		RevisionTag revTag = archive.openBlank().commit();
+		pool.addRevisionDetails(-123456, revTag);
+		pool.addRevisionDetails(-654321, revTag);
+		assertFalse(pool.hasRevisionDetails(-123456, revTag));
+		assertTrue(pool.hasRevisionDetails(-654321, revTag));
 	}
 	
 	@Test

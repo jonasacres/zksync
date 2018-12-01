@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 
 import org.slf4j.Logger;
@@ -24,10 +25,164 @@ public class RequestPool {
 	
 	boolean dirty;
 	ZKArchiveConfig config;
-	HashMap<Integer,HashMap<RevisionTag,LinkedList<Long>>> requestedInodes = new HashMap<>();
-	HashMap<Integer,LinkedList<RevisionTag>> requestedRevisions = new HashMap<>();
-	HashMap<Integer,LinkedList<Long>> requestedPageTags = new HashMap<>();
-	HashMap<Integer,LinkedList<RevisionTag>> requestedRevisionDetails = new HashMap<>();
+	HashList<InodeRef> requestedInodes = new HashList<InodeRef>(
+			(r)->r.revTag.getShortHash() + r.inodeId + 1,
+			(r)->{
+				ByteBuffer buf = ByteBuffer.allocate(r.revTag.getBytes().length + 8);
+				buf.put(r.revTag.getBytes());
+				buf.putLong(r.inodeId);
+				return buf.array();
+			},
+			(buf)->{
+				RevisionTag revTag = new RevisionTag(config, buf, false);
+				long inodeId = buf.getLong();
+				return new InodeRef(revTag, inodeId);
+			});
+	HashList<RevisionTag> requestedRevisions = new HashList<RevisionTag>(
+			(t)->Util.shortTag(t.getBytes()),
+			(t)->t.getBytes(),
+			(buf)->new RevisionTag(config, buf, false));
+	HashList<RevisionTag> requestedRevisionDetails = new HashList<RevisionTag>(
+			(t)->Util.shortTag(t.getBytes()),
+			(t)->t.getBytes(),
+			(buf)->new RevisionTag(config, buf, false));
+	HashList<Long> requestedPageTags = new HashList<Long>(
+			(t)->t.longValue(),
+			(t)->Util.serializeLong(t.longValue()),
+			(buf)->buf.getLong());
+	
+	interface Hasher<T> { public long hash(T item); }
+	interface Remover<T> { public boolean test(T item); }
+	interface Serializer<T> { public byte[] serialize(T item); }
+	interface Deserializer<T> { public T deserialize(ByteBuffer serialization); }
+	
+	class InodeRef {
+		RevisionTag revTag;
+		long inodeId;
+		
+		public InodeRef(RevisionTag revTag, long inodeId) {
+			this.revTag = revTag;
+			this.inodeId = inodeId;
+		}
+	}
+	
+	class HashListEntry<T> {
+		int priority;
+		T item;
+		
+		public HashListEntry(int priority, T item) {
+			this.item = item;
+			this.priority = priority;
+		}
+	}
+	
+	class HashList<T> implements Iterable<HashListEntry<T>> {
+		LinkedList<HashListEntry<T>> list = new LinkedList<>();
+		HashMap<Long, HashListEntry<T>> map = new HashMap<>();
+		Hasher<T> hasher;
+		Serializer<T> serializer;
+		Deserializer<T> deserializer;
+		
+		public HashList(Hasher<T> hasher, Serializer<T> serializer, Deserializer<T> deserializer) {
+			this.hasher = hasher;
+			this.serializer = serializer;
+			this.deserializer = deserializer;
+		}
+		
+		public byte[] serialize() {
+			int recordSize = 0;
+			if(!list.isEmpty()) {
+				recordSize = serializer.serialize(list.getFirst().item).length;
+			}
+			
+			ByteBuffer buf = ByteBuffer.allocate(4 + list.size()*(4 + recordSize));
+			buf.putInt(list.size());
+			for(HashListEntry<T> entry : list) {
+				buf.putInt(entry.priority);
+				buf.put(serializer.serialize(entry.item));
+			}
+			
+			return buf.array();
+		}
+		
+		public void deserialize(ByteBuffer buf) {
+			list.clear();
+			map.clear();
+			int numRecords = buf.getInt();
+			for(int i = 0; i < numRecords; i++) {
+				int priority = buf.getInt();
+				T item = deserializer.deserialize(buf);
+				HashListEntry<T> entry = new HashListEntry<T>(priority, item);
+				list.add(entry);
+				map.put(getHash(item), entry);
+			}
+		}
+		
+		public boolean add(int priority, T item) {
+			long hash = getHash(item);
+			HashListEntry<T> entry = map.get(hash);
+			if(entry != null) {
+				if(entry.priority == priority) return false;
+				entry.priority = priority;
+				return true;
+			}
+			
+			entry = new HashListEntry<T>(priority, item);
+			map.put(hash, entry);
+			list.add(entry);
+			return true;
+		}
+		
+		public void remove(T entry) {
+			long hash = getHash(entry);
+			list.remove(entry);
+			map.remove(hash);
+		}
+		
+		public long getHash(T item) {
+			return hasher.hash(item);
+		}
+		
+		public int size() {
+			return list.size();
+		}
+		
+		public HashMap<Integer,LinkedList<T>> priorityMap() {
+			HashMap<Integer,LinkedList<T>> pMap = new HashMap<>();
+			for(HashListEntry<T> entry : list) {
+				pMap.putIfAbsent(entry.priority, new LinkedList<>());
+				pMap.get(entry.priority).add(entry.item);
+			}
+			return pMap;
+		}
+
+		@Override
+		public Iterator<HashListEntry<T>> iterator() {
+			return list.iterator();
+		}
+
+		public boolean contains(int priority, T item) {
+			return map.containsKey(getHash(item)) && map.get(getHash(item)).priority == priority;
+		}
+
+		public void removeIf(Remover<T> test) {
+			LinkedList<HashListEntry<T>> toRemove = new LinkedList<>();
+			for(HashListEntry<T> entry : list) {
+				if(test.test(entry.item)) {
+					toRemove.add(entry);
+				}
+			}
+			
+			for(HashListEntry<T> entry : toRemove) {
+				list.remove(entry);
+				map.remove(getHash(entry.item));
+			}
+		}
+
+		public boolean isEmpty() {
+			return list.isEmpty();
+		}
+	}
 	
 	boolean requestingEverything, stopped, paused, requestingConfigInfo;
 	Logger logger = LoggerFactory.getLogger(RequestPool.class);
@@ -82,9 +237,7 @@ public class RequestPool {
 	}
 	
 	public synchronized void addInode(int priority, RevisionTag revTag, long inodeId) {
-		requestedInodes.putIfAbsent(priority, new HashMap<>());
-		requestedInodes.get(priority).putIfAbsent(revTag, new LinkedList<>());
-		requestedInodes.get(priority).get(revTag).add(inodeId);
+		requestedInodes.add(priority, new InodeRef(revTag, inodeId));
 		dirty = true;
 
 		if(config.canReceive()) {
@@ -99,8 +252,7 @@ public class RequestPool {
 	}
 	
 	public synchronized void addRevision(int priority, RevisionTag revTag) {
-		requestedRevisions.putIfAbsent(priority, new LinkedList<>());
-		requestedRevisions.get(priority).add(revTag);
+		requestedRevisions.add(priority,  revTag);
 		dirty = true;
 		
 		if(config.canReceive()) {
@@ -115,8 +267,7 @@ public class RequestPool {
 	}
 	
 	public synchronized void addPageTag(int priority, long shortTag) {
-		requestedPageTags.putIfAbsent(priority, new LinkedList<>());
-		requestedPageTags.get(priority).add(shortTag);
+		requestedPageTags.add(priority, shortTag);
 		dirty = true;
 		
 		if(config.canReceive()) {
@@ -131,8 +282,7 @@ public class RequestPool {
 	}
 	
 	public synchronized void addRevisionDetails(int priority, RevisionTag revTag) {
-		requestedRevisionDetails.putIfAbsent(priority, new LinkedList<>());
-		requestedRevisionDetails.get(priority).add(revTag);
+		requestedRevisionDetails.add(priority, revTag);
 		
 		if(config.canReceive()) {
 			for(PeerConnection connection : config.getSwarm().getConnections()) {
@@ -144,24 +294,19 @@ public class RequestPool {
 	}
 	
 	public boolean hasPageTag(int priority, long shortTag) {
-		return requestedPageTags
-				.getOrDefault(priority, new LinkedList<>())
-				.contains(shortTag);
+		return requestedPageTags.contains(priority, shortTag);
 	}
 	
 	public boolean hasInode(int priority, RevisionTag refTag, long inodeId) {
-		return requestedInodes
-				.getOrDefault(priority, new HashMap<>())
-				.getOrDefault(refTag, new LinkedList<>())
-				.contains(inodeId);
+		return requestedInodes.contains(priority, new InodeRef(refTag, inodeId));
 	}
 	
 	public boolean hasRevision(int priority, RevisionTag revTag) {
-		return requestedRevisions.getOrDefault(priority, new LinkedList<>()).contains(revTag);
+		return requestedRevisions.contains(priority, revTag);
 	}
 	
 	public boolean hasRevisionDetails(int priority, RevisionTag revTag) {
-		return requestedRevisionDetails.getOrDefault(priority, new LinkedList<>()).contains(revTag);
+		return requestedRevisionDetails.contains(priority, revTag);
 	}
 
 	
@@ -189,25 +334,41 @@ public class RequestPool {
 			conn.requestAll();
 		}
 		
-		for(int priority : requestedPageTags.keySet()) {
-			conn.requestPageTags(priority, requestedPageTags.get(priority));
+		HashMap<Integer,LinkedList<Long>> pageMap = requestedPageTags.priorityMap();
+		for(int priority : pageMap.keySet()) {
+			conn.requestPageTags(priority, pageMap.get(priority));
 		}
 		
 		try {
-			for(int priority : requestedInodes.keySet()) {
-				for(RevisionTag revTag : requestedInodes.get(priority).keySet()) {
-					conn.requestInodes(priority, revTag, requestedInodes.get(priority).get(revTag));
+			HashMap<Integer, HashMap<RevisionTag, LinkedList<Long>>> inodeMap = inodeMap();
+			for(int priority : inodeMap.keySet()) {
+				for(RevisionTag revTag : inodeMap.get(priority).keySet()) {
+					conn.requestInodes(priority, revTag, inodeMap.get(priority).get(revTag));
 				}
 			}
 			
-			for(int priority : requestedRevisions.keySet()) {
-				conn.requestRevisionContents(priority, requestedRevisions.get(priority));
+			HashMap<Integer,LinkedList<RevisionTag>> map = requestedRevisions.priorityMap();
+			for(int priority : map.keySet()) {
+				conn.requestRevisionContents(priority, map.get(priority));
 			}
 			
-			for(int priority : requestedRevisionDetails.keySet()) {
-				conn.requestRevisionDetails(priority, requestedRevisionDetails.get(priority));
+			map = requestedRevisionDetails.priorityMap();
+			for(int priority : map.keySet()) {
+				conn.requestRevisionDetails(priority, map.get(priority));
 			}
 		} catch(PeerCapabilityException exc) {}
+	}
+	
+	protected HashMap<Integer, HashMap<RevisionTag, LinkedList<Long>>> inodeMap() {
+		HashMap<Integer, HashMap<RevisionTag, LinkedList<Long>>> map = new HashMap<>();
+		for(HashListEntry<InodeRef> entry : requestedInodes) {
+			map.putIfAbsent(entry.priority, new HashMap<RevisionTag, LinkedList<Long>>());
+			HashMap<RevisionTag, LinkedList<Long>> tagMap = map.get(entry.priority);
+			tagMap.putIfAbsent(entry.item.revTag, new LinkedList<Long>());
+			tagMap.get(entry.item.revTag).add(entry.item.inodeId);
+		}
+		
+		return map;
 	}
 	
 	protected void pruneThread() {
@@ -231,59 +392,37 @@ public class RequestPool {
 	}
 	
 	protected void prunePageTags() throws IOException {
-		for(int priority : requestedPageTags.keySet()) {
-			LinkedList<Long> existing = requestedPageTags.get(priority);
-			existing.removeIf((shortTag)->{
-				try {
-					return config.getArchive().expandShortTag(shortTag) != null;
-				} catch(IOException exc) {
-					return false;
-				}
-			});
-		}
+		requestedPageTags.removeIf((shortTag)->{
+			try {
+				return config.getArchive().expandShortTag(shortTag) != null;
+			} catch(IOException exc) {
+				return false;
+			}
+		});
 	}
 	
 	protected void pruneRefTags() throws IOException {
-		for(int priority : requestedInodes.keySet()) {
-			HashMap<RevisionTag,LinkedList<Long>> existing = requestedInodes.get(priority);
-			LinkedList<RevisionTag> emptyTags = new LinkedList<>();
-			for(RevisionTag revTag : existing.keySet()) {
-				LinkedList<Long> inodeIds = existing.get(revTag);
-				if(inodeIds.isEmpty()) {
-					emptyTags.add(revTag);
-				} else {
-					inodeIds.removeIf((inodeId)->{
-						try {
-							return config.getArchive().hasInode(revTag, inodeId);
-						} catch (IOException e) {
-							return false;
-						}
-					});
-				}
+		requestedInodes.removeIf((r)->{
+			try {
+				return config.getArchive().hasInode(r.revTag, r.inodeId);
+			} catch (IOException e) {
+				return false;
 			}
-		}
+		});
 	}
 
 	protected void pruneRevisionTags() throws IOException {
-		for(int priority : requestedRevisions.keySet()) {
-			LinkedList<RevisionTag> existing = requestedRevisions.get(priority);
-			existing.removeIf((revTag)->{
-				try {
-					return config.getArchive().hasRevision(revTag);
-				} catch(IOException exc) {
-					return false;
-				}
-			});
-		}
+		requestedRevisions.removeIf((revTag)->{
+			try {
+				return config.getArchive().hasRevision(revTag);
+			} catch(IOException exc) {
+				return false;
+			}
+		});
 	}
 	
 	protected void pruneRevisionDetails() throws IOException {
-		for(int priority : requestedRevisionDetails.keySet()) {
-			LinkedList<RevisionTag> existing = requestedRevisionDetails.get(priority);
-			existing.removeIf((revTag)->{
-				return config.getRevisionTree().hasParentsForTag(revTag);
-			});
-		}
+		requestedRevisionDetails.removeIf((revTag)->config.getRevisionTree().hasParentsForTag(revTag));
 	}
 	
 	protected Key key() {
@@ -313,43 +452,12 @@ public class RequestPool {
 	
 	protected byte[] serialize() {
 		LinkedList<byte[]> pieces = new LinkedList<>();
-		pieces.add(new byte[] { (byte) (requestingEverything ? 0x01 : 0x00) });
 		
-		pieces.add(Util.serializeInt(requestedPageTags.size()));
-		for(int priority : requestedPageTags.keySet()) {
-			LinkedList<Long> list = requestedPageTags.get(priority);
-			ByteBuffer buf = ByteBuffer.allocate(2*4+8*list.size());
-			buf.putInt(priority);
-			buf.putInt(list.size());
-			for(long shortTag : list) buf.putLong(shortTag);
-			pieces.add(buf.array());
-		}
-		
-		pieces.add(Util.serializeInt(requestedInodes.size()));
-		for(int priority : requestedInodes.keySet()) {
-			HashMap<RevisionTag, LinkedList<Long>> map = requestedInodes.get(priority);
-			pieces.add(Util.serializeInt(priority));
-			pieces.add(Util.serializeInt(map.size()));
-
-			for(RevisionTag revTag : map.keySet()) {
-				LinkedList<Long> inodeIds = map.get(revTag);
-				ByteBuffer buf = ByteBuffer.allocate(RevisionTag.sizeForConfig(config) + 4 + 8*inodeIds.size());
-				buf.put(revTag.getBytes());
-				buf.putInt(inodeIds.size());
-				for(long inodeId : inodeIds) buf.putLong(inodeId);
-				pieces.add(buf.array());
-			}
-		}
-		
-		pieces.add(Util.serializeInt(requestedRevisions.size()));
-		for(int priority : requestedRevisions.keySet()) {
-			LinkedList<RevisionTag> list = requestedRevisions.get(priority);
-			ByteBuffer buf = ByteBuffer.allocate(2*4+RevisionTag.sizeForConfig(config)*list.size());
-			buf.putInt(priority);
-			buf.putInt(list.size());
-			for(RevisionTag tag : list) buf.put(tag.getBytes());
-			pieces.add(buf.array());
-		}
+		pieces.add(new byte[] { (byte) (requestingEverything ? 0x01 : 0x00) });		
+		pieces.add(requestedPageTags.serialize());
+		pieces.add(requestedInodes.serialize());
+		pieces.add(requestedRevisions.serialize());
+		pieces.add(requestedRevisionDetails.serialize());
 		
 		int totalBytes = 0;
 		for(byte[] piece : pieces) totalBytes += piece.length;
@@ -360,43 +468,10 @@ public class RequestPool {
 	
 	protected void deserialize(ByteBuffer buf) {
 		requestingEverything = (buf.get() & 0x01) == 0x01;
-		byte[] tagBytes = new byte[RevisionTag.sizeForConfig(config)];
-		
-		int numPageTagPriorities = buf.getInt();
-		for(int i = 0; i < numPageTagPriorities; i++) {
-			int priority = buf.getInt();
-			int numEntries = buf.getInt();
-			for(int j = 0; j < numEntries; j++) {
-				addPageTag(priority, buf.getLong());
-			}
-		}
-		
-		int numInodePriorities = buf.getInt();
-		for(int i = 0; i < numInodePriorities; i++) {
-			int priority = buf.getInt();
-			int numRevTags = buf.getInt();
-			for(int j = 0; j < numRevTags; j++) {
-				buf.get(tagBytes);
-				int numInodeIds = buf.getInt();
-				RevisionTag revTag = new RevisionTag(config, tagBytes, false);
-				
-				for(int k = 0; k < numInodeIds; k++) {
-					addInode(priority, revTag, buf.getLong());
-				}
-			}
-		}
-		
-		int numRevisionPriorities = buf.getInt();
-		for(int i = 0; i < numRevisionPriorities; i++) {
-			int priority = buf.getInt();
-			int numEntries = buf.getInt();
-			for(int j = 0; j < numEntries; j++) {
-				buf.get(tagBytes);
-				RevisionTag tag = new RevisionTag(config, tagBytes, false);
-				addRevision(priority, tag);
-			}
-		}
-		
-		dirty = false;
+		requestedPageTags.deserialize(buf);
+		requestedInodes.deserialize(buf);
+		requestedRevisions.deserialize(buf);
+		requestedRevisionDetails.deserialize(buf);
+		addDataRequests();
 	}
 }

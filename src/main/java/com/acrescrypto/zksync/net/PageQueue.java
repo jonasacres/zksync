@@ -2,6 +2,8 @@ package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.PriorityQueue;
 
 import org.slf4j.Logger;
@@ -51,15 +53,44 @@ public class PageQueue {
 	
 	abstract class QueueItem implements Comparable<QueueItem> {
 		int priority; // higher comes first
+		QueueItem lastChild;
+		
 		QueueItem(int priority) { this.priority = priority; }
-		QueueItem nextChild() { return null; }
+		QueueItem nextChildActual() { return null; }
+		QueueItem nextChild() {
+			return lastChild = nextChildActual();
+		}
+		
 		ChunkReference reference() { return null; }
 		abstract int classPriority(); // tiebreaker between equal priority; higher goes first.
+		abstract long getHash();
 		
 		@Override
 		public int compareTo(QueueItem other) {
 			if(other.priority != this.priority) return -Integer.compare(priority, other.priority);
 			return -Integer.compare(classPriority(), other.classPriority());
+		}
+		
+		public void reprioritize(int newPriority) {
+			if(newPriority == Integer.MIN_VALUE) {
+				cancel();
+				return;
+			}
+			
+			itemsByPriority.remove(this);
+			this.priority = newPriority;
+			itemsByPriority.add(this);
+			if(lastChild != null) {
+				lastChild.reprioritize(newPriority);
+			}
+		}
+		
+		public void cancel() {
+			itemsByPriority.remove(this);
+			itemsByHash.remove(this.getHash());
+			if(lastChild != null) {
+				lastChild.cancel();
+			}
 		}
 	}
 	
@@ -71,13 +102,9 @@ public class PageQueue {
 			this.reference = reference;
 		}
 		
-		@Override
-		ChunkReference reference() {
-			return reference;
-		}
-		
-		@Override
-		int classPriority() { return 0; }
+		@Override ChunkReference reference() { return reference; }
+		@Override int classPriority() { return 0; }
+		@Override long getHash() { return Util.shortTag(reference.tag) + reference.index + 1; } 
 	}
 	
 	class PageQueueItem extends QueueItem {
@@ -99,13 +126,13 @@ public class PageQueue {
 		}
 		
 		@Override
-		QueueItem nextChild() {
+		QueueItem nextChildActual() {
 			if(!shuffler.hasNext()) return null;
 			return new ChunkQueueItem(priority, new ChunkReference(archive.getStorage(), tag, shuffler.next()));
 		}
 		
-		@Override
-		int classPriority() { return -10; }
+		@Override int classPriority() { return -10; }
+		@Override long getHash() { return tag != null ? Util.shortTag(tag) : -1; }
 	}
 	
 	class InodeContentsQueueItem extends QueueItem {
@@ -135,7 +162,7 @@ public class PageQueue {
 		}
 		
 		@Override
-		QueueItem nextChild() {
+		QueueItem nextChildActual() {
 			if(!shuffler.hasNext()) return null;
 			try {
 				int next = shuffler.next();
@@ -152,8 +179,8 @@ public class PageQueue {
 			}
 		}
 		
-		@Override
-		int classPriority() { return -20; }
+		@Override int classPriority() { return -20; }
+		@Override long getHash() { return tree != null ? Util.shortTag(tree.getRefTag().getHash()) : -1; }
 	}
 	
 	class RevisionQueueItem extends QueueItem {
@@ -179,7 +206,7 @@ public class PageQueue {
 		}
 		
 		@Override
-		QueueItem nextChild() {
+		QueueItem nextChildActual() {
 			try {
 				while(shuffler.hasNext()) {
 					int inodeId = shuffler.next();
@@ -196,8 +223,8 @@ public class PageQueue {
 			}
 		}
 		
-		@Override
-		int classPriority() { return -30; }
+		@Override int classPriority() { return -30; }
+		@Override long getHash() { return Util.shortTag(revTag.getBytes()); }
 	}
 	
 	class EverythingQueueItem extends QueueItem {
@@ -216,7 +243,7 @@ public class PageQueue {
 		}
 		
 		@Override
-		QueueItem nextChild() {
+		QueueItem nextChildActual() {
 			if(traverser == null || !traverser.hasNext()) {
 				done = true;
 				return null;
@@ -231,12 +258,13 @@ public class PageQueue {
 			}
 		}
 		
-		@Override
-		int classPriority() { return -40; }
+		@Override int classPriority() { return -40; }
+		@Override long getHash() { return 0; }
 	}
 	
 	private Logger logger = LoggerFactory.getLogger(PageQueue.class);
 	protected PriorityQueue<QueueItem> itemsByPriority = new PriorityQueue<QueueItem>();
+	protected Map<Long,QueueItem> itemsByHash = new HashMap<>();
 	protected ZKArchiveConfig config;
 	protected EverythingQueueItem everythingItem;
 	protected boolean closed;
@@ -254,8 +282,6 @@ public class PageQueue {
 			addPageTag(priority, config.getArchive().expandShortTag(shortTag));
 		} catch (IOException exc) {
 			logger.error("Caught exception queuing short tag {}", String.format("%16x", shortTag), exc);
-		} catch(NullPointerException exc) {
-			System.out.println("Caught that devilish bug!");
 		}
 	}
 	
@@ -279,11 +305,12 @@ public class PageQueue {
 	
 	public void stopSendingEverything() {
 		if(everythingItem == null) return;
-		itemsByPriority.remove(everythingItem);
+		everythingItem.cancel();
 	}
 	
 	public synchronized void stopAll() {
 		itemsByPriority.clear();
+		itemsByHash.clear();
 	}
 	
 	public synchronized void close() {
@@ -312,11 +339,20 @@ public class PageQueue {
 		
 		if(closed) return null;
 		
-		return itemsByPriority.remove().reference();
+		QueueItem item = itemsByPriority.remove();
+		itemsByHash.remove(item.getHash());
+		return item.reference();
 	}
 	
 	protected synchronized void addItem(QueueItem item) {
+		QueueItem existing = itemsByHash.get(item.getHash());
+		if(existing != null) {
+			existing.reprioritize(item.priority);
+			return;
+		}
+		
 		itemsByPriority.add(item);
+		itemsByHash.put(item.getHash(), item);
 		this.notifyAll();
 	}
 	
@@ -326,8 +362,10 @@ public class PageQueue {
 			QueueItem child = head.nextChild();
 			if(child != null) {
 				itemsByPriority.add(child);
+				itemsByHash.put(child.getHash(), child);
 			} else if(head.reference() == null) {
-				itemsByPriority.poll();
+				QueueItem item = itemsByPriority.poll();
+				itemsByHash.remove(item.getHash());
 			} else {
 				return;
 			}

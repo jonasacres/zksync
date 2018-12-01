@@ -341,16 +341,10 @@ public class PageQueueTest {
 	public void testStopSendingEverything() {
 		// ask for everything, read a chunk, ask to stop
 		queue.startSendingEverything();
-		byte[] tag = queue.nextChunk().tag;
+		queue.nextChunk(); // let it break things down so we get chunk entries
 		queue.stopSendingEverything();
 		
-		// it will finish sending the remaining chunks of the current page
-		for(int i = 0; i < numChunks-1; i++) {
-			assertTrue(queue.hasNextChunk());
-			assertTrue(Arrays.equals(tag, queue.nextChunk().tag));
-		}
-		
-		// and then nothing else
+		// everything, including the queued chunk entries, should be gone
 		assertFalse(queue.hasNextChunk());
 	}
 	
@@ -486,6 +480,29 @@ public class PageQueueTest {
 	}
 	
 	@Test
+	public void testAddPageTagAllowsReprioritization() {
+		// low-priority tag
+		queue.addPageTag(0, pageTag);
+		
+		// now add a high-priority request and grab a chunk
+		queue.addPageTag(1, inodeIndirect.getRefTag().getHash());
+		queue.nextChunk();
+		
+		// now reprioritize; our formerly low-priority tag should bump up to the head of the queue
+		queue.addPageTag(2, pageTag);
+		assertTrue(Arrays.equals(pageTag, queue.nextChunk().tag));
+	}
+	
+	@Test
+	public void testAddPageTagAllowsCancellation() {
+		// low-priority tag
+		queue.addPageTag(0, pageTag);
+		queue.nextChunk();
+		queue.addPageTag(Integer.MIN_VALUE, pageTag);
+		assertFalse(queue.hasNextChunk());
+	}
+	
+	@Test
 	public void testAddInodeContentsEnqueuesAllPagesInRefTag() throws IOException {
 		HashSet<Long> seenPageTags = new HashSet<Long>();
 		HashSet<Integer> seenChunks = null;
@@ -538,6 +555,29 @@ public class PageQueueTest {
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 		assertTrue(queue.hasNextChunk());
 		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getHash(), queue.nextChunk().tag));
+	}
+	
+	@Test
+	public void testAddInodeContentsAllowsReprioritization() {
+		// queue up low-priority and high-priority reftags
+		queue.addInodeContents(0, revTag, inodeIndirect.getStat().getInodeId());
+		queue.addInodeContents(1, revTag, inode2Indirect.getStat().getInodeId());
+		queue.nextChunk();
+		
+		// now make the low priority higher
+		queue.addInodeContents(2, revTag, inodeIndirect.getStat().getInodeId());
+		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getHash(), queue.nextChunk().tag));
+	}
+	
+	@Test
+	public void testAddInodeContentsAllowsCancellation() {
+		// queue up low-priority and high-priority reftags
+		queue.addInodeContents(0, revTag, inodeIndirect.getStat().getInodeId());
+		queue.nextChunk();
+		
+		// now make the low priority higher
+		queue.addInodeContents(Integer.MIN_VALUE, revTag, inodeIndirect.getStat().getInodeId());
+		assertFalse(queue.hasNextChunk());
 	}
 	
 	@Test
@@ -651,6 +691,32 @@ public class PageQueueTest {
 		
 		byte[] nextTag = queue.nextChunk().tag;
 		assertFalse(Arrays.equals(pageTag, nextTag));
+	}
+	
+	@Test
+	public void testAddRevisionTagAllowsReprioritization() throws IOException {
+		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
+		queue.addRevisionTag(0, secondRevTag);
+		queue.addPageTag(1, pageTag);
+		queue.addRevisionTag(2, secondRevTag);
+		assertFalse(Arrays.equals(pageTag, queue.nextChunk().tag));
+		
+		queue.stopAll();
+		queue.addRevisionTag(2, secondRevTag);
+		queue.addPageTag(1, pageTag);
+		queue.addRevisionTag(0, secondRevTag);
+		
+		byte[] nextTag = queue.nextChunk().tag;
+		assertTrue(Arrays.equals(pageTag, nextTag));
+	}
+	
+	@Test
+	public void testAddRevisionTagAllowsCancellation() throws IOException {
+		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
+		queue.addRevisionTag(0, secondRevTag);
+		queue.nextChunk();
+		queue.addRevisionTag(Integer.MIN_VALUE, secondRevTag);
+		assertFalse(queue.hasNextChunk());
 	}
 	
 	public Inode inodeForPageTag(RevisionTag revTag, byte[] pageTag) throws IOException {
