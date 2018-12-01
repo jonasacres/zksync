@@ -26,6 +26,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class PageQueue {
 	public final static int DEFAULT_EVERYTHING_PRIORITY = -10;
+	public final static int CANCEL_PRIORITY = Integer.MIN_VALUE;
 	
 	public class ChunkReference {
 		FS fs;
@@ -72,7 +73,7 @@ public class PageQueue {
 		}
 		
 		public void reprioritize(int newPriority) {
-			if(newPriority == Integer.MIN_VALUE) {
+			if(newPriority == CANCEL_PRIORITY) {
 				cancel();
 				return;
 			}

@@ -440,16 +440,36 @@ public class PeerSwarm implements BlacklistCallback {
 		requestTag(priority, Util.shortTag(pageTag));
 	}
 	
+	public void cancelTag(byte[] pageTag) {
+		// TODO API: (test) cover cancelTag bytes
+		cancelTag(Util.shortTag(pageTag));
+	}
+	
 	public void requestTag(int priority, long shortTag) {
 		pool.addPageTag(priority, shortTag);
+	}
+	
+	public void cancelTag(long shortTag) {
+		// TODO API: (test) cover cancelTag long
+		pool.cancelPageTag(shortTag);
 	}
 	
 	public void requestInode(int priority, RevisionTag revTag, long inodeId) {
 		pool.addInode(priority, revTag, inodeId);
 	}
 	
+	public void cancelInode(RevisionTag revTag, long inodeId) {
+		// TODO API: (test) cover cancelInode
+		pool.cancelInode(revTag, inodeId);
+	}
+	
 	public void requestRevision(int priority, RevisionTag revTag) {
 		pool.addRevision(priority, revTag);
+	}
+	
+	public void cancelRevision(RevisionTag revTag) {
+		// TODO API: (test) cover cancelRevision
+		pool.cancelRevision(revTag);
 	}
 	
 	public void requestRevisionDetails(int priority, RevisionTag revTag) {

@@ -251,6 +251,19 @@ public class RequestPool {
 		}
 	}
 	
+	public synchronized void cancelInode(RevisionTag revTag, long inodeId) {
+		requestedInodes.remove(new InodeRef(revTag, inodeId));
+		if(config.canReceive()) {
+			for(PeerConnection connection : config.getSwarm().getConnections()) {
+				ArrayList<Long> list = new ArrayList<>(1);
+				list.add(inodeId);
+				try {
+					connection.requestInodes(PageQueue.CANCEL_PRIORITY, revTag, list);
+				} catch (PeerCapabilityException e) {}
+			}
+		}
+	}
+	
 	public synchronized void addRevision(int priority, RevisionTag revTag) {
 		requestedRevisions.add(priority,  revTag);
 		dirty = true;
@@ -261,6 +274,21 @@ public class RequestPool {
 				list.add(revTag);
 				try {
 					connection.requestRevisionContents(priority, list);
+				} catch(PeerCapabilityException exc) {}
+			}
+		}
+	}
+	
+	public synchronized void cancelRevision(RevisionTag revTag) {
+		requestedRevisions.remove(revTag);
+		dirty = true;
+		
+		if(config.canReceive()) {
+			for(PeerConnection connection : config.getSwarm().getConnections()) {
+				ArrayList<RevisionTag> list = new ArrayList<>(1);
+				list.add(revTag);
+				try {
+					connection.requestRevisionContents(PageQueue.CANCEL_PRIORITY, list);
 				} catch(PeerCapabilityException exc) {}
 			}
 		}
@@ -277,8 +305,23 @@ public class RequestPool {
 		}
 	}
 	
+	public synchronized void cancelPageTag(long shortTag) {
+		requestedPageTags.remove(shortTag);
+		dirty = true;
+		
+		if(config.canReceive()) {
+			for(PeerConnection connection : config.getSwarm().getConnections()) {
+				connection.requestPageTag(PageQueue.CANCEL_PRIORITY, shortTag);
+			}
+		}
+	}
+	
 	public synchronized void addPageTag(int priority, byte[] pageTag) {
 		addPageTag(priority, Util.shortTag(pageTag));
+	}
+	
+	public synchronized void cancelPageTag(byte[] pageTag) {
+		cancelPageTag(Util.shortTag(pageTag));
 	}
 	
 	public synchronized void addRevisionDetails(int priority, RevisionTag revTag) {

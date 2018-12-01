@@ -61,6 +61,11 @@ public class RequestPoolTest {
 			requestedPageTags.addAll(pageTags);
 		}
 		
+		@Override public void requestPageTag(int priority, long shortTag) {
+			requestedPriority = priority;
+			requestedPageTags.add(shortTag);
+		}
+		
 		@Override public void requestInodes(int priority, RevisionTag revTag, Collection<Long> inodeIds) throws PeerCapabilityException { 
 			if(mockSeedOnly) throw new PeerCapabilityException();
 			requestedPriority = priority;
@@ -83,13 +88,17 @@ public class RequestPoolTest {
 		@Override public void requestConfigInfo() {
 			requestedConfigInfo = true;
 		}
+		
+		@Override public void announceTag(long shortTag) {}
+		@Override public void announceTip(RevisionTag tip) {}
+		@Override public void announceTips() {}
 	}
 	
 	CryptoSupport crypto;
 	ZKMaster master;
 	ZKArchiveConfig config;
 	DummyArchive archive;
-	DummyConnection conn;
+	DummyConnection conn, defaultConn;
 	RequestPool pool;
 	
 	@BeforeClass
@@ -107,6 +116,8 @@ public class RequestPoolTest {
 		archive = new DummyArchive(config);
 		
 		conn = new DummyConnection();
+		defaultConn = new DummyConnection();
+		config.getSwarm().connections.add(defaultConn);
 		pool = new RequestPool(config);
 	}
 	
@@ -133,6 +144,7 @@ public class RequestPoolTest {
 		assertFalse(pool.hasPageTag(12, 1234l));
 		pool.addPageTag(12, 1234l);
 		assertTrue(pool.hasPageTag(12, 1234l));
+		assertTrue(defaultConn.requestedPageTags.contains(1234l));
 	}
 	
 	@Test
@@ -144,12 +156,25 @@ public class RequestPoolTest {
 	}
 	
 	@Test
+	public void testCancelPageTagShort() {
+		pool.addPageTag(12, 1234l);
+		defaultConn.requestedPageTags.clear();
+		pool.cancelPageTag(1234l);
+		
+		assertFalse(pool.hasPageTag(12, 1234l));
+		assertEquals(PageQueue.CANCEL_PRIORITY, defaultConn.requestedPriority);
+		assertTrue(defaultConn.requestedPageTags.contains(1234l));
+	}
+	
+	@Test
 	public void testAddPageTagBytes() {
 		byte[] pageTag = crypto.rng(crypto.hashLength());
 		long shortTag = Util.shortTag(pageTag);
 		assertFalse(pool.hasPageTag(19, shortTag));
 		pool.addPageTag(19, pageTag);
 		assertTrue(pool.hasPageTag(19, shortTag));
+		assertEquals(19, defaultConn.requestedPriority);
+		assertTrue(defaultConn.requestedPageTags.contains(shortTag));
 	}
 	
 	@Test
@@ -160,6 +185,20 @@ public class RequestPoolTest {
 		pool.addPageTag(18, pageTag);
 		assertTrue(pool.hasPageTag(18, shortTag));
 		assertFalse(pool.hasPageTag(19, shortTag));
+		assertEquals(18, defaultConn.requestedPriority);
+	}
+	
+	@Test
+	public void testCancelPageTagBytes() {
+		byte[] pageTag = crypto.rng(crypto.hashLength());
+		long shortTag = Util.shortTag(pageTag);
+		pool.addPageTag(19, pageTag);
+		defaultConn.requestedPageTags.clear();
+		pool.cancelPageTag(pageTag);
+		
+		assertFalse(pool.hasPageTag(19, shortTag));
+		assertTrue(defaultConn.requestedPageTags.contains(shortTag));
+		assertEquals(PageQueue.CANCEL_PRIORITY, defaultConn.requestedPriority);
 	}
 	
 	@Test
@@ -168,6 +207,8 @@ public class RequestPoolTest {
 		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
 		pool.addInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE);
 		assertTrue(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
+		assertEquals(271828183, defaultConn.requestedPriority);
+		assertTrue(defaultConn.requestedInodeIds.contains(InodeTable.INODE_ID_INODE_TABLE));
 	}
 	
 	@Test
@@ -177,6 +218,19 @@ public class RequestPoolTest {
 		pool.addInode(314159265, refTag, InodeTable.INODE_ID_INODE_TABLE);
 		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
 		assertTrue(pool.hasInode(314159265, refTag, InodeTable.INODE_ID_INODE_TABLE));
+		assertEquals(314159265, defaultConn.requestedPriority);
+	}
+	
+	@Test
+	public void testCancelInode() throws IOException {
+		RevisionTag refTag = archive.openBlank().commit();
+		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
+		pool.addInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE);
+		defaultConn.requestedInodeIds.clear();
+		pool.cancelInode(refTag,  InodeTable.INODE_ID_INODE_TABLE);
+		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
+		assertEquals(PageQueue.CANCEL_PRIORITY, defaultConn.requestedPriority);
+		assertTrue(defaultConn.requestedInodeIds.contains(InodeTable.INODE_ID_INODE_TABLE));
 	}
 	
 	@Test
@@ -185,6 +239,8 @@ public class RequestPoolTest {
 		assertFalse(pool.hasRevision(-123456, revTag));
 		pool.addRevision(-123456, revTag);
 		assertTrue(pool.hasRevision(-123456, revTag));
+		assertEquals(-123456, defaultConn.requestedPriority);
+		assertTrue(defaultConn.requestedRevisions.contains(revTag));
 	}
 	
 	@Test
@@ -194,6 +250,19 @@ public class RequestPoolTest {
 		pool.addRevision(-654321, revTag);
 		assertFalse(pool.hasRevision(-123456, revTag));
 		assertTrue(pool.hasRevision(-654321, revTag));
+		assertEquals(-654321, defaultConn.requestedPriority);
+	}
+	
+	@Test
+	public void testCancelRevision() throws IOException {
+		RevisionTag revTag = archive.openBlank().commit();
+		pool.addRevision(-123456, revTag);
+		defaultConn.requestedRevisions.clear();
+		pool.cancelRevision(revTag);
+		
+		assertFalse(pool.hasRevision(-123456, revTag));
+		assertTrue(defaultConn.requestedRevisions.contains(revTag));
+		assertEquals(PageQueue.CANCEL_PRIORITY, defaultConn.requestedPriority);
 	}
 	
 	@Test
@@ -202,15 +271,18 @@ public class RequestPoolTest {
 		assertFalse(pool.hasRevisionDetails(-123456, revTag));
 		pool.addRevisionDetails(-123456, revTag);
 		assertTrue(pool.hasRevisionDetails(-123456, revTag));
+		assertEquals(-123456, defaultConn.requestedPriority);
+		assertTrue(defaultConn.requestedRevisionDetails.contains(revTag));
 	}
 	
 	@Test
-	public void testAddRevisionDefailtsAllowsReprioritization() throws IOException {
+	public void testAddRevisionDetailsAllowsReprioritization() throws IOException {
 		RevisionTag revTag = archive.openBlank().commit();
 		pool.addRevisionDetails(-123456, revTag);
 		pool.addRevisionDetails(-654321, revTag);
 		assertFalse(pool.hasRevisionDetails(-123456, revTag));
 		assertTrue(pool.hasRevisionDetails(-654321, revTag));
+		assertEquals(-654321, defaultConn.requestedPriority);
 	}
 	
 	@Test
