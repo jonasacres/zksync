@@ -85,7 +85,7 @@ public class BandwidthAllocator {
 		}
 		
 		if(willReallocate) {
-			while(Util.currentTimeMillis() < reallocationTime && bytesPerInterval() <= 0) {
+			while(Util.currentTimeMillis() < reallocationTime || bytesPerInterval() <= 0) {
 				Util.sleep(reallocationTime - Util.currentTimeMillis());
 			}
 			
