@@ -182,6 +182,10 @@ public class RequestPool {
 		public boolean isEmpty() {
 			return list.isEmpty();
 		}
+
+		public HashListEntry<T> lookup(T item) {
+			return map.get(getHash(item));
+		}
 	}
 	
 	boolean requestingEverything, stopped, paused, requestingConfigInfo;
@@ -264,6 +268,15 @@ public class RequestPool {
 		}
 	}
 	
+	public int priorityForInode(RevisionTag revTag, long inodeId) {
+		try {
+			return requestedInodes.lookup(new InodeRef(revTag, inodeId)).priority;
+		} catch(NullPointerException exc) {
+			return PageQueue.CANCEL_PRIORITY;
+		}
+	}
+
+	
 	public synchronized void addRevision(int priority, RevisionTag revTag) {
 		requestedRevisions.add(priority,  revTag);
 		dirty = true;
@@ -294,6 +307,14 @@ public class RequestPool {
 		}
 	}
 	
+	public int priorityForRevision(RevisionTag revTag) {
+		try {
+			return requestedRevisions.lookup(revTag).priority;
+		} catch(NullPointerException exc) {
+			return PageQueue.CANCEL_PRIORITY;
+		}
+	}
+	
 	public synchronized void addPageTag(int priority, long shortTag) {
 		requestedPageTags.add(priority, shortTag);
 		dirty = true;
@@ -316,12 +337,28 @@ public class RequestPool {
 		}
 	}
 	
+	public int priorityForPageTag(long shortTag) {
+		try {
+			return requestedPageTags.lookup(shortTag).priority;
+		} catch(NullPointerException exc) {
+			return PageQueue.CANCEL_PRIORITY;
+		}
+	}
+	
 	public synchronized void addPageTag(int priority, byte[] pageTag) {
 		addPageTag(priority, Util.shortTag(pageTag));
 	}
 	
 	public synchronized void cancelPageTag(byte[] pageTag) {
 		cancelPageTag(Util.shortTag(pageTag));
+	}
+	
+	public int priorityForPageTag(byte[] pageTag) {
+		try {
+			return requestedPageTags.lookup(Util.shortTag(pageTag)).priority;
+		} catch(NullPointerException exc) {
+			return PageQueue.CANCEL_PRIORITY;
+		}
 	}
 	
 	public synchronized void addRevisionDetails(int priority, RevisionTag revTag) {
@@ -333,6 +370,14 @@ public class RequestPool {
 					connection.requestRevisionDetails(priority, revTag);
 				} catch(PeerCapabilityException exc) {}
 			}
+		}
+	}
+	
+	public int priorityForRevisionDetails(RevisionTag revTag) {
+		try {
+			return requestedRevisionDetails.lookup(revTag).priority;
+		} catch(NullPointerException exc) {
+			return PageQueue.CANCEL_PRIORITY;
 		}
 	}
 	

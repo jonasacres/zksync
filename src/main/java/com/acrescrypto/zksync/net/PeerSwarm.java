@@ -445,8 +445,18 @@ public class PeerSwarm implements BlacklistCallback {
 		cancelTag(Util.shortTag(pageTag));
 	}
 	
+	public int priorityForTag(byte[] pageTag) {
+		// TODO API: (test) cover priorityForTag
+		return pool.priorityForPageTag(pageTag);
+	}
+	
 	public void requestTag(int priority, long shortTag) {
 		pool.addPageTag(priority, shortTag);
+	}
+	
+	public int priorityForTag(long pageTag) {
+		// TODO API: (test) cover priorityForTag
+		return pool.priorityForPageTag(pageTag);
 	}
 	
 	public void cancelTag(long shortTag) {
@@ -463,6 +473,11 @@ public class PeerSwarm implements BlacklistCallback {
 		pool.cancelInode(revTag, inodeId);
 	}
 	
+	public int priorityForInode(RevisionTag revTag, long inodeId) {
+		// TODO API: (test) cover priorityForInode
+		return pool.priorityForInode(revTag, inodeId);
+	}
+	
 	public void requestRevision(int priority, RevisionTag revTag) {
 		pool.addRevision(priority, revTag);
 	}
@@ -472,8 +487,18 @@ public class PeerSwarm implements BlacklistCallback {
 		pool.cancelRevision(revTag);
 	}
 	
+	public int priorityForRevision(RevisionTag revTag) {
+		// TODO API: (test) cover priorityForRevision
+		return pool.priorityForRevision(revTag);
+	}
+	
 	public void requestRevisionDetails(int priority, RevisionTag revTag) {
 		pool.addRevisionDetails(priority, revTag);
+	}
+	
+	public int priorityForRevisionDetails(RevisionTag revTag) {
+		// TODO API: (test) cover priorityForRevisionDetails
+		return pool.priorityForRevisionDetails(revTag);
 	}
 	
 	public void requestAll() {

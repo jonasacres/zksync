@@ -322,7 +322,7 @@ public class ZKFS extends FS {
 		throw new UnsupportedOperationException();
 	}
 	
-	protected void uncache(String path) throws IOException {
+	public void uncache(String path) throws IOException {
 		directoriesByPath.remove(path);
 	}
 	

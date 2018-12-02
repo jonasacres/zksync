@@ -167,6 +167,17 @@ public class RequestPoolTest {
 	}
 	
 	@Test
+	public void testPriorityForPageTagShortReturnsCancelPriorityIfNoSuchRequest() {
+		assertEquals(PageQueue.CANCEL_PRIORITY, pool.priorityForPageTag(1234l));
+	}
+	
+	@Test
+	public void testPriorityForPageTagShortReturnsAppropriatePriority() {
+		pool.addPageTag(12, 1234l);
+		assertEquals(12, pool.priorityForPageTag(1234l));
+	}
+	
+	@Test
 	public void testAddPageTagBytes() {
 		byte[] pageTag = crypto.rng(crypto.hashLength());
 		long shortTag = Util.shortTag(pageTag);
@@ -202,6 +213,18 @@ public class RequestPoolTest {
 	}
 	
 	@Test
+	public void testPriorityForPageTagBytesReturnsAppropriatePriority() {
+		byte[] pageTag = crypto.rng(crypto.hashLength());
+		pool.addPageTag(12, pageTag);
+		assertEquals(12, pool.priorityForPageTag(pageTag));
+	}
+	
+	@Test
+	public void testPriorityForPageTagBytesReturnsCancelPriorityIfNoSuchRequest() {
+		assertEquals(PageQueue.CANCEL_PRIORITY, pool.priorityForPageTag(crypto.rng(crypto.hashLength())));
+	}
+	
+	@Test
 	public void testAddInode() throws IOException {
 		RevisionTag refTag = archive.openBlank().commit();
 		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
@@ -219,6 +242,19 @@ public class RequestPoolTest {
 		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
 		assertTrue(pool.hasInode(314159265, refTag, InodeTable.INODE_ID_INODE_TABLE));
 		assertEquals(314159265, defaultConn.requestedPriority);
+	}
+	
+	@Test
+	public void testPriorityForInodeBytesReturnsAppropriatePriority() throws IOException {
+		RevisionTag refTag = archive.openBlank().commit();
+		pool.addInode(1234, refTag, 4321);
+		assertEquals(1234, pool.priorityForInode(refTag, 4321));
+	}
+	
+	@Test
+	public void testPriorityForInodeReturnsCancelPriorityIfNoSuchRequest() throws IOException {
+		RevisionTag refTag = archive.openBlank().commit();
+		assertEquals(PageQueue.CANCEL_PRIORITY, pool.priorityForInode(refTag, 1234));
 	}
 	
 	@Test
@@ -266,6 +302,19 @@ public class RequestPoolTest {
 	}
 	
 	@Test
+	public void testPriorityForRevisionReturnsCancelPriorityIfNoSuchRequest() throws IOException {
+		RevisionTag revTag = archive.openBlank().commit();
+		assertEquals(PageQueue.CANCEL_PRIORITY, pool.priorityForRevision(revTag));
+	}
+	
+	@Test
+	public void testPriorityForRevisionReturnsAppropriatePriority() throws IOException {
+		RevisionTag refTag = archive.openBlank().commit();
+		pool.addRevision(1234, refTag);
+		assertEquals(1234, pool.priorityForRevision(refTag));
+	}
+	
+	@Test
 	public void testAddRevisionDetails() throws IOException {
 		RevisionTag revTag = archive.openBlank().commit();
 		assertFalse(pool.hasRevisionDetails(-123456, revTag));
@@ -283,6 +332,19 @@ public class RequestPoolTest {
 		assertFalse(pool.hasRevisionDetails(-123456, revTag));
 		assertTrue(pool.hasRevisionDetails(-654321, revTag));
 		assertEquals(-654321, defaultConn.requestedPriority);
+	}
+	
+	@Test
+	public void testPriorityForRevisionDetailsReturnsCancelPriorityIfNoSuchRequest() throws IOException {
+		RevisionTag revTag = archive.openBlank().commit();
+		assertEquals(PageQueue.CANCEL_PRIORITY, pool.priorityForRevisionDetails(revTag));
+	}
+	
+	@Test
+	public void testPriorityForRevisionDetailsReturnsAppropriatePriority() throws IOException {
+		RevisionTag refTag = archive.openBlank().commit();
+		pool.addRevisionDetails(1234, refTag);
+		assertEquals(1234, pool.priorityForRevisionDetails(refTag));
 	}
 	
 	@Test
