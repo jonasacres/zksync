@@ -17,6 +17,7 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -46,8 +47,12 @@ public abstract class PeerSocket {
 	public abstract void handshake(PeerConnection conn) throws ProtocolViolationException, IOException;
 	public abstract int getPeerType() throws UnsupportedOperationException;
 	public abstract byte[] getSharedSecret();
+	public BandwidthMonitor getMonitorRx() { return null; };
+	public BandwidthMonitor getMonitorTx() { return null; };
 	
 	public void handshake() throws ProtocolViolationException, IOException { handshake(null); }
+	
+	protected PeerSocket() {}
 	
 	protected PeerSocket(PeerSwarm swarm) {
 		this.swarm = swarm;

@@ -489,7 +489,9 @@ public class RequestPool {
 					try {
 						write();
 					} catch(IOException exc) {
-						logger.error("Caught exception writing request pool file", exc);
+						if(!stopped) {
+							logger.error("Caught exception writing request pool file", exc);
+						}
 					}
 				}
 			} catch(Exception exc) {

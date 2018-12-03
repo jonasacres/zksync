@@ -74,7 +74,7 @@ public class TestUtils {
 	
 	public static void assertTidy() {
 		SnoozeThreadSupervisor.shared().prune(false);
-		if(!Util.waitUntil(500, ()->isTidy())) {
+		if(!Util.waitUntil(1000, ()->isTidy())) {
 			System.out.println("Thread untidiness detected!");
 			Util.threadReport(true);
 			fail();

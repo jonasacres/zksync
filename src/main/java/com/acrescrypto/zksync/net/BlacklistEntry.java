@@ -8,6 +8,15 @@ public class BlacklistEntry {
 	private String address;
 	private long expiration;
 	
+	public static BlacklistEntry withExpiration(String address, long expiration) {
+		BlacklistEntry entry = new BlacklistEntry();
+		entry.address = address;
+		entry.expiration = expiration;
+		return entry;
+	}
+	
+	protected BlacklistEntry() {}
+	
 	public BlacklistEntry(String address, long durationMs) {
 		this.setAddress(address);
 		update(durationMs);

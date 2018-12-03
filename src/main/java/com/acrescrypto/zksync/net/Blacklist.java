@@ -56,8 +56,7 @@ public class Blacklist {
 
 	public void addWithAbsoluteTime(String address, long expTime) throws IOException {
 		// TODO API: (test) test addWithAbsoluteTime
-		BlacklistEntry entry = new BlacklistEntry(address, 0);
-		entry.setExpiration(expTime);
+		BlacklistEntry entry = BlacklistEntry.withExpiration(address, expTime);
 		add(entry);
 	}
 	

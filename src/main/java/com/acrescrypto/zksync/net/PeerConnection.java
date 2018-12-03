@@ -59,12 +59,13 @@ public class PeerConnection {
 	}
 	
 	protected PeerSocket socket;
-	protected HashSet<Long> announcedTags = new HashSet<Long>();
+	protected HashSet<Long> announcedTags = new HashSet<Long>(); // TODO Someday: (review) unbounded memory use to track announced page tags
 	protected boolean remotePaused, localPaused;
 	protected PageQueue queue;
-	protected boolean receivedTags, closed;
+	protected boolean closed;
 	protected final Logger logger = LoggerFactory.getLogger(PeerConnection.class);
-	boolean sentProof, wantsEverything;
+	protected long timeStart;
+	protected boolean wantsEverything;
 	
 	public PeerConnection(PeerSwarm swarm, PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
 		this.socket = PeerSocket.connectToAd(swarm, ad);
@@ -79,6 +80,7 @@ public class PeerConnection {
 	}
 	
 	protected void initialize() throws IOException {
+		timeStart = Util.currentTimeMillis();
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config);
 		socket.threadPool.submit(()->pageQueueThread());
@@ -487,7 +489,6 @@ public class PeerConnection {
 		}
 		
 		synchronized(this) {
-			receivedTags = true;
 			this.notifyAll();
 		}
 	}
@@ -577,7 +578,7 @@ public class PeerConnection {
 		ZKArchive archive = socket.swarm.config.getArchive();
 
 		assertPeerCapability(PEER_TYPE_FULL);
-		// TODO Someday: (implement) honor prioritization requests for revision details
+		// TODO Someday: (implement) honor prioritization requests for revision details, or drop priority field altogether
 		msg.rxBuf.getInt(); // this is a priority value, which we don't actually implement support for yet
 		
 		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
@@ -756,5 +757,25 @@ public class PeerConnection {
 	
 	protected CryptoSupport getCrypto() {
 		return socket.swarm.config.getAccessor().getMaster().getCrypto();
+	}
+
+	public boolean isLocalPaused() {
+		return localPaused;
+	}
+
+	public boolean isRemotePaused() {
+		return remotePaused;
+	}
+	
+	public boolean wantsEverything() {
+		return wantsEverything;
+	}
+	
+	public long getTimeStart() {
+		return timeStart;
+	}
+	
+	public synchronized ArrayList<Long> announcedTags() {
+		return new ArrayList<>(announcedTags);
 	}
 }

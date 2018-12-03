@@ -16,6 +16,7 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.utility.RateLimitedOutputStream;
+import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.RateLimitedInputStream;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -38,6 +39,8 @@ public class TCPPeerSocket extends PeerSocket {
 	protected ByteBuffer remainingReadData;
 	protected TCPPeerAdvertisement ad;
 	protected int peerType = -1;
+	
+	protected TCPPeerSocket() {}
 	
 	public TCPPeerSocket(PeerSwarm swarm, PublicDHKey remoteIdentityKey, Socket socket, byte[] sharedSecret, int peerType, int portNum) throws IOException {
 		this(swarm);
@@ -170,6 +173,16 @@ public class TCPPeerSocket extends PeerSocket {
 	@Override
 	public int getPort() {
 		return socket.getPort();
+	}
+	
+	@Override
+	public BandwidthMonitor getMonitorRx() {
+		return in.getMonitor();
+	}
+	
+	@Override
+	public BandwidthMonitor getMonitorTx() {
+		return out.getMonitor();
 	}
 	
 	@Override

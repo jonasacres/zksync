@@ -910,15 +910,6 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testHandleAnnounceTagsSetsReceivedTags() throws ProtocolViolationException {
-		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TAGS);
-		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
-		assertFalse(conn.receivedTags);
-		conn.handle(msg);
-		assertTrue(conn.receivedTags);
-	}
-	
-	@Test
 	public void testHandleAnnounceTagsWorksForSeedOnly() throws ProtocolViolationException, IOException, UnconnectableAdvertisementException {
 		blindPeer();
 		testHandleAnnounceTagsUpdatesAnnouncedTagsList();
