@@ -112,6 +112,8 @@ public class TCPPeerSocketListener {
 	protected void listenThread() {
 		Util.setThreadName("TCPPeerSocketListener listen thread");
 		while(!closed) {
+			ServerSocket oldSocket = listenSocket;
+			
 			try {
 				checkSocketOpen();
 				if(listenSocket != null) {
@@ -119,7 +121,7 @@ public class TCPPeerSocketListener {
 					processIncomingPeer(socket);
 				}
 			} catch(Exception exc) {
-				if(closed) {
+				if(closed || oldSocket != listenSocket) {
 					logger.info("Closed TCP socket on port {}", listenSocket.getLocalPort());
 					break;
 				}

@@ -19,6 +19,7 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	protected byte[] encryptedArchiveId;
 	protected int port;
 	protected int version;
+
 	protected String ipAddress;
 	protected int hash = 0;
 	
@@ -174,5 +175,9 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	
 	public String toString() {
 		return "TCPPeerAdvertisement: " + Util.bytesToHex(pubKey.getBytes(), 4) + " " + ipAddress + ":" + port;
+	}
+
+	public void setHost(String host) {
+		this.host = host;
 	}
 }

@@ -70,6 +70,8 @@ public class PeerSwarm implements BlacklistCallback {
 	int maxPeerListSize = DEFAULT_MAX_PEER_LIST_SIZE;
 	int waitPageRetryTimeMs = DEFAULT_WAIT_PAGE_RETRY_TIME_MS;
 	
+	protected PeerSwarm() {}
+	
 	public PeerSwarm(ZKArchiveConfig config) throws IOException {
 		this.config = config;
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
@@ -624,5 +626,25 @@ public class PeerSwarm implements BlacklistCallback {
 
 	public void setBandwidthMonitorRx(BandwidthMonitor bandwidthMonitorRx) {
 		this.bandwidthMonitorRx = bandwidthMonitorRx;
+	}
+
+	public int numConnections() {
+		return connections.size();
+	}
+
+	public int numKnownAds() {
+		return knownAds.size();
+	}
+	
+	public int numEmbargoedAds() {
+		return adEmbargoes.size();
+	}
+
+	public int numConnectedAds() {
+		return connectedAds.size();
+	}
+
+	public RequestPool getRequestPool() {
+		return pool;
 	}
 }

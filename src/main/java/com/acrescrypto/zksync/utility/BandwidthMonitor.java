@@ -38,6 +38,8 @@ public class BandwidthMonitor {
 		}
 	}
 	
+	protected BandwidthMonitor() {}
+	
 	public BandwidthMonitor(int sampleDurationMs, int sampleExpirationMs) {
 		this.sampleDurationMs = sampleDurationMs;
 		this.sampleExpirationMs = sampleExpirationMs;

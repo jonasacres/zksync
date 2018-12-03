@@ -23,14 +23,14 @@ public class RequestPool {
 	public final static int DEFAULT_PRUNE_INTERVAL_MS = 30*1000;
 	public static int pruneIntervalMs = DEFAULT_PRUNE_INTERVAL_MS;
 	
-	boolean dirty;
-	ZKArchiveConfig config;
-	HashList<InodeRef> requestedInodes = new HashList<InodeRef>(
-			(r)->r.revTag.getShortHash() + r.inodeId + 1,
+	protected boolean dirty;
+	protected ZKArchiveConfig config;
+	protected HashList<InodeRef> requestedInodes = new HashList<InodeRef>(
+			(r)->r.getRevTag().getShortHash() + r.getInodeId() + 1,
 			(r)->{
-				ByteBuffer buf = ByteBuffer.allocate(r.revTag.getBytes().length + 8);
-				buf.put(r.revTag.getBytes());
-				buf.putLong(r.inodeId);
+				ByteBuffer buf = ByteBuffer.allocate(r.getRevTag().getBytes().length + 8);
+				buf.put(r.getRevTag().getBytes());
+				buf.putLong(r.getInodeId());
 				return buf.array();
 			},
 			(buf)->{
@@ -38,15 +38,15 @@ public class RequestPool {
 				long inodeId = buf.getLong();
 				return new InodeRef(revTag, inodeId);
 			});
-	HashList<RevisionTag> requestedRevisions = new HashList<RevisionTag>(
+	protected HashList<RevisionTag> requestedRevisions = new HashList<RevisionTag>(
 			(t)->Util.shortTag(t.getBytes()),
 			(t)->t.getBytes(),
 			(buf)->new RevisionTag(config, buf, false));
-	HashList<RevisionTag> requestedRevisionDetails = new HashList<RevisionTag>(
+	protected HashList<RevisionTag> requestedRevisionDetails = new HashList<RevisionTag>(
 			(t)->Util.shortTag(t.getBytes()),
 			(t)->t.getBytes(),
 			(buf)->new RevisionTag(config, buf, false));
-	HashList<Long> requestedPageTags = new HashList<Long>(
+	protected HashList<Long> requestedPageTags = new HashList<Long>(
 			(t)->t.longValue(),
 			(t)->Util.serializeLong(t.longValue()),
 			(buf)->buf.getLong());
@@ -56,13 +56,30 @@ public class RequestPool {
 	interface Serializer<T> { public byte[] serialize(T item); }
 	interface Deserializer<T> { public T deserialize(ByteBuffer serialization); }
 	
-	class InodeRef {
-		RevisionTag revTag;
-		long inodeId;
+	public class InodeRef {
+		private RevisionTag revTag;
+		private long inodeId;
 		
 		public InodeRef(RevisionTag revTag, long inodeId) {
-			this.revTag = revTag;
+			this.setRevTag(revTag);
+			this.setInodeId(inodeId);
+		}
+		
+		// getters and setters for JSON serialization
+		public long getInodeId() {
+			return inodeId;
+		}
+
+		public void setInodeId(long inodeId) {
 			this.inodeId = inodeId;
+		}
+
+		public RevisionTag getRevTag() {
+			return revTag;
+		}
+
+		public void setRevTag(RevisionTag revTag) {
+			this.revTag = revTag;
 		}
 	}
 	
@@ -76,7 +93,7 @@ public class RequestPool {
 		}
 	}
 	
-	class HashList<T> implements Iterable<HashListEntry<T>> {
+	public class HashList<T> implements Iterable<HashListEntry<T>> {
 		LinkedList<HashListEntry<T>> list = new LinkedList<>();
 		HashMap<Long, HashListEntry<T>> map = new HashMap<>();
 		Hasher<T> hasher;
@@ -190,6 +207,8 @@ public class RequestPool {
 	
 	boolean requestingEverything, stopped, paused, requestingConfigInfo;
 	Logger logger = LoggerFactory.getLogger(RequestPool.class);
+	
+	protected RequestPool() {}
 	
 	public RequestPool(ZKArchiveConfig config) {
 		this.config = config;
@@ -452,8 +471,8 @@ public class RequestPool {
 		for(HashListEntry<InodeRef> entry : requestedInodes) {
 			map.putIfAbsent(entry.priority, new HashMap<RevisionTag, LinkedList<Long>>());
 			HashMap<RevisionTag, LinkedList<Long>> tagMap = map.get(entry.priority);
-			tagMap.putIfAbsent(entry.item.revTag, new LinkedList<Long>());
-			tagMap.get(entry.item.revTag).add(entry.item.inodeId);
+			tagMap.putIfAbsent(entry.item.getRevTag(), new LinkedList<Long>());
+			tagMap.get(entry.item.getRevTag()).add(entry.item.getInodeId());
 		}
 		
 		return map;
@@ -492,7 +511,7 @@ public class RequestPool {
 	protected void pruneRefTags() throws IOException {
 		requestedInodes.removeIf((r)->{
 			try {
-				return config.getArchive().hasInode(r.revTag, r.inodeId);
+				return config.getArchive().hasInode(r.getRevTag(), r.getInodeId());
 			} catch (IOException e) {
 				return false;
 			}
@@ -561,5 +580,45 @@ public class RequestPool {
 		requestedRevisions.deserialize(buf);
 		requestedRevisionDetails.deserialize(buf);
 		addDataRequests();
+	}
+	
+	public HashMap<Integer,LinkedList<Long>> requestedPageTags() {
+		return requestedPageTags.priorityMap();
+	}
+	
+	public HashMap<Integer,LinkedList<InodeRef>> requestedInodes() {
+		return requestedInodes.priorityMap();
+	}
+	
+	public HashMap<Integer,LinkedList<RevisionTag>> requestedRevisions() {
+		return requestedRevisions.priorityMap();
+	}
+
+	public HashMap<Integer,LinkedList<RevisionTag>> requestedRevisionDetails() {
+		return requestedRevisionDetails.priorityMap();
+	}
+
+	public int numPagesRequested() {
+		return requestedPageTags.size();
+	}
+	
+	public int numInodesRequested() {
+		return requestedInodes.size();
+	}
+	
+	public int numRevisionsRequested() {
+		return requestedRevisions.size();
+	}
+	
+	public int numRevisionDetailsRequested() {
+		return requestedRevisionDetails.size();
+	}
+	
+	public boolean isRequestingEverything() {
+		return requestingEverything;
+	}
+	
+	public boolean isPaused() {
+		return paused;
 	}
 }
