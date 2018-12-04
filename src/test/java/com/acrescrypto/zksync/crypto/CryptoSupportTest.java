@@ -38,7 +38,7 @@ public class CryptoSupportTest  {
 
 	@Test
 	public void testAuthenticate() {
-		byte[][][] vectors = hmacTestVectors();
+		byte[][][] vectors = blake2HmacTestVectors();
 
 		for(int i = 0; i < vectors.length; i++) {
 			byte[] digest = crypto.authenticate(vectors[i][1], vectors[i][0]);
@@ -469,7 +469,6 @@ public class CryptoSupportTest  {
 
 	private byte[][][] blake2HkdfTestVectors() {
 		// Test vectors for CryptoSupport.expand (HKDF), used in CryptoSupportTest.blake2HkdfTestVectors()
-		// Generated from test-vectors.py, Python 3.6.5, commit 60bb78be2c5359f73c465b31ead8e34ebfc8608f
 		return new byte[][][] {
 			{
 				Util.hexToBytes(""),
@@ -762,8 +761,8 @@ public class CryptoSupportTest  {
 		};
 	}
 
-	private byte[][][] hmacTestVectors() {
-		// Generated from test-vectors.py, Python 3.6.5, commit 60bb78be2c5359f73c465b31ead8e34ebfc8608f
+	private byte[][][] blake2HmacTestVectors() {
+		// Generated from test-vectors.py, Python 3.6.5, commit db67d8c388d18cb428e257e42baf7c40682f9b83
 		return new byte[][][] {
 			{
 				Util.hexToBytes(""),
@@ -791,5 +790,6 @@ public class CryptoSupportTest  {
 				Util.hexToBytes("ba70bcc76775c4f7d51f823f6982a4ba15f166f921deff55b5f335da210a5344cf95895e3faa771ad4d8c20dca980073bd38554b499e85217fe7f27dde45350f")
 			},
 		};
+
 	}
 }

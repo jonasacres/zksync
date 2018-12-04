@@ -46,7 +46,7 @@ public class KeyTest {
 		}
 		
 		// Test vectors for Key.derive, used in KeyTest.testDerive()
-		// Generated from test-vectors.py, Python 3.6.5, commit 60bb78be2c5359f73c465b31ead8e34ebfc8608f
+		// Generated from test-vectors.py, Python 3.6.5, commit db67d8c388d18cb428e257e42baf7c40682f9b83
 		new KeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 			0x00000000,
