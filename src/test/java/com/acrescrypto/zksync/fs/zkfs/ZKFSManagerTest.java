@@ -192,11 +192,20 @@ public class ZKFSManagerTest {
 	}
 	
 	@Test
-	public void testNewRevisionsAreCheckedOutWhenAutofollowEnabledAndNoChangesPending() throws IOException {
+	public void testNewRevisionsAreCheckedOutWhenAutofollowEnabledAndNoChangesPendingAndBaseRevisionBlank() throws IOException {
 		manager.setAutofollow(true);
 		ZKFS fs2 = archive.openBlank();
 		RevisionTag tag = fs2.commit();
 		assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+	}
+	
+	@Test
+	public void testNewRevisionsAreCheckedOutWhenAutofollowEnabledAndNoChangesPendingAndBaseRevisionNotBlank() throws IOException {
+		RevisionTag tag = archive.openBlank().commit();
+		manager.fs.rebase(tag);
+		manager.setAutofollow(true);
+		RevisionTag tag2 = tag.getFS().commit();
+		assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag2)));
 	}
 	
 	@Test
@@ -206,6 +215,15 @@ public class ZKFSManagerTest {
 		ZKFS fs2 = archive.openBlank();
 		RevisionTag tag = fs2.commit();
 		assertFalse(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+	}
+	
+	@Test
+	public void testNewRevisionsAreNotCheckedOutWhenNewRevisionNotDescendentOfCurrentRevision() throws IOException {
+		RevisionTag tag = archive.openBlank().commit();
+		manager.fs.rebase(tag);
+		manager.setAutofollow(true);
+		RevisionTag tag2 = archive.openBlank().commit();
+		assertFalse(Util.waitUntil(100, ()->fs.baseRevision.equals(tag2)));
 	}
 	
 	@Test

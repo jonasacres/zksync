@@ -49,7 +49,15 @@ public class ZKFSManager {
 	
 	public void notifyNewRevtag(RevisionTag revtag) {
 		RevisionTag latest = fs.archive.config.revisionList.latest();
-		if(autofollow && !fs.isDirty() && !fs.baseRevision.equals(latest)) {
+		boolean isDescendent = false;
+		try {
+			isDescendent = fs.archive.config.revisionTree.descendentOf(latest, fs.baseRevision);
+		} catch(IOException exc) {}
+		
+		if(autofollow
+				&& !fs.isDirty()
+				&& !fs.baseRevision.equals(latest)
+				&& isDescendent) {
 			try {
 				fs.rebase(latest);
 			} catch (IOException exc) {
