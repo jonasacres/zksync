@@ -240,7 +240,7 @@ def make_archive_derive_key_examples():
     result = config_derive_key(bytearray.fromhex(v[0]), v[1], v[2], bytearray.fromhex(v[3]))
     print("new ArchiveKeyDerivationExample(\n\t\"%s\",\n\t0x%04x,\n\t0x%04x,\n\t\"%s\",\n\t\"%s\").validate();" % (v[0], v[1], v[2], v[3], result))
 
-# make_hmac_examples()
-# make_expand_examples()
-# make_derive_key_examples()
+make_hmac_examples()
+make_expand_examples()
+make_derive_key_examples()
 make_archive_derive_key_examples()
