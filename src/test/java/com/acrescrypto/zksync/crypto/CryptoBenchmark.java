@@ -127,6 +127,15 @@ public class CryptoBenchmark {
 	}
 	
 	@Test
+	public void testAuthenticateThroughput() {
+		byte[] oneMiB = new byte[1024*1024];
+		
+		Benchmarks.run("MiB", (i)->{
+			crypto.authenticate(new byte[crypto.hashLength()], oneMiB);
+		});
+	}
+	
+	@Test
 	public void testAsymmetricSignThroughput() {
 		PrivateSigningKey key = crypto.makePrivateSigningKey();
 		byte[] oneMiB = new byte[1024*1024];

@@ -45,13 +45,38 @@ public class KeyTest {
 			}
 		}
 		
-		// tested against implementation in Python 3.6.5 based on hashlib blake2b support, 512-bit hashes
-		new KeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0, "", "7b631364edb74ad050f72914790f9ded649379120b8ae8ba80f43748714b946a").validate();
-	    new KeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 1, "", "7b0ae3920ec7d24eddf74411d0e77be1f564216ab08965f6f0d04a6854b8ef46").validate();
-	    new KeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0xffffffff, "", "6afd93b1ef1940549db025541c0294f211ff9f1f5137178bbd9c5f7cbe4f2e99").validate();
-	    new KeyDerivationExample("000102030405060708090a0b0c0d0e0f", 0, "", "3e37684bd87c5dcfa6d7ac353e42d503").validate();
-	    new KeyDerivationExample("000102030405060708090a0b0c0d0e0f", 0, "00", "c8027344b5059a558ad69b0da256296f").validate();
-	    new KeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0xffffffff, "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf", "e683c46fb2865002ac42137cb29758000949e9cd8b9f1784b514fdb6a329cc72").validate();
+		// Test vectors for Key.derive, used in KeyTest.testDerive()
+		// Generated from test-vectors.py, Python 3.6.5, commit 60bb78be2c5359f73c465b31ead8e34ebfc8608f
+		new KeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+			0x00000000,
+			"",
+			"b6abfc6470a720a02b3c11cc12d62aac86502bcc79bc13670191730695a95ff0").validate();
+		new KeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+			0x00000001,
+			"",
+			"fdcad2202cd184924bd7911b222471320c6e4a44871eb6cafbc8435bc9eba6bd").validate();
+		new KeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+			0xffffffff,
+			"",
+			"565b06e0e32896d12b1037733459c6fd72d5f92c2494926f9539101232c5cea7").validate();
+		new KeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f",
+			0x00000000,
+			"",
+			"7d6828664cd9c40f0a2731551e57dfee").validate();
+		new KeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f",
+			0x00000000,
+			"00",
+			"7d6828664cd9c40f0a2731551e57dfee").validate();
+		new KeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+			0xffffffff,
+			"808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+			"3bbbe1606ae844b6b205a50729bf4722300f9ac130b1909b95889b1181c91f4e").validate();
 	}
 	
 	@Test

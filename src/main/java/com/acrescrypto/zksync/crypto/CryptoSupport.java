@@ -5,9 +5,7 @@ import java.util.Base64;
 
 import org.bouncycastle.crypto.BufferedBlockCipher;
 import org.bouncycastle.crypto.CipherParameters;
-import org.bouncycastle.crypto.Digest;
 import org.bouncycastle.crypto.InvalidCipherTextException;
-import org.bouncycastle.crypto.digests.Blake2bDigest;
 import org.bouncycastle.crypto.engines.AESEngine;
 import org.bouncycastle.crypto.modes.CBCBlockCipher;
 import org.bouncycastle.crypto.modes.OCBBlockCipher;
@@ -85,46 +83,62 @@ public class CryptoSupport {
 	public byte[] hash(byte[] data, int offset, int length) {
 		return startHash().update(data, offset, length).finish();
 	}
-
+	
 	public byte[] authenticate(byte[] key, byte[] data) {
-		// Key must be no greater than 64 bytes, per requirements of blake2
-		Digest digest = new Blake2bDigest(key, hashLength(), null, null);
-		byte[] result = new byte[hashLength()];
-		digest.update(data, 0, data.length);
-		digest.doFinal(result, 0);
-		return result;
+		return authenticate(key, data, 0, data.length);
+	}
+	
+	public byte[] authenticate(byte[] key, byte[] data, int offset, int length) {
+		// HMAC, per RFC 2104
+		/* We're using HMAC since some standards (e.g. noise) explicitly call for the use of
+		 * HMAC in place of an algorithm-specific keyed hash, as supported in BLAKE2b. */
+		int blockSize = HashContext.BLOCK_SIZE;
+		
+		byte[] ipad = new byte[blockSize], opad = new byte[blockSize];
+		for(int i = 0; i < blockSize; i++) {
+			ipad[i] = 0x36;
+			opad[i] = 0x5c;
+		}
+		
+		if(key.length > blockSize) {
+			key = hash(key);
+		}
+		
+		if(key.length < blockSize) {
+			byte[] newKey = new byte[blockSize];
+			System.arraycopy(key, 0, newKey, 0, key.length);
+			key = newKey;
+		}
+		
+		HashContext inner = startHash();
+		inner.update(xor(key, ipad));
+		inner.update(data);
+		
+		HashContext outer = startHash();
+		outer.update(xor(key, opad));
+		outer.update(inner.finish());
+		return outer.finish();
 	}
 	
 	public byte[] expand(byte[] ikm, int length, byte[] salt, byte[] info) {
-		/* 
-		 * This is a modification of HKDF as described in RFC 5869, with the critical difference that we use BLAKE2's
-		 * built-in support for keyed hashes in place of HMAC. Because that feature of BLAKE2 requires keys to be no
-		 * greater than 64 bytes, we first compute the BLAKE2b hash of the supplied salt to get a key that is guaranteed
-		 * to be 64 bytes long.
-		 * 
-		 * The decision not to use HKDF was based purely on implementation concerns. I was unable to find test
-		 * vectors for HKDF based on BLAKE2b, and I was having difficulty replicating results in separate
-		 * implementations.
-		 *  
-		 */
+		// HKDF, per 5869
+		byte[] prk = authenticate(salt, ikm);
 		ByteBuffer output = ByteBuffer.allocate(length);
-		byte[] resizedSalt = hash(salt); // critical HKDF difference #1 (hashes salt before use)
-		byte[] prk = authenticate(resizedSalt, ikm);
 		
-		int n = (int) Math.ceil(((double) length)/prk.length);
+		int n = (int) Math.ceil((double) length/hashLength());
 		byte[] tp = {};
 		for(int i = 1; i <= n; i++) {
 			ByteBuffer concatted = ByteBuffer.allocate(tp.length + info.length + 1);
 			concatted.put(tp);
 			concatted.put(info);
 			concatted.put((byte) i);
-			tp = authenticate(prk, concatted.array()); // critical HKDF difference #2 (uses keyed blake2 instead of hmac)
+			tp = authenticate(prk, concatted.array());
 			output.put(tp, 0, Math.min(tp.length, output.remaining()));
 		}
 		
 		return output.array();
 	}
-	
+
 	/* Encrypt a message.
 	 * @param key Message key to be used. Should be of length symKeyLength().
 	 * @param iv Message initialization vector/nonce.

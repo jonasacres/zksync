@@ -479,13 +479,50 @@ public class ZKArchiveConfigTest {
 			}
 		}
 		
-		new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0, 0, "", "7b631364edb74ad050f72914790f9ded649379120b8ae8ba80f43748714b946a").validate();
-	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 1, 0, "", "dd45557dbc6cbd60db505fbb19c1f609e9df1d78214ba9af6155552ff58ca49e").validate();
-	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 2, 0, "", "5fe9d3cd188c4627e6d97f5d026203b1f0c02d208ee13718559767e99f274e7a").validate();
-	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0, 1, "", "7b0ae3920ec7d24eddf74411d0e77be1f564216ab08965f6f0d04a6854b8ef46").validate();
-	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0, 0xffff, "", "749011256450328dd2eece13243f773f0d4ba701d1c7c776a6f8f7dec40d35c6").validate();
-	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0, 0, "10111213", "636688f05d98667950861b405cd097f33585899f50e63ae37dd53e1e150f1be3").validate();
-	    new ArchiveKeyDerivationExample("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f", 0x5555, 0x8888, "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf", "8bc66d27bb9b7af2d7b425e0434c8db03bbcbde69676ef6daec056d4e2b1d1bf").validate();
+		// These vectors are self-generated, and are here as a canary against unintended changes to key derivation logic.
+		// Generated from test-vectors.py, Python 3.6.5, commit 60bb78be2c5359f73c465b31ead8e34ebfc8608f
+		new ArchiveKeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+			0x0000,
+			0x0000,
+			"",
+			"b6abfc6470a720a02b3c11cc12d62aac86502bcc79bc13670191730695a95ff0").validate();
+		new ArchiveKeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+			0x0001,
+			0x0000,
+			"",
+			"1ea8d06ffa94e7f4d34e04ac72f3ee13d8b532b83a13fe33bbecbe6ec5d57fd2").validate();
+		new ArchiveKeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+			0x0002,
+			0x0000,
+			"",
+			"f0d74adb5f77df2d37adffe0541024a374922558016a210cd80259979f7f05e3").validate();
+		new ArchiveKeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+			0x0000,
+			0x0001,
+			"",
+			"fdcad2202cd184924bd7911b222471320c6e4a44871eb6cafbc8435bc9eba6bd").validate();
+		new ArchiveKeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+			0x0000,
+			0xffff,
+			"",
+			"9783b80dbcce3817bbb8579ff77258e37f9e32ea9c3275f60788b4e2efa1f5e7").validate();
+		new ArchiveKeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+			0x0000,
+			0x0000,
+			"10111213",
+			"fcc462f1c3eb17749969104f54a82e829969a9d340746c181c3f2c2ab8c817cb").validate();
+		new ArchiveKeyDerivationExample(
+			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+			0x5555,
+			0x8888,
+			"808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+			"ffd291c2d5fa1f452e5a3540d60f791ea21cab6e5d90c8a0422fd4dd8002a008").validate();
 	}
 	
 	@Test
