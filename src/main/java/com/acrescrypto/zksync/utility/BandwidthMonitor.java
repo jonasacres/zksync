@@ -46,6 +46,13 @@ public class BandwidthMonitor {
 		this.startTime = Util.currentTimeMillis();
 	}
 	
+	public BandwidthMonitor(BandwidthMonitor parent) {
+		this.sampleDurationMs = parent.sampleDurationMs;
+		this.sampleExpirationMs = parent.sampleExpirationMs;
+		this.startTime = Util.currentTimeMillis();
+		this.addParent(parent);
+	}
+
 	public long observeTraffic(long bytes) {
 		if(bytes <= 0) return bytes; // passthrough without doing anything
 		if(sampleDurationMs == -1 && sampleExpirationMs == -1) return bytes;
@@ -122,5 +129,27 @@ public class BandwidthMonitor {
 	
 	public int getSampleExpirationMs() {
 		return sampleExpirationMs;
+	}
+	
+	public String toString() {
+		double rate = getBytesPerSecond();
+		int order = (int) Math.floor(Math.log(rate)/Math.log(1024));
+		String unit = "B/s";
+		
+		if(order >= 4) {
+			rate /= 1024*1024*1024*1024;
+			unit = "TiB/s";
+		} else if(order == 3) {
+			rate /= 1024*1024*1024;
+			unit = "GiB/s";
+		} else if(order == 2) {
+			rate /= 1024*1024;
+			unit = "MiB/s";
+		} else if(order == 1) {
+			rate /= 1024;
+			unit = "KiB/s";
+		}
+		
+		return String.format("%.02f %s", rate, unit);
 	}
 }

@@ -152,6 +152,30 @@ public class DHTPeer implements Sendable {
 		return this.port == port && this.address.equals(address) && this.key.equals(key);
 	}
 	
+	public DHTID getId() {
+		return id;
+	}
+	
+	public PublicDHKey getKey() {
+		return key;
+	}
+	
+	public int getPort() {
+		return port;
+	}
+	
+	public String getAddress() {
+		return address;
+	}
+	
+	public int getMissedMessages() {
+		return missedMessages;
+	}
+	
+	public long getLastSeen() {
+		return lastSeen;
+	}
+	
 	protected void deserialize(ByteBuffer serialized) throws EINVALException {
 		try {
 			int addrLen = Util.unsignShort(serialized.getShort());

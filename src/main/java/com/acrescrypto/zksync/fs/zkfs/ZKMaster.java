@@ -370,4 +370,15 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	public void setBandwidthAllocatorRx(BandwidthAllocator bandwidthAllocatorRx) {
 		this.bandwidthAllocatorRx = bandwidthAllocatorRx;
 	}
+
+	public void regenerateDHTClient(byte[] networkId) throws IOException {
+		// TODO API: (test) Test DHT client regenerate
+		dhtClient.purge();
+		if(networkId == null) {
+			networkId = dhtClient.getNetworkId();
+		}
+
+		Key key = localKey.derive(ArchiveAccessor.KEY_INDEX_DHT_STORAGE, "dht-storage".getBytes());
+		this.dhtClient = new DHTClient(key, this, networkId);
+	}
 }

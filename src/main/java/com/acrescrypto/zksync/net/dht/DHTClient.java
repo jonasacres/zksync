@@ -18,13 +18,16 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
+import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.EINVALException;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
+import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -74,27 +77,28 @@ public class DHTClient {
 	
 	private Logger logger = LoggerFactory.getLogger(DHTClient.class);
 
-	DatagramSocket socket;
-	Blacklist blacklist;
-	ZKMaster master;
-	DHTRecordStore store;
-	CryptoSupport crypto;
-	DHTID id;
-	DHTRoutingTable routingTable;
-	PrivateDHKey key;
-	Key storageKey, tagKey;
-	String bindAddress;
-	Thread socketListenerThread;
-	ThreadGroup threadGroup;
-	GroupedThreadPool threadPool;
-	boolean closed, initialized;
-	DHTStatusCallback statusCallback;
-	int bindPort;
-	int lastStatus = STATUS_OFFLINE;
-	byte[] networkId;
-	FS storage;
+	protected BandwidthMonitor monitorTx, monitorRx;
+	protected DatagramSocket socket;
+	protected Blacklist blacklist;
+	protected ZKMaster master;
+	protected DHTRecordStore store;
+	protected CryptoSupport crypto;
+	protected DHTID id;
+	protected DHTRoutingTable routingTable;
+	protected PrivateDHKey key;
+	protected Key storageKey, tagKey;
+	protected String bindAddress;
+	protected Thread socketListenerThread;
+	protected ThreadGroup threadGroup;
+	protected GroupedThreadPool threadPool;
+	protected boolean closed, initialized;
+	protected DHTStatusCallback statusCallback;
+	protected int bindPort;
+	protected int lastStatus = STATUS_OFFLINE;
+	protected byte[] networkId;
+	protected FS storage;
 	
-	ArrayList<DHTMessageStub> pendingRequests;
+	protected ArrayList<DHTMessageStub> pendingRequests;
 	
 	public DHTClient(Key storageKey, ZKMaster master) {
 		this(storageKey, master, new byte[storageKey.getCrypto().hashLength()]);
@@ -110,6 +114,9 @@ public class DHTClient {
 		this.crypto = storageKey.getCrypto();
 		this.pendingRequests = new ArrayList<>();
 		this.networkId = networkId;
+		
+		this.monitorTx = new BandwidthMonitor(master.getBandwidthMonitorTx());
+		this.monitorRx = new BandwidthMonitor(master.getBandwidthMonitorRx());
 		
 		read();
 
@@ -272,6 +279,7 @@ public class DHTClient {
 				
 				byte[] receiveData = new byte[MAX_DATAGRAM_SIZE];
 				DatagramPacket packet = new DatagramPacket(receiveData, receiveData.length);
+				monitorRx.observeTraffic(packet.getLength());
 				socket.receive(packet);
 				ByteBuffer buf = ByteBuffer.wrap(packet.getData(), 0, packet.getLength());
 				processMessage(packet.getAddress().getHostAddress(), packet.getPort(), buf);
@@ -314,6 +322,7 @@ public class DHTClient {
 		for(int i = 0; i < 2; i++) {
 			try {
 				socket.send(packet);
+				monitorTx.observeTraffic(packet.getLength());
 				break;
 			} catch (IOException exc) {
 				// TODO API: (coverage) exception
@@ -521,6 +530,20 @@ public class DHTClient {
 		file.write(serialize(), 0);
 	}
 	
+	public void purge() throws IOException {
+		// TODO API: (test) test DHTClient purge
+		close();
+		unlinkIfExists(path());
+		unlinkIfExists(store.path());
+		unlinkIfExists(routingTable.path());
+	}
+	
+	protected void unlinkIfExists(String path) throws IOException {
+		try {
+			storage.unlink(path);
+		} catch(ENOENTException exc) {}
+	}
+	
 	protected byte[] serialize() {
 		ByteBuffer buf = ByteBuffer.allocate(key.getBytes().length + key.publicKey().getBytes().length + tagKey.getRaw().length);
 		buf.put(key.getBytes());
@@ -558,6 +581,47 @@ public class DHTClient {
 	
 	public int getStatus() {
 		return lastStatus;
+	}
+	
+	public DHTRecordStore getRecordStore() {
+		return store;
+	}
+	
+	// TODO API: (test) Test DHTClient bandwidth monitors
+	public BandwidthMonitor getMonitorRx() {
+		return monitorRx;
+	}
+	
+	public BandwidthMonitor getMonitorTx() {
+		return monitorTx;
+	}
+	
+	public DHTID getId() {
+		return id;
+	}
+	
+	public PublicDHKey getPublicKey() {
+		return key.publicKey();
+	}
+	
+	public byte[] getNetworkId() {
+		return networkId;
+	}
+	
+	public String getBindAddress() {
+		return bindAddress;
+	}
+	
+	public boolean isClosed() {
+		return closed;
+	}
+	
+	public DHTRoutingTable getRoutingTable() {
+		return routingTable;
+	}
+	
+	public int numPendingRequests() {
+		return pendingRequests.size();
 	}
 	
 	protected void assertSupportedState(boolean state) throws UnsupportedProtocolException {

@@ -88,6 +88,8 @@ public class DHTRecordStore {
 	protected DHTClient client;
 	protected HashMap<DHTID,ArrayList<StoreEntry>> entriesById = new HashMap<>();
 	private Logger logger = LoggerFactory.getLogger(DHTRecordStore.class);
+	
+	protected DHTRecordStore() {}
 
 	public DHTRecordStore(DHTClient client) {
 		this.client = client;
@@ -266,5 +268,18 @@ public class DHTRecordStore {
 		if(dirty) {
 			write();
 		}
+	}
+	
+	public synchronized int numIds() {
+		return entriesById.size();
+	}
+
+	public synchronized int numRecords() {
+		int totalRecords = 0;
+		for(ArrayList<StoreEntry> list : entriesById.values()) {
+			totalRecords += list.size();
+		}
+		
+		return totalRecords;
 	}
 }

@@ -23,7 +23,7 @@ public class DHTRoutingTable {
 	protected DHTClient client;
 	protected ArrayList<DHTBucket> buckets = new ArrayList<>();
 	protected boolean closed;
-	private ArrayList<DHTPeer> allPeers = new ArrayList<>();
+	protected ArrayList<DHTPeer> allPeers = new ArrayList<>();
 	private Logger logger = LoggerFactory.getLogger(DHTRoutingTable.class);
 
 	public DHTRoutingTable(DHTClient client) {
