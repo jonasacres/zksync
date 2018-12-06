@@ -150,7 +150,12 @@ public class CryptoSupport {
 	{
 		try {
 			if(plaintext == null) plaintext = new byte[0];
-			return processAEADCipher(true, 8*symTagLength(), key, iv, padToSize(plaintext, 0, plaintext.length, padSize), associatedData);
+			return processAEADCipher(true,
+					8*symTagLength(),
+					key,
+					iv,
+					padToSize(plaintext, 0, plaintext.length, padSize),
+					associatedData);
 		} catch (Exception exc) {
 			logger.error("Encountered exception encrypting data", exc);
 			System.exit(1);
@@ -161,7 +166,12 @@ public class CryptoSupport {
 	public byte[] encrypt(byte[] key, byte[] iv, byte[] plaintext, int offset, int length, byte[] associatedData, int adOffset, int adLen, int padSize)
 	{
 		try {
-			return processAEADCipher(true, 8*symTagLength(), key, iv, padToSize(plaintext, offset, length, padSize), associatedData);
+			return processAEADCipher(true,
+					8*symTagLength(),
+					key,
+					iv,
+					padToSize(plaintext, offset, length, padSize),
+					associatedData);
 		} catch (Exception exc) {
 			logger.error("Encountered exception encrypting data", exc);
 			System.exit(1);
@@ -171,12 +181,29 @@ public class CryptoSupport {
 	
 	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, byte[] associatedData, boolean padded)
 	{
-		return decrypt(key, iv, ciphertext, 0, ciphertext.length, associatedData, 0, associatedData == null ? 0 : associatedData.length, padded);
+		return decrypt(key,
+				iv,
+				ciphertext,
+				0,
+				ciphertext.length,
+				associatedData,
+				0,
+				associatedData == null ? 0 : associatedData.length,
+				padded);
 	}
 	
 	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, int offset, int length, byte[] associatedData, int adOffset, int adLen, boolean padded) {
 		try {
-			byte[] paddedPlaintext = processAEADCipher(false, 128, key, iv, ciphertext, offset, length, associatedData, adOffset, adLen);
+			byte[] paddedPlaintext = processAEADCipher(false,
+					128,
+					key,
+					iv,
+					ciphertext,
+					offset,
+					length,
+					associatedData,
+					adOffset,
+					adLen);
 			if(padded) return unpad(paddedPlaintext);
 			return paddedPlaintext;
 		} catch(InvalidCipherTextException exc) {
@@ -198,7 +225,12 @@ public class CryptoSupport {
 	}
 	
 	public byte[] decryptCBC(byte[] key, byte[] iv, byte[] ciphertext, int offset, int length) {
-		byte[] paddedPlaintext = processOrdinaryCipher(false, key, iv, ciphertext, offset, length);
+		byte[] paddedPlaintext = processOrdinaryCipher(false,
+				key,
+				iv,
+				ciphertext,
+				offset,
+				length);
 		return paddedPlaintext;
 	}
 	
@@ -211,7 +243,16 @@ public class CryptoSupport {
 	}
 	
 	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, byte[] ad) throws IllegalStateException, InvalidCipherTextException {
-        return processAEADCipher(encrypt, tagLen, keyBytes, iv, in, 0, in == null ? 0 : in.length, ad, 0, ad == null ? 0 : ad.length);
+        return processAEADCipher(encrypt,
+        		tagLen,
+        		keyBytes,
+        		iv,
+        		in,
+        		0,
+        		in == null ? 0 : in.length,
+        		ad,
+        		0,
+        		ad == null ? 0 : ad.length);
 	}
 	
 	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, int inOffset, int inLen, byte[] ad, int adOffset, int adLen) throws IllegalStateException, InvalidCipherTextException {

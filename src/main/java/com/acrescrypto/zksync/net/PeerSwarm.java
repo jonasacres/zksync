@@ -56,7 +56,7 @@ public class PeerSwarm implements BlacklistCallback {
 	protected RequestPool pool;
 	protected PrivateDHKey identityKey;
 	protected GroupedThreadPool threadPool;
-	private BandwidthMonitor bandwidthMonitorTx, bandwidthMonitorRx;
+	protected BandwidthMonitor bandwidthMonitorTx, bandwidthMonitorRx;
 	
 	protected Lock pageWaitLock = new ReentrantLock();
 	protected Lock connectionWaitLock = new ReentrantLock();

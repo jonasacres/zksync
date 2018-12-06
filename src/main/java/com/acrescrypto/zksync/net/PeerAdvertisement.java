@@ -10,6 +10,8 @@ import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.net.noise.SecureChannelMonitor.ChannelReadCallback;
+import com.acrescrypto.zksync.net.noise.SecureWriteChannel;
 
 public abstract class PeerAdvertisement {
 	public final static int TYPE_TCP_PEER = 0;
@@ -45,6 +47,8 @@ public abstract class PeerAdvertisement {
 	public abstract boolean matchesAddress(String address);
 	public abstract byte getType();
 	public abstract boolean isReachable();
+	
+	public abstract SecureWriteChannel openChannel(ChannelReadCallback readCallback);
 	
 	public PeerConnection connect(PeerSwarm swarm) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
 		return new PeerConnection(swarm, this);
