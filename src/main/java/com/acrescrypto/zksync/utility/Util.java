@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.utility;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -9,10 +10,18 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.acrescrypto.zksync.crypto.HashContext;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.fasterxml.jackson.core.JsonGenerationException;
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.fasterxml.jackson.databind.ser.std.StdSerializer;
 
 public class Util {
 	static long debugTime = -1;
 	private final static char[] hexArray = "0123456789abcdef".toCharArray();
+	private static ObjectMapper objectMapper;
 	
 	public interface WaitTest {
 		boolean test();
@@ -300,4 +309,27 @@ public class Util {
 	public static String toWebSafeBase64(String base64) {
 		return base64.replaceAll("\\+", ".").replaceAll("/", "_");
 	}
+	
+	public static ObjectMapper objectMapper() {
+	    if(objectMapper == null) objectMapper = createDefaultMapper();
+	    return objectMapper;
+	}
+
+    private static ObjectMapper createDefaultMapper() {
+        final ObjectMapper mapper = new ObjectMapper();
+        
+        SimpleModule module = new SimpleModule();
+        module.addSerializer(RevisionTag.class, new StdSerializer<RevisionTag>(RevisionTag.class) {
+			@Override
+			public void serialize(RevisionTag value, JsonGenerator jgen, SerializerProvider provider) throws JsonGenerationException, IOException {
+				jgen.writeBinary(value.getBytes());
+			}
+        });
+        mapper.registerModule(module);
+        
+        // uncomment below to indent output, nice for debugging
+        // mapper.configure(SerializationFeature.INDENT_OUTPUT, true);
+ 
+        return mapper;
+    }
 }

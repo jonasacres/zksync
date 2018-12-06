@@ -62,12 +62,20 @@ public class SecureChannel extends AbstractSelectableChannel implements ByteChan
 		ByteBuffer limitedBuf = ByteBuffer.wrap(readBuf.array(),
 				readBuf.position(),
 				maxBuffer - readBuf.position());
-		channel.read(limitedBuf);
+		
+		boolean finished = false;
+		begin();
+		try {
+			channel.read(limitedBuf);
+			finished = true;
+		} finally {
+			end(finished);
+		}
 		
 		if(expectedLen < 0) {
 			readLength();
 		}
-		
+
 		if(readBuf.position() < 2 + expectedLen) return 0;
 		byte[] plaintext = decryptCiphertext();
 		resetReadBuffer();
