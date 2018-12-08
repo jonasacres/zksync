@@ -121,7 +121,7 @@ public class CryptoSupport {
 	}
 	
 	public byte[] expand(byte[] ikm, int length, byte[] salt, byte[] info) {
-		// HKDF, per 5869
+		// HKDF, per RFC 5869
 		byte[] prk = authenticate(salt, ikm);
 		ByteBuffer output = ByteBuffer.allocate(length);
 		

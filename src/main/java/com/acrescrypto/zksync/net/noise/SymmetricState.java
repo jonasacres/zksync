@@ -8,8 +8,8 @@ import com.acrescrypto.zksync.utility.Util;
 public class SymmetricState {
 	protected CryptoSupport crypto;
 	protected CipherState cipherState;
-	private Key chainingKey;          // 'ck' in Noise specification
-	private byte[] hash;              // 'h' in Noise specification
+	protected Key chainingKey;          // 'ck' in Noise specification
+	protected byte[] hash;              // 'h' in Noise specification
 	
 	public SymmetricState(CryptoSupport crypto, String protocolName) {
 		this.crypto = crypto;
@@ -21,15 +21,29 @@ public class SymmetricState {
 			hash = crypto.hash(protocolName.getBytes());
 		}
 		
-		this.chainingKey = new Key(crypto, new byte[crypto.hashLength()]);
+		this.chainingKey = new Key(crypto, hash.clone());
+		
+		cipherState = new CipherState();
 		cipherState.initializeKey(null);
+	}
+	
+	protected SymmetricState(SymmetricState state) {
+		this.crypto = state.crypto;
+		this.cipherState = new CipherState(state.cipherState);
+		this.chainingKey = new Key(crypto, state.chainingKey.getRaw().clone());
+		this.hash = state.hash.clone();
 	}
 	
 	protected void mixKey(byte[] inputKeyMaterial) {
 		byte[][] newMaterial = hkdf(inputKeyMaterial, 2);
 		
 		chainingKey.replace(newMaterial[0]);
-		Key tempKey = new Key(crypto, newMaterial[1]);
+		
+		byte[] truncated = new byte[crypto.symKeyLength()];
+		System.arraycopy(newMaterial[1], 0, truncated, 0, truncated.length);
+		System.arraycopy(new byte[newMaterial[1].length], 0, newMaterial[1], 0, newMaterial[1].length);
+		
+		Key tempKey = new Key(crypto, truncated);
 		cipherState.initializeKey(tempKey);
 	}
 	
@@ -62,13 +76,17 @@ public class SymmetricState {
 	}
 	
 	public CipherState[] split() {
-		byte[][] newMaterial = hkdf(new byte[0], 2);
-		CipherState[] newStates = new CipherState[2];
+		int numStates = 2;
+		byte[][] newMaterial = hkdf(new byte[0], numStates);
+		CipherState[] newStates = new CipherState[numStates];
 		
-		// split() is the end of this state machine's work, so we may as well destroy the key
+		// split() is the end of this state machine's work, so we may as well destroy the keys
 		chainingKey.destroy();
+		if(cipherState.key != null) {
+			cipherState.key.destroy();
+		}
 		
-		for(int i = 0; i < 2; i++) {
+		for(int i = 0; i < numStates; i++) {
 			newStates[i] = new CipherState();
 			newStates[i].initializeKey(truncatedKey(newMaterial[i]));
 		}
@@ -88,9 +106,7 @@ public class SymmetricState {
 			System.arraycopy(output, i*crypto.hashLength(), results[i], 0, crypto.hashLength());
 		}
 		
-		for(int i = 0; i < output.length; i++) {
-			output[i] = 0;
-		}
+		System.arraycopy(new byte[output.length], 0, output, 0, output.length);
 		
 		return results;
 	}
@@ -99,12 +115,22 @@ public class SymmetricState {
 		if(input.length > crypto.symKeyLength()) {
 			byte[] truncated = new byte[crypto.symKeyLength()];
 			System.arraycopy(input, 0, truncated, 0, truncated.length);
-			for(int i = 0; i < input.length; i++) {
-				input[i] = 0;
-			}
+			System.arraycopy(new byte[input.length], 0, input, 0, input.length);
 			return new Key(crypto, truncated);
 		}
 		
 		return new Key(crypto, input);
+	}
+	
+	public boolean equals(Object _other) {
+		if(!(_other instanceof SymmetricState)) return false;
+		SymmetricState other = (SymmetricState) _other;
+		boolean equal = true;
+		
+		equal &= Util.safeEquals(hash, other.hash);
+		equal &= Util.safeEquals(chainingKey.getRaw(), other.chainingKey.getRaw());
+		equal &= cipherState.equals(other.cipherState);
+		
+		return equal;
 	}
 }

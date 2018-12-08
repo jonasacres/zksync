@@ -131,9 +131,7 @@ public class Key {
 		}
 		
 		System.arraycopy(newKey, 0, raw, 0, raw.length);
-		for(int i = 0; i < newKey.length; i++) {
-			newKey[i] = 0;
-		}
+		System.arraycopy(new byte[newKey.length], 0, newKey, 0, newKey.length);
 	}
 
 	public void destroy() {

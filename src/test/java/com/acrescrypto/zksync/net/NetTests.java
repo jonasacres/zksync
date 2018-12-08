@@ -3,8 +3,11 @@ package com.acrescrypto.zksync.net;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
+import com.acrescrypto.zksync.net.noise.NoiseTests;
+
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
+	NoiseTests.class,
 	BlacklistEntryTest.class,
 	BlacklistTest.class,
 	ChunkAccumulatorTest.class,
@@ -17,7 +20,7 @@ import org.junit.runners.Suite;
 	TCPPeerSocketListenerTest.class,
 	TCPPeerSocketTest.class,
 	PeerConnectionTest.class,
-	RequestPoolTest.class
+	RequestPoolTest.class,
 })
 
 public class NetTests {

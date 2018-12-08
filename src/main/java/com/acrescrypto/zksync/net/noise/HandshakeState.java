@@ -12,30 +12,31 @@ import org.apache.commons.io.IOUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
+import com.acrescrypto.zksync.utility.Util;
 
 // per section 5.3, Noise specification, http://noiseprotocol.org/noise.html, rev 34, 2018-07-11
 public class HandshakeState {
-	private CryptoSupport crypto;
+	protected CryptoSupport crypto;
 	
-	private SymmetricState symmetricState;
+	protected SymmetricState symmetricState;
 	
-	private PrivateDHKey localStaticKey;          // 's' in noise spec
-	private PrivateDHKey localEphemeralKey;       // 'e' in noise spec
-	private PublicDHKey remoteStaticKey;          // 'rs' in noise spec
-	private PublicDHKey remoteEphemeralKey;       // 're' in noise spec
+	protected PrivateDHKey localStaticKey;          // 's' in noise spec
+	protected PrivateDHKey localEphemeralKey;       // 'e' in noise spec
+	protected PublicDHKey remoteStaticKey;          // 'rs' in noise spec
+	protected PublicDHKey remoteEphemeralKey;       // 're' in noise spec
 	
-	private boolean isInitiator;                  // 'initiator' in noise spec
-	private Queue<String[]> messagePatterns;      // 'message_patterns' in noise spec
+	protected boolean isInitiator;                  // 'initiator' in noise spec
+	protected Queue<String[]> messagePatterns;      // 'message_patterns' in noise spec
 	
-	private HashMap<String,TokenWriteHandler> writeHandlers = new HashMap<>();
-	private HashMap<String,TokenReadHandler> readHandlers = new HashMap<>();
+	protected HashMap<String,TokenWriteHandler> writeHandlers = new HashMap<>();
+	protected HashMap<String,TokenReadHandler> readHandlers = new HashMap<>();
 	
-	private byte[] psk;
+	protected byte[] psk;
 	
-	private String protocolName;
+	protected String protocolName;
 	
-	private KeyDeobfuscator deobfuscator;
-	private KeyObfuscator obfuscator;
+	protected KeyDeobfuscator deobfuscator;
+	protected KeyObfuscator obfuscator;
 	
 	private interface TokenReadHandler {
 		public void handle(InputStream in) throws IOException;
@@ -50,7 +51,7 @@ public class HandshakeState {
 	}
 
 	public interface KeyDeobfuscator {
-		public PublicDHKey deobfuscate(InputStream in) throws IOException;
+		public byte[][] deobfuscate(InputStream in) throws IOException;
 	}
 	
 	public HandshakeState(CryptoSupport crypto,
@@ -69,13 +70,14 @@ public class HandshakeState {
 		this.protocolName = protocolName;
 		this.symmetricState = new SymmetricState(crypto, protocolName);
 		
-		this.deobfuscator = ((in)->{
+		this.deobfuscator = (in) -> {
 			byte[] key = IOUtils.readFully(in, crypto.asymPublicDHKeySize());
-			return new PublicDHKey(crypto, key);
-		});
+			return new byte[][] { key, key };
+		};
 		
-		this.obfuscator = ((key)->key.getBytes());
+		this.obfuscator = (key) -> key.getBytes();
 		
+		if(prologue == null) prologue = new byte[0];
 		this.symmetricState.mixHash(prologue);
 
 		this.isInitiator = isInitiator;
@@ -109,7 +111,7 @@ public class HandshakeState {
 		
 		for(String line : lines) {
 			line = line.trim();
-			if(!line.startsWith("-> ") && !line.startsWith("<- ")) continue;
+			if(!line.startsWith("-> ") && !line.startsWith("<- ") && !line.equals("...")) continue;
 			
 			if(line.equals("...")) {
 				inPremessage = false;
@@ -118,23 +120,23 @@ public class HandshakeState {
 			
 			boolean lineForInitiator = line.startsWith("-> ");
 			if(inPremessage) {
-				for(String token : line.split(", ")) {
+				for(String token : line.split(",? ")) {
 					if(token.equals("s")) {
 						if(lineForInitiator == isInitiator) {
-							this.symmetricState.mixHash(localStaticKey.getBytes());
+							this.symmetricState.mixHash(localStaticKey.publicKey().getBytes());
 						} else {
 							this.symmetricState.mixHash(remoteStaticKey.getBytes());
 						}
 					} else if(token.equals("e")) {
 						if(lineForInitiator == isInitiator) {
-							this.symmetricState.mixHash(localEphemeralKey.getBytes());
+							this.symmetricState.mixHash(localEphemeralKey.publicKey().getBytes());
 						} else {
 							this.symmetricState.mixHash(remoteEphemeralKey.getBytes());
 						}
 					}
 				}
 			} else {
-				messagePatterns.add(line.split(", "));
+				messagePatterns.add(line.split(",? "));
 			}
 		}
 	}
@@ -145,11 +147,11 @@ public class HandshakeState {
 		
 		while(result == null) {
 			if(!skip) {
-				result = readMessage(in);
+				result = writeMessage(out);
 			}
 			
 			if(result == null) {
-				result = writeMessage(out);
+				result = readMessage(in);
 			}
 			
 			skip = false;
@@ -161,25 +163,39 @@ public class HandshakeState {
 	protected CipherState[] writeMessage(OutputStream out) throws IOException {
 		String[] tokens = messagePatterns.poll();
 		for(String token : tokens) {
-			writeHandlers.get(token).handle(out);
+			TokenWriteHandler handler = writeHandlers.get(token);
+			if(handler != null) {
+				handler.handle(out);
+			}
 		}
 		
 		// TODO Noise: what about supplementary data?
 		
-		if(messagePatterns.isEmpty()) return symmetricState.split();
+		if(messagePatterns.isEmpty()) return readyStates();
 		return null;
 	}
 	
 	protected CipherState[] readMessage(InputStream in) throws IOException {
 		String[] tokens = messagePatterns.poll();
 		for(String token : tokens) {
-			readHandlers.get(token).handle(in);
+			TokenReadHandler handler = readHandlers.get(token);
+			if(handler != null) {
+				handler.handle(in);
+			}
 		}
 		
 		// TODO Noise: what to do about supplementary data?
 		
-		if(messagePatterns.isEmpty()) return symmetricState.split();
+		if(messagePatterns.isEmpty()) return readyStates();
 		return null;
+	}
+	
+	protected CipherState[] readyStates() {
+		// make sure that our rx state is element 0, tx is element 1
+		CipherState[] states = symmetricState.split();
+		if(isInitiator) return states;
+		
+		return new CipherState[] { states[1], states[0] };
 	}
 	
 	private void initTokenMappers() {
@@ -190,17 +206,17 @@ public class HandshakeState {
 	private void initWriteTokenMappers() {
 		writeHandlers.put("e", (out)->{
 			localEphemeralKey = generateKeypair();
-			// TODO Noise: distinguishable, need a way to obscure this...
-			/* What does Alice have in connecting to Bob?
-			 *  1) bob's public static key
-			 *  2) the archive id
-			 */
 			out.write(obfuscator.obfuscate(localEphemeralKey.publicKey()));
 			symmetricState.mixHash(localEphemeralKey.publicKey().getBytes());
 		});
 		
 		writeHandlers.put("s", (out)->{
-			out.write(symmetricState.encryptAndHash(localStaticKey.publicKey().getBytes()));
+			if(symmetricState.cipherState.hasKey()) {
+				out.write(symmetricState.encryptAndHash(localStaticKey.publicKey().getBytes()));
+			} else {
+				byte[] obfuscated = obfuscator.obfuscate(localStaticKey.publicKey());
+				out.write(symmetricState.encryptAndHash(obfuscated));
+			}
 		});
 		
 		writeHandlers.put("ee", (out)->{
@@ -239,11 +255,14 @@ public class HandshakeState {
 	private void initReadTokenMappers() {
 		readHandlers.put("e", (in)->{
 			assert(remoteEphemeralKey == null);
-			remoteEphemeralKey = deobfuscator.deobfuscate(in);
+			byte[][] deobfuscated = deobfuscator.deobfuscate(in);
+			remoteEphemeralKey = new PublicDHKey(crypto, deobfuscated[0]);
+			symmetricState.mixHash(deobfuscated[1]);
 		});
 		
 		readHandlers.put("s", (in)->{
 			assert(remoteStaticKey == null);
+			
 			if(symmetricState.cipherState.hasKey()) {
 				// spec says dh key size + 16, where the 16 comes from the tag length
 				int len = crypto.asymPublicDHKeySize() + crypto.symTagLength();
@@ -251,7 +270,9 @@ public class HandshakeState {
 				IOUtils.readFully(in, temp);
 				remoteStaticKey = new PublicDHKey(crypto, symmetricState.decryptAndHash(temp));
 			} else {
-				remoteStaticKey = deobfuscator.deobfuscate(in);
+				byte[][] deobfuscated = deobfuscator.deobfuscate(in);
+				remoteStaticKey = new PublicDHKey(crypto, deobfuscated[0]);
+				symmetricState.mixHash(deobfuscated[1]);
 			}
 		});
 		
@@ -294,5 +315,9 @@ public class HandshakeState {
 	
 	public String getProtocolName() {
 		return protocolName;
+	}
+	
+	public boolean isInitiator() {
+		return isInitiator;
 	}
 }
