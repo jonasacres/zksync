@@ -3,6 +3,9 @@ package com.acrescrypto.zksync.crypto;
 import java.nio.ByteBuffer;
 
 import org.bouncycastle.util.Arrays;
+
+import com.acrescrypto.zksync.utility.Util;
+
 import org.bouncycastle.math.ec.rfc7748.X25519; 
 
 public class PrivateDHKey {
@@ -63,5 +66,10 @@ public class PrivateDHKey {
 	
 	public CryptoSupport getCrypto() {
 		return crypto;
+	}
+
+	public void destroy() {
+		privKey = Util.zero(privKey);
+		pubKey.destroy();
 	}
 }

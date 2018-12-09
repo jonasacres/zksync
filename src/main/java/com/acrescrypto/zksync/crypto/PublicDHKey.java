@@ -2,6 +2,8 @@ package com.acrescrypto.zksync.crypto;
 
 import java.util.Arrays;
 
+import com.acrescrypto.zksync.utility.Util;
+
 public class PublicDHKey {
 	protected byte[] pubKey;
 	protected CryptoSupport crypto;
@@ -24,5 +26,9 @@ public class PublicDHKey {
 		if(!(other instanceof PublicDHKey)) return false;
 		
 		return Arrays.equals(pubKey, ((PublicDHKey) other).pubKey);
+	}
+
+	public void destroy() {
+		pubKey = Util.zero(pubKey);
 	}
 }

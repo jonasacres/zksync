@@ -109,6 +109,7 @@ public class BandwidthAllocatorTest {
 	
 	@Test
 	public void testRequestBytesReturnsRequestSizeIfRequestedBytesAreAvailable() {
+		// TODO Urgent: (itf) Test stalls. 2018-12-07 496c588 AllTests Linux
 		MutableBoolean allocated = new MutableBoolean(false);
 		BandwidthAllocation allocation = allocator.requestAllocation();
 		new Thread(()->{

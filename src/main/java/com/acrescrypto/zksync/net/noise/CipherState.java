@@ -110,4 +110,11 @@ public class CipherState {
 		equals &= Util.safeEquals(key.getRaw(), other.key.getRaw());
 		return equals;
 	}
+
+	public void destroy() {
+		nonce = 0;
+		if(key != null) {
+			key.destroy();
+		}
+	}
 }

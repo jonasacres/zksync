@@ -12,7 +12,6 @@ import org.apache.commons.io.IOUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
-import com.acrescrypto.zksync.utility.Util;
 
 // per section 5.3, Noise specification, http://noiseprotocol.org/noise.html, rev 34, 2018-07-11
 public class HandshakeState {
@@ -37,6 +36,10 @@ public class HandshakeState {
 	
 	protected KeyDeobfuscator deobfuscator;
 	protected KeyObfuscator obfuscator;
+	protected PayloadReader payloadReader;
+	protected PayloadWriter payloadWriter;
+	
+	protected int round;
 	
 	private interface TokenReadHandler {
 		public void handle(InputStream in) throws IOException;
@@ -44,6 +47,31 @@ public class HandshakeState {
 	
 	private interface TokenWriteHandler {
 		public void handle(OutputStream out) throws IOException;
+	}
+	
+	public interface DecryptHandler {
+		public byte[] decrypt(byte[] ciphertext);
+	}
+	
+	public interface PayloadReader {
+		/** Callback for handling additional payload in handshaking.
+		 * 
+		 * @param round Message round. The first message from the initiator is round 1, the response is round 2, the next initiator message is round 3, and so on.
+		 * @param in InputStream bearing ciphertext
+		 * @param decrypter DecryptHandler for decrypting ciphertext. Returns plaintext. Must be called exactly once on a byte array containing entire ciphertext read from InputStream, or handshaking will fail.
+		 * @return Ciphertext bytes read from stream.
+		 * @throws IOException
+		 */
+		public void readPayload(int round, InputStream in, DecryptHandler decrypter) throws IOException;
+	}
+	
+	public interface PayloadWriter {
+		/** Callback for providing additional payload in handshaking.
+		 * 
+		 * @param round Message round. The first message from the initiator is round 1, the response is round 2, the next initiator message is round 3, and so on.
+		 * @return Plaintext bytes to be encrypted and sent.
+		 */
+		public byte[] writePayload(int round);
 	}
 	
 	public interface KeyObfuscator {
@@ -77,6 +105,9 @@ public class HandshakeState {
 		
 		this.obfuscator = (key) -> key.getBytes();
 		
+		this.payloadReader = (round, in, decrypter) -> decrypter.decrypt(new byte[0]);
+		this.payloadWriter = (round) -> new byte[0];
+		
 		if(prologue == null) prologue = new byte[0];
 		this.symmetricState.mixHash(prologue);
 
@@ -93,6 +124,11 @@ public class HandshakeState {
 	public void setObfuscation(KeyObfuscator obfuscator, KeyDeobfuscator deobfuscator) {
 		this.obfuscator = obfuscator;
 		this.deobfuscator = deobfuscator;
+	}
+	
+	public void setPayload(PayloadWriter payloadWriter, PayloadReader payloadReader) {
+		this.payloadWriter = payloadWriter;
+		this.payloadReader = payloadReader;
 	}
 	
 	protected void decodeMessagePattern(String bigPattern) {
@@ -161,6 +197,7 @@ public class HandshakeState {
 	}
 	
 	protected CipherState[] writeMessage(OutputStream out) throws IOException {
+		round++;
 		String[] tokens = messagePatterns.poll();
 		for(String token : tokens) {
 			TokenWriteHandler handler = writeHandlers.get(token);
@@ -169,13 +206,18 @@ public class HandshakeState {
 			}
 		}
 		
-		// TODO Noise: what about supplementary data?
+		byte[] payload = payloadWriter.writePayload(round);
+		if(payload != null && payload.length > 0) {
+			byte[] ciphertext = symmetricState.encryptAndHash(payload);
+			out.write(ciphertext);
+		}
 		
 		if(messagePatterns.isEmpty()) return readyStates();
 		return null;
 	}
 	
 	protected CipherState[] readMessage(InputStream in) throws IOException {
+		round++;
 		String[] tokens = messagePatterns.poll();
 		for(String token : tokens) {
 			TokenReadHandler handler = readHandlers.get(token);
@@ -184,7 +226,13 @@ public class HandshakeState {
 			}
 		}
 		
-		// TODO Noise: what to do about supplementary data?
+		payloadReader.readPayload(round, in, (ct)->{
+			if(ct != null && ct.length > 0) {
+				return symmetricState.decryptAndHash(ct);
+			}
+			
+			return new byte[0];
+		});
 		
 		if(messagePatterns.isEmpty()) return readyStates();
 		return null;
@@ -193,6 +241,10 @@ public class HandshakeState {
 	protected CipherState[] readyStates() {
 		// make sure that our rx state is element 0, tx is element 1
 		CipherState[] states = symmetricState.split();
+		
+		localEphemeralKey.destroy();
+		remoteEphemeralKey.destroy();
+		
 		if(isInitiator) return states;
 		
 		return new CipherState[] { states[1], states[0] };

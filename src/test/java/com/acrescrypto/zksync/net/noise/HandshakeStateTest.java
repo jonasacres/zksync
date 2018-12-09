@@ -14,6 +14,7 @@ import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.ByteBuffer;
 
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -478,6 +479,26 @@ public class HandshakeStateTest {
 	}
 	
 	@Test
+	public void testWriteMessageAppendsEncryptedPayload() throws IOException {
+		messagePatterns = "Example:\n"
+				+ "  -> psk\n"
+				+ "  <- ss"; // need an extra line to stop from destroying state
+		remakeHandshakeState();
+		
+		byte[] plaintext = Util.serializeLong(4321);
+		handshakeState.setPayload((round)->plaintext, (round, in, decrypter)->{});
+		
+		SymmetricState clone = new SymmetricState(handshakeState.symmetricState);
+		clone.mixKeyAndHash(psk);
+		byte[] ciphertext = clone.encryptAndHash(plaintext);
+		handshakeState.writeMessage(bufOut);
+		
+		assertEquals(1, handshakeState.symmetricState.cipherState.getNonce());
+		assertEquals(clone, handshakeState.symmetricState);
+		assertArrayEquals(ciphertext, readBuf());
+	}
+	
+	@Test
 	public void testWriteMessageReturnsNullIfRemainingMessagePatterns() throws IOException {
 		messagePatterns = "Example:\n"
 				+ "  -> psk\n"
@@ -639,7 +660,6 @@ public class HandshakeStateTest {
 		
 		assertEquals(0, handshakeState.symmetricState.cipherState.getNonce());
 		assertEquals(clone, handshakeState.symmetricState);
-		assertArrayEquals(new byte[0], readBuf());
 	}
 	
 	@Test
@@ -655,7 +675,6 @@ public class HandshakeStateTest {
 		
 		assertEquals(0, handshakeState.symmetricState.cipherState.getNonce());
 		assertEquals(clone, handshakeState.symmetricState);
-		assertArrayEquals(new byte[0], readBuf());
 	}
 
 	@Test
@@ -672,7 +691,6 @@ public class HandshakeStateTest {
 		
 		assertEquals(0, handshakeState.symmetricState.cipherState.getNonce());
 		assertEquals(clone, handshakeState.symmetricState);
-		assertArrayEquals(new byte[0], readBuf());
 	}
 
 	public void testReadMessageProcesses_se_TokenAppropriatelyWhenInitiator() throws IOException {
@@ -687,7 +705,6 @@ public class HandshakeStateTest {
 		
 		assertEquals(0, handshakeState.symmetricState.cipherState.getNonce());
 		assertEquals(clone, handshakeState.symmetricState);
-		assertArrayEquals(new byte[0], readBuf());
 	}
 
 	@Test
@@ -704,7 +721,6 @@ public class HandshakeStateTest {
 		
 		assertEquals(0, handshakeState.symmetricState.cipherState.getNonce());
 		assertEquals(clone, handshakeState.symmetricState);
-		assertArrayEquals(new byte[0], readBuf());
 	}
 
 	@Test
@@ -720,7 +736,6 @@ public class HandshakeStateTest {
 		
 		assertEquals(0, handshakeState.symmetricState.cipherState.getNonce());
 		assertEquals(clone, handshakeState.symmetricState);
-		assertArrayEquals(new byte[0], readBuf());
 	}
 	
 	@Test
@@ -736,7 +751,33 @@ public class HandshakeStateTest {
 		
 		assertEquals(0, handshakeState.symmetricState.cipherState.getNonce());
 		assertEquals(clone, handshakeState.symmetricState);
-		assertArrayEquals(new byte[0], readBuf());
+	}
+	
+	@Test
+	public void testReadMessageDecryptsPayload() throws IOException {
+		messagePatterns = "Example:\n"
+				+ "  -> psk\n"
+				+ "  <- psk"; // need an extra line to stop from destroying state
+		remakeHandshakeState();
+		
+		byte[] plaintext = crypto.hash("lumber".getBytes());
+		
+		MutableBoolean invoked = new MutableBoolean();
+		handshakeState.setPayload((round)->plaintext, (round, in, decrypter)->{
+			byte[] ciphertext = new byte[plaintext.length + crypto.symTagLength()];
+			in.read(ciphertext);
+			byte[] recovered = decrypter.decrypt(ciphertext);
+			assertArrayEquals(recovered, plaintext);
+			invoked.setTrue();
+		});
+		
+		SymmetricState clone = new SymmetricState(handshakeState.symmetricState);
+		clone.mixKeyAndHash(psk);
+		byte[] ciphertext = clone.encryptAndHash(plaintext);
+		handshakeState.readMessage(new ByteArrayInputStream(ciphertext));
+		
+		assertEquals(1, handshakeState.symmetricState.cipherState.getNonce());
+		assertEquals(clone, handshakeState.symmetricState);
 	}
 	
 	@Test

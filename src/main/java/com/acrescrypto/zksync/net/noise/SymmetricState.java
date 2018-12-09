@@ -39,11 +39,7 @@ public class SymmetricState {
 		
 		chainingKey.replace(newMaterial[0]);
 		
-		byte[] truncated = new byte[crypto.symKeyLength()];
-		System.arraycopy(newMaterial[1], 0, truncated, 0, truncated.length);
-		System.arraycopy(new byte[newMaterial[1].length], 0, newMaterial[1], 0, newMaterial[1].length);
-		
-		Key tempKey = new Key(crypto, truncated);
+		Key tempKey = truncatedKey(newMaterial[1]);
 		cipherState.initializeKey(tempKey);
 	}
 	
@@ -82,9 +78,7 @@ public class SymmetricState {
 		
 		// split() is the end of this state machine's work, so we may as well destroy the keys
 		chainingKey.destroy();
-		if(cipherState.key != null) {
-			cipherState.key.destroy();
-		}
+		cipherState.destroy();
 		
 		for(int i = 0; i < numStates; i++) {
 			newStates[i] = new CipherState();
@@ -106,7 +100,7 @@ public class SymmetricState {
 			System.arraycopy(output, i*crypto.hashLength(), results[i], 0, crypto.hashLength());
 		}
 		
-		System.arraycopy(new byte[output.length], 0, output, 0, output.length);
+		Util.zero(output);
 		
 		return results;
 	}
@@ -115,7 +109,7 @@ public class SymmetricState {
 		if(input.length > crypto.symKeyLength()) {
 			byte[] truncated = new byte[crypto.symKeyLength()];
 			System.arraycopy(input, 0, truncated, 0, truncated.length);
-			System.arraycopy(new byte[input.length], 0, input, 0, input.length);
+			Util.zero(input);
 			return new Key(crypto, truncated);
 		}
 		

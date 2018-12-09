@@ -300,4 +300,12 @@ public class Util {
 	public static String toWebSafeBase64(String base64) {
 		return base64.replaceAll("\\+", ".").replaceAll("/", "_");
 	}
+
+	public static byte[] zero(byte[] array) {
+		for(int i = 0; i < array.length; i++) {
+			array[i] = 0;
+		}
+		
+		return null;
+	}
 }
