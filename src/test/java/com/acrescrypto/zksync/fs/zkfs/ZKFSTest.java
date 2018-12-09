@@ -356,7 +356,7 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testAlternativePageSizes() throws IOException {
 		// let's try some different page sizes to see if we can gum things up.
-		CryptoSupport crypto = new CryptoSupport();
+		CryptoSupport crypto = CryptoSupport.defaultCrypto();
 		
 		int[] pageSizes = {
 				RevisionInfo.FIXED_SIZE >> 1,

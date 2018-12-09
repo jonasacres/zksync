@@ -30,7 +30,7 @@ public class DHTModuleTest {
 		public DummyMaster()
 				throws IOException, InvalidBlacklistException {
 			super();
-			this.crypto = new CryptoSupport();
+			this.crypto = CryptoSupport.defaultCrypto();
 			this.threadGroup = Thread.currentThread().getThreadGroup();
 			this.storage = new RAMFS();
 			this.blacklist = new Blacklist(storage, "blacklist", new Key(crypto));
@@ -92,7 +92,7 @@ public class DHTModuleTest {
 	
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		master = ZKMaster.openBlankTestVolume();
 		root = master.getDHTClient();
 		root.listen(null, 0);

@@ -74,7 +74,7 @@ public class DHTBucketTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException, InvalidBlacklistException {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 	}
 	
 	@Before

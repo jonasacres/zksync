@@ -21,7 +21,7 @@ public class DHTAdvertisementRecordTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234, crypto.rng(crypto.hashLength()));
 	}
 	

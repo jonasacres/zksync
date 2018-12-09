@@ -52,7 +52,7 @@ public class RevisionTreeTest {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createDefaultArchive();
 		config = archive.config;

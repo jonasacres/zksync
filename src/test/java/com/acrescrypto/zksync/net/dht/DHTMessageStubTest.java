@@ -28,7 +28,7 @@ public class DHTMessageStubTest {
 		DatagramPacket sent;
 		
 		public DummyClient() {
-			this.crypto = new CryptoSupport();
+			this.crypto = CryptoSupport.defaultCrypto();
 			this.tagKey = new Key(crypto);
 			this.key = crypto.makePrivateDHKey();
 			this.networkId = new byte[crypto.hashLength()];
@@ -59,7 +59,7 @@ public class DHTMessageStubTest {
 	
 	@Before
 	public void beforeEach() throws UnknownHostException {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		client = new DummyClient();
 		peer = new DHTPeer(client, "127.0.0.1", 12345, crypto.rng(crypto.asymPublicDHKeySize()));
 		req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, new byte[0], (response)->{resp = response;});

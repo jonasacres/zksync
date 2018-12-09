@@ -45,7 +45,7 @@ public class HandshakeStateTest {
 	
 	@Before
 	public void beforeEach() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		
 		localEphKey = new PrivateDHKey(crypto);
 		localStaticKey = new PrivateDHKey(crypto);

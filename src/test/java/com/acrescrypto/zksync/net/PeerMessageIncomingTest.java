@@ -301,7 +301,7 @@ public class PeerMessageIncomingTest {
 	@Test
 	public void testReadBufferMaintainsConsistencyThroughResize() throws EOFException {
 		byte[] seed = { 1, 2, 3, 4 };
-		CryptoSupport crypto = new CryptoSupport();
+		CryptoSupport crypto = CryptoSupport.defaultCrypto();
 		PRNG prngWrite = crypto.prng(seed), prngRead = crypto.prng(seed);
 		
 		// fill up the buffer, then read just a little bit

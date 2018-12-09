@@ -34,7 +34,7 @@ public class TCPPeerAdvertisementTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		pubKey = crypto.rng(crypto.asymPublicSigningKeySize());
 		host = "localhost";
 		port = 12345;

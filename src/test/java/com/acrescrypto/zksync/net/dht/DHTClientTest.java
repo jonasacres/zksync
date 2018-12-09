@@ -57,7 +57,7 @@ public class DHTClientTest {
 		public DummyMaster()
 				throws IOException, InvalidBlacklistException {
 			super();
-			this.crypto = new CryptoSupport();
+			this.crypto = CryptoSupport.defaultCrypto();
 			this.threadGroup = Thread.currentThread().getThreadGroup();
 			this.storage = new RAMFS();
 			this.blacklist = new Blacklist(storage, "blacklist", new Key(crypto));
@@ -351,7 +351,7 @@ public class DHTClientTest {
 		DHTClient.socketCycleDelayMs = 10;
 		DHTClient.socketOpenFailCycleDelayMs = 20;
 		
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		
 		master = new DummyMaster();
 		storageKey = new Key(crypto);

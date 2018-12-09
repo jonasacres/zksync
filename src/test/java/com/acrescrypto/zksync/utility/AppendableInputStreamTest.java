@@ -30,7 +30,7 @@ public class AppendableInputStreamTest {
 	
 	@Before
 	public void beforeEach() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		stream = new AppendableInputStream();
 	}
 	

@@ -35,7 +35,7 @@ public class DHTMessageTest {
 		DHTMessage watch;
 		
 		protected DummyClient() {
-			this.crypto = new CryptoSupport();
+			this.crypto = CryptoSupport.defaultCrypto();
 			this.key = this.crypto.makePrivateDHKey();
 			this.tagKey = new Key(crypto);
 			this.routingTable = new DummyRoutingTable();
@@ -158,7 +158,7 @@ public class DHTMessageTest {
 
 	@Before
 	public void beforeEach() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		client = new DummyClient();
 		peer = makeTestPeer(0);
 	}

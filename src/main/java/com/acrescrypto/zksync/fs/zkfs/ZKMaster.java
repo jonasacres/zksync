@@ -73,7 +73,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public static ZKMaster openTestVolume(PassphraseProvider ppProvider, String name) throws IOException {
 		try {
-			return new ZKMaster(new CryptoSupport(), RAMFS.volumeWithName(name), ppProvider);
+			return new ZKMaster(CryptoSupport.defaultCrypto(), RAMFS.volumeWithName(name), ppProvider);
 		} catch (InvalidBlacklistException e) {
 			// InvalidBlacklistException masked as a runtime to avoid having to add a bunch of throws InBlEx to a zillion tests
 			throw new RuntimeException();
@@ -82,7 +82,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public static ZKMaster open(PassphraseProvider ppProvider, FS storage) throws IOException {
 		try {
-			return new ZKMaster(new CryptoSupport(), storage, ppProvider);
+			return new ZKMaster(CryptoSupport.defaultCrypto(), storage, ppProvider);
 		} catch (InvalidBlacklistException e) {
 			throw new RuntimeException();
 		}
@@ -90,7 +90,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) throws IOException {
 		try {
-			return new ZKMaster(new CryptoSupport(), new LocalFS(path), ppProvider);
+			return new ZKMaster(CryptoSupport.defaultCrypto(), new LocalFS(path), ppProvider);
 		} catch (InvalidBlacklistException e) {
 			// InvalidBlacklistException masked as a runtime to avoid having to add a bunch of throws InBlEx to a zillion tests
 			throw new RuntimeException();

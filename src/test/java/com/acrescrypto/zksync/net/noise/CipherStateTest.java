@@ -21,7 +21,7 @@ public class CipherStateTest {
 	
 	@Before
 	public void beforeEach() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		ct = new CipherState();
 	}
 	

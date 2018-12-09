@@ -117,7 +117,7 @@ public class PeerMessageOutgoingTest {
 		readEnd = new PipedInputStream(writeEnd);
 		msg = new PeerMessageOutgoing(connection, CMD, readEnd);
 		
-		CryptoSupport crypto = new CryptoSupport();
+		CryptoSupport crypto = CryptoSupport.defaultCrypto();
 		readPRNG = crypto.prng(new byte[] {1, 2, 4, 8});
 		writePRNG = crypto.prng(new byte[] {1, 2, 4, 8});
 	}

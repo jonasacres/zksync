@@ -108,7 +108,7 @@ public class RequestPoolTest {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		master = ZKMaster.openBlankTestVolume();
 		
 		ArchiveAccessor accessor = master.makeAccessorForRoot(new Key(crypto), false);

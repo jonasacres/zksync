@@ -15,7 +15,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.utility.Util;
 
 public class CryptoSupportTest  {
-	CryptoSupport crypto = new CryptoSupport();
+	CryptoSupport crypto = CryptoSupport.defaultCrypto();
 
 	@BeforeClass
 	public static void beforeClass() {

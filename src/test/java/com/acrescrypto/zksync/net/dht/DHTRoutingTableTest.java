@@ -28,7 +28,7 @@ public class DHTRoutingTableTest {
 		
 		public DummyClient() {
 			this.storage = new RAMFS();
-			this.crypto = new CryptoSupport();
+			this.crypto = CryptoSupport.defaultCrypto();
 			this.storageKey = new Key(this.crypto);
 			this.key = crypto.makePrivateDHKey();
 			this.id = new DHTID(crypto.rng(crypto.hashLength()));

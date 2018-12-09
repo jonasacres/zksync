@@ -17,7 +17,7 @@ public class SymmetricStateTest {
 	
 	@Before
 	public void beforeEach() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		symState = new SymmetricState(crypto, "Noise_Dummy_WhateverWeHappenToBeUsing");
 	}
 	

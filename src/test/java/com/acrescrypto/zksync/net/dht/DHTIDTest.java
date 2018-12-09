@@ -19,7 +19,7 @@ public class DHTIDTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 	}
 	
 	@AfterClass

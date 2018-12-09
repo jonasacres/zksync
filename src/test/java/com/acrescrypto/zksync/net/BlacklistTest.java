@@ -37,7 +37,7 @@ public class BlacklistTest {
 	
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
-		CryptoSupport crypto = new CryptoSupport();
+		CryptoSupport crypto = CryptoSupport.defaultCrypto();
 		Key key = new Key(crypto, crypto.rng(crypto.symKeyLength()));
 		blacklist = new Blacklist(fs, "blacklist", key);
 	}

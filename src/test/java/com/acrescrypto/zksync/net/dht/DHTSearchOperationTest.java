@@ -64,7 +64,7 @@ public class DHTSearchOperationTest {
 		ArrayList<DHTPeer> simPeers;
 
 		public DummyClient() {
-			this.crypto = new CryptoSupport();
+			this.crypto = CryptoSupport.defaultCrypto();
 			this.simPeers = makeTestList(this, 2048);
 			this.routingTable = new DummyRoutingTable(this);
 		}
@@ -188,7 +188,7 @@ public class DHTSearchOperationTest {
 	
 	@Before
 	public void beforeEach() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		client = new DummyClient();
 		searchId = new DHTID(crypto.rng(crypto.hashLength()));
 		results = null;

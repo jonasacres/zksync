@@ -39,7 +39,7 @@ public class NetModuleTest {
 	
 	@BeforeClass
 	public static void beforeClass() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		ZKFSTest.cheapenArgon2Costs();
 	}
 	

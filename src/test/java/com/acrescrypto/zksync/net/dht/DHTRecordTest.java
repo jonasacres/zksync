@@ -29,7 +29,7 @@ public class DHTRecordTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 	}
 	
 	@Before
@@ -48,7 +48,7 @@ public class DHTRecordTest {
 	
 	@Test
 	public void testDeserializeRecordHandlesAdvertisements() throws UnsupportedProtocolException {
-		CryptoSupport crypto = new CryptoSupport();
+		CryptoSupport crypto = CryptoSupport.defaultCrypto();
 		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234, crypto.rng(crypto.hashLength()));
 		DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(crypto, ad);
 		
@@ -59,7 +59,7 @@ public class DHTRecordTest {
 	
 	@Test(expected=UnsupportedProtocolException.class)
 	public void testDeserializeRecordThrowsExceptionIfUnsupportedType() throws UnsupportedProtocolException {
-		CryptoSupport crypto = new CryptoSupport();
+		CryptoSupport crypto = CryptoSupport.defaultCrypto();
 		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234, crypto.rng(crypto.hashLength()));
 		DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(crypto, ad);
 		byte[] serialized = adRecord.serialize();
@@ -70,7 +70,7 @@ public class DHTRecordTest {
 
 	@Test
 	public void testDeserializeRecordWithPeerHandlesAdvertisements() throws UnsupportedProtocolException {
-		CryptoSupport crypto = new CryptoSupport();
+		CryptoSupport crypto = CryptoSupport.defaultCrypto();
 		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234, crypto.rng(crypto.hashLength()));
 		DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(crypto, ad);
 		DHTPeer peer = new DHTPeer(client, "127.0.0.1", 4321, crypto.makePrivateDHKey().publicKey().getBytes());
@@ -88,7 +88,7 @@ public class DHTRecordTest {
 	
 	@Test(expected=UnsupportedProtocolException.class)
 	public void testDeserializeRecorThrowsExceptionIfUnsupportedType() throws UnsupportedProtocolException {
-		CryptoSupport crypto = new CryptoSupport();
+		CryptoSupport crypto = CryptoSupport.defaultCrypto();
 		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234, crypto.rng(crypto.hashLength()));
 		DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(crypto, ad);
 		DHTPeer peer = new DHTPeer(client, "127.0.0.1", 4321, crypto.makePrivateDHKey().publicKey().getBytes());

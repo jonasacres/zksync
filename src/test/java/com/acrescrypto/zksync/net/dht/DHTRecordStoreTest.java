@@ -28,7 +28,7 @@ public class DHTRecordStoreTest {
 		public DummyClient() {
 			this.storage = new RAMFS();
 			this.threadPool = GroupedThreadPool.newCachedThreadPool(Thread.currentThread().getThreadGroup(), "DummyClient");
-			this.crypto = new CryptoSupport();
+			this.crypto = CryptoSupport.defaultCrypto();
 			this.storageKey = new Key(crypto);
 		}
 

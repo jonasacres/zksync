@@ -72,7 +72,7 @@ public class PageTreeChunkTest {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		master = ZKMaster.openBlankTestVolume();
 		tree = new DummyPageTree();
 		

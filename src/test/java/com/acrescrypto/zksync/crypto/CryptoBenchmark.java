@@ -15,7 +15,7 @@ public class CryptoBenchmark {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		key = crypto.rng(crypto.symKeyLength());
 		iv = crypto.rng(crypto.symIvLength());
 		crypto.encrypt(key, iv, new byte[1024], new byte[1024], -1); // prime the pump

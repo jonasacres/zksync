@@ -42,7 +42,7 @@ public class ZKArchiveTest {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		master = ZKMaster.openBlankTestVolume();
 		accessor = master.makeAccessorForRoot(new Key(crypto), false);
 		config = ZKArchiveConfig.create(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE);

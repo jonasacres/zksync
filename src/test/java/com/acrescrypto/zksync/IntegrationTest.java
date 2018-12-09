@@ -107,7 +107,7 @@ public class IntegrationTest {
 	
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		rootMaster = ZKMaster.openBlankTestVolume();
 		rootClient = rootMaster.getDHTClient();
 		rootClient.listen("127.0.0.1", 0);

@@ -40,7 +40,7 @@ public class PageTreeTest {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		crypto = new CryptoSupport();
+		crypto = CryptoSupport.defaultCrypto();
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		fs = archive.openBlank();
