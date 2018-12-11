@@ -10,17 +10,17 @@ import java.nio.ByteBuffer;
 import java.util.LinkedList;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.mutable.MutableInt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
-import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
-import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
-import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.net.noise.CipherState;
+import com.acrescrypto.zksync.net.noise.HandshakeState;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocketListener {
@@ -34,15 +34,15 @@ public class TCPPeerSocketListener {
 	protected Thread thread;
 	protected Logger logger = LoggerFactory.getLogger(TCPPeerSocketListener.class);
 	protected LinkedList<TCPPeerAdvertisementListener> adListeners;
-	protected LinkedList<Long> recentProofs;
 	protected boolean closed, established;
+	protected PrivateDHKey identityKey;
 	
 	public TCPPeerSocketListener(ZKMaster master) throws IOException {
 		this.crypto = master.getCrypto();
 		this.blacklist = master.getBlacklist();
 		this.master = master;
 		this.adListeners = new LinkedList<>();
-		this.recentProofs = new LinkedList<>();
+		this.identityKey = crypto.makePrivateDHKey(); // TODO Noise: cache static key to disk
 	}
 	
 	public TCPPeerSocketListener(ZKMaster master, int port) throws IOException {
@@ -179,13 +179,17 @@ public class TCPPeerSocketListener {
 	protected void peerThread(Socket peerSocketRaw) {
 		long startTime = Util.currentTimeMillis();
 		try {
-			performServerHandshake(peerSocketRaw);
+			performResponderHandshake(peerSocketRaw);
 		} catch(EOFException | ProtocolViolationException exc) {
 			logger.info("Peer {} sent illegal handshake", peerSocketRaw.getInetAddress().toString(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(IOException exc) {
 			logger.info("Caught IOException on connection to peer {}", peerSocketRaw.getInetAddress().toString(), exc);
+			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
+			Util.delay(delay, ()->peerSocketRaw.close());
+		} catch(SecurityException exc) {
+			logger.info("Unable to handshake with peer {}", peerSocketRaw.getInetAddress().toString(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(Exception exc) {
@@ -195,105 +199,108 @@ public class TCPPeerSocketListener {
 		}
 	}
 	
-	protected TCPPeerSocket performServerHandshake(Socket peerSocketRaw) throws IOException, ProtocolViolationException {
-		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, 10, ()->established, ()->peerSocketRaw.close());
+	protected TCPPeerSocket performResponderHandshake(Socket peerSocketRaw) throws IOException, ProtocolViolationException {
+		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, 10, ()->established, ()->{
+			peerSocketRaw.close();
+		});
 		
 		if(adListeners.isEmpty()) {
 			throw new ProtocolViolationException(); // not ready to accept peers
 		}
 		
+		// TODO Noise: rate limit these
 		InputStream in = peerSocketRaw.getInputStream();
 		OutputStream out = peerSocketRaw.getOutputStream();
-
-		// This will need to be rethought if we ever have different crypto configurations between archives
-		byte[] pubKeyRaw = new byte[crypto.asymPublicSigningKeySize()];
-		byte[] keyHash = new byte[crypto.hashLength()];
-		byte[] keyKnowledgeProof = new byte[crypto.symKeyLength()];
-		byte[] staticKeyCiphertext = new byte[crypto.asymPublicDHKeySize() + crypto.symTagLength()];
-		byte[] timeProof = new byte[crypto.hashLength()];
-		byte[] encryptedPortNumber = new byte[2 + crypto.symTagLength()];
+		class MutableAdListener {
+			TCPPeerAdvertisementListener value;
+		}
 		
-		IOUtils.readFully(in, pubKeyRaw);
-		IOUtils.readFully(in, keyHash);
-		IOUtils.readFully(in, timeProof);
-		IOUtils.readFully(in, keyKnowledgeProof);
-		IOUtils.readFully(in, staticKeyCiphertext);
-		IOUtils.readFully(in, encryptedPortNumber);
+		MutableAdListener ad = new MutableAdListener();
 		
-		PublicDHKey pubKey = crypto.makePublicDHKey(pubKeyRaw);
-		TCPPeerAdvertisementListener ad = findMatchingAdvertisement(pubKey, keyHash);
-
-		byte[] tempSharedSecret = ad.swarm.identityKey.sharedSecret(crypto.makePublicDHKey(pubKeyRaw));
-		checkProofAgainstReplays(tempSharedSecret, keyKnowledgeProof);
+		MutableInt peerType = new MutableInt(), portNum = new MutableInt();
 		
-		Key clientStaticSymKeyText = new Key(crypto, tempSharedSecret).derive(0, new byte[0]);
-		byte[] clientStaticKeyRaw = clientStaticSymKeyText.decryptUnpadded(crypto.symNonce(0), staticKeyCiphertext);
-		int portNum = ByteBuffer.wrap(clientStaticSymKeyText.decryptUnpadded(crypto.symNonce(1), encryptedPortNumber)).getShort();
-		PublicDHKey clientStaticKey = crypto.makePublicDHKey(clientStaticKeyRaw);
-		byte[] staticSecret = ad.swarm.identityKey.sharedSecret(clientStaticKey);
-		int timeIndex = Integer.MIN_VALUE;
+		HandshakeState handshake = new HandshakeState(
+				crypto,
+				TCPPeerSocket.HANDSHAKE_PROTOCOL,
+				TCPPeerSocket.HANDSHAKE_PATTERN,
+				false,
+				new byte[0],
+				getIdentityKey(),
+				null,
+				null,
+				null,
+				null
+				);
 		
-		for(int diff : new int[] { 0, -1, 1 }) {
-			int attemptedTimeIndex = ad.swarm.config.getAccessor().timeSliceIndex() + diff;
-			byte[] expectedTimeProof = crypto.authenticate(tempSharedSecret, Util.serializeInt(attemptedTimeIndex));
-			if(Util.safeEquals(expectedTimeProof, timeProof)) {
-				timeIndex = attemptedTimeIndex;
+		handshake.setObfuscation(
+				(key)->{
+					return key.getBytes(); // TODO: obfuscate with CBC
+				},
+				
+				(inn)->{
+					byte[] keyRaw = IOUtils.readFully(inn, crypto.asymPublicDHKeySize());
+					return new byte[][] { keyRaw, keyRaw };
+				}
+			);
+		
+		handshake.setPayload(
+			(round)->{
+				if(round != 4) return null;
+				byte[] proof;
+				if(peerType.intValue() == PeerConnection.PEER_TYPE_FULL) {
+					proof = ad.value.swarm.getConfig().getAccessor().temporalProof(0, 1, handshake.getHash());
+				} else {
+					proof = crypto.rng(crypto.symKeyLength());
+				}
+				
+				return proof;
+			},
+			
+			(round, inn, decrypter)->{
+				if(round != 3) return;
+				int ctLen = crypto.hashLength() + crypto.symKeyLength() + 2 + crypto.symTagLength();
+				byte[] idHash = new byte[crypto.hashLength()];
+				byte[] proof = new byte[crypto.symKeyLength()];
+				byte[] hsHash = handshake.getHash(); // need hash from before we call decrypt
+				
+				ByteBuffer payload = ByteBuffer.wrap(decrypter.decrypt(IOUtils.readFully(inn, ctLen)));
+				payload.get(idHash);
+				payload.get(proof);
+				
+				try {
+					ad.value = findMatchingAdvertisement(hsHash, idHash);
+				} catch (ProtocolViolationException e) {
+					throw new SecurityException("no archive matching request");
+				}
+				
+				handshake.setPsk(ad.value.swarm.config.getArchiveId());
+				byte[] expectedProof = ad.value.swarm.config.getAccessor().temporalProof(0, 0, hsHash);
+				if(Util.safeEquals(expectedProof, proof)) {
+					peerType.setValue(PeerConnection.PEER_TYPE_FULL);
+				} else {
+					peerType.setValue(PeerConnection.PEER_TYPE_BLIND);
+				}
 			}
-		}
+		);
 		
-		assertState(timeIndex > Integer.MIN_VALUE);
-		int diff = timeIndex - ad.swarm.config.getAccessor().timeSliceIndex();
-		if(diff < 0) {
-			// stated index is in past
-			long expiration = ad.swarm.config.getAccessor().timeSlice(timeIndex) + ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS;
-			long expiredFor = Util.currentTimeMillis() - expiration;
-			assertState(0 <= expiredFor && expiredFor <= 10000);
-		} else if(diff > 0) {
-			// stated index is in future
-			long startTime = ad.swarm.config.getAccessor().timeSlice(timeIndex);
-			long startsIn = startTime - Util.currentTimeMillis();
-			assertState(0 <= startsIn && startsIn <= 10000);
-		}
-
+		CipherState[] states = handshake.handshake(in, out);
 		
-		byte[] expectedKeyKnowledgeProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 0, tempSharedSecret);
-		byte[] responseKeyKnowledgeProof;
-		PrivateDHKey ephemeralKey = crypto.makePrivateDHKey();
-		byte[] ephemeralSecret = ephemeralKey.sharedSecret(pubKey);
-		
-		int peerType;
-		if(Util.safeEquals(expectedKeyKnowledgeProof, keyKnowledgeProof)) {
-			peerType = PeerConnection.PEER_TYPE_FULL;
-			responseKeyKnowledgeProof = ad.swarm.config.getAccessor().temporalProof(timeIndex, 1, tempSharedSecret);
-		} else {
-			peerType = PeerConnection.PEER_TYPE_BLIND;
-			responseKeyKnowledgeProof = crypto.rng(crypto.symKeyLength());
-		}
-		
-		byte[] sharedSecretText = Util.concat(pubKeyRaw,
-				keyHash,
-				timeProof,
-				keyKnowledgeProof,
-				staticKeyCiphertext,
-				ephemeralKey.publicKey().getBytes(),
-				responseKeyKnowledgeProof,
-				ad.swarm.config.getAccessor().temporalSeedId(timeIndex));
-		byte[] sharedSecretRoot = crypto.authenticate(Util.concat(staticSecret, ephemeralSecret),
-				sharedSecretText);
-		byte[] sharedSecret = crypto.authenticate(sharedSecretRoot, Util.serializeInt(0));
-		byte[] handshakeProofKey = crypto.authenticate(sharedSecretRoot, Util.serializeInt(1));
-		
-		out.write(ephemeralKey.publicKey().getBytes());
-		out.write(responseKeyKnowledgeProof);
-		out.write(crypto.authenticate(handshakeProofKey, ad.swarm.config.getAccessor().temporalSeedId(timeIndex)));
-		
-		established = true;
-		return new TCPPeerSocket(ad.swarm, clientStaticKey, peerSocketRaw, sharedSecret, peerType, portNum);
+		return new TCPPeerSocket(ad.value.swarm,
+				handshake.getRemoteStaticKey(),
+				peerSocketRaw,
+				states,
+				handshake.getHash(),
+				peerType.intValue(),
+				portNum.intValue());
 	}
 	
-	protected synchronized TCPPeerAdvertisementListener findMatchingAdvertisement(PublicDHKey pubKey, byte[] keyHash) throws ProtocolViolationException {
+	protected PrivateDHKey getIdentityKey() {
+		return identityKey;
+	}
+
+	protected synchronized TCPPeerAdvertisementListener findMatchingAdvertisement(byte[] hsHash, byte[] idHash) throws ProtocolViolationException {
 		for(TCPPeerAdvertisementListener ad : adListeners) {
-			if(ad.matchesKeyHash(pubKey, keyHash)) return ad;
+			if(ad.matchesIdHash(hsHash, idHash)) return ad;
 		}
 		
 		throw new ProtocolViolationException();
@@ -303,18 +310,6 @@ public class TCPPeerSocketListener {
 		if(!state) throw new ProtocolViolationException();
 	}
 	
-	protected void checkProofAgainstReplays(byte[] tempSharedSecret, byte[] proof) throws ProtocolViolationException {
-		long proofTag = Util.shortTag(crypto.authenticate(tempSharedSecret, proof));
-		assertState(!recentProofs.contains(proofTag));
-		recentProofs.add(proofTag);
-		pruneRecentProofs();
-	}
-	
-	protected void pruneRecentProofs() {
-		while(recentProofs.size() > MAX_RECENT_PROOFS) {
-			recentProofs.removeFirst();
-		}
-	}
 
 	public boolean isListening() {
 		return listenSocket != null && !closed;

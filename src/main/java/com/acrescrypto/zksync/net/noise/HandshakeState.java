@@ -12,6 +12,7 @@ import org.apache.commons.io.IOUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
+import com.acrescrypto.zksync.utility.Util;
 
 // per section 5.3, Noise specification, http://noiseprotocol.org/noise.html, rev 34, 2018-07-11
 public class HandshakeState {
@@ -131,6 +132,14 @@ public class HandshakeState {
 		this.payloadReader = payloadReader;
 	}
 	
+	public void setPayloadWriter(PayloadWriter payloadWriter) {
+		this.payloadWriter = payloadWriter;
+	}
+
+	public void setPayloadReader(PayloadReader payloadReader) {
+		this.payloadReader = payloadReader;
+	}
+
 	protected void decodeMessagePattern(String bigPattern) {
 		this.messagePatterns = new LinkedList<>();
 		
@@ -218,6 +227,7 @@ public class HandshakeState {
 	
 	protected CipherState[] readMessage(InputStream in) throws IOException {
 		round++;
+		
 		String[] tokens = messagePatterns.poll();
 		for(String token : tokens) {
 			TokenReadHandler handler = readHandlers.get(token);
@@ -298,10 +308,6 @@ public class HandshakeState {
 		writeHandlers.put("psk", (out)->{
 			symmetricState.mixKeyAndHash(psk);
 		});
-		
-		writeHandlers.put("d", (out)->{
-			// write a frame
-		});
 	}
 	
 	private void initReadTokenMappers() {
@@ -355,10 +361,6 @@ public class HandshakeState {
 		readHandlers.put("psk", (in)->{
 			symmetricState.mixKeyAndHash(psk);
 		});
-		
-		readHandlers.put("d", (in)->{
-			// read a frame, decrypt
-		});
 	}
 	
 	protected PrivateDHKey generateKeypair() {
@@ -371,5 +373,17 @@ public class HandshakeState {
 	
 	public boolean isInitiator() {
 		return isInitiator;
+	}
+	
+	public byte[] getHash() {
+		return symmetricState.getHandshakeHash();
+	}
+
+	public PublicDHKey getRemoteStaticKey() {
+		return remoteStaticKey;
+	}
+
+	public void setPsk(byte[] psk) {
+		this.psk = psk;
 	}
 }

@@ -201,20 +201,15 @@ public class ArchiveAccessor {
 		return deriveKey(root, type, index, new byte[0]);
 	}	
 
+	// TODO Noise: ditch unneeded offset argument, also this is no longer a "temporal" proof
 	public byte[] temporalProof(int offset, int step, byte[] sharedSecret) {
 		assert(0 <= step && step <= Byte.MAX_VALUE);
-		ByteBuffer timeSecretTweak = ByteBuffer.allocate(9+sharedSecret.length);
-		timeSecretTweak.put((byte) step);
-		timeSecretTweak.putLong(timeSlice(offset));
-		timeSecretTweak.put(sharedSecret);
+		byte[] timeSecretTweak = Util.concat(Util.serializeInt(step), Util.serializeInt(offset), sharedSecret);
 		
-		/* Use a garbage "proof" if we don't actually have knowledge of the passphrase key. We use a combination of
-		 * time, the shared secret and a local key derivative to ensure that this garbage result "feels" like the
-		 * real deal: it changes with the timestamp, it is specific to a shared secret, and cannot be distinguished
-		 * from the real passphrase-derivative version unless someone knows the passphrase root. 
-		 */
+		/* Use a garbage "proof" if we don't actually have knowledge of the passphrase key. But
+		 * at least keep this constant time... */
 		int root = isSeedOnly() ? KEY_ROOT_LOCAL : KEY_ROOT_PASSPHRASE;
-		return deriveKey(root, KEY_TYPE_AUTH, KEY_INDEX_SEED_TEMPORAL, timeSecretTweak.array()).getRaw();
+		return deriveKey(root, KEY_TYPE_AUTH, KEY_INDEX_SEED_TEMPORAL, timeSecretTweak).getRaw();
 	}
 	
 	protected void deriveFromPassphraseRoot(Key passphraseRoot) {

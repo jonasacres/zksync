@@ -3,7 +3,6 @@ package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
 import java.net.SocketException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -19,11 +18,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
-import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ClosedException;
-import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
@@ -54,7 +51,6 @@ public class PeerSwarm implements BlacklistCallback {
 	protected HashMap<Long,Condition> pageWaits = new HashMap<Long,Condition>();
 	protected HashMap<PeerAdvertisement,Long> adEmbargoes = new HashMap<PeerAdvertisement,Long>();
 	protected RequestPool pool;
-	protected PrivateDHKey identityKey;
 	protected GroupedThreadPool threadPool;
 	protected BandwidthMonitor bandwidthMonitorTx, bandwidthMonitorRx;
 	
@@ -75,8 +71,7 @@ public class PeerSwarm implements BlacklistCallback {
 	public PeerSwarm(ZKArchiveConfig config) throws IOException {
 		this.config = config;
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
-		initIdentity();
-		this.threadPool = GroupedThreadPool.newCachedThreadPool(config.getThreadGroup(), "PeerSwarm " + Util.bytesToHex(identityKey.publicKey().getBytes(), 3));
+		this.threadPool = GroupedThreadPool.newCachedThreadPool(config.getThreadGroup(), "PeerSwarm " + Util.bytesToHex(config.getArchiveId()));
 		this.bandwidthMonitorTx = new BandwidthMonitor(100, 3000);
 		this.bandwidthMonitorRx = new BandwidthMonitor(100, 3000);
 		this.bandwidthMonitorTx.addParent(config.getMaster().getBandwidthMonitorTx());
@@ -201,7 +196,7 @@ public class PeerSwarm implements BlacklistCallback {
 		// This could be improved. Once we hit capacity, how can we prune ads for low-quality peers for higher-quality ones?
 		if(ad instanceof TCPPeerAdvertisement) { // ignore our own ad
 			TCPPeerAdvertisement tcpAd = (TCPPeerAdvertisement) ad;
-			if(tcpAd.pubKey.equals(identityKey.publicKey())) return;
+			if(tcpAd.pubKey.equals(getPublicIdentityKey())) return;
 		}
 		
 		if(knownAds.size() >= maxPeerListSize) return;
@@ -237,7 +232,7 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public PublicDHKey getPublicIdentityKey() {
-		return identityKey.publicKey();
+		return config.getMaster().getTCPListener().getIdentityKey().publicKey();
 	}
 	
 	protected void connectionThread() {
@@ -545,49 +540,8 @@ public class PeerSwarm implements BlacklistCallback {
 		return MutableSecureFile.atPath(fs, "identity", config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_AD_IDENTITY));
 	}
 	
-	protected void initIdentity() {
-		try {
-			deserialize(storedFile().read());
-		} catch(ENOENTException exc) {
-			// let it slide without log message
-		} catch(SecurityException exc) {
-			logger.warn("Caught security exception decrypting stored advertisement for archive {}; creating new ad.", Util.bytesToHex(config.getArchiveId()), exc);
-		} catch (IOException exc) {
-			logger.error("Caught exception opening stored advertisement for archive {}", Util.bytesToHex(config.getArchiveId()), exc);
-		} finally {
-			if(this.identityKey != null) return;
-			try {
-				this.identityKey = config.getCrypto().makePrivateDHKey();
-				storedFile().write(serialize(), 0);
-			} catch (IOException exc) {
-				logger.error("Caught exception writing advertisement for archive {}", Util.bytesToHex(config.getArchiveId()), exc);
-			}
-		}
-	}
-	
-	protected byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(config.getCrypto().asymPrivateDHKeySize() + config.getCrypto().asymPublicDHKeySize());
-		buf.put(identityKey.getBytes());
-		buf.put(identityKey.publicKey().getBytes());
-		assert(!buf.hasRemaining());
-		return buf.array();
-	}
-	
-	protected void deserialize(byte[] serialized) {
-		byte[] privateKeyRaw = new byte[config.getCrypto().asymPrivateDHKeySize()];
-		byte[] publicKeyRaw = new byte[config.getCrypto().asymPublicDHKeySize()];
-		assert(serialized.length == privateKeyRaw.length + publicKeyRaw.length);
-		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		buf.get(privateKeyRaw);
-		buf.get(publicKeyRaw);
-		assert(!buf.hasRemaining());
-		
-		identityKey = config.getCrypto().makePrivateDHKeyPair(privateKeyRaw, publicKeyRaw);
-	}
-	
 	public void dumpConnections() {
 		System.out.println("PeerSwarm: archive ID " + Util.bytesToHex(config.getArchiveId()));
-		System.out.println("\tIdentity: " + Util.bytesToHex(identityKey.publicKey().getBytes()));
 		System.out.println("\tConnections: " + connections.size());
 		int i = 0;
 		for(PeerConnection connection : connections) {

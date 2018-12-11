@@ -1,16 +1,12 @@
 package com.acrescrypto.zksync.net;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
-import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
-import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerAdvertisementListener {
@@ -30,25 +26,18 @@ public class TCPPeerAdvertisementListener {
 		}
 	}
 	
-	public boolean matchesKeyHash(PublicDHKey remotePubKey, byte[] keyHash) {
-		ByteBuffer keyHashInput = ByteBuffer.allocate(2*crypto.asymPublicSigningKeySize()+crypto.hashLength()+4);
-		keyHashInput.put(remotePubKey.getBytes());
-		keyHashInput.put(swarm.identityKey.publicKey().getBytes());
-		keyHashInput.put(swarm.config.getArchiveId());
-		keyHashInput.putInt(version);
-		Key keyHashKey = swarm.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED);
-		
-		byte[] expectedKeyHash = keyHashKey.authenticate(keyHashInput.array());
-		return Arrays.equals(expectedKeyHash, keyHash);
+	public boolean matchesIdHash(byte[] hsHash, byte[] idHash) {
+		byte[] thisIdHash = crypto.hash(Util.concat(hsHash, swarm.getConfig().getArchiveId()));
+		return Arrays.equals(thisIdHash, idHash);
 	}
 	
 	public TCPPeerAdvertisement localAd() throws UnconnectableAdvertisementException {
-		byte[] encryptedArchiveId = swarm.config.getEncryptedArchiveId(swarm.identityKey.publicKey().getBytes());
+		byte[] encryptedArchiveId = swarm.config.getEncryptedArchiveId(swarm.getPublicIdentityKey().getBytes());
 		
 		// we could still be binding the socket, so wait for the port number to be non-zero before making the ad
 		if(!Util.waitUntil(500, ()->listener.getPort() > 0)) throw new UnconnectableAdvertisementException();
 		
-		return new TCPPeerAdvertisement(swarm.identityKey.publicKey(), "localhost", listener.getPort(), encryptedArchiveId, version).resolve(); // real hostname filled in by peers; use localhost as safe stand-in
+		return new TCPPeerAdvertisement(swarm.getPublicIdentityKey(), "localhost", listener.getPort(), encryptedArchiveId, version).resolve(); // real hostname filled in by peers; use localhost as safe stand-in
 	}
 	
 	public void announce() {

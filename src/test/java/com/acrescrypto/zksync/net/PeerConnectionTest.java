@@ -282,7 +282,10 @@ public class PeerConnectionTest {
 		assertTrue(Util.waitUntil(100, ()->listener.listenSocket != null));
 		listener.advertise(swarm);
 		assertNull(listener.connectedPeer);
-		PeerConnection conn = new PeerConnection(swarm, listener.listenerForSwarm(swarm).localAd());
+		
+		byte[] encryptedArchiveId = swarm.config.getEncryptedArchiveId(listener.getIdentityKey().publicKey().getBytes());
+		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(listener.getIdentityKey().publicKey(), "localhost", listener.getPort(), encryptedArchiveId, 0).resolve();
+		PeerConnection conn = new PeerConnection(swarm, ad);
 		
 		assertTrue(Util.waitUntil(100, ()->listener.connectedPeer != null));
 		assertNotNull(listener.connectedPeer);
@@ -303,7 +306,10 @@ public class PeerConnectionTest {
 		assertTrue(Util.waitUntil(100, ()->listener.listenSocket != null));
 		listener.advertise(roSwarm);
 		assertNull(listener.connectedPeer);
-		PeerConnection conn = new PeerConnection(swarm, listener.listenerForSwarm(roSwarm).localAd());
+		
+		byte[] encryptedArchiveId = swarm.config.getEncryptedArchiveId(listener.getIdentityKey().publicKey().getBytes());
+		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(listener.getIdentityKey().publicKey(), "localhost", listener.getPort(), encryptedArchiveId, 0).resolve();
+		PeerConnection conn = new PeerConnection(swarm, ad);
 		
 		assertTrue(Util.waitUntil(100, ()->listener.connectedPeer != null));
 		assertNotNull(listener.connectedPeer);
@@ -326,7 +332,10 @@ public class PeerConnectionTest {
 		assertTrue(Util.waitUntil(100, ()->listener.listenSocket != null));
 		listener.advertise(swarm);
 		assertNull(listener.connectedPeer);
-		PeerConnection conn = new PeerConnection(roSwarm, listener.listenerForSwarm(swarm).localAd());
+		
+		byte[] encryptedArchiveId = swarm.config.getEncryptedArchiveId(listener.getIdentityKey().publicKey().getBytes());
+		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(listener.getIdentityKey().publicKey(), "localhost", listener.getPort(), encryptedArchiveId, 0).resolve();
+		PeerConnection conn = new PeerConnection(roSwarm, ad);
 		
 		assertTrue(Util.waitUntil(100, ()->listener.connectedPeer != null));
 		assertNotNull(listener.connectedPeer);

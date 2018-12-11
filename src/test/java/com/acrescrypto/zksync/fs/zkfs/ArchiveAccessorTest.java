@@ -9,7 +9,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import org.junit.AfterClass;
@@ -88,11 +87,8 @@ public class ArchiveAccessorTest {
 		byte[] secret = { 1, 2, 3, 4 };
 		for(int i = -3; i <= 3; i++) {
 			for(byte step = 0; step <= 1; step++) {
-				ByteBuffer tweak = ByteBuffer.allocate(8 + 1 + secret.length);
-				tweak.put(step);
-				tweak.putLong(accessor.timeSlice(i));
-				tweak.put(secret);
-				byte[] expected = accessor.deriveKey(ArchiveAccessor.KEY_ROOT_PASSPHRASE, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED_TEMPORAL, tweak.array()).getRaw();
+				byte[] tweak = Util.concat(Util.serializeInt(step), Util.serializeInt(i), secret);
+				byte[] expected = accessor.deriveKey(ArchiveAccessor.KEY_ROOT_PASSPHRASE, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED_TEMPORAL, tweak).getRaw();
 				byte[] proof = accessor.temporalProof(i, step, secret);
 				assertTrue(Arrays.equals(expected, proof));
 			}
@@ -104,11 +100,8 @@ public class ArchiveAccessorTest {
 		byte[] secret = { 1, 2, 3, 4 };
 		for(int i = -3; i <= 3; i++) {
 			for(byte step = 0; step <= 1; step++) {
-				ByteBuffer tweak = ByteBuffer.allocate(8 + 1 + secret.length);
-				tweak.put(step);
-				tweak.putLong(accessor.timeSlice(i));
-				tweak.put(secret);
-				byte[] expected = seedAccessor.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED_TEMPORAL, tweak.array()).getRaw();
+				byte[] tweak = Util.concat(Util.serializeInt(step), Util.serializeInt(i), secret);
+				byte[] expected = seedAccessor.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED_TEMPORAL, tweak).getRaw();
 				byte[] proof = seedAccessor.temporalProof(i, step, secret);
 				assertTrue(Arrays.equals(expected, proof));
 			}
