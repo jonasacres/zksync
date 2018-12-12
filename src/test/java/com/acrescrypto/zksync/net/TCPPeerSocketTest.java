@@ -25,6 +25,7 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
@@ -193,12 +194,15 @@ public class TCPPeerSocketTest {
 			
 			handshake.setObfuscation(
 					(key)->{
-						return key.getBytes(); // TODO: obfuscate with CBC
+						Key sym = new Key(crypto, crypto.makeSymmetricKey(handshake.getRemoteEphemeralKey().getBytes()));
+						return sym.encryptCBC(new byte[crypto.symBlockSize()], key.getBytes());
 					},
 					
 					(inn)->{
-						byte[] keyRaw = IOUtils.readFully(inn, crypto.asymPublicDHKeySize());
-						return new byte[][] { keyRaw, keyRaw };
+						Key sym = new Key(crypto, crypto.makeSymmetricKey(serverKey.publicKey().getBytes()));
+						byte[] ciphertext = IOUtils.readFully(inn, crypto.asymPublicDHKeySize());
+						byte[] keyRaw = sym.decryptCBC(new byte[crypto.symBlockSize()], ciphertext);
+						return new byte[][] { keyRaw, ciphertext };
 					}
 				);
 			

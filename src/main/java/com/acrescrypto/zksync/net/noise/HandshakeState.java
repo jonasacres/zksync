@@ -268,8 +268,9 @@ public class HandshakeState {
 	private void initWriteTokenMappers() {
 		writeHandlers.put("e", (out)->{
 			localEphemeralKey = generateKeypair();
-			out.write(obfuscator.obfuscate(localEphemeralKey.publicKey()));
-			symmetricState.mixHash(localEphemeralKey.publicKey().getBytes());
+			byte[] obfuscated = obfuscator.obfuscate(localEphemeralKey.publicKey());
+			out.write(obfuscated);
+			symmetricState.mixHash(obfuscated);
 		});
 		
 		writeHandlers.put("s", (out)->{
@@ -385,5 +386,13 @@ public class HandshakeState {
 
 	public void setPsk(byte[] psk) {
 		this.psk = psk;
+	}
+
+	public PublicDHKey getLocalEphemeralKey() {
+		return localEphemeralKey.publicKey();
+	}
+	
+	public PublicDHKey getRemoteEphemeralKey() {
+		return remoteEphemeralKey;
 	}
 }

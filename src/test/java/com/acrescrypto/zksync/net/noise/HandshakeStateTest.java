@@ -309,7 +309,7 @@ public class HandshakeStateTest {
 		
 		assertArrayEquals(Util.serializeLong(1234), readBuf());
 
-		updateHash(handshakeState.localEphemeralKey.publicKey().getBytes());
+		updateHash(Util.serializeLong(1234));
 		assertArrayEquals(expectedHash, handshakeState.symmetricState.hash);
 	}
 

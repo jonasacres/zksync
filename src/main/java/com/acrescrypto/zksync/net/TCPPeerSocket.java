@@ -121,12 +121,15 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		handshake.setObfuscation(
 			(key)->{
-				return key.getBytes(); // TODO: obfuscate with CBC
+				Key sym = new Key(crypto, crypto.makeSymmetricKey(handshake.getRemoteStaticKey().getBytes()));
+				return sym.encryptCBC(new byte[crypto.symBlockSize()], key.getBytes());
 			},
 			
 			(in)->{
-				byte[] keyRaw = IOUtils.readFully(in, crypto.asymPublicDHKeySize());
-				return new byte[][] { keyRaw, keyRaw };
+				Key sym = new Key(crypto, crypto.makeSymmetricKey(handshake.getLocalEphemeralKey().getBytes()));
+				byte[] ciphertext = IOUtils.readFully(in, crypto.asymPublicDHKeySize());
+				byte[] keyRaw = sym.decryptCBC(new byte[crypto.symBlockSize()], ciphertext);
+				return new byte[][] { keyRaw, ciphertext };
 			}
 		);
 		

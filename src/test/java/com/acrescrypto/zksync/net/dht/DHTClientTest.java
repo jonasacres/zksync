@@ -627,6 +627,7 @@ public class DHTClientTest {
 			client.addRecord(searchId, lookupKey, makeBogusAd(0));
 			network.run();
 			
+			// TODO Urgent: (itf) linux UniversalTests 2018-12-11 8cda32e. AssertionError: expected<8> but was <7>
 			assertEquals(DHTSearchOperation.maxResults, numReceived.intValue());
 		}
 	}
