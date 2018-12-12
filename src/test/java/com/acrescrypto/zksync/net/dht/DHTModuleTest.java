@@ -120,6 +120,7 @@ public class DHTModuleTest {
 	
 	@Test
 	public void testPeerDiscovery() throws IOException, InvalidBlacklistException {
+		// TODO Urgent: (itf) Linux 81cc346 2018-12-12 UniversalTests, assertion failed
 		ArrayList<DHTClient> clients = makeClients(256);
 		DHTID id = new DHTID(crypto.rng(crypto.hashLength()));
 		DHTRecord ad = makeBogusAd(0);
