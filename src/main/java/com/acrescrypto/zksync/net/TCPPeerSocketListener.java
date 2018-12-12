@@ -22,6 +22,7 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.noise.CipherState;
 import com.acrescrypto.zksync.net.noise.HandshakeState;
+import com.acrescrypto.zksync.net.noise.SipObfuscator;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocketListener {
@@ -216,10 +217,9 @@ public class TCPPeerSocketListener {
 			TCPPeerAdvertisementListener value;
 		}
 		
+		SipObfuscator[] sip = new SipObfuscator[1];
 		MutableAdListener ad = new MutableAdListener();
-		
 		MutableInt peerType = new MutableInt(), portNum = new MutableInt();
-		
 		HandshakeState handshake = new HandshakeState(
 				crypto,
 				TCPPeerSocket.HANDSHAKE_PROTOCOL,
@@ -232,6 +232,10 @@ public class TCPPeerSocketListener {
 				null,
 				null
 				);
+
+		handshake.setDerivationCallback((key)->{
+			sip[0] = new SipObfuscator(key.derive(0, "siphash".getBytes()).getRaw(), false);
+		});
 		
 		handshake.setObfuscation(
 				(key)->{
@@ -293,6 +297,7 @@ public class TCPPeerSocketListener {
 				handshake.getRemoteStaticKey(),
 				peerSocketRaw,
 				states,
+				sip[0],
 				handshake.getHash(),
 				peerType.intValue(),
 				portNum.intValue());

@@ -10,7 +10,12 @@ public class SymmetricState {
 	protected CipherState cipherState;
 	protected Key chainingKey;          // 'ck' in Noise specification
 	protected byte[] hash;              // 'h' in Noise specification
-	
+	protected DerivationCallback derivationCallback;
+
+	public interface DerivationCallback {
+		public void derived(Key key);
+	}
+
 	public SymmetricState(CryptoSupport crypto, String protocolName) {
 		this.crypto = crypto;
 		if(protocolName.getBytes().length <= crypto.hashLength()) {
@@ -25,6 +30,17 @@ public class SymmetricState {
 		
 		cipherState = new CipherState();
 		cipherState.initializeKey(null);
+	}
+	
+	/** If set, provides a callback for a third derived key from the handshake.
+	 * This is not in the Noise specification and does not affect the derivation of
+	 * other keys. This is provided as a means to derive additional key material as
+	 * needed for purposes beyond the read/write cipher states.
+	 * 
+	 * @param derivationCallback A callback to be invoked when split() is called.
+	 */
+	public void setDerivationCallback(DerivationCallback derivationCallback) {
+		this.derivationCallback = derivationCallback;
 	}
 	
 	protected SymmetricState(SymmetricState state) {
@@ -72,8 +88,8 @@ public class SymmetricState {
 	}
 	
 	public CipherState[] split() {
-		int numStates = 2;
-		byte[][] newMaterial = hkdf(new byte[0], numStates);
+		int numStates = 2, numDerivations = numStates + 1;
+		byte[][] newMaterial = hkdf(new byte[0], numDerivations);
 		CipherState[] newStates = new CipherState[numStates];
 		
 		// split() is the end of this state machine's work, so we may as well destroy the keys
@@ -83,6 +99,10 @@ public class SymmetricState {
 		for(int i = 0; i < numStates; i++) {
 			newStates[i] = new CipherState();
 			newStates[i].initializeKey(truncatedKey(newMaterial[i]));
+		}
+		
+		if(derivationCallback != null) {
+			derivationCallback.derived(truncatedKey(newMaterial[numStates]));
 		}
 		
 		return newStates;

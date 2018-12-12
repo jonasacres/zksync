@@ -12,7 +12,7 @@ import org.apache.commons.io.IOUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
-import com.acrescrypto.zksync.utility.Util;
+import com.acrescrypto.zksync.net.noise.SymmetricState.DerivationCallback;
 
 // per section 5.3, Noise specification, http://noiseprotocol.org/noise.html, rev 34, 2018-07-11
 public class HandshakeState {
@@ -82,7 +82,7 @@ public class HandshakeState {
 	public interface KeyDeobfuscator {
 		public byte[][] deobfuscate(InputStream in) throws IOException;
 	}
-	
+
 	public HandshakeState(CryptoSupport crypto,
 			String protocolName,
 			String handshakePattern,
@@ -138,6 +138,10 @@ public class HandshakeState {
 
 	public void setPayloadReader(PayloadReader payloadReader) {
 		this.payloadReader = payloadReader;
+	}
+	
+	public void setDerivationCallback(DerivationCallback derivationCallback) {
+		symmetricState.setDerivationCallback(derivationCallback);
 	}
 
 	protected void decodeMessagePattern(String bigPattern) {

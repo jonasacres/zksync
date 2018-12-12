@@ -7,6 +7,8 @@ import org.junit.runners.MethodSorters;
 
 import com.acrescrypto.zksync.Benchmarks;
 
+import au.com.forward.sipHash.SipHash_2_4;
+
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
 public class CryptoBenchmark {
 	static CryptoSupport crypto;
@@ -123,6 +125,18 @@ public class CryptoBenchmark {
 		
 		Benchmarks.run("MiB", (i)->{
 			crypto.hash(oneMiB);
+		});
+	}
+	
+	@Test
+	public void testSipHashThroughput() {
+		byte[] key = crypto.rng(16);
+		byte[] oneMiB = new byte[1024*1024];
+		
+		Benchmarks.run("MiB", (i)->{
+			SipHash_2_4 siphash = new SipHash_2_4();
+			siphash.hash(key, oneMiB);
+			siphash.finish();
 		});
 	}
 	

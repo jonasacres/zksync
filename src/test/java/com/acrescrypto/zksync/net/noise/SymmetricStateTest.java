@@ -4,7 +4,9 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -203,5 +205,26 @@ public class SymmetricStateTest {
 		for(int i = 0; i < states.length; i++) {
 			assertArrayEquals(out[i], states[i].key.getRaw());
 		}
+	}
+	
+	@Test
+	public void testSplitInvokesDerivationCallbackIfSupplied() {
+		symState.mixKey(Util.serializeInt(0));
+
+		byte[] hkdf = crypto.expand(new byte[0],
+				3*crypto.hashLength(),
+				symState.chainingKey.getRaw(),
+				new byte[0]);
+		byte[] expected = new byte[crypto.symKeyLength()];
+		System.arraycopy(hkdf, 2*crypto.hashLength(), expected, 0, expected.length);
+		MutableBoolean checked = new MutableBoolean();
+
+		symState.setDerivationCallback((key)->{
+			assertArrayEquals(expected, key.getRaw());
+			checked.setTrue();
+		});
+		
+		symState.split();
+		assertTrue(checked.booleanValue());
 	}
 }

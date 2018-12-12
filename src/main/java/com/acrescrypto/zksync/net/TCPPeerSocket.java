@@ -15,13 +15,14 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.net.noise.CipherState;
 import com.acrescrypto.zksync.net.noise.HandshakeState;
+import com.acrescrypto.zksync.net.noise.SipObfuscator;
 import com.acrescrypto.zksync.utility.RateLimitedOutputStream;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.RateLimitedInputStream;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocket extends PeerSocket {
-	public final static int MAX_MSG_LEN = 65536; // maximum ciphertext length; largest buffer a peer needs to hold in memory at once
+	public final static int MAX_MSG_LEN = 65504; // maximum plaintext length (not including tag)
 	public final static int DEFAULT_MAX_HANDSHAKE_TIME_MILLIS = 60*1000; // 1 minute
 	public final static int DEFAULT_SOCKET_CLOSE_DELAY = 5*1000; // 5 seconds
 	public static int maxHandshakeTimeMillis = DEFAULT_MAX_HANDSHAKE_TIME_MILLIS; // maximum time to handshake before automatic disconnect
@@ -48,16 +49,18 @@ public class TCPPeerSocket extends PeerSocket {
 	protected int peerType = -1;
 	protected CipherState readState, writeState;
 	protected byte[] sharedSecret;
+	protected SipObfuscator sip;
 	
 	protected TCPPeerSocket() {}
 	
-	public TCPPeerSocket(PeerSwarm swarm, PublicDHKey remoteIdentityKey, Socket socket, CipherState[] states, byte[] handshakeHash, int peerType, int portNum) throws IOException {
+	public TCPPeerSocket(PeerSwarm swarm, PublicDHKey remoteIdentityKey, Socket socket, CipherState[] states, SipObfuscator sip, byte[] handshakeHash, int peerType, int portNum) throws IOException {
 		this(swarm);
 		this.address = socket.getInetAddress().getHostAddress();
 		this.socket = socket;
 		this.isLocalRoleClient = false;
 		this.readState = states[0];
 		this.writeState = states[1];
+		this.sip = sip;
 		this.peerType = peerType;
 		this.remoteIdentityKey = remoteIdentityKey;
 		this.sharedSecret = handshakeHash;
@@ -118,6 +121,10 @@ public class TCPPeerSocket extends PeerSocket {
 				ad.getPubKey(),
 				null,
 				swarm.getConfig().getArchiveId());
+		
+		handshake.setDerivationCallback((key)->{
+			sip = new SipObfuscator(key.derive(0, "siphash".getBytes()).getRaw(), true);
+		});
 		
 		handshake.setObfuscation(
 			(key)->{
@@ -181,7 +188,9 @@ public class TCPPeerSocket extends PeerSocket {
 			int writeLen = Math.min(buf.remaining(), MAX_MSG_LEN);
 			byte[] ciphertext = writeState.encryptWithAssociatedData(null, buf.array(), buf.position(), writeLen);
 			buf.position(buf.position() + writeLen);
-			out.write(Util.serializeInt(ciphertext.length), 0, 4);
+			
+			int obfLen = sip.write().obfuscate2(ciphertext.length);
+			out.write(Util.serializeShort((short) obfLen), 0, 2);
 			out.write(ciphertext);
 		}
 	}
@@ -198,10 +207,11 @@ public class TCPPeerSocket extends PeerSocket {
 			length -= readLen;
 		}
 		
-		ByteBuffer lenBuf = ByteBuffer.allocate(4);
+		ByteBuffer lenBuf = ByteBuffer.allocate(2);
 		IOUtils.readFully(in, lenBuf.array());
-		int msgLen = lenBuf.getInt();
-		assertState(0 < msgLen && msgLen <= MAX_MSG_LEN + 2*crypto.symBlockSize()); // add some grace in for padding + built-in overhead in ciphertext
+		int obfMsgLen = lenBuf.getShort();
+		int msgLen = sip.read().obfuscate2(obfMsgLen);
+		assertState(0 < msgLen && msgLen <= MAX_MSG_LEN + crypto.symBlockSize() + crypto.symTagLength());
 		
 		byte[] ciphertext = new byte[msgLen];
 		IOUtils.readFully(in, ciphertext);

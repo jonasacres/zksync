@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.net.noise;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -845,6 +846,11 @@ public class HandshakeStateTest {
 		responderIn.connect(initiatorOut);
 		
 		CipherState[][] stateSets = new CipherState[2][];
+		Key[] additional = new Key[2];
+
+		initiator.setDerivationCallback((key)->additional[0] = key);
+		responder.setDerivationCallback((key)->additional[1] = key);
+
 		new Thread(()->{
 			try {
 				stateSets[0] = initiator.handshake(initiatorIn, initiatorOut);
@@ -865,7 +871,9 @@ public class HandshakeStateTest {
 		assertTrue(Util.waitUntil(5000, ()->stateSets[1] != null));
 		assertEquals(stateSets[0][0], stateSets[1][1]);
 		assertEquals(stateSets[0][1], stateSets[1][0]);
+		assertNotNull(additional[0]);
+		assertEquals(additional[0], additional[1]);
 	}
-	
+
 	// testHandshakeResultsMatchTestVectorsForXKpsk3
 }

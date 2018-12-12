@@ -36,11 +36,12 @@ import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.noise.CipherState;
 import com.acrescrypto.zksync.net.noise.HandshakeState;
+import com.acrescrypto.zksync.net.noise.SipObfuscator;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocketTest {
 	interface ServerSocketCallback {
-		void callback(Socket serverSocket, TCPPeerSocket clientSocket, byte[] secret, CipherState[] states) throws Exception;
+		void callback(Socket serverSocket, TCPPeerSocket clientSocket, byte[] secret, CipherState[] states, SipObfuscator sip) throws Exception;
 	}
 	
 	class DummySwarm extends PeerSwarm {
@@ -117,6 +118,7 @@ public class TCPPeerSocketTest {
 		PrivateDHKey serverEphKey;
 		ZKArchive peerArchive;
 		CipherState readState, writeState;
+		SipObfuscator sip;
 		
 		DummyConnection(TCPPeerSocket client) {
 			this(archive, client);
@@ -128,23 +130,25 @@ public class TCPPeerSocketTest {
 			this.serverEphKey = crypto.makePrivateDHKey();
 		}
 		
-		DummyConnection(Socket serverSock, TCPPeerSocket client, CipherState[] states) {
+		DummyConnection(Socket serverSock, TCPPeerSocket client, CipherState[] states, SipObfuscator sip) {
 			this.serverSock = serverSock;
 			this.client = client;
 			this.readState = states[0];
 			this.writeState = states[1];
-			// TODO: init cipherstates
+			this.sip = sip;
 		}
 		
 		byte[] serverReadNext() throws IOException {
-			int msgLen = ByteBuffer.wrap(serverReadRaw(4)).getInt();
+			int msgLenObf = ByteBuffer.wrap(serverReadRaw(2)).getShort();
+			int msgLen = sip.read().obfuscate2(msgLenObf);
 			byte[] ciphertext = serverReadRaw(msgLen);
 			return readState.decryptWithAssociatedData(new byte[0], ciphertext);
 		}
 		
 		void serverWrite(byte[] data) throws IOException {
 			byte[] ciphertext = writeState.encryptWithAssociatedData(new byte[0], data);
-			serverWriteRaw(ByteBuffer.allocate(4).putInt(ciphertext.length).array());
+			int msgLenObf = sip.write().obfuscate2(ciphertext.length);
+			serverWriteRaw(ByteBuffer.allocate(2).putShort((short) msgLenObf).array());
 			serverWriteRaw(ciphertext);
 		}
 		
@@ -192,6 +196,10 @@ public class TCPPeerSocketTest {
 					null
 					);
 			
+			handshake.setDerivationCallback((key)->{
+				sip = new SipObfuscator(key.derive(0, "siphash".getBytes()).getRaw(), false);
+			});
+
 			handshake.setObfuscation(
 					(key)->{
 						Key sym = new Key(crypto, crypto.makeSymmetricKey(handshake.getRemoteEphemeralKey().getBytes()));
@@ -296,12 +304,17 @@ public class TCPPeerSocketTest {
 			byte[] secret = master.getCrypto().rng(master.getCrypto().asymDHSecretSize());
 			server = new ServerSocket(0);
 			CipherState[] states = { new CipherState(), new CipherState() };
+			SipObfuscator sip = new SipObfuscator(new byte[0], true);
 			clientSocketRaw = new Socket("localhost", server.getLocalPort());
-			clientSocket = new TCPPeerSocket(swarm, identityKey, clientSocketRaw, states, secret, PeerConnection.PEER_TYPE_BLIND, 0);
+			clientSocket = new TCPPeerSocket(swarm, identityKey, clientSocketRaw, states, sip, secret, PeerConnection.PEER_TYPE_BLIND, 0);
 			serverSocket = server.accept();
 			assertEquals(clientSocketRaw, clientSocket.socket);
 			assertTrue(Arrays.equals(secret, clientSocket.getSharedSecret()));
-			callback.callback(serverSocket, clientSocket, secret, new CipherState[] { new CipherState(), new CipherState() });
+			callback.callback(serverSocket,
+					clientSocket,
+					secret,
+					new CipherState[] { new CipherState(), new CipherState() },
+					new SipObfuscator(new byte[0], false));
 		} catch(Exception exc) {
 			throw(exc);
 		} finally {
@@ -352,9 +365,9 @@ public class TCPPeerSocketTest {
 	@Test
 	public void testInitializeWithClientSocket() throws Exception {
 		TCPPeerSocket.disableMakeThreads = true;
-		setupServerSocket((serverSocket, clientSocket, secret, states)->{
+		setupServerSocket((serverSocket, clientSocket, secret, states, sip)->{
 			assertEquals(clientSocket, swarm.opened.socket);
-			DummyConnection conn = new DummyConnection(serverSocket, clientSocket, states);
+			DummyConnection conn = new DummyConnection(serverSocket, clientSocket, states, sip);
 			byte[] buf = new byte[5], data = "hello".getBytes();
 			
 			conn.serverWrite(data);
@@ -412,7 +425,8 @@ public class TCPPeerSocketTest {
 		
 		for(int i = 0; i < 10; i++) {
 			socket.write(data, 0, data.length);
-			int msgLen = ByteBuffer.wrap(dummy.serverReadRaw(4)).getInt();
+			int msgLenObf = ByteBuffer.wrap(dummy.serverReadRaw(2)).getShort();
+			int msgLen = dummy.sip.read().obfuscate2(msgLenObf);
 			if(len == -1) len = msgLen;
 			assertEquals(msgLen, len); // sanity check to ensure we're not just misaligned
 			
@@ -467,27 +481,11 @@ public class TCPPeerSocketTest {
 	}
 	
 	@Test(expected = ProtocolViolationException.class)
-	public void testReadThrowsExceptionIfMessageLengthIsNegative() throws IOException, ProtocolViolationException {
-		byte[] buf = new byte[1];
-		DummyConnection dummy = new DummyConnection(socket).handshake();
-		dummy.serverWriteRaw(ByteBuffer.allocate(4).putInt(-1).array());
-		socket.read(buf, 0, 1);
-	}
-	
-	@Test(expected = ProtocolViolationException.class)
 	public void testReadThrowsExceptionIfMessageLengthIsZero() throws IOException, ProtocolViolationException {
 		byte[] buf = new byte[1];
 		DummyConnection dummy = new DummyConnection(socket).handshake();
-		dummy.serverWriteRaw(ByteBuffer.allocate(4).putInt(0).array());
-		socket.read(buf, 0, 1);
-	}
-	
-	@Test(expected = ProtocolViolationException.class)
-	public void testReadThrowsExceptionIfMessageLengthExceedsLimit() throws IOException, ProtocolViolationException {
-		int limit = TCPPeerSocket.MAX_MSG_LEN + 2*crypto.symBlockSize();
-		byte[] buf = new byte[1];
-		DummyConnection dummy = new DummyConnection(socket).handshake();
-		dummy.serverWriteRaw(ByteBuffer.allocate(4).putInt(limit+1).array());
+		int obfLen = dummy.sip.write().obfuscate2(0);
+		dummy.serverWriteRaw(Util.serializeShort((short) obfLen));
 		socket.read(buf, 0, 1);
 	}
 	
@@ -535,7 +533,7 @@ public class TCPPeerSocketTest {
 	
 	@Test
 	public void testIsClientReturnsFalseIfConstructedWithSharedSecret() throws Exception {
-		setupServerSocket((serverSocket, clientSocket, secret, states)->{
+		setupServerSocket((serverSocket, clientSocket, secret, states, sip)->{
 			assertFalse(clientSocket.isLocalRoleClient());
 		});
 	}
