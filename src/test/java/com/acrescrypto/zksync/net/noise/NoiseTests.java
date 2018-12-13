@@ -7,7 +7,8 @@ import org.junit.runners.Suite;
 @Suite.SuiteClasses({
 	CipherStateTest.class,
 	SymmetricStateTest.class,
-	HandshakeStateTest.class
+	HandshakeStateTest.class,
+	VariableLengthHandshakeStateTest.class
 })
 
 public class NoiseTests {

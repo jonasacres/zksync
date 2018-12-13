@@ -11,7 +11,6 @@ public class SipObfuscator {
 	// credit to ntcp2 project for this technique
 	// https://geti2p.net/spec/ntcp2#siphash-obfuscated-length
 	
-	// TODO Noise: (test) test SipObfuscator
 	protected CryptoSupport crypto;
 	
 	public class SipState {

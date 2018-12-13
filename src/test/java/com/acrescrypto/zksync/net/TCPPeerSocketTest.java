@@ -9,11 +9,16 @@ import static org.junit.Assert.fail;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.StringReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.LinkedList;
+
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonReader;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.input.InfiniteCircularInputStream;
@@ -35,8 +40,8 @@ import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.noise.CipherState;
-import com.acrescrypto.zksync.net.noise.HandshakeState;
 import com.acrescrypto.zksync.net.noise.SipObfuscator;
+import com.acrescrypto.zksync.net.noise.VariableLengthHandshakeState;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocketTest {
@@ -183,7 +188,7 @@ public class TCPPeerSocketTest {
 			assertTrue(Util.waitUntil(3000, ()->client.socket != null));
 			this.serverSock = server.getClientWithPort(client.socket.getLocalPort());
 			
-	        HandshakeState handshake = new HandshakeState(
+	        VariableLengthHandshakeState handshake = new VariableLengthHandshakeState(
 					crypto,
 					TCPPeerSocket.HANDSHAKE_PROTOCOL,
 					TCPPeerSocket.HANDSHAKE_PATTERN,
@@ -214,21 +219,30 @@ public class TCPPeerSocketTest {
 					}
 				);
 			
-			handshake.setPayload(
+			handshake.setSimplePayload(
 				(round)->{
 					if(round != 4) return null;
+					byte[] proof;
+
 					if(sendValidProof) {
-						return archive.getConfig().getAccessor().temporalProof(0, 1, handshake.getHash());
+						proof = archive.getConfig().getAccessor().temporalProof(0, 1, handshake.getHash());
 					} else {
-						return crypto.rng(crypto.symKeyLength());
+						proof = crypto.rng(crypto.symKeyLength());
 					}
+
+					JsonObject json = Json.createObjectBuilder()
+							.add("proof", Util.bytesToHex(proof))
+							.build();
+					
+					return json.toString().getBytes();
+
 				},
 				
-				(round, inn, decrypter)->{
+				(round, payload)->{
 					if(round != 3) return;
-					int ctLen = crypto.hashLength() + crypto.symKeyLength() + 2 + crypto.symTagLength();
 					
-					decrypter.decrypt(IOUtils.readFully(inn, ctLen));
+					JsonReader reader = Json.createReader(new StringReader(new String(payload)));
+					reader.readObject(); // just make sure we got json					
 					handshake.setPsk(archive.getConfig().getArchiveId());
 				}
 			);
@@ -604,11 +618,6 @@ public class TCPPeerSocketTest {
 		assertFalse(socket.isClosed());
 		socket.violation();
 		assertTrue(socket.isClosed());
-	}
-	
-	@Test
-	public void testAssignsMessageIdWhenCurrentIdIsNegative() {
-		// TODO
 	}
 	
 	@Test

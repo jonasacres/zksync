@@ -20,7 +20,9 @@ public class RateLimitedOutputStream extends OutputStream {
 		this.allocator = allocator;
 		this.allocation = allocator.requestAllocation();
 		this.monitor = new BandwidthMonitor(parent.getSampleDurationMs(), parent.getSampleExpirationMs());
-		this.monitor.addParent(parent);
+		if(parent != null) {
+			this.monitor.addParent(parent);
+		}
 	}
 
 	@Override

@@ -219,14 +219,18 @@ public class HandshakeState {
 			}
 		}
 		
+		handleWritePayload(out);
+		
+		if(messagePatterns.isEmpty()) return readyStates();
+		return null;
+	}
+	
+	protected void handleWritePayload(OutputStream out) throws IOException {
 		byte[] payload = payloadWriter.writePayload(round);
 		if(payload != null && payload.length > 0) {
 			byte[] ciphertext = symmetricState.encryptAndHash(payload);
 			out.write(ciphertext);
 		}
-		
-		if(messagePatterns.isEmpty()) return readyStates();
-		return null;
 	}
 	
 	protected CipherState[] readMessage(InputStream in) throws IOException {
@@ -240,6 +244,13 @@ public class HandshakeState {
 			}
 		}
 		
+		handleReadPayload(in);
+		
+		if(messagePatterns.isEmpty()) return readyStates();
+		return null;
+	}
+	
+	protected void handleReadPayload(InputStream in) throws IOException {
 		payloadReader.readPayload(round, in, (ct)->{
 			if(ct != null && ct.length > 0) {
 				return symmetricState.decryptAndHash(ct);
@@ -247,9 +258,6 @@ public class HandshakeState {
 			
 			return new byte[0];
 		});
-		
-		if(messagePatterns.isEmpty()) return readyStates();
-		return null;
 	}
 	
 	protected CipherState[] readyStates() {

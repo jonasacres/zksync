@@ -1,9 +1,15 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
+import javax.json.JsonReader;
 
 import org.apache.commons.io.IOUtils;
 
@@ -16,6 +22,7 @@ import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.net.noise.CipherState;
 import com.acrescrypto.zksync.net.noise.HandshakeState;
 import com.acrescrypto.zksync.net.noise.SipObfuscator;
+import com.acrescrypto.zksync.net.noise.VariableLengthHandshakeState;
 import com.acrescrypto.zksync.utility.RateLimitedOutputStream;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.RateLimitedInputStream;
@@ -67,6 +74,7 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		if(portNum != 0) {
 			// TODO API: (coverage) branch coverage
+			// TODO API: (test) Spookier realization: also need to test that ads are set iff port != 0!
 			byte[] encryptedArchiveId = swarm.config.getEncryptedArchiveId(remoteIdentityKey.getBytes());
 			this.ad = new TCPPeerAdvertisement(remoteIdentityKey, socket.getInetAddress().getHostAddress(), portNum, encryptedArchiveId);
 		}
@@ -111,7 +119,7 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	protected HandshakeState setupHandshakeState() {
-		HandshakeState handshake = new HandshakeState(crypto,
+		VariableLengthHandshakeState handshake = new VariableLengthHandshakeState(crypto,
 				HANDSHAKE_PROTOCOL,
 				HANDSHAKE_PATTERN,
 				true,
@@ -140,21 +148,32 @@ public class TCPPeerSocket extends PeerSocket {
 			}
 		);
 		
-		handshake.setPayload(
+		handshake.setSimplePayload(
 			(round)->{
-				if(round != 3) return null;
-				byte[] id = crypto.hash(Util.concat(handshake.getHash(), swarm.config.getArchiveId()));
-				byte[] proof = swarm.getConfig().getAccessor().temporalProof(0, 0, handshake.getHash());
-				byte[] all = Util.concat(id, proof, Util.serializeShort((short) swarm.config.getMaster().getTCPListener().port));
-				return all;
+				JsonObjectBuilder builder = Json
+						.createObjectBuilder()
+						.add("padding", Util.bytesToHex(new byte[crypto.defaultPrng().getInt(128)]));
+				
+				if(round == 3) {
+					byte[] id = crypto.hash(Util.concat(handshake.getHash(), swarm.config.getArchiveId()));
+					byte[] proof = swarm.getConfig().getAccessor().temporalProof(0, 0, handshake.getHash());
+					
+					builder.add("idHash", Util.bytesToHex(id))
+					       .add("proof", Util.bytesToHex(proof))
+					       .add("port", swarm.getConfig().getMaster().getTCPListener().getPort());
+				}
+				
+				return builder.build().toString().getBytes();
 			},
 			
-			(round, in, decrypter)->{
+			(round, payload)->{
 				if(round != 4) return;
-				byte[] hsHash = handshake.getHash();
-				byte[] proofCt = IOUtils.readFully(in, crypto.symKeyLength() + crypto.symTagLength());
-				byte[] proof = decrypter.decrypt(proofCt);
-				byte[] expectedProof = swarm.config.getAccessor().temporalProof(0, 1, hsHash);
+				byte[] expectedProof = swarm.config.getAccessor().temporalProof(0, 1, handshake.getPreHash());
+				
+				JsonReader reader = Json.createReader(new StringReader(new String(payload)));
+				JsonObject json = reader.readObject();
+				byte[] proof = Util.hexToBytes(json.getString("proof"));
+				
 				if(Util.safeEquals(expectedProof, proof)) {
 					peerType = PeerConnection.PEER_TYPE_FULL;
 				} else {
@@ -183,7 +202,6 @@ public class TCPPeerSocket extends PeerSocket {
 	public synchronized void write(byte[] data, int offset, int length) throws IOException {
 		ByteBuffer buf = ByteBuffer.wrap(data, offset, length);
 		
-		// TODO Noise: Plaintext lengths must DIE!!!
 		while(buf.hasRemaining()) {
 			int writeLen = Math.min(buf.remaining(), MAX_MSG_LEN);
 			byte[] ciphertext = writeState.encryptWithAssociatedData(null, buf.array(), buf.position(), writeLen);

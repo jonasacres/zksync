@@ -2,12 +2,16 @@ package com.acrescrypto.zksync.net;
 
 import java.io.EOFException;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.StringReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
+
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
+import javax.json.JsonReader;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.mutable.MutableInt;
@@ -21,8 +25,11 @@ import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.noise.CipherState;
-import com.acrescrypto.zksync.net.noise.HandshakeState;
 import com.acrescrypto.zksync.net.noise.SipObfuscator;
+import com.acrescrypto.zksync.net.noise.VariableLengthHandshakeState;
+import com.acrescrypto.zksync.utility.BandwidthMonitor;
+import com.acrescrypto.zksync.utility.RateLimitedInputStream;
+import com.acrescrypto.zksync.utility.RateLimitedOutputStream;
 import com.acrescrypto.zksync.utility.Util;
 
 public class TCPPeerSocketListener {
@@ -39,12 +46,16 @@ public class TCPPeerSocketListener {
 	protected boolean closed, established;
 	protected PrivateDHKey identityKey;
 	
+	protected BandwidthMonitor bandwidthMonitorTx, bandwidthMonitorRx;
+	
 	public TCPPeerSocketListener(ZKMaster master) throws IOException {
 		this.crypto = master.getCrypto();
 		this.blacklist = master.getBlacklist();
 		this.master = master;
 		this.adListeners = new LinkedList<>();
 		this.identityKey = crypto.makePrivateDHKey(); // TODO Noise: cache static key to disk
+		this.bandwidthMonitorRx = new BandwidthMonitor(master.getBandwidthMonitorRx());
+		this.bandwidthMonitorTx = new BandwidthMonitor(master.getBandwidthMonitorTx());
 	}
 	
 	public TCPPeerSocketListener(ZKMaster master, int port) throws IOException {
@@ -210,9 +221,13 @@ public class TCPPeerSocketListener {
 			throw new ProtocolViolationException(); // not ready to accept peers
 		}
 		
-		// TODO Noise: rate limit these
-		InputStream in = peerSocketRaw.getInputStream();
-		OutputStream out = peerSocketRaw.getOutputStream();
+		RateLimitedInputStream in = new RateLimitedInputStream(peerSocketRaw.getInputStream(),
+				master.getBandwidthAllocatorRx(),
+				bandwidthMonitorRx);
+		RateLimitedOutputStream out = new RateLimitedOutputStream(peerSocketRaw.getOutputStream(),
+				master.getBandwidthAllocatorTx(),
+				bandwidthMonitorTx);
+		
 		class MutableAdListener {
 			TCPPeerAdvertisementListener value;
 		}
@@ -220,7 +235,7 @@ public class TCPPeerSocketListener {
 		SipObfuscator[] sip = new SipObfuscator[1];
 		MutableAdListener ad = new MutableAdListener();
 		MutableInt peerType = new MutableInt(), portNum = new MutableInt();
-		HandshakeState handshake = new HandshakeState(
+		VariableLengthHandshakeState handshake = new VariableLengthHandshakeState(
 				crypto,
 				TCPPeerSocket.HANDSHAKE_PROTOCOL,
 				TCPPeerSocket.HANDSHAKE_PATTERN,
@@ -251,38 +266,44 @@ public class TCPPeerSocketListener {
 				}
 			);
 		
-		handshake.setPayload(
+		handshake.setSimplePayload(
 			(round)->{
-				if(round != 4) return null;
-				byte[] proof;
-				if(peerType.intValue() == PeerConnection.PEER_TYPE_FULL) {
-					proof = ad.value.swarm.getConfig().getAccessor().temporalProof(0, 1, handshake.getHash());
-				} else {
-					proof = crypto.rng(crypto.symKeyLength());
+				int padding = crypto.defaultPrng().getInt(128);
+				JsonObjectBuilder builder = Json
+						.createObjectBuilder()
+						.add("padding", Util.bytesToHex(new byte[padding]));
+				
+				if(round == 4) {
+					byte[] proof;
+					if(peerType.intValue() == PeerConnection.PEER_TYPE_FULL) {
+						proof = ad.value.swarm.getConfig().getAccessor().temporalProof(0, 1, handshake.getHash());
+					} else {
+						proof = crypto.rng(crypto.symKeyLength());
+					}
+				
+					builder.add("proof", Util.bytesToHex(proof));
 				}
 				
-				return proof;
+				return builder.build().toString().getBytes();
 			},
 			
-			(round, inn, decrypter)->{
+			(round, payload)->{
 				if(round != 3) return;
-				int ctLen = crypto.hashLength() + crypto.symKeyLength() + 2 + crypto.symTagLength();
-				byte[] idHash = new byte[crypto.hashLength()];
-				byte[] proof = new byte[crypto.symKeyLength()];
-				byte[] hsHash = handshake.getHash(); // need hash from before we call decrypt
 				
-				ByteBuffer payload = ByteBuffer.wrap(decrypter.decrypt(IOUtils.readFully(inn, ctLen)));
-				payload.get(idHash);
-				payload.get(proof);
+				JsonReader reader = Json.createReader(new StringReader(new String(payload)));
+				JsonObject json = reader.readObject();
+				byte[] idHash = Util.hexToBytes(json.getJsonString("idHash").getString());
+				byte[] proof = Util.hexToBytes(json.getJsonString("proof").getString());
+				portNum.setValue(json.getInt("port"));
 				
 				try {
-					ad.value = findMatchingAdvertisement(hsHash, idHash);
+					ad.value = findMatchingAdvertisement(handshake.getPreHash(), idHash);
 				} catch (ProtocolViolationException e) {
 					throw new SecurityException("no archive matching request");
 				}
 				
 				handshake.setPsk(ad.value.swarm.config.getArchiveId());
-				byte[] expectedProof = ad.value.swarm.config.getAccessor().temporalProof(0, 0, hsHash);
+				byte[] expectedProof = ad.value.swarm.config.getAccessor().temporalProof(0, 0, handshake.getPreHash());
 				if(Util.safeEquals(expectedProof, proof)) {
 					peerType.setValue(PeerConnection.PEER_TYPE_FULL);
 				} else {
@@ -322,5 +343,13 @@ public class TCPPeerSocketListener {
 
 	public boolean isListening() {
 		return listenSocket != null && !closed;
+	}
+	
+	public BandwidthMonitor getBandwidthMonitorRx() {
+		return bandwidthMonitorRx;
+	}
+	
+	public BandwidthMonitor getBandwidthMonitorTx() {
+		return bandwidthMonitorTx;
 	}
 }
