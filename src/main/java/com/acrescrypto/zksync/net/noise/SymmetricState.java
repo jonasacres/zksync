@@ -88,7 +88,9 @@ public class SymmetricState {
 	}
 	
 	public CipherState[] split() {
-		int numStates = 2, numDerivations = numStates + 1;
+		int numStates = 2, numDerivations = numStates;
+		if(derivationCallback != null) numDerivations++; // need one extra for derivation callback
+		
 		byte[][] newMaterial = hkdf(new byte[0], numDerivations);
 		CipherState[] newStates = new CipherState[numStates];
 		
@@ -102,7 +104,9 @@ public class SymmetricState {
 		}
 		
 		if(derivationCallback != null) {
-			derivationCallback.derived(truncatedKey(newMaterial[numStates]));
+			Key key = truncatedKey(newMaterial[numStates]);
+			derivationCallback.derived(key);
+			key.destroy();
 		}
 		
 		return newStates;

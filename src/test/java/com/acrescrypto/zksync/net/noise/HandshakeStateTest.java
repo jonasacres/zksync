@@ -848,8 +848,8 @@ public class HandshakeStateTest {
 		CipherState[][] stateSets = new CipherState[2][];
 		Key[] additional = new Key[2];
 
-		initiator.setDerivationCallback((key)->additional[0] = key);
-		responder.setDerivationCallback((key)->additional[1] = key);
+		initiator.setDerivationCallback((key)->additional[0] = new Key(crypto, key.getRaw().clone()));
+		responder.setDerivationCallback((key)->additional[1] = new Key(crypto, key.getRaw().clone()));
 
 		new Thread(()->{
 			try {
