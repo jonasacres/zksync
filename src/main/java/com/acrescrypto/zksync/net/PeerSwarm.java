@@ -1,6 +1,7 @@
 
 package com.acrescrypto.zksync.net;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.net.SocketException;
 import java.util.ArrayList;
@@ -313,7 +314,7 @@ public class PeerSwarm implements BlacklistCallback {
 				}
 			} catch (BlacklistedException exc) {
 				logger.debug("Ignoring ad for blacklisted peer {}", ad);
-			} catch(SocketException|SocketClosedException exc) {
+			} catch(SocketException|SocketClosedException|EOFException exc) {
 				logger.info("Caught network exception connecting to peer {}", ad);
 			} catch(Exception exc) {
 				logger.error("Caught exception connecting to peer {}", ad, exc);
