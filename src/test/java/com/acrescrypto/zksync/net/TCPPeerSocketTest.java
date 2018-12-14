@@ -202,7 +202,7 @@ public class TCPPeerSocketTest {
 					);
 			
 			handshake.setDerivationCallback((key)->{
-				sip = new SipObfuscator(key.derive(0, "siphash".getBytes()).getRaw(), false);
+				sip = new SipObfuscator(key.derive(0, SipObfuscator.SIP_OBFUSCATOR_ASK_NAME.getBytes()).getRaw(), false);
 			});
 
 			handshake.setObfuscation(

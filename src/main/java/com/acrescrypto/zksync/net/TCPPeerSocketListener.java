@@ -249,7 +249,7 @@ public class TCPPeerSocketListener {
 				);
 
 		handshake.setDerivationCallback((key)->{
-			sip[0] = new SipObfuscator(key.derive(0, "siphash".getBytes()).getRaw(), false);
+			sip[0] = new SipObfuscator(key.derive(0, SipObfuscator.SIP_OBFUSCATOR_ASK_NAME.getBytes()).getRaw(), false);
 		});
 		
 		handshake.setObfuscation(
