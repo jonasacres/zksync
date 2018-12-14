@@ -7,6 +7,7 @@ import java.util.LinkedList;
 import java.util.Set;
 
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.File;
 
@@ -81,7 +82,11 @@ public class RAMDirectory implements Directory {
 			Set<String> keys = new HashSet<>(fs.inodesByPath.keySet());
 			for(String path : keys) {
 				if(!path.startsWith(prefix) || path.equals(prefix)) continue;
-				boolean isDir = fs.stat(fs.scopedPath(path)).isDirectory();
+				boolean isDir = false;
+				try {
+					isDir = fs.stat(fs.scopedPath(path)).isDirectory();
+				} catch(ENOENTException exc) {} // bad symlink
+				
 				if(isDir && (opts & LIST_OPT_OMIT_DIRECTORIES) != 0) continue;
 				
 				path = path.substring(prefix.length());

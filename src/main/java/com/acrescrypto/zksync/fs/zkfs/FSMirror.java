@@ -1,10 +1,10 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.util.HashSet;
 
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
-import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
@@ -21,6 +21,7 @@ public class FSMirror {
 	public FSMirror(ZKFS zkfs, FS target) {
 		this.zkfs = zkfs;
 		this.target = target;
+		this.lastRev = zkfs.baseRevision;
 	}
 	
 	public void observedTargetPathChange(String path) throws IOException {
@@ -31,18 +32,50 @@ public class FSMirror {
 		ZKFS oldFs = lastRev != null ? lastRev.getFS() : null;
 		
 		try {
-			String[] list = zkfs.opendir("/").listRecursive(0);
+			String[] list = zkfs.opendir("/").listRecursive();
 			for(String path : list) {
 				syncPathArchiveToTarget(oldFs, path);
 			}
+			
+			pruneFsToList(target, list);
 		} finally {
 			oldFs.close();
 		}
 	}
 	
+	public synchronized void syncTargetToArchive() throws IOException {
+		String[] list = target.opendir("/").listRecursive();
+		
+		for(String path : list) {
+			copy(target, zkfs, path);
+		}
+		
+		pruneFsToList(zkfs, list);
+	}
+	
+	protected void pruneFsToList(FS fs, String[] list) throws IOException {
+		HashSet<String> paths = new HashSet<>();
+		for(String path : list) {
+			paths.add(path);
+		}
+		
+		String[] localList = fs.opendir("/").listRecursive();
+		for(String path : localList) {
+			if(paths.contains(path)) continue;
+			remove(fs, path, fs.lstat(path));
+		}
+	}
+	
 	protected void syncPathArchiveToTarget(ZKFS oldFs, String path) throws IOException {
-		 Inode existing = oldFs != null ? oldFs.inodeForPath(path) : null;
-		 Inode incoming = zkfs.inodeForPath(path);
+		 Inode existing = null;
+		 try {
+			 existing = oldFs != null ? oldFs.inodeForPath(path) : null;
+		 } catch(ENOENTException exc) {}
+		 
+		 Inode incoming = null;
+		 try {
+			 incoming = zkfs.inodeForPath(path, false);
+		 } catch(ENOENTException exc) {}
 		 
 		 // TODO Someday: Consider a way to preserve local changes.
 		 
@@ -59,10 +92,11 @@ public class FSMirror {
 		 }
 	}
 	
-	protected void copy(FS src, FS dest, String path) throws IOException {
+	protected Stat copy(FS src, FS dest, String path) throws IOException {
+		Stat srcStat = null, destStat = null;
 		copyParentDirectories(src, dest, path);
 		try {
-			Stat srcStat = src.lstat(path), destStat = null;
+			srcStat = src.lstat(path);
 			try {
 				destStat = dest.lstat(path);
 			} catch(ENOENTException exc) {}
@@ -87,6 +121,8 @@ public class FSMirror {
 				dest.rmrf(path);
 			} catch(ENOENTException exc2) {}
 		}
+		
+		return srcStat;
 	}
 	
 	protected void copyParentDirectories(FS src, FS dest, String path) throws IOException {
@@ -155,11 +191,6 @@ public class FSMirror {
 		remove(dest, path, destStat);
 		String target = src.readlink(path);
 		dest.symlink(target, path);
-	}
-	
-	protected void applyStat(FS src, FS dest, String path) throws IOException {
-		Stat stat = src.lstat(path);
-		applyStat(stat, dest, path);
 	}
 	
 	protected void applyStat(Stat stat, FS dest, String path) throws IOException {

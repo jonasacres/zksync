@@ -11,6 +11,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 // A ZKSync archive.
 public class ZKFS extends FS {
+	public final static int MAX_SYMLINK_DEPTH = 32;
 	public interface ZKFSDirtyMonitor {
 		public void notifyDirty(ZKFS fs);
 	}
@@ -57,12 +58,12 @@ public class ZKFS extends FS {
 	}
 	
 	public Inode inodeForPath(String path, boolean followSymlinks) throws IOException {
+		if(followSymlinks) return inodeForPathWithSymlinks(path, 0);
 		String absPath = absolutePath(path);
 		if(path.equals("")) throw new ENOENTException(path);
 		if(absPath.equals("/")) {
 			return inodeTable.inodeWithId(InodeTable.INODE_ID_ROOT_DIRECTORY);
 		}
-		
 		
 		ZKDirectory root;
 		try {
@@ -75,11 +76,33 @@ public class ZKFS extends FS {
 		root.close();
 		Inode inode = inodeTable.inodeWithId(inodeId);
 		
-		if(followSymlinks && inode.getStat().isSymlink()) {
+		return inode;
+	}
+	
+	protected Inode inodeForPathWithSymlinks(String path, int depth) throws IOException {
+		if(depth > MAX_SYMLINK_DEPTH) throw new ELOOPException(path);
+		String absPath = absolutePath(path);
+		if(path.equals("")) throw new ENOENTException(path);
+		if(absPath.equals("/")) {
+			return inodeTable.inodeWithId(InodeTable.INODE_ID_ROOT_DIRECTORY);
+		}
+		
+		ZKDirectory root;
+		try {
+			root = opendir("/");
+		} catch (EISNOTDIRException e) {
+			throw new ENOENTException(path);
+		}
+		
+		long inodeId = root.inodeForPath(absPath);
+		root.close();
+		Inode inode = inodeTable.inodeWithId(inodeId);
+		
+		if(inode.getStat().isSymlink()) {
 			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL, true);
 			String linkPath = new String(symlink.read(MAX_PATH_LEN));
 			symlink.close();
-			return inodeForPath(linkPath, true);
+			return inodeForPathWithSymlinks(linkPath, depth + 1);
 		}
 		
 		return inode;
@@ -121,8 +144,12 @@ public class ZKFS extends FS {
 	}
 	
 	public void assertPathIsNotDirectory(String path) throws IOException {
+		assertPathIsNotDirectory(path, true);
+	}
+	
+	public void assertPathIsNotDirectory(String path, boolean followSymlink) throws IOException {
 		try {
-			Inode inode = inodeForPath(path);
+			Inode inode = inodeForPath(path, followSymlink);
 			if(inode.getStat().isDirectory()) throw new EISDIRException(path);
 		} catch(ENOENTException e) {
 		}
@@ -148,7 +175,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public ZKFile open(String path, int mode) throws IOException {
-		assertPathIsNotDirectory(path);
+		assertPathIsNotDirectory(path, (mode & File.O_NOFOLLOW) == 0);
 		return new ZKFile(this, path, mode, true);
 	}
 

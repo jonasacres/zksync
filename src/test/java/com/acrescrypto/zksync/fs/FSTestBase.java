@@ -238,6 +238,13 @@ public abstract class FSTestBase {
 		scratch.symlink(target, "readlink");
 		assertEquals(target, scratch.readlink("readlink"));
 	}
+	
+	@Test
+	public void testReadlinkWhenSymlinkPointsToDirectory() throws IOException {
+		scratch.mkdir("dir");
+		scratch.symlink("dir", "readlink");
+		assertEquals("dir", scratch.readlink("readlink"));
+	}
 
 	@Test
 	public void testMknodCharacterDevice() throws IOException {
