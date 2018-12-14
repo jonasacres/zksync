@@ -11,6 +11,7 @@ public class SipObfuscator {
 	// credit to ntcp2 project for this technique
 	// https://geti2p.net/spec/ntcp2#siphash-obfuscated-length
 	
+	public final static String SIP_OBFUSCATOR_ASK_NAME = "siphash-length";
 	protected CryptoSupport crypto;
 	
 	public class SipState {
