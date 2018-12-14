@@ -177,7 +177,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		String fullPath = Paths.get(path, name).toString();
 		
 		try {
-			Inode inode = zkfs.inodeForPath(fullPath);
+			Inode inode = zkfs.inodeForPath(fullPath, false);
 			inode.removeLink();
 		} catch(ENOENTException exc) {
 			// if we have a dead reference, we should be able to unlink it no questions asked
