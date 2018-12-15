@@ -69,6 +69,9 @@ public class ZKFSManager {
 				&& isDescendent) {
 			try {
 				fs.rebase(latest);
+				if(mirror != null) {
+					mirror.syncArchiveToTarget();
+				}
 			} catch (IOException exc) {
 				logger.error("Unable to rebase to revtag", exc);
 			}
@@ -141,12 +144,13 @@ public class ZKFSManager {
 			throw new EINVALException("No automirror path set");
 		}
 
-		this.automirror = automirror;
 		if(automirror && this.automirrorPath != null) {
 			mirror.startWatch();
 		} else {
 			mirror.stopWatch();
 		}
+
+		this.automirror = automirror;
 	}
 
 	public String getAutomirrorPath() {
@@ -165,6 +169,7 @@ public class ZKFSManager {
 				mirror.startWatch();
 			}
 		} else {
+			mirror = null;
 			automirror = false;
 		}
 	}

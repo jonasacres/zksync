@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -24,6 +25,7 @@ public class ZKFSManagerTest {
 	ZKArchive archive;
 	ZKFS fs;
 	ZKFSManager manager;
+	LocalFS mirrorFs;
 	
 	@BeforeClass
 	public static void beforeAll() {
@@ -37,6 +39,7 @@ public class ZKFSManagerTest {
 		fs = archive.openBlank();
 		manager = new ZKFSManager(fs);
 		(new LocalFS("/tmp")).mkdirp(TESTDIR);
+		mirrorFs = new LocalFS("/tmp/" + TESTDIR);
 	}
 	
 	@After
@@ -45,7 +48,7 @@ public class ZKFSManagerTest {
 		fs.close();
 		archive.close();
 		master.close();
-		(new LocalFS("/tmp")).rmrf(TESTDIR);
+		mirrorFs.purge();
 	}
 	
 	@AfterClass
@@ -243,7 +246,7 @@ public class ZKFSManagerTest {
 	
 	@Test
 	public void testSetAutomirrorFalseDisablesWatchIfRunning() throws IOException {
-		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
 		manager.setAutomirror(true);
 		assertTrue(manager.mirror.isWatching());
 		
@@ -256,7 +259,7 @@ public class ZKFSManagerTest {
 		manager.setAutomirror(false);
 		
 		// and again, with an automirror path set
-		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
 		manager.setAutomirror(false);
 	}
 
@@ -267,14 +270,14 @@ public class ZKFSManagerTest {
 	
 	@Test
 	public void testSetAutomirrorTrueStartsWatchIfAutomirrorPathSet() throws IOException {
-		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
 		manager.setAutomirror(true);
 		assertTrue(manager.mirror.isWatching());
 	}
 	
 	@Test
 	public void testSetAutomirrorTrueDoesNotFreakOutIfWatchRunning() throws IOException {
-		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
 		manager.setAutomirror(true);
 		assertTrue(manager.mirror.isWatching());
 		
@@ -284,32 +287,72 @@ public class ZKFSManagerTest {
 	
 	@Test
 	public void testSetAutomirrorPathNullStopsWatchIfRunning() throws IOException {
-		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
 		manager.setAutomirror(true);
 		assertTrue(manager.mirror.isWatching());
 		
+		FSMirror mirror = manager.mirror;
 		manager.setAutomirrorPath(null);
 		assertFalse(manager.isAutomirroring());
-		assertFalse(manager.mirror.isWatching());
+		assertFalse(mirror.isWatching());
 	}
 	
 	@Test
 	public void testSetAutomirrorPathDoesNotStartWatchIfNotAlreadyRunning() throws IOException {
-		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
 		assertFalse(manager.isAutomirroring());
 		assertFalse(manager.mirror.isWatching());
 	}
 	
 	@Test
 	public void testSetAutomirrorPathRestartsWatchIfPreviouslyRunning() throws IOException {
-		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
 		manager.setAutomirror(true);
 		FSMirror mirror = manager.mirror;
 		
-		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
 		assertNotEquals(mirror, manager.mirror);
 		assertFalse(mirror.isWatching());
 		assertTrue(manager.isAutomirroring());
 		assertTrue(manager.mirror.isWatching());
+	}
+	
+	@Test
+	public void testSyncsArchiveToMirrorTargetIfAutofollowEnabled() throws IOException {
+		manager.setAutofollow(true);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
+
+		ZKFS fs2 = archive.openBlank();
+		fs2.write("file", "somebytes".getBytes());
+		RevisionTag tag = fs2.commit();
+		
+		assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+		assertTrue(Util.waitUntil(100, ()->mirrorFs.exists("file")));
+		assertArrayEquals("somebytes".getBytes(), mirrorFs.read("file"));
+	}
+
+	@Test
+	public void testDoesNotSyncArchiveToMirrorTargetIfAutofollowDisabled() throws IOException {
+		manager.setAutofollow(false);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
+
+		ZKFS fs2 = archive.openBlank();
+		fs2.write("file", "somebytes".getBytes());
+		fs2.commit();
+		
+		assertFalse(Util.waitUntil(100, ()->mirrorFs.exists("file")));
+	}
+
+	@Test
+	public void testSyncsArchiveToMirrorTargetIfAutomirrorPathNotSet() throws IOException {
+		manager.setAutofollow(true);
+		manager.setAutomirrorPath(null);
+
+		ZKFS fs2 = archive.openBlank();
+		fs2.write("file", "somebytes".getBytes());
+		RevisionTag tag = fs2.commit();
+		
+		assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+		assertFalse(Util.waitUntil(100, ()->mirrorFs.exists("file")));
 	}
 }
