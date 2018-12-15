@@ -218,7 +218,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		dir.link(dir, ".");
 		dir.link(inode, "..");
 		dir.flush();
-		fs.chmod(path, zkfs.archive.localConfig.getDirectoryMode());
+		fs.chmod(fullPath, zkfs.archive.localConfig.getDirectoryMode());
 
 		return dir;
 	}

@@ -218,4 +218,10 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 		dir.close();
 		assertEquals(name, zkscratch.commit().getFS().opendir("dir").list()[0]);
 	}
+	
+	@Test
+	public void testMatchesLocalConfigPermissions() throws IOException {
+		zkscratch.mkdir("dir");
+		assertEquals(zkscratch.archive.getLocalConfig().getDirectoryMode(), zkscratch.stat("dir").getMode());
+	}
 }

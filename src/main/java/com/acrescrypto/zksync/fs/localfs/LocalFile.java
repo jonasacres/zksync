@@ -19,12 +19,13 @@ public class LocalFile extends File {
 	LocalFile(LocalFS fs, String path, int mode) throws IOException {
 		super(fs);
 		String modeStr = null;
-		if ((mode & O_RDWR) != 0)
+		if ((mode & O_RDWR) != 0) {
 			modeStr = "rw";
-		if ((mode & O_RDONLY) != 0)
+		} else if ((mode & O_RDONLY) != 0) {
 			modeStr = "r";
-		if ((mode & O_WRONLY) != 0)
+		} else if ((mode & O_WRONLY) != 0) {
 			modeStr = "rw"; // "w" is not supported apparently
+		}
 
 		if (!fs.exists(path, (mode & O_NOFOLLOW) == 0)) {
 			if ((mode & O_CREAT) == 0 || (mode & O_WRONLY) == 0)

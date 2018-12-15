@@ -1,27 +1,106 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.WatchEvent;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
 import java.util.HashSet;
+import java.util.concurrent.TimeUnit;
+
+import org.apache.commons.lang3.mutable.MutableBoolean;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.fs.localfs.LocalFS;
+
+import static java.nio.file.StandardWatchEventKinds.*;
 
 public class FSMirror {
 	ZKFS zkfs;
 	FS target;
 	RevisionTag lastRev;
 	
+	Logger logger = LoggerFactory.getLogger(FSMirror.class);
+	MutableBoolean watchFlag = new MutableBoolean();
+	
 	public interface SyncOperation {
 		void op() throws IOException;
+	}
+	
+	public static FSMirror localMirror(ZKFS zkfs, String path) throws IOException {
+		LocalFS localFs = new LocalFS(path);
+		FSMirror mirror = new FSMirror(zkfs, localFs);
+
+		return mirror;
 	}
 	
 	public FSMirror(ZKFS zkfs, FS target) {
 		this.zkfs = zkfs;
 		this.target = target;
 		this.lastRev = zkfs.baseRevision;
+	}
+	
+	public boolean isWatching() {
+		return watchFlag.isTrue();
+	}
+	
+	public void startWatch() throws IOException {
+		if(watchFlag.isTrue()) return;
+		MutableBoolean flag;
+		flag = watchFlag = new MutableBoolean();
+
+		if(!(target instanceof LocalFS)) throw new UnsupportedOperationException("Cannot watch this kind of filesystem");
+		
+		LocalFS localTarget = (LocalFS) target;
+		Path dir = Paths.get(localTarget.getRoot());
+		
+		WatchService watcher = FileSystems.getDefault().newWatchService();
+		dir.register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
+		
+		new Thread( () -> watchThread(flag, watcher) );
+	}
+	
+	public void stopWatch() {
+		watchFlag.setFalse();
+	}
+	
+	protected void watchThread(MutableBoolean flag, WatchService watcher) {
+		while(flag.booleanValue()) {
+			try {
+				WatchKey key = watcher.poll(10, TimeUnit.MILLISECONDS);
+				try {
+					for(WatchEvent<?> event : key.pollEvents()) {
+						WatchEvent.Kind<?> kind = event.kind();
+						if(kind == OVERFLOW) {
+							logger.warn("Caught overflow on FS mirror; some local filesystem changes may not have made it into the archive.");
+							continue;
+						}
+						
+						if(!(event.context() instanceof Path)) continue;
+						
+						Path filename = (Path) event.context();
+						try {
+							observedTargetPathChange(filename.toString());
+						} catch(IOException exc) {
+							logger.error("Caught exception mirroring local FS", exc);
+						}
+					}
+				} catch(Exception exc) {
+					logger.error("Mirror thread caught exception", exc);
+				} finally {
+					if(!key.reset()) return;
+				}
+			} catch (InterruptedException e) {
+			}
+		}
 	}
 	
 	public void observedTargetPathChange(String path) throws IOException {
@@ -81,7 +160,13 @@ public class FSMirror {
 		 
 		 if(existing == null) {
 			 if(incoming == null) return; // should not actually be possible
-			 copy(zkfs, target, path);
+			 try {
+				 copy(zkfs, target, path);
+			 } catch(IOException exc) {
+				 logger.warn("Caught exception copying path to target: " + path, exc);
+			 } catch(UnsupportedOperationException exc) {
+				 logger.info("Skipping path due to lack of local support (maybe we need superuser?): " + path, exc);
+			 }
 		 } else if(incoming == null) {
 			 try {
 				 target.unlink(path);

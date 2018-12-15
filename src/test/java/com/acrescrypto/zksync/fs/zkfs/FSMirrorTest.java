@@ -16,10 +16,11 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.Stat;
-import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.utility.Util;
 
 public class FSMirrorTest {
@@ -31,7 +32,7 @@ public class FSMirrorTest {
 	ZKMaster master;
 	ZKArchive archive;
 	ZKFS zkfs;
-	RAMFS target;
+	FS target;
 	FSMirror mirror;
 	
 	interface PathChangeTest {
@@ -48,12 +49,13 @@ public class FSMirrorTest {
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createDefaultArchive();
 		zkfs = archive.openBlank();
-		target = new RAMFS();
+		target = new LocalFS("/tmp/zksync-test/fsmirrortest");
 		mirror = new FSMirror(zkfs, target);
 	}
 	
 	@After
 	public void afterEach() throws IOException {
+		target.purge();
 		zkfs.close();
 		target.close();
 		archive.close();
@@ -66,6 +68,11 @@ public class FSMirrorTest {
 		TestUtils.assertTidy();
 	}
 	
+	boolean isSuperuser() {
+		// leave the door open for a per-filesystem check
+		return Util.isSuperuser();
+	}
+	
 	void checkPathMatch(FS src, FS modified, Stat expected, String path) throws IOException {
 		if(expected == null) {
 			assertFalse(modified.exists(path));
@@ -73,24 +80,32 @@ public class FSMirrorTest {
 		}
 		
 		Stat current = src.lstat(path);
+		current.setAtime(expected.getAtime()); // let's take a pass on this one; we're on LocalFS
+		if(!expected.equals(current)) {
+			Util.hexdump("current", current.serialize());
+			Util.hexdump("expected", expected.serialize());
+			Util.hexdump("expected", CryptoSupport.xor(current.serialize(), expected.serialize()));
+		}
 		assertEquals(expected, current);
 		
 		Stat stat = modified.lstat(path);
 		assertEquals(expected.getType(), stat.getType());
 		
+		final int timeTolerance = 2*1000*1000*1000; // timestamps are in nanoseconds. allow 2s slop.
+		
 		if(!expected.isSymlink()) {
-			assertEquals(expected.getAtime(), stat.getAtime());
-			assertEquals(expected.getCtime(), stat.getCtime());
-			if(!expected.isDirectory()) {
-				assertEquals(expected.getMtime(), stat.getMtime());
+			assertEquals(expected.getAtime(), stat.getAtime(), timeTolerance);
+			assertEquals(expected.getCtime(), stat.getCtime(), timeTolerance);
+			assertEquals(expected.getMtime(), stat.getMtime(), timeTolerance);
+			
+			if(Util.isSuperuser()) {
+				assertEquals(expected.getUid(), stat.getUid());
+				assertEquals(expected.getUser(), stat.getUser());
+				assertEquals(expected.getGid(), stat.getGid());
+				assertEquals(expected.getGroup(), stat.getGroup());
 			}
 			
-			assertEquals(expected.getUid(), stat.getUid());
-			assertEquals(expected.getUser(), stat.getUser());
-			assertEquals(expected.getGid(), stat.getGid());
-			assertEquals(expected.getGroup(), stat.getGroup());
-			
-			assertEquals(expected.getMode(), stat.getMode());
+			assertEquals(expected.getMode(), stat.getMode(), timeTolerance);
 		}
 		
 		if(expected.isSymlink()) {
@@ -136,26 +151,30 @@ public class FSMirrorTest {
 			int depth = 1 + (Util.unsignByte(prng.get()) % 4);
 			String p = "";
 			for(int j = 0; j < depth; j++) {
-				p = String.format("%s/%016x", p, prng.getLong());
+				p = String.format("%s/%08x", p, prng.getLong());
 			}
 			
 			fs.mkdirp(fs.dirname(p));
 			switch(prng.get() % 8) {
+				case 3:
+					if(isSuperuser()) {
+						p += "-bdev";
+						fs.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
+						break;
+					}
 				case 1:
 					p += "-dir";
 					fs.mkdir(p);
 					break;
+				case 4:
+					if(isSuperuser()) {
+						p += "-cdev";
+						fs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
+						break;
+					}
 				case 2:
 					p += "-fifo";
 					fs.mkfifo(p);
-					break;
-				case 3:
-					p += "-bdev";
-					fs.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
-					break;
-				case 4:
-					p += "-cdev";
-					fs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
 					break;
 				case 5:
 					p += "-brokensym";
@@ -196,7 +215,7 @@ public class FSMirrorTest {
 	public void testObservedFileChangeForRegularFileOverwritesExisting() throws IOException {
 		observeFileChangeTest("foo", (p)->{
 			zkfs.write(p, "baz".getBytes());
-			zkfs.chmod(p, 0123);
+			zkfs.chmod(p, 0714);
 			target.write(p, "bar".getBytes());
 		});
 	}
@@ -238,7 +257,7 @@ public class FSMirrorTest {
 	public void testObservedFileChangeForDirectoryRefreshesExistingStat() throws IOException{
 		observeFileChangeTest("foo", (p)->{
 			zkfs.mkdir(p);
-			zkfs.chmod(p, 0123);
+			zkfs.chmod(p, 0714);
 			target.mkdir(p);
 		});
 	}
@@ -271,7 +290,7 @@ public class FSMirrorTest {
 	public void testObservedFileChangeForFifoRefreshesExistingStat() throws IOException {
 		observeFileChangeTest("foo", (p)->{
 			zkfs.mkfifo(p);
-			zkfs.chmod(p, 0123);
+			zkfs.chmod(p, 0714);
 			target.mkfifo(p);
 		});
 	}
@@ -294,6 +313,7 @@ public class FSMirrorTest {
 
 	@Test
 	public void testObservedFileChangeForFifoReplacesNonfiles() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("foo", (p)->{
 			zkfs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 2);
 			target.mkfifo(p);
@@ -304,6 +324,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testObservedFileChangeForBlockDeviceCreatesDevice() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("foo", (p)->{
 			target.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 2);
 		});
@@ -311,6 +332,7 @@ public class FSMirrorTest {
 
 	@Test
 	public void testObservedFileChangeForBlockDeviceOverwritesExisting() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("foo", (p)->{
 			zkfs.mknod(p, Stat.TYPE_BLOCK_DEVICE, 4, 3);
 			target.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 2);
@@ -319,6 +341,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testObservedFileChangeForBlockDeviceRefreshesStat() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("foo", (p)->{
 			zkfs.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 2);
 			zkfs.chown(p, 1234);
@@ -328,6 +351,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testObservedFileChangeForBlockDeviceCreatesParentDirectoriesInArchive() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("/path/to/foo", (p)->{
 			target.mkdirp(target.dirname(p));
 			target.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 2);
@@ -336,6 +360,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testObservedFileChangeForBlockDeviceReplacesDirectories() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("foo", (p)->{
 			zkfs.mkdirp(p);
 			target.mkdirp(target.dirname(p));
@@ -345,6 +370,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testObservedFileChangeForBlockDeviceReplacesExistingFiles() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("foo", (p)->{
 			zkfs.write(p, "data".getBytes());
 			target.mkdirp(target.dirname(p));
@@ -356,6 +382,7 @@ public class FSMirrorTest {
 
 	@Test
 	public void testObservedFileChangeForCharacterDeviceCreatesDevice() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("foo", (p)->{
 			target.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 2);
 		});
@@ -363,6 +390,7 @@ public class FSMirrorTest {
 
 	@Test
 	public void testObservedFileChangeForCharacterDeviceOverwritesExisting() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("foo", (p)->{
 			zkfs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 4, 3);
 			target.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 2);
@@ -371,6 +399,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testObservedFileChangeForCharacterDeviceRefreshesStat() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("foo", (p)->{
 			zkfs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 2);
 			zkfs.chown(p, 1234);
@@ -380,6 +409,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testObservedFileChangeForCharacterDeviceCreatesParentDirectoriesInArchive() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("/path/to/foo", (p)->{
 			target.mkdirp(target.dirname(p));
 			target.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 2);
@@ -388,6 +418,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testObservedFileChangeForCharacterDeviceReplacesDirectories() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("foo", (p)->{
 			zkfs.mkdirp(p);
 			target.mkdirp(target.dirname(p));
@@ -397,6 +428,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testObservedFileChangeForCharacterDeviceReplacesExistingFiles() throws IOException {
+		if(!isSuperuser()) return;
 		observeFileChangeTest("foo", (p)->{
 			zkfs.write(p, "data".getBytes());
 			target.mkdirp(target.dirname(p));
@@ -535,7 +567,7 @@ public class FSMirrorTest {
 	public void testSyncArchiveToTargetUpdatesFileStat() throws IOException {
 		syncArchiveToTargetTest("foo", (p)->{
 			target.write(p, "data".getBytes());
-			target.chmod(p, 0123);
+			target.chmod(p, 0714);
 			zkfs.write(p, "data".getBytes());
 		});
 	}
@@ -624,7 +656,7 @@ public class FSMirrorTest {
 	public void testSyncArchiveToTargetUpdatesFifoStat() throws IOException {
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mkfifo(p);
-			target.chmod(p, 0123);
+			target.chmod(p, 0714);
 			zkfs.mkfifo(p);
 		});
 	}
@@ -647,6 +679,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetReplacesSpecialFilesWithFifos() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
 			zkfs.mkfifo(p);
@@ -658,6 +691,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetCreatesBlockDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.write(p, "data".getBytes());
 			zkfs.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
@@ -666,6 +700,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetDeletesBlockDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
 		});
@@ -673,15 +708,17 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetUpdatesBlockDeviceStat() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
-			target.chmod(p, 0123);
+			target.chmod(p, 0714);
 			zkfs.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
 		});
 	}
 
 	@Test
 	public void testSyncArchiveToTargetReplacesDirectoriesWithBlockDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mkdir(p);
 			zkfs.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
@@ -690,6 +727,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetReplacesFilesWithBlockDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.write(p, "data".getBytes());
 			zkfs.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
@@ -698,6 +736,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetReplacesSpecialFilesWithBlockDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mkfifo(p);
 			zkfs.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
@@ -708,6 +747,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetCreatesCharacterDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.write(p, "data".getBytes());
 			zkfs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
@@ -716,6 +756,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetDeletesCharacterDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
 		});
@@ -723,15 +764,17 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetUpdatesCharacterDeviceStat() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
-			target.chmod(p, 0123);
+			target.chmod(p, 0714);
 			zkfs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
 		});
 	}
 	
 	@Test
 	public void testSyncArchiveToTargetReplacesDirectoriesWithCharacterDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mkdir(p);
 			zkfs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
@@ -740,6 +783,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetReplacesFilesWithCharacterDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.write(p, "data".getBytes());
 			zkfs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
@@ -748,6 +792,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetReplacesSpecialFilesWithCharacterDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mkfifo(p);
 			zkfs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
@@ -840,6 +885,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetUnlinksBlockDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
 		});
@@ -847,6 +893,7 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testSyncArchiveToTargetUnlinksCharacterDevices() throws IOException {
+		if(!isSuperuser()) return;
 		syncArchiveToTargetTest("foo", (p)->{
 			target.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
 		});
@@ -897,4 +944,6 @@ public class FSMirrorTest {
 			checkPathMatch(target, zkfs, expectations.get(path), path);
 		}
 	}
+	
+	// TODO: Test the FS watcher
 }

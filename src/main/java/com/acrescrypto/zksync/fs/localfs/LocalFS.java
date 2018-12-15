@@ -10,6 +10,7 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import com.acrescrypto.zksync.exceptions.CommandFailedException;
+import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.FileTypeNotSupportedException;
@@ -55,6 +56,8 @@ public class LocalFS extends FS {
 			if(!isWindows()) stat.setInodeId((Long) Files.getAttribute(path, "unix:ino", linkOpt));
 		} catch(NoSuchFileException exc) {
 			throw new ENOENTException(path.toString());
+		} catch(java.nio.file.AccessDeniedException exc) {
+			throw new EACCESException(path.toString());
 		}
 		
 		return stat;
@@ -191,7 +194,17 @@ public class LocalFS extends FS {
 
 	@Override
 	public void symlink(String source, String dest) throws IOException {
-		Files.createSymbolicLink(qualifiedPath(dest), qualifiedPath(source));
+		Path trueSource = source.substring(0, 1).equals("/")
+				? qualifiedPath(source)
+				: Paths.get(source);
+		
+		String aroot = root.endsWith("/") ? root : root + "/";
+		Path explicit = Paths.get(root).resolve(trueSource).normalize().toAbsolutePath();
+		if(!explicit.startsWith(aroot)) {
+			throw new ENOENTException(source);
+		}
+		
+		Files.createSymbolicLink(qualifiedPath(dest), trueSource);
 	}
 	
 	@Override
@@ -199,7 +212,7 @@ public class LocalFS extends FS {
 		try {
 			String target = Files.readSymbolicLink(qualifiedPath(link)).toString();
 			if(target.startsWith(root)) {
-				return target.substring(root.length()+1, target.length());
+				return target.substring(root.length(), target.length());
 			}
 			
 			return target;
@@ -300,6 +313,8 @@ public class LocalFS extends FS {
 
 	@Override
 	public void setMtime(String path, long mtime) throws IOException {
+		// attempting to use java.nio to set timestamps causes an indefinite block on linux (btrfs/Ubuntu 18.04)
+		if(stat(path).isFifo()) throw new UnsupportedOperationException("can't set atime on fifo");
 		FileTime fileTime = FileTime.from(mtime, TimeUnit.NANOSECONDS);
 		try {
 			Files.setAttribute(qualifiedPath(path), "lastModifiedTime", fileTime);
@@ -315,6 +330,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void setAtime(String path, long atime) throws IOException {
+		if(stat(path).isFifo()) throw new UnsupportedOperationException("can't set atime on fifo");
 		FileTime fileTime = FileTime.from(atime, TimeUnit.NANOSECONDS);
 		try {
 			Files.setAttribute(qualifiedPath(path), "lastAccessTime", fileTime);

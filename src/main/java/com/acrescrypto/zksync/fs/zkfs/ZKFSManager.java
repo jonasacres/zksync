@@ -5,6 +5,7 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.RevisionList.RevisionMonitor;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS.ZKFSDirtyMonitor;
 import com.acrescrypto.zksync.utility.SnoozeThread;
@@ -13,8 +14,13 @@ public class ZKFSManager {
 	protected int autocommitIntervalMs;
 	protected boolean autocommit;
 	protected boolean autofollow;
+	protected boolean automirror;
+	protected String automirrorPath;
+	
 	protected ZKFS fs;
 	protected SnoozeThread autocommitTimer;
+	protected FSMirror mirror;
+	
 	protected Logger logger = LoggerFactory.getLogger(ZKFSManager.class);
 	protected RevisionMonitor revMonitor;
 	protected ZKFSDirtyMonitor fsMonitor;
@@ -28,12 +34,14 @@ public class ZKFSManager {
 		fs.getArchive().getConfig().getRevisionList().addMonitor(revMonitor);
 	}
 	
-	public ZKFSManager(ZKFS fs, ZKFSManager manager) {
+	public ZKFSManager(ZKFS fs, ZKFSManager manager) throws IOException {
 		this(fs);
 		
 		setAutocommit(manager.autocommit);
 		setAutofollow(manager.autofollow);
 		setAutocommitIntervalMs(manager.autocommitIntervalMs);
+		setAutomirrorPath(manager.automirrorPath);
+		setAutomirror(manager.automirror);
 	}
 
 	public void close() {
@@ -120,5 +128,35 @@ public class ZKFSManager {
 				logger.error("IOException performing autocommit", exc);
 			}
 		});
+	}
+
+	public boolean isAutomirror() {
+		return automirror;
+	}
+
+	public void setAutomirror(boolean automirror) throws IOException {
+		if(automirror == this.automirror) return;
+		this.automirror = automirror;
+		if(automirror && this.automirrorPath != null) {
+			mirror.startWatch();
+		}
+	}
+
+	public String getAutomirrorPath() {
+		return automirrorPath;
+	}
+
+	public void setAutomirrorPath(String automirrorPath) throws IOException {
+		this.automirrorPath = automirrorPath;
+		if(mirror != null) {
+			mirror.stopWatch();
+		}
+		
+		if(automirrorPath != null) {
+			mirror = new FSMirror(fs, new LocalFS(automirrorPath));
+			if(automirror) {
+				mirror.startWatch();
+			}
+		}
 	}
 }

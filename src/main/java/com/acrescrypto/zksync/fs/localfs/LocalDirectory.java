@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 
+import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
@@ -64,14 +65,19 @@ public class LocalDirectory implements Directory {
 		for(String entry : list(opts & ~Directory.LIST_OPT_OMIT_DIRECTORIES)) {
 			String subpath = Paths.get(prefix, entry).toString(); // what we return in our results
 			String realSubpath = Paths.get(path, entry).toString(); // what we can look up directly in fs
-			if(fs.stat(Paths.get(path, entry).toString()).isDirectory()) {
-				boolean isDotDir = entry.equals(".") || entry.equals("..");
-				if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
+			try {
+				if(fs.stat(Paths.get(path, entry).toString()).isDirectory()) {
+					boolean isDotDir = entry.equals(".") || entry.equals("..");
+					if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
+						results.add(subpath);
+					}
+					
+					if(!isDotDir) fs.opendir(realSubpath).listRecursiveIterate(opts, results, subpath);
+				} else {
 					results.add(subpath);
 				}
-				
-				if(!isDotDir) fs.opendir(realSubpath).listRecursiveIterate(opts, results, subpath);
-			} else {
+			} catch(ENOENTException|EACCESException exc) {
+				// we can get an ENOENT on a broken symlink, and an EACCES on a directory with bad permissions
 				results.add(subpath);
 			}
 		}

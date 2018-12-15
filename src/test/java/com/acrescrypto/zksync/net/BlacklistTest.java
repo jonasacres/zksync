@@ -115,7 +115,7 @@ public class BlacklistTest {
 		blacklist.addCallback(new BlacklistCallback() {
 			public void disconnectAddress(String cbAddress, long cbDurationMs) {
 				assertEquals(address, cbAddress);
-				assertEquals(durationMs, cbDurationMs);
+				assertEquals(durationMs, cbDurationMs, 1);
 				holder.passed = true;
 			}
 		});
