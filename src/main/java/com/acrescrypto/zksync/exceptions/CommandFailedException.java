@@ -4,6 +4,10 @@ import java.io.IOException;
 
 public class CommandFailedException extends IOException {
 
+	public CommandFailedException(String command) {
+		super(command);
+	}
+
 	/**
 	 * 
 	 */

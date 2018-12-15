@@ -1,12 +1,16 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
-import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
 
@@ -14,6 +18,7 @@ import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.CommandFailedException;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.FS;
@@ -35,13 +40,6 @@ public class FSMirror {
 		void op() throws IOException;
 	}
 	
-	public static FSMirror localMirror(ZKFS zkfs, String path) throws IOException {
-		LocalFS localFs = new LocalFS(path);
-		FSMirror mirror = new FSMirror(zkfs, localFs);
-
-		return mirror;
-	}
-	
 	public FSMirror(ZKFS zkfs, FS target) {
 		this.zkfs = zkfs;
 		this.target = target;
@@ -56,26 +54,54 @@ public class FSMirror {
 		if(watchFlag.isTrue()) return;
 		MutableBoolean flag;
 		flag = watchFlag = new MutableBoolean();
+		watchFlag.setTrue();
 
 		if(!(target instanceof LocalFS)) throw new UnsupportedOperationException("Cannot watch this kind of filesystem");
 		
 		LocalFS localTarget = (LocalFS) target;
 		Path dir = Paths.get(localTarget.getRoot());
+		WatchService watcher = dir.getFileSystem().newWatchService();
+		HashMap<WatchKey, Path> pathsByKey = new HashMap<>();
+		watchDirectory(dir, watcher, pathsByKey);
 		
-		WatchService watcher = FileSystems.getDefault().newWatchService();
-		dir.register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
-		
-		new Thread( () -> watchThread(flag, watcher) );
+		new Thread( () -> watchThread(flag, watcher, pathsByKey) ).start();
 	}
 	
 	public void stopWatch() {
 		watchFlag.setFalse();
 	}
 	
-	protected void watchThread(MutableBoolean flag, WatchService watcher) {
+	protected void watchDirectory(Path dir, WatchService watcher, HashMap<WatchKey, Path> pathsByKey) throws IOException {
+		Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
+	        @Override
+	        public FileVisitResult preVisitDirectory(Path subdir, BasicFileAttributes attrs) throws IOException {
+	            WatchKey key = subdir.register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
+	            pathsByKey.put(key, subdir);
+
+				Path basePath = Paths.get(((LocalFS) target).getRoot());
+				String realPath = basePath.relativize(subdir).toString();
+				suspectedTargetPathChange(realPath);
+				
+	            return FileVisitResult.CONTINUE;
+	        }
+	        
+	        @Override
+	        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+				Path basePath = Paths.get(((LocalFS) target).getRoot());
+				String realPath = basePath.relativize(file).toString();
+	        	suspectedTargetPathChange(realPath);
+	        	return FileVisitResult.CONTINUE;
+	        }
+	    });
+	}
+	
+	protected void watchThread(MutableBoolean flag, WatchService watcher, HashMap<WatchKey, Path> pathsByKey) {
 		while(flag.booleanValue()) {
 			try {
 				WatchKey key = watcher.poll(10, TimeUnit.MILLISECONDS);
+				if(key == null || flag.isFalse()) {
+					continue;
+				}
 				try {
 					for(WatchEvent<?> event : key.pollEvents()) {
 						WatchEvent.Kind<?> kind = event.kind();
@@ -87,8 +113,23 @@ public class FSMirror {
 						if(!(event.context() instanceof Path)) continue;
 						
 						Path filename = (Path) event.context();
+						Path fullPath = pathsByKey.get(key).resolve(filename);
+						Path basePath = Paths.get(((LocalFS) target).getRoot());
+						String realPath = basePath.relativize(fullPath).toString();
+						
 						try {
-							observedTargetPathChange(filename.toString());
+							Stat stat = getLstat(target, realPath);
+							
+							if(kind == ENTRY_CREATE && stat != null && stat.isDirectory()) {
+								watchDirectory(fullPath, watcher, pathsByKey);
+							}
+							
+							if(kind != ENTRY_CREATE || stat == null || !stat.isRegularFile()) {
+								// we don't want ENTRY_CREATE for files, because that also generates ENTRY_MODIFY
+								observedTargetPathChange(realPath);
+							}
+						} catch(ENOENTException|CommandFailedException exc) {
+							// ignore it; the file was deleted from underneath us
 						} catch(IOException exc) {
 							logger.error("Caught exception mirroring local FS", exc);
 						}
@@ -103,8 +144,24 @@ public class FSMirror {
 		}
 	}
 	
-	public void observedTargetPathChange(String path) throws IOException {
+	public synchronized void observedTargetPathChange(String path) throws IOException {
 		copy(target, zkfs, path);
+	}
+	
+	protected synchronized void suspectedTargetPathChange(String path) throws IOException {
+		if(path.equals("") || path.equals("/")) return;
+		Stat tstat = getLstat(target, path), zstat = getLstat(zkfs, path);
+		if(tstat == null && zstat == null) return;
+		if(tstat == null || zstat == null) {
+		} else if(tstat.getType() != zstat.getType()) {
+		} else if(tstat.getSize() != zstat.getSize()) {
+		} else if(tstat.getMtime() != zstat.getMtime()) {
+		} else if(tstat.getMode() != zstat.getMode()) {
+		} else {
+			return; // nothing was different
+		}
+		
+		observedTargetPathChange(path);
 	}
 	
 	public synchronized void syncArchiveToTarget() throws IOException {
@@ -226,7 +283,7 @@ public class FSMirror {
 				remove(dest, path, destStat);
 			}
 			
-			archiveFile = dest.open(path, File.O_WRONLY|File.O_CREAT);
+			archiveFile = dest.open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
 			while(targetFile.hasData()) {
 				byte[] chunk = targetFile.read(65536);
 				archiveFile.write(chunk);
@@ -276,6 +333,14 @@ public class FSMirror {
 		remove(dest, path, destStat);
 		String target = src.readlink(path);
 		dest.symlink(target, path);
+	}
+	
+	protected Stat getLstat(FS fs, String path) {
+		try {
+			return fs.lstat(path);
+		} catch(IOException exc) {
+			return null;
+		}
 	}
 	
 	protected void applyStat(Stat stat, FS dest, String path) throws IOException {

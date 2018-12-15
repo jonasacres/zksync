@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -12,9 +13,13 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
+import com.acrescrypto.zksync.exceptions.EINVALException;
+import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKFSManagerTest {
+	final static String TESTDIR = "zksync-test/zkfsmanagertest";
+	
 	ZKMaster master;
 	ZKArchive archive;
 	ZKFS fs;
@@ -31,6 +36,7 @@ public class ZKFSManagerTest {
 		archive = master.createDefaultArchive();
 		fs = archive.openBlank();
 		manager = new ZKFSManager(fs);
+		(new LocalFS("/tmp")).mkdirp(TESTDIR);
 	}
 	
 	@After
@@ -39,6 +45,7 @@ public class ZKFSManagerTest {
 		fs.close();
 		archive.close();
 		master.close();
+		(new LocalFS("/tmp")).rmrf(TESTDIR);
 	}
 	
 	@AfterClass
@@ -232,5 +239,77 @@ public class ZKFSManagerTest {
 		ZKFS fs2 = archive.openBlank();
 		RevisionTag tag = fs2.commit();
 		assertFalse(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+	}
+	
+	@Test
+	public void testSetAutomirrorFalseDisablesWatchIfRunning() throws IOException {
+		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirror(true);
+		assertTrue(manager.mirror.isWatching());
+		
+		manager.setAutomirror(false);
+		assertFalse(manager.mirror.isWatching());
+	}
+	
+	@Test
+	public void testSetAutomirrorFalseDoesNotFreakOutIfWatchNotRunning() throws IOException {
+		manager.setAutomirror(false);
+		
+		// and again, with an automirror path set
+		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirror(false);
+	}
+
+	@Test(expected=EINVALException.class)
+	public void testSetAutomirrorTrueThrowsExceptionIfAutomirrorPathNotSet() throws IOException {
+		manager.setAutomirror(true);
+	}
+	
+	@Test
+	public void testSetAutomirrorTrueStartsWatchIfAutomirrorPathSet() throws IOException {
+		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirror(true);
+		assertTrue(manager.mirror.isWatching());
+	}
+	
+	@Test
+	public void testSetAutomirrorTrueDoesNotFreakOutIfWatchRunning() throws IOException {
+		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirror(true);
+		assertTrue(manager.mirror.isWatching());
+		
+		manager.setAutomirror(true);
+		assertTrue(manager.mirror.isWatching());
+	}
+	
+	@Test
+	public void testSetAutomirrorPathNullStopsWatchIfRunning() throws IOException {
+		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirror(true);
+		assertTrue(manager.mirror.isWatching());
+		
+		manager.setAutomirrorPath(null);
+		assertFalse(manager.isAutomirroring());
+		assertFalse(manager.mirror.isWatching());
+	}
+	
+	@Test
+	public void testSetAutomirrorPathDoesNotStartWatchIfNotAlreadyRunning() throws IOException {
+		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		assertFalse(manager.isAutomirroring());
+		assertFalse(manager.mirror.isWatching());
+	}
+	
+	@Test
+	public void testSetAutomirrorPathRestartsWatchIfPreviouslyRunning() throws IOException {
+		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		manager.setAutomirror(true);
+		FSMirror mirror = manager.mirror;
+		
+		manager.setAutomirrorPath("/tmp/" + TESTDIR);
+		assertNotEquals(mirror, manager.mirror);
+		assertFalse(mirror.isWatching());
+		assertTrue(manager.isAutomirroring());
+		assertTrue(manager.mirror.isWatching());
 	}
 }

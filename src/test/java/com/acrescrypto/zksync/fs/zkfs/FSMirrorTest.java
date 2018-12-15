@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -55,6 +56,7 @@ public class FSMirrorTest {
 	
 	@After
 	public void afterEach() throws IOException {
+		mirror.stopWatch();
 		target.purge();
 		zkfs.close();
 		target.close();
@@ -71,6 +73,24 @@ public class FSMirrorTest {
 	boolean isSuperuser() {
 		// leave the door open for a per-filesystem check
 		return Util.isSuperuser();
+	}
+	
+	boolean quickCheck(FS src, FS modified, Stat expected, String path) {
+		try {
+			Stat stat = zkfs.lstat(path);
+			boolean check = true;
+			check &= stat.getType() == expected.getType();
+			if(stat.isSymlink()) {
+				check &= src.readlink(path).equals(modified.readlink(path));
+			} else if(stat.isRegularFile()) {
+				check &= stat.getSize() == expected.getSize();
+				check &= stat.getMode() == expected.getMode();
+			} else if(stat.isDevice()) {
+				check &= stat.getDevMajor() == expected.getDevMajor();
+				check &= stat.getDevMinor() == expected.getDevMinor();
+			}
+			return check;
+		} catch(IOException exc) { return false; }
 	}
 	
 	void checkPathMatch(FS src, FS modified, Stat expected, String path) throws IOException {
@@ -91,7 +111,7 @@ public class FSMirrorTest {
 		Stat stat = modified.lstat(path);
 		assertEquals(expected.getType(), stat.getType());
 		
-		final int timeTolerance = 2*1000*1000*1000; // timestamps are in nanoseconds. allow 2s slop.
+		final int timeTolerance = 5*1000*1000*1000; // timestamps are in nanoseconds. allow 5s slop.
 		
 		if(!expected.isSymlink()) {
 			assertEquals(expected.getAtime(), stat.getAtime(), timeTolerance);
@@ -141,6 +161,21 @@ public class FSMirrorTest {
 		
 		mirror.syncArchiveToTarget();
 		checkPathMatch(zkfs, target, expected, path);
+	}
+	
+	void watcherTest(String path, PathChangeTest test) throws IOException {
+		mirror.syncTargetToArchive();
+		mirror.startWatch();
+		test.test(path);
+		
+		if(target.exists(path)) {
+			assertTrue(Util.waitUntil(100, ()->zkfs.exists(path)));
+			Stat existing = target.stat(path);
+			assertTrue(Util.waitUntil(100, ()->quickCheck(target, zkfs, existing, path)));
+			checkPathMatch(target, zkfs, existing, path);
+		} else {
+			assertTrue(Util.waitUntil(100, ()->!zkfs.exists(path)));
+		}
 	}
 	
 	LinkedList<String> makeDummyFs(FS fs) throws IOException {
@@ -915,6 +950,170 @@ public class FSMirrorTest {
 	}
 	
 	@Test
+	public void testWatchMonitorsFileCreations() throws IOException {
+		watcherTest("foo", (p)->{
+			target.write(p, "data".getBytes());
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsFileCreationsInSubdirectory() throws IOException {
+		target.mkdirp("a/b/c");
+		watcherTest("a/b/c/foo", (p)->{
+			target.write(p, "data".getBytes());
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsFileExtensions() throws IOException {
+		target.write("foo", "data".getBytes());
+		
+		watcherTest("foo", (p)->{
+			target.write(p, "bar".getBytes());
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsFileTruncations() throws IOException {
+		target.write("foo", "here's a really long string that we can truncate".getBytes());
+		
+		watcherTest("foo", (p)->{
+			target.truncate(p, 8);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsFileDeletions() throws IOException {
+		target.write("foo", "data".getBytes());
+		
+		watcherTest("foo", (p)->{
+			target.unlink(p);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsFileModeChanges() throws IOException {
+		target.write("foo", "data".getBytes());
+		
+		watcherTest("foo", (p)->{
+			target.chmod(p, 0600);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsFileUserChanges() throws IOException {
+		if(!isSuperuser()) return;
+		target.write("foo", "data".getBytes());
+		
+		watcherTest("foo", (p)->{
+			target.chown(p, 1234);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsFileGroupChanges() throws IOException {
+		if(!isSuperuser()) return;
+		target.write("foo", "data".getBytes());
+		
+		watcherTest("foo", (p)->{
+			target.chgrp(p, 1234);
+		});
+	}
+
+	/* This test does not pass.
+	** It is left here as a reminder/demonstration that mtime changes absent other changes are NOT detected.
+	** (at least, so it seems on JDK 1.8.0_171 / Linux / Ubuntu 18.04 / btrfs)
+	*/
+	//	@Test
+	//	public void testWatchMonitorsFileTimestampChanges() throws IOException {
+	//		target.write("foo", "data".getBytes());
+	//		mirror.syncTargetToArchive();
+	//		
+	//		watcherTest("foo", (p)->{
+	//			target.setMtime(p, 1000*1000*1000*1000);
+	//		});
+	//	}
+	
+	@Test
+	public void testWatchMonitorsDirectoryCreation() throws IOException {
+		watcherTest("foo", (p)->{
+			target.mkdir(p);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsDirectoryRemoval() throws IOException {
+		target.mkdir("foo");
+		watcherTest("foo", (p)->{
+			target.rmdir(p);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsSymlinkCreation() throws IOException {
+		watcherTest("foo", (p)->{
+			target.symlink("fake", p);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsSymlinkRemoval() throws IOException {
+		target.symlink("fake", "foo");
+		watcherTest("foo", (p)->{
+			target.unlink(p);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsFifoCreation() throws IOException {
+		watcherTest("foo", (p)->{
+			target.mkfifo(p);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsFifoRemoval() throws IOException {
+		target.mkfifo("foo");
+		watcherTest("foo", (p)->{
+			target.unlink(p);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsCharacterDeviceCreation() throws IOException {
+		if(!isSuperuser()) return;
+		watcherTest("foo", (p)->{
+			target.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsCharacterDeviceRemoval() throws IOException {
+		if(!isSuperuser()) return;
+		target.mknod("foo", Stat.TYPE_CHARACTER_DEVICE, 1, 3);
+		watcherTest("foo", (p)->{
+			target.unlink(p);
+		});
+	}
+
+	@Test
+	public void testWatchMonitorsBlockDeviceCreation() throws IOException {
+		if(!isSuperuser()) return;
+		watcherTest("foo", (p)->{
+			target.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
+		});
+	}
+	
+	@Test
+	public void testWatchMonitorsBlockDeviceRemoval() throws IOException {
+		if(!isSuperuser()) return;
+		target.mknod("foo", Stat.TYPE_BLOCK_DEVICE, 1, 3);
+		watcherTest("foo", (p)->{
+			target.unlink(p);
+		});
+	}
+
+	@Test
 	public void testSyncArchiveToTargetHandlesTree() throws IOException {
 		LinkedList<String> paths = makeDummyFs(zkfs);		
 		zkfs.commit();
@@ -944,6 +1143,20 @@ public class FSMirrorTest {
 			checkPathMatch(target, zkfs, expectations.get(path), path);
 		}
 	}
-	
-	// TODO: Test the FS watcher
+
+	@Test
+	public void testWatchHandlesTree() throws IOException {
+		mirror.startWatch();
+		LinkedList<String> paths = makeDummyFs(target);
+		HashMap<String,Stat> expectations = new HashMap<>();
+		for(String path : paths) {
+			expectations.put(path, target.lstat(path));
+		}
+		
+		for(String path : paths) {
+			Stat expected = expectations.get(path);
+			assertTrue(Util.waitUntil(100, ()->quickCheck(target, zkfs, expected, path)));
+			checkPathMatch(target, zkfs, expected, path);
+		}
+	}
 }

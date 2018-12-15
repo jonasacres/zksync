@@ -131,7 +131,7 @@ public class LocalFS extends FS {
 			process.waitFor();
 			process.getInputStream().read(buf);
 			if(process.exitValue() != 0) {
-				throw new CommandFailedException();
+				throw new CommandFailedException(String.join(" ", args));
 			}
 			return new String(buf);
 		} catch (InterruptedException e) {

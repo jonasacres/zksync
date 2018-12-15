@@ -271,4 +271,12 @@ public class Stat {
 		if(!other.getClass().equals(this.getClass())) return false;
 		return Arrays.areEqual(serialize(), ((Stat) other).serialize());
 	}
+	
+	public String toString() {
+		return String.format("Inode %016x, type=%d, size=%d, mode=0%s",
+				inodeId,
+				type,
+				size,
+				Integer.toOctalString(mode));
+	}
 }

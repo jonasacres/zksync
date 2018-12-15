@@ -5,6 +5,7 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.RevisionList.RevisionMonitor;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS.ZKFSDirtyMonitor;
@@ -130,15 +131,21 @@ public class ZKFSManager {
 		});
 	}
 
-	public boolean isAutomirror() {
+	public boolean isAutomirroring() {
 		return automirror;
 	}
 
 	public void setAutomirror(boolean automirror) throws IOException {
 		if(automirror == this.automirror) return;
+		if(automirrorPath == null) {
+			throw new EINVALException("No automirror path set");
+		}
+
 		this.automirror = automirror;
 		if(automirror && this.automirrorPath != null) {
 			mirror.startWatch();
+		} else {
+			mirror.stopWatch();
 		}
 	}
 
@@ -157,6 +164,8 @@ public class ZKFSManager {
 			if(automirror) {
 				mirror.startWatch();
 			}
+		} else {
+			automirror = false;
 		}
 	}
 }
