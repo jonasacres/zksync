@@ -21,6 +21,7 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.utility.Util;
@@ -34,6 +35,8 @@ public class DHTModuleTest {
 			this.threadGroup = Thread.currentThread().getThreadGroup();
 			this.storage = new RAMFS();
 			this.blacklist = new Blacklist(storage, "blacklist", new Key(crypto));
+			this.globalConfig = new ConfigFile(storage, "config.json");
+			setupBandwidth();
 		}
 		
 		@Override

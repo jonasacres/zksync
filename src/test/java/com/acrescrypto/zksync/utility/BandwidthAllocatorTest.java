@@ -91,7 +91,7 @@ public class BandwidthAllocatorTest {
 	@Test
 	public void testRequestBytesReturnsRequestedAmountIfUnlimited() {
 		long amount = 1122334455667788990L;
-		allocator.setBytesPerSecond(Double.POSITIVE_INFINITY);
+		allocator.setBytesPerSecond(-1);
 		assertEquals(amount, allocator.requestAllocation().requestBytes(amount));
 	}
 	

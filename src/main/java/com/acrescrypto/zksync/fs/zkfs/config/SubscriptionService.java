@@ -36,7 +36,7 @@ public class SubscriptionService {
 		}
 	}
 	
-	class SubscriptionBuilder {
+	public class SubscriptionBuilder {
 		String key;
 		
 		public SubscriptionBuilder(String key) {
@@ -44,47 +44,47 @@ public class SubscriptionService {
 		}
 		
 		
-		SubscriptionToken<Boolean> asBoolean(SubscriptionCallback<Boolean> callback) {
+		public SubscriptionToken<Boolean> asBoolean(SubscriptionCallback<Boolean> callback) {
 			return new SubscriptionToken<Boolean>(Boolean.class, key, null, callback);
 		}
 
-		SubscriptionToken<Boolean> asBoolean(boolean defaultValue, SubscriptionCallback<Boolean> callback) {
+		public SubscriptionToken<Boolean> asBoolean(boolean defaultValue, SubscriptionCallback<Boolean> callback) {
 			return new SubscriptionToken<Boolean>(Boolean.class, key, defaultValue, callback);
 		}
 		
 		
-		SubscriptionToken<Integer> asInt(SubscriptionCallback<Integer> callback) {
+		public SubscriptionToken<Integer> asInt(SubscriptionCallback<Integer> callback) {
 			return new SubscriptionToken<Integer>(Integer.class, key, null, callback);
 		}
 
-		SubscriptionToken<Integer> asInt(int defaultValue, SubscriptionCallback<Integer> callback) {
+		public SubscriptionToken<Integer> asInt(int defaultValue, SubscriptionCallback<Integer> callback) {
 			return new SubscriptionToken<Integer>(Integer.class, key, defaultValue, callback);
 		}
 		
 		
-		SubscriptionToken<Long> asLong(SubscriptionCallback<Long> callback) {
+		public SubscriptionToken<Long> asLong(SubscriptionCallback<Long> callback) {
 			return new SubscriptionToken<Long>(Long.class, key, null, callback);
 		}
 
-		SubscriptionToken<Long> asLong(long defaultValue, SubscriptionCallback<Long> callback) {
+		public SubscriptionToken<Long> asLong(long defaultValue, SubscriptionCallback<Long> callback) {
 			return new SubscriptionToken<Long>(Long.class, key, defaultValue, callback);
 		}
 		
 		
-		SubscriptionToken<Double> asDouble(SubscriptionCallback<Double> callback) {
+		public SubscriptionToken<Double> asDouble(SubscriptionCallback<Double> callback) {
 			return new SubscriptionToken<Double>(Double.class, key, null, callback);
 		}
 
-		SubscriptionToken<Double> asDouble(double defaultValue, SubscriptionCallback<Double> callback) {
+		public SubscriptionToken<Double> asDouble(double defaultValue, SubscriptionCallback<Double> callback) {
 			return new SubscriptionToken<Double>(Double.class, key, defaultValue, callback);
 		}
 		
 		
-		SubscriptionToken<String> asString(SubscriptionCallback<String> callback) {
+		public SubscriptionToken<String> asString(SubscriptionCallback<String> callback) {
 			return new SubscriptionToken<String>(String.class, key, null, callback);
 		}
 
-		SubscriptionToken<String> asString(String defaultValue, SubscriptionCallback<String> callback) {
+		public SubscriptionToken<String> asString(String defaultValue, SubscriptionCallback<String> callback) {
 			return new SubscriptionToken<String>(String.class, key, defaultValue, callback);
 		}
 	}

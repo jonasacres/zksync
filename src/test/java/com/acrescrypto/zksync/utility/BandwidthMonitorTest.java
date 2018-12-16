@@ -42,7 +42,7 @@ public class BandwidthMonitorTest {
 	public void testGetBytesPerSecondReportsBandwidthInBytesPerSecond() {
 		monitor.observeTraffic(1024);
 		Util.setCurrentTimeMillis(999);
-		assertEquals(1000.0*1024/999.0, monitor.getBytesPerSecond(), 1e-5);
+		assertEquals(1000.0*1024/999.0, monitor.getBytesPerSecond(), 2);
 	}
 	
 	@Test

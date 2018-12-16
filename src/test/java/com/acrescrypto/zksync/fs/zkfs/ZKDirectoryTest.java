@@ -220,8 +220,8 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 	}
 	
 	@Test
-	public void testMatchesLocalConfigPermissions() throws IOException {
+	public void testMatchesConfigPermissions() throws IOException {
 		zkscratch.mkdir("dir");
-		assertEquals(zkscratch.archive.getLocalConfig().getDirectoryMode(), zkscratch.stat("dir").getMode());
+		assertEquals(zkscratch.archive.master.getGlobalConfig().getInt("fs.default.directoryMode", 0755), zkscratch.stat("dir").getMode());
 	}
 }

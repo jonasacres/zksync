@@ -43,6 +43,7 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
@@ -61,6 +62,8 @@ public class DHTClientTest {
 			this.threadGroup = Thread.currentThread().getThreadGroup();
 			this.storage = new RAMFS();
 			this.blacklist = new Blacklist(storage, "blacklist", new Key(crypto));
+			this.globalConfig = new ConfigFile(storage, "config.json");
+			setupBandwidth();
 		}
 		
 		@Override

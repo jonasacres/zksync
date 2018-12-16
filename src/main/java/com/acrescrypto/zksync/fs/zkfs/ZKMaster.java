@@ -17,6 +17,7 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveAccessorDiscoveryCallback;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.TCPPeerSocketListener;
 import com.acrescrypto.zksync.net.dht.DHTClient;
@@ -43,12 +44,13 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected DHTClient dhtClient;
 	protected DHTZKArchiveDiscovery dhtDiscovery;
 	protected ThreadGroup threadGroup;
+	protected ConfigFile globalConfig;
 	protected long debugTime = -1;
 	
-	private BandwidthMonitor bandwidthMonitorTx = new BandwidthMonitor(100, 3000);
-	private BandwidthMonitor bandwidthMonitorRx = new BandwidthMonitor(100, 3000);
-	private BandwidthAllocator bandwidthAllocatorTx = new BandwidthAllocator(Double.POSITIVE_INFINITY);
-	private BandwidthAllocator bandwidthAllocatorRx = new BandwidthAllocator(Double.POSITIVE_INFINITY);
+	private BandwidthMonitor bandwidthMonitorTx;
+	private BandwidthMonitor bandwidthMonitorRx;
+	private BandwidthAllocator bandwidthAllocatorTx;
+	private BandwidthAllocator bandwidthAllocatorRx;
 	
 	// TODO Someday: (refactor) this is really test code, which shouldn't be in here.
 	public static PassphraseProvider demoPassphraseProvider() {
@@ -102,6 +104,11 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	public ZKMaster(CryptoSupport crypto, FS storage, PassphraseProvider passphraseProvider) throws IOException, InvalidBlacklistException {
 		this.crypto = crypto;
 		this.storage = storage;
+		
+		this.globalConfig = new ConfigFile(storage, "config.json");
+		setupSubscriptions();
+		setupBandwidth();
+		
 		this.passphraseProvider = passphraseProvider;
 		this.threadGroup = new ThreadGroup("ZKMaster " + System.identityHashCode(this));
 		getLocalKey();
@@ -380,5 +387,21 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 
 		Key key = localKey.derive(ArchiveAccessor.KEY_INDEX_DHT_STORAGE, "dht-storage".getBytes());
 		this.dhtClient = new DHTClient(key, this, networkId);
+	}
+
+	public ConfigFile getGlobalConfig() {
+		return globalConfig;
+	}
+	
+	protected void setupSubscriptions() {
+		globalConfig.subscribe("net.limits.tx").asLong(-1, (v)->bandwidthAllocatorTx.setBytesPerSecond(v));
+		globalConfig.subscribe("net.limits.rx").asLong(-1, (v)->bandwidthAllocatorRx.setBytesPerSecond(v));
+	}
+	
+	protected void setupBandwidth() {
+		bandwidthMonitorTx = new BandwidthMonitor(100, 3000);
+		bandwidthMonitorRx = new BandwidthMonitor(100, 3000);
+		bandwidthAllocatorTx = new BandwidthAllocator(globalConfig.getLong("net.limits.tx", -1));
+		bandwidthAllocatorRx = new BandwidthAllocator(globalConfig.getLong("net.limits.rx", -1));
 	}
 }

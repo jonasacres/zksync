@@ -8,7 +8,7 @@ public class BandwidthMonitor {
 	private long lastRecalculationTime;
 	private long currentBytesInInterval;
 	private long startTime;
-	private double currentRateBytesPerSecond;
+	private long currentRateBytesPerSecond;
 	
 	private LinkedList<BandwidthMonitor> parents = new LinkedList<>();
 	private LinkedList<Sample> samples = new LinkedList<>();
@@ -94,7 +94,7 @@ public class BandwidthMonitor {
 		}
 		
 		long sampleInterval = Util.currentTimeMillis() - oldestTimestamp;
-		currentRateBytesPerSecond = (1.0 * totalSeen) / (sampleInterval / 1000.0);
+		currentRateBytesPerSecond = (long) ((1.0 * totalSeen) / (sampleInterval / 1000.0));
 		currentBytesInInterval = totalSeen;
 		lastRecalculationTime = Util.currentTimeMillis();
 	}
@@ -113,7 +113,7 @@ public class BandwidthMonitor {
 		parents.remove(parent);
 	}
 	
-	public double getBytesPerSecond() {
+	public long getBytesPerSecond() {
 		checkCalculation();
 		return currentRateBytesPerSecond;
 	}

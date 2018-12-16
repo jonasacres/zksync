@@ -11,7 +11,7 @@ public class BandwidthAllocator {
 	private long allocationIntervalMs;
 	private long allocationPool;
 	private long reallocationTime;
-	private double bytesPerSecond;
+	private long bytesPerSecond;
 	private boolean reallocating;
 	private Map<BandwidthAllocation,Long> pendingAllocations = new HashMap<>();
 	
@@ -56,12 +56,12 @@ public class BandwidthAllocator {
 		}
 	}
 	
-	public BandwidthAllocator(double bytesPerSecond, long allocationIntervalMs) {
+	public BandwidthAllocator(long bytesPerSecond, long allocationIntervalMs) {
 		this.allocationIntervalMs = allocationIntervalMs;
 		this.bytesPerSecond = bytesPerSecond;
 	}
 	
-	public BandwidthAllocator(double bytesPerSecond) {
+	public BandwidthAllocator(long bytesPerSecond) {
 		this(bytesPerSecond, DEFAULT_ALLOCATION_INTERVAL_MS);
 	}
 	
@@ -135,11 +135,11 @@ public class BandwidthAllocator {
 		return allocationIntervalMs;
 	}
 	
-	public void setBytesPerSecond(double bytesPerSecond) {
+	public void setBytesPerSecond(long bytesPerSecond) {
 		this.bytesPerSecond = bytesPerSecond;
 	}
 	
-	public double getBytesPerSecond() {
+	public long getBytesPerSecond() {
 		return bytesPerSecond;
 	}
 	
@@ -157,6 +157,6 @@ public class BandwidthAllocator {
 	}
 	
 	public boolean isUnlimited() {
-		return Double.isInfinite(bytesPerSecond);
+		return bytesPerSecond < 0;
 	}
 }

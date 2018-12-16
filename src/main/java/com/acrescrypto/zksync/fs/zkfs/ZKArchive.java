@@ -7,14 +7,12 @@ import java.util.Collection;
 import java.util.HashMap;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
-import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
-import com.acrescrypto.zksync.fs.zkfs.config.LocalConfig;
 import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -31,7 +29,6 @@ public class ZKArchive {
 	protected CryptoSupport crypto;
 	protected FS storage;
 
-	protected LocalConfig localConfig;
 	protected ZKArchiveConfig config;
 	protected ZKMaster master;
 	protected HashCache<RevisionTag,ZKFS> readOnlyFilesystems;
@@ -43,8 +40,6 @@ public class ZKArchive {
 		this.crypto = config.accessor.master.crypto;
 		this.allPageTags = new HashMap<>();
 		this.config = config;
-		Key localKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_CONFIG_FILE);
-		this.localConfig = new LocalConfig(config.localStorage, localKey);
 		this.readOnlyFilesystems = new HashCache<RevisionTag,ZKFS>(64, (tag) -> {
 			if(this.isCacheOnly() && !tag.cacheOnly) {
 				return tag.makeCacheOnly().getFS();
@@ -113,10 +108,6 @@ public class ZKArchive {
 	
 	public CryptoSupport getCrypto() {
 		return crypto;
-	}
-	
-	public LocalConfig getLocalConfig() {
-		return localConfig;
 	}
 	
 	public static String dataDirForArchiveId(byte[] archiveId) {
