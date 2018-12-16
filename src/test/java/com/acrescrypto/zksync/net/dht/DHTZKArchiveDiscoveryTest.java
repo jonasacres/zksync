@@ -256,7 +256,8 @@ public class DHTZKArchiveDiscoveryTest {
 		client.records.clear();
 		discovery.forceUpdate(archive.getConfig().getAccessor());
 		// TODO API: (itf) 511a8be+ linux 12/14/18 UniversalTests, assertion failed
-		assertTrue(Util.waitUntil(100, ()->!client.records.isEmpty()));
+		// and again 12/15, after doubling the timeout to 100... gonna try 500 and see.
+		assertTrue(Util.waitUntil(500, ()->!client.records.isEmpty()));
 	}
 	
 	@Test
@@ -269,6 +270,6 @@ public class DHTZKArchiveDiscoveryTest {
 		client.searchId = null;
 		discovery.forceUpdate(archive.getConfig().getAccessor());
 		// TODO API: (itf) a215023+ linux 11/29/18 AllTests, assertion failed
-		assertTrue(Util.waitUntil(100, ()->client.searchId != null));
+		assertTrue(Util.waitUntil(500, ()->client.searchId != null));
 	}
 }

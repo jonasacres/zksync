@@ -1,8 +1,10 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -68,13 +70,13 @@ public class ZKFSManagerTest {
 	}
 	
 	@Test
-	public void testCloseRemovesMonitorFromZKFS() {
+	public void testCloseRemovesMonitorFromZKFS() throws IOException {
 		manager.close();
 		assertFalse(fs.dirtyMonitors.contains(manager.fsMonitor));
 	}
 	
 	@Test
-	public void testCloseRemovesMonitorFromRevisionList() {
+	public void testCloseRemovesMonitorFromRevisionList() throws IOException {
 		manager.close();
 		assertFalse(archive.getConfig().getRevisionList().monitors.contains(manager.revMonitor));
 	}
@@ -354,5 +356,57 @@ public class ZKFSManagerTest {
 		
 		assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
 		assertFalse(Util.waitUntil(100, ()->mirrorFs.exists("file")));
+	}
+	
+	@Test
+	public void testSerializationAndDeserialization() throws IOException {
+		manager.setAutofollow(true);
+		manager.setAutocommit(true);
+		manager.setAutocommitIntervalMs(123456);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirror(true);
+		byte[] serialized = manager.serialize();
+		
+		ZKFSManager deserialized = new ZKFSManager(archive.getConfig(), serialized);
+		assertEquals(manager.isAutofollowing(), deserialized.isAutofollowing());
+		assertEquals(manager.isAutocommiting(), deserialized.isAutocommiting());
+		assertEquals(manager.isAutomirroring(), deserialized.isAutomirroring());
+		assertEquals(manager.getAutocommitIntervalMs(), deserialized.getAutocommitIntervalMs());
+		assertEquals(manager.getAutomirrorPath(), deserialized.getAutomirrorPath());
+	}
+	
+	@Test
+	public void testPersistentManagerReadsExisting() throws IOException {
+		RevisionTag notLatest = manager.fs.commit();
+		manager.fs.commit();
+		manager.fs.rebase(notLatest);
+
+		manager.setAutofollow(true);
+		manager.setAutocommit(true);
+		manager.setAutocommitIntervalMs(123456);
+		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirror(true);
+		manager.write();
+		
+		ZKFSManager persistent = new ZKFSManager(archive.getConfig());
+		assertEquals(manager.isAutofollowing(), persistent.isAutofollowing());
+		assertEquals(manager.isAutocommiting(), persistent.isAutocommiting());
+		assertEquals(manager.isAutomirroring(), persistent.isAutomirroring());
+		assertEquals(manager.getAutocommitIntervalMs(), persistent.getAutocommitIntervalMs());
+		assertEquals(manager.getAutomirrorPath(), persistent.getAutomirrorPath());
+		assertEquals(notLatest, persistent.fs.getBaseRevision());
+	}
+
+	@Test
+	public void testPersistentManagerInitializesFromDefault() throws IOException {
+		RevisionTag latest = archive.openBlank().commit();
+		
+		ZKFSManager persistent = new ZKFSManager(archive.getConfig());
+		assertFalse(persistent.isAutofollowing());
+		assertFalse(persistent.isAutocommiting());
+		assertFalse(persistent.isAutomirroring());
+		assertEquals(0, persistent.getAutocommitIntervalMs());
+		assertNull(persistent.getAutomirrorPath());
+		assertEquals(latest, persistent.fs.getBaseRevision());
 	}
 }

@@ -42,6 +42,7 @@ public class ArchiveAccessor {
 	public final static int KEY_INDEX_REQUEST_POOL = 16;
 	public final static int KEY_INDEX_DHT_STORAGE = 17;
 	public final static int KEY_INDEX_DHT_LOOKUP = 18;
+	public final static int KEY_INDEX_MANAGER_FILE = 19;
 	
 	protected ZKMaster master;
 

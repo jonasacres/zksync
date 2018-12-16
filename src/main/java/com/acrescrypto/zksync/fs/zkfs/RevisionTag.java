@@ -43,7 +43,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 
 	public ZKArchive getArchive() throws IOException {
-		ZKArchive archive = refTag.config.getArchive();
+		ZKArchive archive = getRefTag().config.getArchive();
 		if(cacheOnly && !archive.isCacheOnly()) {
 			archive = archive.cacheOnlyArchive();
 		}

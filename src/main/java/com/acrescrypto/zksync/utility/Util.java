@@ -289,8 +289,12 @@ public class Util {
 		Thread.currentThread().setName(name + " " + String.format("%08x", System.identityHashCode(Thread.currentThread())));
 	}
 	
-	public byte[] decode64(String base64) {
+	public static byte[] decode64(String base64) {
 		return Base64.getDecoder().decode(fromWebSafeBase64(base64));
+	}
+	
+	public static String encode64(byte[] data) {
+		return Base64.getEncoder().encodeToString(data);
 	}
 	
 	public static String fromWebSafeBase64(String base64) {

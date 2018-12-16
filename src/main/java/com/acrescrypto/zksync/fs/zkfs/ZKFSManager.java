@@ -1,15 +1,25 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.io.StringReader;
+
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonObjectBuilder;
+import javax.json.JsonReader;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.EINVALException;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.RevisionList.RevisionMonitor;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS.ZKFSDirtyMonitor;
 import com.acrescrypto.zksync.utility.SnoozeThread;
+import com.acrescrypto.zksync.utility.Util;
 
 public class ZKFSManager {
 	protected int autocommitIntervalMs;
@@ -26,13 +36,30 @@ public class ZKFSManager {
 	protected RevisionMonitor revMonitor;
 	protected ZKFSDirtyMonitor fsMonitor;
 	
+	protected boolean autosave;
+	
+	public ZKFSManager(ZKArchiveConfig config) throws IOException {
+		try {
+			read(config);
+		} catch(ENOENTException exc) {
+			if(!config.getAccessor().isSeedOnly()) {
+				this.fs = config.getArchive().openLatest();
+			}
+		}
+		
+		autosave = true;
+		setupMonitors();
+	}
+	
+	public ZKFSManager(ZKArchiveConfig config, byte[] serialized) throws IOException {
+		deserialize(config, serialized);
+		autosave = true;		
+		setupMonitors();
+	}
+	
 	public ZKFSManager(ZKFS fs) {
 		this.fs = fs;
-		this.fsMonitor = (f)->notifyLocalChanges();
-		this.revMonitor = (revTag)->notifyNewRevtag(revTag);
-		
-		fs.addMonitor(fsMonitor);
-		fs.getArchive().getConfig().getRevisionList().addMonitor(revMonitor);
+		setupMonitors();
 	}
 	
 	public ZKFSManager(ZKFS fs, ZKFSManager manager) throws IOException {
@@ -44,10 +71,23 @@ public class ZKFSManager {
 		setAutomirrorPath(manager.automirrorPath);
 		setAutomirror(manager.automirror);
 	}
+	
+	protected void setupMonitors() {
+		this.fsMonitor = (f)->notifyLocalChanges();
+		this.revMonitor = (revTag)->notifyNewRevtag(revTag);
+		
+		if(fs != null) {
+			fs.addMonitor(fsMonitor);
+			fs.getArchive().getConfig().getRevisionList().addMonitor(revMonitor);
+		}
+	}
 
-	public void close() {
-		fs.removeMonitor(fsMonitor);
-		fs.getArchive().getConfig().getRevisionList().removeMonitor(revMonitor);
+	public void close() throws IOException {
+		if(fs != null) {
+			fs.removeMonitor(fsMonitor);
+			fs.getArchive().getConfig().getRevisionList().removeMonitor(revMonitor);
+			fs.close();
+		}
 	}
 	
 	public void notifyLocalChanges() {
@@ -77,6 +117,10 @@ public class ZKFSManager {
 			}
 		}
 	}
+	
+	public ZKFS getFs() {
+		return fs;
+	}
 
 	public int getAutocommitIntervalMs() {
 		return autocommitIntervalMs;
@@ -86,6 +130,7 @@ public class ZKFSManager {
 		if(this.autocommitIntervalMs == autocommitIntervalMs) return;
 		this.autocommitIntervalMs = autocommitIntervalMs;
 		setupAutocommitTimer();
+		autosaveIfDesired();
 		
 	}
 
@@ -97,6 +142,7 @@ public class ZKFSManager {
 		if(this.autocommit == autocommit) return;
 		this.autocommit = autocommit;
 		setupAutocommitTimer();
+		autosaveIfDesired();
 	}
 
 	public boolean isAutofollowing() {
@@ -104,7 +150,9 @@ public class ZKFSManager {
 	}
 
 	public void setAutofollow(boolean autofollow) {
+		if(this.autofollow == autofollow) return;
 		this.autofollow = autofollow;
+		autosaveIfDesired();
 	}
 	
 	protected void setupAutocommitTimer() {
@@ -151,6 +199,7 @@ public class ZKFSManager {
 		}
 
 		this.automirror = automirror;
+		autosaveIfDesired();
 	}
 
 	public String getAutomirrorPath() {
@@ -171,6 +220,100 @@ public class ZKFSManager {
 		} else {
 			mirror = null;
 			automirror = false;
+		}
+
+		autosaveIfDesired();
+	}
+	
+	protected String path() {
+		return "manager";
+	}
+	
+	protected Key storageKey(ZKArchiveConfig config) {
+		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL,
+				ArchiveAccessor.KEY_TYPE_CIPHER,
+				ArchiveAccessor.KEY_INDEX_MANAGER_FILE);
+	}
+	
+	protected void write() throws IOException {
+		if(fs == null) return;
+		MutableSecureFile
+		  .atPath(fs.getArchive().getConfig().getLocalStorage(),
+				path(),
+				storageKey(fs.getArchive().getConfig()))
+		  .write(serialize(), 65536);
+	}
+	
+	protected void autosaveIfDesired() {
+		if(!autosave) return;
+		try {
+			write();
+		} catch(IOException exc) {
+			logger.error("Unable to write ZKFSManager file", exc);
+		}
+	}
+	
+	protected void read(ZKArchiveConfig config) throws IOException {
+		byte[] contents = MutableSecureFile
+		  .atPath(config.getLocalStorage(),
+				path(),
+				storageKey(config))
+		  .read();
+		deserialize(config, contents);
+	}
+	
+	protected byte[] serialize() {
+		JsonObjectBuilder builder = Json
+				.createObjectBuilder();
+
+		builder.add("autocommit", autocommit);
+		builder.add("autofollow", autocommit);
+		builder.add("automirror", autocommit);
+		builder.add("autocommitIntervalMs", autocommitIntervalMs);
+		if(automirrorPath != null) {
+			builder.add("automirrorPath", automirrorPath);
+		}
+		builder.add("revtag", Util.encode64(fs.getBaseRevision().serialize()));
+		
+		return builder.build().toString().getBytes();
+	}
+	
+	protected void deserialize(ZKArchiveConfig config, byte[] serialized) throws IOException {
+		JsonReader reader = Json.createReader(new StringReader(new String(serialized)));
+		JsonObject json = reader.readObject();
+		
+		String tagRaw = json.getString("revtag");
+		if(tagRaw != null) {
+			RevisionTag revTag = new RevisionTag(config, Util.decode64(tagRaw), true);
+			fs = revTag.getFS();
+		} else {
+			fs = config.getArchive().openLatest();
+		}
+		
+		setAutocommit(json.getBoolean("autocommit"));
+		setAutofollow(json.getBoolean("autofollow"));
+		setAutocommitIntervalMs(json.getInt("autocommitIntervalMs"));
+		if(json.containsKey("automirrorPath")) {
+			setAutomirrorPath(json.getString("automirrorPath"));
+		} else {
+			setAutomirrorPath(null);
+		}
+		setAutomirror(json.getBoolean("automirror"));
+	}
+
+	public void setFs(ZKFS fs) throws IOException {
+		this.fs.close();
+		this.fs = fs;
+		setupMonitors();
+		setAutomirrorPath(this.automirrorPath); // reinit mirror
+		// setting the path already called autosaveIfDesired()
+	}
+
+	public void purge() throws IOException {
+		close();
+		if(fs == null) return;
+		if(fs.archive.config.getLocalStorage().exists(path())) {
+			fs.archive.config.getLocalStorage().unlink(path());
 		}
 	}
 }
