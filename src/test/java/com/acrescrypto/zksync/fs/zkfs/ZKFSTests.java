@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigTests;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolverTest;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetTest;
 
@@ -28,7 +29,8 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetTest;
 	RevisionTagTest.class,
 	RevisionTreeTest.class,
 	ZKFSManagerTest.class,
-	FSMirrorTest.class
+	FSMirrorTest.class,
+	ConfigTests.class
 })
 
 public class ZKFSTests {
