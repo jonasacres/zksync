@@ -49,6 +49,7 @@ import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
+import com.dosse.upnp.UPnP;
 
 public class DHTClientTest {
 	final static int MAX_TEST_TIME_MS = 2000;
@@ -1210,5 +1211,60 @@ public class DHTClientTest {
 			remote.receivePacket().makeResponse(new ArrayList<>()).send();
 			assertTrue(Util.currentTimeMillis() - timeStart >= i*DHTClient.autoFindPeersIntervalMs);
 		}
+	}
+	
+	@Test
+	public void testPausesWhenNetDhtEnabledSetFalse() {
+		master.getGlobalConfig().set("net.dht.enabled", false);
+		assertTrue(Util.waitUntil(100, ()->client.socket.isClosed()));
+	}
+	
+	@Test
+	public void testUnpausesWhenNetDhtEnabledSetTrueFromFalse() {
+		master.getGlobalConfig().set("net.dht.enabled", false);
+		assertTrue(Util.waitUntil(100, ()->client.socket.isClosed()));
+		master.getGlobalConfig().set("net.dht.enabled", true);
+		assertTrue(Util.waitUntil(100, ()->!client.socket.isClosed()));
+	}
+	
+	@Test
+	public void testRebindsPortWhenNetDhtPortChanged() {
+		int newPort = client.getPort() + 1;
+		master.getGlobalConfig().set("net.dht.port", newPort);
+		assertTrue(Util.waitUntil(100, ()->client.getPort() == newPort));
+	}
+	
+	@Test
+	public void testDoesNotUPnPForwardIfNetDhtUpnpNotEnabled() {
+		assertFalse(UPnP.isMappedUDP(client.getPort()));
+	}
+	
+	@Test
+	public void testUsesUPnPForwardIfNetDhtUpnpEnabledBeforeInit() {
+		client.close();
+		
+		master.getGlobalConfig().set("net.dht.upnp", true);
+		master.getGlobalConfig().set("net.dht.enabled", true);
+		client = new DHTClient(storageKey, master);
+		assertTrue(Util.waitUntil(100, ()->client.getPort() > 0));
+		assertTrue(Util.waitUntil(100, ()->UPnP.isMappedUDP(client.getPort())));
+	}
+
+	@Test
+	public void testUsesUPnPForwardIfNetDhtUpnpEnabledAfterInit() {
+		master.getGlobalConfig().set("net.dht.upnp", true);
+		assertTrue(Util.waitUntil(100, ()->UPnP.isMappedUDP(client.getPort())));
+	}
+	
+	@Test
+	public void testUpdatesUPnPIfPortChanged() {
+		int oldPort = client.getPort();
+		master.getGlobalConfig().set("net.dht.upnp", true);
+		assertTrue(Util.waitUntil(100, ()->UPnP.isMappedUDP(oldPort)));
+		
+		int newPort = client.getPort() + 1;
+		master.getGlobalConfig().set("net.dht.port", newPort);
+		assertTrue(Util.waitUntil(100, ()->!UPnP.isMappedUDP(oldPort)));
+		assertTrue(Util.waitUntil(100, ()->UPnP.isMappedUDP(newPort)));
 	}
 }

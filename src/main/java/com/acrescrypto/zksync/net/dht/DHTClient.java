@@ -10,6 +10,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedList;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,11 +26,13 @@ import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
+import com.dosse.upnp.UPnP;
 
 public class DHTClient {
 	public final static int AUTH_TAG_SIZE = 4;
@@ -91,12 +94,13 @@ public class DHTClient {
 	protected Thread socketListenerThread;
 	protected ThreadGroup threadGroup;
 	protected GroupedThreadPool threadPool;
-	protected boolean closed, initialized;
+	protected boolean closed, paused, initialized;
 	protected DHTStatusCallback statusCallback;
 	protected int bindPort;
 	protected int lastStatus = STATUS_OFFLINE;
 	protected byte[] networkId;
 	protected FS storage;
+	protected LinkedList<SubscriptionToken<?>> subscriptions = new LinkedList<>();
 	
 	protected ArrayList<DHTMessageStub> pendingRequests;
 	
@@ -122,12 +126,63 @@ public class DHTClient {
 
 		this.store = new DHTRecordStore(this);
 		this.routingTable = new DHTRoutingTable(this);
+		
+		setupSubscriptions();
+		if(master.getGlobalConfig().getBool("net.dht.enabled", false)) {
+			String addr = master.getGlobalConfig().getString("net.dht.bindaddress", "0.0.0.0");
+			int port = master.getGlobalConfig().getInt("net.dht.port", 0);
+			try {
+				listen(addr, port);
+			} catch (SocketException exc) {
+				logger.error("Unable to set up DHT socket on " + addr + ":" + port, exc);
+			}
+		}
 	}
 	
 	protected DHTClient() {}
 	
+	protected void setupSubscriptions() {
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.enabled").asBoolean(false, (enabled)->{
+			if(closed || enabled == isListening()) return;
+			if(enabled) {
+				try {
+					listen(bindAddress, bindPort);
+				} catch (SocketException exc) {
+					logger.error("Unable to open DHT socket", exc);
+				}
+			} else {
+				pause();
+			}
+		}));
+		
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.port").asInt(0, (port)->{
+			if(isListening() && getPort() != port) {
+				bindPort = port;
+				try {
+					openSocket();
+				} catch (SocketException exc) {
+					logger.error("Unable to open DHT socket when rebinding to port " + port, exc);
+				}
+			}
+		}));
+		
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.upnp").asBoolean(false, (enabled)->{
+			if(enabled) {
+				checkUPnP();
+			} else if(getPort() > 0 && UPnP.isMappedUDP(getPort())) {
+				UPnP.closePortTCP(getPort());
+			}
+		}));
+	}
+	
+	protected boolean isListening() {
+		return !paused && socket != null;
+	}
+	
 	public DHTClient listen(String address, int port) throws SocketException {
-		this.bindAddress = address == null ? "0.0.0.0" : address;
+		closed = paused = false;
+		
+		this.bindAddress = address == null ? master.getGlobalConfig().getString("net.dht.bindaddress", "0.0.0.0") : address;
 		this.bindPort = port;
 		openSocket();
 
@@ -169,7 +224,7 @@ public class DHTClient {
 	public void autoFindPeers() {
 		new Thread(threadGroup, ()->{
 			Util.setThreadName("DHTClient autoFindPeers");
-			while(!closed) {
+			while(!paused) {
 				Util.blockOn(()->routingTable.allPeers().isEmpty());
 				findPeers();
 				Util.sleep(autoFindPeersIntervalMs);
@@ -220,14 +275,30 @@ public class DHTClient {
 		return crypto.hashLength();
 	}
 	
-	public void close() {
-		closed = true;
-		threadPool.shutdownNow();
+	public void pause() {
+		paused = true;
+		int port = getPort();
+		
 		if(socket != null) {
 			socket.close();
 		}
-		
+
+		if(port > 0 && master.getGlobalConfig().getBool("net.dht.upnp", false)) {
+			UPnP.closePortUDP(port);
+		}
+	}
+	
+	public void close() {
+		pause();
+		closed = true;
+		threadPool.shutdownNow();
 		routingTable.close();
+		
+		for(SubscriptionToken<?> token : subscriptions) {
+			token.close();
+		}
+		
+		subscriptions.clear();
 	}
 	
 	public boolean isInitialized() {
@@ -241,7 +312,7 @@ public class DHTClient {
 	}
 	
 	protected void openSocket() throws SocketException {
-		if(closed) return;
+		if(paused) return;
 		InetAddress addr;
 		try {
 			addr = InetAddress.getByName(bindAddress);
@@ -251,12 +322,18 @@ public class DHTClient {
 		
 		updateStatus(STATUS_ESTABLISHING);
 		if(socket != null && !socket.isClosed()) {
+			int oldPort = socket.getLocalPort();
 			socket.close();
+			if(oldPort != bindPort && master.getGlobalConfig().getBool("net.dht.upnp", false)) {
+				UPnP.closePortUDP(oldPort);
+			}
 		}
 		
 		try {
 			socket = new DatagramSocket(bindPort, addr);
 			socket.setReuseAddress(true);
+			master.getGlobalConfig().set("net.dht.port", socket.getLocalPort());
+			checkUPnP();
 			updateStatus(STATUS_QUESTIONABLE);
 		} catch(SocketException exc) {
 			updateStatus(STATUS_OFFLINE);
@@ -264,11 +341,17 @@ public class DHTClient {
 		}
 	}
 	
+	protected void checkUPnP() {
+		if(master.getGlobalConfig().getBool("net.dht.upnp", false) && socket != null && !paused) {
+			UPnP.openPortUDP(getPort());
+		}
+	}
+	
 	protected void socketListener() {
 		Util.setThreadName("DHTClient socketListener " + Util.bytesToHex(key.publicKey().getBytes(), 4) + " " + getPort());
 		int lastPort = -1;
 		
-		while(!closed) {
+		while(!paused) {
 			try {
 				if(socket == null) {
 					Util.sleep(10);
@@ -284,7 +367,7 @@ public class DHTClient {
 				ByteBuffer buf = ByteBuffer.wrap(packet.getData(), 0, packet.getLength());
 				processMessage(packet.getAddress().getHostAddress(), packet.getPort(), buf);
 			} catch(IOException exc) {
-				if(closed) return;
+				if(paused) return;
 				if(socket.getLocalPort() == lastPort && !socket.isClosed()) {
 					logger.error("DHT socket listener thread encountered IOException", exc);
 				} else {
@@ -318,7 +401,7 @@ public class DHTClient {
 	}
 	
 	protected synchronized void sendDatagram(DatagramPacket packet) {
-		if(closed) return;
+		if(paused) return;
 		for(int i = 0; i < 2; i++) {
 			try {
 				socket.send(packet);
@@ -326,7 +409,7 @@ public class DHTClient {
 				break;
 			} catch (IOException exc) {
 				// TODO API: (coverage) exception
-				if(closed) return;
+				if(paused) return;
 				if(i == 0) {
 					logger.warn("Encountered exception sending on DHT socket; retrying", exc);
 					try {
@@ -614,6 +697,10 @@ public class DHTClient {
 	
 	public boolean isClosed() {
 		return closed;
+	}
+	
+	public boolean isPaused() {
+		return paused;
 	}
 	
 	public DHTRoutingTable getRoutingTable() {

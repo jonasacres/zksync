@@ -29,6 +29,7 @@ import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.RateLimitedInputStream;
 import com.acrescrypto.zksync.utility.RateLimitedOutputStream;
 import com.acrescrypto.zksync.utility.Util;
+import com.dosse.upnp.UPnP;
 
 public class TCPPeerSocketListener {
 	public final static int MAX_RECENT_PROOFS = 128;
@@ -86,6 +87,16 @@ public class TCPPeerSocketListener {
 				startListening(master.getGlobalConfig().getInt("net.swarm.port", 0));
 			}
 		});
+		
+		master.getGlobalConfig().subscribe("net.swarm.upnp").asBoolean(false, (enabled)->{
+			if(enabled && isListening()) {
+				if(!UPnP.isMappedTCP(port)) {
+					UPnP.openPortTCP(port);
+				}
+			} else if(port != 0 && UPnP.isMappedTCP(port)) {
+				UPnP.closePortTCP(port);
+			}
+		});
 	}
 	
 	protected void startListening(int port) {
@@ -108,7 +119,11 @@ public class TCPPeerSocketListener {
 		if(closed) return;
 		closed = true;
 		if(listenSocket != null) {
+			listenSocket.getLocalPort();
 			listenSocket.close();
+			if(master.getGlobalConfig().getBool("net.swarm.upnp", false)) {
+				UPnP.closePortTCP(port);
+			}
 		}
 	}
 	
@@ -176,6 +191,9 @@ public class TCPPeerSocketListener {
 		try {
 			listenSocket = new ServerSocket(port);
 			listenSocket.setReuseAddress(true);
+			if(master.getGlobalConfig().getBool("net.swarm.upnp", false)) {
+				UPnP.openPortTCP(listenSocket.getLocalPort());
+			}
 		} catch(IOException exc) {
 			if(requestedPort != 0 || port == 0) {
 				logger.warn("Caught exception requesting port {}; waiting to retry...", port, exc);

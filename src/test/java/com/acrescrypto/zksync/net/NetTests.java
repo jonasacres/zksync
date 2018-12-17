@@ -21,6 +21,7 @@ import com.acrescrypto.zksync.net.noise.NoiseTests;
 	TCPPeerSocketTest.class,
 	PeerConnectionTest.class,
 	RequestPoolTest.class,
+	UPnPTest.class
 })
 
 public class NetTests {

@@ -12,7 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class SubscriptionService {
-	class SubscriptionToken<T> implements AutoCloseable {
+	public class SubscriptionToken<T> implements AutoCloseable {
 		String key;
 		SubscriptionCallback<T> callback;
 		T defaultValue;

@@ -35,6 +35,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.noise.HandshakeState;
 import com.acrescrypto.zksync.utility.Util;
+import com.dosse.upnp.UPnP;
 
 public class TCPPeerSocketListenerTest {
 	class DummySwarm extends PeerSwarm {
@@ -340,5 +341,42 @@ public class TCPPeerSocketListenerTest {
 		HandshakeState handshake = peerSocket.setupHandshakeState();
 		handshake.handshake(peerSocket.in, peerSocket.out);
 		assertEquals(PeerConnection.PEER_TYPE_FULL, peerSocket.getPeerType());
+	}
+	
+	
+	// TODO: capability to stub these out... don't need live queries!
+	@Test
+	public void testDoesNotInvokeUPnPIfDisabled() {
+		assertFalse(UPnP.isMappedTCP(listener.getPort()));
+	}
+	
+	@Test
+	public void testOpensUPnPWhenEnabledAfterInit() {
+		master.getGlobalConfig().set("net.swarm.upnp", true);
+		Util.waitUntil(1000, ()->UPnP.isMappedTCP(listener.getPort()));
+	}
+	
+	@Test
+	public void testOpensUPnPWhenEnabledBeforeInit() throws IOException {
+		listener.close();
+		master.getGlobalConfig().set("net.swarm.upnp", true);
+		listener = new TCPPeerSocketListener(master, 0);
+		Util.waitUntil(1000, ()->UPnP.isMappedTCP(listener.getPort()));
+	}
+	
+	@Test
+	public void testClosesUPnPAtCloseTime() throws IOException {
+		master.getGlobalConfig().set("net.swarm.upnp", true);
+		Util.waitUntil(1000, ()->UPnP.isMappedTCP(listener.getPort()));
+		listener.close();
+		Util.waitUntil(1000, ()->!UPnP.isMappedTCP(listener.getPort()));
+	}
+	
+	@Test
+	public void testClosesUPnPWhenDisabled() throws IOException {
+		master.getGlobalConfig().set("net.swarm.upnp", true);
+		Util.waitUntil(1000, ()->UPnP.isMappedTCP(listener.getPort()));
+		master.getGlobalConfig().set("net.swarm.upnp", false);
+		Util.waitUntil(1000, ()->!UPnP.isMappedTCP(listener.getPort()));
 	}
 }
