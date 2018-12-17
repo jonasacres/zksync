@@ -126,11 +126,6 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		dhtClient.autoFindPeers();
 	}
 	
-	// Expect this to be deprecated someday.
-	public void listenOnTCP(int port) throws IOException {
-		listener.startListening(port);
-	}
-	
 	public void getLocalKey() throws IOException {
 		Key ppKey;
 		do {

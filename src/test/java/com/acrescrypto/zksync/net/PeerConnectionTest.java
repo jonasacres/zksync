@@ -452,14 +452,14 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testAnnounceSelfWithoutAdDoesntAnnounceIfNoSwarmListener() throws IOException {
-		master.listenOnTCP(0);
+		master.getGlobalConfig().set("net.swarm.enabled", true);
 		conn.announceSelf();
 		assertNoMessage();
 	}
 	
 	@Test
 	public void testAnnounceSelfWIthoutAdAnnouncesLocalAdFromSwarmListener() throws IOException, UnconnectableAdvertisementException {
-		master.listenOnTCP(0);
+		master.getTCPListener().startListening(0);
 		master.getTCPListener().advertise(swarm);
 		TCPPeerAdvertisement ad = master.getTCPListener().listenerForSwarm(swarm).localAd();
 		conn.announceSelf(ad);

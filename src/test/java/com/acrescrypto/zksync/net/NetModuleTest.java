@@ -58,7 +58,7 @@ public class NetModuleTest {
 		ArchiveAccessor aAccessor = aMaster.makeAccessorForRoot(rootKey, false);
 		ZKArchiveConfig aConfig = ZKArchiveConfig.createDefault(aAccessor);
 		addMockData(aConfig.getArchive());
-		aMaster.listenOnTCP(0);
+		aMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
 		TCPPeerAdvertisement ad = aMaster.getTCPListener().listenerForSwarm(aConfig.getSwarm()).localAd();
 		
@@ -97,7 +97,7 @@ public class NetModuleTest {
 		ArchiveAccessor aAccessor = aMaster.makeAccessorForRoot(rootKey, false);
 		ZKArchiveConfig aConfig = ZKArchiveConfig.createDefault(aAccessor);
 		addMockData(aConfig.getArchive());
-		aMaster.listenOnTCP(0);
+		aMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
 		TCPPeerAdvertisement ad = aMaster.getTCPListener().listenerForSwarm(aConfig.getSwarm()).localAd();
 		
@@ -141,7 +141,7 @@ public class NetModuleTest {
 		ArchiveAccessor aAccessor = aMaster.makeAccessorForRoot(rootKey, false);
 		ZKArchiveConfig aConfig = ZKArchiveConfig.createDefault(aAccessor);
 		addMockData(aConfig.getArchive());
-		aMaster.listenOnTCP(0);
+		aMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
 		TCPPeerAdvertisement ad = aMaster.getTCPListener().listenerForSwarm(aConfig.getSwarm()).localAd();
 		
@@ -193,7 +193,7 @@ public class NetModuleTest {
 		fsa.write("path", crypto.rng(2*aConfig.getPageSize()));
 		fsa.commit();
 		
-		aMaster.listenOnTCP(0);
+		aMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
 		TCPPeerAdvertisement ad = aMaster.getTCPListener().listenerForSwarm(aConfig.getSwarm()).localAd();
 		
@@ -237,7 +237,7 @@ public class NetModuleTest {
 		fsa.commit();
 		Inode inode = fsa.inodeForPath("path0");
 		
-		aMaster.listenOnTCP(0);
+		aMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
 		TCPPeerAdvertisement ad = aMaster.getTCPListener().listenerForSwarm(aConfig.getSwarm()).localAd();
 		
@@ -275,7 +275,7 @@ public class NetModuleTest {
 		fsa.commit();
 		byte[] requestedTag = new PageTree(fsa.inodeForPath("path")).getPageTag(0);
 		
-		aMaster.listenOnTCP(0);
+		aMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
 		TCPPeerAdvertisement ad = aMaster.getTCPListener().listenerForSwarm(aConfig.getSwarm()).localAd();
 		
@@ -320,7 +320,7 @@ public class NetModuleTest {
 		fsa.write("2indirect", crypto.rng(5*aConfig.getPageSize()));
 		fsa.commit();
 		
-		aMaster.listenOnTCP(0);
+		aMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
 		TCPPeerAdvertisement ad = aMaster.getTCPListener().listenerForSwarm(aConfig.getSwarm()).localAd();
 		
@@ -360,7 +360,7 @@ public class NetModuleTest {
 		// initialize peers; 0 sets up the archive, everyone follow's 0's lead
 		for(int i = 0; i < numPeers; i++) {
 			masters[i] = ZKMaster.openBlankTestVolume("copy" + i);
-			masters[i].listenOnTCP(0);
+			masters[i].getGlobalConfig().set("net.swarm.enabled", true);
 
 			ArchiveAccessor accessor = masters[i].makeAccessorForRoot(rootKey, false);
 			if(i == 0) {
@@ -416,7 +416,7 @@ public class NetModuleTest {
 		
 		for(int i = 0; i < numPeers; i++) {
 			masters[i] = ZKMaster.openBlankTestVolume("copy" + i);
-			masters[i].listenOnTCP(0);
+			masters[i].getGlobalConfig().set("net.swarm.enabled", true);
 
 			ArchiveAccessor accessor = masters[i].makeAccessorForRoot(rootKey, false);
 			if(i == 0) {

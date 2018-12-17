@@ -24,17 +24,6 @@ import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionBui
  */
 public class ConfigFile {
 	/* want:
-	 * fs.squashIds
-	 * fs.default.fileMode
-	 * fs.default.directoryMode
-	 * fs.default.uid
-	 * fs.default.gid
-	 * fs.default.username
-	 * fs.default.groupname
-	 * 
-	 * net.limits.tx
-	 * net.limits.rx
-	 * 
 	 * net.blacklist.duration
 	 * 
 	 * net.swarm.port
@@ -205,5 +194,38 @@ public class ConfigFile {
 	public String getString(String key, String defaultValue) {
 		if(!hasKey(key)) return defaultValue;
 		return ((JsonString) info.get(key)).getString();
+	}
+
+	public HashMap<String, Object> asHash() {
+		HashMap<String,Object> r = new HashMap<>();
+		for(String key : info.keySet()) {
+			Object o = null;
+			
+			JsonValue v = info.get(key);
+			switch(v.getValueType()) {
+			case STRING:
+				o = new String(((JsonString) v).getString());
+				break;
+			case NUMBER:
+				if(((JsonNumber) v).isIntegral()) {
+					o = new Long(((JsonNumber) v).longValue());
+				} else {
+					o = new Double(((JsonNumber) v).doubleValue());
+				}
+				break;
+			case TRUE:
+				o = new Boolean(true);
+				break;
+			case FALSE:
+				o = new Boolean(false);
+				break;
+			default:
+				break;
+			}
+			
+			r.put(key, o);
+		}
+		
+		return r;
 	}
 }

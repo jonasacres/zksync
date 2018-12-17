@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.ByteBuffer;
 import java.util.LinkedList;
 
 import javax.json.Json;
@@ -20,7 +19,6 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
@@ -49,6 +47,16 @@ public class TCPPeerSocketListener {
 	protected BandwidthMonitor bandwidthMonitorTx, bandwidthMonitorRx;
 	
 	public TCPPeerSocketListener(ZKMaster master) throws IOException {
+		initMaster(master);
+		setupSubscriptions();
+	}
+	
+	protected TCPPeerSocketListener(ZKMaster master, int port) {
+		initMaster(master);
+		startListening(port);
+	}
+	
+	protected void initMaster(ZKMaster master) {
 		this.crypto = master.getCrypto();
 		this.blacklist = master.getBlacklist();
 		this.master = master;
@@ -58,14 +66,35 @@ public class TCPPeerSocketListener {
 		this.bandwidthMonitorTx = new BandwidthMonitor(master.getBandwidthMonitorTx());
 	}
 	
-	public TCPPeerSocketListener(ZKMaster master, int port) throws IOException {
-		this(master);
-		startListening(port);
+	protected void setupSubscriptions() {
+		master.getGlobalConfig().subscribe("net.swarm.enabled").asBoolean(false, (enabled)->{
+			if(enabled == isListening()) return;
+			if(enabled) {
+				startListening(master.getGlobalConfig().getInt("net.swarm.port", 0));
+			} else {
+				try {
+					close();
+				} catch (IOException e) {}
+			}
+		});
+		
+		master.getGlobalConfig().subscribe("net.swarm.port").asInt(0, (port)->{
+			if(isListening() && listenSocket.getLocalPort() != port) {
+				try {
+					close();
+				} catch (IOException e) {}
+				startListening(master.getGlobalConfig().getInt("net.swarm.port", 0));
+			}
+		});
 	}
 	
-	public void startListening(int port) {
+	protected void startListening(int port) {
 		this.requestedPort = port;
-		this.port = port == 0 ? cachedPort() : port;
+		if(port == 0 && master != null && master.getGlobalConfig() != null) {
+			this.port = master.getGlobalConfig().getInt("net.swarm.port", 0);
+		} else {
+			this.port = port;
+		}
 		closed = false;
 		this.thread = new Thread(master.getThreadGroup(), ()->listenThread() );
 		this.thread.start();
@@ -99,27 +128,6 @@ public class TCPPeerSocketListener {
 		}
 		
 		return null;
-	}
-		
-	protected MutableSecureFile cachedPortFile() {
-		// stealing blacklist's FS and key is a bit sneaky and un-kosher, but what the hell...
-		return MutableSecureFile.atPath(blacklist.fs, "tcp-port", blacklist.key.derive(0, new byte[0]));
-	}
-	
-	protected int cachedPort() {
-		try {
-			return ByteBuffer.wrap(cachedPortFile().read()).getInt();
-		} catch(Exception exc) { 
-			return 0;
-		}
-	}
-	
-	protected void cachePort() {
-		try {
-			cachedPortFile().write(ByteBuffer.allocate(4).putInt(port).array(), 0);
-		} catch (IOException exc) {
-			logger.warn("Caught exception attempting to write TCP port cache file", exc);
-		}
 	}
 	
 	protected void listenThread() {
@@ -182,7 +190,7 @@ public class TCPPeerSocketListener {
 	
 	protected synchronized void updatePortCache() {
 		this.port = listenSocket.getLocalPort();
-		cachePort();
+		master.getGlobalConfig().set("net.swarm.port", this.port);
 		logger.info("Listening for peers on TCP port {}", port);
 		for(TCPPeerAdvertisementListener listener : adListeners) {
 			listener.announce();

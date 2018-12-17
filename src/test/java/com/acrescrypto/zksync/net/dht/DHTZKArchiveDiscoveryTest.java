@@ -186,7 +186,7 @@ public class DHTZKArchiveDiscoveryTest {
 	public void testAdvertisementThreadListsSelfInDHTIfConfigFilePresentAndListenerOpen() throws IOException, UnconnectableAdvertisementException {
 		Util.setCurrentTimeMillis(100*ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS);
 		
-		master.listenOnTCP(0);
+		master.getGlobalConfig().set("net.swarm.enabled", true);
 		archive.getConfig().advertise();
 		discovery.discoverArchives(archive.getConfig().getAccessor());
 		assertTrue(Util.waitUntil(100, ()->client.records.size() > 0));
@@ -205,7 +205,7 @@ public class DHTZKArchiveDiscoveryTest {
 	
 	@Test
 	public void testAdvertisementThreadWaitsIntervalBetweenListings() throws IOException {
-		master.listenOnTCP(0);
+		master.getGlobalConfig().set("net.swarm.enabled", true);
 		discovery.advertisementIntervalMs = 50;
 		archive.getConfig().advertise();
 		discovery.discoverArchives(archive.getConfig().getAccessor());
@@ -231,7 +231,7 @@ public class DHTZKArchiveDiscoveryTest {
 	
 	@Test
 	public void testAdvertisementThreadDoesNotListSelfInDHTIfSwarmListenerNotOpen() throws IOException {
-		master.listenOnTCP(0);
+		master.getGlobalConfig().set("net.swarm.enabled", true);
 		discovery.discoverArchives(archive.getConfig().getAccessor());
 		assertFalse(Util.waitUntil(50, ()->client.records.size() > 0));
 	}
@@ -241,14 +241,14 @@ public class DHTZKArchiveDiscoveryTest {
 		archive.getConfig().advertise();
 		discovery.discoverArchives(archive.getConfig().getAccessor());
 		assertFalse(Util.waitUntil(50, ()->client.records.size() > 0));
-		master.listenOnTCP(0);
+		master.getGlobalConfig().set("net.swarm.enabled", true);
 		master.getTCPListener().advertise(archive.getConfig().getSwarm());
 		assertTrue(Util.waitUntil(50, ()->client.records.size() > 0));
 	}
 	
 	@Test
 	public void testForceUpdateTriggersImmediateAdvertisement() throws IOException {
-		master.listenOnTCP(0);
+		master.getGlobalConfig().set("net.swarm.enabled", true);
 		archive.getConfig().advertise();
 		discovery.advertisementIntervalMs = 1000;
 		discovery.discoverArchives(archive.getConfig().getAccessor());
@@ -262,7 +262,7 @@ public class DHTZKArchiveDiscoveryTest {
 	
 	@Test
 	public void testForceUpdateTriggersImmediateDiscovery() throws IOException {
-		master.listenOnTCP(0);
+		master.getGlobalConfig().set("net.swarm.enabled", true);
 		archive.getConfig().advertise();
 		discovery.discoveryIntervalMs = 1000;
 		discovery.discoverArchives(archive.getConfig().getAccessor());

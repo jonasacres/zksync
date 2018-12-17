@@ -69,7 +69,7 @@ public class IntegrationTest {
 	}
 	
 	void activateDHT(ZKMaster master, ZKArchiveConfig config) throws IOException {
-		master.listenOnTCP(0);
+		master.getGlobalConfig().set("net.swarm.enabled", true);
 		master.activateDHT("127.0.0.1", 0, root);
 		config.advertise();
 		config.getRevisionList().automergeDelayMs = 5;
@@ -137,7 +137,7 @@ public class IntegrationTest {
 		for(int i = 0; i < masters.length; i++) {
 			masters[i] = ZKMaster.openBlankTestVolume("test"+i);
 			archives[i] = masters[i].createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "test"+i);
-			masters[i].listenOnTCP(0);
+			masters[i].getGlobalConfig().set("net.swarm.enabled", true);
 			masters[i].activateDHT("127.0.0.1", 0, root);
 			archives[i].getConfig().advertise();
 			
@@ -151,7 +151,7 @@ public class IntegrationTest {
 		
 		// make a new master and look for that passphrase on the DHT and expect to find all of them
 		ZKMaster blankMaster = ZKMaster.openBlankTestVolume("blank");
-		blankMaster.listenOnTCP(0);
+		blankMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		blankMaster.activateDHT("127.0.0.1", 0, root);
 		ArchiveAccessor accessor = blankMaster.makeAccessorForPassphrase("zksync".getBytes());
 		accessor.discoverOnDHT();
@@ -189,7 +189,7 @@ public class IntegrationTest {
 		// first, make an original archive
 		ZKMaster originalMaster = ZKMaster.openBlankTestVolume("original");
 		ZKArchive originalArchive = originalMaster.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "an archive");
-		originalMaster.listenOnTCP(0);
+		originalMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		originalMaster.activateDHT("127.0.0.1", 0, root);
 		originalArchive.getConfig().advertise();
 		byte[] archiveId = originalArchive.getConfig().getArchiveId();
@@ -209,7 +209,7 @@ public class IntegrationTest {
 		// now make a seed-only peer
 		ZKMaster seedMaster = ZKMaster.openBlankTestVolume("seed");
 		ArchiveAccessor seedAccessor = seedMaster.makeAccessorForRoot(originalArchive.getConfig().getAccessor().getSeedRoot(), true);
-		seedMaster.listenOnTCP(0);
+		seedMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		seedMaster.activateDHT("127.0.0.1", 0, root);
 		seedAccessor.discoverOnDHT();
 		assertTrue(Util.waitUntil(3000, ()->seedAccessor.configWithId(archiveId) != null));
@@ -227,7 +227,7 @@ public class IntegrationTest {
 		// now make another peer with the passphrase
 		ZKMaster cloneMaster = ZKMaster.openBlankTestVolume("clone");
 		Util.sleep(1000);
-		cloneMaster.listenOnTCP(0);
+		cloneMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		cloneMaster.activateDHT("127.0.0.1", 0, root);
 		ArchiveAccessor cloneAccessor = cloneMaster.makeAccessorForPassphrase("zksync".getBytes());
 		cloneAccessor.discoverOnDHT();
@@ -372,7 +372,7 @@ public class IntegrationTest {
 		ZKArchive separateArch = separate.createDefaultArchive();
 		createInitialCommit(separateArch, masters.length);
 		
-		separate.listenOnTCP(0);
+		separate.getGlobalConfig().set("net.swarm.enabled", true);
 		separate.activateDHT("127.0.0.1", 0, root);
 		separate.getTCPListener().advertise(separateArch.getConfig().getSwarm());
 		separateArch.getConfig().getAccessor().discoverOnDHT();

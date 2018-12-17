@@ -9,7 +9,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
-import java.net.Socket;
 import java.util.Arrays;
 
 import org.junit.After;
@@ -21,7 +20,6 @@ import org.junit.Test;
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.utility.Util;
 
 public class ZKMasterTest {
 	ZKMaster master;
@@ -45,25 +43,6 @@ public class ZKMasterTest {
 	public static void afterAll() {
 		ZKFSTest.restoreArgon2Costs();
 		TestUtils.assertTidy();
-	}
-	
-	@Test
-	public void testListenOnTCPCreatesTCPListenerOnRequestedPort() throws IOException, InterruptedException {
-		class Holder { Socket socket; }
-		Holder holder = new Holder();
-		int port = 61919;
-		
-		master.listenOnTCP(port); // random; hopefully we don't step on anything
-		assertEquals(port, master.getTCPListener().getPort());
-		new Thread(()-> {
-			try {
-				holder.socket = new Socket("localhost", port);
-			} catch (Exception exc) {
-				exc.printStackTrace();
-			}
-		});
-		
-		Util.waitUntil(100, ()->holder.socket != null);
 	}
 	
 	@Test
