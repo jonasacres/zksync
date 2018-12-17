@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs.config;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.json.Json;
 import javax.json.JsonNumber;
@@ -44,7 +45,7 @@ public class ConfigFile {
 	 */
 	protected SubscriptionService sub = new SubscriptionService();
 	protected FS storage;
-	protected HashMap<String,JsonValue> info = new HashMap<>();
+	protected ConcurrentHashMap<String,JsonValue> info = new ConcurrentHashMap<>();
 	protected String path;
 	
 	protected Logger logger = LoggerFactory.getLogger(ConfigFile.class);
@@ -87,7 +88,7 @@ public class ConfigFile {
 		storage.write(path(), serialize());
 	}
 	
-	protected void writeQuietly() {
+	protected synchronized void writeQuietly() {
 		try {
 			storage.write(path(), serialize());
 		} catch(IOException exc) {
@@ -100,7 +101,7 @@ public class ConfigFile {
 		return sub.subscribe(key);
 	}
 	
-	public void set(String key, JsonValue value) {
+	public synchronized void set(String key, JsonValue value) {
 		info.put(key, value);
 		sub.updatedKey(key, value);
 		writeQuietly();

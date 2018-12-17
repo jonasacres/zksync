@@ -527,6 +527,7 @@ public class IntegrationTest {
 		if(!Util.waitUntil(20000, ()->{
 			RevisionTag firstLatest = archives[0].getConfig().getRevisionList().latest();
 			for(ZKArchive archive : archives) {
+				// TODO Urgent: (itf) 2018-12-17 UniversalTests Linux 656c833, NullPointerException
 				RevisionTag archLatest = archive.getConfig().getRevisionList().latest();
 				if(!firstLatest.equals(archLatest)) return false;
 			}
