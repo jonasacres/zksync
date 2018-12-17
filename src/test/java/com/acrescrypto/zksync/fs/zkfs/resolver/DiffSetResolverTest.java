@@ -191,7 +191,7 @@ public class DiffSetResolverTest {
 	@Test
 	public void testDefaultPicksLatestInode() throws IOException, DiffResolutionException {
 		// if a merge conflict between siblings, we should pick the latest version of an inode (by timestamp)
-		int numChildren = RevisionInfo.USABLE_SIZE/RevisionTag.sizeForConfig(archive.getConfig()) - 1,
+		int numChildren = RevisionInfo.USABLE_PARENT_SIZE/RevisionTag.sizeForConfig(archive.getConfig()) - 1,
 				r = (int) (numChildren*Math.random());
 		
 		for(int i = 0; i < numChildren; i++) {

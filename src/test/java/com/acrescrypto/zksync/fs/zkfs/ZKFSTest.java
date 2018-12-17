@@ -637,6 +637,21 @@ public class ZKFSTest extends FSTestBase {
 		assertFalse(notified.booleanValue());
 	}
 	
+	@Test
+	public void testRevisionTitleDefaultsToArchiveDescription() throws IOException {
+		assertEquals(zkscratch.getArchive().getConfig().getDescription(),
+				zkscratch.getRevisionInfo().getTitle());
+	}
+	
+	@Test
+	public void testRevisionTitleDefaultsToPreviousRevision() throws IOException {
+		zkscratch.getInodeTable().setNextTitle("testing");
+		zkscratch.commit();
+		assertEquals("testing", zkscratch.getRevisionInfo().getTitle());
+		zkscratch.commit();
+		assertEquals("testing", zkscratch.getRevisionInfo().getTitle());
+	}
+	
 	protected byte[] generateFileData(String key, int length) {
 		ByteBuffer buf = ByteBuffer.allocate(4);
 		buf.putInt(length);

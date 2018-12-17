@@ -36,6 +36,7 @@ public class InodeTable extends ZKFile {
 	protected RevisionInfo revision; /** current revision metadata */
 	protected FreeList freelist;
 	protected long nextInodeId; /** next inode ID to be issued when freelist is exhausted */
+	protected String pendingTitle;
 	
 	protected HashCache<Long,Inode[]> inodesByPage; /** in-memory cache of inode data */
 	
@@ -114,9 +115,29 @@ public class InodeTable extends ZKFile {
 		return revTag;
 	}
 	
+	/** Sets the title to be used for the next commit.
+	 * 
+	 * @param title New archive title
+	 */
+	public void setNextTitle(String title) {
+		this.pendingTitle = title;
+	}
+	
+	public String getNextTitle() {
+		if(pendingTitle != null) return pendingTitle;
+		if(revision != null) return revision.title;
+		return zkfs.getArchive().getConfig().getDescription();
+	}
+	
 	/** clear the old revision info and replace with a new one */
 	protected void updateRevisionInfo(Collection<RevisionTag> parents) throws IOException {
-		RevisionInfo newRevision = new RevisionInfo(this, parents, revision.generation+1);
+		String title = revision.title;
+		if(pendingTitle != null) {
+			title = pendingTitle;
+			pendingTitle = null;
+		}
+		
+		RevisionInfo newRevision = new RevisionInfo(this, parents, revision.generation+1, title);
 		revision = newRevision;
 	}
 	
@@ -390,7 +411,7 @@ public class InodeTable extends ZKFile {
 	/** initialize a blank top-level revision (i.e. one that has no ancestors) */
 	private void makeEmptyRevision() throws IOException {
 		ArrayList<RevisionTag> parents = new ArrayList<>();
-		revision = new RevisionInfo(this, parents, 0);
+		revision = new RevisionInfo(this, parents, 0, zkfs.getArchive().getConfig().getDescription());
 	}
 	
 	/** initialize a blank freelist */
