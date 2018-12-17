@@ -156,12 +156,14 @@ public class DHTClient {
 		}));
 		
 		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.port").asInt(0, (port)->{
-			if(isListening() && getPort() != port) {
-				bindPort = port;
-				try {
-					openSocket();
-				} catch (SocketException exc) {
-					logger.error("Unable to open DHT socket when rebinding to port " + port, exc);
+			synchronized(this) {
+				if(isListening() && getPort() != port) {
+					bindPort = port;
+					try {
+						openSocket();
+					} catch (SocketException exc) {
+						logger.error("Unable to open DHT socket when rebinding to port " + port, exc);
+					}
 				}
 			}
 		}));
