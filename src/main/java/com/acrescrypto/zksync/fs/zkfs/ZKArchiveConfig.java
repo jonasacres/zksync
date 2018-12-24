@@ -33,7 +33,6 @@ public class ZKArchiveConfig {
 		private static final long serialVersionUID = 1L;
 	}
 	
-	public final static int CONFIG_MAGIC = 0x6CF2AA14;
 	public final static int CONFIG_SECTION_ARCHIVE_INFO = 0x0001;
 		
 	protected byte[] archiveId; // derived from archive root; will later include public key
@@ -322,13 +321,7 @@ public class ZKArchiveConfig {
 	}
 	
 	protected byte[] serializeVersionPortion() {
-		byte[] effectiveArchiveId = new byte[accessor.master.crypto.hashLength()];
-		if(archiveId != null) effectiveArchiveId = archiveId;
-		
-		ByteBuffer versionInput = ByteBuffer.allocate(4+effectiveArchiveId.length);
-		versionInput.putInt(0);
-		versionInput.put(effectiveArchiveId);
-		return accessor.configFileTagKey.authenticate(versionInput.array()); 
+		return accessor.configFileTagKey.authenticate(Util.serializeInt(0)); 
 	}
 	
 	protected byte[] serializeSeedPortion() {
@@ -341,14 +334,12 @@ public class ZKArchiveConfig {
 	
 	protected byte[] serializeSecurePortion() {
 		byte[] descString = description.getBytes();
-		int headerSize = 4; // magic
 		int sectionHeaderSize = 2 + 4; // section_type + length
-		int archiveInfoSize = archiveRoot.getRaw().length + descString.length; // textRoot + authRoot + description
+		int archiveInfoSize = archiveRoot.getRaw().length + descString.length; // textRoot + description
 		
 		assertState(descString.length <= Short.MAX_VALUE);
 		
-		ByteBuffer buf = ByteBuffer.allocate(headerSize+sectionHeaderSize+archiveInfoSize);
-		buf.putInt(CONFIG_MAGIC);
+		ByteBuffer buf = ByteBuffer.allocate(sectionHeaderSize+archiveInfoSize);
 		buf.putShort((short) CONFIG_SECTION_ARCHIVE_INFO);
 		buf.putInt(archiveInfoSize);
 		buf.put(archiveRoot.getRaw());
@@ -371,7 +362,7 @@ public class ZKArchiveConfig {
 		
 		long pageSizeTemp = buf.getLong();
 		assertState(0 < pageSizeTemp && pageSizeTemp <= Integer.MAX_VALUE);
-		pageSize = (int) pageSizeTemp; // supporting long (2GB+) page sizes is not easy right now
+		pageSize = (int) pageSizeTemp; // supporting long (2GB+) page sizes is not easy right now, but let's leave room
 		
 		try {
 			this.pubKey = accessor.master.crypto.makePublicSigningKey(pubKeyBytes);
@@ -384,7 +375,6 @@ public class ZKArchiveConfig {
 	
 	protected void deserializeSecurePortion(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		assertState(buf.getInt() == CONFIG_MAGIC);
 		while(buf.hasRemaining()) {
 			assertState(buf.remaining() >= 6); // 2-byte type + 4-byte length
 			int type = Util.unsignShort(buf.getShort());
@@ -446,7 +436,7 @@ public class ZKArchiveConfig {
 	}
 	
 	protected byte[] calculateConfigFileIv(byte[] pubKeyBytes) {
-		return accessor.master.crypto.expand(accessor.seedRoot.getRaw(), accessor.master.crypto.symIvLength(), "zksync".getBytes(), pubKeyBytes);
+		return accessor.master.crypto.expand(accessor.seedRoot.getRaw(), accessor.master.crypto.symIvLength(), pubKeyBytes, "zksync".getBytes());
 	}
 	
 	protected void assertState(boolean state) {

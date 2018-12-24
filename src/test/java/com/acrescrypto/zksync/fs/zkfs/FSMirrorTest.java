@@ -111,12 +111,13 @@ public class FSMirrorTest {
 		Stat stat = modified.lstat(path);
 		assertEquals(expected.getType(), stat.getType());
 		
-		final int timeTolerance = 5*1000*1000*1000; // timestamps are in nanoseconds. allow 5s slop.
+		final int conversion = 1000*1000*1000;
+		final int timeTolerance = 10; // timestamps are in nanoseconds. allow 10s slop.
 		
 		if(!expected.isSymlink()) {
-			assertEquals(expected.getAtime(), stat.getAtime(), timeTolerance);
-			assertEquals(expected.getCtime(), stat.getCtime(), timeTolerance);
-			assertEquals(expected.getMtime(), stat.getMtime(), timeTolerance);
+			assertEquals(expected.getAtime()/conversion, stat.getAtime()/conversion, timeTolerance);
+			assertEquals(expected.getCtime()/conversion, stat.getCtime()/conversion, timeTolerance);
+			assertEquals(expected.getMtime()/conversion, stat.getMtime()/conversion, timeTolerance);
 			
 			if(Util.isSuperuser()) {
 				assertEquals(expected.getUid(), stat.getUid());

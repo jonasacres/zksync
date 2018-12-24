@@ -84,14 +84,12 @@ public class ZKArchiveConfigTest {
 			@Override
 			protected byte[] serializeSecurePortion() {
 				byte[] descString = description.getBytes();
-				int headerSize = 4; // magic
 				int sectionHeaderSize = 2 + 4; // section_type + length
 				int archiveInfoSize = 8 + archiveRoot.getRaw().length + descString.length; // pageSize + textRoot + authRoot + description
 				
 				assertState(descString.length <= Short.MAX_VALUE);
 				
-				ByteBuffer buf = ByteBuffer.allocate(headerSize+sectionHeaderSize+archiveInfoSize);
-				buf.putInt(CONFIG_MAGIC);
+				ByteBuffer buf = ByteBuffer.allocate(sectionHeaderSize+archiveInfoSize);
 				buf.putShort((short) CONFIG_SECTION_ARCHIVE_INFO);
 				buf.putInt(archiveInfoSize);
 				buf.putLong(newSize);
@@ -116,7 +114,6 @@ public class ZKArchiveConfigTest {
 				ByteBuffer securePortion = ByteBuffer.wrap(super.serializeSecurePortion());
 				
 				ByteBuffer buf = ByteBuffer.allocate(securePortion.limit() + 2 + 4 + actualSize);
-				buf.putInt(securePortion.getInt());
 				buf.putShort(Short.MAX_VALUE);
 				buf.putInt(statedSize);
 				buf.put(new byte[actualSize]);
@@ -210,23 +207,7 @@ public class ZKArchiveConfigTest {
 		writeModifiedPageSize(Integer.MAX_VALUE+1);
 		assertUnreadable(config, accessor);
 	}
-	
-	@Test
-	public void testRefuseBadMagic() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
-			@Override
-			protected byte[] serializeSecurePortion() {
-				byte[] serialized = super.serializeSecurePortion();
-				serialized[0] ^= 0x01;
-				return serialized;
-			}
-		};
-		
-		modified.write();
-		assertUnreadable(config, accessor);
-		modified.close();
-	}
-	
+
 	@Test
 	public void testRefuseBadArchivePubKey() throws IOException {
 		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
