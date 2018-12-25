@@ -37,6 +37,11 @@ public class TestUtils {
 			if(thread.getName().equals(name)) return true;
 		}
 		
+		// Since moving to JDK11, cached worker threads seem to wait 60s to close. Ugh! Just tolerate those...
+		if(backtrace.length > 0 && backtrace[0].getClassName().equals("jdk.internal.misc.Unsafe")) {
+			return true;
+		}
+		
 		return false;
 	}
 	
@@ -75,9 +80,19 @@ public class TestUtils {
 	public static void assertTidy() {
 		SnoozeThreadSupervisor.shared().prune(false);
 		// This is starting to get a bit ITFy... already had to bump the tolerance to 5000ms from 1000ms and lower.
-		if(!Util.waitUntil(5000, ()->isTidy())) {
-			System.out.println("Thread untidiness detected!");
-			Util.threadReport(true);
+		if(!Util.waitUntil(65000, ()->isTidy())) {
+			Map<Thread,StackTraceElement[]> traces = Thread.getAllStackTraces();
+			knownZombieThreads.clear();
+			for(Thread t : traces.keySet()) {
+				if(!isThreadAcceptable(t, traces.get(t))) {
+					System.out.println("Unacceptable thread: " + t);
+					for(StackTraceElement element : t.getStackTrace()) {
+						System.out.println("\t" + element);
+					}
+				}
+			}
+			// System.out.println("Thread untidiness detected!");
+			// Util.threadReport(true);
 			fail();
 		}
 	}

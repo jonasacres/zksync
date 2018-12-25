@@ -209,16 +209,16 @@ public class ConfigFile {
 				break;
 			case NUMBER:
 				if(((JsonNumber) v).isIntegral()) {
-					o = new Long(((JsonNumber) v).longValue());
+					o = Long.valueOf(((JsonNumber) v).longValue());
 				} else {
-					o = new Double(((JsonNumber) v).doubleValue());
+					o = Double.valueOf(((JsonNumber) v).doubleValue());
 				}
 				break;
 			case TRUE:
-				o = new Boolean(true);
+				o = Boolean.TRUE;
 				break;
 			case FALSE:
-				o = new Boolean(false);
+				o = Boolean.FALSE;
 				break;
 			default:
 				break;
