@@ -1,15 +1,24 @@
 package com.acrescrypto.zksync.crypto;
 
 import java.nio.ByteBuffer;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.ShortBufferException;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 import org.bouncycastle.crypto.BufferedBlockCipher;
 import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.engines.AESEngine;
 import org.bouncycastle.crypto.modes.CBCBlockCipher;
-import org.bouncycastle.crypto.modes.OCBBlockCipher;
-import org.bouncycastle.crypto.params.AEADParameters;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.params.ParametersWithIV;
 
@@ -161,8 +170,7 @@ public class CryptoSupport {
 					associatedData);
 		} catch (Exception exc) {
 			logger.error("Encountered exception encrypting data", exc);
-			System.exit(1);
-			return null; // unreachable, but it makes the compiler happy
+			throw new RuntimeException(exc);
 		}
 	}
 	
@@ -177,8 +185,7 @@ public class CryptoSupport {
 					associatedData);
 		} catch (Exception exc) {
 			logger.error("Encountered exception encrypting data", exc);
-			System.exit(1);
-			return null; // unreachable, but it makes the compiler happy
+			throw new RuntimeException(exc);
 		}
 	}
 	
@@ -258,21 +265,30 @@ public class CryptoSupport {
         		ad == null ? 0 : ad.length);
 	}
 	
-	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, int inOffset, int inLen, byte[] ad, int adOffset, int adLen) throws IllegalStateException, InvalidCipherTextException {
-        KeyParameter key = new KeyParameter(keyBytes);
-        AEADParameters params = new AEADParameters(key, tagLen, iv);
-        OCBBlockCipher cipher = new OCBBlockCipher(new AESEngine(), new AESEngine());
-        cipher.init(encrypt, params);
-
-		int offset = 0;
-		int outLen = cipher.getOutputSize(in != null ? inLen : 0);
-		byte[] out = new byte[outLen];
-		if(ad != null) cipher.processAADBytes(ad, adOffset, adLen);
-        if(in != null) offset = cipher.processBytes(in, inOffset, inLen, out, 0);
-        offset += cipher.doFinal(out, offset);
-        assert(offset == out.length);
-        
-        return out;
+	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] nonce, byte[] in, int inOffset, int inLen, byte[] ad, int adOffset, int adLen) throws IllegalStateException, InvalidCipherTextException {
+		try {
+			if(nonce.length < 12) {
+				byte[] newNonce = new byte[12];
+				System.arraycopy(nonce, 0, newNonce, 0, nonce.length);
+				nonce = newNonce;
+			}
+			
+			Cipher cipher = Cipher.getInstance("ChaCha20-Poly1305");
+			IvParameterSpec ivSpec = new IvParameterSpec(nonce);
+			SecretKeySpec keySpec = new SecretKeySpec(keyBytes, "ChaCha20");
+			cipher.init(encrypt ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE, keySpec, ivSpec);
+			byte[] out = new byte[cipher.getOutputSize(inLen)];
+			int offset = 0;
+			if(ad != null) cipher.updateAAD(ad, adOffset, adLen);
+			if(in != null) offset += cipher.update(in, inOffset, inLen, out, 0);
+			cipher.doFinal(out, offset);
+			return out;
+		} catch(BadPaddingException exc) {
+			throw new SecurityException(exc);
+		} catch (ShortBufferException|InvalidKeyException|NoSuchAlgorithmException|NoSuchPaddingException|IllegalBlockSizeException|InvalidAlgorithmParameterException exc) {
+			exc.printStackTrace();
+			throw new RuntimeException(exc);
+		}
 	}
 	
 	protected static byte[] processOrdinaryCipher(boolean encrypt, byte[] keyBytes, byte[] iv, byte[] in, int offset, int length) throws IllegalStateException {
@@ -373,7 +389,7 @@ public class CryptoSupport {
 	}
 	
 	public int symIvLength() {
-		return 64/8; // 64-bit IV (note: this is for AEAD, do not use for CBC mode)
+		return 96/8;
 	}
 	
 	public int symTagLength() {

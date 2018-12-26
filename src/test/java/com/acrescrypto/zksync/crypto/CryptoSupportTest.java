@@ -56,44 +56,6 @@ public class CryptoSupportTest  {
 		}
 	}
 
-	@Test
-	public void testEncrypt128() {
-		/* these are 128-bit test vectors, and we use 256-bit for zksync, but at least this exercises
-		 * the code and ensures it matches something.
-		 * 
-		 * Really, now that we have a good 256-bit test, this can probably go away. It's a fast test and
-		 * it does kick the tires on the underlying crypto library a bit, even if it's a shorter key than
-		 * zksync uses. If we switch crypto libraries and don't get 128-bit support, we can ditch this. 
-		 * */
-		byte[][][] vectors = aes128OCBTestVectors();
-		for(byte[][] vector : vectors) {
-			byte[] ciphertext = crypto.encrypt(vector[0], vector[1], vector[3], vector[2], -1);
-			assertTrue(Arrays.equals(ciphertext, vector[4]));
-		}
-	}
-
-	@Test
-	public void testEncrypt256() {
-		// http://tools.ietf.org/html/rfc7253, Appendix A, page 17
-		byte[] key = concat(new byte[31], num2str(128, 8));
-		byte[] ciphertext = new byte[0];
-
-		for(int i = 0; i < 128; i++) {
-			byte[] s = new byte[i];
-			byte[] nonce = num2str(3*i+1, 96);
-			ciphertext = concat(ciphertext, ocbencrypt(key, nonce, s, s));
-			nonce = num2str(3*i+2, 96);
-			ciphertext = concat(ciphertext, ocbencrypt(key, nonce, null, s));
-			nonce = num2str(3*i+3, 96);
-			ciphertext = concat(ciphertext, ocbencrypt(key, nonce, s, null));
-		}
-
-		byte[] nonce = num2str(385, 96);
-		byte[] result = ocbencrypt(key, nonce, ciphertext, null);
-		byte[] expected = Util.hexToBytes("D90EB8E9C977C88B79DD793D7FFA161C");
-		assertTrue(Arrays.equals(expected, result));
-	}
-
 	protected byte[] num2str(int n, int len) {
 		byte[] str = new byte[len/8];
 		int i = 0;
@@ -113,7 +75,7 @@ public class CryptoSupportTest  {
 		return c;
 	}
 
-	protected byte[] ocbencrypt(byte[] key, byte[] nonce, byte[] associatedData, byte[] plaintext) {
+	protected byte[] aeadEncrypt(byte[] key, byte[] nonce, byte[] associatedData, byte[] plaintext) {
 		return crypto.encrypt(key, nonce, plaintext, associatedData, -1);
 	}
 
@@ -133,7 +95,8 @@ public class CryptoSupportTest  {
 		byte[] key = crypto.rng(crypto.symKeyLength()),
 				iv = crypto.rng(crypto.symIvLength()),
 				plaintext = "nice day out".getBytes(),
-				recovered =crypto.decrypt(key, iv, crypto.encrypt(key, iv, plaintext, null, 65536), null, true);
+				ciphertext = crypto.encrypt(key, iv, plaintext, null, 65536),
+				recovered = crypto.decrypt(key, iv, ciphertext, null, true);
 		assertTrue(Arrays.equals(recovered, plaintext));
 	}
 
@@ -144,35 +107,6 @@ public class CryptoSupportTest  {
 				plaintext = "nice day out".getBytes(),
 				recovered =crypto.decrypt(key, iv, crypto.encrypt(key, iv, plaintext, null, 0), null, true);
 		assertTrue(Arrays.equals(recovered, plaintext));
-	}
-
-	@Test
-	public void testDecrypt128() {
-		// reference vectors again, going the other way
-		byte[][][] vectors = aes128OCBTestVectors();
-		for(byte[][] vector : vectors) {
-			byte[] plaintext = crypto.decrypt(vector[0], vector[1], vector[4], vector[2], false);
-			assertTrue(Arrays.equals(plaintext, vector[3]));
-		}
-	}
-
-	@Test
-	public void testVerification() {
-		byte[][][] vectors = aes128OCBTestVectors();
-		for(byte[][] vector : vectors) {
-			byte[] molested = vector[4].clone();
-			byte offset = (byte) (vector[4][0] % molested.length), tweak = (byte) (1 << (vector[4][1] & 0x07));
-			if(offset < 0) offset += molested.length;
-			molested[offset] ^= tweak;
-			boolean caughtException = false;
-			try {
-				crypto.decrypt(vector[0], vector[1], molested, vector[2], false);
-			} catch(SecurityException e) {
-				caughtException = true;
-			}
-
-			assertTrue(caughtException);
-		}
 	}
 
 	@Test
@@ -347,124 +281,6 @@ public class CryptoSupportTest  {
 
 		assertTrue(Arrays.equals(expectedSecret, alice.sharedSecretRaw(bob.publicKey())));
 		assertTrue(Arrays.equals(expectedSecret, bob.sharedSecretRaw(alice.publicKey())));
-	}
-
-	private byte[][][] aes128OCBTestVectors() {
-		// Taken from RFC 7253 https://tools.ietf.org/html/rfc7253
-		return new byte[][][] { // key, nonce, ad, plaintext, ciphertext
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa99887766554433221100"),
-				Util.hexToBytes(""),
-				Util.hexToBytes(""),
-				Util.hexToBytes("785407bfffc8ad9edcc5520ac9111ee6")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa99887766554433221101"),
-				Util.hexToBytes("0001020304050607"),
-				Util.hexToBytes("0001020304050607"),
-				Util.hexToBytes("6820b3657b6f615a5725bda0d3b4eb3a257c9af1f8f03009")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa99887766554433221102"),
-				Util.hexToBytes("0001020304050607"),
-				Util.hexToBytes(""),
-				Util.hexToBytes("81017f8203f081277152fade694a0a00")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa99887766554433221103"),
-				Util.hexToBytes(""),
-				Util.hexToBytes("0001020304050607"),
-				Util.hexToBytes("45dd69f8f5aae72414054cd1f35d82760b2cd00d2f99bfa9")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa99887766554433221104"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("571d535b60b277188be5147170a9a22c3ad7a4ff3835b8c5701c1ccec8fc3358")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa99887766554433221105"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes(""),
-				Util.hexToBytes("8cf761b6902ef764462ad86498ca6b97")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa99887766554433221106"),
-				Util.hexToBytes(""),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("5ce88ec2e0692706a915c00aeb8b2396f40e1c743f52436bdf06d8fa1eca343d")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa99887766554433221107"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f1011121314151617"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f1011121314151617"),
-				Util.hexToBytes("1ca2207308c87c010756104d8840ce1952f09673a448a122c92c62241051f57356d7f3c90bb0e07f")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa99887766554433221108"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f1011121314151617"),
-				Util.hexToBytes(""),
-				Util.hexToBytes("6dc225a071fc1b9f7c69f93b0f1e10de")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa99887766554433221109"),
-				Util.hexToBytes(""),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f1011121314151617"),
-				Util.hexToBytes("221bd0de7fa6fe993eccd769460a0af2d6cded0c395b1c3ce725f32494b9f914d85c0b1eb38357ff")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa9988776655443322110a"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes("bd6f6c496201c69296c11efd138a467abd3c707924b964deaffc40319af5a48540fbba186c5553c68ad9f592a79a4240")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa9988776655443322110b"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes(""),
-				Util.hexToBytes("fe80690bee8a485d11f32965bc9d2a32")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa9988776655443322110c"),
-				Util.hexToBytes(""),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"),
-				Util.hexToBytes("2942bfc773bda23cabc6acfd9bfd5835bd300f0973792ef46040c53f1432bcdfb5e1dde3bc18a5f840b52e653444d5df")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa9988776655443322110d"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324252627"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324252627"),
-				Util.hexToBytes("d5ca91748410c1751ff8a2f618255b68a0a12e093ff454606e59f9c1d0ddc54b65e8628e568bad7aed07ba06a4a69483a7035490c5769e60")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa9988776655443322110e"),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324252627"),
-				Util.hexToBytes(""),
-				Util.hexToBytes("c5cd9d1850c141e358649994ee701b68")
-			},
-			{
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f"),
-				Util.hexToBytes("bbaa9988776655443322110f"),
-				Util.hexToBytes(""),
-				Util.hexToBytes("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021222324252627"),
-				Util.hexToBytes("4412923493c57d5de0d700f753cce0d1d2d95060122e9f15a5ddbfc5787e50b5cc55ee507bcb084e479ad363ac366b95a98ca5f3000b1479")
-			},
-		};
 	}
 
 	private byte[][][] blake2HkdfTestVectors() {
