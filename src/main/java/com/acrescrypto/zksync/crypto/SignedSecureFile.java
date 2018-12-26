@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.crypto;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import org.slf4j.Logger;
@@ -10,8 +9,10 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.Page;
+import com.acrescrypto.zksync.utility.Util;
 
 public class SignedSecureFile {
+	public final static int SALT_LEN = 16;
 	protected FS fs;
 	protected PrivateSigningKey privKey;
 	protected PublicSigningKey pubKey;
@@ -28,7 +29,7 @@ public class SignedSecureFile {
 	}
 	
 	public static int fileSize(CryptoSupport crypto, int padSize) {
-		return crypto.asymSignatureSize() + crypto.symPaddedCiphertextSize(padSize);
+		return SALT_LEN + crypto.asymSignatureSize() + crypto.symPaddedCiphertextSize(padSize);
 	}
 	
 	public SignedSecureFile(FS fs, Key textKey, Key authKey, PrivateSigningKey privKey) {
@@ -49,10 +50,18 @@ public class SignedSecureFile {
 	
 	public byte[] read(boolean verify) throws IOException {
 		try {
+			CryptoSupport crypto = textKey.getCrypto();
+
 			byte[] contents = fs.read(path());
 			if(!Arrays.equals(authKey.authenticate(contents), tag)) {
 				throw new SecurityException();
 			}
+			
+			byte[] salt = new byte[SALT_LEN];
+			System.arraycopy(contents, 0, salt, 0, SALT_LEN);
+			
+			byte[] derivedKeyRaw = crypto.expand(salt, crypto.symKeyLength(), textKey.getRaw(), "easysafe-tagged-file".getBytes());
+			Key derivedKey = new Key(crypto, derivedKeyRaw);
 			
 			int sigOffset = contents.length - pubKey.crypto.asymSignatureSize();
 			if(sigOffset < 0) {
@@ -65,7 +74,7 @@ public class SignedSecureFile {
 				}
 			}
 			
-			return textKey.decrypt(fixedIV(), contents, 0, sigOffset);
+			return derivedKey.decrypt(fixedIV(), contents, SALT_LEN, sigOffset - SALT_LEN);
 		} catch (IOException exc) {
 			throw new InaccessibleStorageException();
 		}
@@ -78,15 +87,19 @@ public class SignedSecureFile {
 	public byte[] write(byte[] plaintext, int padSize) throws IOException {
 		assert(privKey != null);
 		try {
-			byte[] ciphertext = textKey.encrypt(fixedIV(), plaintext, padSize);
-			byte[] signature = privKey.sign(ciphertext);
+			// TODO: (refactor) the multiple Util.concat calls here are pretty wasteful...
+			CryptoSupport crypto = textKey.getCrypto();
+			byte[] salt = crypto.expand(plaintext, SALT_LEN, "".getBytes(), "".getBytes());
+			byte[] derivedKeyRaw = crypto.expand(salt, crypto.symKeyLength(), textKey.getRaw(), "easysafe-tagged-file".getBytes());
+			Key derivedKey = new Key(crypto, derivedKeyRaw);
 			
-			ByteBuffer buf = ByteBuffer.allocate(ciphertext.length + signature.length);
-			buf.put(ciphertext);
-			buf.put(signature);
-			tag = authKey.authenticate(buf.array());
+			byte[] ciphertext = derivedKey.encrypt(fixedIV(), plaintext, padSize);
+			byte[] signature = privKey.sign(Util.concat(salt, ciphertext));
 			
-			fs.write(path(), buf.array());
+			byte[] output = Util.concat(salt, ciphertext, signature);
+			tag = authKey.authenticate(output);
+			
+			fs.write(path(), output);
 			fs.squash(path());
 			return tag;
 		} catch(IOException exc) {

@@ -154,7 +154,7 @@ public class Page {
 		ByteBuffer buf = ByteBuffer.allocate(12);
 		buf.putLong(file.getInode().getIdentity()); // no dedupe between files (do not use inode id, breaks diff merges)
 		buf.putInt(pageNum); // no dedupe within file
-		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_PAGE, buf.array());
+		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_ROOT, ArchiveAccessor.KEY_INDEX_PAGE, buf.array());
 	}
 	
 	/** key used to produce page tag (provides authentication of page contents) */

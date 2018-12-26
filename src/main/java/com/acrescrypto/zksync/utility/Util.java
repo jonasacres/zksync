@@ -23,21 +23,25 @@ public class Util {
 	}
 	
 	public static synchronized void hexdump(String caption, byte[] data) {
+		hexdump(caption, data, 0, data.length);
+	}
+	
+	public static synchronized void hexdump(String caption, byte[] data, int offset, int len) {
 		if(data == null) {
 			System.out.printf("%s (null, no fingerprint)\n", caption);
 			return;
 		}
 
-		System.out.printf("%s (%d bytes, fingerprint %s)\n", caption, data.length, fingerprint(data));
+		System.out.printf("%s (%d bytes, fingerprint %s)\n", caption, len, fingerprint(data, offset, len));
 		
-		for(int i = 0; i <= 16 * (int) Math.ceil((double) data.length/16); i++) {
+		for(int i = 0; i <= 16 * (int) Math.ceil((double) len/16); i++) {
 			if((i % 16) == 0) {
 				if(i != 0) {
 					System.out.print("  |");
 					for(int j = 0; j < 16; j++) {
-						byte b = i+j-16 < data.length ? data[i+j-16] : 0;
+						byte b = i+j-16 < len ? data[offset+i+j-16] : 0;
 						char c = '.';
-						if(b >= 0x20 && b < 0x80) c = (char) b;
+						if(b >= 0x20 && b < 0x7f) c = (char) b;
 						System.out.printf("%c", c);
 					}
 					System.out.println("|");
@@ -46,7 +50,7 @@ public class Util {
 				System.out.printf("%04x  ", i);
 			}
 
-			if(i < data.length) System.out.printf("%02x", data[i]);
+			if(i < len) System.out.printf("%02x", data[offset+i]);
 			else System.out.print("  ");
 			if((i % 2) == 1) System.out.print(" ");
 			if((i % 8) == 7) System.out.print(" ");
@@ -56,8 +60,8 @@ public class Util {
 		System.out.println();
 	}
 
-	public static String fingerprint(byte[] data) {
-		return bytesToHex((new HashContext(data)).finish()).substring(0, 8);
+	public static String fingerprint(byte[] data, int offset, int len) {
+		return bytesToHex((new HashContext()).update(data, offset, len).finish()).substring(0, 8);
 	}
 
 	public static byte[] hexToBytes(String s) {

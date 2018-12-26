@@ -137,7 +137,7 @@ public class PageTreeChunk {
 		buf.putLong(index);
 		
 		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
-				ArchiveAccessor.KEY_TYPE_CIPHER,
+				ArchiveAccessor.KEY_TYPE_ROOT,
 				ArchiveAccessor.KEY_INDEX_PAGE,
 				buf.array());
 	}
