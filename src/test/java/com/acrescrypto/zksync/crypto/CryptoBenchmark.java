@@ -25,6 +25,15 @@ public class CryptoBenchmark {
 	}
 	
 	@Test
+	public void testDerivationBenchmark() {
+		byte[] passphrase = "pAssword1".getBytes();
+		
+		Benchmarks.run("derivations", (i)->{
+			crypto.deriveKeyFromPassphrase(passphrase);
+		});
+	}
+	
+	@Test
 	public void testSymmetricEncryptThroughputNoADNoPad() {
 		byte[] oneMiB = new byte[1024*1024];
 		

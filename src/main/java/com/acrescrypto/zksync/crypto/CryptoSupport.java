@@ -4,7 +4,6 @@ import java.nio.ByteBuffer;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -26,10 +25,9 @@ import org.slf4j.LoggerFactory;
 
 import org.slf4j.Logger;
 
-import de.mkammerer.argon2.Argon2Factory;
 import de.mkammerer.argon2.jna.Argon2Library;
+import de.mkammerer.argon2.jna.JnaUint32;
 import de.mkammerer.argon2.jna.Size_t;
-import de.mkammerer.argon2.jna.Uint32_t;
 
 public class CryptoSupport {
 	private PRNG defaultPrng;
@@ -37,11 +35,11 @@ public class CryptoSupport {
 	
 	public static boolean cheapArgon2; // set to true for tests, false otherwise
 	
-	public final static int ARGON2_TIME_COST = 4;
-	public final static int ARGON2_MEMORY_COST = 65536;
-	public final static int ARGON2_PARALLELISM = 1;
+	public final static int ARGON2_TIME_COST = 32; // iterations
+	public final static int ARGON2_MEMORY_COST = 65536;  // KiB
+	public final static int ARGON2_PARALLELISM = 1; // threads
 	
-	public final static byte[] PASSPHRASE_SALT = "zksync-salt".getBytes();
+	public final static byte[] PASSPHRASE_SALT = "easysafe-argon2-salt".getBytes();
 	
 	public static CryptoSupport defaultCrypto() {
 		return new CryptoSupport();
@@ -52,31 +50,30 @@ public class CryptoSupport {
 	}
 	
 	public byte[] deriveKeyFromPassphrase(byte[] passphrase, byte[] salt) {
-        final Uint32_t iterations = new Uint32_t(cheapArgon2 ? 1 : ARGON2_TIME_COST);
-        final Uint32_t memory = new Uint32_t(cheapArgon2 ? 8 : ARGON2_MEMORY_COST);
-        final Uint32_t parallelism = new Uint32_t(ARGON2_PARALLELISM);
-        final Uint32_t hashLen = new Uint32_t(symKeyLength());
-
-        int len = Argon2Library.INSTANCE.argon2_encodedlen(iterations, memory, parallelism,
-                new Uint32_t(salt.length), hashLen, Argon2Factory.Argon2Types.ARGON2i.ordinal).intValue();
-        byte[] encoded = new byte[len];
+        JnaUint32 iterations = new JnaUint32(cheapArgon2 ? 1 : ARGON2_TIME_COST);
+        JnaUint32 memory = new JnaUint32(cheapArgon2 ? 8 : ARGON2_MEMORY_COST);
+        JnaUint32 parallelism = new JnaUint32(ARGON2_PARALLELISM);
+        JnaUint32 hashLen = new JnaUint32(symKeyLength());
         
-        int result = Argon2Library.INSTANCE.argon2i_hash_encoded(
-                iterations, memory, parallelism, passphrase, new Size_t(passphrase.length),
-                salt, new Size_t(salt.length), new Size_t(hashLen.intValue()), encoded, new Size_t(encoded.length)
+        byte[] key = new byte[symKeyLength()];
+        
+        int result = Argon2Library.INSTANCE.argon2d_hash_raw(
+                iterations,
+                memory, 
+                parallelism,
+                passphrase,
+                new Size_t(passphrase.length),
+                salt,
+                new Size_t(salt.length),
+                key,
+                new Size_t(hashLen.intValue())
         );
 
-        if (result != Argon2Library.ARGON2_OK) {
+        if(result != Argon2Library.ARGON2_OK) {
             String errMsg = Argon2Library.INSTANCE.argon2_error_message(result);
             throw new IllegalStateException(String.format("%s (%d)", errMsg, result));
         }
         
-        String[] comps = (new String(encoded)).split("\\$");
-        String base64 = comps[5];
-        if(base64.charAt(base64.length()-1) == 0x00) base64 = base64.substring(0, base64.length()-1);
-        byte[] key = {};
-		key = Base64.getDecoder().decode(base64);
-		
         return key;
 	}
 	
