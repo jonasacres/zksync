@@ -321,7 +321,7 @@ public class ZKArchiveConfig {
 	}
 	
 	protected byte[] serializeVersionPortion() {
-		return accessor.configFileTagKey.authenticate(Util.serializeInt(0)); 
+		return accessor.configFileTagKey.authenticate("easysafe-version:0".getBytes()); 
 	}
 	
 	protected byte[] serializeSeedPortion() {
