@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -229,17 +228,11 @@ public class ArchiveAccessor {
 	}
 	
 	public byte[] temporalSeedId(int offset) {
-		return temporalSeedDerivative(true, offset).authenticate("dht-seed".getBytes());
-	}
-	
-	protected Key temporalSeedKey(int offset) {
-		return temporalSeedDerivative(false, offset);
-	}
-	
-	protected Key temporalSeedDerivative(boolean isAuth, int offset) {
-		ByteBuffer timeTweak = ByteBuffer.allocate(8);
-		timeTweak.putLong(timeSlice(offset));
-		return deriveKey(KEY_ROOT_SEED, isAuth ? KEY_TYPE_AUTH : KEY_TYPE_CIPHER, KEY_INDEX_SEED_TEMPORAL, timeTweak.array());
+		return master.crypto.expand(
+				seedRoot.getRaw(),
+				master.crypto.hashLength(),
+				Util.serializeLong(timeSlice(offset)),
+				"easysafe-temporal-seed-id".getBytes());
 	}
 	
 	public int timeSliceIndex() {
