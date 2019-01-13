@@ -130,7 +130,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		Key ppKey;
 		do {
 			byte[] passphrase = passphraseProvider.requestPassphrase("ZKSync storage passphrase");
-			ppKey = new Key(crypto, crypto.deriveKeyFromPassphrase(passphrase));
+			ppKey = new Key(crypto, crypto.deriveKeyFromPassphrase(passphrase, CryptoSupport.PASSPHRASE_SALT_LOCAL));
 		} while(!attemptPassphraseKey(ppKey));
 	}
 	
@@ -192,7 +192,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	public ZKArchive createArchiveWithWriteRoot(int pageSize, String description) throws IOException {
 		byte[] passphrase = passphraseProvider.requestPassphrase("Passphrase for reading new archive '" + description + "'");
 		byte[] writePassphrase = passphraseProvider.requestPassphrase("Passphrase for writing new archive '" + description + "'");
-		Key writeRoot = new Key(crypto, crypto.deriveKeyFromPassphrase(writePassphrase));
+		Key writeRoot = new Key(crypto, crypto.deriveKeyFromPassphrase(writePassphrase, CryptoSupport.PASSPHRASE_SALT_WRITE));
 		
 		ArchiveAccessor accessor = makeAccessorForPassphrase(passphrase);
 		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, description, pageSize, accessor.passphraseRoot, writeRoot);
@@ -201,8 +201,8 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public ZKArchive createArchiveWithPassphrase(int pageSize, String description, byte[] readPassphrase, byte[] writePassphrase) throws IOException {
 		// TODO API: (test) createArchiveWithPassphrase
-		Key writeRoot = new Key(crypto, crypto.deriveKeyFromPassphrase(writePassphrase));
-		Key readRoot = new Key(crypto, crypto.deriveKeyFromPassphrase(readPassphrase));
+		Key writeRoot = new Key(crypto, crypto.deriveKeyFromPassphrase(writePassphrase, CryptoSupport.PASSPHRASE_SALT_READ));
+		Key readRoot = new Key(crypto, crypto.deriveKeyFromPassphrase(readPassphrase, CryptoSupport.PASSPHRASE_SALT_WRITE));
 		return createArchiveWithWriteRoot(pageSize, description, readRoot, writeRoot);
 	}
 	
@@ -237,7 +237,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 	
 	public ArchiveAccessor makeAccessorForPassphrase(byte[] passphrase) {
-		byte[] passphraseRootRaw = crypto.deriveKeyFromPassphrase(passphrase);
+		byte[] passphraseRootRaw = crypto.deriveKeyFromPassphrase(passphrase, CryptoSupport.PASSPHRASE_SALT_READ);
 		Key passphraseRoot = new Key(crypto, passphraseRootRaw);
 		return makeAccessorForRoot(passphraseRoot, false);
 	}

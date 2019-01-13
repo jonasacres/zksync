@@ -111,16 +111,16 @@ public class CryptoSupportTest  {
 
 	@Test
 	public void testKeyDerivation() {
-		byte[] derived = crypto.deriveKeyFromPassphrase("test".getBytes(), CryptoSupport.PASSPHRASE_SALT);
+		byte[] derived = crypto.deriveKeyFromPassphrase("test".getBytes(), CryptoSupport.PASSPHRASE_SALT_READ);
 
 		/* This is a non-standard test vector. Generated using:
 		 *   git clone https://github.com/P-H-C/phc-winner-argon2
 		 *   cd phc-winner-argon2
 		 *   git checkout 6c8653c3b6859a2d21850fa5979327feee8ca3ee # (latest commit to master branch at time of writing)
 		 *   make
-		 *   echo -n test | time ./argon2 easysafe-argon2-salt -d -t 32 -k 65536 -p 1 -l 32 -r # output is our expected result
+		 *   echo -n test | ./argon2 easysafe-argon2-salt-read -i -t 40 -k 1048576 -p 16 -l 32 -v 13 -r # output is our expected result
 		 */
-		byte[] expected = Util.hexToBytes("d9db1306083ea308833feea8605a8c755a166157494add29af482dddfd074b07");
+		byte[] expected = Util.hexToBytes("964d0448cc1d0aa044d37519c4e94c60aca275eafe6e6d2dd4f0df82069a6617");
 		assertTrue(Arrays.equals(derived, expected));
 	}
 

@@ -88,6 +88,10 @@ public class ZKFSManager {
 			fs.getArchive().getConfig().getRevisionList().removeMonitor(revMonitor);
 			fs.close();
 		}
+		
+		if(mirror != null) {
+			mirror.stopWatch();
+		}
 	}
 	
 	public void notifyLocalChanges() {

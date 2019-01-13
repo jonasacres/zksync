@@ -463,6 +463,7 @@ public class IntegrationTest {
 		}));
 		
 		for(ZKArchive archive : archives) {
+			// TODO EasySafe: (itf) 732b6523e+ linux 1/12/19 UniversalTests, assertion failed
 			assertTrue(maxHeight <= archive.getConfig().getRevisionList().latest().getHeight());
 			archive.close();
 			archive.getMaster().close();

@@ -5,6 +5,7 @@ import static org.junit.Assert.fail;
 import java.util.HashSet;
 import java.util.Map;
 
+import com.acrescrypto.zksync.fs.zkfs.FSMirror;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.SnoozeThreadSupervisor;
 import com.acrescrypto.zksync.utility.Util;
@@ -15,6 +16,7 @@ public class TestUtils {
 	static HashSet<Long> knownZombieThreads = new HashSet<>();
 	static HashSet<SnoozeThread> knownSnoozeThreads = new HashSet<>();
 	static HashSet<WaitTask> knownWaitTasks = new HashSet<>();
+	static int knownZombieWatches = 0;
 	
 	public static boolean isThreadAcceptable(Thread thread, StackTraceElement[] backtrace) {
 		if(knownZombieThreads.contains(thread.getId())) return true;
@@ -74,13 +76,13 @@ public class TestUtils {
 	}
 	
 	public static boolean isTidy() {
-		return threadsTidy();
+		return threadsTidy() && FSMirror.numActive() <= knownZombieWatches;
 	}
 	
 	public static void assertTidy() {
 		SnoozeThreadSupervisor.shared().prune(false);
 		// This is starting to get a bit ITFy... already had to bump the tolerance to 5000ms from 1000ms and lower.
-		if(!Util.waitUntil(65000, ()->isTidy())) {
+		if(!Util.waitUntil(10000, ()->isTidy())) {
 			Map<Thread,StackTraceElement[]> traces = Thread.getAllStackTraces();
 			knownZombieThreads.clear();
 			for(Thread t : traces.keySet()) {
@@ -91,8 +93,12 @@ public class TestUtils {
 					}
 				}
 			}
+
+			knownZombieWatches = FSMirror.numActive();
+
 			// System.out.println("Thread untidiness detected!");
 			// Util.threadReport(true);
+			System.out.println("Active FS monitors: " + FSMirror.numActive());
 			fail();
 		}
 	}

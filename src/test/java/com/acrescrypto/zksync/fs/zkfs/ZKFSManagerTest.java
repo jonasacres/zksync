@@ -373,6 +373,7 @@ public class ZKFSManagerTest {
 		assertEquals(manager.isAutomirroring(), deserialized.isAutomirroring());
 		assertEquals(manager.getAutocommitIntervalMs(), deserialized.getAutocommitIntervalMs());
 		assertEquals(manager.getAutomirrorPath(), deserialized.getAutomirrorPath());
+		deserialized.close();
 	}
 	
 	@Test
@@ -395,6 +396,7 @@ public class ZKFSManagerTest {
 		assertEquals(manager.getAutocommitIntervalMs(), persistent.getAutocommitIntervalMs());
 		assertEquals(manager.getAutomirrorPath(), persistent.getAutomirrorPath());
 		assertEquals(notLatest, persistent.fs.getBaseRevision());
+		persistent.close();
 	}
 
 	@Test

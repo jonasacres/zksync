@@ -35,11 +35,13 @@ public class CryptoSupport {
 	
 	public static boolean cheapArgon2; // set to true for tests, false otherwise
 	
-	public final static int ARGON2_TIME_COST = 32; // iterations
-	public final static int ARGON2_MEMORY_COST = 65536;  // KiB
-	public final static int ARGON2_PARALLELISM = 1; // threads
+	public final static int ARGON2_TIME_COST = 40; // iterations
+	public final static int ARGON2_MEMORY_COST = 1048576;  // KiB
+	public final static int ARGON2_PARALLELISM = 16; // threads
 	
-	public final static byte[] PASSPHRASE_SALT = "easysafe-argon2-salt".getBytes();
+	public final static byte[] PASSPHRASE_SALT_READ = "easysafe-argon2-salt-read".getBytes();
+	public final static byte[] PASSPHRASE_SALT_WRITE = "easysafe-argon2-salt-write".getBytes();
+	public final static byte[] PASSPHRASE_SALT_LOCAL = "easysafe-argon2-salt-local".getBytes();
 	
 	public static CryptoSupport defaultCrypto() {
 		return new CryptoSupport();
@@ -51,13 +53,13 @@ public class CryptoSupport {
 	
 	public byte[] deriveKeyFromPassphrase(byte[] passphrase, byte[] salt) {
         JnaUint32 iterations = new JnaUint32(cheapArgon2 ? 1 : ARGON2_TIME_COST);
-        JnaUint32 memory = new JnaUint32(cheapArgon2 ? 8 : ARGON2_MEMORY_COST);
-        JnaUint32 parallelism = new JnaUint32(ARGON2_PARALLELISM);
+        JnaUint32 memory = new JnaUint32(cheapArgon2 ? 128 : ARGON2_MEMORY_COST);
+        JnaUint32 parallelism = new JnaUint32(cheapArgon2 ? 1 : ARGON2_PARALLELISM);
         JnaUint32 hashLen = new JnaUint32(symKeyLength());
         
         byte[] key = new byte[symKeyLength()];
         
-        int result = Argon2Library.INSTANCE.argon2d_hash_raw(
+        int result = Argon2Library.INSTANCE.argon2i_hash_raw(
                 iterations,
                 memory, 
                 parallelism,
@@ -75,10 +77,6 @@ public class CryptoSupport {
         }
         
         return key;
-	}
-	
-	public byte[] deriveKeyFromPassphrase(byte[] passphrase) {
-		return deriveKeyFromPassphrase(passphrase, PASSPHRASE_SALT);
 	}
 	
 	public HashContext startHash() {

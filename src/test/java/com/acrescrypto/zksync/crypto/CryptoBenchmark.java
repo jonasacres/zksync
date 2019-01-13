@@ -29,7 +29,7 @@ public class CryptoBenchmark {
 		byte[] passphrase = "pAssword1".getBytes();
 		
 		Benchmarks.run("derivations", (i)->{
-			crypto.deriveKeyFromPassphrase(passphrase);
+			crypto.deriveKeyFromPassphrase(passphrase, CryptoSupport.PASSPHRASE_SALT_READ);
 		});
 	}
 	

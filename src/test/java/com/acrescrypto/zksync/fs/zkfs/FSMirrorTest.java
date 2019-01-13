@@ -51,6 +51,7 @@ public class FSMirrorTest {
 		archive = master.createDefaultArchive();
 		zkfs = archive.openBlank();
 		target = new LocalFS("/tmp/zksync-test/fsmirrortest");
+		target.purge();
 		mirror = new FSMirror(zkfs, target);
 	}
 	
@@ -62,6 +63,7 @@ public class FSMirrorTest {
 		target.close();
 		archive.close();
 		master.close();
+		TestUtils.assertTidy();
 	}
 	
 	@AfterClass
