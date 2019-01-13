@@ -260,7 +260,7 @@ public class PageTreeChunkTest {
 		byte[] data = chunk.serialize();
 		PrivateSigningKey fakeKey = crypto.makePrivateSigningKey();
 		byte[] tag = SignedSecureFile
-				  .withParams(tree.archive.storage, chunk.textKey(), chunk.authKey(), fakeKey)
+				  .withParams(tree.archive.storage, chunk.textKey(), chunk.saltKey(), chunk.authKey(), fakeKey)
 				  .write(data, tree.archive.config.pageSize);
 
 		try {
@@ -274,7 +274,7 @@ public class PageTreeChunkTest {
 		byte[] data = chunk.serialize();
 		PrivateSigningKey fakeKey = crypto.makePrivateSigningKey();
 		byte[] tag = SignedSecureFile
-				  .withParams(tree.archive.storage, chunk.textKey(), chunk.authKey(), fakeKey)
+				  .withParams(tree.archive.storage, chunk.textKey(), chunk.saltKey(), chunk.authKey(), fakeKey)
 				  .write(data, tree.archive.config.pageSize);
 
 		new PageTreeChunk(chunk.tree, tag, chunk.index, false);

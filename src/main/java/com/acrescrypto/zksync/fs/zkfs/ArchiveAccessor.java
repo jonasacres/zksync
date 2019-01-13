@@ -42,7 +42,10 @@ public class ArchiveAccessor {
 	public final static int KEY_INDEX_DHT_STORAGE = 17;
 	public final static int KEY_INDEX_DHT_LOOKUP = 18;
 	public final static int KEY_INDEX_MANAGER_FILE = 19;
-	
+
+	public final static int KEY_INDEX_PAGE_SALT = 20;
+	public final static int KEY_INDEX_FILE_ENCRYPTION = 21;
+
 	protected ZKMaster master;
 
 	protected Key passphraseRoot; // derived from passphrase; used to generate seedRoot and configFileKey/Tag

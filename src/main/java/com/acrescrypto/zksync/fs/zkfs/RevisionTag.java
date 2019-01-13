@@ -125,7 +125,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		plaintext.putLong(height);
 
 		Key key = refTag.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
-		byte[] ciphertext = key.encryptCBC(new byte[key.getCrypto().symBlockSize()], plaintext.array());
+		byte[] ciphertext = key.encryptUnauthenticated(new byte[key.getCrypto().symIvLength()], plaintext.array());
 		
 		ByteBuffer signedCiphertext = ByteBuffer.allocate(sizeForConfig(refTag.getConfig()));
 		signedCiphertext.put(ciphertext);
@@ -166,7 +166,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		if(config.archiveRoot == null) return;
 		
 		Key key = config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REFTAG);
-		byte[] rawBytes = key.decryptCBC(new byte[key.getCrypto().symBlockSize()],
+		byte[] rawBytes = key.decryptUnauthenticated(new byte[key.getCrypto().symIvLength()],
 				serialized, 0, serialized.length - config.getCrypto().asymSignatureSize());
 		ByteBuffer raw = ByteBuffer.wrap(rawBytes);
 		byte[] rawRefTag = new byte[config.refTagSize()];

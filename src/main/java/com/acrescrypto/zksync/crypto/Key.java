@@ -27,19 +27,19 @@ public class Key {
 		return new Key(crypto, crypto.expand(raw, raw.length, saltBuf.array(), "zksync".getBytes()));
 	}
 	
-	public byte[] encryptCBC(byte[] iv, byte[] plaintext) {
-		return crypto.encryptCBC(raw, iv, plaintext, 0, plaintext.length);
+	public byte[] encryptUnauthenticated(byte[] iv, byte[] plaintext) {
+		return crypto.encryptUnauthenticated(raw, iv, plaintext, 0, plaintext.length);
 	}
 	
-	public byte[] encryptCBC(byte[] iv, byte[] plaintext, int offset, int length) {
-		return crypto.encryptCBC(raw, iv, plaintext, offset, length);
+	public byte[] encryptUnauthenticated(byte[] iv, byte[] plaintext, int offset, int length) {
+		return crypto.encryptUnauthenticated(raw, iv, plaintext, offset, length);
 	}
 	
-	public byte[] decryptCBC(byte[] iv, byte[] ciphertext) {
+	public byte[] decryptUnauthenticated(byte[] iv, byte[] ciphertext) {
 		return crypto.decryptCBC(raw, iv, ciphertext, 0, ciphertext.length);
 	}
 	
-	public byte[] decryptCBC(byte[] iv, byte[] ciphertext, int offset, int length) {
+	public byte[] decryptUnauthenticated(byte[] iv, byte[] ciphertext, int offset, int length) {
 		return crypto.decryptCBC(raw, iv, ciphertext, offset, length);
 	}
 

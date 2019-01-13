@@ -161,8 +161,8 @@ public class RevisionTagTest {
 		RevisionTag a = new RevisionTag(aTag, 1, 1);
 		RevisionTag b = new RevisionTag(bTag, 1, 1);
 		
-		assertTrue(a.compareTo(b) < 0); // these encrypt, so you can't get direction by eyeballing above definitions
-		assertTrue(b.compareTo(a) > 0);
+		assertTrue(a.compareTo(b) > 0);
+		assertTrue(b.compareTo(a) < 0);
 		assertTrue(a.compareTo(a) == 0);
 		assertTrue(b.compareTo(b) == 0);
 	}

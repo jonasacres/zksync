@@ -208,13 +208,13 @@ public class TCPPeerSocketTest {
 			handshake.setObfuscation(
 					(key)->{
 						Key sym = new Key(crypto, crypto.makeSymmetricKey(handshake.getRemoteEphemeralKey().getBytes()));
-						return sym.encryptCBC(new byte[crypto.symBlockSize()], key.getBytes());
+						return sym.encryptUnauthenticated(new byte[crypto.symIvLength()], key.getBytes());
 					},
 					
 					(inn)->{
 						Key sym = new Key(crypto, crypto.makeSymmetricKey(serverKey.publicKey().getBytes()));
 						byte[] ciphertext = IOUtils.readFully(inn, crypto.asymPublicDHKeySize());
-						byte[] keyRaw = sym.decryptCBC(new byte[crypto.symBlockSize()], ciphertext);
+						byte[] keyRaw = sym.decryptUnauthenticated(new byte[crypto.symIvLength()], ciphertext);
 						return new byte[][] { keyRaw, ciphertext };
 					}
 				);

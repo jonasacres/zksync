@@ -93,9 +93,9 @@ public class TestUtils {
 					}
 				}
 			}
-
+			
 			knownZombieWatches = FSMirror.numActive();
-
+			
 			// System.out.println("Thread untidiness detected!");
 			// Util.threadReport(true);
 			System.out.println("Active FS monitors: " + FSMirror.numActive());

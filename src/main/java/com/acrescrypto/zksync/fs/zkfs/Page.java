@@ -107,7 +107,7 @@ public class Page {
 		}
 		
 		byte[] pageTag = SignedSecureFile
-		  .withParams(file.zkfs.archive.storage, textKey(), authKey(), file.zkfs.archive.config.privKey)
+		  .withParams(file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.privKey)
 		  .write(plaintext.array(), file.zkfs.archive.config.pageSize);
 		this.file.setPageTag(pageNum, pageTag);
 	}
@@ -151,15 +151,31 @@ public class Page {
 		
 		// without further ado, let's go about the nasty business of killing the feature other content-addressable
 		// encrypted file storage systems like to brag about.
-		ByteBuffer buf = ByteBuffer.allocate(12);
+		byte[] archiveId = file.getFS().getArchive().getConfig().getArchiveId();
+		ByteBuffer buf = ByteBuffer.allocate(8 + 4 + archiveId.length);
 		buf.putLong(file.getInode().getIdentity()); // no dedupe between files (do not use inode id, breaks diff merges)
 		buf.putInt(pageNum); // no dedupe within file
+		buf.put(file.getFS().getArchive().getConfig().getArchiveId());
+		
 		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_ROOT, ArchiveAccessor.KEY_INDEX_PAGE, buf.array());
+	}
+	
+	/** used with text key to encrypt page contents */
+	protected Key saltKey() {
+		byte[] archiveId = file.getFS().getArchive().getConfig().getArchiveId();
+		ByteBuffer buf = ByteBuffer.allocate(8 + 4 + archiveId.length);
+		buf.putLong(file.getInode().getIdentity()); // no dedupe between files (do not use inode id, breaks diff merges)
+		buf.putInt(pageNum); // no dedupe within file
+		buf.put(file.getFS().getArchive().getConfig().getArchiveId());
+		
+		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_ROOT, ArchiveAccessor.KEY_INDEX_PAGE_SALT, buf.array());
 	}
 	
 	/** key used to produce page tag (provides authentication of page contents) */
 	protected Key authKey() {
-		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE);
+		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
+				ArchiveAccessor.KEY_TYPE_AUTH,
+				ArchiveAccessor.KEY_INDEX_PAGE);
 	}
 	
 	/** load page contents from underlying storage */
@@ -175,7 +191,7 @@ public class Page {
 		}
 		
 		byte[] plaintext = SignedSecureFile
-		  .withTag(pageTag, file.zkfs.archive.storage, textKey(), authKey(), file.zkfs.archive.config.pubKey)
+		  .withTag(pageTag, file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.pubKey)
 		  .read(!file.trusted);
 		
 		contents = ByteBuffer.allocate(pageSize);

@@ -10,16 +10,10 @@ import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import javax.crypto.ShortBufferException;
+import javax.crypto.spec.ChaCha20ParameterSpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
-import org.bouncycastle.crypto.BufferedBlockCipher;
-import org.bouncycastle.crypto.CipherParameters;
-import org.bouncycastle.crypto.InvalidCipherTextException;
-import org.bouncycastle.crypto.engines.AESEngine;
-import org.bouncycastle.crypto.modes.CBCBlockCipher;
-import org.bouncycastle.crypto.params.KeyParameter;
-import org.bouncycastle.crypto.params.ParametersWithIV;
 
 import org.slf4j.LoggerFactory;
 
@@ -198,30 +192,25 @@ public class CryptoSupport {
 	}
 	
 	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, int offset, int length, byte[] associatedData, int adOffset, int adLen, boolean padded) {
-		try {
-			byte[] paddedPlaintext = processAEADCipher(false,
-					128,
-					key,
-					iv,
-					ciphertext,
-					offset,
-					length,
-					associatedData,
-					adOffset,
-					adLen);
-			if(padded) return unpad(paddedPlaintext);
-			return paddedPlaintext;
-		} catch(InvalidCipherTextException exc) {
-			logger.warn("Unable to validate AEAD ciphertext", exc);
-			throw new SecurityException();
-		}
+		byte[] paddedPlaintext = processAEADCipher(false,
+				128,
+				key,
+				iv,
+				ciphertext,
+				offset,
+				length,
+				associatedData,
+				adOffset,
+				adLen);
+		if(padded) return unpad(paddedPlaintext);
+		return paddedPlaintext;
 	}
 	
 	public byte[] encryptCBC(byte[] key, byte[] iv, byte[] plaintext) {
-		return encryptCBC(key, iv, plaintext, 0, plaintext.length);
+		return encryptUnauthenticated(key, iv, plaintext, 0, plaintext.length);
 	}
 	
-	public byte[] encryptCBC(byte[] key, byte[] iv, byte[] plaintext, int offset, int length) {
+	public byte[] encryptUnauthenticated(byte[] key, byte[] iv, byte[] plaintext, int offset, int length) {
 		return processOrdinaryCipher(true, key, iv, plaintext, offset, length);
 	}
 	
@@ -247,7 +236,7 @@ public class CryptoSupport {
 		return r;
 	}
 	
-	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, byte[] ad) throws IllegalStateException, InvalidCipherTextException {
+	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, byte[] ad) throws IllegalStateException {
         return processAEADCipher(encrypt,
         		tagLen,
         		keyBytes,
@@ -260,7 +249,7 @@ public class CryptoSupport {
         		ad == null ? 0 : ad.length);
 	}
 	
-	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] nonce, byte[] in, int inOffset, int inLen, byte[] ad, int adOffset, int adLen) throws IllegalStateException, InvalidCipherTextException {
+	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] nonce, byte[] in, int inOffset, int inLen, byte[] ad, int adOffset, int adLen) throws IllegalStateException {
 		try {
 			if(nonce.length < 12) {
 				byte[] newNonce = new byte[12];
@@ -286,21 +275,31 @@ public class CryptoSupport {
 		}
 	}
 	
-	protected static byte[] processOrdinaryCipher(boolean encrypt, byte[] keyBytes, byte[] iv, byte[] in, int offset, int length) throws IllegalStateException {
-        KeyParameter key = new KeyParameter(keyBytes);
-        CipherParameters params = new ParametersWithIV(key, iv);
-        BufferedBlockCipher cipher = new BufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
-        cipher.init(encrypt, params);
-
-		int processLen = 0;
-		byte[] out = new byte[length];
-        if(in != null) processLen = cipher.processBytes(in, offset, length, out, 0);
-        assert(processLen == out.length);
-        
-        return out;
+	protected static byte[] processOrdinaryCipher(boolean encrypt, byte[] keyBytes, byte[] nonce, byte[] in, int offset, int length) throws IllegalStateException {
+		try {
+			if(nonce.length < 12) {
+				byte[] newNonce = new byte[12];
+				System.arraycopy(nonce, 0, newNonce, 0, nonce.length);
+				nonce = newNonce;
+			}
+			
+			Cipher cipher = Cipher.getInstance("ChaCha20");
+			ChaCha20ParameterSpec ivSpec = new ChaCha20ParameterSpec(nonce, 1);
+			SecretKeySpec keySpec = new SecretKeySpec(keyBytes, "ChaCha20");
+			cipher.init(encrypt ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE, keySpec, ivSpec);
+			byte[] out = new byte[cipher.getOutputSize(length)];
+			cipher.update(in, offset, length, out, 0);
+			cipher.doFinal(out, offset);
+			return out;
+		} catch(BadPaddingException exc) {
+			throw new SecurityException(exc);
+		} catch (ShortBufferException|InvalidKeyException|NoSuchAlgorithmException|NoSuchPaddingException|IllegalBlockSizeException|InvalidAlgorithmParameterException exc) {
+			exc.printStackTrace();
+			throw new RuntimeException(exc);
+		}
 	}
 	
-	private byte[] padToSize(byte[] raw, int offset, int length, int padSize) {
+	public byte[] padToSize(byte[] raw, int offset, int length, int padSize) {
 		if(raw == null) return null;
 		if(padSize < 0) {
 			if(offset == 0 && length == raw.length) return raw;
@@ -317,10 +316,10 @@ public class CryptoSupport {
 		return padded.array();
 	}
 	
-	private byte[] unpad(byte[] raw) {
+	public byte[] unpad(byte[] raw) {
 		ByteBuffer buf = ByteBuffer.wrap(raw);
 		int length = buf.getInt();
-		if(length > buf.remaining()) throw new SecurityException("invalid ciphertext");
+		if(length > buf.remaining() || length < 0) throw new SecurityException("invalid ciphertext");
 		
 		byte[] unpadded = new byte[length];
 		buf.get(unpadded, 0, length);

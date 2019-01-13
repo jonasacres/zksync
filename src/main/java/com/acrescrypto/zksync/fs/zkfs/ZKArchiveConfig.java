@@ -56,13 +56,13 @@ public class ZKArchiveConfig {
 	
 	public static byte[] decryptArchiveId(ArchiveAccessor accessor, byte[] iv, byte[] encryptedArchiveId) {
 		Key key = accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_AD_ARCHIVE_ID);
-		if(iv.length != key.getCrypto().symBlockSize()) {
-			ByteBuffer truncated = ByteBuffer.allocate(key.getCrypto().symBlockSize());
+		if(iv.length != key.getCrypto().symIvLength()) {
+			ByteBuffer truncated = ByteBuffer.allocate(key.getCrypto().symIvLength());
 			truncated.put(iv, 0, Math.min(iv.length, truncated.capacity()));
 			iv = truncated.array();
 		}
 		
-		return key.decryptCBC(iv, encryptedArchiveId);
+		return key.decryptUnauthenticated(iv, encryptedArchiveId);
 	}
 	
 	public static ZKArchiveConfig createDefault(ArchiveAccessor accessor) throws IOException {
@@ -464,13 +464,13 @@ public class ZKArchiveConfig {
 	public byte[] getEncryptedArchiveId(byte[] iv) {
 		Key key = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_AD_ARCHIVE_ID);
 
-		if(iv.length != key.getCrypto().symBlockSize()) {
-			ByteBuffer truncated = ByteBuffer.allocate(key.getCrypto().symBlockSize());
+		if(iv.length != key.getCrypto().symIvLength()) {
+			ByteBuffer truncated = ByteBuffer.allocate(key.getCrypto().symIvLength());
 			truncated.put(iv, 0, Math.min(iv.length, truncated.capacity()));
 			iv = truncated.array();
 		}
 		
-		return key.encryptCBC(iv, archiveId);
+		return key.encryptUnauthenticated(iv, archiveId);
 	}
 
 	public int getPageSize() {

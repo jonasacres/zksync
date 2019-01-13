@@ -82,7 +82,7 @@ public class PageTreeChunk {
 	protected void write() throws IOException {
 		byte[] serialized = serialize();
 		chunkTag = SignedSecureFile
-				  .withParams(tree.archive.storage, textKey(), authKey(), tree.archive.config.privKey)
+				  .withParams(tree.archive.storage, textKey(), saltKey(), authKey(), tree.archive.config.privKey)
 				  .write(serialized, tree.archive.config.pageSize);
 		
 		if(index != 0) {
@@ -99,7 +99,7 @@ public class PageTreeChunk {
 	
 	protected void read(boolean verify) throws IOException {
 		byte[] serialized = SignedSecureFile
-				  .withTag(chunkTag, tree.archive.storage, textKey(), authKey(), tree.archive.config.pubKey)
+				  .withTag(chunkTag, tree.archive.storage, textKey(), saltKey(), authKey(), tree.archive.config.pubKey)
 				  .read(verify);
 		deserialize(ByteBuffer.wrap(serialized));
 	}
@@ -132,13 +132,28 @@ public class PageTreeChunk {
 	}
 	
 	protected Key textKey() {
-		ByteBuffer buf = ByteBuffer.allocate(16);
+		byte[] archiveId = tree.getArchive().getConfig().getArchiveId();
+		ByteBuffer buf = ByteBuffer.allocate(8 + 8 + archiveId.length);
 		buf.putLong(tree.inodeIdentity);
 		buf.putLong(index);
+		buf.put(archiveId);
 		
 		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
 				ArchiveAccessor.KEY_TYPE_ROOT,
 				ArchiveAccessor.KEY_INDEX_PAGE,
+				buf.array());
+	}
+	
+	protected Key saltKey() {
+		byte[] archiveId = tree.getArchive().getConfig().getArchiveId();
+		ByteBuffer buf = ByteBuffer.allocate(8 + 8 + archiveId.length);
+		buf.putLong(tree.inodeIdentity);
+		buf.putLong(index);
+		buf.put(archiveId);
+		
+		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
+				ArchiveAccessor.KEY_TYPE_ROOT,
+				ArchiveAccessor.KEY_INDEX_PAGE_SALT,
 				buf.array());
 	}
 	

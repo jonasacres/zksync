@@ -8,42 +8,43 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.Page;
-import com.acrescrypto.zksync.utility.Util;
 
 public class SignedSecureFile {
-	public final static int SALT_LEN = 16;
 	protected FS fs;
 	protected PrivateSigningKey privKey;
 	protected PublicSigningKey pubKey;
-	protected Key textKey, authKey;
+	protected Key textKey, authKey, saltKey;
 	protected byte[] tag;
 	protected final Logger logger = LoggerFactory.getLogger(SignedSecureFile.class);
 	
-	public static SignedSecureFile withParams(FS storage, Key textKey, Key authKey, PrivateSigningKey privKey) {
-		return new SignedSecureFile(storage, textKey, authKey, privKey);
+	public static SignedSecureFile withParams(FS storage, Key textKey, Key saltKey, Key authKey, PrivateSigningKey privKey) {
+		return new SignedSecureFile(storage, textKey, saltKey, authKey, privKey);
 	}
 
-	public static SignedSecureFile withTag(byte[] pageTag, FS storage, Key textKey, Key authKey, PublicSigningKey pubKey) {
-		return new SignedSecureFile(pageTag, storage, textKey, authKey, pubKey);
+	public static SignedSecureFile withTag(byte[] pageTag, FS storage, Key textKey, Key saltKey, Key authKey, PublicSigningKey pubKey) {
+		return new SignedSecureFile(pageTag, storage, textKey, saltKey, authKey, pubKey);
 	}
 	
 	public static int fileSize(CryptoSupport crypto, int padSize) {
-		return SALT_LEN + crypto.asymSignatureSize() + crypto.symPaddedCiphertextSize(padSize);
+		return crypto.hashLength() + crypto.asymSignatureSize() + 4 + padSize;
 	}
 	
-	public SignedSecureFile(FS fs, Key textKey, Key authKey, PrivateSigningKey privKey) {
+	public SignedSecureFile(FS fs, Key textKey, Key saltKey, Key authKey, PrivateSigningKey privKey) {
 		this.fs = fs;
 		this.textKey = textKey;
+		this.saltKey = saltKey;
 		this.authKey = authKey;
 		this.privKey = privKey;
 		this.pubKey = privKey.publicKey();
 	}
 	
-	public SignedSecureFile(byte[] tag, FS fs, Key textKey, Key authKey, PublicSigningKey pubKey) {
+	public SignedSecureFile(byte[] tag, FS fs, Key textKey, Key saltKey, Key authKey, PublicSigningKey pubKey) {
 		this.tag = tag;
 		this.fs = fs;
 		this.textKey = textKey;
+		this.saltKey = saltKey;
 		this.authKey = authKey;
 		this.pubKey = pubKey;
 	}
@@ -57,12 +58,6 @@ public class SignedSecureFile {
 				throw new SecurityException();
 			}
 			
-			byte[] salt = new byte[SALT_LEN];
-			System.arraycopy(contents, 0, salt, 0, SALT_LEN);
-			
-			byte[] derivedKeyRaw = crypto.expand(salt, crypto.symKeyLength(), textKey.getRaw(), "easysafe-tagged-file".getBytes());
-			Key derivedKey = new Key(crypto, derivedKeyRaw);
-			
 			int sigOffset = contents.length - pubKey.crypto.asymSignatureSize();
 			if(sigOffset < 0) {
 				throw new SecurityException();
@@ -74,7 +69,12 @@ public class SignedSecureFile {
 				}
 			}
 			
-			return derivedKey.decrypt(fixedIV(), contents, SALT_LEN, sigOffset - SALT_LEN);
+			byte[] salt = new byte[crypto.hashLength()];
+			System.arraycopy(contents, 0, salt, 0, salt.length);
+			
+			Key derivedKey = textKey.derive(ArchiveAccessor.KEY_INDEX_FILE_ENCRYPTION, salt);
+			byte[] paddedPlaintext = derivedKey.decryptUnauthenticated(fixedIV(), contents, salt.length, contents.length - salt.length);
+			return crypto.unpad(paddedPlaintext);
 		} catch (IOException exc) {
 			throw new InaccessibleStorageException();
 		}
@@ -87,19 +87,21 @@ public class SignedSecureFile {
 	public byte[] write(byte[] plaintext, int padSize) throws IOException {
 		assert(privKey != null);
 		try {
-			// TODO: (refactor) the multiple Util.concat calls here are pretty wasteful...
-			CryptoSupport crypto = textKey.getCrypto();
-			byte[] salt = crypto.expand(plaintext, SALT_LEN, "".getBytes(), "".getBytes());
-			byte[] derivedKeyRaw = crypto.expand(salt, crypto.symKeyLength(), textKey.getRaw(), "easysafe-tagged-file".getBytes());
-			Key derivedKey = new Key(crypto, derivedKeyRaw);
+			// TODO Someday: (refactor) there are a lot of unnecessary buffer copies here...
 			
-			byte[] ciphertext = derivedKey.encrypt(fixedIV(), plaintext, padSize);
-			byte[] signature = privKey.sign(Util.concat(salt, ciphertext));
+			byte[] paddedPlaintext = textKey.crypto.padToSize(plaintext, 0, plaintext.length, padSize);
+			byte[] salt = saltKey.authenticate(plaintext);
+			Key encKey = textKey.derive(ArchiveAccessor.KEY_INDEX_FILE_ENCRYPTION, salt);
+			byte[] ciphertext = encKey.encryptUnauthenticated(fixedIV(), paddedPlaintext);
+			byte[] result = new byte[salt.length + ciphertext.length + privKey.crypto.asymSignatureSize()];
 			
-			byte[] output = Util.concat(salt, ciphertext, signature);
-			tag = authKey.authenticate(output);
+			System.arraycopy(salt, 0, result, 0, salt.length);
+			System.arraycopy(ciphertext, 0, result, salt.length, ciphertext.length);
+			byte[] signature = privKey.sign(result, 0, salt.length + ciphertext.length);
+			System.arraycopy(signature, 0, result, salt.length + ciphertext.length, signature.length);
 			
-			fs.write(path(), output);
+			tag = authKey.authenticate(result);
+			fs.write(path(), result);
 			fs.squash(path());
 			return tag;
 		} catch(IOException exc) {
