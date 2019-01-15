@@ -150,7 +150,11 @@ public class ZKArchiveConfig {
 	public ZKArchiveConfig finishOpening() throws IOException {
 		if(archive != null) return this;
 		
-		read();
+		try {
+			read();
+		} catch(SecurityException exc) {
+			throw new InvalidArchiveConfigException();
+		}
 		this.archive = new ZKArchive(this);
 		this.accessor.discoveredArchiveConfig(this);
 		return this;
@@ -282,47 +286,52 @@ public class ZKArchiveConfig {
 	
 	public void read() throws IOException {
 		// TODO EasySafe: (implement) config read
-		File configFile = storage.open(Page.pathForTag(tag()), File.O_RDONLY);
-		
-		byte[] salt = configFile.read(getCrypto().hashLength());
-		byte[] versionSection = configFile.read(getCrypto().hashLength());
-		deserializeVersionSection(salt, versionSection);
-		
-		byte[] seedPreambleCt = configFile.read(4 + getCrypto().symTagLength());
-		Key configSeedPreambleKey = accessor.seedRoot.derive("easysafe-config-seed-preamble-key",
-				Util.concat(salt, versionSection));
-		byte[] seedPreamble = configSeedPreambleKey.decryptUnpadded(
-				getCrypto().symNonce(0),
-				seedPreambleCt);
-		int seedLen = ByteBuffer.wrap(seedPreamble).getInt();
-		
-		byte[] seedSectionCt = configFile.read(seedLen);
-		Key configSeedTextKey = accessor.seedRoot.derive("easysafe-config-seed-ciphertext-key",
-				Util.concat(salt, versionSection, seedPreambleCt));
-		byte[] seedSection = configSeedTextKey.decryptUnpadded(
-				getCrypto().symNonce(0),
-				seedSectionCt);
+		try(File configFile = storage.open(Page.pathForTag(tag()), File.O_RDONLY)) {
+			// TODO EasySafe: (refactor) read the file exactly once
+			byte[] prefix = calculatePrefix(configFile.read());
+			assertState(Util.safeEquals(prefix, archiveId, prefix.length));
+			configFile.rewind();
 
-		deserializeSeedSection(seedSection);
-
-		if(accessor.passphraseRoot != null) {
-			byte[] securePreambleCt = configFile.read(4 + getCrypto().symTagLength());
-			Key configSecurePreambleKey = accessor.passphraseRoot.derive("easysafe-config-secure-preamble-key",
-					Util.concat(salt, versionSection, seedPreambleCt, seedSectionCt));
-			byte[] securePreamble = configSecurePreambleKey.decryptUnpadded(
-					getCrypto().symNonce(0),
-					securePreambleCt);
-			int secureLen = ByteBuffer.wrap(securePreamble).getInt();
+			byte[] salt = configFile.read(getCrypto().hashLength());
+			byte[] versionSection = configFile.read(getCrypto().hashLength());
+			deserializeVersionSection(salt, versionSection);
 			
-			byte[] secureSectionCt = configFile.read(secureLen);
-			Key configSecureTextKey = accessor.passphraseRoot.derive("easysafe-config-secure-ciphertext-key",
-					Util.concat(salt, versionSection, seedPreambleCt, seedSectionCt, securePreambleCt));
-			byte[] secureSection = configSecureTextKey.decryptUnpadded(
+			byte[] seedPreambleCt = configFile.read(4 + getCrypto().symTagLength());
+			Key configSeedPreambleKey = accessor.seedRoot.derive("easysafe-config-seed-preamble-key",
+					Util.concat(salt, versionSection));
+			byte[] seedPreamble = configSeedPreambleKey.decryptUnpadded(
 					getCrypto().symNonce(0),
-					secureSectionCt);
+					seedPreambleCt);
+			int seedLen = ByteBuffer.wrap(seedPreamble).getInt();
+			
+			byte[] seedSectionCt = configFile.read(seedLen);
+			Key configSeedTextKey = accessor.seedRoot.derive("easysafe-config-seed-ciphertext-key",
+					Util.concat(salt, versionSection, seedPreambleCt));
+			byte[] seedSection = configSeedTextKey.decryptUnpadded(
+					getCrypto().symNonce(0),
+					seedSectionCt);
 
-			deserializeSecureSection(secureSection);
-			deriveKeypair();
+			deserializeSeedSection(seedSection);
+
+			if(accessor.passphraseRoot != null) {
+				byte[] securePreambleCt = configFile.read(4 + getCrypto().symTagLength());
+				Key configSecurePreambleKey = accessor.passphraseRoot.derive("easysafe-config-secure-preamble-key",
+						Util.concat(salt, versionSection, seedPreambleCt, seedSectionCt));
+				byte[] securePreamble = configSecurePreambleKey.decryptUnpadded(
+						getCrypto().symNonce(0),
+						securePreambleCt);
+				int secureLen = ByteBuffer.wrap(securePreamble).getInt();
+				
+				byte[] secureSectionCt = configFile.read(secureLen);
+				Key configSecureTextKey = accessor.passphraseRoot.derive("easysafe-config-secure-ciphertext-key",
+						Util.concat(salt, versionSection, seedPreambleCt, seedSectionCt, securePreambleCt));
+				byte[] secureSection = configSecureTextKey.decryptUnpadded(
+						getCrypto().symNonce(0),
+						secureSectionCt);
+
+				deserializeSecureSection(secureSection);
+				deriveKeypair();
+			}
 		}
 	}
 	
@@ -377,15 +386,19 @@ public class ZKArchiveConfig {
 		description = new String(descriptionBytes);
 	}
 	
+	protected byte[] calculatePrefix(byte[] serialized) {
+		return getCrypto().expand(serialized,
+				28, 
+				accessor.getSeedRoot().getRaw(),
+				"easysafe-config-fsid-prefix".getBytes());
+	}
+	
 	public boolean verify(byte[] serialized) {
 		if(serialized.length != getSerializedPageSize()) {
 			return false;
 		}
 		
-		byte[] observedPrefix = getCrypto().expand(serialized,
-				28, 
-				accessor.getSeedRoot().getRaw(),
-				"easysafe-config-fsid-prefix".getBytes());
+		byte[] observedPrefix = calculatePrefix(serialized);
 		if(!Util.safeEquals(observedPrefix, archiveId, observedPrefix.length)) {
 			return false;
 		}

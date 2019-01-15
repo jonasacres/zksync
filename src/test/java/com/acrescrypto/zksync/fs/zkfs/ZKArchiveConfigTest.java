@@ -139,18 +139,23 @@ public class ZKArchiveConfigTest {
 	}
 	
 	// TODO verification tests
-	// bad version
-	// bad salt
-	// bad seed preamble
-	// bad seed section
-	// forged seed section
-	// bad secure preamble
-	// bad secure section
-	// forged secure section
-	// bad padding
-	// bad signature
-	// forged signature (mismatch fsid)
+	@Test
+	public void testVerifyReturnsFalseIfDataTampered() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		configData[0] ^= 0x01;
+		assertFalse(config.verify(configData));
+	}
 	
+	@Test
+	public void testReadThrowsExceptionIfTampered() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		for(int i = 0; i < configData.length; i += configData.length/512) {
+			configData[i] ^= 0x01;
+			config.storage.write(Page.pathForTag(config.tag()), configData);
+			assertUnreadable(config);
+			configData[i] ^= 0x01;
+		}
+	}	
 	
 	@Test
 	public void testGetArchiveId() {
