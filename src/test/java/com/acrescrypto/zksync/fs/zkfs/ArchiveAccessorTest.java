@@ -165,7 +165,7 @@ public class ArchiveAccessorTest {
 			}
 		}
 		
-		// Generated from test-vectors.py, Python 3.6.5, commit 125943e0d5ec57fcf91365dfca6ad3355aafd0f1
+		// Generated from test-vectors.py, Python 3.6.5, commit 992e0c73062ce353d42197973eb4308255b85f47
 		new ArchiveKeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 			"foo",
