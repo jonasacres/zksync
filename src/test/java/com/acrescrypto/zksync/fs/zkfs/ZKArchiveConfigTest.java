@@ -16,6 +16,7 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -79,55 +80,6 @@ public class ZKArchiveConfigTest {
 		return info;
 	}
 	
-	public void writeModifiedPageSize(int newSize) throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
-			@Override
-			protected byte[] serializeSecurePortion() {
-				byte[] descString = description.getBytes();
-				int sectionHeaderSize = 2 + 4; // section_type + length
-				int archiveInfoSize = 8 + archiveRoot.getRaw().length + descString.length; // pageSize + textRoot + authRoot + description
-				
-				assertState(descString.length <= Short.MAX_VALUE);
-				
-				ByteBuffer buf = ByteBuffer.allocate(sectionHeaderSize+archiveInfoSize);
-				buf.putShort((short) CONFIG_SECTION_ARCHIVE_INFO);
-				buf.putInt(archiveInfoSize);
-				buf.putLong(newSize);
-				buf.put(archiveRoot.getRaw());
-				buf.put(descString);
-				
-				assertState(!buf.hasRemaining());
-				
-				return buf.array();
-			}
-		};
-		
-		modified.write();
-		modified.close();
-	}
-	
-	public void writePhonySection(int statedSize, int actualSize) throws IOException {
-		Key key = new Key(master.crypto);
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE, key, key) {
-			@Override
-			protected byte[] serializeSecurePortion() {
-				ByteBuffer securePortion = ByteBuffer.wrap(super.serializeSecurePortion());
-				
-				ByteBuffer buf = ByteBuffer.allocate(securePortion.limit() + 2 + 4 + actualSize);
-				buf.putShort(Short.MAX_VALUE);
-				buf.putInt(statedSize);
-				buf.put(new byte[actualSize]);
-				buf.put(securePortion);
-				
-				return buf.array();
-			}
-		};
-		
-		modified.write();
-		config.close();
-		config = modified;
-	}
-	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
 		ZKFSTest.cheapenArgon2Costs();
@@ -179,153 +131,30 @@ public class ZKArchiveConfigTest {
 	}
 	
 	@Test
-	public void testSkipUnknownRecordTypes() throws IOException {
-		writePhonySection(1024, 1024);
-		assertReadable(config);
+	public void testVerifyReturnsFalseIfSignatureTampered() throws IOException {
+		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		int offset = configData.length-1;
+		configData[offset] ^= 0x01;
+		assertFalse(config.verify(configData));
 	}
 	
-	@Test
-	public void testRefuseNegativeRecordLength() throws IOException {
-		writePhonySection(-1024, 1024);
-		assertUnreadable(config, accessor);
-	}
+	// TODO verification tests
+	// bad version
+	// bad salt
+	// bad seed preamble
+	// bad seed section
+	// forged seed section
+	// bad secure preamble
+	// bad secure section
+	// forged secure section
+	// bad padding
+	// bad signature
+	// forged signature (mismatch fsid)
 	
-	@Test
-	public void testRefuseZeroPageSize() throws IOException {
-		writeModifiedPageSize(0);
-		assertUnreadable(config, accessor);
-	}
-	
-	@Test
-	public void testRefuseNegativePageSize() throws IOException {
-		writeModifiedPageSize(-config.pageSize);
-		assertUnreadable(config, accessor);
-	}
-	
-	@Test
-	public void testRefuseExcessivePageSize() throws IOException {
-		writeModifiedPageSize(Integer.MAX_VALUE+1);
-		assertUnreadable(config, accessor);
-	}
-
-	@Test
-	public void testRefuseBadArchivePubKey() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
-			@Override
-			protected byte[] serializeSeedPortion() {
-				byte[] fakePubKey = accessor.master.crypto.makePrivateSigningKey(new byte[32]).publicKey().getBytes();
-				return ByteBuffer.wrap(super.serializeSeedPortion()).put(fakePubKey).array();
-			}
-		};
-		
-		modified.write();
-		assertUnreadable(config);
-		modified.close();
-	}
-	
-	@Test
-	public void testRefuseBadIV() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
-			@Override
-			public void write() throws IOException {
-				configFileIv[0] ^= 0x01;
-				super.write();
-			}
-		};
-		
-		modified.write();
-		assertUnreadable(config);
-		modified.close();
-	}
-	
-	@Test
-	public void testRefuseCorruptedIVWriteSide() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
-			@Override
-			public void write() throws IOException {
-				configFileIv[0] ^= 0x01;
-				super.write();
-				configFileIv[0] ^= 0x01;
-				
-				ByteBuffer buf = ByteBuffer.wrap(storage.read(Page.pathForTag(tag())));
-				buf.put(configFileIv);
-				storage.write(Page.pathForTag(tag()), buf.array());
-			}
-		};
-		
-		modified.write();
-		assertUnreadable(config);
-		modified.close();
-	}
-
-	@Test
-	public void testRefuseCorruptedIVReadSide() throws IOException {
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, config.archiveId, true, Key.blank(config.getCrypto())) {
-			@Override
-			public void write() throws IOException {
-				super.write();
-				configFileIv[0] ^= 0x01;
-				
-				ByteBuffer buf = ByteBuffer.wrap(storage.read(Page.pathForTag(tag())));
-				buf.put(configFileIv);
-				storage.write(Page.pathForTag(tag()), buf.array());
-			}
-		};
-		
-		modified.write();
-		assertUnreadable(config);
-		modified.close();
-	}
-
-	@Test
-	public void testRefuseShortSeedPortion() throws IOException {
-		Key key = new Key(master.crypto);
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE, key, key) {
-			@Override
-			protected int seedPortionPadSize() {
-				return super.seedPortionPadSize()-1;
-			}
-		};
-		
-		modified.write();
-		assertUnreadable(modified);
-		modified.close();
-	}
-	
-	@Test
-	public void testRefuseLongSeedPortion() throws IOException {
-		Key key = new Key(master.crypto);
-		ZKArchiveConfig modified = new ZKArchiveConfig(accessor, "", ZKArchive.DEFAULT_PAGE_SIZE, key, key) {
-			@Override
-			protected int seedPortionPadSize() {
-				return super.seedPortionPadSize()+1;
-			}
-		};
-		
-		modified.write();
-		assertUnreadable(modified);
-		modified.close();
-	}
-	
-	@Test
-	public void testRefuseModified() throws IOException {
-		byte[] raw = config.archive.storage.read(Page.pathForTag(config.tag()));		
-		int[] steps = {0, config.archive.crypto.symIvLength(), config.seedPortionPadSize(), -1};
-		int offset = 0;
-		for(int step : steps) {
-			if(step < 0) offset = -step;
-			else offset += step;
-			
-			raw[offset] ^= 0x01;
-			config.archive.storage.write(Page.pathForTag(config.tag()), raw);
-			raw[offset] ^= 0x01;
-			assertUnreadable(config);
-		}
-	}
 	
 	@Test
 	public void testGetArchiveId() {
-		assertTrue(Arrays.equals(config.getArchiveId(), config.calculateArchiveId(config.deriveArchiveFingerprint())));
+		// TODO EasySafe: (test) test that the archive id is correct
 		assertTrue(Arrays.equals(config.archiveId, seedConfig.archiveId));
 	}
 	
@@ -411,7 +240,8 @@ public class ZKArchiveConfigTest {
 		config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, 0, 0);
 	}
 	
-	@Test
+	// TODO EasySafe: (test) Recalculate test vectors once new config file is dialed in
+	@Test @Ignore
 	public void testDeriveKeyForArchiveRootMatchesTestVectors() {
 		class ArchiveKeyDerivationExample {
 			public Key key;
@@ -561,12 +391,6 @@ public class ZKArchiveConfigTest {
 	}
 	
 	@Test
-	public void testValidatePageReturnsTrueForValidConfigPage() throws IOException {
-		byte[] serialized = config.storage.read(Page.pathForTag(config.tag()));
-		assertTrue(config.validatePage(config.tag(), serialized));
-	}
-	
-	@Test
 	public void testValidatePageReturnsFalseForTamperedConfigPage() throws IOException {
 		byte[] serialized = config.storage.read(Page.pathForTag(config.tag()));
 		serialized[19] ^= 0x04;
@@ -645,86 +469,6 @@ public class ZKArchiveConfigTest {
 		ZKArchiveConfig config2 = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE);
 		assertFalse(Arrays.equals(config.tag(), config2.tag()));
 		config2.close();
-	}
-	
-	@Test
-	public void testVerifyReturnsTrueIfValidFileSupplied() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
-		assertTrue(config.verify(configData));
-	}
-	
-	@Test
-	public void testVerifyReturnsFalseIfVersionPortionTampered() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
-		configData[0] ^= 0x01;
-		assertFalse(config.verify(configData));
-	}
-	
-	@Test
-	public void testVerifyReturnsFalseIfIvPortionTampered() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
-		int offset = master.crypto.hashLength();
-		configData[offset] ^= 0x01;
-		assertFalse(config.verify(configData));
-	}
-	
-	@Test
-	public void testVerifyReturnsFalseIfSeedPortionTampered() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
-		int offset = master.crypto.hashLength();
-		offset += master.crypto.symIvLength();
-		configData[offset] ^= 0x01;
-		assertFalse(config.verify(configData));
-	}
-	
-	@Test
-	public void testVerifyReturnsFalseIfSeedPortionForgedWithFakePubKey() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
-		ByteBuffer configBuf = ByteBuffer.wrap(configData);
-		
-		byte[] forgedPubKey = config.getPubKey().getBytes().clone();
-		forgedPubKey[4] ^= 0x20;
-		ByteBuffer plaintext = ByteBuffer.allocate(master.crypto.asymPublicSigningKeySize() + 8);
-		plaintext.put(forgedPubKey);
-		plaintext.putLong(config.pageSize);
-		
-		configBuf.position(master.crypto.hashLength() + master.crypto.symIvLength());
-		configBuf.put(config.accessor.configFileSeedKey.encrypt(config.configFileIv, plaintext.array(), config.seedPortionPadSize()));
-		
-		assertFalse(config.verify(configData));
-	}
-
-	@Test
-	public void testVerifyReturnsFalseIfSeedPortionForgedWithFakePageSize() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
-		ByteBuffer configBuf = ByteBuffer.wrap(configData);
-		
-		ByteBuffer plaintext = ByteBuffer.allocate(master.crypto.asymPublicSigningKeySize() + 8);
-		plaintext.put(config.getPubKey().getBytes());
-		plaintext.putLong(config.pageSize+1);
-		
-		configBuf.position(master.crypto.hashLength() + master.crypto.symIvLength());
-		configBuf.put(config.accessor.configFileSeedKey.encrypt(config.configFileIv, plaintext.array(), config.seedPortionPadSize()));
-		
-		assertFalse(config.verify(configData));
-	}
-	
-	@Test
-	public void testVerifyReturnsFalseIfSecurePortionTampered() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
-		int offset = master.crypto.hashLength();
-		offset += master.crypto.symIvLength();
-		offset += master.crypto.symPaddedCiphertextSize(config.seedPortionPadSize());
-		configData[offset] ^= 0x01;
-		assertFalse(config.verify(configData));
-	}
-	
-	@Test
-	public void testVerifyReturnsFalseIfSignatureTampered() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
-		int offset = configData.length-1;
-		configData[offset] ^= 0x01;
-		assertFalse(config.verify(configData));
 	}
 	
 	@Test

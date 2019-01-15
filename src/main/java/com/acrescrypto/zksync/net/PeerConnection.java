@@ -43,10 +43,8 @@ public class PeerConnection {
 	public final static byte CMD_REQUEST_PAGE_TAGS = 0x0b;
 	public final static byte CMD_SEND_PAGE = 0x0c;
 	public final static byte CMD_SET_PAUSED = 0x0d;
-	public final static byte CMD_REQUEST_CONFIG_INFO = 0x0e;
-	public final static byte CMD_SEND_CONFIG_INFO = 0x0f;
 	
-	public final static int MAX_SUPPORTED_CMD = CMD_SEND_CONFIG_INFO; // update to largest acceptable command code
+	public final static int MAX_SUPPORTED_CMD = CMD_SET_PAUSED; // update to largest acceptable command code
 	
 	public final static int PEER_TYPE_STATIC = 0; // static fileserver; needs subclass to handle
 	public final static int PEER_TYPE_BLIND = 1; // has knowledge of seed key, but not archive passphrase; can't decipher data
@@ -313,18 +311,6 @@ public class PeerConnection {
 		send(CMD_REQUEST_REVISION_DETAILS, serializeRevTags(priority, revTags));
 	}
 	
-	public void requestConfigInfo() {
-		send(CMD_REQUEST_CONFIG_INFO, new byte[0]);
-	}
-	
-	public void sendConfigInfo() {
-		ByteBuffer configInfo = ByteBuffer.allocate(8+socket.swarm.config.getCrypto().asymPublicDHKeySize() + socket.swarm.config.getCrypto().hashLength());
-		configInfo.put(socket.swarm.config.getArchiveFingerprint());
-		configInfo.put(socket.swarm.config.getPubKey().getBytes());
-		configInfo.putLong(socket.swarm.config.getPageSize());
-		send(CMD_SEND_CONFIG_INFO, configInfo.array());
-	}
-	
 	public void setPaused(boolean paused) {
 		send(CMD_SET_PAUSED, new byte[] { (byte) (paused ? 0x01 : 0x00) });
 	}
@@ -360,7 +346,6 @@ public class PeerConnection {
 	}
 	
 	protected void waitForFullInit() throws EOFException {
-		Util.blockOn(()->!closed && !socket.swarm.config.canReceive());
 		Util.blockOn(()->!closed && !socket.swarm.config.hasKey() && !socket.swarm.config.getAccessor().isSeedOnly());
 		Util.blockOn(()->!closed && socket.swarm.config.getArchive() == null);
 		if(closed) throw new EOFException(); // maybe not best exception, but we just want to stop processing without triggering a blacklist
@@ -407,12 +392,6 @@ public class PeerConnection {
 				break;
 			case CMD_SET_PAUSED:
 				handleSetPaused(msg);
-				break;
-			case CMD_REQUEST_CONFIG_INFO:
-				handleRequestConfigInfo(msg);
-				break;
-			case CMD_SEND_CONFIG_INFO:
-				handleSendConfigInfo(msg);
 				break;
 			default:
 				logger.info("Ignoring unknown request command {} from {}", msg.cmd, socket.getAddress());
@@ -628,35 +607,6 @@ public class PeerConnection {
 		assertState(pausedByte == 0x00 || pausedByte == 0x01);
 		msg.rxBuf.requireEOF();
 		setRemotePaused(pausedByte == 0x01);
-	}
-	
-	protected void handleRequestConfigInfo(PeerMessageIncoming msg) throws ProtocolViolationException {
-		msg.rxBuf.requireEOF();
-		if(socket.swarm.config.canReceive()) {
-			sendConfigInfo();
-		}
-	}
-	
-	protected void handleSendConfigInfo(PeerMessageIncoming msg) throws EOFException, ProtocolViolationException {
-		byte[] fingerprint = new byte[getCrypto().hashLength()];
-		byte[] pubKeyRaw = new byte[getCrypto().asymPublicDHKeySize()];
-		
-		msg.rxBuf.get(fingerprint);
-		msg.rxBuf.get(pubKeyRaw);
-		long pageSizeLong = msg.rxBuf.getLong();
-		msg.rxBuf.requireEOF();
-		
-		assertState(0 <= pageSizeLong && pageSizeLong <= Integer.MAX_VALUE);
-		byte[] allegedArchiveId = socket.swarm.config.calculateArchiveId(fingerprint, pubKeyRaw, pageSizeLong);
-		assertState(Arrays.equals(socket.swarm.config.getArchiveId(), allegedArchiveId));
-		
-		if(!socket.swarm.config.canReceive()) {
-			socket.swarm.config.setPageSize((int) pageSizeLong);
-			socket.swarm.config.setArchiveFingerprint(fingerprint);
-			socket.swarm.config.setPubKey(getCrypto().makePublicSigningKey(pubKeyRaw));
-		}
-		
-		socket.swarm.receivedConfigInfo();
 	}
 	
 	protected void send(byte cmd, byte[] payload) {

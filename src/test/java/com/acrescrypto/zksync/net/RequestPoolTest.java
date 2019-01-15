@@ -40,7 +40,7 @@ public class RequestPoolTest {
 	}
 	
 	class DummyConnection extends PeerConnection {
-		boolean requestedAll, mockSeedOnly, setPaused, setPausedValue, requestedConfigInfo;
+		boolean requestedAll, mockSeedOnly, setPaused, setPausedValue;
 		int requestedPriority;
 		RevisionTag requestedRevTag;
 		
@@ -83,10 +83,6 @@ public class RequestPoolTest {
 			if(mockSeedOnly) throw new PeerCapabilityException();
 			requestedPriority = priority;
 			requestedRevisionDetails.addAll(refTags);
-		}
-		
-		@Override public void requestConfigInfo() {
-			requestedConfigInfo = true;
 		}
 		
 		@Override public void announceTag(long shortTag) {}
@@ -371,34 +367,6 @@ public class RequestPoolTest {
 	}
 	
 	@Test
-	public void testAddRequestsToPeerAddsConfigInfoRequestIfRequested() {
-		pool.setRequestingConfigInfo(true);
-		pool.addRequestsToConnection(conn);
-		assertTrue(conn.requestedConfigInfo);
-	}
-	
-	@Test
-	public void testAddRequestsToPeerDoesNotAddConfigInfoRequestIfNotRequested() {
-		pool.addRequestsToConnection(conn);
-		assertFalse(conn.requestedConfigInfo);
-	}
-	
-	@Test
-	public void testAddRequestsToPeerDoesNotAddDataRequestsIfConfigNotReadyToReceive() {
-		LinkedList<Long> tags = new LinkedList<>();
-		for(int i = 0; i < 16; i++) {
-			long tag = ByteBuffer.wrap(crypto.rng(8)).getLong();
-			tags.add(tag);
-			pool.addPageTag(123, tag);
-		}
-
-		config.setPageSize(-1);
-		assertFalse(config.canReceive());
-		pool.addRequestsToConnection(conn);
-		assertEquals(0, conn.requestedPageTags.size());
-	}
-	
-	@Test
 	public void testAddRequestsToPeerCallsRequestPageTags() {
 		LinkedList<Long> tags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
@@ -407,7 +375,6 @@ public class RequestPoolTest {
 			pool.addPageTag(123, tag);
 		}
 		
-		pool.receivedConfigInfo();
 		pool.addRequestsToConnection(conn);
 		assertEquals(tags, conn.requestedPageTags);
 		assertEquals(123, conn.requestedPriority);
@@ -649,22 +616,5 @@ public class RequestPoolTest {
 		pool2.stop();
 		try { archive.getConfig().getLocalStorage().unlink(pool2.path()); } catch(ENOENTException exc) {}
 		assertFalse(Util.waitUntil(100, ()->archive.getConfig().getLocalStorage().exists(pool2.path())));
-	}
-	
-	@Test
-	public void testAutomaticallyRequestsConfigInfoWhenCanReceiveFalse() {
-		config.setPageSize(-1);
-		assertFalse(config.canReceive());
-
-		RequestPool pool2 = new RequestPool(config); // need a second pool for the faster prune interval
-		assertTrue(pool2.requestingConfigInfo);
-		pool2.stop();		
-	}
-	
-	@Test
-	public void testDoesNotAutomaticallyRequestConfigInfoWhenCanReceiveTrue() {
-		RequestPool pool2 = new RequestPool(config); // need a second pool for the faster prune interval
-		assertFalse(pool2.requestingConfigInfo);
-		pool2.stop();		
 	}
 }

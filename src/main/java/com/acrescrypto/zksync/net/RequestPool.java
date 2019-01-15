@@ -205,7 +205,7 @@ public class RequestPool {
 		}
 	}
 	
-	boolean requestingEverything, stopped, paused, requestingConfigInfo;
+	boolean requestingEverything, stopped, paused;
 	Logger logger = LoggerFactory.getLogger(RequestPool.class);
 	
 	protected RequestPool() {}
@@ -213,7 +213,6 @@ public class RequestPool {
 	public RequestPool(ZKArchiveConfig config) {
 		this.config = config;
 		
-		setRequestingConfigInfo(!config.canReceive());
 		new Thread(config.getThreadGroup(), ()->pruneThread()).start();
 	}
 	
@@ -226,64 +225,42 @@ public class RequestPool {
 		this.requestingEverything = requestingEverything;
 		dirty = true;
 		
-		if(config.canReceive()) {
-			for(PeerConnection connection : config.getSwarm().getConnections()) {
-				connection.requestAll();
-			}
+		for(PeerConnection connection : config.getSwarm().getConnections()) {
+			connection.requestAll();
 		}
-	}
-	
-	public void setRequestingConfigInfo(boolean requestingConfigInfo) {
-		this.requestingConfigInfo = requestingConfigInfo;
-		dirty = true;
 	}
 	
 	public void setPaused(boolean paused) {
 		this.paused = paused;
 	}
 	
-	public void receivedConfigInfo() {
-		setRequestingConfigInfo(false);
-		addDataRequests();
-	}
-	
 	public synchronized void addRequestsToConnection(PeerConnection conn) {
 		conn.setPaused(paused);
 		
-		if(requestingConfigInfo) {
-			conn.requestConfigInfo();
-		}
-		
-		if(config.canReceive()) {
-			addDataRequestsToConnection(conn);
-		}
+		addDataRequestsToConnection(conn);
 	}
 	
 	public synchronized void addInode(int priority, RevisionTag revTag, long inodeId) {
 		requestedInodes.add(priority, new InodeRef(revTag, inodeId));
 		dirty = true;
 
-		if(config.canReceive()) {
-			for(PeerConnection connection : config.getSwarm().getConnections()) {
-				ArrayList<Long> list = new ArrayList<>(1);
-				list.add(inodeId);
-				try {
-					connection.requestInodes(priority, revTag, list);
-				} catch (PeerCapabilityException e) {}
-			}
+		for(PeerConnection connection : config.getSwarm().getConnections()) {
+			ArrayList<Long> list = new ArrayList<>(1);
+			list.add(inodeId);
+			try {
+				connection.requestInodes(priority, revTag, list);
+			} catch (PeerCapabilityException e) {}
 		}
 	}
 	
 	public synchronized void cancelInode(RevisionTag revTag, long inodeId) {
 		requestedInodes.remove(new InodeRef(revTag, inodeId));
-		if(config.canReceive()) {
-			for(PeerConnection connection : config.getSwarm().getConnections()) {
-				ArrayList<Long> list = new ArrayList<>(1);
-				list.add(inodeId);
-				try {
-					connection.requestInodes(PageQueue.CANCEL_PRIORITY, revTag, list);
-				} catch (PeerCapabilityException e) {}
-			}
+		for(PeerConnection connection : config.getSwarm().getConnections()) {
+			ArrayList<Long> list = new ArrayList<>(1);
+			list.add(inodeId);
+			try {
+				connection.requestInodes(PageQueue.CANCEL_PRIORITY, revTag, list);
+			} catch (PeerCapabilityException e) {}
 		}
 	}
 	
@@ -300,14 +277,12 @@ public class RequestPool {
 		requestedRevisions.add(priority,  revTag);
 		dirty = true;
 		
-		if(config.canReceive()) {
-			for(PeerConnection connection : config.getSwarm().getConnections()) {
-				ArrayList<RevisionTag> list = new ArrayList<>(1);
-				list.add(revTag);
-				try {
-					connection.requestRevisionContents(priority, list);
-				} catch(PeerCapabilityException exc) {}
-			}
+		for(PeerConnection connection : config.getSwarm().getConnections()) {
+			ArrayList<RevisionTag> list = new ArrayList<>(1);
+			list.add(revTag);
+			try {
+				connection.requestRevisionContents(priority, list);
+			} catch(PeerCapabilityException exc) {}
 		}
 	}
 	
@@ -315,14 +290,12 @@ public class RequestPool {
 		requestedRevisions.remove(revTag);
 		dirty = true;
 		
-		if(config.canReceive()) {
-			for(PeerConnection connection : config.getSwarm().getConnections()) {
-				ArrayList<RevisionTag> list = new ArrayList<>(1);
-				list.add(revTag);
-				try {
-					connection.requestRevisionContents(PageQueue.CANCEL_PRIORITY, list);
-				} catch(PeerCapabilityException exc) {}
-			}
+		for(PeerConnection connection : config.getSwarm().getConnections()) {
+			ArrayList<RevisionTag> list = new ArrayList<>(1);
+			list.add(revTag);
+			try {
+				connection.requestRevisionContents(PageQueue.CANCEL_PRIORITY, list);
+			} catch(PeerCapabilityException exc) {}
 		}
 	}
 	
@@ -338,10 +311,8 @@ public class RequestPool {
 		requestedPageTags.add(priority, shortTag);
 		dirty = true;
 		
-		if(config.canReceive()) {
-			for(PeerConnection connection : config.getSwarm().getConnections()) {
-				connection.requestPageTag(priority, shortTag);
-			}
+		for(PeerConnection connection : config.getSwarm().getConnections()) {
+			connection.requestPageTag(priority, shortTag);
 		}
 	}
 	
@@ -349,10 +320,8 @@ public class RequestPool {
 		requestedPageTags.remove(shortTag);
 		dirty = true;
 		
-		if(config.canReceive()) {
-			for(PeerConnection connection : config.getSwarm().getConnections()) {
-				connection.requestPageTag(PageQueue.CANCEL_PRIORITY, shortTag);
-			}
+		for(PeerConnection connection : config.getSwarm().getConnections()) {
+			connection.requestPageTag(PageQueue.CANCEL_PRIORITY, shortTag);
 		}
 	}
 	
@@ -383,12 +352,10 @@ public class RequestPool {
 	public synchronized void addRevisionDetails(int priority, RevisionTag revTag) {
 		requestedRevisionDetails.add(priority, revTag);
 		
-		if(config.canReceive()) {
-			for(PeerConnection connection : config.getSwarm().getConnections()) {
-				try {
-					connection.requestRevisionDetails(priority, revTag);
-				} catch(PeerCapabilityException exc) {}
-			}
+		for(PeerConnection connection : config.getSwarm().getConnections()) {
+			try {
+				connection.requestRevisionDetails(priority, revTag);
+			} catch(PeerCapabilityException exc) {}
 		}
 	}
 	

@@ -168,9 +168,14 @@ public class Util {
 	
 	/** Side-channel-attack resistant comparison of byte arrays. */
 	public static boolean safeEquals(byte[] a, byte[] b) {
-		byte d = 0;
 		if(a.length != b.length) return false;
-		for(int i = 0; i < a.length; i++) {
+		return safeEquals(a, b, a.length);
+	}
+	
+	public static boolean safeEquals(byte[] a, byte[] b, int length) {
+		byte d = 0;
+		if(a.length < length || b.length < length) return false;
+		for(int i = 0; i < length; i++) {
 			d |= (a[i] ^ b[i]);
 		}
 		

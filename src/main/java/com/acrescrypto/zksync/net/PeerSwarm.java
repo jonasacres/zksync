@@ -396,11 +396,7 @@ public class PeerSwarm implements BlacklistCallback {
 		
 		return activeFiles.get(shortTag);
 	}
-	
-	protected void receivedConfigInfo() {
-		pool.receivedConfigInfo();
-	}
-	
+
 	protected synchronized void receivedPage(byte[] tag) {
 		long shortTag = Util.shortTag(tag);
 		activeFiles.remove(shortTag);

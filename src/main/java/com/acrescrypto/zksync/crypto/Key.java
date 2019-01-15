@@ -2,6 +2,8 @@ package com.acrescrypto.zksync.crypto;
 
 import java.nio.ByteBuffer;
 
+import com.acrescrypto.zksync.utility.Util;
+
 public class Key {
 	private byte[] raw;
 	protected CryptoSupport crypto;
@@ -20,11 +22,18 @@ public class Key {
 		this.raw = raw;
 	}
 	
+	// TODO EasySafe: (refactor) remove integer-based key derivation
 	public Key derive(int index, byte[] data) {
 		ByteBuffer saltBuf = ByteBuffer.allocate(data.length+4);
 		saltBuf.put(data);
 		saltBuf.putInt(index);
-		return new Key(crypto, crypto.expand(raw, raw.length, saltBuf.array(), "zksync".getBytes()));
+		return new Key(crypto, crypto.expand(raw, raw.length, saltBuf.array(), "easysafe".getBytes()));
+	}
+	
+	public Key derive(String id, byte[] data) {
+		byte[] salt = Util.concat(id.getBytes(), data);
+		return new Key(crypto,
+				crypto.expand(raw, raw.length, salt, "easysafe".getBytes()));
 	}
 	
 	public byte[] encryptUnauthenticated(byte[] iv, byte[] plaintext) {
