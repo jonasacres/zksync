@@ -504,7 +504,7 @@ public class RequestPool {
 	}
 	
 	protected Key key() {
-		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REQUEST_POOL);
+		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, "easysafe-request-pool-key");
 	}
 	
 	protected String path() {

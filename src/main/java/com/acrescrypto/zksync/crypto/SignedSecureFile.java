@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 
 public class SignedSecureFile {
@@ -72,7 +71,7 @@ public class SignedSecureFile {
 			byte[] salt = new byte[crypto.hashLength()];
 			System.arraycopy(contents, 0, salt, 0, salt.length);
 			
-			Key derivedKey = textKey.derive(ArchiveAccessor.KEY_INDEX_FILE_ENCRYPTION, salt);
+			Key derivedKey = textKey.derive("easysafe-file-encryption", salt);
 			byte[] paddedPlaintext = derivedKey.decryptUnauthenticated(fixedIV(), contents, salt.length, contents.length - salt.length);
 			return crypto.unpad(paddedPlaintext);
 		} catch (IOException exc) {
@@ -91,7 +90,7 @@ public class SignedSecureFile {
 			
 			byte[] paddedPlaintext = textKey.crypto.padToSize(plaintext, 0, plaintext.length, padSize);
 			byte[] salt = saltKey.authenticate(plaintext);
-			Key encKey = textKey.derive(ArchiveAccessor.KEY_INDEX_FILE_ENCRYPTION, salt);
+			Key encKey = textKey.derive("easysafe-file-encryption", salt);
 			byte[] ciphertext = encKey.encryptUnauthenticated(fixedIV(), paddedPlaintext);
 			byte[] result = new byte[salt.length + ciphertext.length + privKey.crypto.asymSignatureSize()];
 			

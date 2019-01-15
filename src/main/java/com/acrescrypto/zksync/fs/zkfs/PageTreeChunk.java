@@ -139,8 +139,7 @@ public class PageTreeChunk {
 		buf.put(archiveId);
 		
 		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
-				ArchiveAccessor.KEY_TYPE_ROOT,
-				ArchiveAccessor.KEY_INDEX_PAGE,
+				"easysafe-page-text-key",
 				buf.array());
 	}
 	
@@ -152,14 +151,12 @@ public class PageTreeChunk {
 		buf.put(archiveId);
 		
 		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
-				ArchiveAccessor.KEY_TYPE_ROOT,
-				ArchiveAccessor.KEY_INDEX_PAGE_SALT,
+				"easysafe-page-salt-key",
 				buf.array());
 	}
 	
 	protected Key authKey() {
 		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
-				ArchiveAccessor.KEY_TYPE_AUTH,
-				ArchiveAccessor.KEY_INDEX_PAGE);
+				"easysafe-page-auth-key");
 	}
 }

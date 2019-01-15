@@ -157,7 +157,9 @@ public class Page {
 		buf.putInt(pageNum); // no dedupe within file
 		buf.put(file.getFS().getArchive().getConfig().getArchiveId());
 		
-		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_ROOT, ArchiveAccessor.KEY_INDEX_PAGE, buf.array());
+		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
+				"easysafe-page-text-key",
+				buf.array());
 	}
 	
 	/** used with text key to encrypt page contents */
@@ -168,14 +170,13 @@ public class Page {
 		buf.putInt(pageNum); // no dedupe within file
 		buf.put(file.getFS().getArchive().getConfig().getArchiveId());
 		
-		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, ArchiveAccessor.KEY_TYPE_ROOT, ArchiveAccessor.KEY_INDEX_PAGE_SALT, buf.array());
+		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, "easysafe-page-salt-key", buf.array());
 	}
 	
 	/** key used to produce page tag (provides authentication of page contents) */
 	protected Key authKey() {
 		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
-				ArchiveAccessor.KEY_TYPE_AUTH,
-				ArchiveAccessor.KEY_INDEX_PAGE);
+				"easysafe-page-auth-key");
 	}
 	
 	/** load page contents from underlying storage */

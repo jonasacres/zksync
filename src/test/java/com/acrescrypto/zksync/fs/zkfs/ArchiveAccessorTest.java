@@ -66,10 +66,7 @@ public class ArchiveAccessorTest {
 		assertTrue(Arrays.equals(seedKey.getRaw(), seedAccessor.seedRoot.getRaw()));
 		// we could test the contents, but it would pretty much be copy-paste from the code we're testing
 		assertNotNull(seedAccessor.seedId);
-		assertNotNull(seedAccessor.seedRegId);
 		assertNotNull(seedAccessor.localRoot);
-		assertNotNull(seedAccessor.configFileTagKey);
-		assertNotNull(seedAccessor.configFileSeedKey);
 	}
 	
 	@Test
@@ -77,10 +74,7 @@ public class ArchiveAccessorTest {
 		assertTrue(Arrays.equals(key.getRaw(), accessor.passphraseRoot.getRaw()));
 		assertNotNull(seedAccessor.seedRoot);
 		assertNotNull(seedAccessor.seedId);
-		assertNotNull(seedAccessor.seedRegId);
 		assertNotNull(seedAccessor.localRoot);
-		assertNotNull(seedAccessor.configFileTagKey);
-		assertNotNull(seedAccessor.configFileSeedKey);
 	}
 	
 	@Test
@@ -89,7 +83,7 @@ public class ArchiveAccessorTest {
 		for(int i = -3; i <= 3; i++) {
 			for(byte step = 0; step <= 1; step++) {
 				byte[] tweak = Util.concat(Util.serializeInt(step), Util.serializeInt(i), secret);
-				byte[] expected = accessor.deriveKey(ArchiveAccessor.KEY_ROOT_PASSPHRASE, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED_TEMPORAL, tweak).getRaw();
+				byte[] expected = accessor.deriveKey(ArchiveAccessor.KEY_ROOT_PASSPHRASE, "easysafe-dht-temporal-proof", tweak).getRaw();
 				byte[] proof = accessor.temporalProof(i, step, secret);
 				assertTrue(Arrays.equals(expected, proof));
 			}
@@ -102,7 +96,7 @@ public class ArchiveAccessorTest {
 		for(int i = -3; i <= 3; i++) {
 			for(byte step = 0; step <= 1; step++) {
 				byte[] tweak = Util.concat(Util.serializeInt(step), Util.serializeInt(i), secret);
-				byte[] expected = seedAccessor.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_SEED_TEMPORAL, tweak).getRaw();
+				byte[] expected = seedAccessor.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, "easysafe-dht-temporal-proof", tweak).getRaw();
 				byte[] proof = seedAccessor.temporalProof(i, step, secret);
 				assertTrue(Arrays.equals(expected, proof));
 			}
@@ -111,22 +105,22 @@ public class ArchiveAccessorTest {
 	
 	@Test
 	public void testDeriveKeyDeterministic() {
-		assertTrue(Arrays.equals(accessor.deriveKey(0, 0, 0).getRaw(), accessor.deriveKey(0, 0, 0).getRaw()));
+		assertTrue(Arrays.equals(accessor.deriveKey(0, "foo").getRaw(), accessor.deriveKey(0, "foo").getRaw()));
 	}
 	
 	@Test
 	public void testDeriveKeyMutatesWithRoot() {
-		assertFalse(Arrays.equals(accessor.deriveKey(0, 0, 0).getRaw(), accessor.deriveKey(2, 0, 0).getRaw()));
+		assertFalse(Arrays.equals(accessor.deriveKey(0, "foo").getRaw(), accessor.deriveKey(2, "foo").getRaw()));
 	}
 	
 	@Test
-	public void testDeriveKeyMutatesWithType() {
-		assertFalse(Arrays.equals(accessor.deriveKey(0, 0, 0).getRaw(), accessor.deriveKey(0, 1, 0).getRaw()));
+	public void testDeriveKeyMutatesWithId() {
+		assertFalse(Arrays.equals(accessor.deriveKey(0, "foo").getRaw(), accessor.deriveKey(0, "bar").getRaw()));
 	}
 	
 	@Test
-	public void testDeriveKeyMutatesWithIndex() {
-		assertFalse(Arrays.equals(accessor.deriveKey(0, 0, 0).getRaw(), accessor.deriveKey(0, 0, 1).getRaw()));
+	public void testDeriveKeyMutatesWithTweak() {
+		assertFalse(Arrays.equals(accessor.deriveKey(0, "foo", "bar".getBytes()).getRaw(), accessor.deriveKey(0, "foo", "baz".getBytes()).getRaw()));
 	}
 	
 	// TODO EasySafe: (test) Recalculate test vectors
@@ -135,12 +129,11 @@ public class ArchiveAccessorTest {
 		class ArchiveKeyDerivationExample {
 			public Key key;
 			public byte[] expectedResult, tweak;
-			public int type, index;
+			public String id;
 			
-			public ArchiveKeyDerivationExample(String keyStr, int type, int index, String tweakStr, String expectedResultStr) {
+			public ArchiveKeyDerivationExample(String keyStr, String id, String tweakStr, String expectedResultStr) {
 				this.key = new Key(accessor.getMaster().getCrypto(), Util.hexToBytes(keyStr));
-				this.type = type;
-				this.index = index;
+				this.id = id;
 				this.tweak = Util.hexToBytes(tweakStr);
 				this.expectedResult = Util.hexToBytes(expectedResultStr);
 			}
@@ -168,7 +161,7 @@ public class ArchiveAccessorTest {
 						fail();
 					}
 					
-					Key derived = accessor.deriveKey(root, type, index, tweak);
+					Key derived = accessor.deriveKey(root, id, tweak);
 					assertArrayEquals(expectedResult, derived.getRaw());
 				}
 			}
@@ -177,44 +170,22 @@ public class ArchiveAccessorTest {
 		// Generated from test-vectors.py, Python 3.6.5, commit db67d8c388d18cb428e257e42baf7c40682f9b83
 		new ArchiveKeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0000,
-			0x0000,
+			"foo",
 			"",
 			"b6abfc6470a720a02b3c11cc12d62aac86502bcc79bc13670191730695a95ff0").validate();
 		new ArchiveKeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0001,
-			0x0000,
+			"bar",
 			"",
 			"1ea8d06ffa94e7f4d34e04ac72f3ee13d8b532b83a13fe33bbecbe6ec5d57fd2").validate();
 		new ArchiveKeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0002,
-			0x0000,
-			"",
-			"f0d74adb5f77df2d37adffe0541024a374922558016a210cd80259979f7f05e3").validate();
-		new ArchiveKeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0000,
-			0x0001,
-			"",
-			"fdcad2202cd184924bd7911b222471320c6e4a44871eb6cafbc8435bc9eba6bd").validate();
-		new ArchiveKeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0000,
-			0xffff,
-			"",
-			"9783b80dbcce3817bbb8579ff77258e37f9e32ea9c3275f60788b4e2efa1f5e7").validate();
-		new ArchiveKeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0000,
-			0x0000,
+			"foo",
 			"10111213",
 			"fcc462f1c3eb17749969104f54a82e829969a9d340746c181c3f2c2ab8c817cb").validate();
 		new ArchiveKeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x5555,
-			0x8888,
+			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 			"808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
 			"ffd291c2d5fa1f452e5a3540d60f791ea21cab6e5d90c8a0422fd4dd8002a008").validate();
 	}
@@ -222,7 +193,7 @@ public class ArchiveAccessorTest {
 	@Test
 	public void testDeriveKeyRejectsArchiveRoot() {
 		try {
-			accessor.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, 0, 0);
+			accessor.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, "foo");
 			fail();
 		} catch(IllegalArgumentException exc) {
 		}

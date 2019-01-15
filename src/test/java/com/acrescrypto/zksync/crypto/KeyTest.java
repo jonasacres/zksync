@@ -34,16 +34,16 @@ public class KeyTest {
 	public void testDerive() {
 		class KeyDerivationExample {
 			public byte[] baseKey, data, expectedResult;
-			public int index;
-			public KeyDerivationExample(String baseKey, int index, String data, String expectedResult) {
+			public String id;
+			public KeyDerivationExample(String baseKey, String id, String data, String expectedResult) {
 				this.baseKey = Util.hexToBytes(baseKey);
-				this.index = index;
+				this.id = id;
 				this.data = Util.hexToBytes(data);
 				this.expectedResult = Util.hexToBytes(expectedResult);
 			}
 			
 			public void validate() {
-				assertArrayEquals(expectedResult, new Key(crypto, baseKey).derive(index, data).getRaw());
+				assertArrayEquals(expectedResult, new Key(crypto, baseKey).derive(id, data).getRaw());
 			}
 		}
 		
@@ -51,32 +51,32 @@ public class KeyTest {
 		// Generated from test-vectors.py, Python 3.6.5, commit db67d8c388d18cb428e257e42baf7c40682f9b83
 		new KeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x00000000,
+			"0",
 			"",
 			"b6abfc6470a720a02b3c11cc12d62aac86502bcc79bc13670191730695a95ff0").validate();
 		new KeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x00000001,
+			"1",
 			"",
 			"fdcad2202cd184924bd7911b222471320c6e4a44871eb6cafbc8435bc9eba6bd").validate();
 		new KeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0xffffffff,
+			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 			"",
 			"565b06e0e32896d12b1037733459c6fd72d5f92c2494926f9539101232c5cea7").validate();
 		new KeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f",
-			0x00000000,
+			"0",
 			"",
 			"7d6828664cd9c40f0a2731551e57dfee").validate();
 		new KeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f",
-			0x00000000,
+			"0",
 			"00",
 			"7d6828664cd9c40f0a2731551e57dfee").validate();
 		new KeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0xffffffff,
+			"0",
 			"808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
 			"3bbbe1606ae844b6b205a50729bf4722300f9ac130b1909b95889b1181c91f4e").validate();
 	}

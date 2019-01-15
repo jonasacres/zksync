@@ -131,7 +131,7 @@ public class TCPPeerSocket extends PeerSocket {
 				swarm.getConfig().getArchiveId());
 		
 		handshake.setDerivationCallback((key)->{
-			sip = new SipObfuscator(key.derive(0, SipObfuscator.SIP_OBFUSCATOR_ASK_NAME.getBytes()).getRaw(), true);
+			sip = new SipObfuscator(key.derive(SipObfuscator.SIP_OBFUSCATOR_ASK_NAME).getRaw(), true);
 		});
 		
 		handshake.setObfuscation(

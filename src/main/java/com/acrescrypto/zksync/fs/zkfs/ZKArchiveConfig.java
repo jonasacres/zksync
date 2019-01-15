@@ -61,7 +61,7 @@ public class ZKArchiveConfig {
 	protected boolean advertising;
 	
 	public static byte[] decryptArchiveId(ArchiveAccessor accessor, byte[] iv, byte[] encryptedArchiveId) {
-		Key key = accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_AD_ARCHIVE_ID);
+		Key key = accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-dht-ad-fsid");
 		if(iv.length != key.getCrypto().symIvLength()) {
 			ByteBuffer truncated = ByteBuffer.allocate(key.getCrypto().symIvLength());
 			truncated.put(iv, 0, Math.min(iv.length, truncated.capacity()));
@@ -415,19 +415,18 @@ public class ZKArchiveConfig {
 		return true;
 	}
 	
-	public Key deriveKey(int root, int type, int index, byte[] tweak) {
-		int modifier = ((type & 0xFFFF) << 16) | (index & 0xFFFF);
+	public Key deriveKey(int root, String id, byte[] tweak) {
 		if(root == ArchiveAccessor.KEY_ROOT_ARCHIVE) { 
-			return archiveRoot.derive(modifier, tweak);
+			return archiveRoot.derive(id, tweak);
 		} else if(root == ArchiveAccessor.KEY_ROOT_WRITE) {
-			return writeRoot.derive(modifier, tweak);
+			return writeRoot.derive(id, tweak);
 		} else {
-			return accessor.deriveKey(root, type, index, tweak);
+			return accessor.deriveKey(root, id, tweak);
 		}
 	}
 	
-	public Key deriveKey(int root, int type, int index) {
-		return deriveKey(root, type, index, new byte[0]);
+	public Key deriveKey(int root, String id) {
+		return deriveKey(root, id, new byte[0]);
 	}
 	
 	protected void initArchiveSpecific(Key archiveRoot, Key writeRoot) {
@@ -455,7 +454,7 @@ public class ZKArchiveConfig {
 			return verify(allegedPage);
 		}
 		
-		Key authKey = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE);
+		Key authKey = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-page-auth-key");
 		int sigOffset = allegedPage.length - accessor.master.crypto.asymSignatureSize();
 		if(!Arrays.equals(tag, authKey.authenticate(allegedPage))) return false;
 		if(!pubKey.verify(allegedPage, 0, sigOffset, allegedPage, sigOffset, pubKey.getCrypto().asymSignatureSize())) return false;
@@ -508,7 +507,7 @@ public class ZKArchiveConfig {
 	}
 	
 	public byte[] getEncryptedArchiveId(byte[] iv) {
-		Key key = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_AD_ARCHIVE_ID);
+		Key key = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-dht-ad-fsid");
 
 		if(iv.length != key.getCrypto().symIvLength()) {
 			ByteBuffer truncated = ByteBuffer.allocate(key.getCrypto().symIvLength());

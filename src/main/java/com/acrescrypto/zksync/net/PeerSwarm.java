@@ -534,7 +534,7 @@ public class PeerSwarm implements BlacklistCallback {
 
 	protected MutableSecureFile storedFile() throws IOException {
 		FS fs = config.getMaster().localStorageFsForArchiveId(config.getArchiveId());
-		return MutableSecureFile.atPath(fs, "identity", config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_AD_IDENTITY));
+		return MutableSecureFile.atPath(fs, "identity", config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, "easysafe-swarm-identity"));
 	}
 	
 	public void dumpConnections() {

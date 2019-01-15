@@ -544,15 +544,15 @@ public class DHTClient {
 	}
 	
 	protected Key clientInfoKey() {
-		return storageKey.derive(KEY_INDEX_CLIENT_INFO, new byte[0]);
+		return storageKey.derive("easysafe-dht-client-info-key");
 	}
 	
 	protected Key recordStoreKey() {
-		return storageKey.derive(KEY_INDEX_RECORD_STORE, new byte[0]);
+		return storageKey.derive("easysafe-dht-record-store-key");
 	}
 	
 	protected Key routingTableKey() {
-		return storageKey.derive(KEY_INDEX_ROUTING_TABLE, new byte[0]);
+		return storageKey.derive("easysafe-dht-routing-table-key");
 	}
 	
 	protected String path() {

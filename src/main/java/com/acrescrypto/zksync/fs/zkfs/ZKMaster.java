@@ -113,8 +113,8 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		this.threadGroup = new ThreadGroup("ZKMaster " + System.identityHashCode(this));
 		getLocalKey();
 		this.storedAccess = new StoredAccess(this);
-		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive(ArchiveAccessor.KEY_INDEX_BLACKLIST, "blacklist".getBytes()));
-		this.dhtClient = new DHTClient(localKey.derive(ArchiveAccessor.KEY_INDEX_DHT_STORAGE, "dht-storage".getBytes()), this);
+		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive("easysafe-blacklist"));
+		this.dhtClient = new DHTClient(localKey.derive("easysafe-dht-storage"), this);
 		this.dhtDiscovery = new DHTZKArchiveDiscovery();
 		listener = new TCPPeerSocketListener(this);
 		loadStoredAccessors();
@@ -380,7 +380,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 			networkId = dhtClient.getNetworkId();
 		}
 
-		Key key = localKey.derive(ArchiveAccessor.KEY_INDEX_DHT_STORAGE, "dht-storage".getBytes());
+		Key key = localKey.derive("easysafe-dht-storage");
 		this.dhtClient = new DHTClient(key, this, networkId);
 	}
 

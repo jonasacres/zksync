@@ -235,8 +235,7 @@ public class ZKFSManager {
 	
 	protected Key storageKey(ZKArchiveConfig config) {
 		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL,
-				ArchiveAccessor.KEY_TYPE_CIPHER,
-				ArchiveAccessor.KEY_INDEX_MANAGER_FILE);
+				"easysafe-local-storage-key");
 	}
 	
 	protected void write() throws IOException {

@@ -138,8 +138,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	
 	protected void discover(DiscoveryEntry entry) {
 		Key lookupKey = entry.accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
-				ArchiveAccessor.KEY_TYPE_AUTH,
-				ArchiveAccessor.KEY_INDEX_DHT_LOOKUP);
+				"easysafe-dht-lookup");
 		DHTID searchId = new DHTID(entry.accessor.temporalSeedId(0));
 		entry.accessor.getMaster().getDHTClient().lookup(searchId, lookupKey, (record)->{
 			if(!(record instanceof DHTAdvertisementRecord)) return;
@@ -173,8 +172,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 			
 			DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(entry.accessor.getMaster().getCrypto(), ad);
 			Key lookupKey = entry.accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
-					ArchiveAccessor.KEY_TYPE_AUTH,
-					ArchiveAccessor.KEY_INDEX_DHT_LOOKUP);
+					"easysafe-dht-lookup");
 			
 			for(int i = -1; i <= 1; i++) {
 				DHTID searchId = new DHTID(entry.accessor.temporalSeedId(i));

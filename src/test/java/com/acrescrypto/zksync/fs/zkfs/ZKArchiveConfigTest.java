@@ -228,21 +228,21 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testDeriveKeyMatchesArchiveAccessor() {
-		assertTrue(Arrays.equals(config.deriveKey(0, 0, 0).getRaw(), accessor.deriveKey(0, 0, 0).getRaw()));
-		assertTrue(Arrays.equals(config.deriveKey(2, 0, 0).getRaw(), accessor.deriveKey(2, 0, 0).getRaw()));
-		assertTrue(Arrays.equals(config.deriveKey(0, 1, 0).getRaw(), accessor.deriveKey(0, 1, 0).getRaw()));
-		assertTrue(Arrays.equals(config.deriveKey(0, 0, 1).getRaw(), accessor.deriveKey(0, 0, 1).getRaw()));
+		assertTrue(Arrays.equals(config.deriveKey(0, "foo").getRaw(), accessor.deriveKey(0, "foo").getRaw()));
+		assertTrue(Arrays.equals(config.deriveKey(2, "foo").getRaw(), accessor.deriveKey(2, "foo").getRaw()));
+		assertTrue(Arrays.equals(config.deriveKey(0, "bar").getRaw(), accessor.deriveKey(0, "bar").getRaw()));
+		assertTrue(Arrays.equals(config.deriveKey(0, "foo", "bar".getBytes()).getRaw(), accessor.deriveKey(0, "foo", "bar".getBytes()).getRaw()));
 	}
 	
 	@Test
 	public void testDeriveKeyWithSeed() {
-		assertTrue(Arrays.equals(config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, 0, 0).getRaw(), seedConfig.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, 0, 0).getRaw()));
-		assertTrue(Arrays.equals(config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, 0, 0).getRaw(), seedConfig.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, 0, 0).getRaw()));
+		assertTrue(Arrays.equals(config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "foo").getRaw(), seedConfig.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "foo").getRaw()));
+		assertTrue(Arrays.equals(config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, "bar").getRaw(), seedConfig.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, "bar").getRaw()));
 	}
 	
 	@Test
 	public void testDeriveKeyAcceptsArchiveRoot() {
-		config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, 0, 0);
+		config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, "foo");
 	}
 	
 	// TODO EasySafe: (test) Recalculate test vectors once new config file is dialed in
@@ -251,12 +251,11 @@ public class ZKArchiveConfigTest {
 		class ArchiveKeyDerivationExample {
 			public Key key;
 			public byte[] expectedResult, tweak;
-			public int type, index;
+			public String id;
 			
-			public ArchiveKeyDerivationExample(String keyStr, int type, int index, String tweakStr, String expectedResultStr) {
+			public ArchiveKeyDerivationExample(String keyStr, String id, String tweakStr, String expectedResultStr) {
 				this.key = new Key(accessor.getMaster().getCrypto(), Util.hexToBytes(keyStr));
-				this.type = type;
-				this.index = index;
+				this.id = id;
 				this.tweak = Util.hexToBytes(tweakStr);
 				this.expectedResult = Util.hexToBytes(expectedResultStr);
 			}
@@ -289,7 +288,7 @@ public class ZKArchiveConfigTest {
 						fail();
 					}
 					
-					Key derived = config.deriveKey(root, type, index, tweak);
+					Key derived = config.deriveKey(root, id, tweak);
 					assertArrayEquals(expectedResult, derived.getRaw());
 				}
 			}
@@ -298,47 +297,25 @@ public class ZKArchiveConfigTest {
 		// These vectors are self-generated, and are here as a canary against unintended changes to key derivation logic.
 		// Generated from test-vectors.py, Python 3.6.5, commit db67d8c388d18cb428e257e42baf7c40682f9b83
 		new ArchiveKeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0000,
-			0x0000,
-			"",
-			"b6abfc6470a720a02b3c11cc12d62aac86502bcc79bc13670191730695a95ff0").validate();
-		new ArchiveKeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0001,
-			0x0000,
-			"",
-			"1ea8d06ffa94e7f4d34e04ac72f3ee13d8b532b83a13fe33bbecbe6ec5d57fd2").validate();
-		new ArchiveKeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0002,
-			0x0000,
-			"",
-			"f0d74adb5f77df2d37adffe0541024a374922558016a210cd80259979f7f05e3").validate();
-		new ArchiveKeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0000,
-			0x0001,
-			"",
-			"fdcad2202cd184924bd7911b222471320c6e4a44871eb6cafbc8435bc9eba6bd").validate();
-		new ArchiveKeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0000,
-			0xffff,
-			"",
-			"9783b80dbcce3817bbb8579ff77258e37f9e32ea9c3275f60788b4e2efa1f5e7").validate();
-		new ArchiveKeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x0000,
-			0x0000,
-			"10111213",
-			"fcc462f1c3eb17749969104f54a82e829969a9d340746c181c3f2c2ab8c817cb").validate();
-		new ArchiveKeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			0x5555,
-			0x8888,
-			"808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
-			"ffd291c2d5fa1f452e5a3540d60f791ea21cab6e5d90c8a0422fd4dd8002a008").validate();
+				"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+				"foo",
+				"",
+				"b6abfc6470a720a02b3c11cc12d62aac86502bcc79bc13670191730695a95ff0").validate();
+			new ArchiveKeyDerivationExample(
+				"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+				"bar",
+				"",
+				"1ea8d06ffa94e7f4d34e04ac72f3ee13d8b532b83a13fe33bbecbe6ec5d57fd2").validate();
+			new ArchiveKeyDerivationExample(
+				"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+				"foo",
+				"10111213",
+				"fcc462f1c3eb17749969104f54a82e829969a9d340746c181c3f2c2ab8c817cb").validate();
+			new ArchiveKeyDerivationExample(
+				"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+				"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+				"808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+				"ffd291c2d5fa1f452e5a3540d60f791ea21cab6e5d90c8a0422fd4dd8002a008").validate();
 	}
 	
 	@Test
@@ -420,7 +397,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testValidatePageReturnsFalseOnForgedTag() throws IOException {
-		Key authKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE);
+		Key authKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-page-auth-key");
 		byte[] fakePage = new byte[config.pageSize];
 		byte[] tag = authKey.authenticate(fakePage);
 		assertFalse(config.validatePage(tag, fakePage));
@@ -439,7 +416,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testValidatePageReturnsTrueOnForgedSignatureAndTag() throws IOException {
-		Key authKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, ArchiveAccessor.KEY_TYPE_AUTH, ArchiveAccessor.KEY_INDEX_PAGE);
+		Key authKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-page-auth-key");
 		ByteBuffer fakePage = ByteBuffer.allocate(PAGE_SIZE+master.crypto.asymSignatureSize());
 		fakePage.position(fakePage.capacity()-master.crypto.asymSignatureSize());
 		fakePage.put(config.privKey.sign(fakePage.array(), 0, fakePage.position()));

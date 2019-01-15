@@ -22,30 +22,6 @@ public class ArchiveAccessor {
 	public final static int KEY_TYPE_AUTH = 1;
 	public final static int KEY_TYPE_ROOT = 2;
 
-	public final static int KEY_INDEX_ARCHIVE = 0;
-	public final static int KEY_INDEX_LOCAL = 1;
-	public final static int KEY_INDEX_PAGE = 2;
-	public final static int KEY_INDEX_REVISION = 3;
-	public final static int KEY_INDEX_CONFIG_FILE = 4;
-	public final static int KEY_INDEX_REVISION_LIST = 5;
-	public final static int KEY_INDEX_REVISION_TREE = 6;
-	public final static int KEY_INDEX_SEED = 7;
-	public final static int KEY_INDEX_SEED_REG = 8;
-	public final static int KEY_INDEX_SEED_TEMPORAL = 9;
-	public final static int KEY_INDEX_STORED_ACCESS = 10;
-	public final static int KEY_INDEX_REFTAG = 11;
-	public final static int KEY_INDEX_BLACKLIST = 12;
-	public final static int KEY_INDEX_ACCUMULATOR = 13;
-	public final static int KEY_INDEX_AD_IDENTITY = 14;
-	public final static int KEY_INDEX_AD_ARCHIVE_ID = 15;
-	public final static int KEY_INDEX_REQUEST_POOL = 16;
-	public final static int KEY_INDEX_DHT_STORAGE = 17;
-	public final static int KEY_INDEX_DHT_LOOKUP = 18;
-	public final static int KEY_INDEX_MANAGER_FILE = 19;
-
-	public final static int KEY_INDEX_PAGE_SALT = 20;
-	public final static int KEY_INDEX_FILE_ENCRYPTION = 21;
-
 	protected ZKMaster master;
 
 	protected Key passphraseRoot; // derived from passphrase; used to generate seedRoot and configFileKey/Tag
@@ -53,11 +29,6 @@ public class ArchiveAccessor {
 	protected Key localRoot; // derived from locally-stored entropy combined with seedRoot; encrypts user preferences and any other data not shared with peers
 	
 	protected Key seedId; // derived from seed root; identifies archive family (all archives bearing the same passphrase)
-	protected Key seedRegId; // derived from seed root; unique identifier for registering archive family
-	
-	protected Key configFileKey; // derived from passphrase root; used to encrypt secure portion of configuration file
-	protected Key configFileSeedKey; // derived from passphrase root; used to encrypt seed portion of configuration file
-	protected Key configFileTagKey; // derived from passphrase root; used to set location in filesystem of config file
 	
 	protected int type; // KEY_ROOT_PASSPHRASE or KEY_ROOT_SEED
 
@@ -178,7 +149,6 @@ public class ArchiveAccessor {
 	
 	public void becomeSeedOnly() {
 		passphraseRoot = null;
-		configFileKey = null;
 		type = KEY_ROOT_SEED;
 	}
 	
@@ -190,18 +160,17 @@ public class ArchiveAccessor {
 		deriveFromSeedRoot(seedRoot);
 	}
 
-	public Key deriveKey(int root, int type, int index, byte[] tweak) {
+	public Key deriveKey(int root, String id, byte[] tweak) {
 		Key[] keys = { passphraseRoot, null, seedRoot, localRoot };
 		if(root >= keys.length || keys[root] == null) {
 			throw new IllegalArgumentException();
 		}
 		
-		int modifier = ((type & 0xFFFF) << 16) | (index & 0xFFFF);
-		return keys[root].derive(modifier, tweak);
+		return keys[root].derive(id, tweak);
 	}
 	
-	public Key deriveKey(int root, int type, int index) {
-		return deriveKey(root, type, index, new byte[0]);
+	public Key deriveKey(int root, String id) {
+		return deriveKey(root, id, new byte[0]);
 	}	
 
 	// TODO Noise: ditch unneeded offset argument, also this is no longer a "temporal" proof
@@ -212,22 +181,18 @@ public class ArchiveAccessor {
 		/* Use a garbage "proof" if we don't actually have knowledge of the passphrase key. But
 		 * at least keep this constant time... */
 		int root = isSeedOnly() ? KEY_ROOT_LOCAL : KEY_ROOT_PASSPHRASE;
-		return deriveKey(root, KEY_TYPE_AUTH, KEY_INDEX_SEED_TEMPORAL, timeSecretTweak).getRaw();
+		return deriveKey(root, "easysafe-dht-temporal-proof", timeSecretTweak).getRaw();
 	}
 	
 	protected void deriveFromPassphraseRoot(Key passphraseRoot) {
 		this.passphraseRoot = passphraseRoot;
-		deriveFromSeedRoot(deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_ROOT, KEY_INDEX_SEED));		
-		configFileKey = deriveKey(KEY_ROOT_PASSPHRASE, KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_FILE, new byte[0]);
+		deriveFromSeedRoot(deriveKey(KEY_ROOT_PASSPHRASE, "easysafe-seed-root"));		
 	}
 	
 	protected void deriveFromSeedRoot(Key seedRoot) {
 		this.seedRoot = seedRoot;
-		seedId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED, new byte[0]);
-		seedRegId = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_SEED_REG, new byte[0]);
-		localRoot = deriveKey(KEY_ROOT_SEED, KEY_TYPE_ROOT, KEY_INDEX_LOCAL, master.localKey.getRaw());
-		configFileTagKey = deriveKey(KEY_ROOT_SEED, KEY_TYPE_AUTH, KEY_INDEX_CONFIG_FILE, new byte[0]);
-		configFileSeedKey = deriveKey(KEY_ROOT_SEED, KEY_TYPE_CIPHER, KEY_INDEX_CONFIG_FILE, new byte[0]);
+		seedId = deriveKey(KEY_ROOT_SEED, "easysafe-seed-id", new byte[0]);
+		localRoot = deriveKey(KEY_ROOT_SEED, "easysafe-local-root", master.localKey.getRaw());
 	}
 	
 	public byte[] temporalSeedId(int offset) {

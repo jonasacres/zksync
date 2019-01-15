@@ -188,7 +188,7 @@ public class RevisionList {
 	}
 	
 	protected Key branchTipKey() {
-		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, ArchiveAccessor.KEY_TYPE_CIPHER, ArchiveAccessor.KEY_INDEX_REVISION_LIST);
+		return config.deriveKey(ArchiveAccessor.KEY_ROOT_LOCAL, "easysafe-revision-list-key");
 	}
 	
 	public void setAutomerge(boolean automerge) {
