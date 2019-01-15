@@ -14,7 +14,6 @@ import java.util.Arrays;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -123,8 +122,7 @@ public class ArchiveAccessorTest {
 		assertFalse(Arrays.equals(accessor.deriveKey(0, "foo", "bar".getBytes()).getRaw(), accessor.deriveKey(0, "foo", "baz".getBytes()).getRaw()));
 	}
 	
-	// TODO EasySafe: (test) Recalculate test vectors
-	@Test @Ignore
+	@Test
 	public void testDeriveKeyMatchesTestVectors() {
 		class ArchiveKeyDerivationExample {
 			public Key key;
@@ -167,27 +165,27 @@ public class ArchiveAccessorTest {
 			}
 		}
 		
-		// Generated from test-vectors.py, Python 3.6.5, commit db67d8c388d18cb428e257e42baf7c40682f9b83
+		// Generated from test-vectors.py, Python 3.6.5, commit 125943e0d5ec57fcf91365dfca6ad3355aafd0f1
 		new ArchiveKeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 			"foo",
 			"",
-			"b6abfc6470a720a02b3c11cc12d62aac86502bcc79bc13670191730695a95ff0").validate();
+			"010c58af3dcaf904b08b657f9278f18bf2bfb65efbd92000b646f5ac66ebdc2f").validate();
 		new ArchiveKeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 			"bar",
 			"",
-			"1ea8d06ffa94e7f4d34e04ac72f3ee13d8b532b83a13fe33bbecbe6ec5d57fd2").validate();
+			"82eb5c004e2890e274faa46e0dd16b8c476d558ff8ecc9ff162d7dc3ad5411f1").validate();
 		new ArchiveKeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 			"foo",
 			"10111213",
-			"fcc462f1c3eb17749969104f54a82e829969a9d340746c181c3f2c2ab8c817cb").validate();
+			"89809b56c6a5bb2c79db364c46bafdd93ded5dbb12d2a580c65a45aa2781f29d").validate();
 		new ArchiveKeyDerivationExample(
 			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
 			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 			"808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
-			"ffd291c2d5fa1f452e5a3540d60f791ea21cab6e5d90c8a0422fd4dd8002a008").validate();
+			"c84b4ee9d379680a9a5abc0d93fda4e5e8fad56cc473878a9709027690e8ff22").validate();
 	}
 	
 	@Test

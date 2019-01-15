@@ -8,7 +8,6 @@ import java.util.Arrays;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -30,7 +29,7 @@ public class KeyTest {
 	}
 
 	// TODO EasySafe: (test) Recalculate test vectors once new config file is dialed in
-	@Test @Ignore
+	@Test
 	public void testDerive() {
 		class KeyDerivationExample {
 			public byte[] baseKey, data, expectedResult;
@@ -48,37 +47,42 @@ public class KeyTest {
 		}
 		
 		// Test vectors for Key.derive, used in KeyTest.testDerive()
-		// Generated from test-vectors.py, Python 3.6.5, commit db67d8c388d18cb428e257e42baf7c40682f9b83
+		// Generated from test-vectors.py, Python 3.6.5, commit 125943e0d5ec57fcf91365dfca6ad3355aafd0f1
 		new KeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			"0",
-			"",
-			"b6abfc6470a720a02b3c11cc12d62aac86502bcc79bc13670191730695a95ff0").validate();
-		new KeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			"1",
-			"",
-			"fdcad2202cd184924bd7911b222471320c6e4a44871eb6cafbc8435bc9eba6bd").validate();
-		new KeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			"",
-			"565b06e0e32896d12b1037733459c6fd72d5f92c2494926f9539101232c5cea7").validate();
-		new KeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f",
-			"0",
-			"",
-			"7d6828664cd9c40f0a2731551e57dfee").validate();
-		new KeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f",
-			"0",
-			"00",
-			"7d6828664cd9c40f0a2731551e57dfee").validate();
-		new KeyDerivationExample(
-			"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-			"0",
-			"808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
-			"3bbbe1606ae844b6b205a50729bf4722300f9ac130b1909b95889b1181c91f4e").validate();
+				"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+				"foo",
+				"",
+				"010c58af3dcaf904b08b657f9278f18bf2bfb65efbd92000b646f5ac66ebdc2f").validate();
+			new KeyDerivationExample(
+				"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+				"foo",
+				"00",
+				"010c58af3dcaf904b08b657f9278f18bf2bfb65efbd92000b646f5ac66ebdc2f").validate();
+			new KeyDerivationExample(
+				"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+				"bar",
+				"",
+				"82eb5c004e2890e274faa46e0dd16b8c476d558ff8ecc9ff162d7dc3ad5411f1").validate();
+			new KeyDerivationExample(
+				"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+				"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+				"",
+				"fee63ce71ced6ed84d3cc52bf9af93068f8f252aa293d6c9fd3bddf3d4227773").validate();
+			new KeyDerivationExample(
+				"000102030405060708090a0b0c0d0e0f",
+				"foo",
+				"",
+				"09ff8d92bb76baa696ef3f66f173d5b1").validate();
+			new KeyDerivationExample(
+				"000102030405060708090a0b0c0d0e0f",
+				"foo",
+				"00",
+				"09ff8d92bb76baa696ef3f66f173d5b1").validate();
+			new KeyDerivationExample(
+				"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+				"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+				"808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+				"c84b4ee9d379680a9a5abc0d93fda4e5e8fad56cc473878a9709027690e8ff22").validate();
 	}
 	
 	@Test

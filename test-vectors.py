@@ -28,13 +28,12 @@ def hmac(key, data):
 def expand(ikm, length, salt, info):
   return Hkdf(salt, ikm, hash=hashlib.blake2b).expand(info, length).hex()
 
-def derive_key(orig_key, index, data):
-  salt = data + index.to_bytes(4, byteorder="big")
-  return expand(orig_key, len(orig_key), salt, b"zksync")
+def derive_key(orig_key, idStr, data):
+  salt = bytearray(idStr, 'utf8') + data
+  return expand(orig_key, len(orig_key), salt, b"easysafe")
 
-def config_derive_key(root, type, index, tweak):
-  modifier = ((type & 0xFFFF) << 16) | (index & 0xFFFF)
-  return derive_key(root, modifier, tweak)
+def config_derive_key(root, idStr, tweak):
+  return derive_key(root, idStr, tweak)
 
 def make_hmac_examples():
   vectors = [
@@ -147,36 +146,41 @@ def make_expand_examples():
   print("};\n\n")
 
 def make_derive_key_examples():
-  # root key, index, data
+  # root key, id, data
   vectors = [
     [
       "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      0,
+      "foo",
       ""
     ],
     [
       "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      1,
-      ""
-    ],
-    [
-      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      0xffffffff,
-      ""
-    ],
-    [
-      "000102030405060708090a0b0c0d0e0f",
-      0,
-      ""
-    ],
-    [
-      "000102030405060708090a0b0c0d0e0f",
-      0,
+      "foo",
       "00"
     ],
     [
       "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      0xffffffff,
+      "bar",
+      ""
+    ],
+    [
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      ""
+    ],
+    [
+      "000102030405060708090a0b0c0d0e0f",
+      "foo",
+      ""
+    ],
+    [
+      "000102030405060708090a0b0c0d0e0f",
+      "foo",
+      "00"
+    ],
+    [
+      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
     ]
   ]
@@ -185,51 +189,29 @@ def make_derive_key_examples():
   show_version()
   for v in vectors:
     result = derive_key(bytearray.fromhex(v[0]), v[1], bytearray.fromhex(v[2]))
-    print("new KeyDerivationExample(\n\t\"%s\",\n\t0x%08x,\n\t\"%s\",\n\t\"%s\").validate();" % (v[0], v[1], v[2], result))
+    print("new KeyDerivationExample(\n\t\"%s\",\n\t\"%s\",\n\t\"%s\",\n\t\"%s\").validate();" % (v[0], v[1], v[2], result))
   print("\n")
 
 def make_archive_derive_key_examples():
   vectors = [
     [
       "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      0,
-      0,
+      "foo",
       ""
     ],
     [
       "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      1,
-      0,
+      "bar",
       ""
     ],
     [
       "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      2,
-      0,
-      ""
-    ],
-    [
-      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      0,
-      1,
-      ""
-    ],
-    [
-      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      0,
-      0xffff,
-      ""
-    ],
-    [
-      "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      0,
-      0,
+      "foo",
       "10111213"
     ],
     [
       "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
-      0x5555,
-      0x8888,
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9fa0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf"
     ]
   ]
@@ -237,8 +219,8 @@ def make_archive_derive_key_examples():
   print("// Test vectors for archive key derivation, used in ZKArchiveConfigTest.testDeriveKeyForArchiveRootMatchesTestVectors and ArchiveAccessorTest.testDeriveKeyMatchesTestVectors")
   show_version()
   for v in vectors:
-    result = config_derive_key(bytearray.fromhex(v[0]), v[1], v[2], bytearray.fromhex(v[3]))
-    print("new ArchiveKeyDerivationExample(\n\t\"%s\",\n\t0x%04x,\n\t0x%04x,\n\t\"%s\",\n\t\"%s\").validate();" % (v[0], v[1], v[2], v[3], result))
+    result = config_derive_key(bytearray.fromhex(v[0]), v[1], bytearray.fromhex(v[2]))
+    print("new ArchiveKeyDerivationExample(\n\t\"%s\",\n\t\"%s\",\n\t\"%s\",\n\t\"%s\").validate();" % (v[0], v[1], v[2], result))
 
 make_hmac_examples()
 make_expand_examples()
