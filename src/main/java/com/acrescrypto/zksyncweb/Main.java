@@ -1,0 +1,54 @@
+package com.acrescrypto.zksyncweb;
+
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+
+import javax.ws.rs.ProcessingException;
+
+import org.glassfish.grizzly.http.server.HttpHandler;
+import org.glassfish.grizzly.http.server.HttpServer;
+import org.glassfish.grizzly.http.server.ServerConfiguration;
+import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpContainer;
+import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
+import org.glassfish.jersey.jackson.JacksonFeature;
+import org.glassfish.jersey.server.ContainerFactory;
+import org.glassfish.jersey.server.ResourceConfig;
+
+import com.acrescrypto.zksync.utility.Util;
+
+public class Main {
+	public final static String BASE_URI = "http://0.0.0.0:8080/";
+	public static HttpServer startServer() throws IOException, URISyntaxException {
+        ResourceConfig rc = new ResourceConfig();
+        rc
+          .register(ObjectMapperProvider.class)
+          .register(JacksonFeature.class)
+          .register(CustomLoggingFilter.class)
+          .packages("com.acrescrypto.zksyncweb.exceptionmappers")
+          .packages("com.acrescrypto.zksyncweb.resources");
+
+        HttpHandler handler = ContainerFactory.createContainer(
+                GrizzlyHttpContainer.class, rc);
+
+        URI uri = new URI(BASE_URI);
+
+        HttpServer server = GrizzlyHttpServerFactory.createHttpServer(uri);
+
+        ServerConfiguration config = server.getServerConfiguration();
+        config.addHttpHandler(handler, "/");
+        
+        server.start();
+        return server;
+	}
+	
+    public static void main(String[] args) {
+        try {
+        	Util.launchTime();
+        	startServer();
+            System.in.read();
+        } catch (ProcessingException | IOException | URISyntaxException e) {
+            throw new Error("Unable to create HTTP server.", e);
+        }
+    }
+}

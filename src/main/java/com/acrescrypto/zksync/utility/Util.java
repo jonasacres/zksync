@@ -12,6 +12,8 @@ import com.acrescrypto.zksync.crypto.HashContext;
 
 public class Util {
 	static long debugTime = -1;
+	static long launchTime = -1;
+	
 	private final static char[] hexArray = "0123456789abcdef".toCharArray();
 	
 	public interface WaitTest {
@@ -320,5 +322,10 @@ public class Util {
 		}
 		
 		return null;
+	}
+	
+	public static long launchTime() {
+		if(launchTime < 0) launchTime = System.currentTimeMillis();
+		return launchTime;
 	}
 }

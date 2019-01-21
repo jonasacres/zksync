@@ -8,7 +8,8 @@ import org.junit.runners.Suite;
 	ShufflerTest.class,
 	AppendableInputStreamTest.class,
 	BandwidthMonitorTest.class,
-	BandwidthAllocatorTest.class
+	BandwidthAllocatorTest.class,
+	MemLogAppenderTest.class
 })
 
 public class UtilityTests {
