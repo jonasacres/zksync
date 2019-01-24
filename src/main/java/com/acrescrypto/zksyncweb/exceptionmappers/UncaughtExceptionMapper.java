@@ -26,10 +26,17 @@ public class UncaughtExceptionMapper implements ExceptionMapper<Throwable> {
 			return XAPIResponse.withError(404, "Not found").toResponse();
 		}
 		
-		logger.warn("{} {} {} caught exception: {} {}",
-				request.getRemoteAddr(),
-				request.getMethod(),
-				request.getRequestURI(),
+		String preamble = "Unknown request";
+		if(request != null) {
+			String.format("%s %s %s",
+					request.getRemoteAddr(),
+					request.getMethod(),
+					request.getRequestURI());
+			
+		}
+		
+		logger.warn("{} caught exception: {} {}",
+				preamble,
 				exception.getClass().getSimpleName(),
 				exception.getMessage(),
 				exception);
