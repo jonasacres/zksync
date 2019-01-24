@@ -146,7 +146,7 @@ public class DHTClient {
 			if(closed || enabled == isListening()) return;
 			if(enabled) {
 				try {
-					listen(bindAddress, bindPort);
+					listen(bindAddress, master.getGlobalConfig().getInt("net.dht.port", 0));
 				} catch (SocketException exc) {
 					logger.error("DHT: Unable to open DHT socket", exc);
 				}
@@ -335,7 +335,9 @@ public class DHTClient {
 		try {
 			socket = new DatagramSocket(bindPort, addr);
 			socket.setReuseAddress(true);
-			master.getGlobalConfig().set("net.dht.port", socket.getLocalPort());
+			if(socket.getLocalPort() != master.getGlobalConfig().getInt("net.dht.port", 0)) {
+				master.getGlobalConfig().set("net.dht.port", socket.getLocalPort());
+			}
 			logger.info("DHT: listening on UDP port " + getPort());
 			checkUPnP();
 			updateStatus(STATUS_QUESTIONABLE);
