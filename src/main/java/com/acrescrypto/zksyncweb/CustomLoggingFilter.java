@@ -10,18 +10,26 @@ import javax.ws.rs.container.ResourceInfo;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.ext.Provider;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @Provider
 public class CustomLoggingFilter implements ContainerRequestFilter, ContainerResponseFilter {
-    @Context
-    private ResourceInfo resourceInfo;
+	@Context
+	private ResourceInfo resourceInfo;
+	
+	private	Logger logger = LoggerFactory.getLogger(CustomLoggingFilter.class);
 
-    @Override
-    public void filter(ContainerRequestContext requestContext) throws IOException {
-        // System.out.println(requestContext.getMethod() + " " + requestContext.getUriInfo().getPath() + " " + requestContext.getLength());
-    }
+	@Override
+	public void filter(ContainerRequestContext requestContext) throws IOException {
+		logger.info("{} {} -- {} bytes",
+				requestContext.getMethod(),
+				requestContext.getUriInfo().getRequestUri(),
+				requestContext.getLength());
+	}
 
-    @Override
-    public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext)
-                                 throws IOException {
-    }
+	@Override
+	public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext)
+			throws IOException {
+	}
 }
