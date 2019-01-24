@@ -14,41 +14,51 @@ import org.glassfish.jersey.grizzly2.httpserver.GrizzlyHttpServerFactory;
 import org.glassfish.jersey.jackson.JacksonFeature;
 import org.glassfish.jersey.server.ContainerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
+import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.utility.Util;
+
+import ch.qos.logback.classic.LoggerContext;
+import ch.qos.logback.core.util.StatusPrinter;
 
 public class Main {
 	public final static String BASE_URI = "http://0.0.0.0:8080/";
 	public static HttpServer startServer() throws IOException, URISyntaxException {
-        ResourceConfig rc = new ResourceConfig();
-        rc
-          .register(ObjectMapperProvider.class)
-          .register(JacksonFeature.class)
-          .register(CustomLoggingFilter.class)
-          .packages("com.acrescrypto.zksyncweb.exceptionmappers")
-          .packages("com.acrescrypto.zksyncweb.resources");
+		ResourceConfig rc = new ResourceConfig();
+		rc
+			.register(ObjectMapperProvider.class)
+			.register(JacksonFeature.class)
+			.register(CustomLoggingFilter.class)
+			.packages("com.acrescrypto.zksyncweb.exceptionmappers")
+			.packages("com.acrescrypto.zksyncweb.resources");
 
-        HttpHandler handler = ContainerFactory.createContainer(
-                GrizzlyHttpContainer.class, rc);
+		HttpHandler handler = ContainerFactory.createContainer(
+				GrizzlyHttpContainer.class, rc);
 
-        URI uri = new URI(BASE_URI);
+		URI uri = new URI(BASE_URI);
 
-        HttpServer server = GrizzlyHttpServerFactory.createHttpServer(uri);
+		HttpServer server = GrizzlyHttpServerFactory.createHttpServer(uri);
 
-        ServerConfiguration config = server.getServerConfiguration();
-        config.addHttpHandler(handler, "/");
-        
-        server.start();
-        return server;
+		ServerConfiguration config = server.getServerConfiguration();
+		config.addHttpHandler(handler, "/");
+
+		server.start();
+		return server;
 	}
-	
-    public static void main(String[] args) {
-        try {
-        	Util.launchTime();
-        	startServer();
-            System.in.read();
-        } catch (ProcessingException | IOException | URISyntaxException e) {
-            throw new Error("Unable to create HTTP server.", e);
-        }
-    }
+
+	public static void main(String[] args) {
+		// assume SLF4J is bound to logback in the current environment
+		LoggerContext lc = (LoggerContext) LoggerFactory.getILoggerFactory();
+		// print logback's internal status
+		StatusPrinter.print(lc);
+		
+		try {
+			Util.launchTime();
+			State.sharedState();
+			startServer();
+			System.in.read();
+		} catch (ProcessingException | IOException | URISyntaxException e) {
+			throw new Error("Unable to create HTTP server.", e);
+		}
+	}
 }

@@ -26,106 +26,117 @@ import de.mkammerer.argon2.jna.Size_t;
 public class CryptoSupport {
 	private PRNG defaultPrng;
 	private Logger logger = LoggerFactory.getLogger(CryptoSupport.class);
-	
+
 	public static boolean cheapArgon2; // set to true for tests, false otherwise
-	
+
 	public final static int ARGON2_TIME_COST = 40; // iterations
 	public final static int ARGON2_MEMORY_COST = 1048576;  // KiB
 	public final static int ARGON2_PARALLELISM = 16; // threads
-	
+
 	public final static byte[] PASSPHRASE_SALT_READ = "easysafe-argon2-salt-read".getBytes();
 	public final static byte[] PASSPHRASE_SALT_WRITE = "easysafe-argon2-salt-write".getBytes();
 	public final static byte[] PASSPHRASE_SALT_LOCAL = "easysafe-argon2-salt-local".getBytes();
-	
+
 	public static CryptoSupport defaultCrypto() {
 		return new CryptoSupport();
 	}
-	
+
 	private CryptoSupport() {
 		defaultPrng = new PRNG();
 	}
-	
-	public byte[] deriveKeyFromPassphrase(byte[] passphrase, byte[] salt) {
-        JnaUint32 iterations = new JnaUint32(cheapArgon2 ? 1 : ARGON2_TIME_COST);
-        JnaUint32 memory = new JnaUint32(cheapArgon2 ? 128 : ARGON2_MEMORY_COST);
-        JnaUint32 parallelism = new JnaUint32(cheapArgon2 ? 1 : ARGON2_PARALLELISM);
-        JnaUint32 hashLen = new JnaUint32(symKeyLength());
-        
-        byte[] key = new byte[symKeyLength()];
-        
-        int result = Argon2Library.INSTANCE.argon2i_hash_raw(
-                iterations,
-                memory, 
-                parallelism,
-                passphrase,
-                new Size_t(passphrase.length),
-                salt,
-                new Size_t(salt.length),
-                key,
-                new Size_t(hashLen.intValue())
-        );
 
-        if(result != Argon2Library.ARGON2_OK) {
-            String errMsg = Argon2Library.INSTANCE.argon2_error_message(result);
-            throw new IllegalStateException(String.format("%s (%d)", errMsg, result));
-        }
-        
-        return key;
+	public byte[] deriveKeyFromPassphrase(byte[] passphrase, byte[] salt) {
+		JnaUint32 iterations = new JnaUint32(cheapArgon2 ? 1 : ARGON2_TIME_COST);
+		JnaUint32 memory = new JnaUint32(cheapArgon2 ? 128 : ARGON2_MEMORY_COST);
+		JnaUint32 parallelism = new JnaUint32(cheapArgon2 ? 1 : ARGON2_PARALLELISM);
+		JnaUint32 hashLen = new JnaUint32(symKeyLength());
+
+		byte[] key = new byte[symKeyLength()];
+
+		logger.debug("Starting argon2: {} iterations, {} memory, {} parallelism, {} hashlen",
+				iterations,
+				memory,
+				parallelism,
+				hashLen);
+		long startTs = System.currentTimeMillis();
+		int result = Argon2Library.INSTANCE.argon2i_hash_raw(
+				iterations,
+				memory, 
+				parallelism,
+				passphrase,
+				new Size_t(passphrase.length),
+				salt,
+				new Size_t(salt.length),
+				key,
+				new Size_t(hashLen.intValue())
+				);
+		
+		logger.debug("argon2 calculation complete; elasped time = {}ms, result = {} (want 0)",
+				System.currentTimeMillis() - startTs,
+				result);
+
+		if(result != Argon2Library.ARGON2_OK) {
+			String errMsg = Argon2Library.INSTANCE.argon2_error_message(result);
+			logger.error("Argon2 failed: {}", errMsg);
+			throw new IllegalStateException(String.format("%s (%d)", errMsg, result));
+		}
+
+		return key;
 	}
-	
+
 	public HashContext startHash() {
 		return new HashContext();
 	}
-	
+
 	public byte[] hash(byte[] data) {
 		return startHash().update(data).finish();
 	}
-	
+
 	public byte[] hash(byte[] data, int offset, int length) {
 		return startHash().update(data, offset, length).finish();
 	}
-	
+
 	public byte[] authenticate(byte[] key, byte[] data) {
 		return authenticate(key, data, 0, data.length);
 	}
-	
+
 	public byte[] authenticate(byte[] key, byte[] data, int offset, int length) {
 		// HMAC, per RFC 2104
 		/* We're using HMAC since some standards (e.g. noise) explicitly call for the use of
 		 * HMAC in place of an algorithm-specific keyed hash, as supported in BLAKE2b. */
 		int blockSize = HashContext.BLOCK_SIZE;
-		
+
 		byte[] ipad = new byte[blockSize], opad = new byte[blockSize];
 		for(int i = 0; i < blockSize; i++) {
 			ipad[i] = 0x36;
 			opad[i] = 0x5c;
 		}
-		
+
 		if(key.length > blockSize) {
 			key = hash(key);
 		}
-		
+
 		if(key.length < blockSize) {
 			byte[] newKey = new byte[blockSize];
 			System.arraycopy(key, 0, newKey, 0, key.length);
 			key = newKey;
 		}
-		
+
 		HashContext inner = startHash();
 		inner.update(xor(key, ipad));
 		inner.update(data);
-		
+
 		HashContext outer = startHash();
 		outer.update(xor(key, opad));
 		outer.update(inner.finish());
 		return outer.finish();
 	}
-	
+
 	public byte[] expand(byte[] ikm, int length, byte[] salt, byte[] info) {
 		// HKDF, per RFC 5869
 		byte[] prk = authenticate(salt, ikm);
 		ByteBuffer output = ByteBuffer.allocate(length);
-		
+
 		int n = (int) Math.ceil((double) length/hashLength());
 		byte[] tp = {};
 		for(int i = 1; i <= n; i++) {
@@ -136,7 +147,7 @@ public class CryptoSupport {
 			tp = authenticate(prk, concatted.array());
 			output.put(tp, 0, Math.min(tp.length, output.remaining()));
 		}
-		
+
 		return output.array();
 	}
 
@@ -162,7 +173,7 @@ public class CryptoSupport {
 			throw new RuntimeException(exc);
 		}
 	}
-	
+
 	public byte[] encrypt(byte[] key, byte[] iv, byte[] plaintext, int offset, int length, byte[] associatedData, int adOffset, int adLen, int padSize)
 	{
 		try {
@@ -177,7 +188,7 @@ public class CryptoSupport {
 			throw new RuntimeException(exc);
 		}
 	}
-	
+
 	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, byte[] associatedData, boolean padded)
 	{
 		return decrypt(key,
@@ -188,9 +199,9 @@ public class CryptoSupport {
 				associatedData,
 				0,
 				associatedData == null ? 0 : associatedData.length,
-				padded);
+						padded);
 	}
-	
+
 	public byte[] decrypt(byte[] key, byte[] iv, byte[] ciphertext, int offset, int length, byte[] associatedData, int adOffset, int adLen, boolean padded) {
 		byte[] paddedPlaintext = processAEADCipher(false,
 				128,
@@ -205,19 +216,19 @@ public class CryptoSupport {
 		if(padded) return unpad(paddedPlaintext);
 		return paddedPlaintext;
 	}
-	
+
 	public byte[] encryptCBC(byte[] key, byte[] iv, byte[] plaintext) {
 		return encryptUnauthenticated(key, iv, plaintext, 0, plaintext.length);
 	}
-	
+
 	public byte[] encryptUnauthenticated(byte[] key, byte[] iv, byte[] plaintext, int offset, int length) {
 		return processOrdinaryCipher(true, key, iv, plaintext, offset, length);
 	}
-	
+
 	public byte[] decryptCBC(byte[] key, byte[] iv, byte[] ciphertext) {
 		return decryptCBC(key, iv, ciphertext, 0, ciphertext.length);
 	}
-	
+
 	public byte[] decryptCBC(byte[] key, byte[] iv, byte[] ciphertext, int offset, int length) {
 		byte[] paddedPlaintext = processOrdinaryCipher(false,
 				key,
@@ -227,28 +238,28 @@ public class CryptoSupport {
 				length);
 		return paddedPlaintext;
 	}
-	
+
 	public static byte[] xor(byte[] a, byte[] b) {
 		int len = Math.min(a.length, b.length);
 		byte[] r = new byte[len];
-		
+
 		for(int i = 0; i < len; i++) r[i] = (byte) (a[i] ^ b[i]);
 		return r;
 	}
-	
+
 	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] iv, byte[] in, byte[] ad) throws IllegalStateException {
-        return processAEADCipher(encrypt,
-        		tagLen,
-        		keyBytes,
-        		iv,
-        		in,
-        		0,
-        		in == null ? 0 : in.length,
-        		ad,
-        		0,
-        		ad == null ? 0 : ad.length);
+		return processAEADCipher(encrypt,
+				tagLen,
+				keyBytes,
+				iv,
+				in,
+				0,
+				in == null ? 0 : in.length,
+						ad,
+						0,
+						ad == null ? 0 : ad.length);
 	}
-	
+
 	protected static byte[] processAEADCipher(boolean encrypt, int tagLen, byte[] keyBytes, byte[] nonce, byte[] in, int inOffset, int inLen, byte[] ad, int adOffset, int adLen) throws IllegalStateException {
 		try {
 			if(nonce.length < 12) {
@@ -256,7 +267,7 @@ public class CryptoSupport {
 				System.arraycopy(nonce, 0, newNonce, 0, nonce.length);
 				nonce = newNonce;
 			}
-			
+
 			Cipher cipher = Cipher.getInstance("ChaCha20-Poly1305");
 			IvParameterSpec ivSpec = new IvParameterSpec(nonce);
 			SecretKeySpec keySpec = new SecretKeySpec(keyBytes, "ChaCha20");
@@ -274,7 +285,7 @@ public class CryptoSupport {
 			throw new RuntimeException(exc);
 		}
 	}
-	
+
 	protected static byte[] processOrdinaryCipher(boolean encrypt, byte[] keyBytes, byte[] nonce, byte[] in, int offset, int length) throws IllegalStateException {
 		try {
 			if(nonce.length < 12) {
@@ -282,7 +293,7 @@ public class CryptoSupport {
 				System.arraycopy(nonce, 0, newNonce, 0, nonce.length);
 				nonce = newNonce;
 			}
-			
+
 			Cipher cipher = Cipher.getInstance("ChaCha20");
 			ChaCha20ParameterSpec ivSpec = new ChaCha20ParameterSpec(nonce, 1);
 			SecretKeySpec keySpec = new SecretKeySpec(keyBytes, "ChaCha20");
@@ -298,7 +309,7 @@ public class CryptoSupport {
 			throw new RuntimeException(exc);
 		}
 	}
-	
+
 	public byte[] padToSize(byte[] raw, int offset, int length, int padSize) {
 		if(raw == null) return null;
 		if(padSize < 0) {
@@ -309,103 +320,103 @@ public class CryptoSupport {
 		if(length > padSize) {
 			throw new IllegalArgumentException("attempted to pad data beyond maximum size (" + raw.length + " > " + padSize + ")");
 		}
-		
+
 		ByteBuffer padded = ByteBuffer.allocate(padSize+4);
 		padded.putInt(length);
 		padded.put(raw, offset, length);
 		return padded.array();
 	}
-	
+
 	public byte[] unpad(byte[] raw) {
 		ByteBuffer buf = ByteBuffer.wrap(raw);
 		int length = buf.getInt();
 		if(length > buf.remaining() || length < 0) throw new SecurityException("invalid ciphertext");
-		
+
 		byte[] unpadded = new byte[length];
 		buf.get(unpadded, 0, length);
 		return unpadded;
 	}
-	
+
 	public PRNG prng(byte[] seed) {
 		return new PRNG(seed);
 	}
-	
+
 	public PRNG defaultPrng() {
 		return defaultPrng;
 	}
-	
+
 	public byte[] rng(int numBytes) {
 		return defaultPrng.getBytes(numBytes);
 	}
-	
+
 	public byte[] makeSymmetricKey() {
 		return rng(symKeyLength());
 	}
-	
+
 	public byte[] makeSymmetricKey(byte[] material) {
 		return expand(material, symKeyLength(), new byte[0], new byte[0]);
 	}
-	
+
 	public byte[] makeSymmetricIv() {
 		return rng(symIvLength());
 	}
-	
+
 	public PrivateSigningKey makePrivateSigningKey() {
 		return new PrivateSigningKey(this, rng(asymPrivateSigningKeySize()));
 	}
-	
+
 	public PrivateSigningKey makePrivateSigningKey(byte[] privateKeyMaterial) {
 		if(privateKeyMaterial.length != asymPrivateSigningKeySize()) {
 			privateKeyMaterial = this.expand(privateKeyMaterial, asymPrivateSigningKeySize(), "zksync-salt".getBytes(), new byte[0]);
 		}
-		
+
 		return new PrivateSigningKey(this, privateKeyMaterial);
 	}
-	
+
 	public PublicSigningKey makePublicSigningKey(byte[] publicKeyMaterial) {
 		return new PublicSigningKey(this, publicKeyMaterial);
 	}
-	
+
 	public PrivateDHKey makePrivateDHKey() {
 		return new PrivateDHKey(this);
 	}
-	
+
 	public PrivateDHKey makePrivateDHKeyPair(byte[] privKey, byte[] pubKey) {
 		return new PrivateDHKey(this, privKey, pubKey);
 	}
-	
+
 	public PublicDHKey makePublicDHKey(byte[] publicKeyMaterial) {
 		return new PublicDHKey(this, publicKeyMaterial);
 	}
-	
+
 	public int symKeyLength() {
 		return 256/8; // 256-bit symmetric keys 
 	}
-	
+
 	public int symIvLength() {
 		return 96/8;
 	}
-	
+
 	public int symTagLength() {
 		return 128/8;
 	}
-	
+
 	public int symBlockSize() {
 		return 128/8; // AES has 128-bit blocks
 	}
-	
+
 	public int hashLength() {
 		return HashContext.HASH_SIZE;
 	}
-	
+
 	public int asymPrivateSigningKeySize() {
 		return 256/8;
 	}
-	
+
 	public int asymPublicSigningKeySize() {
 		return 256/8;
 	}
-	
+
 	public int asymSignatureSize() {
 		return 512/8;
 	}
@@ -413,19 +424,19 @@ public class CryptoSupport {
 	public int asymPrivateDHKeySize() {
 		return PublicDHKey.KEY_SIZE;
 	}
-	
+
 	public int asymPublicDHKeySize() {
 		return PublicDHKey.KEY_SIZE;
 	}
-	
+
 	public int asymDHSecretSize() {
 		return PrivateDHKey.RAW_SECRET_SIZE;
 	}
-	
+
 	public int symPadToReachSize(int paddedLen) {
 		return paddedLen - 4 - symTagLength();
 	}
-	
+
 	public int symPaddedCiphertextSize(int textLen) {
 		return 4 + textLen + symTagLength();
 	}

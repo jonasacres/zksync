@@ -1,5 +1,6 @@
 package com.acrescrypto.zksyncweb.exceptionmappers;
 
+import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
@@ -16,8 +17,8 @@ import com.acrescrypto.zksyncweb.data.XAPIResponse;
 public class UncaughtExceptionMapper implements ExceptionMapper<Throwable> {
 	private	Logger logger = LoggerFactory.getLogger(UncaughtExceptionMapper.class);
 
-	@Context
-	private HttpHeaders headers;
+	@Context private HttpHeaders headers;
+	@Context private HttpServletRequest request;
 
 	@Override
 	public Response toResponse(Throwable exception) {
@@ -25,7 +26,12 @@ public class UncaughtExceptionMapper implements ExceptionMapper<Throwable> {
 			return XAPIResponse.withError(404, "Not found").toResponse();
 		}
 		
-		logger.warn("Caught exception: {}",
+		logger.warn("{} {} {} caught exception: {} {}",
+				request.getRemoteAddr(),
+				request.getMethod(),
+				request.getRequestURI(),
+				exception.getClass().getSimpleName(),
+				exception.getMessage(),
 				exception);
 		return XAPIResponse.withError(500, "Server error").toResponse();
 	}

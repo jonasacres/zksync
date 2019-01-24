@@ -102,6 +102,7 @@ public class ConfigFile {
 	}
 	
 	public synchronized void set(String key, JsonValue value) {
+		logger.info("Config: Setting " + key + " -> " + value);
 		info.put(key, value);
 		sub.updatedKey(key, value);
 		writeQuietly();
@@ -109,12 +110,14 @@ public class ConfigFile {
 	
 	public void set(String key, boolean value) {
 		info.put(key, value ? JsonValue.TRUE : JsonValue.FALSE);
+		logger.info("Config: Setting " + key + " -> " + value);
 		sub.updatedKey(key, info.get(key));
 		writeQuietly();
 	}
 	
 	public void set(String key, int value) {
 		// For some reason, Json.createValue is throwing UnsupportedOperationExceptions... so here's a hack.
+		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
 		sub.updatedKey(key, info.get(key));
@@ -122,6 +125,7 @@ public class ConfigFile {
 	}
 	
 	public void set(String key, long value) {
+		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
 		sub.updatedKey(key, info.get(key));
@@ -129,6 +133,7 @@ public class ConfigFile {
 	}
 	
 	public void set(String key, double value) {
+		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
 		sub.updatedKey(key, info.get(key));
@@ -136,6 +141,7 @@ public class ConfigFile {
 	}
 	
 	public void set(String key, String value) {
+		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
 		sub.updatedKey(key, info.get(key));

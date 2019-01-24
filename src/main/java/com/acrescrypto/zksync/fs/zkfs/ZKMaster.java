@@ -127,10 +127,16 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 	
 	public void getLocalKey() throws IOException {
+		logger.info("Setting up local key...");
 		Key ppKey;
 		do {
 			byte[] passphrase = passphraseProvider.requestPassphrase("ZKSync storage passphrase");
-			ppKey = new Key(crypto, crypto.deriveKeyFromPassphrase(passphrase, CryptoSupport.PASSPHRASE_SALT_LOCAL));
+			if(passphrase == null) {
+				logger.info("No local passphrase provided; using default key.");
+				ppKey = new Key(crypto, crypto.makeSymmetricKey(crypto.symNonce(0)));
+			} else {
+				ppKey = new Key(crypto, crypto.deriveKeyFromPassphrase(passphrase, CryptoSupport.PASSPHRASE_SALT_LOCAL));
+			}
 		} while(!attemptPassphraseKey(ppKey));
 	}
 	
@@ -324,6 +330,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 			logger.info("No keyfile found; creating...");
 			localKey = new Key(crypto, crypto.rng(crypto.symKeyLength()));
 			keyFile.write(localKey.getRaw(), 512);
+			logger.info("Wrote key to {}", keyFile.getPath());
 			return true;
 		}
 	}

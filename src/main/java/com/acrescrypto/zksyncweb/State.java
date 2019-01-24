@@ -38,7 +38,8 @@ public class State {
 	private static State sharedState;
 	
 	public static byte[] defaultPassphrase() {
-		return "one two three four enter".getBytes();
+		// TODO Someday: (redesign) allow specification of local key
+		return null;
 	}
 	
 	public static CryptoSupport sharedCrypto() throws IOException {
@@ -47,7 +48,7 @@ public class State {
 	
 	public static State sharedState() throws IOException {
 		if(sharedState == null) {
-			sharedState = new State(defaultPassphrase(), "/tmp/zksync-test");
+			sharedState = new State(defaultPassphrase(), System.getProperty("user.dir") + "/data");
 		}
 		
 		return sharedState;

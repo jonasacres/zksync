@@ -134,7 +134,7 @@ public class DHTClient {
 			try {
 				listen(addr, port);
 			} catch (SocketException exc) {
-				logger.error("Unable to set up DHT socket on " + addr + ":" + port, exc);
+				logger.error("DHT: Unable to set up DHT socket on " + addr + ":" + port, exc);
 			}
 		}
 	}
@@ -148,7 +148,7 @@ public class DHTClient {
 				try {
 					listen(bindAddress, bindPort);
 				} catch (SocketException exc) {
-					logger.error("Unable to open DHT socket", exc);
+					logger.error("DHT: Unable to open DHT socket", exc);
 				}
 			} else {
 				pause();
@@ -162,7 +162,7 @@ public class DHTClient {
 					try {
 						openSocket();
 					} catch (SocketException exc) {
-						logger.error("Unable to open DHT socket when rebinding to port " + port, exc);
+						logger.error("DHT: Unable to open DHT socket when rebinding to port " + port, exc);
 					}
 				}
 			}
@@ -262,7 +262,7 @@ public class DHTClient {
 						byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, peer.key.getBytes()));
 						store.addRecordForId(searchId, token, record);
 					} catch (IOException exc) {
-						logger.error("Encountered exception adding record", exc);
+						logger.error("DHT: Encountered exception adding record", exc);
 					}
 				} else {
 					peer.addRecord(searchId, lookupKey, record);
@@ -327,6 +327,7 @@ public class DHTClient {
 			int oldPort = socket.getLocalPort();
 			socket.close();
 			if(oldPort != bindPort && master.getGlobalConfig().getBool("net.dht.upnp", false)) {
+				logger.info("DHT: Closing UPnP for DHT on UDP port " + getPort());
 				UPnP.closePortUDP(oldPort);
 			}
 		}
@@ -335,6 +336,7 @@ public class DHTClient {
 			socket = new DatagramSocket(bindPort, addr);
 			socket.setReuseAddress(true);
 			master.getGlobalConfig().set("net.dht.port", socket.getLocalPort());
+			logger.info("DHT: listening on UDP port " + getPort());
 			checkUPnP();
 			updateStatus(STATUS_QUESTIONABLE);
 		} catch(SocketException exc) {
@@ -345,6 +347,7 @@ public class DHTClient {
 	
 	protected void checkUPnP() {
 		if(master.getGlobalConfig().getBool("net.dht.upnp", false) && socket != null && !paused) {
+			logger.info("DHT: Requesting UPnP for DHT on UDP port " + getPort());
 			UPnP.openPortUDP(getPort());
 		}
 	}
@@ -371,20 +374,20 @@ public class DHTClient {
 			} catch(IOException exc) {
 				if(paused) return;
 				if(socket.getLocalPort() == lastPort && !socket.isClosed()) {
-					logger.error("DHT socket listener thread encountered IOException", exc);
+					logger.error("DHT: socket listener thread encountered IOException", exc);
 				} else {
-					logger.warn("DHT socket listener thread encountered IOException", exc);
+					logger.warn("DHT: socket listener thread encountered IOException", exc);
 				}
 				
 				Util.sleep(socketCycleDelayMs); // add in a delay to prevent a fail loop from gobbling CPU / spamming log
 				try {
 					openSocket();
 				} catch (SocketException e) {
-					logger.error("DHT socket listener thread encountered IOException rebinding socket", exc);
+					logger.error("DHT: socket listener thread encountered IOException rebinding socket", exc);
 					Util.sleep(socketOpenFailCycleDelayMs); // wait even longer if we know the socket is dead and the OS isn't giving it back
 				}
 			} catch(Exception exc) {
-				logger.error("DHT socket listener thread encountered exception", exc);
+				logger.error("DHT: socket listener thread encountered exception", exc);
 			}
 		}
 	}
@@ -413,15 +416,15 @@ public class DHTClient {
 				// TODO API: (coverage) exception
 				if(paused) return;
 				if(i == 0) {
-					logger.warn("Encountered exception sending on DHT socket; retrying", exc);
+					logger.warn("DHT: Encountered exception sending on DHT socket; retrying", exc);
 					try {
 						openSocket();
 					} catch (SocketException exc2) {
-						logger.error("Encountered exception rebinding DHT socket; giving up on sending message", exc2);
+						logger.error("DHT: Encountered exception rebinding DHT socket; giving up on sending message", exc2);
 						return;
 					}
 				} else {
-					logger.error("Encountered exception sending on DHT socket; giving up", exc);
+					logger.error("DHT: Encountered exception sending on DHT socket; giving up", exc);
 				}
 			}
 		}
@@ -432,7 +435,7 @@ public class DHTClient {
 			DHTMessage message = new DHTMessage(this, senderAddress, senderPort, data);
 			
 			if(blacklist.contains(senderAddress)) {
-				logger.info("Ignoring message from blacklisted peer " + senderAddress);
+				logger.info("DHT: Ignoring message from blacklisted peer " + senderAddress);
 				return;
 			}
 			
@@ -442,14 +445,14 @@ public class DHTClient {
 				processRequest(message);
 			}
 		} catch(ProtocolViolationException exc) {
-			logger.warn("Received illegal message from " + senderAddress + "; blacklisting.");
+			logger.warn("DHT: Received illegal message from " + senderAddress + "; blacklisting.");
 			try {
 				blacklist.add(senderAddress, Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
 			} catch(IOException exc2) {
-				logger.error("Encountered exception while blacklisting peer {}", senderAddress, exc2);
+				logger.error("DHT: Encountered exception while blacklisting peer {}", senderAddress, exc2);
 			}
 		} catch(SecurityException exc) {
-			logger.warn("Received indecipherable message from " + senderAddress + "; ignoring.");
+			logger.warn("DHT: Received indecipherable message from " + senderAddress + "; ignoring.");
 		}
 	}
 	
@@ -490,21 +493,30 @@ public class DHTClient {
 				throw new UnsupportedProtocolException();
 			}
 		} catch (UnsupportedProtocolException e) {
-			logger.warn("Received unsupported message from " + message.peer.address + "; ignoring.");
+			logger.warn("DHT: Received unsupported message from " + message.peer.address + "; ignoring.");
 		}
 	}
 	
 	protected void processRequestPing(DHTMessage message) {
+		logger.debug("DHT: received ping from {}",
+				message.peer.address);
+
 		message.makeResponse(null).send();
 	}
 	
 	protected void processRequestFindNode(DHTMessage message) throws ProtocolViolationException, UnsupportedProtocolException {
 		assertSupportedState(message.payload.length == idLength() + crypto.hashLength());
+		
 		ByteBuffer buf = ByteBuffer.wrap(message.payload);
 		byte[] idBytes = new byte[idLength()];
 		byte[] token = new byte[crypto.hashLength()];
 		buf.get(idBytes);
 		buf.get(token);
+		
+		logger.debug("DHT: received find node request from {} for id {}, token {}",
+				message.peer.address,
+				Util.bytesToHex(idBytes),
+				Util.bytesToHex(token));
 		
 		DHTID id = new DHTID(idBytes);
 		
@@ -524,7 +536,12 @@ public class DHTClient {
 		buf.get(idRaw);
 		buf.get(token);
 		DHTID id = new DHTID(idRaw);
-		
+
+		logger.debug("DHT: received add record request from {} for id {}, token {}",
+				message.peer.address,
+				Util.bytesToHex(idRaw),
+				Util.bytesToHex(token));
+
 		assertSupportedState(buf.remaining() > 0);
 		DHTRecord record = DHTRecord.deserializeRecord(crypto, buf);
 		assertSupportedState(record != null);
@@ -533,7 +550,7 @@ public class DHTClient {
 		try {
 			store.addRecordForId(id, token, record);
 		} catch(IOException exc) {
-			logger.error("Encountered exception adding record from {}", message.peer.address, exc);
+			logger.error("DHT: Encountered exception adding record from {}", message.peer.address, exc);
 		}
 		
 		message.makeResponse(new ArrayList<>(0)).send();
@@ -592,7 +609,7 @@ public class DHTClient {
 		try {
 			write();
 		} catch (IOException exc) {
-			logger.error("Encountered exception writing DHT client info", exc);
+			logger.error("DHT: Encountered exception writing DHT client info", exc);
 		}
 	}
 	
@@ -658,6 +675,7 @@ public class DHTClient {
 	
 	protected synchronized void updateStatus(int newStatus) {
 		if(lastStatus == newStatus) return;
+		logger.debug("DHT: status now {}, was {}", newStatus, lastStatus);
 		lastStatus = newStatus;
 		if(statusCallback != null) {
 			statusCallback.dhtStatusUpdate(newStatus);

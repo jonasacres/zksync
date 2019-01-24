@@ -61,4 +61,8 @@ public class MutableSecureFile extends SecureFile {
 	protected int headerLength() {
 		return key.crypto.symIvLength() + encryptedKeyLength();
 	}
+
+	public String getPath() {
+		return path;
+	}
 }
