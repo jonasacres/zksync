@@ -9,6 +9,7 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 import org.glassfish.grizzly.http.server.HttpServer;
 import org.junit.After;
@@ -53,5 +54,29 @@ public class GenericResourceTest {
 		} catch(WebApplicationException exc) {
 			assertEquals(400, exc.getResponse().getStatus());
 		}
+	}
+	
+	@Test
+	public void testInvalidMethodTriggers405() {
+		Entity<Object> entity = Entity.entity("{I AM NOT REALLY JSON}", MediaType.APPLICATION_JSON);
+		try {
+			target
+				.path("/archives")
+				.request()
+				.put(entity, String.class);
+			fail();
+		} catch(WebApplicationException exc) {
+			assertEquals(405, exc.getResponse().getStatus());
+		}
+	}
+	
+	@Test
+	public void testInvalidPathTriggers404() {
+		Response resp = target
+			.path("/doesntexist")
+			.request()
+			.get();
+		
+		assertEquals(404, resp.getStatus());
 	}
 }

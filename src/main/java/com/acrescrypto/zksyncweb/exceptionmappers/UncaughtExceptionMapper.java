@@ -1,6 +1,7 @@
 package com.acrescrypto.zksyncweb.exceptionmappers;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.ws.rs.NotAllowedException;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
@@ -27,6 +28,10 @@ public class UncaughtExceptionMapper implements ExceptionMapper<Throwable> {
 			return XAPIResponse.withError(404, "Not found").toResponse();
 		}
 		
+		if(exception instanceof NotAllowedException) {
+			return XAPIResponse.withError(405, "Method not allowed for this resource").toResponse();
+		}
+		
 		if(exception instanceof JsonParseException) {
 			return XAPIResponse.withError(400, "Invalid request JSON").toResponse();
 		}
@@ -45,6 +50,6 @@ public class UncaughtExceptionMapper implements ExceptionMapper<Throwable> {
 				exception.getClass().getSimpleName(),
 				exception.getMessage(),
 				exception);
-		return XAPIResponse.withError(500, "Server error 2").toResponse();
+		return XAPIResponse.withError(500, "Server error").toResponse();
 	}
 }

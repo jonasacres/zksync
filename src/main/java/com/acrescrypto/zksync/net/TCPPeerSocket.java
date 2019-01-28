@@ -82,6 +82,11 @@ public class TCPPeerSocket extends PeerSocket {
 		makeStreams();
 		swarm.openedConnection(new PeerConnection(this));
 		makeThreads();
+		
+		logger.debug("Swarm: received connection from {}:{}",
+				this.address,
+				socket.getPort(),
+				this.address);
 	}
 	
 	public TCPPeerSocket(PeerSwarm swarm, TCPPeerAdvertisement ad) throws IOException, BlacklistedException {
@@ -110,6 +115,10 @@ public class TCPPeerSocket extends PeerSocket {
 		this.socket = new Socket(ad.host, ad.port);
 		this.address = socket.getInetAddress().getHostAddress();
 		makeStreams();
+		logger.debug("Swarm: connecting to ad {}:{} ({})",
+				ad.host,
+				ad.port,
+				this.address);
 	}
 	
 	protected TCPPeerSocket(PeerSwarm swarm) throws IOException {
@@ -196,6 +205,9 @@ public class TCPPeerSocket extends PeerSocket {
 		}
 		
 		this.sharedSecret = handshake.getHash();
+		logger.debug("Swarm: completed handshake with {}:{}",
+				address,
+				socket.getPort());
 	}
 	
 	@Override
@@ -203,6 +215,10 @@ public class TCPPeerSocket extends PeerSocket {
 		ByteBuffer buf = ByteBuffer.wrap(data, offset, length);
 		
 		while(buf.hasRemaining()) {
+			logger.debug("Swarm: sending {} bytes to {}:{}",
+					length,
+					socket.getInetAddress().getHostAddress(),
+					socket.getPort());
 			int writeLen = Math.min(buf.remaining(), MAX_MSG_LEN);
 			byte[] ciphertext = writeState.encryptWithAssociatedData(null, buf.array(), buf.position(), writeLen);
 			buf.position(buf.position() + writeLen);
@@ -227,8 +243,13 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		ByteBuffer lenBuf = ByteBuffer.allocate(2);
 		IOUtils.readFully(in, lenBuf.array());
+		
 		int obfMsgLen = lenBuf.getShort();
 		int msgLen = sip.read().obfuscate2(obfMsgLen);
+		logger.debug("Swarm: receiving {} bytes from {}:{}",
+				msgLen,
+				socket.getInetAddress().getHostAddress(),
+				socket.getPort());
 		assertState(0 < msgLen && msgLen <= MAX_MSG_LEN + crypto.symBlockSize() + crypto.symTagLength());
 		
 		byte[] ciphertext = new byte[msgLen];

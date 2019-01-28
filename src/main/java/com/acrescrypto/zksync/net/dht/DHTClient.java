@@ -406,6 +406,10 @@ public class DHTClient {
 				DatagramPacket packet = new DatagramPacket(receiveData, receiveData.length);
 				monitorRx.observeTraffic(packet.getLength());
 				socket.receive(packet);
+				logger.debug("DHT: received {} bytes from {}:{}",
+						packet.getLength(),
+						packet.getAddress().getHostAddress(),
+						packet.getPort());
 				ByteBuffer buf = ByteBuffer.wrap(packet.getData(), 0, packet.getLength());
 				processMessage(packet.getAddress().getHostAddress(), packet.getPort(), buf);
 			} catch(IOException exc) {
@@ -446,6 +450,10 @@ public class DHTClient {
 		if(paused) return;
 		for(int i = 0; i < 2; i++) {
 			try {
+				logger.debug("DHT: sending {} bytes to {}:{}",
+						packet.getData().length,
+						packet.getAddress().getHostAddress(),
+						packet.getPort());
 				socket.send(packet);
 				monitorTx.observeTraffic(packet.getLength());
 				break;
