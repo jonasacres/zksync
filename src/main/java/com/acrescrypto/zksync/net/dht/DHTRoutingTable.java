@@ -153,7 +153,11 @@ public class DHTRoutingTable {
 					freshen();
 				}
 			} catch(Exception exc) {
-				logger.error("DHT routing table freshen thread encountered exception", exc);
+				if(closed) {
+					logger.info("DHT routing table freshen thread encountered exception after close", exc);
+				} else {
+					logger.error("DHT routing table freshen thread encountered exception", exc);
+				}
 			}
 		}
 	}

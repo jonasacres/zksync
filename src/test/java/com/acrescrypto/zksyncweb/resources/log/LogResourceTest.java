@@ -16,6 +16,7 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +30,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import ch.qos.logback.classic.Level;
 
+/* This is ignored unless needed because these tests are a pain to maintain.
+ * They're very sensitive to WHICH log events come back... but we can have all sorts of log
+ * events happening asynchronously during our test. So these are only used when needed.
+ */
+@Ignore
 public class LogResourceTest {
 	private HttpServer server;
 	private WebTarget target;

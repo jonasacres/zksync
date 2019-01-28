@@ -235,8 +235,9 @@ public class ArchiveResource {
 						/* When we move to permissions, automirror is in general SUPER DANGEROUS.
 						 * We can get the API server to manipulate the local filesystem. So we want
 						 * to be able to:
-						 *   1) restrict automirror controls to certain people, and
-						 *   2) disable the feature entirely.
+						 *   1) restrict automirror controls to certain people,
+						 *   2) restrict all automirrors to a certain directory, and
+						 *   3) disable the feature entirely.
 						 */
 						if(automirrorPath.equals("")) {
 							automirrorPath = null;

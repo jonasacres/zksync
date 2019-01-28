@@ -14,10 +14,10 @@ import com.fasterxml.jackson.databind.SerializerProvider;
 
 @Provider
 public class XAPIResponseMapper extends JsonSerializer<XAPIResponse> implements ExceptionMapper<XAPIResponse> {
-    @Override
-    public Response toResponse(XAPIResponse exc) {
-    	return exc.toResponse();
-    }
+	@Override
+	public Response toResponse(XAPIResponse exc) {
+		return exc.toResponse();
+	}
 
 	@Override
 	public void serialize(XAPIResponse value, JsonGenerator jgen, SerializerProvider provider)

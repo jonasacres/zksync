@@ -1267,4 +1267,29 @@ public class DHTClientTest {
 		assertTrue(Util.waitUntil(100, ()->!UPnP.isMappedUDP(oldPort)));
 		assertTrue(Util.waitUntil(100, ()->UPnP.isMappedUDP(newPort)));
 	}
+	
+	@Test
+	public void testAddsDefaultHostIfBootstrapEnabledBeforeInit() {
+		master.getGlobalConfig().set("net.dht.bootstrap.enabled", true);
+		client.close();
+		
+		DHTClient client2 = new DHTClient(storageKey, master);
+		assertTrue(Util.waitUntil(3000, ()->client2.routingTable.allPeers().size() > 0));
+	}
+	
+	@Test
+	public void testAddsDefaultHostIfBootstrapEnabledAfterInit() {
+		client.routingTable.reset();
+		master.getGlobalConfig().set("net.dht.bootstrap.enabled", true);
+		assertTrue(Util.waitUntil(3000, ()->client.routingTable.allPeers().size() > 0));
+	}
+	
+	@Test
+	public void testClearsRoutingTableWhenBootstrapEnabled() {
+		client.routingTable.reset();
+		master.getGlobalConfig().set("net.dht.bootstrap.enabled", true);
+		Util.waitUntil(3000, ()->client.routingTable.allPeers().size() > 0);
+		master.getGlobalConfig().set("net.dht.bootstrap.enabled", false);
+		assertTrue(Util.waitUntil(3000, ()->client.routingTable.allPeers().size() == 0));
+	}
 }

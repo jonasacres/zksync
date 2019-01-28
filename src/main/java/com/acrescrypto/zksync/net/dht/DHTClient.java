@@ -128,6 +128,7 @@ public class DHTClient {
 		this.routingTable = new DHTRoutingTable(this);
 		
 		setupSubscriptions();
+		
 		if(master.getGlobalConfig().getBool("net.dht.enabled", false)) {
 			String addr = master.getGlobalConfig().getString("net.dht.bindaddress", "0.0.0.0");
 			int port = master.getGlobalConfig().getInt("net.dht.port", 0);
@@ -136,6 +137,10 @@ public class DHTClient {
 			} catch (SocketException exc) {
 				logger.error("DHT: Unable to set up DHT socket on " + addr + ":" + port, exc);
 			}
+		}
+		
+		if(master.getGlobalConfig().getBool("net.dht.bootstrap.enabled", false)) {
+			addDefaults();
 		}
 	}
 	
@@ -175,6 +180,36 @@ public class DHTClient {
 				UPnP.closePortTCP(getPort());
 			}
 		}));
+		
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.bootstrap.enabled").asBoolean(false, (useBootstrap)->{
+			if(useBootstrap) {
+				addDefaults();
+			} else {
+				logger.warn("Wiping routing table since net.dht.bootstrap.enabled set false");
+				routingTable.reset();
+			}
+		}));
+	}
+	
+	protected void addDefaults() {
+		String defaultHost = master.getGlobalConfig().getString("net.dht.bootstrap.host",
+				"dht1.easysafe.io");
+		int defaultPort = master.getGlobalConfig().getInt("net.dht.bootstrap.port",
+				49921);
+		String defaultKey = master.getGlobalConfig().getString("net.dht.bootstrap.key",
+				"M/o1rvmhAsQO8+Z5evXJQ+21/sk2fxei4JKl+h1SPU5rKLNWRfnUyrxVAGxBK1Ydl2RQGoW+CZLKQRbZS+WLrw==");
+		
+		PublicDHKey pubkey = crypto.makePublicDHKey(Util.decode64(defaultKey));
+		
+		try {
+			addPeer(new DHTPeer(this,
+					InetAddress.getByName(defaultHost).getHostAddress(),
+					defaultPort,
+					pubkey));
+			logger.info("DHT: Added bootstrap peer: " + defaultHost + ":" + defaultPort + " " + defaultKey);
+		} catch (UnknownHostException exc) {
+			logger.error("DHT: Unable to resolve " + defaultHost, exc);
+		}
 	}
 	
 	protected boolean isListening() {

@@ -53,7 +53,7 @@ public class CryptoSupport {
 
 		byte[] key = new byte[symKeyLength()];
 
-		logger.debug("Starting argon2: {} iterations, {} memory, {} parallelism, {} hashlen",
+		logger.info("Starting argon2: {} iterations, {} memory, {} parallelism, {} hashlen",
 				iterations,
 				memory,
 				parallelism,
@@ -71,7 +71,7 @@ public class CryptoSupport {
 				new Size_t(hashLen.intValue())
 				);
 		
-		logger.debug("argon2 calculation complete; elasped time = {}ms, result = {} (want 0)",
+		logger.info("argon2 calculation complete; elasped time = {}ms, result = {} (want 0)",
 				System.currentTimeMillis() - startTs,
 				result);
 

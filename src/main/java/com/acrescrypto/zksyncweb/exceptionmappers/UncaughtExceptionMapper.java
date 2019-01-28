@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
+import com.fasterxml.jackson.core.JsonParseException;
 
 @Provider
 public class UncaughtExceptionMapper implements ExceptionMapper<Throwable> {
@@ -24,6 +25,10 @@ public class UncaughtExceptionMapper implements ExceptionMapper<Throwable> {
 	public Response toResponse(Throwable exception) {
 		if(exception instanceof NotFoundException) {
 			return XAPIResponse.withError(404, "Not found").toResponse();
+		}
+		
+		if(exception instanceof JsonParseException) {
+			return XAPIResponse.withError(400, "Invalid request JSON").toResponse();
 		}
 		
 		String preamble = "Unknown request";
@@ -40,6 +45,6 @@ public class UncaughtExceptionMapper implements ExceptionMapper<Throwable> {
 				exception.getClass().getSimpleName(),
 				exception.getMessage(),
 				exception);
-		return XAPIResponse.withError(500, "Server error").toResponse();
+		return XAPIResponse.withError(500, "Server error 2").toResponse();
 	}
 }

@@ -21,6 +21,7 @@ import com.acrescrypto.zksyncweb.WebUtils;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 import com.acrescrypto.zksyncweb.data.XArchiveIdentification;
 import com.acrescrypto.zksyncweb.data.XArchiveSpecification;
+import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -134,12 +135,13 @@ public class ArchivesResource {
 			});
 			
 			XArchiveIdentification id = XArchiveIdentification.fromConfig(config);
-			return XAPIResponse.withPayload(status, id);
-		} catch(JsonParsingException|JsonMappingException exc) {
-			return XAPIResponse.invalidJsonResponse();
+			throw XAPIResponse.withPayload(status, id);
+		} catch(JsonParseException|JsonParsingException|JsonMappingException exc) {
+			throw XAPIResponse.invalidJsonResponse();
+		} catch(XAPIResponse resp) {
+			throw resp;
 		} catch(Exception exc) {
-			exc.printStackTrace();
-			return XAPIResponse.genericServerErrorResponse();
+			throw XAPIResponse.genericServerErrorResponse();
 		}
     }
 }

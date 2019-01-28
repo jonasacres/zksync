@@ -398,7 +398,7 @@ public class RequestPool {
 	
 	protected void addDataRequests() {
 		// TODO API: (coverage) branch coverage
-		{
+		if(config.getSwarm() != null) {
 			for(PeerConnection conn : config.getSwarm().getConnections()) {
 				addDataRequestsToConnection(conn);
 			}

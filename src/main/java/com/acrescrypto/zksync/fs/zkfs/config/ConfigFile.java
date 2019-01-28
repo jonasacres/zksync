@@ -109,14 +109,20 @@ public class ConfigFile {
 	}
 	
 	public void set(String key, boolean value) {
-		info.put(key, value ? JsonValue.TRUE : JsonValue.FALSE);
+		JsonValue jvalue = value ? JsonValue.TRUE : JsonValue.FALSE;
+		try { if(info.get(key).equals(jvalue)) return; } catch(NullPointerException exc) {}
+		
 		logger.info("Config: Setting " + key + " -> " + value);
+		info.put(key, jvalue);
 		sub.updatedKey(key, info.get(key));
 		writeQuietly();
 	}
 	
 	public void set(String key, int value) {
 		// For some reason, Json.createValue is throwing UnsupportedOperationExceptions... so here's a hack.
+		
+		try { if(((JsonNumber) info.get(key)).intValue() == value) return; } catch(NullPointerException exc) {}
+		
 		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
@@ -125,6 +131,8 @@ public class ConfigFile {
 	}
 	
 	public void set(String key, long value) {
+		try { if(((JsonNumber) info.get(key)).longValue() == value) return; } catch(NullPointerException exc) {}
+		
 		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
@@ -133,6 +141,8 @@ public class ConfigFile {
 	}
 	
 	public void set(String key, double value) {
+		try { if(((JsonNumber) info.get(key)).doubleValue() == value) return; } catch(NullPointerException exc) {}
+		
 		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
@@ -141,6 +151,8 @@ public class ConfigFile {
 	}
 	
 	public void set(String key, String value) {
+		try { if(((JsonString) info.get(key)).getString() == value) return; } catch(NullPointerException exc) {}
+		
 		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
