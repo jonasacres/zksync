@@ -15,6 +15,9 @@ public class XArchiveNetInfo {
 	private Long maxBytesPerSecondTx;
 	private Long maxBytesPerSecondRx;
 	
+	private Long lifetimeBytesTx;
+	private Long lifetimeBytesRx;
+	
 	public XArchiveNetInfo() {}
 	
 	public XArchiveNetInfo(ZKArchiveConfig config) {
@@ -29,7 +32,10 @@ public class XArchiveNetInfo {
 		
 		this.maxBytesPerSecondTx = config.getSwarm().getBandwidthAllocatorTx().getBytesPerSecond();
 		this.maxBytesPerSecondRx = config.getSwarm().getBandwidthAllocatorRx().getBytesPerSecond();
-	}
+
+		this.lifetimeBytesTx = config.getSwarm().getBandwidthMonitorTx().getLifetimeBytes();
+		this.lifetimeBytesRx = config.getSwarm().getBandwidthMonitorRx().getLifetimeBytes();
+}
 	
 	public Integer getNumPeers() {
 		return numPeers;
@@ -101,5 +107,21 @@ public class XArchiveNetInfo {
 
 	public void setNumEmbargoedAds(int numEmbargoedAds) {
 		this.numEmbargoedAds = numEmbargoedAds;
+	}
+
+	public Long getLifetimeBytesRx() {
+		return lifetimeBytesRx;
+	}
+
+	public void setLifetimeBytesRx(Long lifetimeBytesRx) {
+		this.lifetimeBytesRx = lifetimeBytesRx;
+	}
+
+	public Long getLifetimeBytesTx() {
+		return lifetimeBytesTx;
+	}
+
+	public void setLifetimeBytesTx(Long lifetimeBytesTx) {
+		this.lifetimeBytesTx = lifetimeBytesTx;
 	}
 }

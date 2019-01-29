@@ -26,6 +26,9 @@ public class XDHTInfo {
 	private Long bytesPerSecondRx;
 	private Long bytesPerSecondTx;
 	
+	private Long lifetimeBytesTx;
+	private Long lifetimeBytesRx;
+	
 	public XDHTInfo(DHTClient client) {
 		numBadPeers = 0;
 		numQuestionablePeers = 0;
@@ -56,6 +59,9 @@ public class XDHTInfo {
 		this.numPendingRequests = client.numPendingRequests();
 		this.bytesPerSecondRx = client.getMonitorRx().getBytesPerSecond();
 		this.bytesPerSecondTx = client.getMonitorTx().getBytesPerSecond();
+		
+		this.lifetimeBytesRx = client.getMonitorRx().getLifetimeBytes();
+		this.lifetimeBytesTx = client.getMonitorTx().getLifetimeBytes();
 		
 		this.numRecordIds = client.getRecordStore().numIds();
 		this.numRecords = client.getRecordStore().numRecords();
@@ -195,5 +201,21 @@ public class XDHTInfo {
 
 	public void setNumRecordIds(Integer numRecordIds) {
 		this.numRecordIds = numRecordIds;
+	}
+
+	public Long getLifetimeBytesTx() {
+		return lifetimeBytesTx;
+	}
+
+	public void setLifetimeBytesTx(Long lifetimeBytesTx) {
+		this.lifetimeBytesTx = lifetimeBytesTx;
+	}
+
+	public Long getLifetimeBytesRx() {
+		return lifetimeBytesRx;
+	}
+
+	public void setLifetimeBytesRx(Long lifetimeBytesRx) {
+		this.lifetimeBytesRx = lifetimeBytesRx;
 	}
 }

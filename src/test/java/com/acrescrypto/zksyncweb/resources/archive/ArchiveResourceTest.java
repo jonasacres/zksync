@@ -124,6 +124,8 @@ public class ArchiveResourceTest {
 		long expectedLocalStorageSize = archive.getConfig().getLocalStorage().storageSize("/");
 		double expectedBandwidthRx = archive.getConfig().getSwarm().getBandwidthMonitorRx().getBytesPerSecond();
 		double expectedBandwidthTx = archive.getConfig().getSwarm().getBandwidthMonitorTx().getBytesPerSecond();
+		long expectedLifetimeTx = archive.getConfig().getSwarm().getBandwidthMonitorTx().getLifetimeBytes();
+		long expectedLifetimeRx = archive.getConfig().getSwarm().getBandwidthMonitorRx().getLifetimeBytes();
 
 		assertEquals(ZKArchive.DEFAULT_PAGE_SIZE, resp.get("pageSize").asInt());
 		assertEquals("", resp.get("description").asText());
@@ -136,6 +138,8 @@ public class ArchiveResourceTest {
 		assertEquals(expectedLocalStorageSize, resp.get("consumedLocalStorage").longValue());
 		assertEquals(expectedBandwidthRx, resp.get("bytesPerSecondRx").doubleValue(), 1.0);
 		assertEquals(expectedBandwidthTx, resp.get("bytesPerSecondTx").doubleValue(), 1.0);
+		assertEquals(expectedLifetimeRx, resp.get("lifetimeBytesRx").longValue());
+		assertEquals(expectedLifetimeTx, resp.get("lifetimeBytesTx").longValue());
 		assertArrayEquals(tag.getBytes(), resp.get("currentRevTag").binaryValue());
 		assertArrayEquals(archive.getConfig().getArchiveId(), resp.get("archiveId").binaryValue());
 

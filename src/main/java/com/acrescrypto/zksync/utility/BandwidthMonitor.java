@@ -9,6 +9,7 @@ public class BandwidthMonitor {
 	private long currentBytesInInterval;
 	private long startTime;
 	private long currentRateBytesPerSecond;
+	private long lifetimeBytes;
 	
 	private LinkedList<BandwidthMonitor> parents = new LinkedList<>();
 	private LinkedList<Sample> samples = new LinkedList<>();
@@ -55,9 +56,11 @@ public class BandwidthMonitor {
 
 	public long observeTraffic(long bytes) {
 		if(bytes <= 0) return bytes; // passthrough without doing anything
-		if(sampleDurationMs == -1 && sampleExpirationMs == -1) return bytes;
 		LinkedList<BandwidthMonitor> parentClone;
 		synchronized(this) {
+			lifetimeBytes += bytes;
+			if(sampleDurationMs == -1 && sampleExpirationMs == -1) return bytes;
+
 			parentClone = new LinkedList<>(parents);
 			if(currentSample == null || currentSample.isFinished()) {
 				currentSample = new Sample();
@@ -129,6 +132,10 @@ public class BandwidthMonitor {
 	
 	public int getSampleExpirationMs() {
 		return sampleExpirationMs;
+	}
+	
+	public long getLifetimeBytes() {
+		return lifetimeBytes;
 	}
 	
 	public String toString() {

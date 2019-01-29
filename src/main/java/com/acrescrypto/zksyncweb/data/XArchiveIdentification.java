@@ -26,6 +26,8 @@ public class XArchiveIdentification {
 	private Long consumedLocalStorage;
 	private Long bytesPerSecondRx;
 	private Long bytesPerSecondTx;
+	private Long lifetimeBytesRx;
+	private Long lifetimeBytesTx;
 
 	private XArchiveSettings config;
 	
@@ -45,6 +47,8 @@ public class XArchiveIdentification {
 		id.connectedPeers = config.getSwarm().getConnections().size();
 		id.bytesPerSecondRx = config.getSwarm().getBandwidthMonitorRx().getBytesPerSecond();
 		id.bytesPerSecondTx = config.getSwarm().getBandwidthMonitorTx().getBytesPerSecond();
+		id.lifetimeBytesRx = config.getSwarm().getBandwidthMonitorRx().getLifetimeBytes();
+		id.lifetimeBytesTx = config.getSwarm().getBandwidthMonitorTx().getLifetimeBytes();
 		
 		try {
 			id.currentRevTag = State.sharedState().activeFs(config).getBaseRevision().getBytes();
@@ -188,5 +192,21 @@ public class XArchiveIdentification {
 
 	public void setCurrentTitle(String currentTitle) {
 		this.currentTitle = currentTitle;
+	}
+
+	public Long getLifetimeBytesRx() {
+		return lifetimeBytesRx;
+	}
+
+	public void setLifetimeBytesRx(Long lifetimeBytesRx) {
+		this.lifetimeBytesRx = lifetimeBytesRx;
+	}
+
+	public Long getLifetimeBytesTx() {
+		return lifetimeBytesTx;
+	}
+
+	public void setLifetimeBytesTx(Long lifetimeBytesTx) {
+		this.lifetimeBytesTx = lifetimeBytesTx;
 	}
 }

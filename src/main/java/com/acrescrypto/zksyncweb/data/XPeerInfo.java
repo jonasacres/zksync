@@ -10,6 +10,8 @@ public class XPeerInfo {
 	
 	private Long bytesPerSecondTx;
 	private Long bytesPerSecondRx;
+	private Long lifetimeBytesTx;
+	private Long lifetimeBytesRx;
 	private Integer role;
 	private Integer peerType;
 	private XTCPAdListing ad;
@@ -23,6 +25,8 @@ public class XPeerInfo {
 	public XPeerInfo(PeerConnection conn) {
 		this.bytesPerSecondRx = bytesFromMonitor(conn.getSocket().getMonitorRx());
 		this.bytesPerSecondTx = bytesFromMonitor(conn.getSocket().getMonitorTx());
+		this.lifetimeBytesRx = lifetimeBytesFromMonitor(conn.getSocket().getMonitorRx());
+		this.lifetimeBytesTx = lifetimeBytesFromMonitor(conn.getSocket().getMonitorTx());
 		this.role = conn.getSocket().isLocalRoleClient() ? ROLE_REQUESTOR : ROLE_RESPONDER;
 		this.peerType = conn.getPeerType();
 		
@@ -39,6 +43,11 @@ public class XPeerInfo {
 	protected Long bytesFromMonitor(BandwidthMonitor monitor) {
 		if(monitor == null) return null;
 		return monitor.getBytesPerSecond();
+	}
+	
+	protected Long lifetimeBytesFromMonitor(BandwidthMonitor monitor) {
+		if(monitor == null) return null;
+		return monitor.getLifetimeBytes();
 	}
 	
 	public Long getBytesPerSecondTx() {
@@ -111,5 +120,21 @@ public class XPeerInfo {
 
 	public void setTimeStart(Long timeStart) {
 		this.timeStart = timeStart;
+	}
+
+	public Long getLifetimeBytesTx() {
+		return lifetimeBytesTx;
+	}
+
+	public void setLifetimeBytesTx(Long lifetimeBytesTx) {
+		this.lifetimeBytesTx = lifetimeBytesTx;
+	}
+
+	public Long getLifetimeBytesRx() {
+		return lifetimeBytesRx;
+	}
+
+	public void setLifetimeBytesRx(Long lifetimeBytesRx) {
+		this.lifetimeBytesRx = lifetimeBytesRx;
 	}
 }

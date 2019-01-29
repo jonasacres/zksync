@@ -9,6 +9,8 @@ import com.acrescrypto.zksyncweb.State;
 public class XGlobalInfo {
 	private Long bytesPerSecondTx;
 	private Long bytesPerSecondRx;
+	private Long lifetimeBytesTx;
+	private Long lifetimeBytesRx;
 	private Integer numArchives;
 	private HashMap<String,Object> settings;
 	private Boolean isListening;
@@ -19,6 +21,8 @@ public class XGlobalInfo {
 		XGlobalInfo info = new XGlobalInfo();
 		info.bytesPerSecondTx = master.getBandwidthMonitorTx().getBytesPerSecond();
 		info.bytesPerSecondRx = master.getBandwidthMonitorRx().getBytesPerSecond();
+		info.lifetimeBytesTx = master.getBandwidthMonitorTx().getLifetimeBytes();
+		info.lifetimeBytesRx = master.getBandwidthMonitorRx().getLifetimeBytes();
 		info.numArchives = master.allConfigs().size();
 		info.setIsListening(master.getTCPListener().isListening());
 		info.settings = master.getGlobalConfig().asHash();
@@ -64,5 +68,21 @@ public class XGlobalInfo {
 
 	public void setIsListening(Boolean isListening) {
 		this.isListening = isListening;
+	}
+
+	public Long getLifetimeBytesTx() {
+		return lifetimeBytesTx;
+	}
+
+	public void setLifetimeBytesTx(Long lifetimeBytesTx) {
+		this.lifetimeBytesTx = lifetimeBytesTx;
+	}
+
+	public Long getLifetimeBytesRx() {
+		return lifetimeBytesRx;
+	}
+
+	public void setLifetimeBytesRx(Long lifetimeBytesRx) {
+		this.lifetimeBytesRx = lifetimeBytesRx;
 	}
 }
