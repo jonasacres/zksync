@@ -17,17 +17,17 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
+import com.acrescrypto.zksync.utility.MemLogAppender.LogEvent;
 import com.acrescrypto.zksync.utility.MemLogAppender.MemLogMonitor;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.spi.ILoggingEvent;
 
 public class MemLogAppenderTest {
 	class TestMonitor implements MemLogMonitor {
-		LinkedList<ILoggingEvent> entries = new LinkedList<>();
+		LinkedList<LogEvent> entries = new LinkedList<>();
 		
 		@Override
-		public void receivedEntry(ILoggingEvent entry) {
+		public void receivedEntry(LogEvent entry) {
 			entries.add(entry);
 		}
 	}
@@ -72,10 +72,26 @@ public class MemLogAppenderTest {
 	@Test
 	public void testMemLogGetsLogEvents() {
 		logger.debug("test");
-		Collection<ILoggingEvent> entries = memlog.getEntries(-1, 1, Integer.MIN_VALUE);
+		Collection<LogEvent> entries = memlog.getEntries(-1, 1, Integer.MIN_VALUE, Long.MIN_VALUE, Long.MAX_VALUE);
 		assertEquals(1, entries.size());
-		for(ILoggingEvent entry : entries) {
-			assertEquals("test", entry.getMessage());
+		for(LogEvent event : entries) {
+			assertEquals("test", event.getEntry().getMessage());
+		}
+	}
+	
+	@Test
+	public void testMemLogIssuesSequentialIds() {
+		int count = 10;
+		for(int j = 0; j < count; j++) {
+			logger.debug(""+j);
+		}
+		
+		Collection<LogEvent> entries = memlog.getEntries(-1, count, Integer.MIN_VALUE, Long.MIN_VALUE, Long.MAX_VALUE);
+		int i = 0;
+		for(LogEvent event : entries) {
+			assertEquals(i, event.getEntryId());
+			assertEquals(""+i, event.getEntry().getMessage());
+			i++;
 		}
 	}
 	
@@ -85,10 +101,10 @@ public class MemLogAppenderTest {
 			logger.debug("test " + i);
 		}
 		
-		LinkedList<ILoggingEvent> list = memlog.getEntries(-1, 10);
+		LinkedList<LogEvent> list = memlog.getEntries(-1, 10);
 		int idx = 41;
-		for(ILoggingEvent entry : list) {
-			assertEquals("test " + (idx++), entry.getMessage());
+		for(LogEvent event : list) {
+			assertEquals("test " + (idx++), event.getEntry().getMessage());
 		}
 	}
 	
@@ -98,12 +114,40 @@ public class MemLogAppenderTest {
 		logger.info("info");
 		logger.warn("warn");
 		
-		LinkedList<ILoggingEvent> list = memlog.getEntries(-1, 10, Level.INFO_INT);
+		LinkedList<LogEvent> list = memlog.getEntries(-1, 10, Level.INFO_INT, Long.MIN_VALUE, Long.MAX_VALUE);
 		assertEquals(2, list.size());
-		assertEquals("info", list.remove().getMessage());
-		assertEquals("warn", list.remove().getMessage());
+		assertEquals("info", list.remove().getEntry().getMessage());
+		assertEquals("warn", list.remove().getEntry().getMessage());
 	}
 	
+	@Test
+	public void testGetRecordsWithBeforeIdReturnsOnlyEntriesBelowId() {
+		int count = 10, threshold = 2;
+		for(int i = 0; i < count; i++) {
+			logger.debug("" + i);
+		}
+		
+		LinkedList<LogEvent> list = memlog.getEntries(-1, 10, Integer.MIN_VALUE, Long.MIN_VALUE, threshold);
+		assertEquals(threshold, list.size());
+		for(int i = 0; i < threshold; i++) {
+			assertEquals(i, list.remove().entryId);
+		}
+	}
+
+	@Test
+	public void testGetRecordsWithAfterIdReturnsOnlyEntriesAboveId() {
+		int count = 10, threshold = 2;
+		for(int i = 0; i < count; i++) {
+			logger.debug("" + i);
+		}
+		
+		LinkedList<LogEvent> list = memlog.getEntries(-1, 10, Integer.MIN_VALUE, threshold, Long.MAX_VALUE);
+		assertEquals(count-threshold-1, list.size());
+		for(int i = threshold+1; i < count; i++) {
+			assertEquals(i, list.remove().entryId);
+		}
+	}
+
 	@Test
 	public void testMemlogPrunesToHistoryDepth() {
 		memlog.setHistoryDepth(16);
@@ -121,7 +165,7 @@ public class MemLogAppenderTest {
 		}
 		
 		assertEquals("test " + memlog.getHistoryDepth(),
-				memlog.getEntries(1).getFirst().getMessage());
+				memlog.getEntries(1).getFirst().getEntry().getMessage());
 	}
 	
 	@Test
@@ -146,7 +190,7 @@ public class MemLogAppenderTest {
 		assertEquals(2, memlog.numEntries());
 		memlog.setThreshold(Level.WARN_INT);
 		assertEquals(1, memlog.numEntries());
-		assertEquals(Level.WARN_INT, memlog.getEntries(1).getFirst().getLevel().toInt());
+		assertEquals(Level.WARN_INT, memlog.getEntries(1).getFirst().getEntry().getLevel().toInt());
 	}
 	
 	@Test
@@ -155,7 +199,7 @@ public class MemLogAppenderTest {
 		logger.debug("hello world");
 		
 		assertEquals(1, monitor.entries.size());
-		assertEquals("hello world", monitor.entries.getFirst().getMessage());
+		assertEquals("hello world", monitor.entries.getFirst().getEntry().getMessage());
 	}
 	
 	@Test

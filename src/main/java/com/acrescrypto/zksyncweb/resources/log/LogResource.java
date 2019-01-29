@@ -13,10 +13,10 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.UriInfo;
 
 import com.acrescrypto.zksync.utility.MemLogAppender;
+import com.acrescrypto.zksync.utility.MemLogAppender.LogEvent;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.spi.ILoggingEvent;
 
 @Path("/logs")
 public class LogResource {
@@ -31,12 +31,14 @@ public class LogResource {
 			@DefaultValue("-1") @QueryParam("offset") int offset,
 			@DefaultValue("1000") @QueryParam("length") int length,
 			@DefaultValue("info") @QueryParam("level") String thresholdName,
+			@DefaultValue("-1") @QueryParam("after") long after,
+			@DefaultValue("9223372036854775807") @QueryParam("before") long before,
 			@Context UriInfo uriInfo
 			) {
 		int threshold = intForLevelName(thresholdName);
-		List<ILoggingEvent> entries = MemLogAppender
+		List<LogEvent> entries = MemLogAppender
 				.sharedInstance()
-				.getEntries(offset, length, threshold);
+				.getEntries(offset, length, threshold, after, before);
 		
 		throw XAPIResponse.withWrappedPayload("entries", entries);
 	}

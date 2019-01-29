@@ -13,16 +13,34 @@ public class MemLogAppender extends AppenderBase<ILoggingEvent> {
 	}
 	
 	public interface MemLogMonitor {
-		void receivedEntry(ILoggingEvent entry);
+		void receivedEntry(LogEvent entry);
 	}
 	
-	LinkedList<ILoggingEvent> entries = new LinkedList<>();
+	public class LogEvent {
+		ILoggingEvent entry;
+		long entryId;
+		
+		public LogEvent(ILoggingEvent entry) {
+			this.entry = entry;
+			this.entryId = issueEntryId();
+		}
+		
+		public ILoggingEvent getEntry() { return entry; }
+		public long getEntryId() { return entryId; }
+	}
+	
+	LinkedList<LogEvent> entries = new LinkedList<>();
 	LinkedList<MemLogMonitor> monitors = new LinkedList<>();
 	private int historyDepth = 16384;
 	private int threshold = Integer.MIN_VALUE;
+	private long nextEntryId = 0;
 	
 	public MemLogAppender() {
 		sharedMemlog = this;
+	}
+	
+	protected synchronized long issueEntryId() {
+		return nextEntryId++;
 	}
 	
 	protected synchronized void prune() {
@@ -35,11 +53,16 @@ public class MemLogAppender extends AppenderBase<ILoggingEvent> {
 		entries.clear();
 	}
 	
+	public synchronized void hardPurge() {
+		purge();
+		nextEntryId = 0;
+	}
+	
 	protected synchronized void pruneToThreshold() {
-		LinkedList<ILoggingEvent> pruned = new LinkedList<>();
-		for(ILoggingEvent record : entries) {
-			if(record.getLevel().toInt() >= getThreshold()) {
-				pruned.add(record);
+		LinkedList<LogEvent> pruned = new LinkedList<>();
+		for(LogEvent event : entries) {
+			if(event.entry.getLevel().toInt() >= getThreshold()) {
+				pruned.add(event);
 			}
 		}
 		
@@ -47,16 +70,16 @@ public class MemLogAppender extends AppenderBase<ILoggingEvent> {
 		prune();
 	}
 	
-	public LinkedList<ILoggingEvent> getEntries(int length) {
-		return getEntries(-1, length, Integer.MIN_VALUE);
+	public LinkedList<LogEvent> getEntries(int length) {
+		return getEntries(-1, length, Integer.MIN_VALUE, Long.MIN_VALUE, Long.MAX_VALUE);
 	}
 	
-	public LinkedList<ILoggingEvent> getEntries(int offset, int length) {
-		return getEntries(offset, length, Integer.MIN_VALUE);
+	public LinkedList<LogEvent> getEntries(int offset, int length) {
+		return getEntries(offset, length, Integer.MIN_VALUE, Long.MIN_VALUE, Long.MAX_VALUE);
 	}
 	
-	public synchronized LinkedList<ILoggingEvent> getEntries(int offset, int length, int threshold) {
-		LinkedList<ILoggingEvent> results = new LinkedList<>();
+	public synchronized LinkedList<LogEvent> getEntries(int offset, int length, int threshold, long after, long before) {
+		LinkedList<LogEvent> results = new LinkedList<>();
 		int maxOffset = entries.size();
 		
 		if(length == 0) return results;
@@ -70,13 +93,16 @@ public class MemLogAppender extends AppenderBase<ILoggingEvent> {
 		}
 		
 		int idx = -1;
-		for(ILoggingEvent entry : entries) {
+		for(LogEvent event : entries) {
 			idx++;
-			if(entry.getLevel().toInt() < threshold) continue;
+			if(event.entry.getLevel().toInt() < threshold) continue;
+			if(event.getEntryId() <= after) continue;
+			if(event.getEntryId() >= before) continue;
 			if(idx < toSkip) continue;
+			
 			if(length > 0 && results.size() >= length) break;
 			if(idx > maxOffset) break;
-			results.add(entry);
+			results.add(event);
 		}
 		
 		return results;
@@ -84,14 +110,15 @@ public class MemLogAppender extends AppenderBase<ILoggingEvent> {
 
 	@Override
 	public void append(ILoggingEvent entry) {
+		LogEvent event = new LogEvent(entry);
 		if(entry.getLevel().toInt() < getThreshold()) return;
 		synchronized(this) {
-			entries.add(entry);
+			entries.add(event);
 			prune();
 		}
 		
 		for(MemLogMonitor monitor : monitors) {
-			monitor.receivedEntry(entry);
+			monitor.receivedEntry(event);
 		}
 	}
 	

@@ -52,7 +52,7 @@ public class LogResourceTest {
 		server = Main.startServer();
 		Client c = ClientBuilder.newClient();
 		target = c.target(Main.BASE_URI);
-		MemLogAppender.sharedInstance().purge();
+		MemLogAppender.sharedInstance().hardPurge();
 	}
 
 	@After
@@ -128,6 +128,30 @@ public class LogResourceTest {
 		assertEquals("debug", filteredEntries.get(0).get("msg").asText());
 		assertEquals("info", filteredEntries.get(1).get("msg").asText());
 		assertEquals("warn", filteredEntries.get(2).get("msg").asText());
+	}
+	
+	@Test
+	public void testGetLogsFiltersToRequestedBeforeId() {
+		logger.debug("debug");
+		logger.info("info");
+		logger.warn("warn");
+
+		JsonNode resp = WebTestUtils.requestGet(target, "/logs?before=1&level=" + Level.ALL_INT);
+		ArrayList<JsonNode> filteredEntries = filterEntries(resp.get("entries"));
+		assertEquals(1, filteredEntries.size());
+		assertEquals("debug", filteredEntries.get(0).get("msg").asText());
+	}
+
+	@Test
+	public void testGetLogsFiltersToRequestedAfterId() {
+		logger.debug("debug");
+		logger.info("info");
+		logger.warn("warn");
+
+		JsonNode resp = WebTestUtils.requestGet(target, "/logs?after=1&level=" + Level.ALL_INT);
+		ArrayList<JsonNode> filteredEntries = filterEntries(resp.get("entries"));
+		assertEquals(1, filteredEntries.size());
+		assertEquals("warn", filteredEntries.get(0).get("msg").asText());
 	}
 
 	@Test
