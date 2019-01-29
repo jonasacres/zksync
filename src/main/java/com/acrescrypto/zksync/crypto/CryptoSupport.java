@@ -36,6 +36,9 @@ public class CryptoSupport {
 	public final static byte[] PASSPHRASE_SALT_READ = "easysafe-argon2-salt-read".getBytes();
 	public final static byte[] PASSPHRASE_SALT_WRITE = "easysafe-argon2-salt-write".getBytes();
 	public final static byte[] PASSPHRASE_SALT_LOCAL = "easysafe-argon2-salt-local".getBytes();
+	
+	private int maxSimultaneousArgon2;
+	protected int activeSimultaneousArgon2;
 
 	public static CryptoSupport defaultCrypto() {
 		return new CryptoSupport();
@@ -44,8 +47,32 @@ public class CryptoSupport {
 	private CryptoSupport() {
 		defaultPrng = new PRNG();
 	}
-
+	
 	public byte[] deriveKeyFromPassphrase(byte[] passphrase, byte[] salt) {
+		synchronized(this) {
+			while(getMaxSimultaneousArgon2() > 0 && activeSimultaneousArgon2 >= getMaxSimultaneousArgon2()) {
+				try {
+					logger.info("Waiting to derive argon2 key; {} active of max {} simultaneous",
+							activeSimultaneousArgon2,
+							getMaxSimultaneousArgon2());
+					this.wait();
+				} catch (InterruptedException e) {}
+			}
+			
+			activeSimultaneousArgon2++;
+		}
+		
+		byte[] key = deriveKeyFromPassphraseNonblocking(passphrase, salt);
+		
+		synchronized(this) {
+			activeSimultaneousArgon2--;
+			this.notify();
+		}
+		
+		return key;
+	}
+
+	public byte[] deriveKeyFromPassphraseNonblocking(byte[] passphrase, byte[] salt) {
 		JnaUint32 iterations = new JnaUint32(cheapArgon2 ? 1 : ARGON2_TIME_COST);
 		JnaUint32 memory = new JnaUint32(cheapArgon2 ? 128 : ARGON2_MEMORY_COST);
 		JnaUint32 parallelism = new JnaUint32(cheapArgon2 ? 1 : ARGON2_PARALLELISM);
@@ -443,5 +470,13 @@ public class CryptoSupport {
 
 	public byte[] symNonce(long i) {
 		return ByteBuffer.allocate(symIvLength()).putLong(i).array();
+	}
+
+	public int getMaxSimultaneousArgon2() {
+		return maxSimultaneousArgon2;
+	}
+
+	public void setMaxSimultaneousArgon2(int maxSimultaneousArgon2) {
+		this.maxSimultaneousArgon2 = maxSimultaneousArgon2;
 	}
 }

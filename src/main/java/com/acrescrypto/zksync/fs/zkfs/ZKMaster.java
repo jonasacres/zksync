@@ -110,6 +110,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		setupSubscriptions();
 		setupBandwidth();
 		
+		this.crypto.setMaxSimultaneousArgon2(globalConfig.getInt("crypto.pbkdf.maxsimultaneous"));
 		this.passphraseProvider = passphraseProvider;
 		this.threadGroup = new ThreadGroup("ZKMaster " + System.identityHashCode(this));
 		getLocalKey();
@@ -397,6 +398,8 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 	
 	protected void setupDefaultConfig() {
+		globalConfig.setDefault("crypto.pbkdf.maxsimultaneous", 1);
+		
 		globalConfig.setDefault("net.dht.enabled", false);
 		globalConfig.setDefault("net.dht.bindaddress", "0.0.0.0");
 		globalConfig.setDefault("net.dht.port", 0);
@@ -427,6 +430,8 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected void setupSubscriptions() {
 		globalConfig.subscribe("net.limits.tx").asLong((v)->bandwidthAllocatorTx.setBytesPerSecond(v));
 		globalConfig.subscribe("net.limits.rx").asLong((v)->bandwidthAllocatorRx.setBytesPerSecond(v));
+		
+		globalConfig.subscribe("crypto.pbkdf.maxsimultaneous").asInt((v)->crypto.setMaxSimultaneousArgon2(v));
 	}
 	
 	protected void setupBandwidth() {
