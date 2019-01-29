@@ -282,6 +282,7 @@ public class TCPPeerSocketListenerTest {
 	
 	@Test
 	public void testListenerForSwarmReturnsListenerIfSwarmAdvertised() throws IOException, InvalidBlacklistException, UnconnectableAdvertisementException {
+		assertTrue(Util.waitUntil(100, ()->listener.getPort() != 0));
 		listener.advertise(swarm);
 		TCPPeerAdvertisementListener adListener = listener.listenerForSwarm(swarm);
 		assertNotNull(adListener);

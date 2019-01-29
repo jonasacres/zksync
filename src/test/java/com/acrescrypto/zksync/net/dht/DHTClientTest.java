@@ -64,6 +64,7 @@ public class DHTClientTest {
 			this.storage = new RAMFS();
 			this.blacklist = new Blacklist(storage, "blacklist", new Key(crypto));
 			this.globalConfig = new ConfigFile(storage, "config.json");
+			setupDefaultConfig();
 			setupBandwidth();
 		}
 		

@@ -143,6 +143,14 @@ public class GlobalResourceTest {
 	}
 	
 	@Test
+	public void testGetGlobalSettingsReturnsAllSettings() {
+		JsonNode resp = WebTestUtils.requestGet(target, "/global/settings");
+		for(String key : master.getGlobalConfig().keys()) {
+			assertTrue("missing " + key, resp.has(key));
+		}
+	}
+	
+	@Test
 	public void testGetGlobalSettingsReturnsTcpPortWhenListenerActive() {
 		master.getGlobalConfig().set("net.swarm.enabled", true);
 		assertTrue(Util.waitUntil(100, ()->master.getTCPListener().getPort() != 0));

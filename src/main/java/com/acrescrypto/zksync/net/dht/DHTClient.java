@@ -129,9 +129,9 @@ public class DHTClient {
 		
 		setupSubscriptions();
 		
-		if(master.getGlobalConfig().getBool("net.dht.enabled", false)) {
-			String addr = master.getGlobalConfig().getString("net.dht.bindaddress", "0.0.0.0");
-			int port = master.getGlobalConfig().getInt("net.dht.port", 0);
+		if(master.getGlobalConfig().getBool("net.dht.enabled")) {
+			String addr = master.getGlobalConfig().getString("net.dht.bindaddress");
+			int port = master.getGlobalConfig().getInt("net.dht.port");
 			try {
 				listen(addr, port);
 			} catch (SocketException exc) {
@@ -139,7 +139,7 @@ public class DHTClient {
 			}
 		}
 		
-		if(master.getGlobalConfig().getBool("net.dht.bootstrap.enabled", false)) {
+		if(master.getGlobalConfig().getBool("net.dht.bootstrap.enabled")) {
 			addDefaults();
 		}
 	}
@@ -147,11 +147,11 @@ public class DHTClient {
 	protected DHTClient() {}
 	
 	protected void setupSubscriptions() {
-		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.enabled").asBoolean(false, (enabled)->{
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.enabled").asBoolean((enabled)->{
 			if(closed || enabled == isListening()) return;
 			if(enabled) {
 				try {
-					listen(bindAddress, master.getGlobalConfig().getInt("net.dht.port", 0));
+					listen(bindAddress, master.getGlobalConfig().getInt("net.dht.port"));
 				} catch (SocketException exc) {
 					logger.error("DHT: Unable to open DHT socket", exc);
 				}
@@ -160,7 +160,7 @@ public class DHTClient {
 			}
 		}));
 		
-		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.port").asInt(0, (port)->{
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.port").asInt((port)->{
 			synchronized(this) {
 				if(isListening() && getPort() != port) {
 					bindPort = port;
@@ -173,7 +173,7 @@ public class DHTClient {
 			}
 		}));
 		
-		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.upnp").asBoolean(false, (enabled)->{
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.upnp").asBoolean((enabled)->{
 			if(enabled) {
 				checkUPnP();
 			} else if(getPort() > 0 && UPnP.isMappedUDP(getPort())) {
@@ -181,7 +181,7 @@ public class DHTClient {
 			}
 		}));
 		
-		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.bootstrap.enabled").asBoolean(false, (useBootstrap)->{
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.bootstrap.enabled").asBoolean((useBootstrap)->{
 			if(useBootstrap) {
 				addDefaults();
 			} else {
@@ -192,12 +192,9 @@ public class DHTClient {
 	}
 	
 	protected void addDefaults() {
-		String defaultHost = master.getGlobalConfig().getString("net.dht.bootstrap.host",
-				"dht1.easysafe.io");
-		int defaultPort = master.getGlobalConfig().getInt("net.dht.bootstrap.port",
-				49921);
-		String defaultKey = master.getGlobalConfig().getString("net.dht.bootstrap.key",
-				"M/o1rvmhAsQO8+Z5evXJQ+21/sk2fxei4JKl+h1SPU5rKLNWRfnUyrxVAGxBK1Ydl2RQGoW+CZLKQRbZS+WLrw==");
+		String defaultHost = master.getGlobalConfig().getString("net.dht.bootstrap.host");
+		int defaultPort = master.getGlobalConfig().getInt("net.dht.bootstrap.port");
+		String defaultKey = master.getGlobalConfig().getString("net.dht.bootstrap.key");
 		
 		PublicDHKey pubkey = crypto.makePublicDHKey(Util.decode64(defaultKey));
 		
@@ -219,7 +216,7 @@ public class DHTClient {
 	public DHTClient listen(String address, int port) throws SocketException {
 		closed = paused = false;
 		
-		this.bindAddress = address == null ? master.getGlobalConfig().getString("net.dht.bindaddress", "0.0.0.0") : address;
+		this.bindAddress = address == null ? master.getGlobalConfig().getString("net.dht.bindaddress") : address;
 		this.bindPort = port;
 		openSocket();
 
@@ -320,7 +317,7 @@ public class DHTClient {
 			socket.close();
 		}
 
-		if(port > 0 && master.getGlobalConfig().getBool("net.dht.upnp", false)) {
+		if(port > 0 && master.getGlobalConfig().getBool("net.dht.upnp")) {
 			UPnP.closePortUDP(port);
 		}
 	}
@@ -361,7 +358,7 @@ public class DHTClient {
 		if(socket != null && !socket.isClosed()) {
 			int oldPort = socket.getLocalPort();
 			socket.close();
-			if(oldPort != bindPort && master.getGlobalConfig().getBool("net.dht.upnp", false)) {
+			if(oldPort != bindPort && master.getGlobalConfig().getBool("net.dht.upnp")) {
 				logger.info("DHT: Closing UPnP for DHT on UDP port " + getPort());
 				UPnP.closePortUDP(oldPort);
 			}
@@ -370,7 +367,7 @@ public class DHTClient {
 		try {
 			socket = new DatagramSocket(bindPort, addr);
 			socket.setReuseAddress(true);
-			if(socket.getLocalPort() != master.getGlobalConfig().getInt("net.dht.port", 0)) {
+			if(socket.getLocalPort() != master.getGlobalConfig().getInt("net.dht.port")) {
 				master.getGlobalConfig().set("net.dht.port", socket.getLocalPort());
 			}
 			logger.info("DHT: listening on UDP port " + getPort());
@@ -383,7 +380,7 @@ public class DHTClient {
 	}
 	
 	protected void checkUPnP() {
-		if(master.getGlobalConfig().getBool("net.dht.upnp", false) && socket != null && !paused) {
+		if(master.getGlobalConfig().getBool("net.dht.upnp") && socket != null && !paused) {
 			logger.info("DHT: Requesting UPnP for DHT on UDP port " + getPort());
 			UPnP.openPortUDP(getPort());
 		}

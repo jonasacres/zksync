@@ -3,6 +3,8 @@ package com.acrescrypto.zksync.fs.zkfs.config;
 import java.io.IOException;
 import java.io.StringReader;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.json.Json;
@@ -12,6 +14,7 @@ import javax.json.JsonObjectBuilder;
 import javax.json.JsonReader;
 import javax.json.JsonString;
 import javax.json.JsonValue;
+import javax.json.JsonValue.ValueType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,29 +27,11 @@ import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionBui
  * would have knowledge of key if they did possess encrypted LocalConfig file.
  */
 public class ConfigFile {
-	/* want:
-	 * net.blacklist.duration
-	 * 
-	 * net.swarm.port
-	 * net.swarm.enabled
-	 * net.swarm.defaultmaxpeers
-	 * 
-	 * net.dht.port
-	 * net.dht.enabled
-	 * 
-	 * net.upnp.enabled
-	 * 
-	 * api.http.port
-	 * 
-	 * and an observer system:
-	 * handle = config.subscribe("net.swarm.port").withInt((port)->rebind(port), 0);
-	 * handle.close() // when owner is ready to relinquish, for memory management
-	 * config.get("net.swarm.port").asInt(0)
-	 */
 	protected SubscriptionService sub = new SubscriptionService();
 	protected FS storage;
 	protected ConcurrentHashMap<String,JsonValue> info = new ConcurrentHashMap<>();
 	protected String path;
+	protected HashMap<String,Object> defaults = new HashMap<>();
 	
 	protected Logger logger = LoggerFactory.getLogger(ConfigFile.class);
 	
@@ -114,7 +99,7 @@ public class ConfigFile {
 		
 		logger.info("Config: Setting " + key + " -> " + value);
 		info.put(key, jvalue);
-		sub.updatedKey(key, info.get(key));
+		sub.updatedKey(key, jvalue);
 		writeQuietly();
 	}
 	
@@ -126,7 +111,7 @@ public class ConfigFile {
 		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
-		sub.updatedKey(key, info.get(key));
+		sub.updatedKey(key, jsonValue);
 		writeQuietly();
 	}
 	
@@ -136,7 +121,7 @@ public class ConfigFile {
 		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
-		sub.updatedKey(key, info.get(key));
+		sub.updatedKey(key, jsonValue);
 		writeQuietly();
 	}
 	
@@ -146,7 +131,7 @@ public class ConfigFile {
 		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
-		sub.updatedKey(key, info.get(key));
+		sub.updatedKey(key, jsonValue);
 		writeQuietly();
 	}
 	
@@ -156,90 +141,114 @@ public class ConfigFile {
 		logger.info("Config: Setting " + key + " -> " + value);
 		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
 		info.put(key, jsonValue);
-		sub.updatedKey(key, info.get(key));
+		sub.updatedKey(key, jsonValue);
 		writeQuietly();
 	}
 	
-
+	public void setDefault(String key, Object value) {
+		if(hasKey(key)) return;
+		defaults.put(key, value);
+	}
+	
 	public boolean hasKey(String key) {
 		return info.containsKey(key);
 	}
 	
+	public Object get(String key) {
+		JsonValue value = info.get(key);
+		if(value.getValueType().equals(ValueType.FALSE)) return false;
+		if(value.getValueType().equals(ValueType.TRUE)) return true;
+		if(value.getValueType().equals(ValueType.NUMBER)) {
+			double dvalue = getDouble(key);
+			if(Math.floor(dvalue) != dvalue) return dvalue;
+			
+			long lvalue = getLong(key);
+			if(Integer.MIN_VALUE <= lvalue && lvalue <= Integer.MAX_VALUE) {
+				return getInt(key);
+			} else {
+				return lvalue;
+			}
+		}
+		if(value.getValueType().equals(ValueType.STRING)) return getString(key);
+		return null;
+	}
 
 	public boolean getBool(String key) {
+		if(!hasKey(key)) return (boolean) defaults.get(key);
 		return info.get(key).equals(JsonValue.TRUE);
 	}
-	
-	public boolean getBool(String key, boolean defaultValue) {
-		if(!hasKey(key)) return defaultValue;
-		return info.get(key).equals(JsonValue.TRUE);
-	}
-
 	
 	public int getInt(String key) {
+		if(!hasKey(key)) return safeInt(defaults.get(key));
 		return ((JsonNumber) info.get(key)).intValue();
 	}
 	
-	public int getInt(String key, int defaultValue) {
-		if(!hasKey(key)) return defaultValue;
-		return ((JsonNumber) info.get(key)).intValue();
-	}
-	
-
 	public long getLong(String key) {
+		if(!hasKey(key)) return safeLong(defaults.get(key));
 		return ((JsonNumber) info.get(key)).longValue();
 	}
-	
-	public long getLong(String key, long defaultValue) {
-		if(!hasKey(key)) return defaultValue;
-		return ((JsonNumber) info.get(key)).longValue();
-	}
-
 	
 	public double getDouble(String key) {
+		if(!hasKey(key)) return safeDouble(defaults.get(key));
 		return ((JsonNumber) info.get(key)).doubleValue();
 	}
-	
-	public double getDouble(String key, double defaultValue) {
-		if(!hasKey(key)) return defaultValue;
-		return ((JsonNumber) info.get(key)).doubleValue();
-	}
-
 	
 	public String getString(String key) {
+		if(!hasKey(key)) return (String) defaults.get(key);
 		return ((JsonString) info.get(key)).getString();
 	}
 	
-	public String getString(String key, String defaultValue) {
-		if(!hasKey(key)) return defaultValue;
-		return ((JsonString) info.get(key)).getString();
+	protected Long safeLong(Object n) {
+		if(n instanceof Number) return ((Number) n).longValue();
+		return null;
 	}
-
+	
+	protected Integer safeInt(Object n) {
+		if(n instanceof Number) return ((Number) n).intValue();
+		return null;
+	}
+	
+	protected Double safeDouble(Object n) {
+		if(n instanceof Number) return ((Number) n).doubleValue();
+		return null;
+	}
+	
+	public Set<String> keys() {
+		HashSet<String> keys = new HashSet<>();
+		keys.addAll(defaults.keySet());
+		keys.addAll(info.keySet());
+		return keys;
+	}
+	
 	public HashMap<String, Object> asHash() {
 		HashMap<String,Object> r = new HashMap<>();
-		for(String key : info.keySet()) {
+		for(String key : keys()) {
 			Object o = null;
 			
 			JsonValue v = info.get(key);
-			switch(v.getValueType()) {
-			case STRING:
-				o = new String(((JsonString) v).getString());
-				break;
-			case NUMBER:
-				if(((JsonNumber) v).isIntegral()) {
-					o = Long.valueOf(((JsonNumber) v).longValue());
-				} else {
-					o = Double.valueOf(((JsonNumber) v).doubleValue());
+			if(v != null) {
+				switch(v.getValueType()) {
+				case STRING:
+					o = new String(((JsonString) v).getString());
+					break;
+				case NUMBER:
+					if(((JsonNumber) v).isIntegral()) {
+						o = Long.valueOf(((JsonNumber) v).longValue());
+					} else {
+						o = Double.valueOf(((JsonNumber) v).doubleValue());
+					}
+					break;
+				case TRUE:
+					o = Boolean.TRUE;
+					break;
+				case FALSE:
+					o = Boolean.FALSE;
+					break;
+				default:
+					break;
 				}
-				break;
-			case TRUE:
-				o = Boolean.TRUE;
-				break;
-			case FALSE:
-				o = Boolean.FALSE;
-				break;
-			default:
-				break;
+			} else {
+				o = defaults.get(key);
 			}
 			
 			r.put(key, o);

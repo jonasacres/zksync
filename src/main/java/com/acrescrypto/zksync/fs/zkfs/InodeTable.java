@@ -258,11 +258,11 @@ public class InodeTable extends ZKFile {
 		inode.getStat().setCtime(now);
 		inode.getStat().setAtime(now);
 		inode.getStat().setMtime(now);
-		inode.getStat().setMode(zkfs.archive.master.getGlobalConfig().getInt("fs.default.fileMode", 0644));
-		inode.getStat().setUser(zkfs.archive.master.getGlobalConfig().getString("fs.default.username", "root"));
-		inode.getStat().setUid(zkfs.archive.master.getGlobalConfig().getInt("fs.default.uid", 0));
-		inode.getStat().setGroup(zkfs.archive.master.getGlobalConfig().getString("fs.default.groupname", "root"));
-		inode.getStat().setGid(zkfs.archive.master.getGlobalConfig().getInt("fs.default.gid", 0));
+		inode.getStat().setMode(zkfs.archive.master.getGlobalConfig().getInt("fs.default.fileMode"));
+		inode.getStat().setUser(zkfs.archive.master.getGlobalConfig().getString("fs.default.username"));
+		inode.getStat().setUid(zkfs.archive.master.getGlobalConfig().getInt("fs.default.uid"));
+		inode.getStat().setGroup(zkfs.archive.master.getGlobalConfig().getString("fs.default.groupname"));
+		inode.getStat().setGid(zkfs.archive.master.getGlobalConfig().getInt("fs.default.gid"));
 		inode.setRefTag(RefTag.blank(zkfs.archive));
 		return inode;
 	}

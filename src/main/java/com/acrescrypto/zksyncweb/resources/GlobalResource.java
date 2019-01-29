@@ -29,7 +29,14 @@ public class GlobalResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/settings")
 	public XAPIResponse getGlobalSettings() throws IOException {
-		throw XAPIResponse.withPayload(State.sharedState().getMaster().getGlobalConfig().asHash());
+		try {
+			throw XAPIResponse.withPayload(State.sharedState().getMaster().getGlobalConfig().asHash());
+		} catch(XAPIResponse exc) {
+			throw exc;
+		} catch(Exception exc) {
+			exc.printStackTrace();
+			throw exc;
+		}
 	}
 	
 	@PUT

@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.net;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.StringReader;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.LinkedList;
@@ -68,10 +69,10 @@ public class TCPPeerSocketListener {
 	}
 	
 	protected void setupSubscriptions() {
-		master.getGlobalConfig().subscribe("net.swarm.enabled").asBoolean(false, (enabled)->{
+		master.getGlobalConfig().subscribe("net.swarm.enabled").asBoolean((enabled)->{
 			if(enabled == isListening()) return;
 			if(enabled) {
-				startListening(master.getGlobalConfig().getInt("net.swarm.port", 0));
+				startListening(master.getGlobalConfig().getInt("net.swarm.port"));
 			} else {
 				try {
 					close();
@@ -79,16 +80,16 @@ public class TCPPeerSocketListener {
 			}
 		});
 		
-		master.getGlobalConfig().subscribe("net.swarm.port").asInt(0, (port)->{
+		master.getGlobalConfig().subscribe("net.swarm.port").asInt((port)->{
 			if(isListening() && listenSocket.getLocalPort() != port) {
 				try {
 					close();
 				} catch (IOException e) {}
-				startListening(master.getGlobalConfig().getInt("net.swarm.port", 0));
+				startListening(master.getGlobalConfig().getInt("net.swarm.port"));
 			}
 		});
 		
-		master.getGlobalConfig().subscribe("net.swarm.upnp").asBoolean(false, (enabled)->{
+		master.getGlobalConfig().subscribe("net.swarm.upnp").asBoolean((enabled)->{
 			if(enabled && isListening()) {
 				if(!UPnP.isMappedTCP(port)) {
 					UPnP.openPortTCP(port);
@@ -102,7 +103,7 @@ public class TCPPeerSocketListener {
 	protected void startListening(int port) {
 		this.requestedPort = port;
 		if(port == 0 && master != null && master.getGlobalConfig() != null) {
-			this.port = master.getGlobalConfig().getInt("net.swarm.port", 0);
+			this.port = master.getGlobalConfig().getInt("net.swarm.port");
 		} else {
 			this.port = port;
 		}
@@ -121,7 +122,7 @@ public class TCPPeerSocketListener {
 		if(listenSocket != null) {
 			listenSocket.getLocalPort();
 			listenSocket.close();
-			if(master.getGlobalConfig().getBool("net.swarm.upnp", false)) {
+			if(master.getGlobalConfig().getBool("net.swarm.upnp")) {
 				UPnP.closePortTCP(port);
 			}
 		}
@@ -189,9 +190,11 @@ public class TCPPeerSocketListener {
 	
 	protected void openSocket() {
 		try {
-			listenSocket = new ServerSocket(port);
+			listenSocket = new ServerSocket(port,
+					master.getGlobalConfig().getInt("net.swarm.backlog"),
+					InetAddress.getByName(master.getGlobalConfig().getString("net.swarm.bindaddress")));
 			listenSocket.setReuseAddress(true);
-			if(master.getGlobalConfig().getBool("net.swarm.upnp", false)) {
+			if(master.getGlobalConfig().getBool("net.swarm.upnp")) {
 				UPnP.openPortTCP(listenSocket.getLocalPort());
 			}
 		} catch(IOException exc) {

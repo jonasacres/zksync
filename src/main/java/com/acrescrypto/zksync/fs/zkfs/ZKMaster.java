@@ -106,6 +106,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		this.storage = storage;
 		
 		this.globalConfig = new ConfigFile(storage, "config.json");
+		setupDefaultConfig();
 		setupSubscriptions();
 		setupBandwidth();
 		
@@ -395,15 +396,43 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		return globalConfig;
 	}
 	
+	protected void setupDefaultConfig() {
+		globalConfig.setDefault("net.dht.enabled", false);
+		globalConfig.setDefault("net.dht.bindaddress", "0.0.0.0");
+		globalConfig.setDefault("net.dht.port", 0);
+		globalConfig.setDefault("net.dht.upnp", false);
+		
+		globalConfig.setDefault("net.dht.bootstrap.enabled", false);
+		globalConfig.setDefault("net.dht.bootstrap.host", "dht1.easysafe.io");
+		globalConfig.setDefault("net.dht.bootstrap.port", 49921);
+		globalConfig.setDefault("net.dht.bootstrap.key", "M/o1rvmhAsQO8+Z5evXJQ+21/sk2fxei4JKl+h1SPU5rKLNWRfnUyrxVAGxBK1Ydl2RQGoW+CZLKQRbZS+WLrw==");
+		
+		globalConfig.setDefault("net.swarm.enabled", false);
+		globalConfig.setDefault("net.swarm.bindaddress", "0.0.0.0");
+		globalConfig.setDefault("net.swarm.backlog", 50);
+		globalConfig.setDefault("net.swarm.port", 0);
+		globalConfig.setDefault("net.swarm.upnp", false);
+		
+		globalConfig.setDefault("fs.default.fileMode", 0644);
+		globalConfig.setDefault("fs.default.username", "root");
+		globalConfig.setDefault("fs.default.uid", 0);
+		globalConfig.setDefault("fs.default.groupname", "root");
+		globalConfig.setDefault("fs.default.gid", 0);
+		globalConfig.setDefault("fs.default.directoryMode", 0755);
+		
+		globalConfig.setDefault("net.limits.tx", -1);
+		globalConfig.setDefault("net.limits.rx", -1);
+	}
+	
 	protected void setupSubscriptions() {
-		globalConfig.subscribe("net.limits.tx").asLong(-1, (v)->bandwidthAllocatorTx.setBytesPerSecond(v));
-		globalConfig.subscribe("net.limits.rx").asLong(-1, (v)->bandwidthAllocatorRx.setBytesPerSecond(v));
+		globalConfig.subscribe("net.limits.tx").asLong((v)->bandwidthAllocatorTx.setBytesPerSecond(v));
+		globalConfig.subscribe("net.limits.rx").asLong((v)->bandwidthAllocatorRx.setBytesPerSecond(v));
 	}
 	
 	protected void setupBandwidth() {
 		bandwidthMonitorTx = new BandwidthMonitor(100, 3000);
 		bandwidthMonitorRx = new BandwidthMonitor(100, 3000);
-		bandwidthAllocatorTx = new BandwidthAllocator(globalConfig.getLong("net.limits.tx", -1));
-		bandwidthAllocatorRx = new BandwidthAllocator(globalConfig.getLong("net.limits.rx", -1));
+		bandwidthAllocatorTx = new BandwidthAllocator(globalConfig.getLong("net.limits.tx"));
+		bandwidthAllocatorRx = new BandwidthAllocator(globalConfig.getLong("net.limits.rx"));
 	}
 }
