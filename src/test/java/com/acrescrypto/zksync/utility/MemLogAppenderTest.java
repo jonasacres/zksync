@@ -53,7 +53,7 @@ public class MemLogAppenderTest {
 			originalThreshold = memlog.getThreshold();
 		}
 		
-		memlog.purge();
+		memlog.hardPurge();
 	}
 	
 	@After
@@ -61,7 +61,7 @@ public class MemLogAppenderTest {
 		memlog.setHistoryDepth(originalHistoryDepth);
 		memlog.setThreshold(originalThreshold);
 		memlog.clearMonitors();
-		memlog.purge();
+		memlog.hardPurge();
 	}
 	
 	@AfterClass
