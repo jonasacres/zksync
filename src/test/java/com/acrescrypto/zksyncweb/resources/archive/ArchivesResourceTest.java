@@ -137,11 +137,10 @@ public class ArchivesResourceTest {
 		XArchiveSpecification spec = new XArchiveSpecification();
 		spec.setReadPassphrase(pp);
 		JsonNode postResp = WebTestUtils.requestPost(target, "archives", spec);
-		System.out.println(postResp);
 		
 		State.resetState();
 		JsonNode getResp = WebTestUtils.requestGet(target, "archives");
-		System.out.println(getResp);
+		assertTrue(getResp.get("archives").get(0).get("archiveId").textValue().equals(postResp.get("archiveId").textValue()));
 	}
 
 	@Test
@@ -344,7 +343,7 @@ public class ArchivesResourceTest {
 	}
 
 	@Test
-	public void testCreateDoesNotSaveKeysIfAccessLevelIsNull() throws IOException {
+	public void testCreateDoesSavesKeysIfAccessLevelIsNull() throws IOException {
 		String pp = "passphrase";
 
 		XArchiveSpecification spec = new XArchiveSpecification();
@@ -353,7 +352,7 @@ public class ArchivesResourceTest {
 		WebTestUtils.requestPost(target, "archives", spec);
 
 		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		assertEquals(0, state2.getOpenConfigs().size());
+		assertEquals(1, state2.getOpenConfigs().size());
 	}
 
 	@Test

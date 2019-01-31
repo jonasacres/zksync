@@ -117,7 +117,9 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		this.storedAccess = new StoredAccess(this);
 		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive("easysafe-blacklist"));
 		this.dhtClient = new DHTClient(localKey.derive("easysafe-dht-storage"), this);
-		this.dhtDiscovery = new DHTZKArchiveDiscovery();
+		this.dhtDiscovery = new DHTZKArchiveDiscovery(
+				globalConfig.getInt("net.dht.discoveryintervalms"),
+				globalConfig.getInt("net.dht.advertisementintervalms"));
 		listener = new TCPPeerSocketListener(this);
 		loadStoredAccessors();
 	}
@@ -410,6 +412,9 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		globalConfig.setDefault("net.dht.bootstrap.port", 49921);
 		globalConfig.setDefault("net.dht.bootstrap.key", "M/o1rvmhAsQO8+Z5evXJQ+21/sk2fxei4JKl+h1SPU5rKLNWRfnUyrxVAGxBK1Ydl2RQGoW+CZLKQRbZS+WLrw==");
 		
+		globalConfig.setDefault("net.dht.discoveryintervalms", DHTZKArchiveDiscovery.DEFAULT_DISCOVERY_INTERVAL_MS);
+		globalConfig.setDefault("net.dht.advertisementintervalms", DHTZKArchiveDiscovery.DEFAULT_ADVERTISEMENT_INTERVAL_MS);
+		
 		globalConfig.setDefault("net.swarm.enabled", false);
 		globalConfig.setDefault("net.swarm.bindaddress", "0.0.0.0");
 		globalConfig.setDefault("net.swarm.backlog", 50);
@@ -432,6 +437,9 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		globalConfig.subscribe("net.limits.rx").asLong((v)->bandwidthAllocatorRx.setBytesPerSecond(v));
 		
 		globalConfig.subscribe("crypto.pbkdf.maxsimultaneous").asInt((v)->crypto.setMaxSimultaneousArgon2(v));
+		
+		globalConfig.subscribe("net.dht.discoveryintervalms").asInt((v)->dhtDiscovery.setDiscoveryIntervalMs(v));
+		globalConfig.subscribe("net.dht.advertisementintervalms").asInt((v)->dhtDiscovery.setAdvertisementIntervalMs(v));
 	}
 	
 	protected void setupBandwidth() {

@@ -17,7 +17,6 @@ import com.acrescrypto.zksync.fs.zkfs.StoredAccess;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksyncweb.State;
-import com.acrescrypto.zksyncweb.WebUtils;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 import com.acrescrypto.zksyncweb.data.XArchiveIdentification;
 import com.acrescrypto.zksyncweb.data.XArchiveSpecification;
@@ -90,7 +89,7 @@ public class ArchivesResource {
 					}
 
 					ZKArchiveConfig existing = State.sharedState().configForArchiveId(config.getArchiveId());
-					if(existing != null) {
+					if(existing != null && existing != config) {
 						status = 200;
 						config = existing;
 					}
@@ -128,11 +127,11 @@ public class ArchivesResource {
 				State.sharedState().addOpenConfig(config);
 			}
 
-			final ZKArchiveConfig cconfig = config;
-			WebUtils.mapFieldWithException(spec.getSavedAccessLevel(), (level)->{
-				if(level == StoredAccess.ACCESS_LEVEL_NONE) return;
-				cconfig.getMaster().storedAccess().storeArchiveAccess(cconfig, level);
-			});
+			Integer level = spec.getSavedAccessLevel();
+			if(level == null) level = StoredAccess.ACCESS_LEVEL_READWRITE;
+			if(level != StoredAccess.ACCESS_LEVEL_NONE) {
+				config.getMaster().storedAccess().storeArchiveAccess(config, level);
+			}
 
 			XArchiveIdentification id = XArchiveIdentification.fromConfig(config);
 			throw XAPIResponse.withPayload(status, id);

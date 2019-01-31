@@ -55,10 +55,15 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	
 	private Logger logger = LoggerFactory.getLogger(DHTClient.class);
 	protected HashMap<ArchiveAccessor,DiscoveryEntry> activeDiscoveries = new HashMap<>();
-	protected int discoveryIntervalMs = DEFAULT_DISCOVERY_INTERVAL_MS;
-	protected int advertisementIntervalMs = DEFAULT_ADVERTISEMENT_INTERVAL_MS;
-	
+	protected int discoveryIntervalMs;
+	protected int advertisementIntervalMs;
 	public DHTZKArchiveDiscovery() {
+		this(DEFAULT_DISCOVERY_INTERVAL_MS, DEFAULT_ADVERTISEMENT_INTERVAL_MS);
+	}
+	
+	public DHTZKArchiveDiscovery(int discoveryIntervalMs, int advertisementIntervalMs) {
+		this.discoveryIntervalMs = discoveryIntervalMs;
+		this.advertisementIntervalMs = advertisementIntervalMs;
 	}
 
 	@Override
@@ -179,5 +184,22 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 				entry.accessor.getMaster().getDHTClient().addRecord(searchId, lookupKey, adRecord);
 			}
 		}
+	}
+	
+	
+	public void setDiscoveryIntervalMs(int discoveryIntervalMs) {
+		this.discoveryIntervalMs = discoveryIntervalMs;
+	}
+	
+	public int getDiscoveryIntervalMs() {
+		return discoveryIntervalMs;
+	}
+	
+	public void setAdvertisementIntervalMs(int advertisementIntervalMs) {
+		this.advertisementIntervalMs = advertisementIntervalMs;
+	}
+	
+	public int getAdvertisementIntervalMs() {
+		return advertisementIntervalMs;
 	}
 }
