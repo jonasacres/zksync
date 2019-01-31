@@ -8,6 +8,9 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
@@ -36,6 +39,7 @@ public class State {
 	}
 	
 	private static State sharedState;
+	protected Logger logger = LoggerFactory.getLogger(State.class);
 	
 	public static byte[] defaultPassphrase() {
 		// TODO Someday: (redesign) allow specification of local key
@@ -68,7 +72,7 @@ public class State {
 	}
 	
 	public static void resetState() throws IOException {
-		sharedState.activeFilesystems.clear();
+		sharedState = new State(defaultPassphrase(), sharedState.getMaster().getStorage());
 	}
 	
 	class OneTimePassphraseProvider implements PassphraseProvider {
@@ -134,7 +138,16 @@ public class State {
 	
 	public ZKArchiveConfig configForArchiveId(byte[] archiveId) {
 		for(ZKArchiveConfig config : getOpenConfigs()) {
-			if(Arrays.equals(config.getArchiveId(), archiveId)) return config;
+			if(Arrays.equals(config.getArchiveId(), archiveId)) {
+				try {
+					activeFs(config);
+				} catch (IOException exc) {
+					logger.error("Caught exception instantiating active FS for archive {}",
+							Util.bytesToHex(archiveId),
+							exc);
+				}
+				return config;
+			}
 		}
 		
 		return null;

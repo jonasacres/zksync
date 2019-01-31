@@ -3,6 +3,7 @@ package com.acrescrypto.zksyncweb.data;
 import java.io.IOException;
 
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.fs.zkfs.ZKFSManager;
 import com.acrescrypto.zksyncweb.State;
 
 public class XArchiveSettings {
@@ -19,15 +20,17 @@ public class XArchiveSettings {
 	
 	public static XArchiveSettings fromConfig(ZKArchiveConfig config) throws IOException {
 		XArchiveSettings settings = new XArchiveSettings();
+		ZKFSManager manager = State.sharedState().activeManager(config);
 		settings.advertising = config.isAdvertising();
 		settings.requestingAll = config.getSwarm().isRequestingAll();
 		settings.peerLimit = config.getSwarm().getMaxSocketCount();
-		if(!config.getAccessor().isSeedOnly()) {
-			settings.autocommit = State.sharedState().activeManager(config).isAutocommiting();
-			settings.autocommitInterval = State.sharedState().activeManager(config).getAutocommitIntervalMs();
-			settings.autofollow = State.sharedState().activeManager(config).isAutofollowing();
-			settings.automirror = State.sharedState().activeManager(config).isAutomirroring();
-			settings.automirrorPath = State.sharedState().activeManager(config).getAutomirrorPath();
+		if(!config.getAccessor().isSeedOnly() && manager != null) {
+			settings.autocommit = manager.isAutocommiting();
+			settings.autocommitInterval = manager.getAutocommitIntervalMs();
+			settings.autofollow = manager.isAutofollowing();
+			settings.automirror = manager.isAutomirroring();
+			settings.automirrorPath = manager.getAutomirrorPath();
+
 		}
 		return settings;
 	}

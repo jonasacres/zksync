@@ -185,10 +185,20 @@ public class ArchiveResource {
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/settings")
-	public XAPIResponse getConfig(@PathParam("archiveId") String archiveId) throws IOException, XAPIResponse {
+	public XAPIResponse getSettings(@PathParam("archiveId") String archiveId) throws IOException, XAPIResponse {
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
 		throw XAPIResponse.withPayload(XArchiveSettings.fromConfig(config));
+	}
+	
+	@POST
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("/discover")
+	public XAPIResponse postDiscover(@PathParam("archiveId") String archiveId) throws XAPIResponse, IOException {
+		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
+		if(config == null) throw XAPIResponse.notFoundErrorResponse();
+		config.getMaster().getDHTDiscovery().forceUpdate(config.getAccessor());
+		throw XAPIResponse.successResponse();
 	}
 	
 	@PUT

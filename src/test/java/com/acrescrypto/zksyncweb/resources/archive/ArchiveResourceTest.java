@@ -18,6 +18,7 @@ import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
 
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.glassfish.grizzly.http.server.HttpServer;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -26,6 +27,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.StoredAccess;
@@ -35,6 +37,8 @@ import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.net.PeerSwarm;
+import com.acrescrypto.zksync.net.dht.DHTID;
+import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.Main;
@@ -1017,6 +1021,37 @@ public class ArchiveResourceTest {
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archive.getConfig().getArchiveId());
 		config.getArchive().openBlank().commit();
 	}
+	
+	@SuppressWarnings("deprecation")
+	@Test
+	public void testPostDiscoverTriggersDHTSearch() throws IOException {
+		MutableBoolean called = new MutableBoolean();
+
+		class DummyClient extends DHTClient {
+			DummyClient() {
+				this.initialized = true;
+			}
+			
+			@Override
+			public void lookup(DHTID searchId, Key lookupKey, LookupCallback callback) {
+				called.setTrue();
+			}
+			
+			@Override public void close() {}
+		};
+		
+		DummyClient client = new DummyClient(); 
+		
+		State.sharedState().getMaster().getDHTClient().close();
+		State.sharedState().getMaster().setDHTClient(client);
+		WebTestUtils.requestPost(target, "archives/" + transformArchiveId(archive) + "/discover", null);
+		assertTrue(called.booleanValue());
+	}
+	
+	@Test
+	public void testPostDiscoverReturns404IfArchiveNotFound() {
+		WebTestUtils.requestPostWithError(target, 404, "archives/nonexistent/discover", null);
+	}
 
 	@Test
 	public void testSettingsArePersistent() throws IOException {
@@ -1034,7 +1069,7 @@ public class ArchiveResourceTest {
 
 		State.resetState();
 		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
-
+		
 		assertEquals(settings.isAdvertising().booleanValue(), resp.get("advertising").asBoolean());
 		assertEquals(settings.isAutocommit().booleanValue(), resp.get("autocommit").asBoolean());
 		assertEquals(settings.isAutofollow().booleanValue(), resp.get("autofollow").asBoolean());

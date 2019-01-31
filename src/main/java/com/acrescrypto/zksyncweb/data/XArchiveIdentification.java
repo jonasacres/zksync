@@ -3,7 +3,6 @@ package com.acrescrypto.zksyncweb.data;
 import java.io.IOException;
 
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
-import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksyncweb.State;
 
 public class XArchiveIdentification {
@@ -33,7 +32,7 @@ public class XArchiveIdentification {
 	
 	public static XArchiveIdentification fromConfig(ZKArchiveConfig config) {
 		XArchiveIdentification id = new XArchiveIdentification();
-		XArchiveSettings xset = new XArchiveSettings();
+		XArchiveSettings xset;
 		
 		id.archiveId = config.getArchiveId().clone();
 		id.description = config.getDescription();
@@ -57,17 +56,13 @@ public class XArchiveIdentification {
 		}
 		
 		try {
-			ZKMaster master = State.sharedState().getMaster();
-			xset.setAdvertising(master.getDHTDiscovery().isAdvertising(config.getAccessor()));
-			xset.setRequestingAll(config.getSwarm().isRequestingAll());
-			xset.setPeerLimit(config.getSwarm().getMaxSocketCount());
-			// TODO API: (implement) Autocommit field
-			// TODO API: (implement) Autofollow field
-			// TODO API: (implement) Autocommit interval field
-
+			xset = XArchiveSettings.fromConfig(config);
 			id.consumedStorage = config.getStorage().storageSize("/");
 			id.consumedLocalStorage = config.getLocalStorage().storageSize("/");
-		} catch(IOException exc) {}
+		} catch(IOException exc) {
+			xset = new XArchiveSettings();
+			// TODO API: (log) worth logging this...
+		}
 		
 		id.config = xset;
 		

@@ -40,16 +40,16 @@ public class ArchivesResource {
 			return XAPIResponse.genericServerErrorResponse();
 		}
 	}
-	
-    @POST
-    @Produces(MediaType.APPLICATION_JSON)
-    public XAPIResponse postArchives(String json) {
-    	try {
+
+	@POST
+	@Produces(MediaType.APPLICATION_JSON)
+	public XAPIResponse postArchives(String json) {
+		try {
 			XArchiveSpecification spec = new ObjectMapper().readValue(json, XArchiveSpecification.class);
 			ArchiveAccessor accessor;
 			ZKArchiveConfig config;
 			int status = 201;
-			
+
 			// build the accessor; this is the thing that lets us find archives with a matching read passphrase in the DHT.
 			if(spec.getReadPassphrase() != null) {
 				accessor = State.sharedState().getMaster().makeAccessorForPassphrase(spec.getReadPassphrase().getBytes());
@@ -62,7 +62,7 @@ public class ArchivesResource {
 			} else {
 				return XAPIResponse.withError(400, "Must supply a read passphrase, read key or seed key");
 			}
-			
+
 			// if we're doing a write key, set that up now 
 			Key writeRoot = null;
 			if(spec.getWritePassphrase() != null) {
@@ -71,7 +71,7 @@ public class ArchivesResource {
 			} else if(spec.getWriteKey() != null) {
 				writeRoot = new Key(State.sharedCrypto(), spec.getWriteKey()); 
 			}
-			
+
 			if(spec.getArchiveId() == null) {
 				// no archive id => we're making a new archive or joining a default archive
 				if(writeRoot == null) {
@@ -112,7 +112,7 @@ public class ArchivesResource {
 					} else {
 						config = ZKArchiveConfig.openExisting(accessor, spec.getArchiveId(), false, writeRoot);
 					}
-	
+
 					/* We can't do anything with this archive until we have the config file, which we'll need to
 					 * download from the swarm. So spin up a thread whose job is to get us swarmed up. */
 					final ZKArchiveConfig cconfig = config;
@@ -123,17 +123,17 @@ public class ArchivesResource {
 					});
 				}
 			}
-			
+
 			if(status == 201) {
 				State.sharedState().addOpenConfig(config);
 			}
-			
+
 			final ZKArchiveConfig cconfig = config;
 			WebUtils.mapFieldWithException(spec.getSavedAccessLevel(), (level)->{
 				if(level == StoredAccess.ACCESS_LEVEL_NONE) return;
 				cconfig.getMaster().storedAccess().storeArchiveAccess(cconfig, level);
 			});
-			
+
 			XArchiveIdentification id = XArchiveIdentification.fromConfig(config);
 			throw XAPIResponse.withPayload(status, id);
 		} catch(JsonParseException|JsonParsingException|JsonMappingException exc) {
@@ -141,7 +141,9 @@ public class ArchivesResource {
 		} catch(XAPIResponse resp) {
 			throw resp;
 		} catch(Exception exc) {
+			exc.printStackTrace();
+
 			throw XAPIResponse.genericServerErrorResponse();
 		}
-    }
+	}
 }

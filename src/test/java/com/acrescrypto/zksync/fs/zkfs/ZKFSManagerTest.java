@@ -108,9 +108,9 @@ public class ZKFSManagerTest {
 		manager.setAutocommitIntervalMs(interval);
 		fs.write("file", "somebytes".getBytes());
 		Util.sleep(interval - 20);
+		long timeStart = System.currentTimeMillis();
 		fs.write("file", "somebytes2".getBytes());
 		
-		long timeStart = System.currentTimeMillis();
 		assertTrue(Util.waitUntil(2*interval, ()->!fs.isDirty()));
 		long duration = System.currentTimeMillis() - timeStart;
 		assertTrue(duration >= interval);

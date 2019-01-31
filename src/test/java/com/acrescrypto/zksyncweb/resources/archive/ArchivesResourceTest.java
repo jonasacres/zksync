@@ -2,6 +2,7 @@ package com.acrescrypto.zksyncweb.resources.archive;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -128,6 +129,19 @@ public class ArchivesResourceTest {
 
 		assertArrayEquals(expectedConfig.getArchiveId(), storedConfig.getArchiveId());
 		validateSingleArchiveListing(resp, spec);
+	}
+	
+	@Test
+	public void testCreatedArchivesPersistBetweenRuns() throws JsonParseException, JsonMappingException, IOException {
+		String pp = "let's test this thing";
+		XArchiveSpecification spec = new XArchiveSpecification();
+		spec.setReadPassphrase(pp);
+		JsonNode postResp = WebTestUtils.requestPost(target, "archives", spec);
+		System.out.println(postResp);
+		
+		State.resetState();
+		JsonNode getResp = WebTestUtils.requestGet(target, "archives");
+		System.out.println(getResp);
 	}
 
 	@Test
@@ -398,4 +412,19 @@ public class ArchivesResourceTest {
 			assertTrue(found);
 		}
 	}
+	
+	@Test
+	public void testListArchivesShowsArchiveSettings() throws IOException {
+		XArchiveSpecification spec = new XArchiveSpecification();
+		spec.setReadPassphrase("test archive");
+		WebTestUtils.requestPost(target, "archives", spec);
+		JsonNode listing = WebTestUtils.requestGet(target, "/archives");
+		
+		assertTrue(listing.get("archives").isArray());
+		JsonNode config = listing.get("archives").get(0).get("config");
+		assertFalse(config.get("autocommit").isNull());
+		assertFalse(config.get("automirror").isNull());
+		assertFalse(config.get("autofollow").isNull());
+	}
+
 }

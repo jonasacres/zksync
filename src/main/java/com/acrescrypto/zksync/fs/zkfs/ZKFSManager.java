@@ -238,7 +238,7 @@ public class ZKFSManager {
 				"easysafe-local-storage-key");
 	}
 	
-	protected void write() throws IOException {
+	public void write() throws IOException {
 		if(fs == null) return;
 		MutableSecureFile
 		  .atPath(fs.getArchive().getConfig().getLocalStorage(),
@@ -270,9 +270,14 @@ public class ZKFSManager {
 				.createObjectBuilder();
 
 		builder.add("autocommit", autocommit);
-		builder.add("autofollow", autocommit);
-		builder.add("automirror", autocommit);
+		builder.add("autofollow", autofollow);
+		builder.add("automirror", automirror);
 		builder.add("autocommitIntervalMs", autocommitIntervalMs);
+		
+		builder.add("advertising", fs.getArchive().getConfig().isAdvertising());
+		builder.add("requestingAll", fs.getArchive().getConfig().getSwarm().isRequestingAll());
+		builder.add("peerLimit", fs.getArchive().getConfig().getSwarm().getMaxSocketCount());
+		
 		if(automirrorPath != null) {
 			builder.add("automirrorPath", automirrorPath);
 		}
@@ -296,6 +301,23 @@ public class ZKFSManager {
 		setAutocommit(json.getBoolean("autocommit"));
 		setAutofollow(json.getBoolean("autofollow"));
 		setAutocommitIntervalMs(json.getInt("autocommitIntervalMs"));
+		
+		if(json.getBoolean("advertising", false)) {
+			config.advertise();
+		} else {
+			config.stopAdvertising();
+		}
+		
+		if(json.getBoolean("requestingAll", false)) {
+			config.swarm.requestAll();
+		} else {
+			config.swarm.stopRequestingAll();
+		}
+		
+		if(json.containsKey("peerLimit")) {
+			config.swarm.setMaxSocketCount(json.getInt("peerLimit"));
+		}
+		
 		if(json.containsKey("automirrorPath")) {
 			setAutomirrorPath(json.getString("automirrorPath"));
 		} else {

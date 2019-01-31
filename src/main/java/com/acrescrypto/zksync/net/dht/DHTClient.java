@@ -70,7 +70,7 @@ public class DHTClient {
 		void receivedPeerForReference(DHTPeer peer);
 	}
 	
-	interface LookupCallback {
+	public interface LookupCallback {
 		void receivedRecord(DHTRecord ad);
 	}
 	
@@ -473,21 +473,21 @@ public class DHTClient {
 	}
 	
 	protected void processMessage(String senderAddress, int senderPort, ByteBuffer data) {
+		if(blacklist.contains(senderAddress)) {
+			logger.info("DHT: Ignoring message from blacklisted peer {}", senderAddress);
+			return;
+		}
+
 		try {
 			DHTMessage message = new DHTMessage(this, senderAddress, senderPort, data);
-			
-			if(blacklist.contains(senderAddress)) {
-				logger.info("DHT: Ignoring message from blacklisted peer " + senderAddress);
-				return;
-			}
-			
+						
 			if(message.isResponse()) {
 				processResponse(message);
 			} else {
 				processRequest(message);
 			}
 		} catch(ProtocolViolationException exc) {
-			logger.warn("DHT: Received illegal message from " + senderAddress + "; blacklisting.");
+			logger.warn("DHT: Received illegal message from {}; blacklisting.", senderAddress, exc);
 			try {
 				blacklist.add(senderAddress, Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
 			} catch(IOException exc2) {

@@ -156,7 +156,6 @@ public class ZKArchiveConfig {
 			throw new InvalidArchiveConfigException();
 		}
 		this.archive = new ZKArchive(this);
-		this.accessor.discoveredArchiveConfig(this);
 		return this;
 	}
 	
