@@ -33,7 +33,7 @@ public class DHTRecordStoreTest {
 		}
 
 		@Override
-		protected DHTRecord deserializeRecord(ByteBuffer serialized) throws UnsupportedProtocolException {
+		protected DHTRecord deserializeRecord(DHTPeer peer, ByteBuffer serialized) throws UnsupportedProtocolException {
 			return new DummyRecord(serialized);
 		}
 	}
@@ -76,6 +76,7 @@ public class DHTRecordStoreTest {
 		@Override public boolean isValid() { return valid; }
 		@Override public boolean isReachable() { return reachable; }
 		public boolean equals(Object o) { return Arrays.equals(contents, ((DummyRecord) o).contents); }
+		@Override public String routingInfo() { return ""; }
 	}
 		
 	DummyClient client;

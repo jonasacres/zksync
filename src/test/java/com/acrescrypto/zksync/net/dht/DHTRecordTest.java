@@ -80,7 +80,7 @@ public class DHTRecordTest {
 		
 		TCPPeerAdvertisement deserializedAd = (TCPPeerAdvertisement) deserialized.ad;
 		assertEquals("127.0.0.1", deserializedAd.getHost());
-		assertEquals(4321, deserializedAd.getPort());
+		assertEquals(ad.getPort(), deserializedAd.getPort());
 		assertEquals(ad.getVersion(), deserializedAd.getVersion());
 		assertArrayEquals(ad.getPubKey().getBytes(), deserializedAd.getPubKey().getBytes());
 		assertArrayEquals(ad.getEncryptedArchiveId(), deserializedAd.getEncryptedArchiveId());

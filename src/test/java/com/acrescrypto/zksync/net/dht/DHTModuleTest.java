@@ -127,7 +127,7 @@ public class DHTModuleTest {
 		// TODO Urgent: (itf) Linux 81cc346 2018-12-12 UniversalTests, assertion failed
 		ArrayList<DHTClient> clients = makeClients(256);
 		DHTID id = new DHTID(crypto.rng(crypto.hashLength()));
-		DHTRecord ad = makeBogusAd(0);
+		DHTAdvertisementRecord ad = makeBogusAd(0);
 		Key lookupKey = new Key(crypto);
 		
 		for(int i = 0; i < 16; i++) {
@@ -141,7 +141,7 @@ public class DHTModuleTest {
 				if(result == null) {
 					finished.setTrue();
 				} else {
-					if(result.equals(ad)) found.setTrue();
+					if(result.asAd().asTcp().getPubKey().equals(ad.asTcp().getPubKey())) found.setTrue();
 				}
 			});
 		}

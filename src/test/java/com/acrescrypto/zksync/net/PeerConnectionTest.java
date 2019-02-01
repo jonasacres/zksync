@@ -825,7 +825,7 @@ public class PeerConnectionTest {
 		assertEquals(0, swarm.receivedAds.size());
 		conn.handle(msg);
 		assertEquals(1, swarm.receivedAds.size());
-		assertEquals(socket.getPort(), ((TCPPeerAdvertisement) swarm.receivedAds.getFirst()).port);
+		assertEquals(ad.port, ((TCPPeerAdvertisement) swarm.receivedAds.getFirst()).port);
 		assertEquals(socket.getAddress(), ((TCPPeerAdvertisement) swarm.receivedAds.getFirst()).host);
 		assertTrue(Arrays.equals(ad.pubKey.getBytes(), ((TCPPeerAdvertisement) swarm.receivedAds.getFirst()).pubKey.getBytes()));
 	}

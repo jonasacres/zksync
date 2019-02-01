@@ -35,10 +35,9 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 		this.version = version;
 	}
 	
-	public TCPPeerAdvertisement(CryptoSupport crypto, ByteBuffer serialized, String address, int port) throws UnconnectableAdvertisementException {
+	public TCPPeerAdvertisement(CryptoSupport crypto, ByteBuffer serialized, String address) throws UnconnectableAdvertisementException {
 		this(crypto, serialized);
 		this.ipAddress = this.host = address;
-		this.port = port;
 	}
 	
 	public TCPPeerAdvertisement(CryptoSupport crypto, ByteBuffer serialized) throws UnconnectableAdvertisementException {
@@ -179,5 +178,10 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 
 	public void setHost(String host) {
 		this.host = host;
+	}
+
+	@Override
+	public String routingInfo() {
+		return ipAddress + ":" + port;
 	}
 }

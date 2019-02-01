@@ -222,20 +222,23 @@ public class TCPPeerSocketListener {
 		long startTime = Util.currentTimeMillis();
 		try {
 			performResponderHandshake(peerSocketRaw);
-		} catch(EOFException | ProtocolViolationException exc) {
-			logger.info("Peer {} sent illegal handshake", peerSocketRaw.getInetAddress().toString(), exc);
+		} catch(EOFException exc) {
+			logger.debug("Peer {} disconnected during handshake; possibly a reachability probe.",
+					peerSocketRaw.getInetAddress().getHostAddress());
+		} catch(ProtocolViolationException exc) {
+			logger.info("Peer {} sent illegal handshake", peerSocketRaw.getInetAddress().getHostAddress(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(IOException exc) {
-			logger.info("Caught IOException on connection to peer {}", peerSocketRaw.getInetAddress().toString(), exc);
+			logger.info("Caught IOException on connection to peer {}", peerSocketRaw.getInetAddress().getHostAddress(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(SecurityException exc) {
-			logger.info("Unable to handshake with peer {}", peerSocketRaw.getInetAddress().toString(), exc);
+			logger.info("Unable to handshake with peer {}", peerSocketRaw.getInetAddress().getHostAddress(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(Exception exc) {
-			logger.error("Caught unexpected exception on connection to peer {}", peerSocketRaw.getInetAddress().toString(), exc);
+			logger.error("Caught unexpected exception on connection to peer {}", peerSocketRaw.getInetAddress().getHostAddress(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		}

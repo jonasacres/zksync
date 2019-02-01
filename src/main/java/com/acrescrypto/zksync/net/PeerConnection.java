@@ -439,7 +439,7 @@ public class PeerConnection {
 		byte[] adRaw = new byte[adLen];
 		msg.rxBuf.get(adRaw);
 		try {
-			PeerAdvertisement ad = PeerAdvertisement.deserializeRecordWithAddress(msg.connection.getCrypto(), ByteBuffer.wrap(adRaw), msg.connection.socket.getAddress(), msg.connection.socket.getPort());
+			PeerAdvertisement ad = PeerAdvertisement.deserializeRecordWithAddress(msg.connection.getCrypto(), ByteBuffer.wrap(adRaw), msg.connection.socket.getAddress());
 			if(ad != null && !ad.isBlacklisted(socket.swarm.config.getAccessor().getMaster().getBlacklist())) {
 				socket.swarm.addPeerAdvertisement(ad);
 			}

@@ -94,7 +94,7 @@ public class DHTClient {
 	protected Thread socketListenerThread;
 	protected ThreadGroup threadGroup;
 	protected GroupedThreadPool threadPool;
-	protected boolean closed, paused, initialized;
+	protected boolean closed, paused, initialized, autofind = true;
 	protected DHTStatusCallback statusCallback;
 	protected int bindPort;
 	protected int lastStatus = STATUS_OFFLINE;
@@ -224,6 +224,8 @@ public class DHTClient {
 			socketListenerThread = new Thread(threadGroup, ()->socketListener());
 			socketListenerThread.start();
 		}
+
+		autoFindPeers();
 		
 		return this;
 	}
@@ -243,7 +245,9 @@ public class DHTClient {
 	}
 	
 	public void findPeers() {
+		logger.debug("DHT: Finding peers...");
 		new DHTSearchOperation(this, id, new Key(crypto), (peers)->{
+			logger.debug("DHT: Found {} peers", peers.size());
 			// no need to do anything; just doing the search populates the routing table
 			if(peers == null || peers.isEmpty()) {
 				updateStatus(STATUS_QUESTIONABLE);
@@ -258,11 +262,14 @@ public class DHTClient {
 	public void autoFindPeers() {
 		new Thread(threadGroup, ()->{
 			Util.setThreadName("DHTClient autoFindPeers");
-			while(!paused) {
-				Util.blockOn(()->routingTable.allPeers().isEmpty());
+			logger.debug("Starting autoFindPeers thread; querying each {}ms",
+					autoFindPeersIntervalMs);
+			while(!closed) {
+				Util.blockOn(()->routingTable.allPeers().isEmpty() || !isListening() || !autofind);
 				findPeers();
 				Util.sleep(autoFindPeersIntervalMs);
 			}
+			logger.debug("Stopping autoFindPeers thread");
 		}).start();
 	}
 	
@@ -274,6 +281,9 @@ public class DHTClient {
 			
 			callback.receivedRecord(null); // we won't be getting any more records, so signal end of results
 		}, (record)->{
+			logger.info("DHT: Received record for ID {}: {}",
+					id.toShortString(),
+					record.routingInfo());
 			callback.receivedRecord(record);
 		}).run();
 	}
@@ -447,10 +457,6 @@ public class DHTClient {
 		if(paused) return;
 		for(int i = 0; i < 2; i++) {
 			try {
-				logger.debug("DHT: sending {} bytes to {}:{}",
-						packet.getData().length,
-						packet.getAddress().getHostAddress(),
-						packet.getPort());
 				socket.send(packet);
 				monitorTx.observeTraffic(packet.getLength());
 				break;
@@ -488,6 +494,7 @@ public class DHTClient {
 			}
 		} catch(ProtocolViolationException exc) {
 			logger.warn("DHT: Received illegal message from {}; blacklisting.", senderAddress, exc);
+			logger.debug("Exception details: {} {}", exc.getMessage(), exc.getStackTrace());
 			try {
 				blacklist.add(senderAddress, Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
 			} catch(IOException exc2) {
@@ -500,6 +507,7 @@ public class DHTClient {
 	
 	protected void processResponse(DHTMessage message) throws ProtocolViolationException {
 		if(lastStatus < STATUS_CAN_SEND) updateStatus(STATUS_CAN_SEND);
+		logger.debug("DHT: Received response to message " + message.msgId);
 		
 		message.peer.acknowledgedMessage();
 		message.peer.remoteAuthTag = message.authTag;
@@ -540,8 +548,10 @@ public class DHTClient {
 	}
 	
 	protected void processRequestPing(DHTMessage message) {
-		logger.debug("DHT: received ping from {}",
-				message.peer.address);
+		logger.debug("DHT: received ping from {}:{}, msgId={}",
+				message.peer.address,
+				message.peer.port,
+				message.msgId);
 
 		message.makeResponse(null).send();
 	}
@@ -555,10 +565,12 @@ public class DHTClient {
 		buf.get(idBytes);
 		buf.get(token);
 		
-		logger.debug("DHT: received find node request from {} for id {}, token {}",
+		logger.debug("DHT: received find node request from {}:{} for id {}, token {}, msgId={}",
 				message.peer.address,
+				message.peer.port,
 				Util.bytesToHex(idBytes),
-				Util.bytesToHex(token));
+				Util.bytesToHex(token),
+				message.msgId);
 		
 		DHTID id = new DHTID(idBytes);
 		
@@ -579,13 +591,15 @@ public class DHTClient {
 		buf.get(token);
 		DHTID id = new DHTID(idRaw);
 
-		logger.debug("DHT: received add record request from {} for id {}, token {}",
+		logger.debug("DHT: received add record request from {}:{} for id {}, token {}, msgId={}",
 				message.peer.address,
+				message.peer.port,
 				Util.bytesToHex(idRaw),
-				Util.bytesToHex(token));
+				Util.bytesToHex(token),
+				message.msgId);
 
 		assertSupportedState(buf.remaining() > 0);
-		DHTRecord record = DHTRecord.deserializeRecord(crypto, buf);
+		DHTRecord record = deserializeRecord(message.peer, buf);
 		assertSupportedState(record != null);
 		assertSupportedState(record.isValid());
 		
@@ -638,8 +652,12 @@ public class DHTClient {
 	}
 	
 	// having the call happen here instead of directly accessing DHTRecord is convenient for stubbing out test classes
-	protected DHTRecord deserializeRecord(ByteBuffer serialized) throws UnsupportedProtocolException {
-		return DHTRecord.deserializeRecord(crypto, serialized);
+	protected DHTRecord deserializeRecord(DHTPeer sender, ByteBuffer serialized) throws UnsupportedProtocolException {
+		if(sender == null) {
+			return DHTRecord.deserializeRecord(crypto, serialized);
+		} else {
+			return DHTRecord.deserializeRecordWithPeer(sender, serialized);
+		}
 	}
 	
 	protected void initNew() {
@@ -717,7 +735,10 @@ public class DHTClient {
 	
 	protected synchronized void updateStatus(int newStatus) {
 		if(lastStatus == newStatus) return;
-		logger.debug("DHT: status now {}, was {}", newStatus, lastStatus);
+		logger.debug("DHT: status now {}, was {}, table size {}",
+				newStatus,
+				lastStatus,
+				routingTable.allPeers.size());
 		lastStatus = newStatus;
 		if(statusCallback != null) {
 			statusCallback.dhtStatusUpdate(newStatus);

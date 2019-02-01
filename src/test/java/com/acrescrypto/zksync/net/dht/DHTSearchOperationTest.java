@@ -58,6 +58,7 @@ public class DHTSearchOperationTest {
 		@Override public boolean isReachable() { return reachable; }
 		public boolean equals(Object o) { return Arrays.equals(contents, ((DummyRecord) o).contents); }
 		public int hashCode() { return ByteBuffer.wrap(contents).getInt(); }
+		@Override public String routingInfo() { return ""; }
 	}
 
 	class DummyClient extends DHTClient {

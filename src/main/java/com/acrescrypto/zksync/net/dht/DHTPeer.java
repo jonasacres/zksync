@@ -5,6 +5,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.EINVALException;
@@ -31,6 +34,8 @@ public class DHTPeer implements Sendable {
 	int missedMessages;
 	protected PublicDHKey key;
 	protected byte[] remoteAuthTag = new byte[DHTClient.AUTH_TAG_SIZE];
+	
+	private Logger logger = LoggerFactory.getLogger(DHTPeer.class);
 	
 	public DHTPeer(DHTClient client, String address, int port, byte[] key) {
 		this(client, address, port, client.crypto.makePublicDHKey(key));
@@ -68,10 +73,12 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public void ping() {
+		logger.debug("DHT: Send " + address + ":" + port + " -- ping");
 		client.pingMessage(this, null).send();
 	}
 	
 	public void findNode(DHTID nodeId, Key lookupKey, DHTFindNodePeerCallback peerCallback, DHTFindNodeRecordCallback recordCallback) {
+		logger.debug("DHT: Send " + address + ":" + port + " -- findNode " + Util.bytesToHex(nodeId.rawId));
 		client.findNodeMessage(this, nodeId, lookupKey, (resp)->{
 			ArrayList<DHTPeer> receivedPeers = new ArrayList<>();
 			this.remoteAuthTag = resp.authTag;
@@ -101,7 +108,7 @@ public class DHTPeer implements Sendable {
 					break;
 				case 1: // record list item
 					try {
-						recordCallback.receivedRecord(client.deserializeRecord(buf));
+						recordCallback.receivedRecord(client.deserializeRecord(resp.peer, buf));
 						if(buf.position() != expectedPos) throw new UnsupportedProtocolException();
 					} catch (UnsupportedProtocolException e) {
 						buf.position(expectedPos);
@@ -118,6 +125,7 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public void addRecord(DHTID recordId, Key lookupKey, DHTRecord record) {
+		logger.debug("DHT: Send " + address + ":" + port + " -- addRecord " + Util.bytesToHex(recordId.rawId));
 		client.addRecordMessage(this, recordId, lookupKey, record, null).send();
 	}
 	

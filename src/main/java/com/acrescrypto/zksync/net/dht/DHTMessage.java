@@ -8,6 +8,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
@@ -31,6 +34,7 @@ public class DHTMessage {
 	byte[] payload, authTag;
 	boolean isFinal;
 	ArrayList<Collection<? extends Sendable>> itemLists;
+	Logger logger = LoggerFactory.getLogger(DHTMessage.class);
 	
 	public DHTMessage(DHTPeer recipient, byte cmd, byte[] payload, DHTMessageCallback callback) {
 		this(recipient, cmd, ByteBuffer.wrap(payload), callback);
@@ -143,6 +147,13 @@ public class DHTMessage {
 		}
 		byte[] serialized = serialize(numPackets, sendBuf);
 		DatagramPacket packet = new DatagramPacket(serialized, serialized.length, address, peer.port);
+		logger.debug("DHT: sending {} bytes to {}:{}, cmd={}, flags=0x{}, msgId={}",
+				packet.getData().length,
+				packet.getAddress().getHostAddress(),
+				packet.getPort(),
+				cmd,
+				String.format("%02x", flags),
+				msgId);
 		peer.client.sendDatagram(packet);
 		return packet;
 	}

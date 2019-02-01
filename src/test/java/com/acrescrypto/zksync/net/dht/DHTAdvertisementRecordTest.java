@@ -47,11 +47,11 @@ public class DHTAdvertisementRecordTest {
 	public void testConstructWithSerializationAddressAndPort() throws UnsupportedProtocolException {
 		DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(crypto, ad);
 		ByteBuffer serialization = ByteBuffer.wrap(adRecord.serialize());
-		DHTAdvertisementRecord deserialized = new DHTAdvertisementRecord(crypto, serialization, "127.0.0.1", 4321);
+		DHTAdvertisementRecord deserialized = new DHTAdvertisementRecord(crypto, serialization, "127.0.0.1");
 		TCPPeerAdvertisement deserializedAd = (TCPPeerAdvertisement) deserialized.ad;
 		
 		assertEquals("127.0.0.1", deserializedAd.getHost());
-		assertEquals(4321, deserializedAd.getPort());
+		assertEquals(adRecord.asTcp().getPort(), deserializedAd.getPort());
 		assertEquals(ad.getVersion(), deserializedAd.getVersion());
 		
 		assertArrayEquals(ad.getEncryptedArchiveId(), deserializedAd.getEncryptedArchiveId());

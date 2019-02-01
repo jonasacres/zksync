@@ -62,9 +62,10 @@ public class DHTRecordStore {
 			int expectedPos = serialized.getShort() + serialized.position();
 			
 			try {
-				record = client.deserializeRecord(serialized);
+				record = client.deserializeRecord(null, serialized);
 				if(serialized.position() != expectedPos) throw new UnsupportedProtocolException();
 			} catch (UnsupportedProtocolException exc) {
+				exc.printStackTrace();
 				logger.error("Record store contained unsupported record", record);
 				serialized.position(expectedPos);
 				throw exc;
@@ -155,7 +156,16 @@ public class DHTRecordStore {
 	protected void addRecordIfReachable(DHTID id, byte[] token, DHTRecord record) {
 		Util.setThreadName("Add record worker");
 		try {
-			if(!record.isReachable()) return;
+			if(!record.isReachable()) {
+				logger.info("Ignoring DHT record for non-reachable host {} for ID {}",
+						record.routingInfo(),
+						Util.bytesToHex(id.rawId));
+				return;
+			}
+			
+			logger.info("Adding record from {} for ID {}",
+					record.routingInfo(),
+					Util.bytesToHex(id.rawId));
 			
 			synchronized(this) {
 				if(!entriesById.containsKey(id)) {

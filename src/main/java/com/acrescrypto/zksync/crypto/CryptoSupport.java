@@ -27,7 +27,8 @@ public class CryptoSupport {
 	private PRNG defaultPrng;
 	private Logger logger = LoggerFactory.getLogger(CryptoSupport.class);
 
-	public static boolean cheapArgon2; // set to true for tests, false otherwise
+	// TODO Load Test: (WARNING) cheapArgon2 set true for load test!!
+	public static boolean cheapArgon2 = true; // set to true for tests, false otherwise
 
 	public final static int ARGON2_TIME_COST = 40; // iterations
 	public final static int ARGON2_MEMORY_COST = 1048576;  // KiB

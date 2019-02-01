@@ -53,7 +53,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		}
 	}
 	
-	private Logger logger = LoggerFactory.getLogger(DHTClient.class);
+	private Logger logger = LoggerFactory.getLogger(DHTZKArchiveDiscovery.class);
 	protected HashMap<ArchiveAccessor,DiscoveryEntry> activeDiscoveries = new HashMap<>();
 	protected int discoveryIntervalMs;
 	protected int advertisementIntervalMs;
@@ -74,6 +74,8 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		
 		DiscoveryEntry entry = activeDiscoveries.get(accessor);
 		if(entry.increment()) {
+			logger.info("Starting discovery thread for accessor with temporal seed ID {}",
+					Util.bytesToHex(accessor.temporalSeedId(0)));
 			new Thread(accessor.getThreadGroup(), ()->discoveryThread(entry)).start();
 			new Thread(accessor.getThreadGroup(), ()->advertisementThread(entry)).start();
 		}
@@ -105,6 +107,9 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 				logger.error("Caught exception in DHTZKArchiveDiscovery discovery thread", exc);
 			}
 		}
+		
+		logger.info("Stopping discovery thread for accessor with temporal seed ID {}",
+				Util.bytesToHex(entry.accessor.temporalSeedId(0)));
 	}
 	
 	protected void advertisementThread(DiscoveryEntry entry) {
@@ -135,7 +140,13 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	
 	public void forceUpdate(ArchiveAccessor accessor) {
 		DiscoveryEntry entry = activeDiscoveries.get(accessor);
-		if(entry == null) return;
+		if(entry == null) {
+			logger.info("Cannot force DHT update for non-advertised archive accessor");
+			return;
+		}
+		
+		logger.info("Forcing DHT update for archive accessor with temporal ID {}",
+				Util.bytesToHex(accessor.temporalSeedId(0)));
 		synchronized(entry) {
 			entry.notifyAll();
 		}
@@ -145,6 +156,8 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		Key lookupKey = entry.accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
 				"easysafe-dht-lookup");
 		DHTID searchId = new DHTID(entry.accessor.temporalSeedId(0));
+		logger.debug("Doing DHT discovery for archive with temporal seed ID {}",
+				Util.bytesToHex(entry.accessor.temporalSeedId(0)));
 		entry.accessor.getMaster().getDHTClient().lookup(searchId, lookupKey, (record)->{
 			if(!(record instanceof DHTAdvertisementRecord)) return;
 			DHTAdvertisementRecord adRecord = (DHTAdvertisementRecord) record;
@@ -164,6 +177,8 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	protected void advertise(DiscoveryEntry entry) {
 		if(!entry.accessor.getMaster().getTCPListener().isListening()) return;
 		for(ZKArchiveConfig config : entry.accessor.knownArchiveConfigs()) {
+			logger.debug("Advertising archive with temporal archive ID {}",
+					config.getAccessor().temporalSeedId(0));
 			if(!config.isAdvertising()) continue;
 			TCPPeerAdvertisementListener listener = entry.accessor.getMaster().getTCPListener().listenerForSwarm(config.getSwarm());
 			if(listener == null) continue;

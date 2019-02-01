@@ -125,9 +125,9 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 	
 	public void activateDHT(String address, int port, DHTPeer root) throws SocketException {
+		// TODO Release: (refactor) This isn't used anymore; use net.dht.enabled config setting instead.
 		dhtClient.listen(address, port);
 		dhtClient.addPeer(root);
-		dhtClient.autoFindPeers();
 	}
 	
 	public void getLocalKey() throws IOException {
@@ -410,7 +410,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		globalConfig.setDefault("net.dht.bootstrap.enabled", false);
 		globalConfig.setDefault("net.dht.bootstrap.host", "dht1.easysafe.io");
 		globalConfig.setDefault("net.dht.bootstrap.port", 49921);
-		globalConfig.setDefault("net.dht.bootstrap.key", "M/o1rvmhAsQO8+Z5evXJQ+21/sk2fxei4JKl+h1SPU5rKLNWRfnUyrxVAGxBK1Ydl2RQGoW+CZLKQRbZS+WLrw==");
+		globalConfig.setDefault("net.dht.bootstrap.key", "sFmC46lkaxLfDUdWufZuRXf4wSoxiJCsxQp/qi/dEg0=");
 		
 		globalConfig.setDefault("net.dht.discoveryintervalms", DHTZKArchiveDiscovery.DEFAULT_DISCOVERY_INTERVAL_MS);
 		globalConfig.setDefault("net.dht.advertisementintervalms", DHTZKArchiveDiscovery.DEFAULT_ADVERTISEMENT_INTERVAL_MS);

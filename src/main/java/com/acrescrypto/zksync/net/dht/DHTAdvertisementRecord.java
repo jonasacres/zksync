@@ -6,6 +6,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.net.PeerAdvertisement;
+import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTAdvertisementRecord extends DHTRecord {
@@ -17,9 +18,9 @@ public class DHTAdvertisementRecord extends DHTRecord {
 		deserialize(serialized);
 	}
 	
-	public DHTAdvertisementRecord(CryptoSupport crypto, ByteBuffer serialized, String address, int port) throws UnsupportedProtocolException {
+	public DHTAdvertisementRecord(CryptoSupport crypto, ByteBuffer serialized, String address) throws UnsupportedProtocolException {
 		this.crypto = crypto;
-		deserialize(serialized, address, port);
+		deserialize(serialized, address);
 	}
 	
 	public DHTAdvertisementRecord(CryptoSupport crypto, PeerAdvertisement ad) {
@@ -39,10 +40,10 @@ public class DHTAdvertisementRecord extends DHTRecord {
 
 	@Override
 	public void deserialize(ByteBuffer serialized) throws UnsupportedProtocolException {
-		deserialize(serialized, null, 0);
+		deserialize(serialized, null);
 	}
 	
-	public void deserialize(ByteBuffer serialized, String address, int port) throws UnsupportedProtocolException {
+	public void deserialize(ByteBuffer serialized, String address) throws UnsupportedProtocolException {
 		byte type = serialized.get();
 		if(type != RECORD_TYPE_ADVERTISEMENT) throw new UnsupportedProtocolException();
 		if(serialized.remaining() < 2) throw new UnsupportedProtocolException();
@@ -51,10 +52,10 @@ public class DHTAdvertisementRecord extends DHTRecord {
 		int expectedPos = serialized.position() + expectedLen;
 		
 		try {
-			if(address == null || port <= 0) {
+			if(address == null) {
 				this.ad = PeerAdvertisement.deserializeRecord(crypto, serialized);
 			} else {
-				this.ad = PeerAdvertisement.deserializeRecordWithAddress(crypto, serialized, address, port);
+				this.ad = PeerAdvertisement.deserializeRecordWithAddress(crypto, serialized, address);
 			}
 			
 			if(ad == null) {
@@ -66,6 +67,7 @@ public class DHTAdvertisementRecord extends DHTRecord {
 				throw new UnsupportedProtocolException();
 			}
 		} catch (UnconnectableAdvertisementException exc) {
+			exc.printStackTrace();
 			serialized.position(expectedPos);
 			throw new UnsupportedProtocolException();
 		}
@@ -89,5 +91,14 @@ public class DHTAdvertisementRecord extends DHTRecord {
 	
 	public String toString() {
 		return ad.toString();
+	}
+
+	@Override
+	public String routingInfo() {
+		return ad.routingInfo();
+	}
+	
+	public TCPPeerAdvertisement asTcp() {
+		return (TCPPeerAdvertisement) this.ad;
 	}
 }

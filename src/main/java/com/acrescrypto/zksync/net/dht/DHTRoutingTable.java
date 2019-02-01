@@ -101,8 +101,17 @@ public class DHTRoutingTable {
 	}
 	
 	public synchronized void suggestPeer(DHTPeer peer, long lastSeen) {
+		logger.debug("DHT: Suggested peer {}:{} {}, table currently has {} peers",
+				peer.address,
+				peer.port,
+				Util.bytesToHex(peer.key.getBytes()),
+				allPeers.size());
+
 		for(DHTPeer existing : allPeers) {
 			if(existing.id.equals(peer.id) && existing.address.equals(peer.address) && existing.port == peer.port) {
+				logger.debug("DHT: Already have peer {}:{}; ignoring",
+						peer.address,
+						peer.port);
 				return; // already have this peer
 			}
 		}
@@ -115,11 +124,19 @@ public class DHTRoutingTable {
 		if(bucket.hasCapacity()) {
 			bucket.add(insertablePeer, lastSeen);
 			allPeers.add(insertablePeer);
+			logger.info("Added peer {}:{}, table has {} peers",
+					peer.address,
+					peer.port,
+					allPeers.size());
 			try {
 				write();
 			} catch (IOException exc) {
 				logger.error("Encountered exception writing routing table after receiving new peer", exc);
 			}
+		} else {
+			logger.debug("DHT: Relevant bucket too full for peer {}:{}; ignoring",
+					peer.address,
+					peer.port);
 		}
 	}
 	
@@ -142,6 +159,11 @@ public class DHTRoutingTable {
 	
 	protected void removedPeer(DHTPeer peer) {
 		allPeers.remove(peer);
+		logger.info("DHT: Removed peer {}:{} key={}, table has {} peers",
+				peer.address,
+				peer.port,
+				Util.bytesToHex(peer.key.getBytes()),
+				allPeers.size());
 	}
 	
 	protected void freshenThread() {

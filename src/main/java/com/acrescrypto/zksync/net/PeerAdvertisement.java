@@ -28,12 +28,12 @@ public abstract class PeerAdvertisement {
 		return null;
 	}
 	
-	public static PeerAdvertisement deserializeRecordWithAddress(CryptoSupport crypto, ByteBuffer serialized, String address, int port) throws UnconnectableAdvertisementException {
+	public static PeerAdvertisement deserializeRecordWithAddress(CryptoSupport crypto, ByteBuffer serialized, String address) throws UnconnectableAdvertisementException {
 		byte type = serialized.get();
 		serialized.position(serialized.position()-1);
 		switch(type) {
 		case TYPE_TCP_PEER:
-			return new TCPPeerAdvertisement(crypto, serialized, address, port);
+			return new TCPPeerAdvertisement(crypto, serialized, address);
 		}
 		
 		return null;
@@ -45,6 +45,7 @@ public abstract class PeerAdvertisement {
 	public abstract boolean matchesAddress(String address);
 	public abstract byte getType();
 	public abstract boolean isReachable();
+	public abstract String routingInfo();
 	
 	public PeerConnection connect(PeerSwarm swarm) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
 		return new PeerConnection(swarm, this);

@@ -107,6 +107,8 @@ public class DHTClientTest {
 		@Override public boolean isReachable() { return reachable; }
 		public boolean equals(Object o) { return Arrays.equals(contents, ((DummyRecord) o).contents); }
 		public int hashCode() { return ByteBuffer.wrap(contents).getInt(); }
+
+		@Override public String routingInfo() { return ""; }
 	}
 	
 	class RemotePeer implements AutoCloseable {
@@ -361,6 +363,7 @@ public class DHTClientTest {
 		master = new DummyMaster();
 		storageKey = new Key(crypto);
 		client = new DHTClient(storageKey, master);
+		client.autofind = false;
 		remote = new RemotePeer();
 		
 		client.addPeer(remote.peer);
@@ -475,9 +478,18 @@ public class DHTClientTest {
 				seenNull.setTrue();
 				return;
 			}
+			
+			DHTRecord found = null;
+			TCPPeerAdvertisement tcp = (TCPPeerAdvertisement) ((DHTAdvertisementRecord) record).ad;
+			for(DHTRecord existing : records) {
+				TCPPeerAdvertisement eTcp = (TCPPeerAdvertisement) ((DHTAdvertisementRecord) existing).ad;
+				if(tcp.getPubKey().equals(eTcp.getPubKey())) {
+					found = existing;
+					break;
+				}
+			}
 
-			assertTrue(records.contains(record));
-			records.remove(record);
+			records.remove(found);
 		});
 
 		DHTMessage findNodeReq = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
@@ -770,7 +782,10 @@ public class DHTClientTest {
 	
 	@Test
 	public void testFindNodeIgnoresTruncatedID() throws IOException, ProtocolViolationException {
-		DHTMessage req = remote.listenClient.findNodeMessage(clientPeer, clientPeer.id, new Key(crypto), null);
+		DHTMessage req = remote.listenClient.findNodeMessage(clientPeer,
+				clientPeer.id,
+				new Key(crypto),
+				null);
 		req.payload = crypto.rng(req.payload.length-1);
 		req.send();
 		
@@ -1085,8 +1100,10 @@ public class DHTClientTest {
 	
 	@Test
 	public void testDeserializeRecordDeserializesIntoAppropriateRecordObject() throws UnsupportedProtocolException {
-		DHTRecord record = makeBogusAd(0);
-		assertEquals(record, client.deserializeRecord(ByteBuffer.wrap(record.serialize())));
+		DHTAdvertisementRecord record = makeBogusAd(0);
+		TCPPeerAdvertisement ad = (TCPPeerAdvertisement) record.ad;
+		DHTPeer peer = new DHTPeer(client, ad.getHost(), ad.getPort(), ad.getPubKey());
+		assertEquals(record, client.deserializeRecord(peer, ByteBuffer.wrap(record.serialize())));
 	}
 	
 	@Test
@@ -1206,7 +1223,7 @@ public class DHTClientTest {
 	@Test
 	public void testAutoFindPeersCallsFindPeersOnInterval() throws IOException, ProtocolViolationException {
 		DHTClient.autoFindPeersIntervalMs = 50;
-		client.autoFindPeers();
+		client.autofind = true;
 		long timeStart = Util.currentTimeMillis();
 		for(int i = 0; i < 8; i++) {
 			remote.receivePacket().makeResponse(new ArrayList<>()).send();

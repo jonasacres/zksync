@@ -56,6 +56,7 @@ public class PeerSwarmTest {
 			if(!(other instanceof DummyAdvertisement)) return false;
 			return address.equals(((DummyAdvertisement) other).address);
 		}
+		@Override public String routingInfo() { return ""; }
 	}
 	
 	class ExplodingDummyAdvertisement extends DummyAdvertisement { // could replace with DummyAdvertisement.explode

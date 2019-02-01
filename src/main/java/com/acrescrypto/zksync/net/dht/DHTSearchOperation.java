@@ -4,8 +4,12 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.TreeSet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.utility.SnoozeThread;
+import com.acrescrypto.zksync.utility.Util;
 
 public class DHTSearchOperation {
 	interface SearchOperationPeerCallback {
@@ -33,6 +37,8 @@ public class DHTSearchOperation {
 	SnoozeThread timeout;
 	Key lookupKey;
 	
+	private Logger logger = LoggerFactory.getLogger(DHTSearchOperation.class);
+	
 	public DHTSearchOperation(DHTClient client, DHTID searchId, Key lookupKey, SearchOperationPeerCallback peerCallback, SearchOperationRecordCallback recordCallback) {
 		this.client = client;
 		this.searchId = searchId;
@@ -43,6 +49,9 @@ public class DHTSearchOperation {
 	
 	public synchronized void run() {
 		this.timeout = new SnoozeThread(searchQueryTimeoutMs, true, ()->peerCallback.searchOperationFinished(closestPeers));
+		logger.debug("DHT: Searching for id {}, routing table has {} peers",
+				Util.bytesToHex(searchId.rawId),
+				client.routingTable.allPeers().size());
 		
 		for(DHTPeer peer : client.routingTable.allPeers()) {
 			addIfBetter(peer);

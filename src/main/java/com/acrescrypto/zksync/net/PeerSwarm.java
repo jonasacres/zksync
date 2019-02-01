@@ -315,7 +315,7 @@ public class PeerSwarm implements BlacklistCallback {
 			} catch (BlacklistedException exc) {
 				logger.debug("Ignoring ad for blacklisted peer {}", ad);
 			} catch(SocketException|SocketClosedException|EOFException exc) {
-				logger.info("Caught network exception connecting to peer {}", ad);
+				logger.info("Caught network exception connecting to peer {}", ad, exc);
 			} catch(Exception exc) {
 				logger.error("Caught exception connecting to peer {}", ad, exc);
 			} finally {
