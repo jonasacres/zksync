@@ -1,7 +1,5 @@
 package com.acrescrypto.zksync.crypto;
 
-import java.util.Arrays;
-
 import com.acrescrypto.zksync.utility.Util;
 
 public class PublicDHKey {
@@ -25,7 +23,7 @@ public class PublicDHKey {
 	public boolean equals(Object other) {
 		if(!(other instanceof PublicDHKey)) return false;
 		
-		return Arrays.equals(pubKey, ((PublicDHKey) other).pubKey);
+		return Util.safeEquals(pubKey, ((PublicDHKey) other).pubKey);
 	}
 
 	public void destroy() {

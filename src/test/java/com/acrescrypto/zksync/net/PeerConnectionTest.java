@@ -127,8 +127,9 @@ public class PeerConnectionTest {
 	class DummyTCPPeerSocketListener extends TCPPeerSocketListener {
 		Socket connectedPeer;
 		
-		public DummyTCPPeerSocketListener(ZKMaster master, int port) throws IOException {
-			super(master, port);
+		public DummyTCPPeerSocketListener(ZKMaster master) throws IOException {
+			super(master);
+			startListening();
 		}
 		
 		@Override
@@ -276,9 +277,9 @@ public class PeerConnectionTest {
 
 	@Test
 	public void testConstructWithAdConnectsToAdvertisement() throws IOException, UnsupportedProtocolException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
-		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master, 0);
+		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master);
 		
-		assertTrue(Util.waitUntil(100, ()->listener.listenSocket != null));
+		assertTrue(Util.waitUntil(100, ()->listener.ready()));
 		listener.advertise(swarm);
 		assertNull(listener.connectedPeer);
 		
@@ -300,9 +301,9 @@ public class PeerConnectionTest {
 		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
 		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
 		DummySwarm roSwarm = new DummySwarm(roConfig);
-		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master, 0);
+		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master);
 		
-		assertTrue(Util.waitUntil(100, ()->listener.listenSocket != null));
+		assertTrue(Util.waitUntil(100, ()->listener.ready()));
 		listener.advertise(roSwarm);
 		assertNull(listener.connectedPeer);
 		
@@ -326,9 +327,9 @@ public class PeerConnectionTest {
 		ArchiveAccessor roAccessor = archive.getConfig().getAccessor().makeSeedOnly();
 		ZKArchiveConfig roConfig = ZKArchiveConfig.openExisting(roAccessor, archive.getConfig().getArchiveId());
 		DummySwarm roSwarm = new DummySwarm(roConfig);
-		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master, 0);
+		DummyTCPPeerSocketListener listener = new DummyTCPPeerSocketListener(master);
 
-		assertTrue(Util.waitUntil(100, ()->listener.listenSocket != null));
+		assertTrue(Util.waitUntil(100, ()->listener.ready()));
 		listener.advertise(swarm);
 		assertNull(listener.connectedPeer);
 		
@@ -458,7 +459,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testAnnounceSelfWIthoutAdAnnouncesLocalAdFromSwarmListener() throws IOException, UnconnectableAdvertisementException {
-		master.getTCPListener().startListening(0);
+		master.getTCPListener().startListening();
 		master.getTCPListener().advertise(swarm);
 		TCPPeerAdvertisement ad = master.getTCPListener().listenerForSwarm(swarm).localAd();
 		conn.announceSelf(ad);

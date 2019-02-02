@@ -83,6 +83,8 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public void close() {
+		logger.info("Swarm: Closing PeerSwarm for archive {}",
+				Util.bytesToHex(config.getArchiveId()));
 		closed = true;
 		if(pool != null) pool.stop();
 		
@@ -165,6 +167,10 @@ public class PeerSwarm implements BlacklistCallback {
 				if(!Arrays.equals(connection.socket.remoteIdentityKey.getBytes(), existing.socket.remoteIdentityKey.getBytes())) continue;
 				boolean existingIsLowOrder = Util.compareArrays(existing.socket.getSharedSecret(), connection.socket.getSharedSecret()) < 0;
 				
+				logger.info("Swarm: Closing duplicate connection to {}:{} for archive {}",
+						connection.socket.getAddress(),
+						connection.socket.getPort(),
+						Util.bytesToHex(config.getArchiveId()));
 				if(existingIsLowOrder) {
 					connection.close();
 					return;
@@ -174,6 +180,11 @@ public class PeerSwarm implements BlacklistCallback {
 				connections.remove(existing);
 			}
 			
+			logger.info("Swarm: Opened connection to {}:{} for archive {}, {} peers total",
+					connection.socket.getAddress(),
+					connection.socket.getPort(),
+					Util.bytesToHex(config.getArchiveId()),
+					connections.size());
 			connection.announcePeers(knownAds);
 			connections.add(connection);
 		}
@@ -191,6 +202,11 @@ public class PeerSwarm implements BlacklistCallback {
 	public synchronized void closedConnection(PeerConnection connection) {
 		activeSockets--;
 		connections.remove(connection);
+		logger.info("Swarm: Closed connection to {}:{} for archive {}, {} peers total",
+				connection.socket.address,
+				connection.socket.getPort(),
+				Util.bytesToHex(config.getArchiveId()),
+				connections.size());
 	}
 	
 	public void addPeerAdvertisement(PeerAdvertisement ad) {
@@ -214,6 +230,9 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 
 		if(announce) {
+			logger.info("Received ad for {}, archive ID {}",
+					ad.routingInfo(),
+					Util.bytesToHex(config.getArchiveId()));
 			announcePeer(ad);
 		}
 	}
@@ -247,10 +266,15 @@ public class PeerSwarm implements BlacklistCallback {
 				}
 							
 				try {
-					logger.trace("Connecting to ad {}", ad);
+					logger.info("Swarm: connecting to ad from {} for archive {}",
+							ad.routingInfo(),
+							Util.bytesToHex(config.getArchiveId()));
 					openConnection(ad);
 				} catch(Exception exc) {
-					logger.error("Connection thread caught exception handling ad {}", ad, exc);
+					logger.error("Swarm: Connection thread caught exception handling ad from {} for archive {}",
+							ad.routingInfo(),
+							Util.bytesToHex(config.getArchiveId()),
+							exc);
 				}
 			}
 		});
@@ -304,20 +328,37 @@ public class PeerSwarm implements BlacklistCallback {
 				conn = ad.connect(this);
 				openedConnection(conn);
 			} catch (UnsupportedProtocolException exc) {
-				logger.info("Ignoring unsupported ad type " + ad.getType());
+				logger.info("Swarm: Ignoring unsupported ad type {} from {} for archive {}",
+						ad.getType(),
+						ad.routingInfo(),
+						Util.bytesToHex(config.getArchiveId()));
 			} catch (ProtocolViolationException exc) {
-				logger.warn("Encountered protocol violation connecting to peer ad: {}", ad, exc);
+				logger.warn("Swarm: Encountered protocol violation connecting to peer ad from {} for archive {}",
+						ad.routingInfo(),
+						Util.bytesToHex(config.getArchiveId()),
+						exc);
 				try {
 					ad.blacklist(config.getAccessor().getMaster().getBlacklist());
 				} catch(IOException exc2) {
-					logger.error("Encountered IOException blacklisting peer ad: {}", ad, exc);
+					logger.error("Swarm: Encountered IOException blacklisting peer ad from: {} for archive {}",
+							ad.routingInfo(),
+							Util.bytesToHex(config.getArchiveId()),
+							exc);
 				}
 			} catch (BlacklistedException exc) {
-				logger.debug("Ignoring ad for blacklisted peer {}", ad);
+				logger.debug("Swarm: Ignoring ad for blacklisted peer {} for archive {}",
+						ad.routingInfo(),
+						Util.bytesToHex(config.getArchiveId()));
 			} catch(SocketException|SocketClosedException|EOFException exc) {
-				logger.info("Caught network exception connecting to peer {}", ad, exc);
+				logger.info("Swarm: Caught network exception connecting to peer {} for archive {}",
+						ad.routingInfo(),
+						Util.bytesToHex(config.getArchiveId()),
+						exc);
 			} catch(Exception exc) {
-				logger.error("Caught exception connecting to peer {}", ad, exc);
+				logger.error("Swarm: Caught exception connecting to peer {} for archive {}",
+						ad.routingInfo(),
+						Util.bytesToHex(config.getArchiveId()),
+						exc);
 			} finally {
 				if(conn == null) {
 					synchronized(this) {
@@ -425,6 +466,9 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public void announceTip(RevisionTag tip) {
+		logger.info("Swarm: Announcing revtag {} of archive {}",
+				String.format("%08x", tip.getShortHash()),
+				Util.bytesToHex(config.getArchiveId()));
 		for(PeerConnection connection : getConnections()) {
 			connection.announceTip(tip);
 		}
@@ -496,10 +540,14 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public void requestAll() {
+		logger.info("Swarm: Requesting all pages of archive {}",
+				Util.bytesToHex(config.getArchiveId()));
 		pool.setRequestingEverything(true);
 	}
 	
 	public void stopRequestingAll() {
+		logger.info("Swarm: Canceling request for all pages of archive {}",
+				Util.bytesToHex(config.getArchiveId()));
 		pool.setRequestingEverything(false);
 		for(PeerConnection connection : getConnections()) {
 			connection.requestAllCancel();
@@ -512,6 +560,8 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 
 	public void setPaused(boolean paused) {
+		logger.info("Swarm: Setting paused={} for archive {}",
+				Util.bytesToHex(config.getArchiveId()));
 		pool.setPaused(paused);
 		for(PeerConnection connection : getConnections()) {
 			connection.setPaused(paused);

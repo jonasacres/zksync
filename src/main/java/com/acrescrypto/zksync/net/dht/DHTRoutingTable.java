@@ -101,17 +101,8 @@ public class DHTRoutingTable {
 	}
 	
 	public synchronized void suggestPeer(DHTPeer peer, long lastSeen) {
-		logger.debug("DHT: Suggested peer {}:{} {}, table currently has {} peers",
-				peer.address,
-				peer.port,
-				Util.bytesToHex(peer.key.getBytes()),
-				allPeers.size());
-
 		for(DHTPeer existing : allPeers) {
 			if(existing.id.equals(peer.id) && existing.address.equals(peer.address) && existing.port == peer.port) {
-				logger.debug("DHT: Already have peer {}:{}; ignoring",
-						peer.address,
-						peer.port);
 				return; // already have this peer
 			}
 		}

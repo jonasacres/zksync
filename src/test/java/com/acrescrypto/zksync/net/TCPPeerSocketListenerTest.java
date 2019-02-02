@@ -65,6 +65,7 @@ public class TCPPeerSocketListenerTest {
 	byte[] keyKnowledgeProof, keyHash, staticKeyCiphertext, timeProof;
 	
 	protected TCPPeerSocket peerSocket() throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException, UnconnectableAdvertisementException {
+		Util.waitUntil(100, ()->listener.listenSocket != null && listener.port != 0);
 		listener.advertise(swarm);
 		byte[] encArchiveId = archive.getConfig().getEncryptedArchiveId(listener.getIdentityKey().publicKey().getBytes());
 		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(listener.getIdentityKey().publicKey(), "localhost", listener.port, encArchiveId);
@@ -84,7 +85,7 @@ public class TCPPeerSocketListenerTest {
 	}
 	
 	protected Socket connect(TCPPeerSocketListener theListener) throws UnknownHostException, IOException {
-		Util.waitUntil(100, ()->theListener.listenSocket != null);
+		Util.waitUntil(100, ()->theListener.listenSocket != null && theListener.port != 0);
 		assertNotNull(theListener.listenSocket);
 		return new Socket("localhost", theListener.port);
 	}
@@ -148,7 +149,8 @@ public class TCPPeerSocketListenerTest {
 		TCPPeerSocket.disableMakeThreads = true;
 		TCPPeerSocket.socketCloseDelay = 50;
 		TCPPeerSocket.maxHandshakeTimeMillis = 250;
-		listener = new TCPPeerSocketListener(master, 0);
+		master.getGlobalConfig().set("net.swarm.enabled", true);
+		listener = master.getTCPListener();
 		swarm = new DummySwarm(archive.getConfig());
 		peerKey = crypto.makePrivateDHKey();
 	}
@@ -186,18 +188,21 @@ public class TCPPeerSocketListenerTest {
 		 * It's pretty easy in eclipse to have a process suspended in the debugger that you then forget about and leave
 		 * hanging, occupying this socket and triggering failures in this test.
 		 */
-		TCPPeerSocketListener specific = new TCPPeerSocketListener(master, TEST_PORT);
+		ZKMaster master2 = ZKMaster.openBlankTestVolume();
+		master2.getGlobalConfig().set("net.swarm.port", TEST_PORT);
+		master2.getGlobalConfig().set("net.swarm.enabled", true);
+		TCPPeerSocketListener specific = master2.getTCPListener();
+		assertTrue(Util.waitUntil(100, ()->specific.listenSocket != null && specific.listenSocket.getLocalPort() == TEST_PORT && specific.port == TEST_PORT));
+
 		Socket socket = connect(specific);
-		assertEquals(TEST_PORT, specific.requestedPort);
-		assertEquals(TEST_PORT, specific.port);
-		assertEquals(TEST_PORT, specific.listenSocket.getLocalPort());
 		assertEquals(TEST_PORT, socket.getPort());
+		
 		specific.close();
 	}
 	
 	@Test
 	public void testListensOnRandomPortWhenZeroSpecified() throws IOException {
-		TCPPeerSocketListener listener2 = new TCPPeerSocketListener(master, 0);
+		TCPPeerSocketListener listener2 = new TCPPeerSocketListener(master);
 		Util.waitUntil(100, ()->listener.listenSocket != null);
 		Util.waitUntil(100, ()->listener2.listenSocket != null);
 		assertNotEquals(listener.port, listener2.port);
@@ -212,7 +217,7 @@ public class TCPPeerSocketListenerTest {
 		listener.close();
 		
 		Thread.sleep(10); // give OS some time to free up the socket
-		TCPPeerSocketListener listener2 = new TCPPeerSocketListener(master, 0);
+		TCPPeerSocketListener listener2 = new TCPPeerSocketListener(master);
 		Util.waitUntil(100, ()->listener2.listenSocket != null);
 		assertEquals(port, listener2.port);
 		listener2.close();
@@ -220,12 +225,12 @@ public class TCPPeerSocketListenerTest {
 	
 	@Test
 	public void testReallocationOfPortIfLastPortUnavailableAndZeroRequested() throws IOException {
-		Util.waitUntil(100, ()->listener.listenSocket != null);
+		Util.waitUntil(100, ()->listener.listenSocket != null && listener.port != 0);
 		int port = listener.port;
 		assertNotEquals(0, port);
 		
-		TCPPeerSocketListener listener2 = new TCPPeerSocketListener(master, 0);
-		Util.waitUntil(100, ()->listener2.listenSocket != null);
+		TCPPeerSocketListener listener2 = new TCPPeerSocketListener(master);
+		Util.waitUntil(100, ()->listener2.listenSocket != null && listener2.port != 0);
 		assertNotNull(listener2.listenSocket);
 		assertNotEquals(listener.port, listener2.port);
 		listener2.close();
@@ -233,18 +238,17 @@ public class TCPPeerSocketListenerTest {
 	
 	@Test
 	public void testNonReallocationOfPortIfLastPortUnavailableAndNonzeroRequested() throws IOException {
-		Util.waitUntil(100, ()->listener.listenSocket != null);
-		int port = listener.port;
-		assertNotEquals(0, port);
+		master.getGlobalConfig().set("net.swarm.port", TEST_PORT);
+		Util.waitUntil(100, ()->listener.listenSocket != null && listener.port == TEST_PORT);
 
-		TCPPeerSocketListener listener2 = new TCPPeerSocketListener(master, port);
-		Util.waitUntil(100, ()->listener2.listenSocket != null);
+		TCPPeerSocketListener listener2 = new TCPPeerSocketListener(master);
+		Util.waitUntil(100, ()->listener2.listenSocket != null && listener2.port != 0);
 		assertNull(listener2.listenSocket);
 		
 		listener.close();
-		Util.waitUntil(2000, ()->listener2.listenSocket != null);
+		Util.waitUntil(2000, ()->listener2.listenSocket != null && listener2.port != 0);
 		assertNotNull(listener2.listenSocket);
-		assertEquals(port, listener2.port);
+		assertEquals(TEST_PORT, listener2.port);
 		listener2.close();
 	}
 	
@@ -261,7 +265,7 @@ public class TCPPeerSocketListenerTest {
 	
 	@Test
 	public void testGetPortReturnsCurrentPort() {
-		Util.waitUntil(100, ()->listener.listenSocket != null);
+		Util.waitUntil(100, ()->listener.listenSocket != null && listener.port != 0);
 		assertNotEquals(listener.getPort(), 0);
 		assertEquals(listener.listenSocket.getLocalPort(), listener.getPort());
 		assertEquals(listener.port, listener.getPort());
@@ -363,7 +367,7 @@ public class TCPPeerSocketListenerTest {
 	public void testOpensUPnPWhenEnabledBeforeInit() throws IOException {
 		listener.close();
 		master.getGlobalConfig().set("net.swarm.upnp", true);
-		listener = new TCPPeerSocketListener(master, 0);
+		listener = new TCPPeerSocketListener(master);
 		Util.waitUntil(1000, ()->UPnP.isMappedTCP(listener.getPort()));
 	}
 	
@@ -381,5 +385,21 @@ public class TCPPeerSocketListenerTest {
 		Util.waitUntil(1000, ()->UPnP.isMappedTCP(listener.getPort()));
 		master.getGlobalConfig().set("net.swarm.upnp", false);
 		Util.waitUntil(1000, ()->!UPnP.isMappedTCP(listener.getPort()));
+	}
+	
+	@Test
+	public void testIsImmuneToPortRebindRaceCondition() throws IOException {
+		int port = TEST_PORT;
+		
+		for(int i = 0; i < 3; i++) {
+			ZKMaster master2 = ZKMaster.openBlankTestVolume();
+			new Thread(()->master2.getGlobalConfig().set("net.swarm.enabled", true)).start();
+			new Thread(()->master2.getGlobalConfig().set("net.swarm.port", port)).start();
+			assertTrue(Util.waitUntil(250, ()->master2.getTCPListener().getPort() == port));
+			assertTrue(Util.waitUntil(250, ()->master2.getTCPListener().listenSocket.getLocalPort() == port));
+			assertFalse(Util.waitUntil(250, ()->master2.getTCPListener().listenSocket.getLocalPort() != port));
+			master2.getTCPListener().close();
+			master2.close();
+		}
 	}
 }

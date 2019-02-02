@@ -108,7 +108,7 @@ public class DHTPeer implements Sendable {
 					break;
 				case 1: // record list item
 					try {
-						recordCallback.receivedRecord(client.deserializeRecord(resp.peer, buf));
+						recordCallback.receivedRecord(client.deserializeRecord(null, buf));
 						if(buf.position() != expectedPos) throw new UnsupportedProtocolException();
 					} catch (UnsupportedProtocolException e) {
 						buf.position(expectedPos);
@@ -125,7 +125,10 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public void addRecord(DHTID recordId, Key lookupKey, DHTRecord record) {
-		logger.debug("DHT: Send " + address + ":" + port + " -- addRecord " + Util.bytesToHex(recordId.rawId));
+		logger.info("DHT: Adding record with ID {} to {}:{}",
+				Util.bytesToHex(recordId.rawId),
+				address,
+				port);
 		client.addRecordMessage(this, recordId, lookupKey, record, null).send();
 	}
 	

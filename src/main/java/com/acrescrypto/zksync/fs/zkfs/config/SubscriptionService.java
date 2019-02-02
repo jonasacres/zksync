@@ -31,6 +31,7 @@ public class SubscriptionService {
 		
 		public void close() {
 			removeToken(this);
+			this.callback = null;
 		}
 	}
 	

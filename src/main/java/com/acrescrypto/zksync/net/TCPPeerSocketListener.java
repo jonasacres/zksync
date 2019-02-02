@@ -23,6 +23,7 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.net.noise.CipherState;
 import com.acrescrypto.zksync.net.noise.SipObfuscator;
 import com.acrescrypto.zksync.net.noise.VariableLengthHandshakeState;
@@ -32,9 +33,11 @@ import com.acrescrypto.zksync.utility.RateLimitedOutputStream;
 import com.acrescrypto.zksync.utility.Util;
 import com.dosse.upnp.UPnP;
 
+// I hate this implementation. Burn it.
+
 public class TCPPeerSocketListener {
 	public final static int MAX_RECENT_PROOFS = 128;
-	protected int port, requestedPort;
+	protected int port;
 	
 	protected CryptoSupport crypto;
 	protected Blacklist blacklist;
@@ -45,17 +48,16 @@ public class TCPPeerSocketListener {
 	protected LinkedList<TCPPeerAdvertisementListener> adListeners;
 	protected boolean closed, established;
 	protected PrivateDHKey identityKey;
+	protected LinkedList<SubscriptionToken<?>> subscriptions = new LinkedList<>();
 	
 	protected BandwidthMonitor bandwidthMonitorTx, bandwidthMonitorRx;
 	
 	public TCPPeerSocketListener(ZKMaster master) throws IOException {
 		initMaster(master);
 		setupSubscriptions();
-	}
-	
-	protected TCPPeerSocketListener(ZKMaster master, int port) {
-		initMaster(master);
-		startListening(port);
+		if(master.getGlobalConfig().getBool("net.swarm.enabled")) {
+			startListening();
+		}
 	}
 	
 	protected void initMaster(ZKMaster master) {
@@ -69,27 +71,26 @@ public class TCPPeerSocketListener {
 	}
 	
 	protected void setupSubscriptions() {
-		master.getGlobalConfig().subscribe("net.swarm.enabled").asBoolean((enabled)->{
-			if(enabled == isListening()) return;
-			if(enabled) {
-				startListening(master.getGlobalConfig().getInt("net.swarm.port"));
-			} else {
-				try {
-					close();
-				} catch (IOException e) {}
+		subscriptions.add(master.getGlobalConfig().subscribe("net.swarm.enabled").asBoolean((enabled)->{
+			synchronized(this) {
+				if(enabled == isListening()) return;
+				if(enabled) {
+					startListening();
+				} else {
+					try {
+						close();
+					} catch (IOException e) {}
+				}
 			}
-		});
+		}));
 		
-		master.getGlobalConfig().subscribe("net.swarm.port").asInt((port)->{
-			if(isListening() && listenSocket.getLocalPort() != port) {
-				try {
-					close();
-				} catch (IOException e) {}
-				startListening(master.getGlobalConfig().getInt("net.swarm.port"));
+		subscriptions.add(master.getGlobalConfig().subscribe("net.swarm.port").asInt((port)->{
+			synchronized(this) {
+				rebind();
 			}
-		});
+		}));
 		
-		master.getGlobalConfig().subscribe("net.swarm.upnp").asBoolean((enabled)->{
+		subscriptions.add(master.getGlobalConfig().subscribe("net.swarm.upnp").asBoolean((enabled)->{
 			if(enabled && isListening()) {
 				if(!UPnP.isMappedTCP(port)) {
 					UPnP.openPortTCP(port);
@@ -97,16 +98,10 @@ public class TCPPeerSocketListener {
 			} else if(port != 0 && UPnP.isMappedTCP(port)) {
 				UPnP.closePortTCP(port);
 			}
-		});
+		}));
 	}
 	
-	protected void startListening(int port) {
-		this.requestedPort = port;
-		if(port == 0 && master != null && master.getGlobalConfig() != null) {
-			this.port = master.getGlobalConfig().getInt("net.swarm.port");
-		} else {
-			this.port = port;
-		}
+	protected void startListening() {
 		closed = false;
 		this.thread = new Thread(master.getThreadGroup(), ()->listenThread() );
 		this.thread.start();
@@ -116,11 +111,29 @@ public class TCPPeerSocketListener {
 		return port;
 	}
 	
+	public boolean ready() {
+		return listenSocket != null && port != 0 && !listenSocket.isClosed() && !closed; 
+	}
+	
+	protected void rebind() {
+		int configPort = master.getGlobalConfig().getInt("net.swarm.port");
+		if(isListening() && listenSocket.getLocalPort() != configPort && configPort != 0) {
+			try {
+				close();
+			} catch (IOException e) {}
+			startListening();
+		}
+	}
+	
 	public void close() throws IOException {
 		if(closed) return;
 		closed = true;
+		for(SubscriptionToken<?> sub : subscriptions) {
+			sub.close();
+		}
+		subscriptions.clear();
+		
 		if(listenSocket != null) {
-			listenSocket.getLocalPort();
 			listenSocket.close();
 			if(master.getGlobalConfig().getBool("net.swarm.upnp")) {
 				UPnP.closePortTCP(port);
@@ -158,7 +171,7 @@ public class TCPPeerSocketListener {
 					processIncomingPeer(socket);
 				}
 			} catch(Exception exc) {
-				if(closed || oldSocket != listenSocket) {
+				if(closed || oldSocket != listenSocket || listenSocket.isClosed()) {
 					logger.info("Closed TCP socket on port {}", listenSocket.getLocalPort());
 					break;
 				}
@@ -172,7 +185,8 @@ public class TCPPeerSocketListener {
 		if(listenSocket == null || listenSocket.isClosed()) {
 			openSocket();
 			if(listenSocket != null && listenSocket.getLocalPort() != port) {
-				updatePortCache();
+				this.port = listenSocket.getLocalPort();
+				announceListening();
 			}
 		}
 	}
@@ -184,34 +198,46 @@ public class TCPPeerSocketListener {
 			return;
 		}
 		
-		logger.info("Accepted TCP connection from peer {}", socket.getInetAddress().toString());
+		logger.info("Accepted TCP connection from peer {}", socket.getInetAddress().getHostAddress());
 		new Thread(master.getThreadGroup(), ()->peerThread(socket) ).start();
 	}
 	
 	protected void openSocket() {
+		int lastPort = master.getGlobalConfig().getInt("net.swarm.lastport");
+		int requestPort = master.getGlobalConfig().getInt("net.swarm.port");
+		if(lastPort != 0 && port == 0) {
+			logger.debug("Attempting to require previously-bound TCP port {}", lastPort);
+			requestPort = lastPort;
+		}
+		
 		try {
-			listenSocket = new ServerSocket(port,
+			listenSocket = new ServerSocket(requestPort,
 					master.getGlobalConfig().getInt("net.swarm.backlog"),
 					InetAddress.getByName(master.getGlobalConfig().getString("net.swarm.bindaddress")));
 			listenSocket.setReuseAddress(true);
+
 			if(master.getGlobalConfig().getBool("net.swarm.upnp")) {
 				UPnP.openPortTCP(listenSocket.getLocalPort());
 			}
+			
+			master.getGlobalConfig().set("net.swarm.lastport", listenSocket.getLocalPort());
+			rebind();
 		} catch(IOException exc) {
-			if(requestedPort != 0 || port == 0) {
-				logger.warn("Caught exception requesting port {}; waiting to retry...", port, exc);
+			if(port == 0 && requestPort != 0) {
+				logger.warn("Unable to re-acquire TCP port {}, requesting new port number...", requestPort, exc);
+				master.getGlobalConfig().set("net.swarm.lastport", 0);
+			} else if(port == 0) {
+				logger.warn("Caught exception requesting random port; waiting to retry...", exc);
 				try { Thread.sleep(1000); } catch(InterruptedException exc2) {}
 				return;
+			} else {
+				logger.warn("Unable to acquire configured TCP port {}; re-requesting with same port number...",
+						port);
 			}
-			
-			logger.warn("Unable to re-acquire TCP port {}, requesting new port number...", port, exc);
-			port = 0;
 		}
 	}
 	
-	protected synchronized void updatePortCache() {
-		this.port = listenSocket.getLocalPort();
-		master.getGlobalConfig().set("net.swarm.port", this.port);
+	protected synchronized void announceListening() {
 		logger.info("Listening for peers on TCP port {}", port);
 		for(TCPPeerAdvertisementListener listener : adListeners) {
 			listener.announce();

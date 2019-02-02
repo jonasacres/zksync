@@ -163,14 +163,10 @@ public class DHTRecordStore {
 				return;
 			}
 			
-			logger.info("Adding record from {} for ID {}",
-					record.routingInfo(),
-					Util.bytesToHex(id.rawId));
-			
 			synchronized(this) {
+				if(!hasRoomForRecord(id, record)) return;
+				
 				if(!entriesById.containsKey(id)) {
-					if(entriesById.size() >= MAX_IDS) prune();
-					if(entriesById.size() >= MAX_IDS) return;
 					entriesById.put(id, new ArrayList<StoreEntry>(MAX_RECORDS_PER_ID));
 				}
 				
@@ -178,6 +174,13 @@ public class DHTRecordStore {
 				if(entriesForId.size() >= MAX_RECORDS_PER_ID) prune();
 				if(entriesForId.size() >= MAX_RECORDS_PER_ID) return;
 				entriesForId.add(new StoreEntry(record, token));
+				
+				logger.info("Added record from {} for ID {}; {} records for ID, {} ids in store",
+						record.routingInfo(),
+						Util.bytesToHex(id.rawId),
+						entriesForId.size(),
+						entriesById.size());
+
 				write();
 			}
 		} catch(IOException exc) {

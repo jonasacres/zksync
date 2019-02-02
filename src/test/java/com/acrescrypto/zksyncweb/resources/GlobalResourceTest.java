@@ -159,7 +159,7 @@ public class GlobalResourceTest {
 		master.getGlobalConfig().set("net.swarm.enabled", true);
 		assertTrue(Util.waitUntil(100, ()->master.getTCPListener().getPort() != 0));
 		JsonNode resp = WebTestUtils.requestGet(target, "/global/settings");
-		assertEquals(master.getTCPListener().getPort(), resp.get("net.swarm.port").intValue());
+		assertEquals(master.getTCPListener().getPort(), resp.get("net.swarm.lastport").intValue());
 	}
 
 	@Test

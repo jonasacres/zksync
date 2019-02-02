@@ -37,7 +37,7 @@ public class TCPPeerAdvertisementListenerTest {
 	
 	class DummyTCPPeerSocketListener extends TCPPeerSocketListener {
 		public DummyTCPPeerSocketListener(ZKMaster master, int port) throws IOException {
-			super(master, -1);
+			super(master);
 			this.port = port;
 		}
 		

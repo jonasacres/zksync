@@ -199,16 +199,19 @@ public class ConfigFile {
 	}
 	
 	protected Long safeLong(Object n) {
+		if(n == null) return 0L;
 		if(n instanceof Number) return ((Number) n).longValue();
 		return null;
 	}
 	
 	protected Integer safeInt(Object n) {
+		if(n == null) return 0;
 		if(n instanceof Number) return ((Number) n).intValue();
 		return null;
 	}
 	
 	protected Double safeDouble(Object n) {
+		if(n == null) return 0.0;
 		if(n instanceof Number) return ((Number) n).doubleValue();
 		return null;
 	}
