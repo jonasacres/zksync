@@ -36,10 +36,15 @@ public class PeerSwarmTest {
 		String address;
 		boolean blacklisted, explode;
 		byte type = -1;
-		public DummyAdvertisement() { address = "localhost"; }
+		public DummyAdvertisement() {
+			address = "localhost";
+			this.pubKey = master.getCrypto().makePrivateDHKey().publicKey();
+		}
+		
 		public DummyAdvertisement(String address) {
 			this.address = address;
 			this.type = TYPE_TCP_PEER;
+			this.pubKey = master.getCrypto().makePrivateDHKey().publicKey();
 		}
 		@Override public void blacklist(Blacklist blacklist) throws IOException {}
 		@Override public boolean isBlacklisted(Blacklist blacklist) throws IOException { return blacklisted; }
@@ -172,7 +177,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Before
-	public void before() throws IOException {
+	public void beforeEach() throws IOException {
 		connectedAddresses.clear();
 		
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
@@ -189,7 +194,7 @@ public class PeerSwarmTest {
 	}
 	
 	@After
-	public void after() {
+	public void afterEach() {
 		connection.close();
 		archive.close();
 		try { Thread.sleep(1); } catch(InterruptedException exc) {} // give exploding ads a chance to percolate through before turning logging back on

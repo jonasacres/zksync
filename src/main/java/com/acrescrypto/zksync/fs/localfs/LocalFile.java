@@ -5,6 +5,9 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
@@ -16,13 +19,17 @@ public class LocalFile extends File {
 	protected long offset, size;
 	protected int mode;
 	
+	protected Logger logger = LoggerFactory.getLogger(LocalFile.class);
+	
 	LocalFile(LocalFS fs, String path, int mode) throws IOException {
 		super(fs);
 		String modeStr = null;
-		if ((mode & O_RDWR) != 0) {
-			modeStr = "rw";
-		} else if ((mode & O_RDONLY) != 0) {
-			modeStr = "r";
+		if ((mode & O_RDONLY) != 0) {
+			if ((mode & O_RDWR) == O_RDWR) {
+				modeStr = "rw";
+			} else {
+				modeStr = "r";
+			}
 		} else if ((mode & O_WRONLY) != 0) {
 			modeStr = "rw"; // "w" is not supported apparently
 		}

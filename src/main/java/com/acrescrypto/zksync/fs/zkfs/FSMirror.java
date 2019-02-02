@@ -77,11 +77,13 @@ public class FSMirror {
 		incrementActive();
 		HashMap<WatchKey, Path> pathsByKey = new HashMap<>();
 		watchDirectory(dir, watcher, pathsByKey);
+		logger.info("FSMirror: Starting watch of {}", localTarget.getRoot());
 
 		new Thread( () -> watchThread(flag, watcher, pathsByKey) ).start();
 	}
 
 	public void stopWatch() {
+		logger.info("FSMirror: Stopping watch of {}", ((LocalFS) target).getRoot());
 		watchFlag.setFalse();
 	}
 
@@ -120,7 +122,7 @@ public class FSMirror {
 			watcher.close();
 			decrementActive();
 		} catch (IOException exc) {
-			logger.error("Unable to close watcher", exc);
+			logger.error("FSMirror: Unable to close watcher", exc);
 		}
 	}
 	
@@ -134,7 +136,7 @@ public class FSMirror {
 				for(WatchEvent<?> event : key.pollEvents()) {
 					WatchEvent.Kind<?> kind = event.kind();
 					if(kind == OVERFLOW) {
-						logger.warn("Caught overflow on FS mirror; some local filesystem changes may not have made it into the archive.");
+						logger.warn("FSMirror: Caught overflow; some local filesystem changes may not have made it into the archive.");
 						continue;
 					}
 
@@ -159,11 +161,11 @@ public class FSMirror {
 					} catch(ENOENTException|CommandFailedException exc) {
 						// ignore it; the file was deleted from underneath us
 					} catch(IOException exc) {
-						logger.error("Caught exception mirroring local FS", exc);
+						logger.error("FSMirror: Caught exception mirroring local FS", exc);
 					}
 				}
 			} catch(Exception exc) {
-				logger.error("Mirror thread caught exception", exc);
+				logger.error("FSMirror: mirror thread caught exception", exc);
 			} finally {
 				if(!key.reset()) return false;
 			}
@@ -174,6 +176,7 @@ public class FSMirror {
 	}
 
 	public synchronized void observedTargetPathChange(String path) throws IOException {
+		logger.info("FSMirror: Observed change: " + path);
 		copy(target, zkfs, path);
 	}
 
@@ -195,6 +198,10 @@ public class FSMirror {
 
 	public synchronized void syncArchiveToTarget() throws IOException {
 		ZKFS oldFs = lastRev != null ? lastRev.getFS() : null;
+		boolean wasWatching = isWatching();
+		if(wasWatching) {
+			stopWatch();
+		}
 
 		try {
 			String[] list = zkfs.opendir("/").listRecursive();
@@ -205,6 +212,10 @@ public class FSMirror {
 			pruneFsToList(target, list);
 		} finally {
 			oldFs.close();
+		}
+		
+		if(wasWatching) {
+			startWatch();
 		}
 	}
 
@@ -249,9 +260,9 @@ public class FSMirror {
 			try {
 				copy(zkfs, target, path);
 			} catch(IOException exc) {
-				logger.warn("Caught exception copying path to target: " + path, exc);
+				logger.warn("FSMirror: Caught exception copying path to target: " + path, exc);
 			} catch(UnsupportedOperationException exc) {
-				logger.info("Skipping path due to lack of local support (maybe we need superuser?): " + path, exc);
+				logger.info("FSMirror: Skipping path due to lack of local support (maybe we need superuser?): " + path, exc);
 			}
 		} else if(incoming == null) {
 			try {

@@ -204,7 +204,7 @@ public class ArchiveResource {
 	@PUT
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/settings")
-	public XAPIResponse putConfig(@PathParam("archiveId") String archiveId, String json) throws IOException, XAPIResponse {
+	public XAPIResponse putSettings(@PathParam("archiveId") String archiveId, String json) throws IOException, XAPIResponse {
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
 		XArchiveSettings settings = new ObjectMapper().readValue(json, XArchiveSettings.class);

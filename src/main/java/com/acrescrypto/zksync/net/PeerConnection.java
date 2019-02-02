@@ -479,7 +479,12 @@ public class PeerConnection {
 			msg.rxBuf.get(revTagRaw);
 			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw, true);
 			try {
-				socket.swarm.config.getRevisionList().addBranchTip(revTag);
+				if(socket.swarm.config.getRevisionList().addBranchTip(revTag)) {
+					logger.info("Received new revTag {} from {}:{}",
+							String.format("%08x", revTag.getShortHash()),
+							socket.address,
+							socket.getPort());
+				}
 			} catch(SearchFailedException exc) {
 				/* placeholder if we ever want to do something about getting a branch tip we can't get info about
 				** kinda weird that we didn't learn anything, since the peer who told us about it ought to have info...*/ 

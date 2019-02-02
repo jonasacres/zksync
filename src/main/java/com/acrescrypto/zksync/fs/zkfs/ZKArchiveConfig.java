@@ -469,6 +469,7 @@ public class ZKArchiveConfig {
 		advertising = true;
 		accessor.discoverOnDHT();
 		accessor.master.getTCPListener().advertise(swarm);
+		accessor.master.getDHTDiscovery().forceUpdate(accessor);
 	}
 	
 	public void stopAdvertising() {

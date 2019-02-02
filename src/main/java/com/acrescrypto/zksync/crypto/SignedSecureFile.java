@@ -75,6 +75,7 @@ public class SignedSecureFile {
 			byte[] paddedPlaintext = derivedKey.decryptUnauthenticated(fixedIV(), contents, salt.length, contents.length - salt.length);
 			return crypto.unpad(paddedPlaintext);
 		} catch (IOException exc) {
+			logger.error("Encountered exception loading file {}", path(), exc);
 			throw new InaccessibleStorageException();
 		}
 	}

@@ -180,13 +180,13 @@ public class PeerSwarm implements BlacklistCallback {
 				connections.remove(existing);
 			}
 			
+			connection.announcePeers(knownAds);
+			connections.add(connection);
 			logger.info("Swarm: Opened connection to {}:{} for archive {}, {} peers total",
 					connection.socket.getAddress(),
 					connection.socket.getPort(),
 					Util.bytesToHex(config.getArchiveId()),
 					connections.size());
-			connection.announcePeers(knownAds);
-			connections.add(connection);
 		}
 		
 		pool.addRequestsToConnection(connection);
@@ -230,9 +230,10 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 
 		if(announce) {
-			logger.info("Received ad for {}, archive ID {}",
+			logger.info("Received ad for {}, archive ID {}, public key {}",
 					ad.routingInfo(),
-					Util.bytesToHex(config.getArchiveId()));
+					Util.bytesToHex(config.getArchiveId()),
+					Util.bytesToHex(ad.getPubKey().getBytes()));
 			announcePeer(ad);
 		}
 	}
@@ -466,9 +467,10 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public void announceTip(RevisionTag tip) {
-		logger.info("Swarm: Announcing revtag {} of archive {}",
+		logger.info("Swarm: Announcing revtag {} of archive {} to {} peers",
 				String.format("%08x", tip.getShortHash()),
-				Util.bytesToHex(config.getArchiveId()));
+				Util.bytesToHex(config.getArchiveId()),
+				connections.size());
 		for(PeerConnection connection : getConnections()) {
 			connection.announceTip(tip);
 		}

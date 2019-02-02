@@ -59,11 +59,11 @@ public class RevisionList {
 		this.monitors.remove(monitor);
 	}
 	
-	public void addBranchTip(RevisionTag newBranch) throws IOException {
-		if(config.revisionTree.isSuperceded(newBranch)) return;
+	public boolean addBranchTip(RevisionTag newBranch) throws IOException {
+		if(config.revisionTree.isSuperceded(newBranch)) return false;
 		
 		synchronized(this) {
-			if(branchTips.contains(newBranch)) return;
+			if(branchTips.contains(newBranch)) return false;
 			branchTips.add(newBranch);
 			config.swarm.announceTip(newBranch);
 			updateLatest(newBranch);
@@ -80,6 +80,8 @@ public class RevisionList {
 				logger.error("Unable to automerge with new branch " + newBranch + ": ", exc);
 			}
 		}
+		
+		return true;
 	}
 	
 	public void consolidate(RevisionTag newBranch) throws IOException {

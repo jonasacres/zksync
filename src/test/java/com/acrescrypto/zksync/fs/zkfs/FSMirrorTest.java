@@ -953,6 +953,27 @@ public class FSMirrorTest {
 	}
 	
 	@Test
+	public void testSyncArchiveToTargetDoesNotTriggerWatch() throws IOException {
+		mirror.startWatch();
+		syncArchiveToTargetTest("foo", (p)->{
+			zkfs.write(p, "foo".getBytes());
+		});
+		
+		assertFalse(zkfs.dirty);
+	}
+
+	@Test
+	public void testSyncArchiveToTargetResumesWatchWhenDone() throws IOException {
+		mirror.startWatch();
+		syncArchiveToTargetTest("foo", (p)->{
+			zkfs.write(p, "foo".getBytes());
+		});
+		
+		target.write("foo", "bar".getBytes());
+		assertTrue(Util.waitUntil(100, ()->zkfs.dirty));
+	}
+	
+	@Test
 	public void testWatchMonitorsFileCreations() throws IOException {
 		watcherTest("foo", (p)->{
 			target.write(p, "data".getBytes());

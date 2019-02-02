@@ -68,6 +68,9 @@ public class TCPPeerSocketListener {
 		this.identityKey = crypto.makePrivateDHKey(); // TODO Noise: cache static key to disk
 		this.bandwidthMonitorRx = new BandwidthMonitor(master.getBandwidthMonitorRx());
 		this.bandwidthMonitorTx = new BandwidthMonitor(master.getBandwidthMonitorTx());
+		
+		logger.info("TCP listener public key: {}",
+				Util.bytesToHex(identityKey.getBytes()));
 	}
 	
 	protected void setupSubscriptions() {
