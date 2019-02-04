@@ -7,7 +7,6 @@ import static org.junit.Assert.assertFalse;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Base64;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
@@ -56,13 +55,18 @@ public class DHTResourceTest {
 			this.key = new PrivateDHKey(State.sharedCrypto());
 			this.id = new DHTID(key.publicKey());
 			this.pendingRequests = new ArrayList<>();
-			this.networkId = State.sharedCrypto().hash(Util.serializeInt(1));
+			this.networkId = crypto.hash(State.sharedState().getMaster().getGlobalConfig().getString("net.dht.network").getBytes());
 
 			this.bindAddress = "0.0.0.0";
 			this.bindPort = 1234;
+			
+			subscriptions.add(State.sharedState().getMaster().getGlobalConfig().subscribe("net.dht.network").asString((network)->{
+				byte[] newNetworkId = crypto.hash(network.getBytes());
+				this.networkId = newNetworkId;
+			}));
 		}
 
-		@Override public void close() { closed = true; }
+		@Override public void close() { closed = true; closeSubscriptions(); }
 		@Override public void purge() { purged = true; }
 		@Override public int numPendingRequests() { return 777; }
 		@Override public void addPeer(DHTPeer peer) { this.addedPeer = peer; }
@@ -249,19 +253,10 @@ public class DHTResourceTest {
 	}
 
 	@Test
-	public void testRegenerateUsesPreviousNetworkIdIfNoNetworkIdSupplied() throws IOException {
+	public void testRegenerateUsesPreviousNetworkId() throws IOException {
+		State.sharedState().getMaster().getGlobalConfig().set("net.dht.network", "test");
 		WebTestUtils.requestPost(target, basepath + "regenerate", null);
 		DHTClient newClient = State.sharedState().getMaster().getDHTClient();
 		assertArrayEquals(client.getNetworkId(), newClient.getNetworkId());
-	}
-
-	@Test
-	public void testRegenerateUsesRequestedNetworkIdIfNetworkIdSupplied() throws IOException {
-		byte[] newNetworkId = State.sharedCrypto().hash(Util.serializeInt(1234));
-		String base64 = Util.toWebSafeBase64(Base64.getEncoder().encodeToString(newNetworkId));
-
-		WebTestUtils.requestPost(target, basepath + "regenerate/" + base64, null);
-		DHTClient newClient = State.sharedState().getMaster().getDHTClient();
-		assertArrayEquals(newNetworkId, newClient.getNetworkId());
 	}
 }

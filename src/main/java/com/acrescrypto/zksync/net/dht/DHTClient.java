@@ -105,10 +105,6 @@ public class DHTClient {
 	protected ArrayList<DHTMessageStub> pendingRequests;
 	
 	public DHTClient(Key storageKey, ZKMaster master) {
-		this(storageKey, master, new byte[storageKey.getCrypto().hashLength()]);
-	}
-	
-	public DHTClient(Key storageKey, ZKMaster master, byte[] networkId) {
 		this.master = master;
 		this.threadGroup = new ThreadGroup(master.getThreadGroup(), "DHTClient");
 		this.threadPool = GroupedThreadPool.newCachedThreadPool(threadGroup, "DHTClient Pool");
@@ -117,7 +113,8 @@ public class DHTClient {
 		this.storage = master.getStorage();
 		this.crypto = storageKey.getCrypto();
 		this.pendingRequests = new ArrayList<>();
-		this.networkId = networkId;
+		
+		this.networkId = crypto.hash(master.getGlobalConfig().getString("net.dht.network").getBytes());
 		
 		this.monitorTx = new BandwidthMonitor(master.getBandwidthMonitorTx());
 		this.monitorRx = new BandwidthMonitor(master.getBandwidthMonitorRx());
@@ -188,6 +185,16 @@ public class DHTClient {
 				logger.warn("Wiping routing table since net.dht.bootstrap.enabled set false");
 				routingTable.reset();
 			}
+		}));
+		
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.network").asString((network)->{
+			
+			byte[] newNetworkId = crypto.hash(network.getBytes());
+			if(Arrays.equals(newNetworkId, networkId)) return;
+			
+			this.networkId = newNetworkId;
+			logger.info("Updated network id to {}; clearing routing table", Util.bytesToHex(networkId));
+			routingTable.reset();
 		}));
 		
 		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.bootstrap.host").asString((host)->addDefaults()));
@@ -343,7 +350,10 @@ public class DHTClient {
 		closed = true;
 		threadPool.shutdownNow();
 		routingTable.close();
-		
+		closeSubscriptions();
+	}
+	
+	protected void closeSubscriptions() {
 		for(SubscriptionToken<?> token : subscriptions) {
 			token.close();
 		}

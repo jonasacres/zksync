@@ -384,15 +384,11 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		this.bandwidthAllocatorRx = bandwidthAllocatorRx;
 	}
 
-	public void regenerateDHTClient(byte[] networkId) throws IOException {
-		// TODO API: (test) Test DHT client regenerate
+	public void regenerateDHTClient() throws IOException {
 		dhtClient.purge();
-		if(networkId == null) {
-			networkId = dhtClient.getNetworkId();
-		}
 
 		Key key = localKey.derive("easysafe-dht-storage");
-		this.dhtClient = new DHTClient(key, this, networkId);
+		this.dhtClient = new DHTClient(key, this);
 	}
 
 	public ConfigFile getGlobalConfig() {
@@ -406,6 +402,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		globalConfig.setDefault("net.dht.bindaddress", "0.0.0.0");
 		globalConfig.setDefault("net.dht.port", 0);
 		globalConfig.setDefault("net.dht.upnp", false);
+		globalConfig.setDefault("net.dht.network", "easysafe");
 		
 		globalConfig.setDefault("net.dht.bootstrap.enabled", false);
 		globalConfig.setDefault("net.dht.bootstrap.host", "dht1.easysafe.io");
