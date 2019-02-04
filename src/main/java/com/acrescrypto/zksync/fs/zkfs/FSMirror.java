@@ -282,6 +282,12 @@ public class FSMirror {
 			try {
 				destStat = dest.lstat(path);
 			} catch(ENOENTException exc) {}
+			
+			if(src == zkfs) {
+				logger.debug("FS: {} sync zkfs -> target");
+			} else {
+				logger.debug("FS: {} sync target -> zkfs");
+			}
 
 			if(srcStat.isRegularFile()) {
 				copyFile(src, dest, path, srcStat, destStat);

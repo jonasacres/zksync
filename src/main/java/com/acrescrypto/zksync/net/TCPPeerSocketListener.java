@@ -201,7 +201,8 @@ public class TCPPeerSocketListener {
 			return;
 		}
 		
-		logger.info("Accepted TCP connection from peer {}", socket.getInetAddress().getHostAddress());
+		logger.debug("Accepted TCP connection from peer {}",
+				socket.getInetAddress().getHostAddress());
 		new Thread(master.getThreadGroup(), ()->peerThread(socket) ).start();
 	}
 	
