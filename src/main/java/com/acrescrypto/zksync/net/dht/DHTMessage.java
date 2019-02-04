@@ -199,9 +199,9 @@ public class DHTMessage {
 			byte[] plaintext = key.decrypt(new byte[client.crypto.symIvLength()], serialized.array(), serialized.position(), serialized.remaining());
 			serialized = ByteBuffer.wrap(plaintext);
 		} catch(SecurityException exc) {
-			logger.error("DHT: Cannot decrypt message from peer {}:{}",
-					peer.address,
-					peer.port,
+			logger.warn("DHT: Cannot decrypt message from peer {}:{}",
+					senderAddress,
+					senderPort,
 					exc);
 			throw new ProtocolViolationException();
 		}

@@ -189,6 +189,10 @@ public class DHTClient {
 				routingTable.reset();
 			}
 		}));
+		
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.bootstrap.host").asString((host)->addDefaults()));
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.bootstrap.port").asInt((port)->addDefaults()));
+		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.bootstrap.key").asString((key)->addDefaults()));
 	}
 	
 	protected void addDefaults() {
@@ -197,13 +201,14 @@ public class DHTClient {
 		String defaultKey = master.getGlobalConfig().getString("net.dht.bootstrap.key");
 		
 		PublicDHKey pubkey = crypto.makePublicDHKey(Util.decode64(defaultKey));
+		routingTable.reset();
 		
 		try {
 			addPeer(new DHTPeer(this,
 					InetAddress.getByName(defaultHost).getHostAddress(),
 					defaultPort,
 					pubkey));
-			logger.info("DHT: Added bootstrap peer: " + defaultHost + ":" + defaultPort + " " + defaultKey);
+			logger.info("DHT: Added bootstrap peer: " + defaultHost + ":" + defaultPort + " " + defaultKey + "; routing table reset");
 		} catch (UnknownHostException exc) {
 			logger.error("DHT: Unable to resolve " + defaultHost, exc);
 		}
@@ -245,6 +250,7 @@ public class DHTClient {
 	}
 	
 	public void findPeers() {
+		if(!isListening()) return;
 		logger.debug("DHT: Finding peers...");
 		new DHTSearchOperation(this, id, new Key(crypto), (peers)->{
 			logger.debug("DHT: Found {} peers", peers.size());

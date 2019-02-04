@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.LinkedList;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
 import com.acrescrypto.zksync.utility.HashCache;
@@ -25,6 +28,8 @@ public class ZKFS extends FS {
 	protected LinkedList<ZKFSDirtyMonitor> dirtyMonitors = new LinkedList<>();
 		
 	public final static int MAX_PATH_LEN = 65535;
+	
+	Logger logger = LoggerFactory.getLogger(ZKFS.class);
 	
 	public ZKFS(RevisionTag revision, String root) throws IOException {
 		this.root = root;
@@ -388,6 +393,9 @@ public class ZKFS extends FS {
 	}
 
 	public void rebase(RevisionTag revision) throws IOException {
+		logger.info("FS: Rebasing archive {} to revision {}",
+				Util.bytesToHex(revision.config.getArchiveId()),
+				Util.bytesToHex(revision.getBytes()));
 		this.archive = revision.getArchive();
 		this.directoriesByPath = new HashCache<String,ZKDirectory>(128, (String path) -> {
 			assertPathIsDirectory(path);

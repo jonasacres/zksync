@@ -293,6 +293,15 @@ public class GlobalResourceTest {
 
 		assertTrue(Util.waitUntil(100, ()->master.getTCPListener().getPort() == port + 1));
 	}
+	
+	@Test
+	public void testPutSettingsWithStringFieldSetsConfigValue() {
+		// observed issue: setting a config field with a string name caused an exception
+		HashMap<String,Object> settings = new HashMap<>();
+		settings.put("net.dht.bootstrap.host", "localhost");
+		WebTestUtils.requestPut(target, "/global/settings", settings);
+		assertTrue(Util.waitUntil(100, ()->master.getGlobalConfig().getString("net.dht.bootstrap.host").equals("localhost")));
+	}
 
 	@Test
 	public void testGetUptimeReturnsUptime() {

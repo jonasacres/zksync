@@ -139,7 +139,7 @@ public class ConfigFile {
 		try { if(((JsonString) info.get(key)).getString() == value) return; } catch(NullPointerException exc) {}
 		
 		logger.info("Config: Setting " + key + " -> " + value);
-		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
+		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonString("x");
 		info.put(key, jsonValue);
 		sub.updatedKey(key, jsonValue);
 		writeQuietly();
