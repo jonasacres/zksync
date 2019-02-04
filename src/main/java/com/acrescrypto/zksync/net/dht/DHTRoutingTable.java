@@ -101,6 +101,7 @@ public class DHTRoutingTable {
 	}
 	
 	public synchronized void suggestPeer(DHTPeer peer, long lastSeen) {
+		if(peer.id.equals(client.getId())) return; // we don't need an entry for ourselves!
 		for(DHTPeer existing : allPeers) {
 			if(existing.id.equals(peer.id) && existing.address.equals(peer.address) && existing.port == peer.port) {
 				return; // already have this peer

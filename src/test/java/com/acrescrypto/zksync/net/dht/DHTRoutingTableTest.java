@@ -31,7 +31,7 @@ public class DHTRoutingTableTest {
 			this.crypto = CryptoSupport.defaultCrypto();
 			this.storageKey = new Key(this.crypto);
 			this.key = crypto.makePrivateDHKey();
-			this.id = new DHTID(crypto.rng(crypto.hashLength()));
+			this.id = new DHTID(key.publicKey());
 			this.lookupIds = new LinkedList<>();
 		}
 		
@@ -61,7 +61,10 @@ public class DHTRoutingTableTest {
 	public DHTPeer makeTestPeer(DHTID id) {
 		byte[] seed = id.serialize();
 		byte[] pubKey = client.crypto.prng(seed).getBytes(client.crypto.asymPublicDHKeySize());
-		DHTPeer peer = new DHTPeer(client, "10.0.0."+(client.crypto.prng(seed).getInt()%256), (client.crypto.prng(seed).getInt()%65536), pubKey);
+		DHTPeer peer = new DHTPeer(client,
+				"10.0.0."+(client.crypto.prng(seed).getInt()%256),
+				(client.crypto.prng(seed).getInt()%65536),
+				pubKey);
 		peer.id = id;
 		return peer;
 	}
@@ -211,7 +214,8 @@ public class DHTRoutingTableTest {
 	public void testClosestPeersReturnsPartialListIfTableIsSmallerThanRequestedSize() {
 		int numPeers = 16;
 		for(int i = 0; i < numPeers-1; i++) {
-			table.suggestPeer(makeTestPeer(table.buckets.get(i).randomIdInRange()));
+			// make sure to ignore bucket 0 since it always stays empty
+			table.suggestPeer(makeTestPeer(table.buckets.get(i+1).randomIdInRange()));
 		}
 		
 		DHTID id = new DHTID(client.crypto.rng(client.idLength()));
@@ -275,12 +279,21 @@ public class DHTRoutingTableTest {
 		assertFalse(table.buckets.get(bucketIdx).peers.contains(peer));
 	}
 	
+	
+	@Test
+	public void testSuggestPeerRejectsSelf() {
+		DHTPeer peer = new DHTPeer(client, "127.0.0.1", 0, table.client.getPublicKey());
+		table.suggestPeer(peer);
+		int bucketIdx = peer.id.xor(client.id).order()+1;
+		assertFalse(table.buckets.get(bucketIdx).peers.contains(peer));
+	}
+	
 	@Test
 	public void testAllPeersReturnsListOfPeersAcrossAllBuckets() {
-		int numPeers = table.buckets.size();
+		int numPeers = table.buckets.size() - 1;
 		ArrayList<DHTPeer> peers = new ArrayList<>(numPeers);
 		for(int i = 0; i < numPeers; i++) {
-			DHTPeer peer = makeTestPeer(table.buckets.get(i).randomIdInRange());
+			DHTPeer peer = makeTestPeer(table.buckets.get(i+1).randomIdInRange());
 			peers.add(peer);
 			table.suggestPeer(peers.get(i));
 		}
