@@ -44,17 +44,19 @@ public class RateLimitedOutputStream extends OutputStream {
 	
 	@Override
 	public void write(byte[] b, int off, int len) throws IOException {
-		int writeLen = (int) allocation.requestBytes(len);
-		output.write(b,  off,  writeLen);
-		monitor.observeTraffic(writeLen);
+		int written = 0;
+		while(written < len) {
+			int writeLen = (int) allocation.requestBytes(len - written);
+			output.write(b,  off + written, writeLen);
+			if(!allocator.isUnlimited()) flush(); // buffering weakens our control over bandwidth usage 
+			monitor.observeTraffic(writeLen);
+			written += writeLen;
+		}
 	}
 	
 	@Override
 	public void write(byte[] b) throws IOException {
-		int writeLen = (int) allocation.requestBytes(b.length);
-		output.write(b,  0,  writeLen);
-		if(!allocator.isUnlimited()) flush(); // buffering weakens our control over bandwidth usage 
-		monitor.observeTraffic(writeLen);
+		write(b, 0, b.length);
 	}
 
 	public BandwidthMonitor getMonitor() {
