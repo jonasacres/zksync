@@ -246,11 +246,12 @@ public class TCPPeerSocket extends PeerSocket {
 		if(remainingReadData != null && remainingReadData.hasRemaining()) {
 			int readLen = Math.min(length, remainingReadData.remaining());
 			remainingReadData.get(data, offset, readLen);
-			logger.trace("Swarm {} {}:{}: read {} bytes from existing buffer",
+			logger.trace("Swarm {} {}:{}: read {} bytes from existing buffer, {} remaining",
 					Util.bytesToHex(swarm.config.getArchiveId(), 8),
 					address,
 					socket.getPort(),
-					readLen);
+					readLen,
+					remainingReadData.remaining());
 			if(readLen == length) return readLen;
 			
 			// TODO API: (coverage) branch coverage
@@ -273,12 +274,13 @@ public class TCPPeerSocket extends PeerSocket {
 		int readLen = Math.min(length, remainingReadData.remaining());
 		remainingReadData.get(data, totalRead + offset, readLen);
 		totalRead += readLen;
-		logger.trace("Swarm {} {}:{}: read {} bytes from new buffer, {} total",
+		logger.trace("Swarm {} {}:{}: read {} bytes from new buffer, {} total read, {} remaining in buffer",
 				Util.bytesToHex(swarm.config.getArchiveId(), 8),
 				address,
 				socket.getPort(),
 				readLen,
-				totalRead);
+				totalRead,
+				remainingReadData.remaining());
 		return totalRead;
 	}
 	
