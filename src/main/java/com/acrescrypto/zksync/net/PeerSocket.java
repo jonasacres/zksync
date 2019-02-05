@@ -70,7 +70,10 @@ public abstract class PeerSocket {
 	/** Immediately close socket and blacklist due to a clear protocol violation. 
 	 * @throws IOException */
 	public void violation() {
-		logger.warn("Logging violation for peer {}", getAddress());
+		logger.warn("Swarm {} {}:{}: logging protocol violation",
+				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				getAddress(),
+				getPort());
 		try {
 			close();
 			swarm.config.getAccessor().getMaster().getBlacklist().add(getAddress(), Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
@@ -150,7 +153,11 @@ public abstract class PeerSocket {
 	/** Handle some sort of I/O exception */
 	protected void ioexception(IOException exc) {
 		/* These are probably our fault. There is the possibility that they are caused by malicious actors. */
-		logger.warn("Socket for peer {} caught IOException", getAddress(), exc);
+		logger.debug("Swarm {} {}:{}: caught IOException",
+				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				getAddress(),
+				getPort(),
+				exc);
 		try {
 			close();
 		} catch (IOException e) {
@@ -280,6 +287,10 @@ public abstract class PeerSocket {
 			} else { // pruned message
 				if(maxReceivedMessageId == Integer.MAX_VALUE) {
 					// we can accept no new messages since we've exceeded the limits of the 32-bit ID field; close and force a reconnect
+					logger.debug("Swarm {} {}:{}: terminating connection due to maximum message count being reached",
+							Util.bytesToHex(swarm.config.getArchiveId(), 8),
+							getAddress(),
+							getPort());
 					close();
 				}
 				
