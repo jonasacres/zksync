@@ -108,7 +108,22 @@ public class DHTPeer implements Sendable {
 					break;
 				case 1: // record list item
 					try {
-						recordCallback.receivedRecord(client.deserializeRecord(null, buf));
+						int offset = buf.position();
+						DHTRecord record = client.deserializeRecord(null, buf);
+						
+						try {
+							/* It's possible on small networks that someone will have to store their own
+							 * advertisement. If this is the case, they'll fill 127.0.0.1 into their host
+							 * field, which is unhelpful... but since they can be on a NAT, they might not
+							 * know their own IP. Let's detect this problem and fill in the IP if needed. 
+							 */
+							buf.position(offset);
+							if(record.asAd().asTcp().getHost().equals("127.0.0.1")) {
+								record = client.deserializeRecord(resp.peer, buf);
+							}
+						} catch(Exception exc) {}
+						
+						recordCallback.receivedRecord(record);
 						if(buf.position() != expectedPos) throw new UnsupportedProtocolException();
 					} catch (UnsupportedProtocolException e) {
 						buf.position(expectedPos);

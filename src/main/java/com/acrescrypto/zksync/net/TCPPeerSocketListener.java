@@ -224,7 +224,7 @@ public class TCPPeerSocketListener {
 				UPnP.openPortTCP(listenSocket.getLocalPort());
 			}
 			
-			logger.info("Swarm: Listening on TCP port {} with public key #{}",
+			logger.info("Swarm: Listening on TCP port {} with public key {}",
 					listenSocket.getLocalPort(),
 					Util.bytesToHex(identityKey.publicKey().getBytes()));
 			master.getGlobalConfig().set("net.swarm.lastport", listenSocket.getLocalPort());
