@@ -228,13 +228,23 @@ public abstract class PeerSocket {
 							Util.bytesToHex(swarm.config.getArchiveId(), 8),
 							getAddress(),
 							getPort(),
-							exc);					violation();
+							exc);
+					violation();
 				} catch(SocketException|EOFException exc) { // socket closed; just ignore it
 					logger.debug("Swarm {} {}:{}: socket closed",
 							Util.bytesToHex(swarm.config.getArchiveId(), 8),
 							getAddress(),
 							getPort(),
 							exc);
+					try {
+						close();
+					} catch (IOException exc2) {
+						logger.debug("Swarm {} {}:{}: encountered exception closing socket {}",
+								Util.bytesToHex(swarm.config.getArchiveId(), 8),
+								getAddress(),
+								getPort(),
+								exc2);
+					}
 				} catch(Exception exc) {					
 					logger.debug("Swarm {} {}:{}: caught exception in socket receive thread",
 							Util.bytesToHex(swarm.config.getArchiveId(), 8),
