@@ -112,6 +112,10 @@ public class ZKFSManager {
 				&& !fs.baseRevision.equals(latest)
 				&& isDescendent) {
 			try {
+				logger.info("FS: Automatically rebasing archive {} to new revtag {} from {}",
+						Util.bytesToHex(fs.getArchive().getConfig().getArchiveId(), 8),
+						Util.bytesToHex(latest.getBytes(), 8),
+						Util.bytesToHex(fs.getBaseRevision().getBytes(), 8));
 				fs.rebase(latest);
 				if(mirror != null) {
 					mirror.syncArchiveToTarget();

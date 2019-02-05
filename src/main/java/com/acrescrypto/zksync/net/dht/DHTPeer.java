@@ -129,7 +129,7 @@ public class DHTPeer implements Sendable {
 	
 	public void addRecord(DHTID recordId, Key lookupKey, DHTRecord record) {
 		logger.info("DHT: Adding record with ID {} to {}:{}",
-				Util.bytesToHex(recordId.rawId),
+				Util.bytesToHex(recordId.rawId, 8),
 				address,
 				port);
 		client.addRecordMessage(this, recordId, lookupKey, record, null).send();

@@ -177,7 +177,7 @@ public class DHTRecordStore {
 				
 				logger.info("Added record from {} for ID {}; {} records for ID, {} ids in store",
 						record.routingInfo(),
-						Util.bytesToHex(id.rawId),
+						Util.bytesToHex(id.rawId, 8),
 						entriesForId.size(),
 						entriesById.size());
 

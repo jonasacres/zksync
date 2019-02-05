@@ -479,8 +479,12 @@ public class PeerConnection {
 			msg.rxBuf.get(revTagRaw);
 			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw, true);
 			try {
+				logger.debug("Considering revtag {} from {}:{}",
+						String.format("%08x", revTag.getShortHash()),
+						socket.address,
+						socket.getPort());
 				if(socket.swarm.config.getRevisionList().addBranchTip(revTag)) {
-					logger.info("Received new revTag {} from {}:{}",
+					logger.info("Adopted new revTag {} from {}:{}",
 							String.format("%08x", revTag.getShortHash()),
 							socket.address,
 							socket.getPort());

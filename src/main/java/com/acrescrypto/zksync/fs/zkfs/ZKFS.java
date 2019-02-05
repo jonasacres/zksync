@@ -51,6 +51,9 @@ public class ZKFS extends FS {
 		
 		baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
 		dirty = false;
+		logger.info("FS: Archive {} created revtag {}",
+				Util.bytesToHex(archive.getConfig().getArchiveId(), 8),
+				Util.bytesToHex(baseRevision.getBytes(), 8));
 		return baseRevision;
 	}
 	
@@ -393,9 +396,10 @@ public class ZKFS extends FS {
 	}
 
 	public void rebase(RevisionTag revision) throws IOException {
-		logger.info("FS: Rebasing archive {} to revision {}",
-				Util.bytesToHex(revision.config.getArchiveId()),
-				Util.bytesToHex(revision.getBytes()));
+		logger.info("FS: Rebasing archive {} to revision {} from {}",
+				Util.bytesToHex(revision.config.getArchiveId(), 8),
+				Util.bytesToHex(revision.getBytes(), 8),
+				baseRevision != null ? Util.bytesToHex(baseRevision.getBytes(), 8) : "null");
 		this.archive = revision.getArchive();
 		this.directoriesByPath = new HashCache<String,ZKDirectory>(128, (String path) -> {
 			assertPathIsDirectory(path);

@@ -63,6 +63,10 @@ public class RevisionList {
 		if(config.revisionTree.isSuperceded(newBranch)) return false;
 		
 		synchronized(this) {
+			if(config.revisionTree.isSuperceded(newBranch)) return false;
+			logger.info("FS: Adding branch tip {} to archive {} revision list",
+					Util.bytesToHex(newBranch.getBytes(), 8),
+					Util.bytesToHex(config.getArchiveId(), 8));
 			if(branchTips.contains(newBranch)) return false;
 			branchTips.add(newBranch);
 			config.swarm.announceTip(newBranch);
@@ -77,7 +81,7 @@ public class RevisionList {
 			try {
 				queueAutomerge();
 			} catch (DiffResolutionException exc) {
-				logger.error("Unable to automerge with new branch " + newBranch + ": ", exc);
+				logger.error("FS: Unable to automerge with new branch " + newBranch + ": ", exc);
 			}
 		}
 		
@@ -135,6 +139,9 @@ public class RevisionList {
 	}
 	
 	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
+		logger.info("FS: Removed branch tip {} from archive {}",
+				Util.bytesToHex(oldBranch.getBytes(), 8),
+				Util.bytesToHex(config.getArchiveId(), 8));
 		branchTips.remove(oldBranch);
 		if(latest != null && latest.equals(oldBranch)) recalculateLatest();
 	}
@@ -174,7 +181,7 @@ public class RevisionList {
 				branchTips.add(revTag);
 				updateLatest(revTag);
 			} catch (SecurityException exc) {
-				logger.error("Invalid signature on stored revision tag; skipping", exc);
+				logger.error("FS: Invalid signature on stored revision tag; skipping", exc);
 			}
 		}
 		
@@ -218,14 +225,22 @@ public class RevisionList {
 	
 	protected void updateLatest(RevisionTag newTip) {
 		if(latest == null || newTip.compareTo(latest) > 0) {
+			logger.info("FS: New latest revtag {} for archive {}, was {}",
+					Util.bytesToHex(newTip.getBytes(), 8),
+					Util.bytesToHex(config.getArchiveId(), 8),
+					latest != null ? Util.bytesToHex(latest.getBytes(), 8) : "null");
 			latest = newTip;
-		}		
+		}
 	}
 	
 	protected void recalculateLatest() {
 		latest = null;
 		for(RevisionTag tip : branchTips) {
 			if(latest == null || tip.compareTo(latest) > 0) {
+				logger.info("FS: Recalculated latest revtag {} for archive {}, was {}",
+						Util.bytesToHex(tip.getBytes(), 8),
+						Util.bytesToHex(config.getArchiveId(), 8),
+						latest != null ? Util.bytesToHex(latest.getBytes(), 8) : "null");
 				latest = tip;
 			}
 		}
