@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateSigningKey;
@@ -59,6 +62,7 @@ public class ZKArchiveConfig {
 	protected RevisionList revisionList;
 	protected RevisionTree revisionTree;
 	protected boolean advertising;
+	protected Logger logger = LoggerFactory.getLogger(ZKArchiveConfig.class);
 	
 	public static byte[] decryptArchiveId(ArchiveAccessor accessor, byte[] iv, byte[] encryptedArchiveId) {
 		Key key = accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-dht-ad-fsid");
@@ -606,6 +610,8 @@ public class ZKArchiveConfig {
 	}
 
 	public void close() {
+		logger.info("FS {}: Closing archive",
+				Util.bytesToHex(archiveId, 8));
 		swarm.close();
 		stopAdvertising();
 	}

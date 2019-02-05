@@ -25,6 +25,7 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
+import com.acrescrypto.zksync.utility.Util;
 
 import static java.nio.file.StandardWatchEventKinds.*;
 
@@ -77,13 +78,17 @@ public class FSMirror {
 		incrementActive();
 		HashMap<WatchKey, Path> pathsByKey = new HashMap<>();
 		watchDirectory(dir, watcher, pathsByKey);
-		logger.info("FSMirror: Starting watch of {}", localTarget.getRoot());
+		logger.info("FS {}: Starting watch of {}",
+				Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+				localTarget.getRoot());
 
 		new Thread( () -> watchThread(flag, watcher, pathsByKey) ).start();
 	}
 
 	public void stopWatch() {
-		logger.info("FSMirror: Stopping watch of {}", ((LocalFS) target).getRoot());
+		logger.info("FS {}: Stopping watch of {}",
+				Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+				((LocalFS) target).getRoot());
 		watchFlag.setFalse();
 	}
 
@@ -122,7 +127,9 @@ public class FSMirror {
 			watcher.close();
 			decrementActive();
 		} catch (IOException exc) {
-			logger.error("FSMirror: Unable to close watcher", exc);
+			logger.error("FS {}: FSMirror unable to close watcher",
+					Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+					exc);
 		}
 	}
 	
@@ -136,7 +143,8 @@ public class FSMirror {
 				for(WatchEvent<?> event : key.pollEvents()) {
 					WatchEvent.Kind<?> kind = event.kind();
 					if(kind == OVERFLOW) {
-						logger.warn("FSMirror: Caught overflow; some local filesystem changes may not have made it into the archive.");
+						logger.warn("FS {}: Caught overflow; some local filesystem changes may not have made it into the archive.",
+								Util.bytesToHex(zkfs.archive.config.archiveId, 8));
 						continue;
 					}
 
@@ -161,11 +169,15 @@ public class FSMirror {
 					} catch(ENOENTException|CommandFailedException exc) {
 						// ignore it; the file was deleted from underneath us
 					} catch(IOException exc) {
-						logger.error("FSMirror: Caught exception mirroring local FS", exc);
+						logger.error("FS {}: FSMirror caught exception mirroring local FS",
+								Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+								exc);
 					}
 				}
 			} catch(Exception exc) {
-				logger.error("FSMirror: mirror thread caught exception", exc);
+				logger.error("FS {}: FSMirror mirror thread caught exception",
+						Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+						exc);
 			} finally {
 				if(!key.reset()) return false;
 			}
@@ -260,9 +272,15 @@ public class FSMirror {
 			try {
 				copy(zkfs, target, path);
 			} catch(IOException exc) {
-				logger.warn("FSMirror: Caught exception copying path to target: " + path, exc);
+				logger.warn("FS {}: FSMirror caught exception copying path to target: {}",
+						Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+						path,
+						exc);
 			} catch(UnsupportedOperationException exc) {
-				logger.info("FSMirror: Skipping path due to lack of local support (maybe we need superuser?): " + path, exc);
+				logger.info("FS {}: FSMirror skipping path due to lack of local support (maybe we need superuser?): {}",
+						Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+						path,
+						exc);
 			}
 		} else if(incoming == null) {
 			try {
@@ -284,9 +302,13 @@ public class FSMirror {
 			} catch(ENOENTException exc) {}
 			
 			if(src == zkfs) {
-				logger.debug("FS: {} sync zkfs -> target", path);
+				logger.debug("FS {}: {} sync zkfs -> target",
+						Util.bytesToHex(zkfs.getArchive().getConfig().archiveId, 8),
+						path);
 			} else {
-				logger.debug("FS: {} sync target -> zkfs", path);
+				logger.debug("FS {}: {} sync target -> zkfs",
+						Util.bytesToHex(zkfs.getArchive().getConfig().archiveId, 8),
+						path);
 			}
 
 			if(srcStat.isRegularFile()) {

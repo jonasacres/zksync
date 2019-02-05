@@ -73,12 +73,17 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public void ping() {
-		logger.debug("DHT: Send " + address + ":" + port + " -- ping");
+		logger.debug("DHT {}:{}: send ping",
+				address,
+				port);
 		client.pingMessage(this, null).send();
 	}
 	
 	public void findNode(DHTID nodeId, Key lookupKey, DHTFindNodePeerCallback peerCallback, DHTFindNodeRecordCallback recordCallback) {
-		logger.debug("DHT: Send " + address + ":" + port + " -- findNode " + Util.bytesToHex(nodeId.rawId));
+		logger.debug("DHT {}:{}: send findNode {} {}",
+				address,
+				port,
+				Util.bytesToHex(nodeId.rawId));
 		client.findNodeMessage(this, nodeId, lookupKey, (resp)->{
 			ArrayList<DHTPeer> receivedPeers = new ArrayList<>();
 			this.remoteAuthTag = resp.authTag;
@@ -128,10 +133,10 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public void addRecord(DHTID recordId, Key lookupKey, DHTRecord record) {
-		logger.info("DHT: Adding record with ID {} to {}:{}",
-				Util.bytesToHex(recordId.rawId, 8),
+		logger.info("DHT {}:{}: send addRecord {}",
 				address,
-				port);
+				port,
+				Util.bytesToHex(recordId.rawId, 8));
 		client.addRecordMessage(this, recordId, lookupKey, record, null).send();
 	}
 	

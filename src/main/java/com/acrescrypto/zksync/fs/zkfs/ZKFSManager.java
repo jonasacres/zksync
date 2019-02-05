@@ -112,7 +112,7 @@ public class ZKFSManager {
 				&& !fs.baseRevision.equals(latest)
 				&& isDescendent) {
 			try {
-				logger.info("FS: Automatically rebasing archive {} to new revtag {} from {}",
+				logger.info("FS {}: Automatically rebasing to new revtag {} from {}",
 						Util.bytesToHex(fs.getArchive().getConfig().getArchiveId(), 8),
 						Util.bytesToHex(latest.getBytes(), 8),
 						Util.bytesToHex(fs.getBaseRevision().getBytes(), 8));
@@ -121,7 +121,9 @@ public class ZKFSManager {
 					mirror.syncArchiveToTarget();
 				}
 			} catch (IOException exc) {
-				logger.error("Unable to rebase to revtag", exc);
+				logger.error("FS {}: Unable to rebase to revtag",
+						Util.bytesToHex(fs.getArchive().getConfig().getArchiveId(), 8),
+						exc);
 			}
 		}
 	}
@@ -185,7 +187,9 @@ public class ZKFSManager {
 				
 				setupAutocommitTimer();
 			} catch (IOException exc) {
-				logger.error("IOException performing autocommit", exc);
+				logger.error("FS {}: IOException performing autocommit",
+						Util.bytesToHex(fs.getArchive().getConfig().getArchiveId(), 8),
+						exc);
 			}
 		});
 	}
@@ -256,7 +260,9 @@ public class ZKFSManager {
 		try {
 			write();
 		} catch(IOException exc) {
-			logger.error("Unable to write ZKFSManager file", exc);
+			logger.error("FS {}: Unable to write ZKFSManager file",
+					Util.bytesToHex(fs.getArchive().getConfig().getArchiveId(), 8),
+					exc);
 		}
 	}
 	

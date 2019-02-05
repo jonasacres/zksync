@@ -64,9 +64,9 @@ public class RevisionList {
 		
 		synchronized(this) {
 			if(config.revisionTree.isSuperceded(newBranch)) return false;
-			logger.info("FS: Adding branch tip {} to archive {} revision list",
-					Util.bytesToHex(newBranch.getBytes(), 8),
-					Util.bytesToHex(config.getArchiveId(), 8));
+			logger.info("FS {}: Adding branch tip {} to revision list",
+					Util.bytesToHex(config.archiveId, 8),
+					Util.bytesToHex(newBranch.getBytes(), 8));
 			if(branchTips.contains(newBranch)) return false;
 			branchTips.add(newBranch);
 			config.swarm.announceTip(newBranch);
@@ -81,7 +81,10 @@ public class RevisionList {
 			try {
 				queueAutomerge();
 			} catch (DiffResolutionException exc) {
-				logger.error("FS: Unable to automerge with new branch " + newBranch + ": ", exc);
+				logger.error("FS {}: Unable to automerge with new branch {}: ",
+						Util.bytesToHex(config.archiveId, 8),
+						newBranch,
+						exc);
 			}
 		}
 		
@@ -139,7 +142,8 @@ public class RevisionList {
 	}
 	
 	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
-		logger.info("FS: Removed branch tip {} from archive {}",
+		logger.info("FS {}: Removed branch tip {}",
+				Util.bytesToHex(config.archiveId, 8),
 				Util.bytesToHex(oldBranch.getBytes(), 8),
 				Util.bytesToHex(config.getArchiveId(), 8));
 		branchTips.remove(oldBranch);
@@ -181,7 +185,9 @@ public class RevisionList {
 				branchTips.add(revTag);
 				updateLatest(revTag);
 			} catch (SecurityException exc) {
-				logger.error("FS: Invalid signature on stored revision tag; skipping", exc);
+				logger.error("FS {}: Invalid signature on stored revision tag; skipping",
+						Util.bytesToHex(config.archiveId, 8),
+						exc);
 			}
 		}
 		
@@ -225,9 +231,9 @@ public class RevisionList {
 	
 	protected void updateLatest(RevisionTag newTip) {
 		if(latest == null || newTip.compareTo(latest) > 0) {
-			logger.info("FS: New latest revtag {} for archive {}, was {}",
+			logger.info("FS {}: New latest revtag {}, was {}",
+					Util.bytesToHex(config.archiveId, 8),
 					Util.bytesToHex(newTip.getBytes(), 8),
-					Util.bytesToHex(config.getArchiveId(), 8),
 					latest != null ? Util.bytesToHex(latest.getBytes(), 8) : "null");
 			latest = newTip;
 		}
@@ -237,9 +243,9 @@ public class RevisionList {
 		latest = null;
 		for(RevisionTag tip : branchTips) {
 			if(latest == null || tip.compareTo(latest) > 0) {
-				logger.info("FS: Recalculated latest revtag {} for archive {}, was {}",
+				logger.info("FS {}: Recalculated latest revtag {}, was {}",
+						Util.bytesToHex(config.archiveId, 8),
 						Util.bytesToHex(tip.getBytes(), 8),
-						Util.bytesToHex(config.getArchiveId(), 8),
 						latest != null ? Util.bytesToHex(latest.getBytes(), 8) : "null");
 				latest = tip;
 			}

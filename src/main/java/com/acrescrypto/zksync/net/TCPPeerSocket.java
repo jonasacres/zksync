@@ -83,10 +83,10 @@ public class TCPPeerSocket extends PeerSocket {
 		swarm.openedConnection(new PeerConnection(this));
 		makeThreads();
 		
-		logger.debug("Swarm: received connection from {}:{}",
+		logger.debug("Swarm {} {}:{}: received connection",
+				Util.bytesToHex(swarm.config.getArchiveId(), 8),
 				this.address,
-				socket.getPort(),
-				this.address);
+				socket.getPort());
 	}
 	
 	public TCPPeerSocket(PeerSwarm swarm, TCPPeerAdvertisement ad) throws IOException, BlacklistedException {
@@ -113,7 +113,9 @@ public class TCPPeerSocket extends PeerSocket {
 	protected void connect(PeerConnection connection) throws IOException {
 		String effectiveHost = ad.host;
 		if(effectiveHost.equals("127.0.0.1") && ad.getSenderHost() != null) {
-			logger.info("Swarm: Overriding ad from {} to {}",
+			logger.info("Swarm {} {}:{}: Overriding ad from {} to {}",
+					Util.bytesToHex(swarm.config.getArchiveId(), 8),
+					this.address,
 					ad.host,
 					effectiveHost);
 		}
@@ -121,10 +123,11 @@ public class TCPPeerSocket extends PeerSocket {
 		this.socket = new Socket(ad.host, ad.port);
 		this.address = socket.getInetAddress().getHostAddress();
 		makeStreams();
-		logger.debug("Swarm: connecting to ad {}:{} ({})",
-				effectiveHost,
+		logger.debug("Swarm {} {}:{}: connecting to ad (host={})",
+				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				this.address,
 				ad.port,
-				this.address);
+				effectiveHost);
 	}
 	
 	protected TCPPeerSocket(PeerSwarm swarm) throws IOException {
@@ -211,7 +214,8 @@ public class TCPPeerSocket extends PeerSocket {
 		}
 		
 		this.sharedSecret = handshake.getHash();
-		logger.debug("Swarm: completed handshake with {}:{}",
+		logger.debug("Swarm {} {}:{}: completed handshake",
+				Util.bytesToHex(swarm.config.getArchiveId(), 8),
 				address,
 				socket.getPort());
 	}
@@ -221,10 +225,11 @@ public class TCPPeerSocket extends PeerSocket {
 		ByteBuffer buf = ByteBuffer.wrap(data, offset, length);
 		
 		while(buf.hasRemaining()) {
-			logger.trace("Swarm: sending {} bytes to {}:{}",
-					length,
-					socket.getInetAddress().getHostAddress(),
-					socket.getPort());
+			logger.trace("Swarm {} {}:{}: sending {} bytes",
+					Util.bytesToHex(swarm.config.getArchiveId(), 8),
+					address,
+					socket.getPort(),
+					length);
 			int writeLen = Math.min(buf.remaining(), MAX_MSG_LEN);
 			byte[] ciphertext = writeState.encryptWithAssociatedData(null, buf.array(), buf.position(), writeLen);
 			buf.position(buf.position() + writeLen);
@@ -252,10 +257,11 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		int obfMsgLen = lenBuf.getShort();
 		int msgLen = sip.read().obfuscate2(obfMsgLen);
-		logger.trace("Swarm: receiving {} bytes from {}:{}",
-				msgLen,
-				socket.getInetAddress().getHostAddress(),
-				socket.getPort());
+		logger.trace("Swarm {} {}:{}: receiving {} bytes",
+				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				address,
+				socket.getPort(),
+				msgLen);
 		assertState(0 < msgLen && msgLen <= MAX_MSG_LEN + crypto.symBlockSize() + crypto.symTagLength());
 		
 		byte[] ciphertext = new byte[msgLen];

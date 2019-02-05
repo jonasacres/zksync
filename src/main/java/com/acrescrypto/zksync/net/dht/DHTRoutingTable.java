@@ -116,17 +116,20 @@ public class DHTRoutingTable {
 		if(bucket.hasCapacity()) {
 			bucket.add(insertablePeer, lastSeen);
 			allPeers.add(insertablePeer);
-			logger.info("Added peer {}:{}, table has {} peers",
+			logger.info("DHT {}:{}: Added peer to routing table, table has {} peers",
 					peer.address,
 					peer.port,
 					allPeers.size());
 			try {
 				write();
 			} catch (IOException exc) {
-				logger.error("Encountered exception writing routing table after receiving new peer", exc);
+				logger.error("DHT {}:{} Encountered exception writing routing table after receiving new peer",
+						peer.address,
+						peer.port,
+						exc);
 			}
 		} else {
-			logger.debug("DHT: Relevant bucket too full for peer {}:{}; ignoring",
+			logger.debug("DHT {}:{}: Relevant bucket too full for peer; ignoring",
 					peer.address,
 					peer.port);
 		}
@@ -151,7 +154,7 @@ public class DHTRoutingTable {
 	
 	protected void removedPeer(DHTPeer peer) {
 		allPeers.remove(peer);
-		logger.info("DHT: Removed peer {}:{} key={}, table has {} peers",
+		logger.info("DHT {}:{}: Removed peer, key={}, table has {} peers",
 				peer.address,
 				peer.port,
 				Util.bytesToHex(peer.key.getBytes()),
@@ -168,9 +171,9 @@ public class DHTRoutingTable {
 				}
 			} catch(Exception exc) {
 				if(closed) {
-					logger.info("DHT routing table freshen thread encountered exception after close", exc);
+					logger.info("DHT -: routing table freshen thread encountered exception after close", exc);
 				} else {
-					logger.error("DHT routing table freshen thread encountered exception", exc);
+					logger.error("DHT -: routing table freshen thread encountered exception", exc);
 				}
 			}
 		}

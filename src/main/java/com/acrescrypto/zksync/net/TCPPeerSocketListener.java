@@ -69,7 +69,7 @@ public class TCPPeerSocketListener {
 		this.bandwidthMonitorRx = new BandwidthMonitor(master.getBandwidthMonitorRx());
 		this.bandwidthMonitorTx = new BandwidthMonitor(master.getBandwidthMonitorTx());
 		
-		logger.info("Swarm: TCP listener public key: {}",
+		logger.info("Swarm - {}: TCP listener public key: {}",
 				Util.bytesToHex(identityKey.getBytes()));
 	}
 	
@@ -175,11 +175,11 @@ public class TCPPeerSocketListener {
 				}
 			} catch(Exception exc) {
 				if(closed || oldSocket != listenSocket || listenSocket.isClosed()) {
-					logger.info("Swarm: Closed TCP socket on port {}", listenSocket.getLocalPort());
+					logger.info("Swarm - -: Closed TCP socket on port {}", listenSocket.getLocalPort());
 					break;
 				}
 				
-				logger.error("Swarm: TCP listen thread on port " + port + " caught exception", exc);
+				logger.error("Swarm - -: TCP listen thread on port " + port + " caught exception", exc);
 			}
 		}
 	}
@@ -196,12 +196,12 @@ public class TCPPeerSocketListener {
 	
 	protected void processIncomingPeer(Socket socket) throws IOException {
 		if(blacklist.contains(socket.getInetAddress().getHostAddress())) {
-			logger.info("Swarm: Rejected connection from blacklisted peer {}", socket.getInetAddress().getHostAddress());
+			logger.info("Swarm - {}: Rejected connection from blacklisted peer", socket.getInetAddress().getHostAddress());
 			socket.close();
 			return;
 		}
 		
-		logger.debug("Swarm: Accepted TCP connection from peer {}",
+		logger.debug("Swarm - {}: Accepted TCP connection from peer",
 				socket.getInetAddress().getHostAddress());
 		new Thread(master.getThreadGroup(), ()->peerThread(socket) ).start();
 	}
@@ -210,7 +210,7 @@ public class TCPPeerSocketListener {
 		int lastPort = master.getGlobalConfig().getInt("net.swarm.lastport");
 		int requestPort = master.getGlobalConfig().getInt("net.swarm.port");
 		if(lastPort != 0 && port == 0) {
-			logger.debug("Swarm: Attempting to require previously-bound TCP port {}", lastPort);
+			logger.debug("Swarm - -: Attempting to require previously-bound TCP port {}", lastPort);
 			requestPort = lastPort;
 		}
 		
@@ -224,21 +224,21 @@ public class TCPPeerSocketListener {
 				UPnP.openPortTCP(listenSocket.getLocalPort());
 			}
 			
-			logger.info("Swarm: Listening on TCP port {} with public key {}",
+			logger.info("Swarm - -: Listening on TCP port {} with public key {}",
 					listenSocket.getLocalPort(),
 					Util.bytesToHex(identityKey.publicKey().getBytes()));
 			master.getGlobalConfig().set("net.swarm.lastport", listenSocket.getLocalPort());
 			rebind();
 		} catch(IOException exc) {
 			if(port == 0 && requestPort != 0) {
-				logger.warn("Swarm: Unable to re-acquire TCP port {}, requesting new port number...", requestPort, exc);
+				logger.warn("Swarm - -: Unable to re-acquire TCP port {}, requesting new port number...", requestPort, exc);
 				master.getGlobalConfig().set("net.swarm.lastport", 0);
 			} else if(port == 0) {
-				logger.warn("Swarm: Caught exception requesting random port; waiting to retry...", exc);
+				logger.warn("Swarm - -: Caught exception requesting random port; waiting to retry...", exc);
 				try { Thread.sleep(1000); } catch(InterruptedException exc2) {}
 				return;
 			} else {
-				logger.warn("Swarm: Unable to acquire configured TCP port {}; re-requesting with same port number...",
+				logger.warn("Swarm - -: Unable to acquire configured TCP port {}; re-requesting with same port number...",
 						port);
 			}
 		}
@@ -255,22 +255,22 @@ public class TCPPeerSocketListener {
 		try {
 			performResponderHandshake(peerSocketRaw);
 		} catch(EOFException exc) {
-			logger.debug("Swarm: Peer {} disconnected during handshake; possibly a reachability probe.",
+			logger.debug("Swarm - {}: Peer disconnected during handshake; possibly a reachability probe.",
 					peerSocketRaw.getInetAddress().getHostAddress());
 		} catch(ProtocolViolationException exc) {
-			logger.info("Swarm: Peer {} sent illegal handshake", peerSocketRaw.getInetAddress().getHostAddress(), exc);
+			logger.info("Swarm - {}: Peer sent illegal handshake", peerSocketRaw.getInetAddress().getHostAddress(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(IOException exc) {
-			logger.info("Swarm: Caught IOException on connection to peer {}", peerSocketRaw.getInetAddress().getHostAddress(), exc);
+			logger.info("Swarm - {}: Caught IOException on connection to peer", peerSocketRaw.getInetAddress().getHostAddress(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(SecurityException exc) {
-			logger.info("Swarm: Unable to handshake with peer {}", peerSocketRaw.getInetAddress().getHostAddress(), exc);
+			logger.info("Swarm - {}: Unable to handshake with peer", peerSocketRaw.getInetAddress().getHostAddress(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(Exception exc) {
-			logger.error("Swarm: Caught unexpected exception on connection to peer {}", peerSocketRaw.getInetAddress().getHostAddress(), exc);
+			logger.error("Swarm - {}: Caught unexpected exception on connection to peer", peerSocketRaw.getInetAddress().getHostAddress(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		}

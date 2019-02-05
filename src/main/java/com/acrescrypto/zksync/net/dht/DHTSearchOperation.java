@@ -49,7 +49,7 @@ public class DHTSearchOperation {
 	
 	public synchronized void run() {
 		this.timeout = new SnoozeThread(searchQueryTimeoutMs, true, ()->peerCallback.searchOperationFinished(closestPeers));
-		logger.debug("DHT: Searching for id {}, routing table has {} peers",
+		logger.debug("DHT -: Searching for id {}, routing table has {} peers",
 				Util.bytesToHex(searchId.rawId),
 				client.routingTable.allPeers().size());
 		

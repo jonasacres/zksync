@@ -147,10 +147,10 @@ public class DHTMessage {
 		}
 		byte[] serialized = serialize(numPackets, sendBuf);
 		DatagramPacket packet = new DatagramPacket(serialized, serialized.length, address, peer.port);
-		logger.trace("DHT: sending {} bytes to {}:{}, cmd={}, flags=0x{}, msgId={}",
-				packet.getData().length,
+		logger.trace("DHT {}:{}: sending {} bytes, cmd={}, flags=0x{}, msgId={}",
 				packet.getAddress().getHostAddress(),
 				packet.getPort(),
+				packet.getData().length,
 				cmd,
 				String.format("%02x", flags),
 				msgId);
@@ -199,7 +199,7 @@ public class DHTMessage {
 			byte[] plaintext = key.decrypt(new byte[client.crypto.symIvLength()], serialized.array(), serialized.position(), serialized.remaining());
 			serialized = ByteBuffer.wrap(plaintext);
 		} catch(SecurityException exc) {
-			logger.warn("DHT: Cannot decrypt message from peer {}:{}",
+			logger.warn("DHT {}:{}: Cannot decrypt message from peer",
 					senderAddress,
 					senderPort,
 					exc);
