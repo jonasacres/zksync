@@ -242,13 +242,19 @@ public class TCPPeerSocket extends PeerSocket {
 	
 	@Override
 	public int read(byte[] data, int offset, int length) throws IOException, ProtocolViolationException {
+		int totalRead = 0;
 		if(remainingReadData != null && remainingReadData.hasRemaining()) {
 			int readLen = Math.min(length, remainingReadData.remaining());
 			remainingReadData.get(data, offset, readLen);
+			logger.trace("Swarm {} {}:{}: read {} bytes from existing buffer",
+					Util.bytesToHex(swarm.config.getArchiveId(), 8),
+					address,
+					socket.getPort(),
+					readLen);
 			if(readLen == length) return readLen;
 			
 			// TODO API: (coverage) branch coverage
-			offset += readLen;
+			totalRead += readLen;
 			length -= readLen;
 		}
 		
@@ -257,11 +263,6 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		int obfMsgLen = lenBuf.getShort();
 		int msgLen = sip.read().obfuscate2(obfMsgLen);
-		logger.trace("Swarm {} {}:{}: receiving {} bytes",
-				Util.bytesToHex(swarm.config.getArchiveId(), 8),
-				address,
-				socket.getPort(),
-				msgLen);
 		assertState(0 < msgLen && msgLen <= MAX_MSG_LEN + crypto.symBlockSize() + crypto.symTagLength());
 		
 		byte[] ciphertext = new byte[msgLen];
@@ -270,8 +271,15 @@ public class TCPPeerSocket extends PeerSocket {
 		byte[] plaintext = readState.decryptWithAssociatedData(new byte[0], ciphertext); 
 		remainingReadData = ByteBuffer.wrap(plaintext);
 		int readLen = Math.min(length, remainingReadData.remaining());
-		remainingReadData.get(data, offset, readLen);
-		return readLen;
+		remainingReadData.get(data, totalRead + offset, readLen);
+		totalRead += readLen;
+		logger.trace("Swarm {} {}:{}: read {} bytes from new buffer, {} total",
+				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				address,
+				socket.getPort(),
+				readLen,
+				totalRead);
+		return totalRead;
 	}
 	
 	@Override
@@ -282,6 +290,10 @@ public class TCPPeerSocket extends PeerSocket {
 	@Override
 	public void _close() throws IOException {
 		if(socket != null) {
+			logger.trace("Swarm {} {}:{}: closing socket",
+					Util.bytesToHex(swarm.config.getArchiveId(), 8),
+					address,
+					socket.getPort());
 			socket.close();
 		}
 
