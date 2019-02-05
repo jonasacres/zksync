@@ -8,6 +8,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public abstract class DHTRecord implements Sendable {
 	public final static byte RECORD_TYPE_ADVERTISEMENT = 0;
+	protected DHTPeer sender;
 	
 	public static DHTRecord deserializeRecordWithPeer(DHTPeer peer, ByteBuffer serialized) throws UnsupportedProtocolException {
 		int type = Util.unsignByte(serialized.get());
@@ -41,5 +42,16 @@ public abstract class DHTRecord implements Sendable {
 	
 	public DHTAdvertisementRecord asAd() {
 		return (DHTAdvertisementRecord) this;
+	}
+	
+	public void setSender(DHTPeer sender) {
+		this.sender = sender;
+		if(this instanceof DHTAdvertisementRecord) {
+			this.asAd().ad.setSenderHost(sender.getAddress());
+		}
+	}
+	
+	public DHTPeer getSender() {
+		return sender;
 	}
 }

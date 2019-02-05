@@ -26,7 +26,6 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
-import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -38,7 +37,6 @@ public class DHTPeerTest {
 		Key reqKey;
 		DHTRecord reqRecord;
 		DummyRoutingTable routingTable;
-		boolean useTcpAd;
 		
 		public DummyClient() {
 			this.crypto = DHTPeerTest.crypto;
@@ -79,13 +77,6 @@ public class DHTPeerTest {
 		
 		@Override
 		protected DHTRecord deserializeRecord(DHTPeer peer, ByteBuffer serialized) throws UnsupportedProtocolException {
-			if(useTcpAd) {
-				if(peer == null) {
-					return DHTRecord.deserializeRecord(crypto, serialized);
-				} else {
-					return DHTRecord.deserializeRecordWithPeer(peer, serialized);
-				}
-			}
 			return new DummyRecord(serialized);
 		}
 	}
@@ -531,37 +522,6 @@ public class DHTPeerTest {
 		assertFalse(callbackReceived.booleanValue());
 		client.msg.callback.responseReceived(makeResponse(new byte[0], true));
 		assertTrue(callbackReceived.booleanValue());
-	}	
-	
-	@Test
-	public void testFindNodeHandlerFillsInSenderIpIfAdHostIs127_0_0_1() throws ProtocolViolationException {
-		DHTPeer peer = makeTestPeer();
-		DHTID id = makeId();
-		Key lookupKey = new Key(crypto);
-		client.useTcpAd = true;
-		
-		TCPPeerAdvertisement tcp = new TCPPeerAdvertisement(
-				crypto.makePrivateDHKey().publicKey(),
-				"127.0.0.1",
-				0,
-				crypto.rng(crypto.hashLength()));
-		DHTAdvertisementRecord record = new DHTAdvertisementRecord(crypto, tcp);
-		
-		ByteBuffer response = ByteBuffer.allocate((1+2+record.serialize().length));
-		response.put((byte) 1);
-		response.putShort((short) record.serialize().length);
-		response.put(record.serialize());
-		
-		MutableBoolean satisfied = new MutableBoolean();
-		
-		peer.findNode(id, lookupKey, (results, isFinal)->{}, (received)->{
-			if(received == null) return;
-			assertEquals(peer.address, received.asAd().asTcp().getHost());
-			satisfied.setTrue();
-		});
-		
-		client.msg.callback.responseReceived(makeResponse(response.array()));
-		assertTrue(satisfied.booleanValue());
 	}	
 	
 	@Test

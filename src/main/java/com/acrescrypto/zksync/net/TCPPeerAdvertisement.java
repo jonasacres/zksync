@@ -179,6 +179,18 @@ public class TCPPeerAdvertisement extends PeerAdvertisement {
 	public void setHost(String host) {
 		this.host = host;
 	}
+	
+	@Override
+	public void setSenderHost(String senderHost) {
+		super.setSenderHost(senderHost);
+		if(ipAddress.equals("127.0.0.1") && senderHost != null) {
+			this.host = senderHost;
+			try {
+				resolve();
+			} catch (UnconnectableAdvertisementException e) {
+			}
+		}
+	}
 
 	@Override
 	public String routingInfo() {

@@ -679,7 +679,9 @@ public class DHTClient {
 		if(sender == null) {
 			return DHTRecord.deserializeRecord(crypto, serialized);
 		} else {
-			return DHTRecord.deserializeRecordWithPeer(sender, serialized);
+			DHTRecord record = DHTRecord.deserializeRecordWithPeer(sender, serialized);
+			record.setSender(sender);
+			return record;
 		}
 	}
 	

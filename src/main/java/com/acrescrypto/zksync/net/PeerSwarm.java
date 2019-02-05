@@ -351,9 +351,10 @@ public class PeerSwarm implements BlacklistCallback {
 						ad.routingInfo(),
 						Util.bytesToHex(config.getArchiveId()));
 			} catch(SocketException|SocketClosedException|EOFException exc) {
-				logger.info("Swarm: Caught network exception connecting to peer {} for archive {}",
+				logger.info("Swarm: Caught network exception connecting to peer {} for archive {}, peer key = {}",
 						ad.routingInfo(),
 						Util.bytesToHex(config.getArchiveId()),
+						Util.bytesToHex(ad.getPubKey().getBytes()),
 						exc);
 			} catch(Exception exc) {
 				logger.error("Swarm: Caught exception connecting to peer {} for archive {}",

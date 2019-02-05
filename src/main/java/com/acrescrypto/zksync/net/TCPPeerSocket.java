@@ -111,12 +111,18 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	protected void connect(PeerConnection connection) throws IOException {
+		String effectiveHost = ad.host;
+		if(effectiveHost.equals("127.0.0.1") && ad.getSenderHost() != null) {
+			logger.info("Swarm: Overriding ad from {} to {}",
+					ad.host,
+					effectiveHost);
+		}
 		this.connection = connection;
 		this.socket = new Socket(ad.host, ad.port);
 		this.address = socket.getInetAddress().getHostAddress();
 		makeStreams();
 		logger.debug("Swarm: connecting to ad {}:{} ({})",
-				ad.host,
+				effectiveHost,
 				ad.port,
 				this.address);
 	}
