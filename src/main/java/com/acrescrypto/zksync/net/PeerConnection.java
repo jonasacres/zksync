@@ -106,17 +106,16 @@ public class PeerConnection {
 			closed = true;
 		}
 		
-		logger.debug("Swarm {} {}:{}: Closing peer connection",
-				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
-				socket.getAddress(),
-				socket.getPort());
-		
 		if(queue != null) {
 			queue.close();
 		}
 		
 		try {
 			if(socket != null) {
+				logger.debug("Swarm {} {}:{}: Closing peer connection",
+						Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+						socket.getAddress(),
+						socket.getPort());
 				socket.close();
 			}
 		} catch(IOException exc) {

@@ -291,7 +291,7 @@ public class TCPPeerSocket extends PeerSocket {
 
 	@Override
 	public void _close() throws IOException {
-		if(socket != null) {
+		if(socket != null && !socket.isClosed()) {
 			logger.trace("Swarm {} {}:{}: closing socket",
 					Util.bytesToHex(swarm.config.getArchiveId(), 8),
 					address,
@@ -326,7 +326,7 @@ public class TCPPeerSocket extends PeerSocket {
 	
 	@Override
 	public int getPort() {
-		return socket.getPort();
+		return socket == null ? -1  :socket.getPort();
 	}
 	
 	@Override

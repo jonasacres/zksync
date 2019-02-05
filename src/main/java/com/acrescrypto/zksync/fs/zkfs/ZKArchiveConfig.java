@@ -96,6 +96,8 @@ public class ZKArchiveConfig {
 		return new ZKArchiveConfig(accessor, archiveId, finish, writeRoot);
 	}
 	
+	protected ZKArchiveConfig() {}
+	
 	/* Bootstrapping the archive is a mess of chicken-and-egg problems, especially where PeerSwarm is concerned.
 	 * So, we have the ability to defer finishing opening (i.e. reading the config file itself) while we solve those problems.
 	 * */

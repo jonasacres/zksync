@@ -21,9 +21,21 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerMessageOutgoingTest {
+	class DummyArchiveConfig extends ZKArchiveConfig {
+		public DummyArchiveConfig() {
+			this.archiveId = CryptoSupport.defaultCrypto().hash(Util.serializeInt(0));
+		}
+	}
+	class DummySwarm extends PeerSwarm {
+		public DummySwarm() {
+			this.config = new DummyArchiveConfig();
+		}
+	}
+	
 	class DummySocket extends PeerSocket {
 		MessageSegment received;
 		int messageId = 1234;
@@ -32,7 +44,10 @@ public class PeerMessageOutgoingTest {
 		
 		int total;
 		
-		public DummySocket() { super(null); }
+		public DummySocket() {
+			super(null);
+			this.swarm = new DummySwarm();
+		}
 		
 		@Override public PeerAdvertisement getAd() { return null; }
 		@Override public void write(byte[] data, int offset, int length) {}

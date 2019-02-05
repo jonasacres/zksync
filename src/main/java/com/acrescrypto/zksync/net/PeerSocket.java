@@ -60,8 +60,7 @@ public abstract class PeerSocket {
 	}
 	
 	public final void close() throws IOException {
-		if(isClosed()) return;
-		logger.warn("Swarm {} {}:{}: tidying up closed connection",
+		logger.trace("Swarm {} {}:{}: tidying up closed connection",
 				Util.bytesToHex(swarm.config.getArchiveId(), 8),
 				getAddress(),
 				getPort());		
