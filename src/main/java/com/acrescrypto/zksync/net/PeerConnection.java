@@ -115,7 +115,12 @@ public class PeerConnection {
 				socket.close();
 			}
 		} catch(IOException exc) {
-			logger.warn("Caught exception closing socket to address {}", socket.getAddress(), exc);
+			logger.warn("Swarm {} {}:{}: Caught exception closing socket",
+					Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+					socket.getAddress(),
+					socket.getPort(),
+					socket.getAddress(),
+					exc);
 		} finally {
 			if(socket != null && socket.swarm != null) {
 				socket.swarm.closedConnection(this);
@@ -131,6 +136,10 @@ public class PeerConnection {
 	 * Note that the alternative forms of announceTags do NOT automatically send pages to the remote peer at this time.
 	 */
 	public void announceTag(long shortTag) {
+		logger.trace("Swarm {} {}:{}: send announceTag",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		ByteBuffer tag = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
 		tag.putLong(shortTag);
 		send(CMD_ANNOUNCE_TAGS, tag.array());
@@ -150,11 +159,19 @@ public class PeerConnection {
 			// TODO API: (coverage) branch coverage
 			announceSelf(adListener.localAd());
 		} catch(UnconnectableAdvertisementException exc) {
-			logger.error("Unable to announce local ad", exc);
+			logger.error("Swarm {} {}:{}: Unable to announce local ad",
+					Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+					socket.getAddress(),
+					socket.getPort(),
+					exc);
 		}
 	}
 	
 	public void announceSelf(PeerAdvertisement ad) {
+		logger.trace("Swarm {} {}:{}: send announceSelfAd",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		byte[] serializedAd = ad.serialize();
 		ByteBuffer serialized = ByteBuffer.allocate(2+serializedAd.length);
 		assert(serializedAd.length <= Short.MAX_VALUE);
@@ -164,6 +181,10 @@ public class PeerConnection {
 	}
 	
 	public void announcePeer(PeerAdvertisement ad) {
+		logger.trace("Swarm {} {}:{}: send announcePeer",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		byte[] serializedAd = ad.serialize();
 		ByteBuffer serialized = ByteBuffer.allocate(2+serializedAd.length);
 		assert(serializedAd.length <= Short.MAX_VALUE);
@@ -173,6 +194,10 @@ public class PeerConnection {
 	}
 	
 	public void announcePeers(Collection<PeerAdvertisement> ads) {
+		logger.trace("Swarm {} {}:{}: send announcePeers",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		byte[][] serializations = new byte[ads.size()][];
 		int len = 0, idx = 0;
 		for(PeerAdvertisement ad : ads) {
@@ -192,6 +217,10 @@ public class PeerConnection {
 	}
 	
 	public void announceShortTags(Collection<Long> tags) {
+		logger.trace("Swarm {} {}:{}: send announceShortTags",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		ByteBuffer serialized = ByteBuffer.allocate(tags.size() * RefTag.REFTAG_SHORT_SIZE);
 		for(Long shortTag : tags) {
 			if(!serialized.hasRemaining()) break; // possible to add tags as we iterate
@@ -201,6 +230,10 @@ public class PeerConnection {
 	}
 	
 	public void announceTags(Collection<byte[]> tags) {
+		logger.trace("Swarm {} {}:{}: send announceTags",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		ByteBuffer serialized = ByteBuffer.allocate(tags.size() * RefTag.REFTAG_SHORT_SIZE);
 		for(byte[] tag : tags) {
 			if(!serialized.hasRemaining()) break; // possible to add tags as we iterate
@@ -220,10 +253,18 @@ public class PeerConnection {
 	}
 	
 	public void announceTip(RevisionTag tip) {
+		logger.trace("Swarm {} {}:{}: send announceTip",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		send(CMD_ANNOUNCE_TIPS, tip.getBytes());
 	}
 	
 	public void announceTips() throws IOException {
+		logger.trace("Swarm {} {}:{}: send announceTips",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		ZKArchive archive = socket.swarm.config.getArchive();
 		if(archive == null || archive.getConfig().getRevisionList() == null) {
 			send(CMD_ANNOUNCE_TIPS, new byte[0]);
@@ -240,6 +281,10 @@ public class PeerConnection {
 	}
 	
 	public void announceRevisionDetails(RevisionTag tag) {
+		logger.trace("Swarm {} {}:{}: send announceRevisionDetails",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		Collection<RevisionTag> parents = socket.swarm.config.getRevisionTree().parentsForTagLocal(tag);
 		if(parents == null) return;
 		
@@ -253,14 +298,26 @@ public class PeerConnection {
 	}
 	
 	public void requestAll() {
+		logger.trace("Swarm {} {}:{}: send requestAll",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		send(CMD_REQUEST_ALL, new byte[0]);
 	}
 	
 	public void requestAllCancel() {
+		logger.trace("Swarm {} {}:{}: send requestAllCancel",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		send(CMD_REQUEST_ALL_CANCEL, new byte[0]);
 	}
 	
 	public void requestPageTag(int priority, long shortTag) {
+		logger.trace("Swarm {} {}:{}: send requestPageTag",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		ByteBuffer buf = ByteBuffer.allocate(4+RefTag.REFTAG_SHORT_SIZE);
 		buf.putInt(priority);
 		buf.putLong(shortTag);
@@ -268,6 +325,10 @@ public class PeerConnection {
 	}
 
 	public void requestPageTags(int priority, Collection<Long> pageTags) {
+		logger.trace("Swarm {} {}:{}: send requestPageTags",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		if(pageTags.isEmpty()) return;
 		ByteBuffer pageTagsMerged = ByteBuffer.allocate(4+RefTag.REFTAG_SHORT_SIZE*pageTags.size());
 		pageTagsMerged.putInt(priority);
@@ -280,6 +341,10 @@ public class PeerConnection {
 	
 	/** Request encrypted files pertaining to a given inode (including page tree chunks). */
 	public void requestInodes(int priority, RevisionTag revTag, Collection<Long> inodeIds) throws PeerCapabilityException {
+		logger.trace("Swarm {} {}:{}: send requestInodes",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		if(inodeIds.isEmpty()) return;
 		assertPeerCapability(PEER_TYPE_FULL);
 		
@@ -294,6 +359,10 @@ public class PeerConnection {
 	}
 	
 	public void requestRevisionContents(int priority, Collection<RevisionTag> tips) throws PeerCapabilityException {
+		logger.trace("Swarm {} {}:{}: send requestRevisionContents",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		if(tips.isEmpty()) return;
 		assertPeerCapability(PEER_TYPE_FULL);
 		send(CMD_REQUEST_REVISION_CONTENTS, serializeRevTags(priority, tips));
@@ -306,16 +375,28 @@ public class PeerConnection {
 	}
 	
 	public void requestRevisionDetails(int priority, Collection<RevisionTag> revTags) throws PeerCapabilityException {
+		logger.trace("Swarm {} {}:{}: send requestRevisionDetails",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		if(revTags.isEmpty()) return;
 		assertPeerCapability(PEER_TYPE_FULL);
 		send(CMD_REQUEST_REVISION_DETAILS, serializeRevTags(priority, revTags));
 	}
 	
 	public void setPaused(boolean paused) {
+		logger.trace("Swarm {} {}:{}: send setPaused",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		send(CMD_SET_PAUSED, new byte[] { (byte) (paused ? 0x01 : 0x00) });
 	}
 	
 	public synchronized void setLocalPaused(boolean localPaused) {
+		logger.trace("Swarm {} {}:{}: send setLocalPaused",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		this.localPaused = localPaused;
 		this.notifyAll();
 	}
@@ -394,7 +475,11 @@ public class PeerConnection {
 				handleSetPaused(msg);
 				break;
 			default:
-				logger.info("Ignoring unknown request command {} from {}", msg.cmd, socket.getAddress());
+				logger.info("Swarm {} {}:{}: Ignoring unknown request command ",
+						Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+						socket.getAddress(),
+						socket.getPort(),
+						msg.cmd);
 				return false;
 			}
 		} catch(EOFException exc) {
@@ -408,7 +493,11 @@ public class PeerConnection {
 			 * Sadly, there's the possibility that we cut ourselves off for a long time because we had a volume go
 			 * unmounted or something. That's not great. An opportunity for future improvement...
 			 */
-			logger.warn("Blacklisting peer " + socket.getAddress() + " due to exception", exc);
+			logger.warn("Swarm {} {}:{}: Blacklisting peer due to exception",
+					Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+					socket.getAddress(),
+					socket.getPort(),
+					exc);
 			throw new ProtocolViolationException();
 		}
 		
@@ -416,6 +505,10 @@ public class PeerConnection {
 	}
 
 	protected void handleAnnouncePeers(PeerMessageIncoming msg) throws EOFException, ProtocolViolationException {
+		logger.trace("Swarm {} {}:{}: recv announcePeers",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		while(msg.rxBuf.hasRemaining()) {
 			int adLen = Util.unsignShort(msg.rxBuf.getShort());
 			assertState(0 < adLen && adLen <= PeerMessage.MESSAGE_SIZE);
@@ -434,6 +527,10 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceSelfAd(PeerMessageIncoming msg) throws ProtocolViolationException, EOFException {
+		logger.trace("Swarm {} {}:{}: recv announceSelfAd",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		int adLen = Util.unsignShort(msg.rxBuf.getShort());
 		assertState(0 < adLen && adLen <= PeerMessage.MESSAGE_SIZE);
 		byte[] adRaw = new byte[adLen];
@@ -450,6 +547,10 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceTags(PeerMessageIncoming msg) throws EOFException {
+		logger.trace("Swarm {} {}:{}: recv announceTags",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		assert(RefTag.REFTAG_SHORT_SIZE == 8); // This code depends on tags being sent as 64-bit values.
 		while(msg.rxBuf.hasRemaining()) {
 			// lots of tags to go through, and locks are expensive; accumulate into a buffer so we can minimize lock/release cycling
@@ -473,21 +574,27 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
+		logger.trace("Swarm {} {}:{}: recv announceTips",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		waitForFullInit();
 		byte[] revTagRaw = new byte[RevisionTag.sizeForConfig(socket.swarm.config)];
 		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(revTagRaw);
 			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw, true);
 			try {
-				logger.debug("Considering revtag {} from {}:{}",
-						String.format("%08x", revTag.getShortHash()),
-						socket.address,
-						socket.getPort());
+				logger.debug("Swarm {} {}:{}: Considering revtag {}",
+						Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+						socket.getAddress(),
+						socket.getPort(),
+						Util.bytesToHex(revTag.getBytes(), 8));
 				if(socket.swarm.config.getRevisionList().addBranchTip(revTag)) {
-					logger.info("Adopted new revTag {} from {}:{}",
-							String.format("%08x", revTag.getShortHash()),
-							socket.address,
-							socket.getPort());
+					logger.info("Swarm {} {}:{}: Adopted new revTag {}",
+							Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+							socket.getAddress(),
+							socket.getPort(),
+							Util.bytesToHex(revTag.getBytes(), 8));
 				}
 			} catch(SearchFailedException exc) {
 				/* placeholder if we ever want to do something about getting a branch tip we can't get info about
@@ -500,6 +607,10 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceRevisionDetails(PeerMessageIncoming msg) throws PeerCapabilityException, EOFException {
+		logger.trace("Swarm {} {}:{}: recv announceRevisionDetails",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		waitForFullInit();
 		assertPeerCapability(PEER_TYPE_FULL);
 
@@ -517,17 +628,29 @@ public class PeerConnection {
 	}
 	
 	protected void handleRequestAll(PeerMessageIncoming msg) throws ProtocolViolationException, IOException {
+		logger.trace("Swarm {} {}:{}: recv requestAll",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		waitForFullInit();
 		msg.rxBuf.requireEOF();
 		sendEverything();
 	}
 
 	protected void handleRequestAllCancel(PeerMessageIncoming msg) throws ProtocolViolationException, IOException {
+		logger.trace("Swarm {} {}:{}: recv requestAllCancel",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		msg.rxBuf.requireEOF();
 		stopSendingEverything();
 	}
 
 	protected void handleRequestInodes(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
+		logger.trace("Swarm {} {}:{}: recv requestInodes",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		waitForFullInit();
 		ZKArchive archive = socket.swarm.config.getArchive();
 		
@@ -548,6 +671,10 @@ public class PeerConnection {
 	}
 	
 	protected void handleRequestRevisionContents(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
+		logger.trace("Swarm {} {}:{}: recv requestRevisionContents",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		waitForFullInit();
 		ZKArchive archive = socket.swarm.config.getArchive();
 
@@ -562,6 +689,10 @@ public class PeerConnection {
 	}
 	
 	protected void handleRequestRevisionDetails(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
+		logger.trace("Swarm {} {}:{}: recv requestRevisionDetails",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		waitForFullInit();
 		ZKArchive archive = socket.swarm.config.getArchive();
 
@@ -577,6 +708,10 @@ public class PeerConnection {
 	}
 	
 	protected void handleRequestPageTags(PeerMessageIncoming msg) throws IOException {
+		logger.trace("Swarm {} {}:{}: recv requestPageTags",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		waitForFullInit();
 		byte[] shortTag = new byte[RefTag.REFTAG_SHORT_SIZE];
 		int priority = msg.rxBuf.getInt();
@@ -587,6 +722,10 @@ public class PeerConnection {
 	}
 	
 	protected void handleSendPage(PeerMessageIncoming msg) throws IOException, ProtocolViolationException {
+		logger.trace("Swarm {} {}:{}: recv sendPage",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		byte[] tag = msg.rxBuf.read(socket.swarm.config.getCrypto().hashLength());
 		if(!Arrays.equals(tag, socket.swarm.getConfig().tag())) {
 			waitForFullInit();
@@ -612,6 +751,10 @@ public class PeerConnection {
 	}
 	
 	protected void handleSetPaused(PeerMessageIncoming msg) throws ProtocolViolationException, EOFException {
+		logger.trace("Swarm {} {}:{}: recv setPaused",
+				Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+				socket.getAddress(),
+				socket.getPort());
 		byte pausedByte = msg.rxBuf.get();
 		assertState(pausedByte == 0x00 || pausedByte == 0x01);
 		msg.rxBuf.requireEOF();
@@ -704,7 +847,11 @@ public class PeerConnection {
 				}
 			} catch(SocketClosedException exc) {
 			} catch(Exception exc) {
-				logger.error("Caught exception in PeerConnection page queue thread", exc);
+				logger.error("Swarm {} {}:{}: Caught exception in PeerConnection page queue thread",
+						Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+						socket.getAddress(),
+						socket.getPort(),
+						exc);
 				try { Thread.sleep(500); } catch(InterruptedException exc2) {}
 			}
 		}
