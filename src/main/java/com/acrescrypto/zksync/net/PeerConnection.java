@@ -837,6 +837,12 @@ public class PeerConnection {
 					lastTag = chunk.tag;
 				}
 				
+				logger.trace("Swarm {} {}:{}: Sending chunk {} of tag {} ",
+						Util.bytesToHex(socket.swarm.config.getArchiveId(), 8),
+						socket.getAddress(),
+						socket.getPort(),
+						chunk.index,
+						Util.bytesToHex(chunk.tag, 8));
 				lastStream.write(ByteBuffer.allocate(4).putInt(chunk.index).array());
 				lastStream.write(chunk.getData());
 				
