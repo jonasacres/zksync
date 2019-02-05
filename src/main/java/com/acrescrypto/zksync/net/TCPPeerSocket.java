@@ -215,6 +215,10 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	protected void sendHandshake() throws IOException {
+		logger.trace("Swarm {} {}:{}: sending handshake",
+				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				address,
+				socket.getPort());
 		HandshakeState handshake = setupHandshakeState();
 		CipherState[] states = handshake.handshake(in, out);				
 		readState = states[0];
@@ -362,6 +366,10 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	protected void makeStreams() throws IOException {
+		socket.setSoTimeout(0);
+		socket.setKeepAlive(true);
+		socket.setTcpNoDelay(true);
+		
 		this.out = new RateLimitedOutputStream(socket.getOutputStream(),
 				swarm.getBandwidthAllocatorTx(),
 				swarm.getBandwidthMonitorTx());

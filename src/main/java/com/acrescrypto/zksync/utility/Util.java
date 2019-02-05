@@ -235,19 +235,20 @@ public class Util {
 		return ByteBuffer.allocate(8).putLong(x).array();
 	}
 	
-	public static void threadReport(boolean includeStackTraces) {
+	public static String threadReport(boolean includeStackTraces) {
 		Map<Thread,StackTraceElement[]> stackTraces = Thread.getAllStackTraces();
 		HashMap<String,Integer> instanceCounts = new HashMap<>();
+		String output = "";
 		
-		System.out.println("Thread count: " + stackTraces.size());
+		output += "Thread count: " + stackTraces.size() + "\n";
 		for(Thread t : stackTraces.keySet()) {
 			instanceCounts.put(t.getName(), instanceCounts.getOrDefault(t.getName(), 0) + 1);
 			if(includeStackTraces) {
-				System.out.println(t.getName() + " - " + t.getId());
+				output += t.getName() + " - " + t.getId() + "\n";
 				for(StackTraceElement e : stackTraces.get(t)) {
-					System.out.println("\t"+e.getClassName() + "::" + e.getMethodName() + " line " + e.getLineNumber());
+					output += "\t"+e.getClassName() + "::" + e.getMethodName() + " line " + e.getLineNumber() + "\n";
 				}
-				System.out.println("\n");
+				output += "\n";
 			}
 		}
 		
@@ -256,12 +257,13 @@ public class Util {
 		sortedInstanceNames.sort((a, b)->instanceCounts.get(b).compareTo(instanceCounts.get(a)));
 		
 		for(String name : sortedInstanceNames) {
-			System.out.println(name + ": " + instanceCounts.get(name));
+			output += name + ": " + instanceCounts.get(name) + "\n";
 		}
 		
-		SnoozeThreadSupervisor.shared().dump();
+		output += SnoozeThreadSupervisor.shared().report();
 		
-		System.out.println("\n");
+		output += "\n";
+		return output;
 	}
 	
 	public static String caller(int depth) {

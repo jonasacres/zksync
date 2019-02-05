@@ -102,12 +102,17 @@ public class SnoozeThreadSupervisor {
 	public Collection<SnoozeThread> getItems() {
 		return items;
 	}
+	
+	public synchronized String report() {
+		String output = "Pending snooze threads: " + items.size() + "\n";
+		for(SnoozeThread item : items) {
+			output += "\t" + item.delayMs + "ms " + item.callback.getClass().getSimpleName() + "\n";
+		}
+		return output; 
+	}
 
 	public synchronized void dump() {
-		System.out.println("Pending snooze threads: " + items.size());
-		for(SnoozeThread item : items) {
-			System.out.println("\t" + item.delayMs + "ms " + item.callback.getClass().getSimpleName());
-		}
+		System.out.println(report());
 	}
 
 	public synchronized void update() {

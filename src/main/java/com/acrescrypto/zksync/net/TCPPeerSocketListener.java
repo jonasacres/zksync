@@ -278,6 +278,9 @@ public class TCPPeerSocketListener {
 	
 	protected TCPPeerSocket performResponderHandshake(Socket peerSocketRaw) throws IOException, ProtocolViolationException {
 		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, 10, ()->established, ()->{
+			logger.debug("Swarm - {}: Closing socket since handshake was not completed within {}ms",
+					peerSocketRaw.getInetAddress().getHostAddress(),
+					TCPPeerSocket.maxHandshakeTimeMillis);
 			peerSocketRaw.close();
 		});
 		
@@ -377,6 +380,7 @@ public class TCPPeerSocketListener {
 		);
 		
 		CipherState[] states = handshake.handshake(in, out);
+		established = true;
 		
 		return new TCPPeerSocket(ad.value.swarm,
 				handshake.getRemoteStaticKey(),
