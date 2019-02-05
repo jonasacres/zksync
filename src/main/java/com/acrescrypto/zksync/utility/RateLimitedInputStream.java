@@ -64,6 +64,7 @@ public class RateLimitedInputStream extends InputStream {
 	
 	@Override
 	public void close() throws IOException {
+		logger.trace("RateLimitedInputStream close");
 		input.close();
 	}
 	

@@ -31,6 +31,7 @@ public class RateLimitedOutputStream extends OutputStream {
 
 	@Override
 	public void close() throws IOException {
+		logger.trace("RateLimitedOutputStream close");
 		output.close();
 	}
 	
