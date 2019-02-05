@@ -202,11 +202,15 @@ public class PeerSwarm implements BlacklistCallback {
 	public synchronized void closedConnection(PeerConnection connection) {
 		activeSockets--;
 		connections.remove(connection);
-		logger.info("Swarm {} {}:{}: Closed connection, {} peers remaining",
+		logger.info("Swarm {} {}:{}: Closed connection, {} peers remaining, retry={}",
 				Util.bytesToHex(config.getArchiveId(), 8),
 				connection.socket.address,
 				connection.socket.getPort(),
-				connections.size());
+				connections.size(),
+				connection.retryOnClose());
+		if(connection.retryOnClose()) {
+			connectedAds.remove(connection.socket.getAd());
+		}
 	}
 	
 	public void addPeerAdvertisement(PeerAdvertisement ad) {

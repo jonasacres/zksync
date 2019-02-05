@@ -156,8 +156,8 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		Key lookupKey = entry.accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
 				"easysafe-dht-lookup");
 		DHTID searchId = new DHTID(entry.accessor.temporalSeedId(0));
-		logger.debug("Doing DHT discovery for archive with temporal seed ID {}",
-				Util.bytesToHex(entry.accessor.temporalSeedId(0)));
+		logger.debug("DHT -: Doing discovery for archive with temporal seed ID {}",
+				Util.bytesToHex(entry.accessor.temporalSeedId(0), 8));
 		entry.accessor.getMaster().getDHTClient().lookup(searchId, lookupKey, (record)->{
 			if(!(record instanceof DHTAdvertisementRecord)) return;
 			DHTAdvertisementRecord adRecord = (DHTAdvertisementRecord) record;
@@ -177,8 +177,8 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	protected void advertise(DiscoveryEntry entry) {
 		if(!entry.accessor.getMaster().getTCPListener().isListening()) return;
 		for(ZKArchiveConfig config : entry.accessor.knownArchiveConfigs()) {
-			logger.debug("Advertising archive with temporal archive ID {}",
-					config.getAccessor().temporalSeedId(0));
+			logger.debug("DHT -: Advertising archive with temporal archive ID {}",
+					Util.bytesToHex(config.getAccessor().temporalSeedId(0), 8));
 			if(!config.isAdvertising()) continue;
 			TCPPeerAdvertisementListener listener = entry.accessor.getMaster().getTCPListener().listenerForSwarm(config.getSwarm());
 			if(listener == null) continue;

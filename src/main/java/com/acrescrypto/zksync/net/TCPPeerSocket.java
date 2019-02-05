@@ -19,6 +19,7 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
+import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.net.noise.CipherState;
 import com.acrescrypto.zksync.net.noise.HandshakeState;
 import com.acrescrypto.zksync.net.noise.SipObfuscator;
@@ -96,6 +97,16 @@ public class TCPPeerSocket extends PeerSocket {
 		this.crypto = swarm.config.getAccessor().getMaster().getCrypto();
 		this.isLocalRoleClient = true;
 		this.remoteIdentityKey = ad.pubKey;
+		try {
+			ad.resolve();
+		} catch (UnconnectableAdvertisementException exc) {
+			logger.warn("Swarm {} {}:{}: Unable to resolve host: {}",
+					Util.bytesToHex(swarm.config.getArchiveId(), 8),
+					this.address,
+					this.getPort(),
+					ad.host);
+			throw new IOException(exc);
+		}
 		if(ad.isBlacklisted(swarm.config.getAccessor().getMaster().getBlacklist())) throw new BlacklistedException(ad.host);
 	}
 	
@@ -116,7 +127,7 @@ public class TCPPeerSocket extends PeerSocket {
 			logger.info("Swarm {} {}:{}: Overriding ad from {} to {}",
 					Util.bytesToHex(swarm.config.getArchiveId(), 8),
 					this.address,
-					ad.host,
+					this.getPort(),
 					effectiveHost);
 		}
 		this.connection = connection;

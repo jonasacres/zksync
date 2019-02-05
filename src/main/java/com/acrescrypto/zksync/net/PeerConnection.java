@@ -64,6 +64,7 @@ public class PeerConnection {
 	protected final Logger logger = LoggerFactory.getLogger(PeerConnection.class);
 	protected long timeStart;
 	protected boolean wantsEverything;
+	protected boolean retryOnClose;
 	
 	public PeerConnection(PeerSwarm swarm, PeerAdvertisement ad) throws UnsupportedProtocolException, IOException, ProtocolViolationException, BlacklistedException {
 		this.socket = PeerSocket.connectToAd(swarm, ad);
@@ -78,6 +79,7 @@ public class PeerConnection {
 	}
 	
 	protected void initialize() throws IOException {
+		this.retryOnClose = true;
 		timeStart = Util.currentTimeMillis();
 		socket.connection = this;
 		this.queue = new PageQueue(socket.swarm.config);
@@ -892,5 +894,13 @@ public class PeerConnection {
 	
 	public synchronized ArrayList<Long> announcedTags() {
 		return new ArrayList<>(announcedTags);
+	}
+
+	public boolean retryOnClose() {
+		return retryOnClose;
+	}
+
+	public void setRetryOnClose(boolean retryOnClose) {
+		this.retryOnClose = retryOnClose;
 	}
 }

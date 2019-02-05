@@ -77,6 +77,7 @@ public abstract class PeerSocket {
 				Util.bytesToHex(swarm.config.getArchiveId(), 8),
 				getAddress(),
 				getPort());
+		connection.retryOnClose = false;
 		try {
 			close();
 			swarm.config.getAccessor().getMaster().getBlacklist().add(getAddress(), Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
@@ -241,10 +242,11 @@ public abstract class PeerSocket {
 							exc);
 					violation();
 				} catch(SocketException|EOFException exc) { // socket closed; just ignore it
-					logger.debug("Swarm {} {}:{}: socket closed",
+					logger.debug("Swarm {} {}:{}: unable to read socket, closed={}",
 							Util.bytesToHex(swarm.config.getArchiveId(), 8),
 							getAddress(),
 							getPort(),
+							isClosed(),
 							exc);
 					try {
 						close();
