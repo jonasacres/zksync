@@ -51,7 +51,7 @@ public class RateLimitedOutputStream extends OutputStream {
 		int written = 0;
 		while(written < len) {
 			int writeLen = (int) allocation.requestBytes(len - written);
-			logger.trace("RateLimitedOutputStream serializing {} bytes of {}", writeLen, len);
+			logger.trace("RateLimitedOutputStream writing {} bytes of {}", writeLen, len);
 			output.write(b,  off + written, writeLen);
 			if(!allocator.isUnlimited()) flush(); // buffering weakens our control over bandwidth usage 
 			monitor.observeTraffic(writeLen);

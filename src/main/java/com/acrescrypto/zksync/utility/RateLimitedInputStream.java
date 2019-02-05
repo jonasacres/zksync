@@ -3,6 +3,9 @@ package com.acrescrypto.zksync.utility;
 import java.io.IOException;
 import java.io.InputStream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.utility.BandwidthAllocator.BandwidthAllocation;
 
 public class RateLimitedInputStream extends InputStream {
@@ -10,6 +13,7 @@ public class RateLimitedInputStream extends InputStream {
 	private BandwidthAllocator allocator;
 	private BandwidthAllocation allocation;
 	private BandwidthMonitor monitor;
+	protected final Logger logger = LoggerFactory.getLogger(RateLimitedInputStream.class);
 	
 	public RateLimitedInputStream(InputStream input, BandwidthAllocator allocator) {
 		this(input, allocator, new BandwidthMonitor(-1, -1));
@@ -32,13 +36,13 @@ public class RateLimitedInputStream extends InputStream {
 	
 	@Override
 	public int read(byte[] buf) throws IOException {
-		int readLen = (int) allocation.requestBytes(buf.length);
-		return (int) monitor.observeTraffic(input.read(buf, 0, readLen));
+		return read(buf, 0, buf.length);
 	}
 	
 	@Override
 	public int read(byte[] buf, int offset, int length) throws IOException {
 		int readLen = (int) allocation.requestBytes(length);
+		logger.trace("RateLimitedInputStream rx {} bytes, requested {}", readLen, length);
 		return (int) monitor.observeTraffic(input.read(buf, offset, readLen));
 	}
 	
