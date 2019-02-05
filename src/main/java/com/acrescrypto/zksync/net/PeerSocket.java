@@ -224,10 +224,23 @@ public abstract class PeerSocket {
 						processMessage(msgId, cmd, flags, payload);
 					}
 				} catch(ProtocolViolationException exc) {
-					violation();
+					logger.debug("Swarm {} {}:{}: caught protocol violation",
+							Util.bytesToHex(swarm.config.getArchiveId(), 8),
+							getAddress(),
+							getPort(),
+							exc);					violation();
 				} catch(SocketException|EOFException exc) { // socket closed; just ignore it
-				} catch(Exception exc) {
-					logger.error("Socket receive thread for {} caught exception", getAddress(), exc);
+					logger.debug("Swarm {} {}:{}: socket closed",
+							Util.bytesToHex(swarm.config.getArchiveId(), 8),
+							getAddress(),
+							getPort(),
+							exc);
+				} catch(Exception exc) {					
+					logger.debug("Swarm {} {}:{}: caught exception in socket receive thread",
+							Util.bytesToHex(swarm.config.getArchiveId(), 8),
+							getAddress(),
+							getPort(),
+							exc);
 					violation();
 				}
 			});
