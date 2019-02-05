@@ -215,7 +215,7 @@ public class TCPPeerSocket extends PeerSocket {
 		ByteBuffer buf = ByteBuffer.wrap(data, offset, length);
 		
 		while(buf.hasRemaining()) {
-			logger.debug("Swarm: sending {} bytes to {}:{}",
+			logger.trace("Swarm: sending {} bytes to {}:{}",
 					length,
 					socket.getInetAddress().getHostAddress(),
 					socket.getPort());
@@ -246,7 +246,7 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		int obfMsgLen = lenBuf.getShort();
 		int msgLen = sip.read().obfuscate2(obfMsgLen);
-		logger.debug("Swarm: receiving {} bytes from {}:{}",
+		logger.trace("Swarm: receiving {} bytes from {}:{}",
 				msgLen,
 				socket.getInetAddress().getHostAddress(),
 				socket.getPort());

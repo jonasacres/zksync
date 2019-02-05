@@ -294,9 +294,16 @@ public class DHTClient {
 			
 			callback.receivedRecord(null); // we won't be getting any more records, so signal end of results
 		}, (record)->{
-			logger.info("DHT: Received record for ID {}: {}",
-					id.toShortString(),
-					record.routingInfo());
+			try {
+				logger.info("DHT: Received TCP ad record for ID {}: {}, key {}",
+						id.toShortString(),
+						record.routingInfo(),
+						Util.bytesToHex(record.asAd().asTcp().getPubKey().getBytes()));
+			} catch(Exception exc) {
+				logger.info("DHT: Received record for ID {}: {}",
+						id.toShortString(),
+						record.routingInfo());
+			}
 			callback.receivedRecord(record);
 		}).run();
 	}
@@ -429,7 +436,7 @@ public class DHTClient {
 				DatagramPacket packet = new DatagramPacket(receiveData, receiveData.length);
 				monitorRx.observeTraffic(packet.getLength());
 				socket.receive(packet);
-				logger.debug("DHT: received {} bytes from {}:{}",
+				logger.trace("DHT: received {} bytes from {}:{}",
 						packet.getLength(),
 						packet.getAddress().getHostAddress(),
 						packet.getPort());

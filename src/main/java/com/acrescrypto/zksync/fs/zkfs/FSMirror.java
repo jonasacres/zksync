@@ -284,9 +284,9 @@ public class FSMirror {
 			} catch(ENOENTException exc) {}
 			
 			if(src == zkfs) {
-				logger.debug("FS: {} sync zkfs -> target");
+				logger.debug("FS: {} sync zkfs -> target", path);
 			} else {
-				logger.debug("FS: {} sync target -> zkfs");
+				logger.debug("FS: {} sync target -> zkfs", path);
 			}
 
 			if(srcStat.isRegularFile()) {

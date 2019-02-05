@@ -147,7 +147,7 @@ public class DHTMessage {
 		}
 		byte[] serialized = serialize(numPackets, sendBuf);
 		DatagramPacket packet = new DatagramPacket(serialized, serialized.length, address, peer.port);
-		logger.debug("DHT: sending {} bytes to {}:{}, cmd={}, flags=0x{}, msgId={}",
+		logger.trace("DHT: sending {} bytes to {}:{}, cmd={}, flags=0x{}, msgId={}",
 				packet.getData().length,
 				packet.getAddress().getHostAddress(),
 				packet.getPort(),

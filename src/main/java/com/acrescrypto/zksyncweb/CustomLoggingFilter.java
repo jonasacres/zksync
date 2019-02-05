@@ -22,7 +22,7 @@ public class CustomLoggingFilter implements ContainerRequestFilter, ContainerRes
 
 	@Override
 	public void filter(ContainerRequestContext requestContext) throws IOException {
-		logger.info("{} {} -- {} bytes",
+		logger.debug("{} {} -- {} bytes",
 				requestContext.getMethod(),
 				requestContext.getUriInfo().getRequestUri(),
 				requestContext.getLength());
