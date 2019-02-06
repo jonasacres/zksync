@@ -343,21 +343,21 @@ public class ZKFS extends FS {
 
 	@Override
 	public void setMtime(String path, long mtime) throws IOException {
-		Inode inode = inodeForPath(path);
+		Inode inode = inodeForPath(path, false);
 		inode.getStat().setMtime(mtime);
 		markDirty();
 	}
 
 	@Override
 	public void setCtime(String path, long ctime) throws IOException {
-		Inode inode = inodeForPath(path);
+		Inode inode = inodeForPath(path, false);
 		inode.getStat().setCtime(ctime);
 		markDirty();
 	}
 
 	@Override
 	public void setAtime(String path, long atime) throws IOException {
-		Inode inode = inodeForPath(path);
+		Inode inode = inodeForPath(path, false);
 		inode.getStat().setAtime(atime);
 		markDirty();
 	}

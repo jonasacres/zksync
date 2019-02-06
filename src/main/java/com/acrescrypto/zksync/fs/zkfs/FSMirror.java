@@ -409,8 +409,9 @@ public class FSMirror {
 	}
 
 	protected void applyStat(Stat stat, FS dest, String path) throws IOException {
+		// Java's filesystem API does not behave as you'd expect with symlinks, so just leave their metadata alone.
 		if(stat.isSymlink()) return;
-		dest.chmod(path, stat.getMode());
+		attempt(() -> dest.chmod(path, stat.getMode()));
 
 		// we may not actually want this, even if permissions available
 		// also we're doing string names second since we want the username ('steve') to override a uid (100)
@@ -444,7 +445,8 @@ public class FSMirror {
 	protected void attempt(SyncOperation op) {
 		try {
 			op.op();
-		} catch(IOException|UnsupportedOperationException exc) {}
+		} catch(IOException|UnsupportedOperationException exc) {
+		}
 	}
 	
 	protected void tracelog(FS src, FS dest, String path, String msg) {
