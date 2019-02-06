@@ -107,6 +107,11 @@ public class BackedFSTest extends FSTestBase {
 		}
 		
 		@Override
+		public FS unscopedFS() throws IOException {
+			return new DummyFS("/");
+		}
+		
+		@Override
 		public byte[] read(String path) throws IOException {
 			delay();
 			accessed = true;
@@ -125,7 +130,9 @@ public class BackedFSTest extends FSTestBase {
 		public void unlink(String path) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public void link(String target, String link) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public void symlink(String target, String link) throws IOException { throw new RuntimeException("attempted to write to backup"); }
+		public void symlink_unsafe(String target, String link) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public String readlink(String link) throws IOException { throw new RuntimeException("attempted to read link on backup"); }
+		public String readlink_unsafe(String link) throws IOException { throw new RuntimeException("attempted to read link on backup"); }
 		public void mknod(String path, int type, int major, int minor) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public void mkfifo(String path) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public void chmod(String path, int mode) throws IOException { throw new RuntimeException("attempted to write to backup"); }

@@ -208,6 +208,12 @@ public class LocalFS extends FS {
 	}
 	
 	@Override
+	public void symlink_unsafe(String source, String dest) throws IOException {
+		Path psource = Paths.get(source);
+		Files.createSymbolicLink(qualifiedPath(dest), psource);
+	}
+	
+	@Override
 	public String readlink(String link) throws IOException {
 		try {
 			String target = Files.readSymbolicLink(qualifiedPath(link)).toString();
@@ -216,6 +222,15 @@ public class LocalFS extends FS {
 			}
 			
 			return target;
+		} catch(NoSuchFileException exc) {
+			throw new ENOENTException(link);
+		}
+	}
+	
+	@Override
+	public String readlink_unsafe(String link) throws IOException {
+		try {
+			return Files.readSymbolicLink(qualifiedPath(link)).toString();
 		} catch(NoSuchFileException exc) {
 			throw new ENOENTException(link);
 		}
@@ -389,6 +404,11 @@ public class LocalFS extends FS {
 	public LocalFS scopedFS(String subpath) throws IOException {
 		if(!exists(subpath)) mkdirp(subpath);
 		return new LocalFS(expandPath(subpath));
+	}
+	
+	@Override
+	public LocalFS unscopedFS() throws IOException {
+		return new LocalFS("/");
 	}
 	
 	public String getRoot() {

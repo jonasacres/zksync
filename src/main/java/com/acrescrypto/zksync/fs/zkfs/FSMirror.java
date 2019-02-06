@@ -301,16 +301,6 @@ public class FSMirror {
 				destStat = dest.lstat(path);
 			} catch(ENOENTException exc) {}
 			
-			if(src == zkfs) {
-				logger.debug("FS {}: {} sync zkfs -> target",
-						Util.bytesToHex(zkfs.getArchive().getConfig().archiveId, 8),
-						path);
-			} else {
-				logger.debug("FS {}: {} sync target -> zkfs",
-						Util.bytesToHex(zkfs.getArchive().getConfig().archiveId, 8),
-						path);
-			}
-
 			if(srcStat.isRegularFile()) {
 				copyFile(src, dest, path, srcStat, destStat);
 			} else if(srcStat.isFifo()) {
@@ -336,6 +326,7 @@ public class FSMirror {
 	}
 
 	protected void copyParentDirectories(FS src, FS dest, String path) throws IOException {
+		tracelog(src, dest, path, "copy parent directories");
 		String dir = src.dirname(path);
 		if(!dest.exists(dir)) {
 			copy(src, dest, dir);
@@ -343,6 +334,7 @@ public class FSMirror {
 	}
 
 	protected void copyFile(FS src, FS dest, String path, Stat srcStat, Stat destStat) throws IOException {
+		tracelog(src, dest, path, "copy regular file");
 		File targetFile = null, archiveFile = null;
 		try {
 			targetFile = src.open(path, File.O_RDONLY);
@@ -367,6 +359,7 @@ public class FSMirror {
 
 	protected void copyFifo(FS src, FS dest, String path, Stat srcStat, Stat destStat) throws IOException {
 		if(destStat != null && destStat.isFifo()) return;
+		tracelog(src, dest, path, "copy regular fifo");
 		remove(dest, path, destStat);
 		dest.mkfifo(path);
 	}
@@ -379,6 +372,7 @@ public class FSMirror {
 			return;
 		}
 
+		tracelog(src, dest, path, "copy device");
 		remove(dest, path, destStat);
 		dest.mknod(path, srcStat.getType(), srcStat.getDevMajor(), srcStat.getDevMinor());
 	}
@@ -388,19 +382,22 @@ public class FSMirror {
 			return;
 		}
 
+		tracelog(src, dest, path, "copy directory");
 		remove(dest, path, destStat);
 		dest.mkdir(path);
 	}
 
 	protected void copySymlink(FS src, FS dest, String path, Stat srcStat, Stat destStat) throws IOException {
+		String link = src.readlink(path);
 		if(destStat != null && destStat.isSymlink()
-				&& src.readlink(path).equals(dest.readlink(path))) {
+				&& link.equals(dest.readlink(path))) {
 			return;
 		}
 
+		tracelog(src, dest, path, "copy symlink, link target is {}", link);
 		remove(dest, path, destStat);
 		String target = src.readlink(path);
-		dest.symlink(target, path);
+		dest.symlink_unsafe(target, path);
 	}
 
 	protected Stat getLstat(FS fs, String path) {
@@ -448,5 +445,19 @@ public class FSMirror {
 		try {
 			op.op();
 		} catch(IOException|UnsupportedOperationException exc) {}
+	}
+	
+	protected void tracelog(FS src, FS dest, String path, String msg) {
+		tracelog(src, dest, path, msg, null);
+	}
+	
+	protected void tracelog(FS src, FS dest, String path, String msg, Object arg) {
+		String direction = src == zkfs ? "zkfs -> target" : "target -> zkfs";
+		String prefix = "FS " + Util.bytesToHex(zkfs.archive.config.archiveId, 8) +
+				": sync " +
+				path +
+				" " +
+				direction + " ";
+		logger.trace(prefix + msg, arg);
 	}
 }

@@ -125,6 +125,11 @@ public class RAMFS extends FS {
 	@Override
 	public void symlink(String target, String link) throws IOException {
 		unscopedPath(target); // trigger exception if outside scope
+		symlink_unsafe(target, link);
+	}
+	
+	@Override
+	public void symlink_unsafe(String target, String link) throws IOException {
 		if(exists(link)) throw new EEXISTSException(link);
 		makeInode(link, (inode)->{
 			inode.stat.makeSymlink();
@@ -134,6 +139,11 @@ public class RAMFS extends FS {
 
 	@Override
 	public String readlink(String link) throws IOException {
+		return new String(llookup(link).data);
+	}
+	
+	@Override
+	public String readlink_unsafe(String link) throws IOException {
 		return new String(llookup(link).data);
 	}
 
@@ -238,6 +248,11 @@ public class RAMFS extends FS {
 	public FS scopedFS(String path) throws IOException {
 		if(!exists(path)) mkdirp(path);
 		return new RAMFS(unscopedPath(path), this);
+	}
+	
+	@Override
+	public RAMFS unscopedFS() throws IOException {
+		return new RAMFS("/", this);
 	}
 	
 	protected Inode lookup(String path) throws ENOENTException {

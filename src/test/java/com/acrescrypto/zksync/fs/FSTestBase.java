@@ -233,6 +233,26 @@ public abstract class FSTestBase {
 	}
 	
 	@Test
+	public void testSymlinkUnsafe() throws IOException {
+		// TODO Someday: (refactor) This is going to fail on windows with LocalFS...
+		String target = "/tmp/symlink-target";
+		FS unscopedFs = scratch.unscopedFS();
+		
+		try {
+			if(!unscopedFs.exists(unscopedFs.dirname(target))) {
+				unscopedFs.mkdirp(unscopedFs.dirname(target));
+			}
+			unscopedFs.write(target, "over here".getBytes());
+			scratch.symlink_unsafe(target, "symlink-link");
+			byte[] a = unscopedFs.read(target);
+			byte[] b = scratch.read("symlink-link");
+			assertTrue(Arrays.equals(a, b));
+		} finally {
+			unscopedFs.unlink(target);
+		}
+	}
+	
+	@Test
 	public void testReadlink() throws IOException {
 		String target = "doesntexistbutthatsok";
 		scratch.symlink(target, "readlink");

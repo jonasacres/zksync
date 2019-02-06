@@ -1183,4 +1183,12 @@ public class FSMirrorTest {
 			checkPathMatch(target, zkfs, expected, path);
 		}
 	}
+	
+	@Test
+	public void testAbsoluteSymlinksCanCopy() throws IOException {
+		String linkTarget = "/dev/null", link = "test-symlink";
+		zkfs.symlink(linkTarget, link);
+		mirror.syncArchiveToTarget();
+		assertEquals(linkTarget, target.readlink_unsafe(link));
+	}
 }

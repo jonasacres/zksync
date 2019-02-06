@@ -83,9 +83,19 @@ public class SwarmFS extends FS {
 	public void symlink(String target, String link) throws IOException {
 		throw new UnsupportedOperationException();
 	}
+	
+	@Override
+	public void symlink_unsafe(String target, String link) throws IOException {
+		throw new UnsupportedOperationException();
+	}
 
 	@Override
 	public String readlink(String link) throws IOException {
+		throw new UnsupportedOperationException();
+	}
+	
+	@Override
+	public String readlink_unsafe(String link) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 
@@ -166,6 +176,11 @@ public class SwarmFS extends FS {
 	@Override
 	public SwarmFS scopedFS(String subpath) {
 		throw new UnsupportedOperationException(); // no concept of scoping here
+	}
+	
+	@Override
+	public SwarmFS unscopedFS() {
+		return new SwarmFS(swarm);
 	}
 	
 	public PeerSwarm getSwarm() {

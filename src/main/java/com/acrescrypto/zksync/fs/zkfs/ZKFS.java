@@ -270,11 +270,21 @@ public class ZKFS extends FS {
 	}
 	
 	@Override
+	public void symlink_unsafe(String source, String dest) throws IOException {
+		symlink(source, dest);
+	}
+	
+	@Override
 	public String readlink(String link) throws IOException {
 		if(!lstat(link).isSymlink()) throw new EINVALException(link);
 		ZKFile symlink = open(link, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL);
 		String target = new String(symlink.read());
 		return target;
+	}
+	
+	@Override
+	public String readlink_unsafe(String link) throws IOException {
+		return readlink(link);
 	}
 
 	@Override
@@ -355,6 +365,11 @@ public class ZKFS extends FS {
 	@Override
 	public ZKFS scopedFS(String subpath) {
 		throw new UnsupportedOperationException();
+	}
+	
+	@Override
+	public ZKFS unscopedFS() throws IOException {
+		return new ZKFS(baseRevision);
 	}
 	
 	public void uncache(String path) throws IOException {

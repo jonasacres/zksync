@@ -53,6 +53,14 @@ public class ZKFSTest extends FSTestBase {
 		TestUtils.assertTidy();
 	}
 	
+	@Override @Test
+	public void testSymlinkUnsafe() throws IOException {
+		scratch.write("symlink-target", "over here".getBytes());
+		scratch.symlink_unsafe("symlink-target", "symlink-link");
+		byte[] a = scratch.read("symlink-target");
+		byte[] b = scratch.read("symlink-link");
+		assertTrue(Arrays.equals(a, b));
+	}	
 	@Test
 	public void testMultipageWrite() throws IOException {
 		byte[] text = new byte[10*zkscratch.getArchive().config.pageSize];

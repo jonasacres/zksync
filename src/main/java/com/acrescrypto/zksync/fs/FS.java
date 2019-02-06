@@ -23,7 +23,9 @@ public abstract class FS {
 	public abstract void unlink(String path) throws IOException;
 	public abstract void link(String target, String link) throws IOException;
 	public abstract void symlink(String target, String link) throws IOException;
+	public abstract void symlink_unsafe(String source, String dest) throws IOException; // allow symlinks to exit fs scope
 	public abstract String readlink(String link) throws IOException;
+	public abstract String readlink_unsafe(String link) throws IOException;
 	public abstract void mknod(String path, int type, int major, int minor) throws IOException;
 	public abstract void mkfifo(String path) throws IOException;
 	
@@ -218,6 +220,9 @@ public abstract class FS {
 	 * except this FS remains unmodified and the chrooted FS is a new one that is returned. 
 	 * @throws IOException */
 	public abstract FS scopedFS(String path) throws IOException;
+	
+	/** Return an instance of this FS class with the scope removed. */
+	public abstract FS unscopedFS() throws IOException;
 	
 	/** Close any resources associated with keeping this FS access open, e.g. sockets. The FS object may not be reused. */
 	public void close() throws IOException {}

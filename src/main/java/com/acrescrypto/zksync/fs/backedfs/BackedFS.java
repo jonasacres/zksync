@@ -112,11 +112,23 @@ public class BackedFS extends FS {
 		ensureParentPresent(link);
 		cacheFS.symlink(target, link);
 	}
+	
+	@Override
+	public void symlink_unsafe(String target, String link) throws IOException {
+		ensureParentPresent(link);
+		cacheFS.symlink_unsafe(target, link);
+	}
 
 	@Override
 	public String readlink(String link) throws IOException {
 		ensurePresent(link);
 		return cacheFS.readlink(link);
+	}
+	
+	@Override
+	public String readlink_unsafe(String link) throws IOException {
+		ensurePresent(link);
+		return cacheFS.readlink_unsafe(link);
 	}
 
 	@Override
@@ -266,6 +278,11 @@ public class BackedFS extends FS {
 	@Override
 	public BackedFS scopedFS(String subpath) throws IOException {
 		return new BackedFS(cacheFS.scopedFS(subpath), backupFS.scopedFS(subpath));
+	}
+	
+	@Override
+	public BackedFS unscopedFS() throws IOException {
+		return new BackedFS(cacheFS.unscopedFS(), backupFS.unscopedFS());
 	}
 
 	public FS getCacheFS() {
