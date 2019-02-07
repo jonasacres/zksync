@@ -85,7 +85,7 @@ public class TCPPeerSocket extends PeerSocket {
 		makeThreads();
 		
 		logger.debug("Swarm {} {}:{}: received connection",
-				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				Util.formatArchiveId(swarm.config.getArchiveId()),
 				this.address,
 				socket.getPort());
 	}
@@ -101,7 +101,7 @@ public class TCPPeerSocket extends PeerSocket {
 			ad.resolve();
 		} catch (UnconnectableAdvertisementException exc) {
 			logger.warn("Swarm {} {}:{}: Unable to resolve host: {}",
-					Util.bytesToHex(swarm.config.getArchiveId(), 8),
+					Util.formatArchiveId(swarm.config.getArchiveId()),
 					this.address,
 					this.getPort(),
 					ad.host);
@@ -125,7 +125,7 @@ public class TCPPeerSocket extends PeerSocket {
 		String effectiveHost = ad.host;
 		if(effectiveHost.equals("127.0.0.1") && ad.getSenderHost() != null) {
 			logger.info("Swarm {} {}:{}: Overriding ad from {} to {}",
-					Util.bytesToHex(swarm.config.getArchiveId(), 8),
+					Util.formatArchiveId(swarm.config.getArchiveId()),
 					this.address,
 					this.getPort(),
 					effectiveHost);
@@ -135,7 +135,7 @@ public class TCPPeerSocket extends PeerSocket {
 		this.address = socket.getInetAddress().getHostAddress();
 		makeStreams();
 		logger.debug("Swarm {} {}:{}: connecting to ad (host={})",
-				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				Util.formatArchiveId(swarm.config.getArchiveId()),
 				this.address,
 				ad.port,
 				effectiveHost);
@@ -216,7 +216,7 @@ public class TCPPeerSocket extends PeerSocket {
 	
 	protected void sendHandshake() throws IOException {
 		logger.trace("Swarm {} {}:{}: sending handshake",
-				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				Util.formatArchiveId(swarm.config.getArchiveId()),
 				address,
 				socket.getPort());
 		HandshakeState handshake = setupHandshakeState();
@@ -230,7 +230,7 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		this.sharedSecret = handshake.getHash();
 		logger.debug("Swarm {} {}:{}: completed handshake",
-				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				Util.formatArchiveId(swarm.config.getArchiveId()),
 				address,
 				socket.getPort());
 	}
@@ -241,7 +241,7 @@ public class TCPPeerSocket extends PeerSocket {
 		
 		while(buf.hasRemaining()) {
 			logger.trace("Swarm {} {}:{}: sending {} bytes",
-					Util.bytesToHex(swarm.config.getArchiveId(), 8),
+					Util.formatArchiveId(swarm.config.getArchiveId()),
 					address,
 					socket.getPort(),
 					length);
@@ -262,7 +262,7 @@ public class TCPPeerSocket extends PeerSocket {
 			int readLen = Math.min(length, remainingReadData.remaining());
 			remainingReadData.get(data, offset, readLen);
 			logger.trace("Swarm {} {}:{}: read {} bytes from existing buffer, {} remaining",
-					Util.bytesToHex(swarm.config.getArchiveId(), 8),
+					Util.formatArchiveId(swarm.config.getArchiveId()),
 					address,
 					socket.getPort(),
 					readLen,
@@ -290,7 +290,7 @@ public class TCPPeerSocket extends PeerSocket {
 		remainingReadData.get(data, totalRead + offset, readLen);
 		totalRead += readLen;
 		logger.trace("Swarm {} {}:{}: read {} bytes from new buffer, {} total read, {} remaining in buffer",
-				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				Util.formatArchiveId(swarm.config.getArchiveId()),
 				address,
 				socket.getPort(),
 				readLen,
@@ -308,7 +308,7 @@ public class TCPPeerSocket extends PeerSocket {
 	public void _close() throws IOException {
 		if(socket != null && !socket.isClosed()) {
 			logger.trace("Swarm {} {}:{}: closing socket",
-					Util.bytesToHex(swarm.config.getArchiveId(), 8),
+					Util.formatArchiveId(swarm.config.getArchiveId()),
 					address,
 					socket.getPort());
 			socket.close();

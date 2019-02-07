@@ -9,6 +9,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.acrescrypto.zksync.crypto.HashContext;
+import com.acrescrypto.zksync.crypto.PublicDHKey;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 
 public class Util {
 	static long debugTime = -1;
@@ -329,5 +331,21 @@ public class Util {
 	public static long launchTime() {
 		if(launchTime < 0) launchTime = System.currentTimeMillis();
 		return launchTime;
+	}
+	
+	public static String formatArchiveId(byte[] archiveId) {
+		return "a:" + formatLongId(archiveId);
+	}
+	
+	public static String formatRevisionTag(RevisionTag rev) {
+		return "rev:" + formatLongId(rev.getBytes());
+	}
+	
+	public static String formatPubKey(PublicDHKey key) {
+		return "pk:" + formatLongId(key.getBytes());
+	}
+	
+	public static String formatLongId(byte[] longId) {
+		return Util.bytesToHex(longId, 4);
 	}
 }

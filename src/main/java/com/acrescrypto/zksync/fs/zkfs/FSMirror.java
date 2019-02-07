@@ -79,7 +79,7 @@ public class FSMirror {
 		HashMap<WatchKey, Path> pathsByKey = new HashMap<>();
 		watchDirectory(dir, watcher, pathsByKey);
 		logger.info("FS {}: Starting watch of {}",
-				Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+				Util.formatArchiveId(zkfs.archive.config.archiveId),
 				localTarget.getRoot());
 
 		new Thread( () -> watchThread(flag, watcher, pathsByKey) ).start();
@@ -87,7 +87,7 @@ public class FSMirror {
 
 	public void stopWatch() {
 		logger.info("FS {}: Stopping watch of {}",
-				Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+				Util.formatArchiveId(zkfs.archive.config.archiveId),
 				((LocalFS) target).getRoot());
 		watchFlag.setFalse();
 	}
@@ -128,7 +128,7 @@ public class FSMirror {
 			decrementActive();
 		} catch (IOException exc) {
 			logger.error("FS {}: FSMirror unable to close watcher",
-					Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					exc);
 		}
 	}
@@ -144,7 +144,7 @@ public class FSMirror {
 					WatchEvent.Kind<?> kind = event.kind();
 					if(kind == OVERFLOW) {
 						logger.warn("FS {}: Caught overflow; some local filesystem changes may not have made it into the archive.",
-								Util.bytesToHex(zkfs.archive.config.archiveId, 8));
+								Util.formatArchiveId(zkfs.archive.config.archiveId));
 						continue;
 					}
 
@@ -170,13 +170,13 @@ public class FSMirror {
 						// ignore it; the file was deleted from underneath us
 					} catch(IOException exc) {
 						logger.error("FS {}: FSMirror caught exception mirroring local FS",
-								Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+								Util.formatArchiveId(zkfs.archive.config.archiveId),
 								exc);
 					}
 				}
 			} catch(Exception exc) {
 				logger.error("FS {}: FSMirror mirror thread caught exception",
-						Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+						Util.formatArchiveId(zkfs.archive.config.archiveId),
 						exc);
 			} finally {
 				if(!key.reset()) return false;
@@ -273,12 +273,12 @@ public class FSMirror {
 				copy(zkfs, target, path);
 			} catch(IOException exc) {
 				logger.warn("FS {}: FSMirror caught exception copying path to target: {}",
-						Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+						Util.formatArchiveId(zkfs.archive.config.archiveId),
 						path,
 						exc);
 			} catch(UnsupportedOperationException exc) {
 				logger.info("FS {}: FSMirror skipping path due to lack of local support (maybe we need superuser?): {}",
-						Util.bytesToHex(zkfs.archive.config.archiveId, 8),
+						Util.formatArchiveId(zkfs.archive.config.archiveId),
 						path,
 						exc);
 			}
@@ -455,7 +455,7 @@ public class FSMirror {
 	
 	protected void tracelog(FS src, FS dest, String path, String msg, Object arg) {
 		String direction = src == zkfs ? "zkfs -> target" : "target -> zkfs";
-		String prefix = "FS " + Util.bytesToHex(zkfs.archive.config.archiveId, 8) +
+		String prefix = "FS " + Util.formatArchiveId(zkfs.archive.config.archiveId) +
 				": sync " +
 				path +
 				" " +

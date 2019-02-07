@@ -61,7 +61,7 @@ public abstract class PeerSocket {
 	
 	public final void close() throws IOException {
 		logger.trace("Swarm {} {}:{}: tidying up closed connection",
-				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				Util.formatArchiveId(swarm.config.getArchiveId()),
 				getAddress(),
 				getPort());		
 		_close();
@@ -74,7 +74,7 @@ public abstract class PeerSocket {
 	 * @throws IOException */
 	public void violation() {
 		logger.warn("Swarm {} {}:{}: logging protocol violation",
-				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				Util.formatArchiveId(swarm.config.getArchiveId()),
 				getAddress(),
 				getPort());
 		connection.retryOnClose = false;
@@ -158,7 +158,7 @@ public abstract class PeerSocket {
 	protected void ioexception(IOException exc) {
 		/* These are probably our fault. There is the possibility that they are caused by malicious actors. */
 		logger.debug("Swarm {} {}:{}: caught IOException",
-				Util.bytesToHex(swarm.config.getArchiveId(), 8),
+				Util.formatArchiveId(swarm.config.getArchiveId()),
 				getAddress(),
 				getPort(),
 				exc);
@@ -236,14 +236,14 @@ public abstract class PeerSocket {
 					}
 				} catch(ProtocolViolationException exc) {
 					logger.debug("Swarm {} {}:{}: caught protocol violation",
-							Util.bytesToHex(swarm.config.getArchiveId(), 8),
+							Util.formatArchiveId(swarm.config.getArchiveId()),
 							getAddress(),
 							getPort(),
 							exc);
 					violation();
 				} catch(SocketException|EOFException exc) { // socket closed; just ignore it
 					logger.debug("Swarm {} {}:{}: unable to read socket, closed={}",
-							Util.bytesToHex(swarm.config.getArchiveId(), 8),
+							Util.formatArchiveId(swarm.config.getArchiveId()),
 							getAddress(),
 							getPort(),
 							isClosed(),
@@ -252,14 +252,14 @@ public abstract class PeerSocket {
 						close();
 					} catch (IOException exc2) {
 						logger.debug("Swarm {} {}:{}: encountered exception closing socket {}",
-								Util.bytesToHex(swarm.config.getArchiveId(), 8),
+								Util.formatArchiveId(swarm.config.getArchiveId()),
 								getAddress(),
 								getPort(),
 								exc2);
 					}
 				} catch(Exception exc) {					
 					logger.debug("Swarm {} {}:{}: caught exception in socket receive thread",
-							Util.bytesToHex(swarm.config.getArchiveId(), 8),
+							Util.formatArchiveId(swarm.config.getArchiveId()),
 							getAddress(),
 							getPort(),
 							exc);
@@ -293,7 +293,7 @@ public abstract class PeerSocket {
 				if(maxReceivedMessageId == Integer.MAX_VALUE) {
 					// we can accept no new messages since we've exceeded the limits of the 32-bit ID field; close and force a reconnect
 					logger.debug("Swarm {} {}:{}: terminating connection due to maximum message count being reached",
-							Util.bytesToHex(swarm.config.getArchiveId(), 8),
+							Util.formatArchiveId(swarm.config.getArchiveId()),
 							getAddress(),
 							getPort());
 					close();

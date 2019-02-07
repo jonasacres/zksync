@@ -613,7 +613,7 @@ public class ZKArchiveConfig {
 
 	public void close() {
 		logger.info("FS {}: Closing archive",
-				Util.bytesToHex(archiveId, 8));
+				Util.formatArchiveId(archiveId));
 		swarm.close();
 		stopAdvertising();
 	}

@@ -14,6 +14,9 @@ public class XGlobalInfo {
 	private Integer numArchives;
 	private HashMap<String,Object> settings;
 	private Boolean isListening;
+	private Long memoryUsed;
+	private Long memoryTotal;
+	private Long memoryMax;
 	
 	public static XGlobalInfo globalInfo() throws IOException {
 		ZKMaster master = State.sharedState().getMaster();
@@ -26,6 +29,9 @@ public class XGlobalInfo {
 		info.numArchives = master.allConfigs().size();
 		info.setIsListening(master.getTCPListener().isListening());
 		info.settings = master.getGlobalConfig().asHash();
+		info.memoryUsed = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+		info.memoryTotal = Runtime.getRuntime().totalMemory();
+		info.memoryMax = Runtime.getRuntime().maxMemory();
 		
 		return info;
 	}
@@ -84,5 +90,29 @@ public class XGlobalInfo {
 
 	public void setLifetimeBytesRx(Long lifetimeBytesRx) {
 		this.lifetimeBytesRx = lifetimeBytesRx;
+	}
+
+	public Long getMemoryUsed() {
+		return memoryUsed;
+	}
+
+	public void setMemoryUsed(Long memoryUsed) {
+		this.memoryUsed = memoryUsed;
+	}
+
+	public Long getMemoryMax() {
+		return memoryMax;
+	}
+
+	public void setMemoryMax(Long memoryMax) {
+		this.memoryMax = memoryMax;
+	}
+
+	public Long getMemoryTotal() {
+		return memoryTotal;
+	}
+
+	public void setMemoryTotal(Long memoryTotal) {
+		this.memoryTotal = memoryTotal;
 	}
 }
