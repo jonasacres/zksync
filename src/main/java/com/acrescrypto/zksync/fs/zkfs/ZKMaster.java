@@ -25,6 +25,7 @@ import com.acrescrypto.zksync.net.dht.DHTPeer;
 import com.acrescrypto.zksync.net.dht.DHTZKArchiveDiscovery;
 import com.acrescrypto.zksync.utility.BandwidthAllocator;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
+import com.acrescrypto.zksync.utility.MemLogAppender;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
@@ -427,6 +428,10 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		
 		globalConfig.setDefault("net.limits.tx", -1);
 		globalConfig.setDefault("net.limits.rx", -1);
+		
+		globalConfig.setDefault("log.includeLogRequests", false);
+		globalConfig.setDefault("log.historyDepth", MemLogAppender.sharedInstance().getHistoryDepth());
+		globalConfig.setDefault("log.threshold", MemLogAppender.sharedInstance().getThreshold());
 	}
 	
 	protected void setupSubscriptions() {
@@ -437,6 +442,9 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		
 		globalConfig.subscribe("net.dht.discoveryintervalms").asInt((v)->dhtDiscovery.setDiscoveryIntervalMs(v));
 		globalConfig.subscribe("net.dht.advertisementintervalms").asInt((v)->dhtDiscovery.setAdvertisementIntervalMs(v));
+		
+		globalConfig.subscribe("log.historyDepth").asInt((depth)->MemLogAppender.sharedInstance().setHistoryDepth(depth));
+		globalConfig.subscribe("log.threshold").asInt((threshold)->MemLogAppender.sharedInstance().setThreshold(threshold));
 	}
 	
 	protected void setupBandwidth() {

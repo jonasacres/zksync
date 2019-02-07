@@ -188,7 +188,9 @@ public class FSMirror {
 	}
 
 	public synchronized void observedTargetPathChange(String path) throws IOException {
-		logger.info("FSMirror: Observed change: " + path);
+		logger.info("FS {}: mirror observed change: ",
+				Util.formatArchiveId(zkfs.archive.config.archiveId),
+				path);
 		copy(target, zkfs, path);
 	}
 

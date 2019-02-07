@@ -70,7 +70,7 @@ public class TCPPeerSocketListener {
 		this.bandwidthMonitorTx = new BandwidthMonitor(master.getBandwidthMonitorTx());
 		
 		logger.info("Swarm - {}: TCP listener public key: {}",
-				Util.bytesToHex(identityKey.getBytes()));
+				Util.formatPubKey(identityKey.publicKey()));
 	}
 	
 	protected void setupSubscriptions() {
@@ -226,7 +226,7 @@ public class TCPPeerSocketListener {
 			
 			logger.info("Swarm - -: Listening on TCP port {} with public key {}",
 					listenSocket.getLocalPort(),
-					Util.bytesToHex(identityKey.publicKey().getBytes()));
+					Util.formatPubKey(identityKey.publicKey()));
 			master.getGlobalConfig().set("net.swarm.lastport", listenSocket.getLocalPort());
 			rebind();
 		} catch(IOException exc) {

@@ -334,15 +334,15 @@ public class Util {
 	}
 	
 	public static String formatArchiveId(byte[] archiveId) {
-		return "a:" + formatLongId(archiveId);
+		return "a-" + formatLongId(archiveId);
 	}
 	
 	public static String formatRevisionTag(RevisionTag rev) {
-		return "rev:" + formatLongId(rev.getBytes());
+		return "rev-" + formatLongId(rev.getBytes());
 	}
 	
 	public static String formatPubKey(PublicDHKey key) {
-		return "pk:" + formatLongId(key.getBytes());
+		return "pk-" + formatLongId(key.getBytes());
 	}
 	
 	public static String formatLongId(byte[] longId) {
