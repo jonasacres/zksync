@@ -417,7 +417,7 @@ public class ZKFS extends FS {
 
 	public void rebase(RevisionTag revision) throws IOException {
 		logger.info("FS {}: Rebasing to revision {}, was {}",
-				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				Util.formatArchiveId(revision.getConfig().getArchiveId()),
 				Util.formatRevisionTag(revision),
 				baseRevision != null ? Util.formatRevisionTag(baseRevision) : "null");
 		this.archive = revision.getArchive();
