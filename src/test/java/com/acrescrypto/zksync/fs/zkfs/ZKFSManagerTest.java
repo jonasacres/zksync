@@ -156,6 +156,18 @@ public class ZKFSManagerTest {
 	}
 	
 	@Test
+	public void testSetAutomergeTrueSetsRevisionListAutomergeToTrue() {
+		manager.setAutomerge(true);
+		assertTrue(archive.getConfig().getRevisionList().automerge);
+	}
+
+	@Test
+	public void testSetAutomergeFalseSetsRevisionListAutomergeToFalse() {
+		manager.setAutomerge(false);
+		assertFalse(archive.getConfig().getRevisionList().automerge);
+	}
+
+	@Test
 	public void testSetAutocommitTrueStartsTimerIfTimerWasNotPreviouslyRunning() throws IOException {
 		int interval = 100;
 		manager.setAutocommit(false);
@@ -362,6 +374,7 @@ public class ZKFSManagerTest {
 	public void testSerializationAndDeserialization() throws IOException {
 		manager.setAutofollow(true);
 		manager.setAutocommit(true);
+		manager.setAutomerge(true);
 		manager.setAutocommitIntervalMs(123456);
 		manager.setAutomirrorPath(mirrorFs.getRoot());
 		manager.setAutomirror(true);
@@ -370,6 +383,7 @@ public class ZKFSManagerTest {
 		ZKFSManager deserialized = new ZKFSManager(archive.getConfig(), serialized);
 		assertEquals(manager.isAutofollowing(), deserialized.isAutofollowing());
 		assertEquals(manager.isAutocommiting(), deserialized.isAutocommiting());
+		assertEquals(manager.isAutomerging(), deserialized.isAutomerging());
 		assertEquals(manager.isAutomirroring(), deserialized.isAutomirroring());
 		assertEquals(manager.getAutocommitIntervalMs(), deserialized.getAutocommitIntervalMs());
 		assertEquals(manager.getAutomirrorPath(), deserialized.getAutomirrorPath());
@@ -384,6 +398,7 @@ public class ZKFSManagerTest {
 
 		manager.setAutofollow(true);
 		manager.setAutocommit(true);
+		manager.setAutomerge(true);
 		manager.setAutocommitIntervalMs(123456);
 		manager.setAutomirrorPath(mirrorFs.getRoot());
 		manager.setAutomirror(true);
@@ -392,6 +407,7 @@ public class ZKFSManagerTest {
 		ZKFSManager persistent = new ZKFSManager(archive.getConfig());
 		assertEquals(manager.isAutofollowing(), persistent.isAutofollowing());
 		assertEquals(manager.isAutocommiting(), persistent.isAutocommiting());
+		assertEquals(manager.isAutomerging(), persistent.isAutomerging());
 		assertEquals(manager.isAutomirroring(), persistent.isAutomirroring());
 		assertEquals(manager.getAutocommitIntervalMs(), persistent.getAutocommitIntervalMs());
 		assertEquals(manager.getAutomirrorPath(), persistent.getAutomirrorPath());

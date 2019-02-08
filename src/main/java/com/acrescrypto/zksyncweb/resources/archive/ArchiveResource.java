@@ -227,6 +227,10 @@ public class ArchiveResource {
 					(autocommit)->{
 						State.sharedState().activeManager(config).setAutocommit(autocommit);
 					});
+			WebUtils.mapFieldWithException(settings.isAutomerge(),
+					(automerge)->{
+						State.sharedState().activeManager(config).setAutomerge(settings.isAutomerge());
+					});
 			WebUtils.mapFieldWithException(settings.isAutofollow(),
 					(autofollow)->{
 						State.sharedState().activeManager(config).setAutofollow(autofollow);

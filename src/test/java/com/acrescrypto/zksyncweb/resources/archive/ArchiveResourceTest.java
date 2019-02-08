@@ -481,6 +481,20 @@ public class ArchiveResourceTest {
 		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
 		assertFalse(resp.get("autocommit").asBoolean());
 	}
+	
+	@Test
+	public void testGetSettingsAutomergeIsTrueIfSetByManager() throws IOException {
+		State.sharedState().activeManager(archive.getConfig()).setAutomerge(true);
+		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
+		assertTrue(resp.get("automerge").asBoolean());
+	}
+
+	@Test
+	public void testGetSettingsAutomergeIsFalseIfSetByManager() throws IOException {
+		State.sharedState().activeManager(archive.getConfig()).setAutomerge(false);
+		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
+		assertFalse(resp.get("automerge").asBoolean());
+	}
 
 	@Test
 	public void testGetSettingsAutofollowIsTrueIfSetByManager() throws IOException {
@@ -637,6 +651,32 @@ public class ArchiveResourceTest {
 		
 		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
 		assertTrue(resp.get("autocommit").asBoolean());
+	}
+	
+	@Test
+	public void testPutSettingsSetsAutomergeFalseIfRequested() throws IOException {
+		XArchiveSettings settings = new XArchiveSettings();
+		settings.setAutomerge(false);
+		State.sharedState().activeManager(archive.getConfig()).setAutomerge(true);
+
+		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/settings", settings);
+		assertFalse(State.sharedState().activeManager(archive.getConfig()).isAutomerging());
+		
+		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
+		assertFalse(resp.get("automerge").asBoolean());
+	}
+	
+	@Test
+	public void testPutSettingsSetsAutomergeTrueIfRequested() throws IOException {
+		XArchiveSettings settings = new XArchiveSettings();
+		settings.setAutomerge(true);
+		State.sharedState().activeManager(archive.getConfig()).setAutomerge(false);
+
+		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/settings", settings);
+		assertTrue(State.sharedState().activeManager(archive.getConfig()).isAutomerging());
+		
+		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
+		assertTrue(resp.get("automerge").asBoolean());
 	}
 
 	@Test
@@ -1058,6 +1098,7 @@ public class ArchiveResourceTest {
 		XArchiveSettings settings = new XArchiveSettings();
 		settings.setAdvertising(true);
 		settings.setAutocommiting(true);
+		settings.setAutomerge(true);
 		settings.setAutofollow(true);
 		settings.setRequestingAll(true);
 		settings.setAutocommitInterval(12345);
@@ -1072,6 +1113,7 @@ public class ArchiveResourceTest {
 		
 		assertEquals(settings.isAdvertising().booleanValue(), resp.get("advertising").asBoolean());
 		assertEquals(settings.isAutocommit().booleanValue(), resp.get("autocommit").asBoolean());
+		assertEquals(settings.isAutomerge().booleanValue(), resp.get("automerge").asBoolean());
 		assertEquals(settings.isAutofollow().booleanValue(), resp.get("autofollow").asBoolean());
 		assertEquals(settings.isRequestingAll().booleanValue(), resp.get("requestingAll").asBoolean());
 		assertEquals(settings.getAutocommitInterval().intValue(), resp.get("autocommitInterval").intValue());

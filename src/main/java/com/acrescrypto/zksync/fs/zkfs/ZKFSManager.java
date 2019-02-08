@@ -282,6 +282,7 @@ public class ZKFSManager {
 		builder.add("autocommit", autocommit);
 		builder.add("autofollow", autofollow);
 		builder.add("automirror", automirror);
+		builder.add("automerge", isAutomerging());
 		builder.add("autocommitIntervalMs", autocommitIntervalMs);
 		
 		builder.add("advertising", fs.getArchive().getConfig().isAdvertising());
@@ -310,6 +311,7 @@ public class ZKFSManager {
 		
 		setAutocommit(json.getBoolean("autocommit"));
 		setAutofollow(json.getBoolean("autofollow"));
+		setAutomerge(json.getBoolean("automerge"));
 		setAutocommitIntervalMs(json.getInt("autocommitIntervalMs"));
 		
 		if(json.getBoolean("advertising", false)) {
@@ -350,5 +352,13 @@ public class ZKFSManager {
 		if(fs.archive.config.getLocalStorage().exists(path())) {
 			fs.archive.config.getLocalStorage().unlink(path());
 		}
+	}
+
+	public boolean isAutomerging() {
+		return fs.getArchive().getConfig().getRevisionList().getAutomerge();
+	}
+	
+	public void setAutomerge(boolean automerging) {
+		fs.getArchive().getConfig().getRevisionList().setAutomerge(automerging);
 	}
 }

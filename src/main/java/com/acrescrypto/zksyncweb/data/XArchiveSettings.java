@@ -12,6 +12,7 @@ public class XArchiveSettings {
 	private Boolean autocommit;
 	private Boolean autofollow;
 	private Boolean automirror;
+	private Boolean automerge;
 	
 	private Integer peerLimit;
 	private Integer autocommitInterval;
@@ -29,8 +30,8 @@ public class XArchiveSettings {
 			settings.autocommitInterval = manager.getAutocommitIntervalMs();
 			settings.autofollow = manager.isAutofollowing();
 			settings.automirror = manager.isAutomirroring();
+			settings.automerge = manager.isAutomerging();
 			settings.automirrorPath = manager.getAutomirrorPath();
-
 		}
 		return settings;
 	}
@@ -97,5 +98,13 @@ public class XArchiveSettings {
 
 	public void setAutomirror(Boolean automirror) {
 		this.automirror = automirror;
+	}
+
+	public Boolean isAutomerge() {
+		return automerge;
+	}
+
+	public void setAutomerge(Boolean automerge) {
+		this.automerge = automerge;
 	}
 }
