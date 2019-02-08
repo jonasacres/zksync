@@ -22,6 +22,12 @@ public class CustomLoggingFilter implements ContainerRequestFilter, ContainerRes
 
 	@Override
 	public void filter(ContainerRequestContext requestContext) throws IOException {
+		boolean includeLog = State.sharedState().getMaster().getGlobalConfig().getBool("log.includeLogRequests");
+		if(!includeLog
+				&& requestContext.getMethod().equals("GET")
+				&& requestContext.getUriInfo().getAbsolutePath().equals("/logs")) {
+			return;
+		}
 		logger.debug("{} {} -- {} bytes",
 				requestContext.getMethod(),
 				requestContext.getUriInfo().getRequestUri(),
