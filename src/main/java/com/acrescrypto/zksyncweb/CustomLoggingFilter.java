@@ -25,7 +25,7 @@ public class CustomLoggingFilter implements ContainerRequestFilter, ContainerRes
 		boolean includeLog = State.sharedState().getMaster().getGlobalConfig().getBool("log.includeLogRequests");
 		if(!includeLog
 				&& requestContext.getMethod().equals("GET")
-				&& requestContext.getUriInfo().getAbsolutePath().equals("/logs")) {
+				&& requestContext.getUriInfo().getAbsolutePath().getPath().equals("/logs")) {
 			return;
 		}
 		logger.debug("{} {} -- {} bytes",
