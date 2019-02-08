@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.exceptions.InvalidRevisionTagException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionTag implements Comparable<RevisionTag> {
@@ -138,7 +139,9 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	
 	public void deserialize(ByteBuffer buf, boolean verifySignature) {
 		byte[] serialized = new byte[sizeForConfig(config)];
-		assert(buf.remaining() >= sizeForConfig(config));
+		if(buf.remaining() < sizeForConfig(config)) {
+			throw new InvalidRevisionTagException(Util.bytesToHex(buf.array()));
+		}
 		buf.get(serialized);
 		
 		if(Arrays.equals(new byte[serialized.length], serialized)) {

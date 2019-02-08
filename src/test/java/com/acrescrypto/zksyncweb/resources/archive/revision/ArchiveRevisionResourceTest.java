@@ -26,54 +26,60 @@ import com.acrescrypto.zksyncweb.WebTestUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 
 public class ArchiveRevisionResourceTest {
-    private HttpServer server;
-    private WebTarget target;
-    private ZKArchive archive;
-    private ZKFS fs;
-    private RevisionTag revTag;
-    private String basePath;
-    
-    @BeforeClass
-    public static void beforeAll() {
-    	ZKFSTest.cheapenArgon2Costs();
-    	WebTestUtils.squelchGrizzlyLogs();
-    }
+	private HttpServer server;
+	private WebTarget target;
+	private ZKArchive archive;
+	private ZKFS fs;
+	private RevisionTag revTag;
+	private String basePath;
 
-    @Before
-    public void beforeEach() throws Exception {
-    	State.setTestState();
-        server = Main.startServer();
-        Client c = ClientBuilder.newClient();
-        target = c.target(Main.BASE_URI);
-        
-    	archive = State.sharedState().getMaster().createDefaultArchive("passphrase".getBytes());
-    	archive.getConfig().advertise();
-    	archive.getMaster().storedAccess().storeArchiveAccess(archive.getConfig(), StoredAccess.ACCESS_LEVEL_READWRITE);
-    	State.sharedState().addOpenConfig(archive.getConfig());
-    	
-    	fs = State.sharedState().activeFs(archive.getConfig());
-    	revTag = fs.commit();
-    	fs.commit();
-    	basePath = "/archives/" + WebTestUtils.transformArchiveId(archive) + "/revisions/" + WebTestUtils.transformRevTag(revTag);
-    }
+	@BeforeClass
+	public static void beforeAll() {
+		ZKFSTest.cheapenArgon2Costs();
+		WebTestUtils.squelchGrizzlyLogs();
+	}
 
-    @After
-    public void afterEach() throws Exception {
-    	fs.close();
-    	archive.close();
-        server.shutdownNow();
-        State.clearState();
-    }
-    
-    @AfterClass
-    public static void afterAll() {
-    	ZKFSTest.restoreArgon2Costs();
-    }
-    
-    @Test
-    public void testGetReturnsInfoOfRequestedRevtag() throws IOException {
-    	JsonNode resp = WebTestUtils.requestGet(target, basePath);
-    	assertArrayEquals(revTag.getBytes(), resp.get("revTag").binaryValue());
-    	WebTestUtils.validateRevisionInfo(archive.getConfig(), resp);
-    }
+	@Before
+	public void beforeEach() throws Exception {
+		State.setTestState();
+		server = Main.startServer();
+		Client c = ClientBuilder.newClient();
+		target = c.target(Main.BASE_URI);
+
+		archive = State.sharedState().getMaster().createDefaultArchive("passphrase".getBytes());
+		archive.getConfig().advertise();
+		archive.getMaster().storedAccess().storeArchiveAccess(archive.getConfig(), StoredAccess.ACCESS_LEVEL_READWRITE);
+		State.sharedState().addOpenConfig(archive.getConfig());
+
+		fs = State.sharedState().activeFs(archive.getConfig());
+		revTag = fs.commit();
+		fs.commit();
+		basePath = "/archives/" + WebTestUtils.transformArchiveId(archive) + "/revisions/" + WebTestUtils.transformRevTag(revTag);
+	}
+
+	@After
+	public void afterEach() throws Exception {
+		fs.close();
+		archive.close();
+		server.shutdownNow();
+		State.clearState();
+	}
+
+	@AfterClass
+	public static void afterAll() {
+		ZKFSTest.restoreArgon2Costs();
+	}
+
+	@Test
+	public void testGetReturnsInfoOfRequestedRevtag() throws IOException {
+		JsonNode resp = WebTestUtils.requestGet(target, basePath);
+		assertArrayEquals(revTag.getBytes(), resp.get("revTag").binaryValue());
+		WebTestUtils.validateRevisionInfo(archive.getConfig(), resp);
+	}
+	
+	@Test
+	public void testGetReturns404IfRevtagNotFound() throws IOException {
+		basePath = "/archives/" + WebTestUtils.transformArchiveId(archive) + "/revisions/doesntexist";
+		WebTestUtils.requestGetWithError(target, 404, basePath);
+	}
 }

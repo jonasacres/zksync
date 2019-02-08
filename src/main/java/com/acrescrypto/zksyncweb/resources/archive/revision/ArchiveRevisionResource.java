@@ -8,6 +8,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
+import com.acrescrypto.zksync.exceptions.InvalidRevisionTagException;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksyncweb.State;
@@ -24,8 +25,12 @@ public class ArchiveRevisionResource {
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
 		
-		RevisionTag tag = State.sharedState().fsForRevision(config, revTag).getBaseRevision();
-		XRevisionInfo xInfo = new XRevisionInfo(tag);
-		return XAPIResponse.withPayload(xInfo);
+		try {
+			RevisionTag tag = State.sharedState().fsForRevision(config, revTag).getBaseRevision();
+			XRevisionInfo xInfo = new XRevisionInfo(tag);
+			return XAPIResponse.withPayload(xInfo);
+		} catch(InvalidRevisionTagException exc) {
+			throw XAPIResponse.notFoundErrorResponse();
+		}
 	}
 }

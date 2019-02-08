@@ -1,6 +1,8 @@
 package com.acrescrypto.zksyncweb.data;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import com.acrescrypto.zksync.fs.zkfs.RevisionInfo;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
@@ -46,5 +48,16 @@ public class XRevisionInfo {
 
 	public void setParents(byte[][] parents) {
 		this.parents = parents;
+	}
+	
+	@Override
+	public int hashCode() {
+		return ByteBuffer.wrap(revTag).getInt();
+	}
+	
+	@Override
+	public boolean equals(Object o) {
+		if(!(o instanceof XRevisionInfo)) return false;
+		return Arrays.equals(revTag, ((XRevisionInfo) o).revTag);
 	}
 }

@@ -3,16 +3,22 @@ package com.acrescrypto.zksyncweb.resources.archive.revision;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashSet;
+import java.util.LinkedList;
 
+import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTree;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 import com.acrescrypto.zksyncweb.data.XRevisionInfo;
@@ -22,9 +28,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class ArchiveRevisionsResource {
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
-	public XAPIResponse getPath(@PathParam("archiveId") String archiveId) throws XAPIResponse, IOException {
+	public XAPIResponse getRevisions(
+			@PathParam("archiveId") String archiveId,
+			@DefaultValue("tips") @QueryParam("mode") String mode
+			) throws XAPIResponse, IOException {
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
+		
+		if(mode.equals("all")) {
+			return listAll(config);
+		}
 		
 		ArrayList<byte[]> tips = new ArrayList<>();
 		for(RevisionTag tip :  config.getRevisionList().branchTips()) {
@@ -33,7 +46,23 @@ public class ArchiveRevisionsResource {
 		
 		return XAPIResponse.withWrappedPayload("branchTips", tips);
 	}
+	
+	protected XAPIResponse listAll(ZKArchiveConfig config) throws IOException {
+		HashSet<XRevisionInfo> set = new HashSet<>();
+		LinkedList<RevisionTag> queue = new LinkedList<>();
 
+		RevisionTree tree = config.getRevisionTree();
+		
+		queue.addAll(config.getRevisionList().branchTips());
+		while(!queue.isEmpty()) {
+			RevisionTag tip = queue.pop();
+			queue.addAll(tree.parentsForTag(tip));
+			set.add(new XRevisionInfo(tip));
+		}
+		
+		return XAPIResponse.withWrappedPayload("revisions", set);
+	}
+	
 	@POST
 	@Produces(MediaType.APPLICATION_JSON)
 	public XAPIResponse postCommit(@PathParam("archiveId") String archiveId, String json) throws IOException, XAPIResponse {
