@@ -34,6 +34,7 @@ public class FSMirror {
 	ZKFS zkfs;
 	FS target;
 	RevisionTag lastRev;
+	Thread watchThread;
 
 	Logger logger = LoggerFactory.getLogger(FSMirror.class);
 	MutableBoolean watchFlag = new MutableBoolean();
@@ -75,21 +76,31 @@ public class FSMirror {
 		LocalFS localTarget = (LocalFS) target;
 		Path dir = Paths.get(localTarget.getRoot());
 		WatchService watcher = dir.getFileSystem().newWatchService();
-		incrementActive();
 		HashMap<WatchKey, Path> pathsByKey = new HashMap<>();
-		watchDirectory(dir, watcher, pathsByKey);
-		logger.info("FS {}: Starting watch of {}",
+		incrementActive();
+		logger.info("FS {}: FSMirror starting watch of {}, {} active",
 				Util.formatArchiveId(zkfs.archive.config.archiveId),
-				localTarget.getRoot());
+				localTarget.getRoot(),
+				numActive());
+		watchDirectory(dir, watcher, pathsByKey);
 
-		new Thread( () -> watchThread(flag, watcher, pathsByKey) ).start();
+		watchThread = new Thread( () -> watchThread(flag, watcher, pathsByKey) );
+		watchThread.start();
 	}
 
 	public void stopWatch() {
-		logger.info("FS {}: Stopping watch of {}",
+		if(watchThread == null) return;
+		Thread stoppedThread = watchThread;
+		logger.info("FS {}: FSMirror stopping watch of {}, {} active",
 				Util.formatArchiveId(zkfs.archive.config.archiveId),
-				((LocalFS) target).getRoot());
+				((LocalFS) target).getRoot(),
+				numActive());
 		watchFlag.setFalse();
+		Util.blockOn(()->stoppedThread.isAlive());
+		logger.info("FS {}: FSMirror stopped watch of {}, {} watches active",
+				Util.formatArchiveId(zkfs.archive.config.archiveId),
+				((LocalFS) target).getRoot(),
+				numActive());
 	}
 
 	protected void watchDirectory(Path dir, WatchService watcher, HashMap<WatchKey, Path> pathsByKey) throws IOException {
@@ -143,7 +154,7 @@ public class FSMirror {
 				for(WatchEvent<?> event : key.pollEvents()) {
 					WatchEvent.Kind<?> kind = event.kind();
 					if(kind == OVERFLOW) {
-						logger.warn("FS {}: Caught overflow; some local filesystem changes may not have made it into the archive.",
+						logger.warn("FS {}: FSMirror caught overflow; some local filesystem changes may not have made it into the archive.",
 								Util.formatArchiveId(zkfs.archive.config.archiveId));
 						continue;
 					}
@@ -188,7 +199,7 @@ public class FSMirror {
 	}
 
 	public synchronized void observedTargetPathChange(String path) throws IOException {
-		logger.info("FS {}: mirror observed change: ",
+		logger.info("FS {}: FSMirror observed change: {}",
 				Util.formatArchiveId(zkfs.archive.config.archiveId),
 				path);
 		copy(target, zkfs, path);
@@ -200,9 +211,29 @@ public class FSMirror {
 		if(tstat == null && zstat == null) return;
 		if(tstat == null || zstat == null) {
 		} else if(tstat.getType() != zstat.getType()) {
-		} else if(tstat.getSize() != zstat.getSize()) {
-		} else if(tstat.getMtime() != zstat.getMtime()) {
+			logger.trace("FS {}: FSMirror detects difference at {} due to differing type (zkfs {}, target {})",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					path,
+					zstat.getType(),
+					tstat.getType());
+		} else if(zstat.getType() == Stat.TYPE_REGULAR_FILE && tstat.getSize() != zstat.getSize()) {
+			logger.trace("FS {}: FSMirror detects difference at {} due to differing size (zkfs {}, target {})",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					path,
+					zstat.getSize(),
+					tstat.getSize());
+		} else if(zstat.getType() == Stat.TYPE_REGULAR_FILE && tstat.getMtime() != zstat.getMtime()) {
+			logger.trace("FS {}: FSMirror detects difference at {} due to differing mtime (zkfs {}, target {})",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					path,
+					zstat.getMtime(),
+					tstat.getMtime());
 		} else if(tstat.getMode() != zstat.getMode()) {
+			logger.trace("FS {}: FSMirror detects difference at {} due to differing size (zkfs {}, target {})",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					path,
+					zstat.getMode(),
+					tstat.getMode());
 		} else {
 			return; // nothing was different
 		}
@@ -458,7 +489,7 @@ public class FSMirror {
 	protected void tracelog(FS src, FS dest, String path, String msg, Object arg) {
 		String direction = src == zkfs ? "zkfs -> target" : "target -> zkfs";
 		String prefix = "FS " + Util.formatArchiveId(zkfs.archive.config.archiveId) +
-				": sync " +
+				": FSMirror sync " +
 				path +
 				" " +
 				direction + " ";

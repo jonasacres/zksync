@@ -69,7 +69,7 @@ public class TCPPeerSocketListener {
 		this.bandwidthMonitorRx = new BandwidthMonitor(master.getBandwidthMonitorRx());
 		this.bandwidthMonitorTx = new BandwidthMonitor(master.getBandwidthMonitorTx());
 		
-		logger.info("Swarm - {}: TCP listener public key: {}",
+		logger.info("Swarm - -: TCP listener public key: {}",
 				Util.formatPubKey(identityKey.publicKey()));
 	}
 	
