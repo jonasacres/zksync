@@ -40,7 +40,7 @@ public class RevisionListTest {
 	
 	@BeforeClass	
 	public static void beforeClass() throws IOException {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		Security.addProvider(new BouncyCastleProvider());
 	}
 	
@@ -63,7 +63,7 @@ public class RevisionListTest {
 	@AfterClass
 	public static void afterAll() throws IOException {
 		TestUtils.assertTidy();
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 	}
 	
 	public LinkedList<RevisionTag> setupFakeRevisions(int count) throws IOException {

@@ -25,7 +25,6 @@ import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.Shuffler;
 
@@ -127,7 +126,7 @@ public class ChunkAccumulatorTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		
@@ -178,7 +177,7 @@ public class ChunkAccumulatorTest {
 	public static void afterAll() throws IOException {
 		archive.close();
 		master.close();
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

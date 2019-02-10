@@ -23,12 +23,12 @@ public class StoredAccessTest {
 	@BeforeClass
 	public static void beforeClass() throws IOException {
 		Security.addProvider(new BouncyCastleProvider());
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 	}
 	
 	@AfterClass
 	public static void afterClass() throws IOException {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

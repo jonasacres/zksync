@@ -20,7 +20,7 @@ public class FreeListTest {
 	@BeforeClass
 	public static void beforeClass() throws IOException {
 		master = ZKMaster.openBlankTestVolume();
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		Security.addProvider(new BouncyCastleProvider());
 	}
 	

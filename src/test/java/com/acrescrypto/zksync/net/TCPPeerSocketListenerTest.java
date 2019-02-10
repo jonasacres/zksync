@@ -31,7 +31,6 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.noise.HandshakeState;
 import com.acrescrypto.zksync.utility.Util;
@@ -138,7 +137,7 @@ public class TCPPeerSocketListenerTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		crypto = CryptoSupport.defaultCrypto();
 	}
 	
@@ -173,7 +172,7 @@ public class TCPPeerSocketListenerTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		TCPPeerSocket.socketCloseDelay = TCPPeerSocket.DEFAULT_SOCKET_CLOSE_DELAY;
 		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

@@ -22,7 +22,6 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.utility.Util;
@@ -60,7 +59,7 @@ public class DHTZKArchiveDiscoveryTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 	}
 	
 	@SuppressWarnings("deprecation")
@@ -88,7 +87,7 @@ public class DHTZKArchiveDiscoveryTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

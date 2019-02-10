@@ -32,7 +32,7 @@ public class RevisionTagTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 	}
 	
 	@Before
@@ -55,7 +55,7 @@ public class RevisionTagTest {
 	
 	@AfterClass
 	public static void afterAll() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

@@ -5,6 +5,7 @@ import static org.junit.Assert.fail;
 import java.util.HashSet;
 import java.util.Map;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.FSMirror;
 import com.acrescrypto.zksync.utility.SnoozeThread;
@@ -111,5 +112,15 @@ public class TestUtils {
 			System.out.println("Open file handles: " + FS.getGlobalOpenFiles().size());
 			fail();
 		}
+	}
+
+	public static void stopDebugMode() {
+		CryptoSupport.cheapArgon2 = false;
+		FS.fileHandleTelemetryEnabled = false;
+	}
+
+	public static void startDebugMode() {
+		CryptoSupport.cheapArgon2 = true;
+		FS.fileHandleTelemetryEnabled = true;
 	}
 }

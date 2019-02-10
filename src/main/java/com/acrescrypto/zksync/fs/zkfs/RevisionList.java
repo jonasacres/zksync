@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
+import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
@@ -265,8 +266,13 @@ public class RevisionList {
 					} else {
 						DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
 					}
+				} catch(ClosedException exc) {
+					logger.debug("FS {}: Automerge aborted since archive clsoed",
+							config.getArchiveId());
 				} catch (IOException|DiffResolutionException exc) {
-					logger.error("Error performing automerge", exc);
+					logger.error("FS {}: Error performing automerge",
+							Util.formatArchiveId(config.archiveId),
+							exc);
 				}
 			});
 		} else {

@@ -86,7 +86,7 @@ public class ZKArchiveConfigTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		master = ZKMaster.openBlankTestVolume();
 		key = new Key(master.crypto, master.crypto.rng(master.crypto.symKeyLength()));
 		accessor = master.makeAccessorForRoot(key, false);
@@ -115,7 +115,7 @@ public class ZKArchiveConfigTest {
 	@AfterClass
 	public static void afterAll() {
 		master.close();
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

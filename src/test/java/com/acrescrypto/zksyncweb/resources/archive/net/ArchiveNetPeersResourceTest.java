@@ -22,9 +22,9 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.net.BlacklistEntry;
 import com.acrescrypto.zksync.net.PeerAdvertisement;
 import com.acrescrypto.zksync.net.PeerConnection;
@@ -43,6 +43,13 @@ public class ArchiveNetPeersResourceTest {
 	class DummySwarm extends PeerSwarm {
 		LinkedList<PeerAdvertisement> addedAds = new LinkedList<>();
 		ArrayList<DummyPeerConnection> connections = new ArrayList<>();
+		PublicDHKey key;
+		
+		@Override
+		public PublicDHKey getPublicIdentityKey() {
+			if(key == null) key = archive.getCrypto().makePrivateDHKey().publicKey();
+			return key;
+		}
 		
 		@Override
 		public void addPeerAdvertisement(PeerAdvertisement ad) {
@@ -66,7 +73,7 @@ public class ArchiveNetPeersResourceTest {
 		
 		public DummyPeerConnection(int index) {
 			this.index = index;
-			super.socket = this.socket = new DummyPeerSocket();
+			super.socket = this.socket = new DummyPeerSocket(swarm);
 			PublicDHKey pubKey = new PublicDHKey(archive.getCrypto(),
 					archive.getCrypto().expand(
 						Util.serializeInt(index),
@@ -100,6 +107,11 @@ public class ArchiveNetPeersResourceTest {
 		int peerType;
 		PublicDHKey pubKey;
 		
+		public DummyPeerSocket(DummySwarm swarm) {
+			super();
+			this.swarm = swarm;
+		}
+		
 		@Override
 		public BandwidthMonitor getMonitorRx() {
 			return new DummyMonitor();
@@ -121,6 +133,8 @@ public class ArchiveNetPeersResourceTest {
 		public int getPeerType() {
 			return peerType;
 		}
+		
+		@Override public PeerSwarm getSwarm() { return swarm; }
 	}
 	
 	class DummyMonitor extends BandwidthMonitor {
@@ -136,7 +150,7 @@ public class ArchiveNetPeersResourceTest {
     
     @BeforeClass
     public static void beforeAll() {
-    	ZKFSTest.cheapenArgon2Costs();
+    	TestUtils.startDebugMode();
     	WebTestUtils.squelchGrizzlyLogs();
     }
 
@@ -197,7 +211,7 @@ public class ArchiveNetPeersResourceTest {
     
     @AfterClass
     public static void afterAll() {
-    	ZKFSTest.restoreArgon2Costs();
+    	TestUtils.stopDebugMode();
     }
     
     @Test

@@ -25,7 +25,6 @@ import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -172,7 +171,7 @@ public class PeerSwarmTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		master = ZKMaster.openBlankTestVolume();
 	}
 	
@@ -206,7 +205,7 @@ public class PeerSwarmTest {
 	@AfterClass
 	public static void afterAll() {
 		master.close();
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

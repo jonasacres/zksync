@@ -23,7 +23,6 @@ import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.PeerSwarm;
 
@@ -61,7 +60,7 @@ public class SwarmFSTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 	}
 	
 	@Before
@@ -88,7 +87,7 @@ public class SwarmFSTest {
 	
 	@AfterClass
 	public static void afterAll() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

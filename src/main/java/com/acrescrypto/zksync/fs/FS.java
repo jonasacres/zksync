@@ -27,6 +27,8 @@ public abstract class FS implements AutoCloseable {
 		return globalFileBacktraces;
 	}
 	
+	public static boolean fileHandleTelemetryEnabled = false;
+	
 	public abstract Stat stat(String path) throws IOException;
 	public abstract Stat lstat(String path) throws IOException;
 	
@@ -271,12 +273,16 @@ public abstract class FS implements AutoCloseable {
 	}
 
 	public synchronized void reportOpenFile(File file) {
+		if(!fileHandleTelemetryEnabled) return;
+		
 		Throwable backtrace = new Throwable();
 		addOpenFileHandle(file, backtrace);
 		localFileBacktraces.put(file, backtrace);
 	}
 	
 	public synchronized void reportClosedFile(File file) {
+		if(!fileHandleTelemetryEnabled) return;
+		
 		removeOpenFileHandle(file);
 		localFileBacktraces.remove(file);
 	}

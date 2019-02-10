@@ -26,6 +26,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
@@ -35,7 +36,6 @@ import com.acrescrypto.zksync.fs.zkfs.StoredAccessRecord;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.net.dht.DHTID;
 import com.acrescrypto.zksync.net.dht.DHTClient;
@@ -59,7 +59,7 @@ public class ArchiveResourceTest {
 
 	@BeforeClass
 	public static void beforeAll() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		WebTestUtils.squelchGrizzlyLogs();
 	}
 
@@ -98,7 +98,7 @@ public class ArchiveResourceTest {
 
 	@AfterClass
 	public static void afterAll() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 	}
 
 	public String encodeArchiveId(ZKArchive archive) {

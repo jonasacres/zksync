@@ -28,7 +28,7 @@ public class DiffSetResolverTest {
 	
 	@BeforeClass
 	public static void beforeClass() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		Security.addProvider(new BouncyCastleProvider());
 		try {
 			master = ZKMaster.openBlankTestVolume();
@@ -40,7 +40,7 @@ public class DiffSetResolverTest {
 	@AfterClass
 	public static void afterClass() {
 		master.close();
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

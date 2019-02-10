@@ -31,7 +31,7 @@ public class ZKFSManagerTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 	}
 	
 	@Before
@@ -60,7 +60,7 @@ public class ZKFSManagerTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

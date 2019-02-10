@@ -22,7 +22,7 @@ public class PageTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 	}
 	
 	@Before
@@ -46,7 +46,7 @@ public class PageTest {
 	
 	@AfterClass
 	public static void afterAll() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

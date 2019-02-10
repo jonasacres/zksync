@@ -18,7 +18,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.BlacklistEntry;
 import com.acrescrypto.zksyncweb.Main;
@@ -34,7 +34,7 @@ public class BlacklistResourceTest {
 
 	@BeforeClass
 	public static void beforeAll() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 	}
 	
 	@Before
@@ -54,7 +54,7 @@ public class BlacklistResourceTest {
 	
 	@AfterClass
 	public static void afterAll() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

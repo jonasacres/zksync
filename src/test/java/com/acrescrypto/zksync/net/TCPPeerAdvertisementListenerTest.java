@@ -19,7 +19,6 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -54,7 +53,7 @@ public class TCPPeerAdvertisementListenerTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 	}
@@ -73,7 +72,7 @@ public class TCPPeerAdvertisementListenerTest {
 	
 	@AfterClass
 	public static void afterAll() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		archive.close();
 		master.close();
 		TestUtils.assertTidy();

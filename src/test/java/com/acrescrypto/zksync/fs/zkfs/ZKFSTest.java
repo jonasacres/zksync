@@ -29,7 +29,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		master = ZKMaster.openBlankTestVolume();
 		scratch = zkscratch = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 		prepareExamples();
@@ -40,7 +40,7 @@ public class ZKFSTest extends FSTestBase {
 		master.close();
 		zkscratch.close();
 		zkscratch.archive.close();
-		restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 	}
 	
 	@BeforeClass
@@ -673,13 +673,5 @@ public class ZKFSTest extends FSTestBase {
 		ByteBuffer buf = ByteBuffer.allocate(4);
 		buf.putInt(length);
 		return zkscratch.archive.crypto.expand(key.getBytes(), length, buf.array(), "zksync".getBytes());
-	}
-	
-	public static void cheapenArgon2Costs() {
-		CryptoSupport.cheapArgon2 = true;
-	}
-	
-	public static void restoreArgon2Costs() {
-		CryptoSupport.cheapArgon2 = false;
 	}
 }

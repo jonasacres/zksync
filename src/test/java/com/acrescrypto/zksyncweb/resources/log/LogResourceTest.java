@@ -21,7 +21,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.utility.MemLogAppender;
 import com.acrescrypto.zksyncweb.Main;
 import com.acrescrypto.zksyncweb.State;
@@ -43,7 +43,7 @@ public class LogResourceTest {
 	@BeforeClass
 	public static void beforeAll() {
 		WebTestUtils.squelchGrizzlyLogs();
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 	}
 
 	@Before
@@ -62,7 +62,7 @@ public class LogResourceTest {
 
 	@AfterClass
 	public static void afterAll() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 	}
 	
 	public ArrayList<JsonNode> filterEntries(JsonNode entries) {

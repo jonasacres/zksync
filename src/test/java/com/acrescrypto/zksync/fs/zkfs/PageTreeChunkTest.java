@@ -67,7 +67,7 @@ public class PageTreeChunkTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 	}
 	
 	@Before
@@ -89,7 +89,7 @@ public class PageTreeChunkTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

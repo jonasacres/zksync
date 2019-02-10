@@ -368,25 +368,30 @@ public class FSMirror {
 
 	protected void copyFile(FS src, FS dest, String path, Stat srcStat, Stat destStat) throws IOException {
 		tracelog(src, dest, path, "copy regular file");
-		File targetFile = null, archiveFile = null;
+		File srcFile = null, destFile = null;
 		try {
-			targetFile = src.open(path, File.O_RDONLY);
+			srcFile = src.open(path, File.O_RDONLY);
 
 			if(destStat != null && !destStat.isRegularFile()) {
 				remove(dest, path, destStat);
 			}
 
-			archiveFile = dest.open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
-			while(targetFile.hasData()) {
-				byte[] chunk = targetFile.read(65536);
-				archiveFile.write(chunk);
+			destFile = dest.open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
+			while(srcFile.hasData()) {
+				logger.trace("FS {}: FSMirror write {} chunk offset {} length {}",
+						Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+						path,
+						srcFile.seek(0, File.SEEK_CUR),
+						srcFile.getStat().getSize());
+				byte[] chunk = srcFile.read(65536);
+				destFile.write(chunk);
 			}
 
-			archiveFile.close();
-			archiveFile = null;
+			destFile.close();
+			destFile = null;
 		} finally {
-			ensureClosed(targetFile);
-			ensureClosed(archiveFile);
+			ensureClosed(srcFile);
+			ensureClosed(destFile);
 		}
 	}
 

@@ -27,17 +27,17 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		master = ZKMaster.openBlankTestVolume();
 		scratch = zkscratch = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
 	}
 	
 	@After
 	public void afterEach() throws IOException {
-		ZKFSTest.restoreArgon2Costs();
 		master.close();
 		zkscratch.close();
 		zkscratch.archive.close();
+		TestUtils.stopDebugMode();
 	}
 
 	@BeforeClass

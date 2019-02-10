@@ -19,9 +19,9 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTID;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
@@ -119,7 +119,7 @@ public class DHTResourceTest {
 
 	@BeforeClass
 	public static void beforeAll() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		WebTestUtils.squelchGrizzlyLogs();
 	}
 
@@ -147,7 +147,7 @@ public class DHTResourceTest {
 
 	@AfterClass
 	public static void afterAll() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 	}
 
 	void validateDHTClientInfo(JsonNode info, DHTClient client) throws IOException {

@@ -18,7 +18,6 @@ import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKFile;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSet;
@@ -38,13 +37,13 @@ public class DiffSetTest {
 	
 	@BeforeClass
 	public static void beforeClass() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		Security.addProvider(new BouncyCastleProvider());
 	}
 	
 	@AfterClass
 	public static void afterClass() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

@@ -21,11 +21,11 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.net.RequestPool;
 import com.acrescrypto.zksync.utility.Util;
@@ -78,7 +78,7 @@ public class ArchiveNetPoolResourceTest {
 
     @BeforeClass
     public static void beforeAll() {
-    	ZKFSTest.cheapenArgon2Costs();
+    	TestUtils.startDebugMode();
     	WebTestUtils.squelchGrizzlyLogs();
     }
     
@@ -110,7 +110,7 @@ public class ArchiveNetPoolResourceTest {
     
     @AfterClass
     public static void afterAll() {
-    	ZKFSTest.restoreArgon2Costs();
+    	TestUtils.stopDebugMode();
     }
 
     @Test

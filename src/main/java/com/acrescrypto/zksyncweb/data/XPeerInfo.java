@@ -1,8 +1,15 @@
 package com.acrescrypto.zksyncweb.data;
 
+import java.io.IOException;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.net.PeerConnection;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
+import com.acrescrypto.zksync.utility.Util;
+import com.acrescrypto.zksyncweb.State;
 
 public class XPeerInfo {
 	public final static int ROLE_REQUESTOR = 0;
@@ -19,6 +26,9 @@ public class XPeerInfo {
 	private Boolean remotePaused;
 	private Boolean wantsEverything;
 	private Long timeStart;
+	private String connectionId;
+	
+	protected final Logger logger = LoggerFactory.getLogger(XPeerInfo.class);
 	
 	public XPeerInfo() {}
 	
@@ -29,6 +39,14 @@ public class XPeerInfo {
 		this.lifetimeBytesTx = lifetimeBytesFromMonitor(conn.getSocket().getMonitorTx());
 		this.role = conn.getSocket().isLocalRoleClient() ? ROLE_REQUESTOR : ROLE_RESPONDER;
 		this.peerType = conn.getPeerType();
+		try {
+			this.connectionId = Util.bytesToHex(State.sharedCrypto().authenticate(
+					conn.getSocket().getSwarm().getPublicIdentityKey().getBytes(),
+					Util.serializeInt(System.identityHashCode(conn))
+					), 8);
+		} catch (IOException exc) {
+			logger.error("XPeerInfo caught exception serializing connection ID", exc);
+		}
 		
 		if(conn.getSocket().getAd() instanceof TCPPeerAdvertisement) {
 			this.ad = new XTCPAdListing((TCPPeerAdvertisement) conn.getSocket().getAd());
@@ -136,5 +154,13 @@ public class XPeerInfo {
 
 	public void setLifetimeBytesRx(Long lifetimeBytesRx) {
 		this.lifetimeBytesRx = lifetimeBytesRx;
+	}
+
+	public String getConnectionId() {
+		return connectionId;
+	}
+
+	public void setConnectionId(String connectionId) {
+		this.connectionId = connectionId;
 	}
 }

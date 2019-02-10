@@ -85,9 +85,9 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	
 	public ZKFS readOnlyFS() throws IOException {
 		if(cacheOnly) {
-			return refTag.config.archive.cacheOnlyArchive().readOnlyFilesystems.get(this);
+			return refTag.config.archive.cacheOnlyArchive().openRevisionReadOnly(this);
 		} else {
-			return refTag.config.archive.readOnlyFilesystems.get(this);
+			return refTag.config.archive.openRevisionReadOnly(this);
 		}
 	}
 	

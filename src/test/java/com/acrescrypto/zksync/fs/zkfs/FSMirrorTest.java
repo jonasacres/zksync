@@ -42,7 +42,7 @@ public class FSMirrorTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 	}
 	
 	@Before
@@ -68,7 +68,7 @@ public class FSMirrorTest {
 	
 	@AfterClass
 	public static void afterAll() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	
@@ -114,7 +114,7 @@ public class FSMirrorTest {
 		assertEquals(expected.getType(), stat.getType());
 		
 		final int conversion = 1000*1000*1000;
-		final int timeTolerance = 10; // timestamps are in nanoseconds. allow 10s slop.
+		final int timeTolerance = 20; // timestamps are in nanoseconds. allow some slop.
 		
 		if(!expected.isSymlink()) {
 			assertEquals(expected.getAtime()/conversion, stat.getAtime()/conversion, timeTolerance);

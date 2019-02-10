@@ -20,13 +20,13 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.StoredAccess;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.net.PageQueue;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.Main;
@@ -43,7 +43,7 @@ public class ArchiveFsResourceTest {
 
 	@BeforeClass
 	public static void beforeAll() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		WebTestUtils.squelchGrizzlyLogs();
 	}
 
@@ -73,7 +73,7 @@ public class ArchiveFsResourceTest {
 
 	@AfterClass
 	public static void afterAll() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 	}
 
 	long setupMissingFile() throws IOException {

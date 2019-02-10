@@ -15,11 +15,11 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.StoredAccess;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksyncweb.Main;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.WebTestUtils;
@@ -34,7 +34,7 @@ public class ArchiveRevisionLatestResourceTest {
     
     @BeforeClass
     public static void beforeAll() {
-    	ZKFSTest.cheapenArgon2Costs();
+    	TestUtils.startDebugMode();
     	WebTestUtils.squelchGrizzlyLogs();
     }
 
@@ -64,7 +64,7 @@ public class ArchiveRevisionLatestResourceTest {
     
     @AfterClass
     public static void afterAll() {
-    	ZKFSTest.restoreArgon2Costs();
+    	TestUtils.stopDebugMode();
     }
     
     @Test

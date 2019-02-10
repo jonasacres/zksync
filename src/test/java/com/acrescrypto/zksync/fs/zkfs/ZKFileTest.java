@@ -25,7 +25,7 @@ public class ZKFileTest extends FileTestBase {
 	
 	@BeforeClass
 	public static void beforeClass() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		Security.addProvider(new BouncyCastleProvider());
 	}
 	
@@ -44,7 +44,7 @@ public class ZKFileTest extends FileTestBase {
 	
 	@AfterClass
 	public static void afterClass() throws IOException {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 

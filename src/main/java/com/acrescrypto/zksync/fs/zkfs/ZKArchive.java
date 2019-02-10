@@ -99,11 +99,23 @@ public class ZKArchive implements AutoCloseable {
 		return new ZKFS(revision);
 	}
 	
+	public ZKFS openRevisionReadOnly(RevisionTag revision) throws IOException {
+		if(isClosed()) {
+			throw new ClosedException();
+		}
+		
+		ZKFS fs = readOnlyFilesystems.get(revision);
+		
+		if(isClosed()) {
+			fs.close();
+			throw new ClosedException();
+		}
+		
+		return fs;
+	}
+	
 	public ZKFS openBlank() throws IOException {
 		assertOpen();
-		if(config.isReadOnly()) {
-			
-		}
 		return new ZKFS(new RevisionTag(RefTag.blank(this), 0, 0));
 	}
 	

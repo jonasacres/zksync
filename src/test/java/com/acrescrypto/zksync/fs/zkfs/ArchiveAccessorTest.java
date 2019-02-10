@@ -29,7 +29,7 @@ public class ArchiveAccessorTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		master = ZKMaster.openBlankTestVolume();
 	}
 	
@@ -43,7 +43,7 @@ public class ArchiveAccessorTest {
 	
 	@AfterClass
 	public static void afterAll() throws IOException {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

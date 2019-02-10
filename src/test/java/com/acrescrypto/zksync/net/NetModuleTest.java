@@ -21,7 +21,6 @@ import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
 import com.acrescrypto.zksync.utility.Util;
@@ -40,12 +39,12 @@ public class NetModuleTest {
 	@BeforeClass
 	public static void beforeClass() {
 		crypto = CryptoSupport.defaultCrypto();
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 	}
 	
 	@AfterClass
 	public static void afterClass() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 

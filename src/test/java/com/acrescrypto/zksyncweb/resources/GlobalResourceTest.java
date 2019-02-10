@@ -20,7 +20,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.Util;
@@ -44,7 +44,7 @@ public class GlobalResourceTest {
 
 	@BeforeClass
 	public static void beforeAll() {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		WebTestUtils.squelchGrizzlyLogs();
 	}
 
@@ -69,7 +69,7 @@ public class GlobalResourceTest {
 
 	@AfterClass
 	public static void afterAll() {
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 	}
 
 	@Test

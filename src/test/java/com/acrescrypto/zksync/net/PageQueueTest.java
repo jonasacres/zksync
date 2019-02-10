@@ -28,7 +28,6 @@ import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.fs.zkfs.ZKFSTest;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.PageQueue.ChunkQueueItem;
 import com.acrescrypto.zksync.net.PageQueue.ChunkReference;
@@ -55,7 +54,7 @@ public class PageQueueTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
-		ZKFSTest.cheapenArgon2Costs();
+		TestUtils.startDebugMode();
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		numChunks = (int) Math.ceil((double) archive.getConfig().getPageSize()/PeerMessage.FILE_CHUNK_SIZE);
@@ -99,7 +98,7 @@ public class PageQueueTest {
 	public static void afterAll() {
 		archive.close();
 		master.close();
-		ZKFSTest.restoreArgon2Costs();
+		TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

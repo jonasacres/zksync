@@ -136,22 +136,27 @@ public class DiffSetResolver {
 	}
 	
 	public RevisionTag resolve() throws IOException, DiffResolutionException {
-		if(diffset.revisions.length == 1) {
-			fs.getArchive().getConfig().getRevisionList().consolidate(diffset.revisions[0]);
+		try {
+			if(diffset.revisions.length == 1) {
+				fs.getArchive().getConfig().getRevisionList().consolidate(diffset.revisions[0]);
+				fs.close();
+				return diffset.revisions[0];
+			}
+			
+			if(diffset.revisions.length > RevisionInfo.maxParentsForConfig(fs.getArchive().getConfig())) {
+				return resolveExcessive();
+			}
+			
+			selectResolutions();
+			applyResolutions();
+			RevisionTag revTag = fs.commitWithTimestamp(diffset.revisions, 0);
+			fs.getArchive().getConfig().getRevisionList().consolidate(revTag);
 			fs.close();
-			return diffset.revisions[0];
+			return revTag;
+		} catch(Throwable exc) {
+			fs.close();
+			throw exc;
 		}
-		
-		if(diffset.revisions.length > RevisionInfo.maxParentsForConfig(fs.getArchive().getConfig())) {
-			return resolveExcessive();
-		}
-		
-		selectResolutions();
-		applyResolutions();
-		RevisionTag revTag = fs.commitWithTimestamp(diffset.revisions, 0);
-		fs.getArchive().getConfig().getRevisionList().consolidate(revTag);
-		fs.close();
-		return revTag;
 	}
 	
 	protected RevisionTag resolveExcessive() throws IOException, DiffResolutionException {
