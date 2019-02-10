@@ -62,16 +62,13 @@ public class ZKArchive implements AutoCloseable {
 	}
 	
 	public void close() {
-		readOnlyFilesystems.cachedKeys().forEach((tag)->{
-			try {
-				readOnlyFilesystems.get(tag).close();
-			} catch (IOException exc) {
-				logger.error("ZKFS {}: Caught exception closing filesystem for tag {}",
-						Util.formatArchiveId(config.getArchiveId()),
-						Util.formatRevisionTag(tag),
-						exc);
-			}
-		});
+		try {
+			readOnlyFilesystems.removeAll();
+		} catch (IOException exc) {
+			logger.error("ZKFS {}: Caught exception closing read-only filesystems during archive closure",
+					Util.formatArchiveId(config.getArchiveId()),
+					exc);
+		}
 		
 		if(cacheOnlyArchive != null) {
 			cacheOnlyArchive.close();

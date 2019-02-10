@@ -254,6 +254,7 @@ public class RevisionList {
 	protected void queueAutomerge() throws IOException, DiffResolutionException {
 		if(automergeSnoozeThread == null || automergeSnoozeThread.isCancelled()) {
 			automergeSnoozeThread = new SnoozeThread(automergeDelayMs, maxAutomergeDelayMs, true, ()-> {
+				if(config.getArchive().isClosed()) return;
 				try {
 					if(config.isReadOnly()) {
 						/* obviously we're not doing any merging if we don't have the write key, so
