@@ -34,7 +34,7 @@ public class NetModuleTest {
 		fs.write("file0", crypto.rng(crypto.hashLength()-1));
 		fs.write("file1", crypto.rng(archive.getConfig().getPageSize()));
 		fs.write("file2", crypto.rng(10*archive.getConfig().getPageSize()));
-		fs.commit();
+		fs.commitAndClose();
 	}
 	
 	@BeforeClass
