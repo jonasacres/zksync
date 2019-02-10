@@ -329,40 +329,42 @@ public class PageTreeTest {
 		stats = diTree.getStats();
 		assertEquals(diTree.numPages, stats.totalPages);
 		assertEquals(expected, stats.numCachedPages);
+		smallPageFs.close();
 	}
 
 	@Test
 	public void testGetStatsReturnsChunksCachedForDoubleIndirects() throws IOException {
 		ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
-		ZKFS smallPageFs = smallPageArchive.openBlank();
-		int size = 512*1024;
-		smallPageFs.write("test", new byte[size]);
-		assertArrayEquals(new byte[size], smallPageFs.read("test"));
-		
-		PageTree diTree = new PageTree(smallPageFs.inodeForPath("test"));
-		PageTreeStats stats = diTree.getStats();
-		
-		assertEquals(diTree.numChunks, stats.totalChunks);
-		assertEquals(diTree.numChunks, stats.numCachedChunks);
-		long expected = diTree.numChunks;
-		long levelSize = (long) (Math.log(stats.totalChunks)/Math.log(smallPageArchive.getConfig().tagsPerChunk));
-		
-		for(long i = diTree.numChunks - levelSize + 1; i < diTree.numChunks; i++) {
-			if(i % 2 == 0) continue;
-			try {
-				String path = Page.pathForTag(diTree.tagForChunk(i));
-				smallPageArchive.getConfig().getCacheStorage().unlink(path);
-				expected--;
-			} catch(ENOENTException exc) {
-				// some chunks are blank so they don't really exist
+		try(ZKFS smallPageFs = smallPageArchive.openBlank()) {
+			int size = 512*1024;
+			smallPageFs.write("test", new byte[size]);
+			assertArrayEquals(new byte[size], smallPageFs.read("test"));
+			
+			PageTree diTree = new PageTree(smallPageFs.inodeForPath("test"));
+			PageTreeStats stats = diTree.getStats();
+			
+			assertEquals(diTree.numChunks, stats.totalChunks);
+			assertEquals(diTree.numChunks, stats.numCachedChunks);
+			long expected = diTree.numChunks;
+			long levelSize = (long) (Math.log(stats.totalChunks)/Math.log(smallPageArchive.getConfig().tagsPerChunk));
+			
+			for(long i = diTree.numChunks - levelSize + 1; i < diTree.numChunks; i++) {
+				if(i % 2 == 0) continue;
+				try {
+					String path = Page.pathForTag(diTree.tagForChunk(i));
+					smallPageArchive.getConfig().getCacheStorage().unlink(path);
+					expected--;
+				} catch(ENOENTException exc) {
+					// some chunks are blank so they don't really exist
+				}
 			}
+			
+			smallPageArchive.rescanPageTags();
+			
+			stats = diTree.getStats();
+			assertEquals(diTree.numChunks, stats.totalChunks);
+			assertEquals(expected, stats.numCachedChunks);
 		}
-		
-		smallPageArchive.rescanPageTags();
-		
-		stats = diTree.getStats();
-		assertEquals(diTree.numChunks, stats.totalChunks);
-		assertEquals(expected, stats.numCachedChunks);
 	}
 	
 	@Test
@@ -515,22 +517,23 @@ public class PageTreeTest {
 	@Test
 	public void testResizeDownwardInHeightMultipleLevels() throws IOException {
 		ZKArchive smallPageArchive = master.createArchive(1024, "i have small, lovable pages!");
-		ZKFS smallPageFs = smallPageArchive.openBlank();
-		smallPageFs.write("test", new byte[0]);
-		PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
-		
-		int contracted = smallPageTree.tagsPerChunk();
-		int max = (int) (smallPageTree.tagsPerChunk()*smallPageTree.tagsPerChunk()+1);
-		
-		for(int i = 0; i < max; i++) {
-			smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
-		}
-		
-		smallPageTree.resize(contracted);
-		assertEquals(contracted, smallPageTree.numPages);
-		
-		for(int i = 0; i < contracted; i++) {
-			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+		try(ZKFS smallPageFs = smallPageArchive.openBlank()) {
+			smallPageFs.write("test", new byte[0]);
+			PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
+			
+			int contracted = smallPageTree.tagsPerChunk();
+			int max = (int) (smallPageTree.tagsPerChunk()*smallPageTree.tagsPerChunk()+1);
+			
+			for(int i = 0; i < max; i++) {
+				smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+			}
+			
+			smallPageTree.resize(contracted);
+			assertEquals(contracted, smallPageTree.numPages);
+			
+			for(int i = 0; i < contracted; i++) {
+				assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+			}
 		}
 	}
 
@@ -559,27 +562,28 @@ public class PageTreeTest {
 	@Test
 	public void testResizeUpwardInHeightMultipleLevels() throws IOException {
 		ZKArchive smallPageArchive = master.createArchive(1024, "adopt a tinypage now!");
-		ZKFS smallPageFs = smallPageArchive.openBlank();
-		smallPageFs.write("test", new byte[0]);
-		PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
-		
-		int original = smallPageTree.tagsPerChunk();
-		int max = (int) (smallPageTree.tagsPerChunk()*smallPageTree.tagsPerChunk()+1);
-		byte[] blank = new byte[crypto.hashLength()];
-		
-		for(int i = 0; i < original; i++) {
-			smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
-		}
-		
-		smallPageTree.resize(max);
-		assertEquals(max, smallPageTree.numPages);
-		
-		for(int i = 0; i < original; i++) {
-			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
-		}
-		
-		for(int i = original; i < max; i++) {
-			assertArrayEquals(blank, tree.getPageTag(i));
+		try(ZKFS smallPageFs = smallPageArchive.openBlank()) {
+			smallPageFs.write("test", new byte[0]);
+			PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
+			
+			int original = smallPageTree.tagsPerChunk();
+			int max = (int) (smallPageTree.tagsPerChunk()*smallPageTree.tagsPerChunk()+1);
+			byte[] blank = new byte[crypto.hashLength()];
+			
+			for(int i = 0; i < original; i++) {
+				smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+			}
+			
+			smallPageTree.resize(max);
+			assertEquals(max, smallPageTree.numPages);
+			
+			for(int i = 0; i < original; i++) {
+				assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+			}
+			
+			for(int i = original; i < max; i++) {
+				assertArrayEquals(blank, tree.getPageTag(i));
+			}
 		}
 	}
 	
@@ -592,19 +596,22 @@ public class PageTreeTest {
 		 */
 		
 		// TODO Someday: (bug) If page size is 512, chunk cache has a capacity of 8, and the tree depth is 6, this fails.
-		ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
-		ZKFS smallPageFs = smallPageArchive.openBlank();
-		smallPageFs.write("test", new byte[0]);
-		PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
-		
-		int max = (int) Math.pow(smallPageTree.tagsPerChunk(), 4); // exponent is tree depth
-		
-		for(int i = 0; i < max; i++) {
-			smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
-		}
-		
-		for(int i = 0; i < max; i++) {
-			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+		;
+		try(
+				ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
+				ZKFS smallPageFs = smallPageArchive.openBlank()) {
+			smallPageFs.write("test", new byte[0]);
+			PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
+			
+			int max = (int) Math.pow(smallPageTree.tagsPerChunk(), 4); // exponent is tree depth
+			
+			for(int i = 0; i < max; i++) {
+				smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+			}
+			
+			for(int i = 0; i < max; i++) {
+				assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+			}
 		}
 	}
 	

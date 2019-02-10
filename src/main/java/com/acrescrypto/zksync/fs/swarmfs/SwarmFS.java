@@ -186,4 +186,8 @@ public class SwarmFS extends FS {
 	public PeerSwarm getSwarm() {
 		return swarm;
 	}
+	
+	public String toString() {
+		return this.getClass().getSimpleName() + " " + Util.formatArchiveId(swarm.getConfig().getArchiveId());
+	}
 }

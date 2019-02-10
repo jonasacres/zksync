@@ -5,6 +5,7 @@ import static org.junit.Assert.fail;
 import java.util.HashSet;
 import java.util.Map;
 
+import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.FSMirror;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.SnoozeThreadSupervisor;
@@ -16,7 +17,7 @@ public class TestUtils {
 	static HashSet<Long> knownZombieThreads = new HashSet<>();
 	static HashSet<SnoozeThread> knownSnoozeThreads = new HashSet<>();
 	static HashSet<WaitTask> knownWaitTasks = new HashSet<>();
-	static int knownZombieWatches = 0;
+	static int knownZombieWatches = 0, knownOpenFiles = 0;
 	
 	public static boolean isThreadAcceptable(Thread thread, StackTraceElement[] backtrace) {
 		if(knownZombieThreads.contains(thread.getId())) return true;
@@ -76,7 +77,7 @@ public class TestUtils {
 	}
 	
 	public static boolean isTidy() {
-		return threadsTidy() && FSMirror.numActive() <= knownZombieWatches;
+		return threadsTidy() && FSMirror.numActive() <= knownZombieWatches && FS.getGlobalOpenFiles().size() == 0;
 	}
 	
 	public static void assertTidy() {
@@ -94,11 +95,20 @@ public class TestUtils {
 				}
 			}
 			
+			FS.getGlobalOpenFiles().forEach((file, backtrace)->{
+				System.out.printf("Open file: [%s] -- %s\nOpened from:\n",
+						file.getFs(),
+						file.getPath());
+				backtrace.printStackTrace();
+			});
+			
 			knownZombieWatches = FSMirror.numActive();
+			knownOpenFiles = FS.getGlobalOpenFiles().size();
 			
 			// System.out.println("Thread untidiness detected!");
 			// Util.threadReport(true);
 			System.out.println("Active FS monitors: " + FSMirror.numActive());
+			System.out.println("Open file handles: " + FS.getGlobalOpenFiles().size());
 			fail();
 		}
 	}

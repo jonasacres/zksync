@@ -53,17 +53,31 @@ public class InodeTable extends ZKFile {
 	 */
 	public InodeTable(ZKFS fs, RevisionTag tag) throws IOException {
 		super(fs);
-		this.trusted = false;
-		this.path = INODE_TABLE_PATH;
-		this.mode = O_RDWR;
-		this.inodesByPage = new HashCache<Long,Inode[]>(16, (Long pageNum) -> {
-			return inodesForPage(pageNum);
-		}, (Long pageNum, Inode[] inodes) -> {
-			commitInodePage(pageNum, inodes);
-		});
+		try {
+			this.trusted = false;
+			this.path = INODE_TABLE_PATH;
+			this.mode = O_RDWR;
+			this.inodesByPage = new HashCache<Long,Inode[]>(16, (Long pageNum) -> {
+				return inodesForPage(pageNum);
+			}, (Long pageNum, Inode[] inodes) -> {
+				commitInodePage(pageNum, inodes);
+			});
+			
+			if(tag.getRefTag().isBlank()) initialize();
+			else readExisting(tag);
+		} catch(Throwable exc) {
+			this.close();
+			throw exc;
+		}
+	}
+	
+	@Override
+	public void close() throws IOException {
+		if(freelist != null) {
+			freelist.close();
+		}
 		
-		if(tag.getRefTag().isBlank()) initialize();
-		else readExisting(tag);
+		super.close();
 	}
 	
 	/** calculate the next inode ID to be issued (by scanning for the largest issued inode ID) */

@@ -111,31 +111,34 @@ public class ZKArchiveTest {
 	
 	@Test
 	public void testHasInodeReturnsFalseIfRevTagIsNonsense() throws IOException {
-		ZKFS fs = addMockData(archive);
-		RevisionTag revTag = new RevisionTag(new RefTag(archive, crypto.rng(archive.getConfig().refTagSize())), 0, 0);
-		assertFalse(archive.hasInode(revTag, fs.stat("file2").getInodeId()));
+		try(ZKFS fs = addMockData(archive)) {
+			RevisionTag revTag = new RevisionTag(new RefTag(archive, crypto.rng(archive.getConfig().refTagSize())), 0, 0);
+			assertFalse(archive.hasInode(revTag, fs.stat("file2").getInodeId()));
+		}
 	}
 	
 	@Test
 	public void testHasInodeReturnsFalseIfInodeIsUnissued() throws IOException {
-		ZKFS fs = addMockData(archive);
-		assertFalse(archive.hasInode(fs.baseRevision, fs.getInodeTable().nextInodeId()));
+		try(ZKFS fs = addMockData(archive)) {
+			assertFalse(archive.hasInode(fs.baseRevision, fs.getInodeTable().nextInodeId()));
+		}
 	}
 	
 	@Test
 	public void testHasInodeReturnsFalseIfInodeIsDeleted() throws IOException {
-		ZKFS fs = addMockData(archive);
-		Inode inode = fs.inodeForPath("file2");
-		fs.unlink("file2");
-		fs.commit();
-		assertFalse(archive.hasInode(fs.baseRevision, inode.stat.getInodeId()));
+		try(ZKFS fs = addMockData(archive)) {
+			Inode inode = fs.inodeForPath("file2");
+			fs.unlink("file2");
+			fs.commit();
+			assertFalse(archive.hasInode(fs.baseRevision, inode.stat.getInodeId()));
+		}
 	}
 	
 	@Test
 	public void testHasRevisionReturnsTrueIfRevisionContentsInStorage() throws IOException {
-		ZKFS fs = addMockData(archive);
-		assertTrue(archive.hasRevision(fs.baseRevision));
-		fs.close();
+		try(ZKFS fs = addMockData(archive)) {
+			assertTrue(archive.hasRevision(fs.baseRevision));
+		}
 	}
 	
 	@Test
@@ -152,33 +155,33 @@ public class ZKArchiveTest {
 	
 	@Test
 	public void testHasRevisionReturnsFalseIfMissingAnyFilePageTreeChunks() throws IOException {
-		ZKFS fs = addMockData(archive);
-		Inode inode = fs.inodeForPath("file2");
-		PageTree tree = new PageTree(inode);
-		archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
-		assertFalse(archive.hasRevision(fs.baseRevision));
-		fs.close();
+		try(ZKFS fs = addMockData(archive)) {
+			Inode inode = fs.inodeForPath("file2");
+			PageTree tree = new PageTree(inode);
+			archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
+			assertFalse(archive.hasRevision(fs.baseRevision));
+		}
 	}
 	
 	@Test
 	public void testHasRevisionReturnsFalseIfPagesMissingFromInodeTable() throws IOException {
-		ZKFS fs = addMockData(archive);
-		PageTree tree = new PageTree(fs.baseRevision.getRefTag());
-		archive.storage.unlink(Page.pathForTag(tree.getPageTag(0)));
-		assertFalse(archive.hasRevision(fs.baseRevision));
-		fs.close();
+		try(ZKFS fs = addMockData(archive)) {
+			PageTree tree = new PageTree(fs.baseRevision.getRefTag());
+			archive.storage.unlink(Page.pathForTag(tree.getPageTag(0)));
+			assertFalse(archive.hasRevision(fs.baseRevision));
+		}
 	}
 	
 	@Test
 	public void testHasRevisionReturnsFalseIfPageTreeChunksMissingFromInodeTable() throws IOException {
-		ZKFS fs = addMockData(archive);
-		for(int i = 0; i < 1024; i++) fs.write(""+i, "".getBytes());
-		RevisionTag revTag = fs.commit();
-		assertTrue(revTag.getRefTag().numPages > 1);
-		PageTree tree = new PageTree(revTag.getRefTag());
-		archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
-		assertFalse(archive.hasRevision(revTag));
-		fs.close();
+		try(ZKFS fs = addMockData(archive)) {
+			for(int i = 0; i < 1024; i++) fs.write(""+i, "".getBytes());
+			RevisionTag revTag = fs.commit();
+			assertTrue(revTag.getRefTag().numPages > 1);
+			PageTree tree = new PageTree(revTag.getRefTag());
+			archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
+			assertFalse(archive.hasRevision(revTag));
+		}
 	}
 	
 	@Test
@@ -186,11 +189,15 @@ public class ZKArchiveTest {
 		Key writeKey = new Key(crypto);
 		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
 		ZKArchive archive = config.getArchive();
-		ZKFS fs = archive.openBlank();
-		String str = "contents!";
-		fs.write("filename", str.getBytes());
-		assertArrayEquals(str.getBytes(), fs.commit().getFS().read("filename"));
-		fs.close();
+		
+		try(ZKFS fs = archive.openBlank()) {
+			String str = "contents!";
+			fs.write("filename", str.getBytes());
+			try(ZKFS fs2 = fs.commit().getFS()) {
+				assertArrayEquals(str.getBytes(), fs2.read("filename"));
+			}
+		}
+		
 		config.close();
 	}
 	
@@ -200,15 +207,20 @@ public class ZKArchiveTest {
 		
 		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
 		ZKArchive archive = config.getArchive();
-		ZKFS fs = archive.openBlank();
-		byte[] data = "some data".getBytes();
-		fs.write("filename", data);
-		RevisionTag revTag = fs.commit();
-		config.close();
+		RevisionTag revTag;
 		
+		byte[] data = "some data".getBytes();
+		try(ZKFS fs = archive.openBlank()) {
+			fs.write("filename", data);
+			revTag = fs.commit();
+		}
+		
+		config.close();
 		ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null);
-		fs = ro.getArchive().openRevision(revTag);
-		assertArrayEquals(data, fs.read("filename"));
+		
+		try(ZKFS fs = ro.getArchive().openRevision(revTag)) {
+			assertArrayEquals(data, fs.read("filename"));
+		}
 	}
 	
 	@Test(expected=EACCESException.class)
@@ -217,21 +229,24 @@ public class ZKArchiveTest {
 		
 		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
 		ZKArchive archive = config.getArchive();
-		ZKFS fs = archive.openBlank();
-		byte[] data = "some data".getBytes();
-		fs.write("filename", data);
-		RevisionTag revTag = fs.commit();
-		config.close();
-		
-		master.allConfigs.clear();
-		master.accessors.clear();
-		ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null);
-		archive = ro.getArchive();
-		RevisionTag transplantTag = new RevisionTag(ro, revTag.serialize(), false);
-		
-		fs = ro.getArchive().openRevision(transplantTag);
-		fs.write("filename", data);
-		fs.commit();
+		try(ZKFS fs = archive.openBlank()) {
+			byte[] data = "some data".getBytes();
+			fs.write("filename", data);
+			RevisionTag revTag = fs.commit();
+			config.close();
+			
+			master.allConfigs.clear();
+			master.accessors.clear();
+			ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null);
+			archive = ro.getArchive();
+			RevisionTag transplantTag = new RevisionTag(ro, revTag.serialize(), false);
+			
+			
+			try(ZKFS fs2 = ro.getArchive().openRevision(transplantTag)) {
+				fs2.write("filename", data);
+				fs2.commit();
+			}
+		}
 	}
 	
 	@Test(expected=EACCESException.class)
@@ -240,20 +255,20 @@ public class ZKArchiveTest {
 		
 		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
 		ZKArchive archive = config.getArchive();
-		ZKFS fs = archive.openBlank();
-		byte[] data = "some data".getBytes();
-		fs.write("filename", data);
-		RevisionTag revTag = fs.commit();
-		config.close();
-		
-		master.allConfigs.clear();
-		master.accessors.clear();
-		ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null);
-		archive = ro.getArchive();
-		RevisionTag transplantTag = new RevisionTag(ro, revTag.serialize(), false);
-		
-		fs = ro.getArchive().openRevision(transplantTag);
-		fs.commit();
+		try(ZKFS fs = archive.openBlank()) {
+			byte[] data = "some data".getBytes();
+			fs.write("filename", data);
+			RevisionTag revTag = fs.commit();
+			config.close();
+			
+			master.allConfigs.clear();
+			master.accessors.clear();
+			ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null);
+			archive = ro.getArchive();
+			RevisionTag transplantTag = new RevisionTag(ro, revTag.serialize(), false);
+			
+			ro.getArchive().openRevision(transplantTag).commitAndClose();
+		}
 	}
 
 }

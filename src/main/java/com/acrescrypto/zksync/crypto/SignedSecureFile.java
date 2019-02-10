@@ -105,7 +105,7 @@ public class SignedSecureFile {
 			fs.squash(path());
 			return tag;
 		} catch(IOException exc) {
-			logger.error("Caught exception writing SignedSecureFile to {}", path(), exc);
+			logger.error("FS -: Caught exception writing SignedSecureFile to {}", path(), exc);
 			throw new InaccessibleStorageException();
 		}
 	}

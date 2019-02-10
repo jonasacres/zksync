@@ -138,6 +138,7 @@ public class DiffSetResolver {
 	public RevisionTag resolve() throws IOException, DiffResolutionException {
 		if(diffset.revisions.length == 1) {
 			fs.getArchive().getConfig().getRevisionList().consolidate(diffset.revisions[0]);
+			fs.close();
 			return diffset.revisions[0];
 		}
 		
@@ -149,6 +150,7 @@ public class DiffSetResolver {
 		applyResolutions();
 		RevisionTag revTag = fs.commitWithTimestamp(diffset.revisions, 0);
 		fs.getArchive().getConfig().getRevisionList().consolidate(revTag);
+		fs.close();
 		return revTag;
 	}
 	
@@ -181,6 +183,7 @@ public class DiffSetResolver {
 		partialMerges.sort(null);
 		DiffSet partialDiffset = DiffSet.withCollection(partialMerges);
 		DiffSetResolver partialResolver = new DiffSetResolver(partialDiffset, inodeResolver, pathResolver);
+		fs.close();
 		return partialResolver.resolve();
 	}
 	

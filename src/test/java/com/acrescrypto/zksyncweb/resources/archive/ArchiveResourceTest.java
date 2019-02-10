@@ -80,13 +80,17 @@ public class ArchiveResourceTest {
 		fs.write("foo", "bar".getBytes());
 		tag = fs.commit();
 		State.sharedState().addOpenConfig(archive.getConfig());
-
-		(new LocalFS("/")).mkdirp(TESTDIR);
+		
+		try(LocalFS lfs = new LocalFS("/")) {
+			lfs.mkdirp(TESTDIR);
+		}
 	}
 
 	@After
 	public void afterEach() throws Exception {
-		(new LocalFS("/")).rmrf(TESTDIR);
+		try(LocalFS lfs = new LocalFS("/")) {
+			lfs.rmrf(TESTDIR);
+		}
 		archive.close();
 		server.shutdownNow();
 		State.clearState();

@@ -72,15 +72,16 @@ public class LocalFSTest extends FSTestBase {
 	@Test
 	public void testStatIdentifiesDevices() throws IOException {
 		if(Util.isWindows()) return;
-		LocalFS root = new LocalFS("/");
-		Stat devNull = root.stat("/dev/null");
-		assertTrue(devNull.isCharacterDevice());
-		if(Util.isLinux()) {
-			assertEquals(devNull.getDevMajor(), 1);
-			assertEquals(devNull.getDevMinor(), 3);
-		} else if(Util.isOSX()) {
-			assertEquals(devNull.getDevMajor(), 3);
-			assertEquals(devNull.getDevMinor(), 2);
+		try(LocalFS root = new LocalFS("/")) {
+			Stat devNull = root.stat("/dev/null");
+			assertTrue(devNull.isCharacterDevice());
+			if(Util.isLinux()) {
+				assertEquals(devNull.getDevMajor(), 1);
+				assertEquals(devNull.getDevMinor(), 3);
+			} else if(Util.isOSX()) {
+				assertEquals(devNull.getDevMajor(), 3);
+				assertEquals(devNull.getDevMinor(), 2);
+			}
 		}
 	}
 	

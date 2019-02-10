@@ -292,4 +292,8 @@ public class BackedFS extends FS {
 	public FS getBackupFS() {
 		return backupFS;
 	}
+	
+	public String toString() {
+		return this.getClass().getSimpleName() + " cache: (" + cacheFS + ") backup: (" + backupFS + ")";
+	}
 }

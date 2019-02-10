@@ -11,6 +11,7 @@ import java.util.Map;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.PathDiffResolver;
@@ -41,7 +42,9 @@ public class DiffSet {
 		this.revisions = revisions;
 		Arrays.sort(this.revisions);
 		
-		findPathDiffs(findInodeDiffs(pickMergeFs()));
+		try(ZKFS fs = pickMergeFs()) {
+			findPathDiffs(findInodeDiffs(fs));
+		}
 	}
 	
 	/** all inode IDs differing in the revisions of this set, excluding inode table, revision info and freelist */
@@ -72,8 +75,10 @@ public class DiffSet {
 		allPaths.add("/");
 		
 		for(RevisionTag rev : revisions) {
-			for(String path : rev.readOnlyFS().opendir("/").listRecursive()) {
-				allPaths.add(path);
+			try(ZKDirectory dir = rev.readOnlyFS().opendir("/")) {
+				for(String path : dir.listRecursive()) {
+					allPaths.add(path);
+				}
 			}
 		}
 		return allPaths;

@@ -77,7 +77,7 @@ public class FreeListTest {
 			fs.unlink("file"+i);
 		}
 		
-		RevisionTag tag = fs.commit();
+		RevisionTag tag = fs.commitAndClose();
 		
 		fs = tag.getFS();
 		for(int i = size-1; i >= 0; i--) {

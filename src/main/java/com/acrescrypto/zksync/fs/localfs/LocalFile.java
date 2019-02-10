@@ -18,12 +18,14 @@ public class LocalFile extends File {
 	protected FileChannel channel;
 	protected long offset, size;
 	protected int mode;
+	protected boolean closed;
 	
 	protected Logger logger = LoggerFactory.getLogger(LocalFile.class);
 	
 	LocalFile(LocalFS fs, String path, int mode) throws IOException {
 		super(fs);
 		String modeStr = null;
+		this.path = path;
 		if ((mode & O_RDONLY) != 0) {
 			if ((mode & O_RDWR) == O_RDWR) {
 				modeStr = "rw";
@@ -33,25 +35,37 @@ public class LocalFile extends File {
 		} else if ((mode & O_WRONLY) != 0) {
 			modeStr = "rw"; // "w" is not supported apparently
 		}
-
-		if (!fs.exists(path, (mode & O_NOFOLLOW) == 0)) {
-			if ((mode & O_CREAT) == 0 || (mode & O_WRONLY) == 0)
-				throw new ENOENTException(path);
-		}
-
+		
 		try {
-			if ((mode & O_NOFOLLOW) != 0 && fs.lstat(path).isSymlink())
-				throw new EMLINKException(path);
-			if (fs.stat(path).isDirectory()) {
-				throw new EISDIRException(path);
+			if (!fs.exists(path, (mode & O_NOFOLLOW) == 0)) {
+				if ((mode & O_CREAT) == 0 || (mode & O_WRONLY) == 0)
+					throw new ENOENTException(path);
 			}
-		} catch (ENOENTException e) {
-		}
+	
+			try {
+				if ((mode & O_NOFOLLOW) != 0 && fs.lstat(path).isSymlink())
+					throw new EMLINKException(path);
+				if (fs.stat(path).isDirectory()) {
+					throw new EISDIRException(path);
+				}
+			} catch (ENOENTException exc) {
+			}
 
-		String fullPath = fs.expandPath(path);
-		this.fileHandle = new RandomAccessFile(fullPath, modeStr);
-		this.channel = this.fileHandle.getChannel();
-		this.path = path;
+			String fullPath = fs.expandPath(path);
+			this.fileHandle = new RandomAccessFile(fullPath, modeStr);
+			this.channel = this.fileHandle.getChannel();
+		} catch(Throwable exc) {
+			close();
+			throw exc;
+		}
+		
+		logger.trace("LocalFS {}: open {} {} (0x{}), {} open",
+				fs.root,
+				path,
+				modeStr,
+				Integer.toHexString(mode),
+				fs.getOpenFiles().size());
+
 		this.mode = mode;
 
 		if ((mode & O_APPEND) != 0)
@@ -62,7 +76,7 @@ public class LocalFile extends File {
 
 	@Override
 	public String getPath() {
-		return this.path;
+		return path;
 	}
 
 	@Override
@@ -119,8 +133,22 @@ public class LocalFile extends File {
 
 	@Override
 	public void close() throws IOException {
-		channel.close();
-		fileHandle.close();
+		if(closed) return;
+		closed = true;
+		
+		fs.reportClosedFile(this);
+		logger.trace("LocalFS {}: close {}, {} open",
+				((LocalFS) fs).getRoot(),
+				path,
+				fs.getOpenFiles().size());
+		
+		if(channel != null) {
+			channel.close();
+		}
+		
+		if(fileHandle != null) {
+			fileHandle.close();
+		}
 	}
 
 	@Override

@@ -140,7 +140,7 @@ public class SwarmFSTest {
 	
 	@Test
 	public void testOpenRequestsTagFromSwarm() throws IOException {
-		swarmFs.open(Page.pathForTag(tag), File.O_RDONLY);
+		swarmFs.open(Page.pathForTag(tag), File.O_RDONLY).close();
 		assertTrue(Arrays.equals(tag, swarm.requestedTag));
 		assertEquals(SwarmFS.REQUEST_PRIORITY, swarm.requestedPriority);
 	}
@@ -152,7 +152,7 @@ public class SwarmFSTest {
 		
 		Thread thread = new Thread(()-> {
 			try {
-				swarmFs.open(Page.pathForTag(tag), File.O_RDONLY);
+				swarmFs.open(Page.pathForTag(tag), File.O_RDONLY).close();
 				holder.waited = true;
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -171,10 +171,12 @@ public class SwarmFSTest {
 	
 	@Test
 	public void testOpenReturnsFileHandleFromCachedStorage() throws IOException {
-		File expected = archive.getConfig().getCacheStorage().open(Page.pathForTag(tag), File.O_RDONLY);
-		File actual = swarmFs.open(Page.pathForTag(tag), File.O_RDONLY);
-		
-		assertEquals(expected.getClass(), actual.getClass());
+		try(
+			File expected = archive.getConfig().getCacheStorage().open(Page.pathForTag(tag), File.O_RDONLY);
+			File actual = swarmFs.open(Page.pathForTag(tag), File.O_RDONLY)
+		) {
+				assertEquals(expected.getClass(), actual.getClass());
+		}
 	}
 	
 	@Test

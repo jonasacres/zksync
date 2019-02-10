@@ -24,9 +24,14 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	public ZKDirectory(ZKFS fs, String path) throws IOException {
 		super(fs, path, fs.archive.config.isReadOnly() ? O_RDONLY : O_RDWR, true);
-		entries = new HashMap<String,Long>();
-		byte[] contents = read((int) inode.getStat().getSize());
-		deserialize(contents);
+		try {
+			entries = new HashMap<String,Long>();
+			byte[] contents = read((int) inode.getStat().getSize());
+			deserialize(contents);
+		} catch(Throwable exc) {
+			close();
+			throw exc;
+		}
 	}
 	
 	@Override

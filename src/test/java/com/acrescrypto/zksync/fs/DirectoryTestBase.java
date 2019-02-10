@@ -139,11 +139,12 @@ public class DirectoryTestBase {
 	public void testLinkByFileHandle() throws IOException {
 		scratch.mkdir("linkbydir");
 		Directory dir = scratch.opendir("linkbydir");
-		File file = scratch.open("linkbydir/a", File.O_WRONLY|File.O_CREAT);
-		assertFalse(scratch.exists("linkbydir/b"));
-		dir.link(file, "b");
-		dir.close();
-		assertTrue(scratch.exists("linkbydir/b"));
+		try(File file = scratch.open("linkbydir/a", File.O_WRONLY|File.O_CREAT)) {
+			assertFalse(scratch.exists("linkbydir/b"));
+			dir.link(file, "b");
+			dir.close();
+			assertTrue(scratch.exists("linkbydir/b"));
+		}
 	}
 	
 	@Test

@@ -61,6 +61,7 @@ public class ZKFSTest extends FSTestBase {
 		byte[] b = scratch.read("symlink-link");
 		assertTrue(Arrays.equals(a, b));
 	}	
+	
 	@Test
 	public void testMultipageWrite() throws IOException {
 		byte[] text = new byte[10*zkscratch.getArchive().config.pageSize];
@@ -162,23 +163,24 @@ public class ZKFSTest extends FSTestBase {
 		byte[] testData = generateFileData("page-boundary", pageCount*zkscratch.getArchive().config.pageSize);
 		ByteBuffer testBuf = ByteBuffer.wrap(testData);
 		
-		ZKFile testFile = zkscratch.open("page-boundary-extension-test", File.O_RDWR|File.O_CREAT);
-		for(int page = 0; page < pageCount; page++) {
-			int[] writeLengths = { 1, zkscratch.getArchive().config.pageSize-2, 1 };
-			for(int writeLength: writeLengths) {
-				byte[] writeData = new byte[writeLength];
-				testBuf.get(writeData);
-				testFile.write(writeData, 0, writeLength);
-				testFile.flush();
-				
-				assertEquals(testFile.pos(), testFile.getInode().getStat().getSize());
-				assertEquals(testFile.pos(), testBuf.position());
-				testFile.seek(0, File.SEEK_SET);
-				byte[] readData = testFile.read(testBuf.position());
-				for(int i = 0; i < testBuf.position(); i++) {
-					if(readData[i] != testData[i]) throw new IllegalStateException("read data doesn't match written data at index " + i);
+		try(ZKFile testFile = zkscratch.open("page-boundary-extension-test", File.O_RDWR|File.O_CREAT)) {
+			for(int page = 0; page < pageCount; page++) {
+				int[] writeLengths = { 1, zkscratch.getArchive().config.pageSize-2, 1 };
+				for(int writeLength: writeLengths) {
+					byte[] writeData = new byte[writeLength];
+					testBuf.get(writeData);
+					testFile.write(writeData, 0, writeLength);
+					testFile.flush();
+					
+					assertEquals(testFile.pos(), testFile.getInode().getStat().getSize());
+					assertEquals(testFile.pos(), testBuf.position());
+					testFile.seek(0, File.SEEK_SET);
+					byte[] readData = testFile.read(testBuf.position());
+					for(int i = 0; i < testBuf.position(); i++) {
+						if(readData[i] != testData[i]) throw new IllegalStateException("read data doesn't match written data at index " + i);
+					}
+					assertEquals(testFile.pos(), testBuf.position());
 				}
-				assertEquals(testFile.pos(), testBuf.position());
 			}
 		}
 	}
@@ -187,21 +189,22 @@ public class ZKFSTest extends FSTestBase {
 	public void testPageBoundaryTruncations() throws IOException {
 		int pageCount = 5;
 		int pageSize = zkscratch.getArchive().config.pageSize;
-		ZKFile testFile = zkscratch.open("page-boundary-extension-test", File.O_RDWR|File.O_CREAT);
-		byte[] testData = generateFileData("page-boundary", pageCount*pageSize);
-		
-		testFile.write(testData);
-		for(int page = pageCount - 1; page >= 0; page--) {
-			for(int i = 1; i >= -1; i--) {
-				int size = page*pageSize + i;
-				if(size < 0) continue;
-				
-				byte[] expectedData = new byte[size];
-				System.arraycopy(testData, 0, expectedData, 0, size);
-				testFile.truncate(size);
-				assertEquals(size, testFile.getInode().getStat().getSize());
-				testFile.seek(0, File.SEEK_SET);
-				assertArrayEquals(expectedData, testFile.read());
+		try(ZKFile testFile = zkscratch.open("page-boundary-extension-test", File.O_RDWR|File.O_CREAT)) {
+			byte[] testData = generateFileData("page-boundary", pageCount*pageSize);
+			
+			testFile.write(testData);
+			for(int page = pageCount - 1; page >= 0; page--) {
+				for(int i = 1; i >= -1; i--) {
+					int size = page*pageSize + i;
+					if(size < 0) continue;
+					
+					byte[] expectedData = new byte[size];
+					System.arraycopy(testData, 0, expectedData, 0, size);
+					testFile.truncate(size);
+					assertEquals(size, testFile.getInode().getStat().getSize());
+					testFile.seek(0, File.SEEK_SET);
+					assertArrayEquals(expectedData, testFile.read());
+				}
 			}
 		}
 	}
@@ -227,18 +230,20 @@ public class ZKFSTest extends FSTestBase {
 		revisions[0] = RevisionTag.blank(zkscratch.archive.config);
 		
 		for(int i = 0; i < numRevisions; i++) {
-			ZKFS revFs = revisions[i].getFS();
-			revFs.write("successive-revisions", ("Version " + i).getBytes());
-			revisions[i+1] = revFs.commit();
+			try(ZKFS revFs = revisions[i].getFS()) {
+				revFs.write("successive-revisions", ("Version " + i).getBytes());
+				revisions[i+1] = revFs.commit();
+			}
 		}
 		
 		for(int i = 1; i <= numRevisions; i++) {
-			ZKFS revFs = revisions[i].getFS();
-			byte[] text = ("Version " + (i-1)).getBytes();
-			assertTrue(Arrays.equals(text, revFs.read("successive-revisions")));
-			assertEquals(1, revFs.getRevisionInfo().getNumParents());
-			if(i > 1) {
-				assertEquals(revisions[i-1], revFs.getRevisionInfo().getParents().get(0));
+			try(ZKFS revFs = revisions[i].getFS()) {
+				byte[] text = ("Version " + (i-1)).getBytes();
+				assertTrue(Arrays.equals(text, revFs.read("successive-revisions")));
+				assertEquals(1, revFs.getRevisionInfo().getNumParents());
+				if(i > 1) {
+					assertEquals(revisions[i-1], revFs.getRevisionInfo().getParents().get(0));
+				}
 			}
 		}
 	}
@@ -252,18 +257,20 @@ public class ZKFSTest extends FSTestBase {
 			RevisionTag parent = null;
 			if(i == 0) parent = RevisionTag.blank(zkscratch.archive.config);
 			else parent = revisions[(i-1)/2]; 
-			ZKFS revFs = parent.getFS();
-			revFs.write("intensive-revisions", ("Version " + i).getBytes());
-			revisions[i] = revFs.commit();
+			try(ZKFS revFs = parent.getFS()) {
+				revFs.write("intensive-revisions", ("Version " + i).getBytes());
+				revisions[i] = revFs.commit();
+			}
 		}
 
 		for(int i = 0; i < numRevisions; i++) {
-			ZKFS revFs = revisions[i].getFS();
-			byte[] text = ("Version " + i).getBytes();
-			assertTrue(Arrays.equals(text, revFs.read("intensive-revisions")));
-			assertEquals(1, revFs.getRevisionInfo().getNumParents());
-			if(i > 0) {
-				assertEquals(revisions[(i-1)/2], revFs.getRevisionInfo().getParents().get(0));
+			try(ZKFS revFs = revisions[i].getFS()) {
+				byte[] text = ("Version " + i).getBytes();
+				assertTrue(Arrays.equals(text, revFs.read("intensive-revisions")));
+				assertEquals(1, revFs.getRevisionInfo().getNumParents());
+				if(i > 0) {
+					assertEquals(revisions[(i-1)/2], revFs.getRevisionInfo().getParents().get(0));
+				}
 			}
 		}
 	}
@@ -274,10 +281,11 @@ public class ZKFSTest extends FSTestBase {
 		assertTrue(zkscratch.inodeTable.getStat().getSize() >= zkscratch.archive.crypto.hashLength());
 		assertTrue(zkscratch.inodeTable.getStat().getSize() <= zkscratch.archive.config.pageSize);
 		assertEquals(1, zkscratch.inodeTable.inode.refTag.numPages);
-		ZKFS revFs = rev.getFS();
-		assertTrue(Arrays.equals(revFs.inodeTable.tree.getRefTag().getBytes(), zkscratch.inodeTable.tree.getRefTag().getBytes()));
-		assertTrue(revFs.inodeTable.tree.maxNumPages <= revFs.inodeTable.tree.tagsPerChunk());
-		assertEquals(zkscratch.inodeTable.getStat().getSize(), revFs.inodeTable.getStat().getSize());
+		try(ZKFS revFs = rev.getFS()) {
+			assertTrue(Arrays.equals(revFs.inodeTable.tree.getRefTag().getBytes(), zkscratch.inodeTable.tree.getRefTag().getBytes()));
+			assertTrue(revFs.inodeTable.tree.maxNumPages <= revFs.inodeTable.tree.tagsPerChunk());
+			assertEquals(zkscratch.inodeTable.getStat().getSize(), revFs.inodeTable.getStat().getSize());
+		}
 	}
 	
 	@Test
@@ -398,6 +406,7 @@ public class ZKFSTest extends FSTestBase {
 			assertArrayEquals(twoPageData, fs.read("2page"));
 			assertArrayEquals(tenPageData, fs.read("10page"));
 			archive.close();
+			fs.close();
 		}
 	}
 	

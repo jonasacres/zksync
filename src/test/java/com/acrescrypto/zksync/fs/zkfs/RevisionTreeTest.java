@@ -64,6 +64,7 @@ public class RevisionTreeTest {
 	@After
 	public void afterEach() {
 		config.close();
+		archive.close();
 		master.close();
 		Util.setCurrentTimeMillis(-1);
 		RevisionTree.treeSearchTimeoutMs = RevisionTree.DEFAULT_TREE_SEARCH_TIMEOUT_MS;
@@ -83,27 +84,32 @@ public class RevisionTreeTest {
 		if(depth <= 0) return list;
 		
 		for(int i = 0; i < width; i++) {
-			ZKFS fs = base.getFS();
-			RevisionTag revTag = fs.commitWithTimestamp(new RevisionTag[0], i);
-			if(depth == 1) list.add(revTag);
-			buildSimpleTree(list, revTag, depth-1, width);
+			try(ZKFS fs = base.getFS()) {
+				RevisionTag revTag = fs.commitWithTimestamp(new RevisionTag[0], i);
+				if(depth == 1) list.add(revTag);
+				buildSimpleTree(list, revTag, depth-1, width);
+			}
 		}
 		
 		return list;
 	}
 	
 	RevisionTag buildMultiparentRevision(int numParents, ArrayList<RevisionTag> createdParents) throws IOException {
-		RevisionTag base = archive.openBlank().commit();
+		RevisionTag base = archive.openBlank().commitAndClose();
 		RevisionTag[] parents = new RevisionTag[numParents-1];
-		RevisionTag firstParent = base.getFS().commit();
+		RevisionTag firstParent = base.getFS().commitAndClose();
 		if(createdParents != null) createdParents.add(firstParent);
 		
 		for(int i = 1; i < numParents; i++) {
-			parents[i-1] = base.getFS().commitWithTimestamp(new RevisionTag[0], i);
-			if(createdParents != null) createdParents.add(parents[i-1]);
+			try(ZKFS fs = base.getFS()) {
+				parents[i-1] = fs.commitWithTimestamp(new RevisionTag[0], i);
+				if(createdParents != null) createdParents.add(parents[i-1]);
+			}
 		}
 		
-		return firstParent.getFS().commit(parents);
+		try(ZKFS fs = firstParent.getFS()) {
+			return fs.commit(parents);
+		}
 	}
 	
 	@Test
@@ -115,7 +121,7 @@ public class RevisionTreeTest {
 	
 	@Test
 	public void testValdiateParentListAcceptsValidListsForSingleParents() throws IOException {
-		RevisionTag baseRevTag = archive.openBlank().commit();
+		RevisionTag baseRevTag = archive.openBlank().commitAndClose();
 		ArrayList<RevisionTag> children = buildSimpleTree(baseRevTag, 1, 2);
 		ArrayList<RevisionTag> parents = new ArrayList<>();
 		parents.add(baseRevTag);
@@ -127,10 +133,10 @@ public class RevisionTreeTest {
 	
 	@Test
 	public void testValidateParentListRejectsInvalidParentListsForSingleParentRevisions() throws IOException {
-		RevisionTag baseRevTag = archive.openBlank().commit();
+		RevisionTag baseRevTag = archive.openBlank().commitAndClose();
 		ArrayList<RevisionTag> children = buildSimpleTree(baseRevTag, 1, 2);
 		ArrayList<RevisionTag> parents = new ArrayList<>();
-		parents.add(archive.openBlank().commit());
+		parents.add(archive.openBlank().commitAndClose());
 		
 		for(RevisionTag child : children) {
 			try {
@@ -142,7 +148,7 @@ public class RevisionTreeTest {
 	
 	@Test
 	public void testValidateParentListRejectsEmptyParentListsForSingleParentRevisions() throws IOException {
-		RevisionTag baseRevTag = archive.openBlank().commit();
+		RevisionTag baseRevTag = archive.openBlank().commitAndClose();
 		ArrayList<RevisionTag> children = buildSimpleTree(baseRevTag, 1, 2);
 		ArrayList<RevisionTag> parents = new ArrayList<>();
 		
@@ -156,7 +162,7 @@ public class RevisionTreeTest {
 	
 	@Test
 	public void testValidateParentListRejectsSupersetParentListsForSingleParentRevisions() throws IOException {
-		RevisionTag baseRevTag = archive.openBlank().commit();
+		RevisionTag baseRevTag = archive.openBlank().commitAndClose();
 		ArrayList<RevisionTag> children = buildSimpleTree(baseRevTag, 1, 2);
 		ArrayList<RevisionTag> parents = new ArrayList<>();
 		parents.add(baseRevTag);
@@ -399,7 +405,7 @@ public class RevisionTreeTest {
 	@Test
 	public void testCommonAncestorForOneRevisionIsTheRevisionItself() throws IOException {
 		// the common ancestor of a list of one revtag is the revtag itself (yes, you are your own ancestor, it works out trust me)
-		RevisionTag tag = archive.openBlank().commit();
+		RevisionTag tag = archive.openBlank().commitAndClose();
 		ArrayList<RevisionTag> list = new ArrayList<>();
 		list.add(tag);
 		assertEquals(tag, tree.commonAncestor(list));
@@ -408,7 +414,7 @@ public class RevisionTreeTest {
 	@Test
 	public void testCommonAncestorOfBlankAndNonblankIsBlank() throws IOException {
 		RevisionTag blank = RevisionTag.blank(config);
-		RevisionTag tag = archive.openBlank().commit();
+		RevisionTag tag = archive.openBlank().commitAndClose();
 		ArrayList<RevisionTag> list = new ArrayList<>();
 		list.add(blank);
 		list.add(tag);
@@ -417,47 +423,55 @@ public class RevisionTreeTest {
 	
 	@Test
 	public void testCommonAncestorOfSiblingsIsParent() throws IOException {
-		ZKFS fs = archive.openBlank();
-		RevisionTag parent = fs.commit();
-		int numChildren = 8;
-		
-		ArrayList<RevisionTag> children = new ArrayList<>(numChildren);
-		for(int i = 0; i < numChildren; i++) {
-			RevisionTag child = parent.getFS().commitWithTimestamp(new RevisionTag[0], i);
-			children.add(child);
+		try(ZKFS fs = archive.openBlank()) {
+			RevisionTag parent = fs.commit();
+			int numChildren = 8;
+			
+			ArrayList<RevisionTag> children = new ArrayList<>(numChildren);
+			for(int i = 0; i < numChildren; i++) {
+				try(ZKFS fs2 = parent.getFS()) {
+					RevisionTag child = fs2.commitWithTimestamp(new RevisionTag[0], i);
+					children.add(child);
+				}
+			}
+			
+			assertEquals(parent, tree.commonAncestor(children));
 		}
-		
-		assertEquals(parent, tree.commonAncestor(children));
 	}
 	
 	@Test
 	public void testCommonAncestorOfMixedParentSiblingsIsSharedParent() throws IOException {
-		ZKFS fs = archive.openBlank();
-		RevisionTag parent = fs.commit();
-		int numChildren = 8;
-		
-		ArrayList<RevisionTag> children = new ArrayList<>(numChildren);
-		for(int i = 0; i < numChildren; i++) {
-			RevisionTag otherParent = archive.openBlank().commit();
-			RevisionTag child = parent.getFS().commitWithTimestamp(new RevisionTag[] { otherParent }, i);
-			children.add(child);
+		try(ZKFS fs = archive.openBlank()) {
+			RevisionTag parent = fs.commit();
+			int numChildren = 8;
+			
+			ArrayList<RevisionTag> children = new ArrayList<>(numChildren);
+			for(int i = 0; i < numChildren; i++) {
+				RevisionTag otherParent = archive.openBlank().commitAndClose();
+				try(ZKFS fs2 = parent.getFS()) {
+					RevisionTag child = fs2.commitWithTimestamp(new RevisionTag[] { otherParent }, i);
+					children.add(child);
+				}
+			}
+			
+			assertEquals(parent, tree.commonAncestor(children));
 		}
-		
-		assertEquals(parent, tree.commonAncestor(children));
 	}
 	
 	@Test
 	public void testCommonAncestorOfSiblingsWithQuasiSharedParentsIsSharedParent() throws IOException {
 		// 2 quasi parents, each belonging to half the nodes, so they're not common to all and shouldn't be the result.
 		ZKFS fs = archive.openBlank();
-		RevisionTag parent = fs.commit();
-		RevisionTag[] quasi = { archive.openBlank().commit(), archive.openBlank().commit() };
+		RevisionTag parent = fs.commitAndClose();
+		RevisionTag[] quasi = { archive.openBlank().commitAndClose(), archive.openBlank().commitAndClose() };
 		int numChildren = 8;
 		
 		ArrayList<RevisionTag> children = new ArrayList<>(numChildren);
 		for(int i = 0; i < numChildren; i++) {
-			RevisionTag child = parent.getFS().commitWithTimestamp(new RevisionTag[] { quasi[i%2] }, i);
-			children.add(child);
+			try(ZKFS fs2 = parent.getFS()) {
+				RevisionTag child = fs2.commitWithTimestamp(new RevisionTag[] { quasi[i%2] }, i);
+				children.add(child);
+			}
 		}
 		
 		assertEquals(parent, tree.commonAncestor(children));
@@ -470,7 +484,7 @@ public class RevisionTreeTest {
 		RevisionTag[] revTags = new RevisionTag[numParents-1];
 		
 		for(int i = 0; i < numParents; i++) {
-			RevisionTag revTag = archive.openBlank().commit();
+			RevisionTag revTag = archive.openBlank().commitAndClose();
 			parents.add(revTag);
 		}
 		
@@ -483,7 +497,7 @@ public class RevisionTreeTest {
 		
 		ArrayList<RevisionTag> children = new ArrayList<>(numChildren);
 		for(int i = 0; i < numChildren; i++) {
-			RevisionTag child = parents.get(numParents-1).getFS().commitWithTimestamp(revTags, i);
+			RevisionTag child = parents.get(numParents-1).getFS().commitAndCloseWithTimestamp(revTags, i);
 			children.add(child);
 		}
 	
@@ -494,10 +508,17 @@ public class RevisionTreeTest {
 	public void testCommonAncestorOfAuntNiece() throws IOException {
 		// this time the compared revisions have different heights
 		// (one is the child of the sibling of the other, so it's the "niece")
-		RevisionTag ancestor = archive.openBlank().commit();
-		RevisionTag aunt = ancestor.getFS().commit();
-		RevisionTag sister = ancestor.getFS().commitWithTimestamp(new RevisionTag[0], 0);
-		RevisionTag niece = sister.getFS().commitWithTimestamp(new RevisionTag[0], 1);
+		RevisionTag ancestor = archive.openBlank().commitAndClose();
+		RevisionTag aunt = ancestor.getFS().commitAndClose();
+		RevisionTag sister, niece;
+		
+		try(ZKFS fs = ancestor.getFS()) {
+			sister = fs.commitWithTimestamp(new RevisionTag[0], 0);
+		}
+		
+		try(ZKFS fs = sister.getFS()) {
+			niece = fs.commitWithTimestamp(new RevisionTag[0], 1);
+		}
 		
 		ArrayList<RevisionTag> revisions = new ArrayList<>(2);
 		revisions.add(aunt);
@@ -512,9 +533,9 @@ public class RevisionTreeTest {
 		for(int i = 0; i < numTags; i++) {
 			RevisionTag revTag = archive
 				.openBlank()
-				.commitWithTimestamp(new RevisionTag[0], i)
+				.commitAndCloseWithTimestamp(new RevisionTag[0], i)
 				.getFS()
-				.commitWithTimestamp(new RevisionTag[0], i);
+				.commitAndCloseWithTimestamp(new RevisionTag[0], i);
 			revTags.add(revTag);
 		}
 		
@@ -523,27 +544,27 @@ public class RevisionTreeTest {
 	
 	@Test
 	public void testCommonAncestorWithManyGenerationsOfDepth() throws IOException {
-		RevisionTag parent = archive.openBlank().commit();
+		RevisionTag parent = archive.openBlank().commitAndClose();
 		ArrayList<RevisionTag> revTags = buildSimpleTree(parent, 4, 2);
 		assertEquals(parent, tree.commonAncestor(revTags));
 	}
 	
 	@Test
 	public void testDescendentOfReturnsTrueIfRevTagAndAncestorAreSame() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		assertTrue(tree.descendentOf(revTag, revTag));
 	}
 	
 	@Test
 	public void testDescendentOfReturnsTrueIfAncestorIsBlank() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		assertTrue(tree.descendentOf(revTag, RevisionTag.blank(config)));
 	}
 	
 	@Test
 	public void testDescendentOfReturnsTrueIfAncestorIsImmediateParentOfTag() throws IOException {
-		RevisionTag ancestor = archive.openBlank().commit();
-		RevisionTag revTag = ancestor.getFS().commit();
+		RevisionTag ancestor = archive.openBlank().commitAndClose();
+		RevisionTag revTag = ancestor.getFS().commitAndClose();
 		assertTrue(tree.descendentOf(revTag, ancestor));
 	}
 	
@@ -559,31 +580,47 @@ public class RevisionTreeTest {
 	@Test
 	public void testDescendentOfReturnsTrueIfAncestorIsGrandparentOfTag() throws IOException {
 		int generations = 8;
-		RevisionTag ancestor = archive.openBlank().commit(), revTag = ancestor;
+		RevisionTag ancestor = archive.openBlank().commitAndClose(), revTag = ancestor;
 		for(int i = 0; i < generations; i++) {
-			revTag = ancestor.getFS().commit();
+			revTag = ancestor.getFS().commitAndClose();
 			assertTrue(tree.descendentOf(revTag, ancestor));
 		}
 	}
 	
 	@Test
 	public void testDescendentOfReturnsFalseIfRevtagIsBlankAndAncestorIsNot() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		assertFalse(tree.descendentOf(RevisionTag.blank(config), revTag));
 	}
 	
 	@Test
 	public void testDescendentOfReturnsFalseIfRootRevtagDoesNotHaveIndicatedAncestor() throws IOException {
-		RevisionTag revTagA = archive.openBlank().commitWithTimestamp(new RevisionTag[0], 0);
-		RevisionTag revTagB = archive.openBlank().commitWithTimestamp(new RevisionTag[0], 1);
+		RevisionTag revTagA, revTagB;
+		
+		try(ZKFS fs = archive.openBlank()) {
+			revTagA = fs.commitWithTimestamp(new RevisionTag[0], 0);
+		}
+		
+		try(ZKFS fs = archive.openBlank()) {
+			revTagB = fs.commitWithTimestamp(new RevisionTag[0], 1);
+		}
+		
 		assertFalse(tree.descendentOf(revTagB, revTagA));
 		assertFalse(tree.descendentOf(revTagA, revTagB));
 	}
 
 	@Test
 	public void testDescendentOfReturnsFalseIfNonRootRevtagDoesNotHaveIndicatedAncestor() throws IOException {
-		RevisionTag revTagA = archive.openBlank().commitWithTimestamp(new RevisionTag[0], 0).getFS().commit();
-		RevisionTag revTagB = archive.openBlank().commitWithTimestamp(new RevisionTag[0], 1).getFS().commit();
+		RevisionTag revTagA, revTagB;
+		
+		try(ZKFS fs = archive.openBlank()) {
+			revTagA = fs.commitWithTimestamp(new RevisionTag[0], 0).getFS().commitAndClose();
+		}
+
+		try(ZKFS fs = archive.openBlank()) {
+			revTagB = fs.commitWithTimestamp(new RevisionTag[0], 1).getFS().commitAndClose();
+		}
+		
 		assertFalse(tree.descendentOf(revTagB, revTagA));
 		assertFalse(tree.descendentOf(revTagA, revTagB));
 	}
@@ -592,31 +629,34 @@ public class RevisionTreeTest {
 	public void testIsSupercededReturnsTrueIfTagIsBlankAndArchiveIsNonempty() throws IOException {
 		ZKFS fs = archive.openBlank();
 		RevisionTag blank = fs.baseRevision;
-		fs.commit();
+		fs.commitAndClose();
 		assertTrue(tree.isSuperceded(blank));
 	}
 	
 	@Test
 	public void testIsSupercededReturnsFalseIfTagIsBlankAndArchiveIsEmpty() throws IOException {
-		RevisionTag blank = archive.openBlank().baseRevision;
-		assertFalse(tree.isSuperceded(blank));
+		try(ZKFS fs = archive.openBlank()) {
+			RevisionTag blank = fs.baseRevision;
+			assertFalse(tree.isSuperceded(blank));
+		}
 	}
 	
 	@Test
 	public void testIsSupercededReturnsTrueIfListContainsDescendentOfTag() throws IOException {
-		ZKFS fs = archive.openBlank();
-		RevisionTag base = null;
-		
-		for(int j = 0; j < 8; j++) {
-			base = fs.commit(); // allow for 8 separate branch tips
-			for(int i = 0; i < 8; i++) {
-				fs.write("a", (""+i).getBytes());
-				fs.commit(); // each tip has a history 8 deep
+		try(ZKFS fs = archive.openBlank()) {
+			RevisionTag base = null;
+			
+			for(int j = 0; j < 8; j++) {
+				base = fs.commit(); // allow for 8 separate branch tips
+				for(int i = 0; i < 8; i++) {
+					fs.write("a", (""+i).getBytes());
+					fs.commit(); // each tip has a history 8 deep
+				}
 			}
+			
+			// the first revision in the last tip ought to have been superceded
+			assertTrue(tree.isSuperceded(base));
 		}
-		
-		// the first revision in the last tip ought to have been superceded
-		assertTrue(tree.isSuperceded(base));
 	}
 	
 	@Test
@@ -626,21 +666,25 @@ public class RevisionTreeTest {
 		RevisionTag[] basicTags = new RevisionTag[numParents-2], extendedTags = new RevisionTag[numParents-1];
 		
 		for(int i = 0; i < numParents; i++) {
-			ZKFS fs = archive.openBlank();
-			fs.write("file"+i, ("contents"+i).getBytes());
-			RevisionTag tag = fs.commit();
-			if(i == 0) {
-				baseParent = tag;
-			} else {
-				if(i < numParents-1) basicTags[i-1] = tag;
-				extendedTags[i-1] = tag;
+			try(ZKFS fs = archive.openBlank()) {
+				fs.write("file"+i, ("contents"+i).getBytes());
+				RevisionTag tag = fs.commit();
+				if(i == 0) {
+					baseParent = tag;
+				} else {
+					if(i < numParents-1) basicTags[i-1] = tag;
+					extendedTags[i-1] = tag;
+				}
 			}
 		}
 		
-		RevisionTag a = baseParent.getFS().commit(basicTags),
-				    b = baseParent.getFS().commit(extendedTags);
-		assertTrue(tree.isSuperceded(a));
-		assertFalse(tree.isSuperceded(b));
+		try(ZKFS fs1 = baseParent.getFS();
+			ZKFS fs2 = baseParent.getFS().commitAndClose().getFS()) {
+			RevisionTag a = fs1.commit(basicTags),
+				    b = fs2.commit(extendedTags);
+			assertTrue(tree.isSuperceded(a));
+			assertFalse(tree.isSuperceded(b));
+		}
 	}
 	
 	@Test
@@ -650,21 +694,25 @@ public class RevisionTreeTest {
 		RevisionTag[] basicTags = new RevisionTag[numParents-2], extendedTags = new RevisionTag[numParents-1];
 		
 		for(int i = 0; i < numParents; i++) {
-			ZKFS fs = archive.openBlank();
-			fs.write("file"+i, ("contents"+i).getBytes());
-			RevisionTag tag = fs.commit();
-			if(i == 0) {
-				baseParent = tag;
-			} else {
-				if(i < numParents-1) basicTags[i-1] = tag;
-				extendedTags[i-1] = tag;
+			try(ZKFS fs = archive.openBlank()) {
+				fs.write("file"+i, ("contents"+i).getBytes());
+				RevisionTag tag = fs.commit();
+				if(i == 0) {
+					baseParent = tag;
+				} else {
+					if(i < numParents-1) basicTags[i-1] = tag;
+					extendedTags[i-1] = tag;
+				}
 			}
 		}
 		
-		RevisionTag a = baseParent.getFS().commit(basicTags),
-				    b = baseParent.getFS().commit().getFS().commit(extendedTags);
-		assertTrue(tree.isSuperceded(a));
-		assertFalse(tree.isSuperceded(b));
+		try(ZKFS fs1 = baseParent.getFS();
+			ZKFS fs2 = baseParent.getFS().commitAndClose().getFS()) {
+			RevisionTag a = fs1.commit(basicTags),
+				    b = fs2.commit(extendedTags);
+			assertTrue(tree.isSuperceded(a));
+			assertFalse(tree.isSuperceded(b));
+		}
 	}
 	
 	@Test
@@ -674,33 +722,37 @@ public class RevisionTreeTest {
 		RevisionTag[] basicTags = new RevisionTag[numParents-2], extendedTags = new RevisionTag[numParents-1];
 		
 		for(int i = 0; i < numParents; i++) {
-			ZKFS fs = archive.openBlank();
-			fs.write("file"+i, ("contents"+i).getBytes());
-			RevisionTag tag = fs.commit();
-			if(i == 0) {
-				baseParent = tag;
-			} else {
-				if(i < numParents-1) basicTags[i-1] = tag;
-				extendedTags[i-1] = tag;
+			try(ZKFS fs = archive.openBlank()) {
+				fs.write("file"+i, ("contents"+i).getBytes());
+				RevisionTag tag = fs.commit();
+				if(i == 0) {
+					baseParent = tag;
+				} else {
+					if(i < numParents-1) basicTags[i-1] = tag;
+					extendedTags[i-1] = tag;
+				}
 			}
 		}
 		
-		RevisionTag a = baseParent.getFS().commit(basicTags),
-				    b = baseParent.getFS().commit(extendedTags).getFS().commit();
-		assertTrue(tree.isSuperceded(a));
-		assertFalse(tree.isSuperceded(b));
-	}
+		try(ZKFS fs1 = baseParent.getFS();
+				ZKFS fs2 = baseParent.getFS().commitAndClose().getFS()) {
+				RevisionTag a = fs1.commit(basicTags),
+					    b = fs2.commit(extendedTags);
+				assertTrue(tree.isSuperceded(a));
+				assertFalse(tree.isSuperceded(b));
+			}
+		}
 	
 	@Test
 	public void testIsSupercededReturnsFalseIfTagIsABranchTip() throws IOException {
-		RevisionTag tag = archive.openBlank().commit().getFS().commit();
+		RevisionTag tag = archive.openBlank().commitAndClose().getFS().commitAndClose();
 		assertFalse(tree.isSuperceded(tag));
 	}
 	
 	@Test(expected=SearchFailedException.class)
 	public void testIsSupercededThrowsSearchFailedExceptionIfLookupTimedOut() throws IOException {
 		RevisionTree.treeSearchTimeoutMs = 1;
-		RevisionTag tag = archive.openBlank().commit().getFS().commit();
+		RevisionTag tag = archive.openBlank().commitAndClose().getFS().commitAndClose();
 		tree.clear();
 		config.getCacheStorage().purge();
 		tree.isSuperceded(tag);

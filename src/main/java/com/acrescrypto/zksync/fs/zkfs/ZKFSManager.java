@@ -21,7 +21,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFS.ZKFSDirtyMonitor;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 
-public class ZKFSManager {
+public class ZKFSManager implements AutoCloseable {
 	protected int autocommitIntervalMs;
 	protected boolean autocommit;
 	protected boolean autofollow;

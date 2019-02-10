@@ -2,6 +2,9 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
@@ -22,11 +25,20 @@ public class ZKFile extends File {
 	protected Page bufferedPage; /** buffered page contents (page for current file pointer offset) */
 	protected boolean dirty; /** true if file has been modified since last flush */
 	protected boolean trusted; /** verify page signatures when reading <=> !trusted */
+	protected boolean closed; /** is this file closed? */
 	
 	public final static int O_LINK_LITERAL = 1 << 16; /** treat symlinks as literal files, needed for lowlevel symlink operations */
 	
+	protected Logger logger = LoggerFactory.getLogger(ZKFile.class);
+	
 	protected ZKFile(ZKFS fs) {
 		super(fs);
+		logger.trace("ZKFS {} {}: open {} - (0x{}), {} open",
+				Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(fs.baseRevision),
+				path,
+				Integer.toHexString(mode),
+				fs.getOpenFiles().size());
 		this.zkfs = fs;
 		this.trusted = true; // set to false for inode table
 	}
@@ -34,29 +46,34 @@ public class ZKFile extends File {
 	/** Open a file handle at a path */
 	public ZKFile(ZKFS fs, String path, int mode, boolean trusted) throws IOException {
 		super(fs);
-		this.zkfs = fs;
-		this.path = path;
-		this.mode = mode;
-		this.trusted = trusted;
-		
-		if((mode & (O_NOFOLLOW | O_LINK_LITERAL)) == O_LINK_LITERAL) {
-			throw new EINVALException("O_LINK_LITERAL not valid without O_NOFOLLOW");
-		}
-		
 		try {
-			this.inode = fs.inodeForPath(path, (mode & O_NOFOLLOW) == 0);
-			if(this.inode.getStat().isSymlink() && (mode & O_LINK_LITERAL) == 0) {
-				throw new EMLINKException(path);
+			this.zkfs = fs;
+			this.path = path;
+			this.mode = mode;
+			this.trusted = trusted;
+			
+			if((mode & (O_NOFOLLOW | O_LINK_LITERAL)) == O_LINK_LITERAL) {
+				throw new EINVALException("O_LINK_LITERAL not valid without O_NOFOLLOW");
 			}
-		} catch(ENOENTException e) {
-			if((mode & O_CREAT) == 0) throw e;
-			this.inode = fs.create(path);
+			
+			try {
+				this.inode = fs.inodeForPath(path, (mode & O_NOFOLLOW) == 0);
+				if(this.inode.getStat().isSymlink() && (mode & O_LINK_LITERAL) == 0) {
+					throw new EMLINKException(path);
+				}
+			} catch(ENOENTException e) {
+				if((mode & O_CREAT) == 0) throw e;
+				this.inode = fs.create(path);
+			}
+			
+			this.tree = new PageTree(this.inode);
+			if((mode & O_WRONLY) != 0 && zkfs.archive.config.isReadOnly()) throw new EACCESException("cannot open files with write access when archive is opened read-only");
+			if((mode & O_TRUNC) != 0) truncate(0);
+			if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();
+		} catch(Throwable exc) {
+			this.close();
+			throw exc;
 		}
-		
-		this.tree = new PageTree(this.inode);
-		if((mode & O_WRONLY) != 0 && zkfs.archive.config.isReadOnly()) throw new EACCESException("cannot open files with write access when archive is opened read-only");
-		if((mode & O_TRUNC) != 0) truncate(0);
-		if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();
 	}
 	
 	/** Filesystem for this file */
@@ -238,6 +255,15 @@ public class ZKFile extends File {
 
 	@Override
 	public void close() throws IOException {
+		if(closed) return;
+		closed = true;
+		
+		fs.reportClosedFile(this);
+		logger.trace("ZKFS {} {}: close {}, {} open",
+				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(zkfs.baseRevision),
+				path,
+				fs.getOpenFiles().size());
 		flush();
 	}
 

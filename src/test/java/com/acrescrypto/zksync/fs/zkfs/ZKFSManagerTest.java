@@ -40,7 +40,11 @@ public class ZKFSManagerTest {
 		archive = master.createDefaultArchive();
 		fs = archive.openBlank();
 		manager = new ZKFSManager(fs);
-		(new LocalFS("/tmp")).mkdirp(TESTDIR);
+		
+		try(LocalFS lfs = new LocalFS("/tmp")) {
+			lfs.mkdirp(TESTDIR);
+		}
+		
 		mirrorFs = new LocalFS("/tmp/" + TESTDIR);
 	}
 	
@@ -218,17 +222,18 @@ public class ZKFSManagerTest {
 	@Test
 	public void testNewRevisionsAreCheckedOutWhenAutofollowEnabledAndNoChangesPendingAndBaseRevisionBlank() throws IOException {
 		manager.setAutofollow(true);
-		ZKFS fs2 = archive.openBlank();
-		RevisionTag tag = fs2.commit();
-		assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+		try(ZKFS fs2 = archive.openBlank()) {
+			RevisionTag tag = fs2.commit();
+			assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+		}
 	}
 	
 	@Test
 	public void testNewRevisionsAreCheckedOutWhenAutofollowEnabledAndNoChangesPendingAndBaseRevisionNotBlank() throws IOException {
-		RevisionTag tag = archive.openBlank().commit();
+		RevisionTag tag = archive.openBlank().commitAndClose();
 		manager.fs.rebase(tag);
 		manager.setAutofollow(true);
-		RevisionTag tag2 = tag.getFS().commit();
+		RevisionTag tag2 = tag.getFS().commitAndClose();
 		assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag2)));
 	}
 	
@@ -236,26 +241,28 @@ public class ZKFSManagerTest {
 	public void testNewRevisionsAreNotCheckedOutWhenAutofollowEnabledAndChangesArePending() throws IOException {
 		manager.setAutofollow(true);
 		fs.write("change", "somedata".getBytes());
-		ZKFS fs2 = archive.openBlank();
-		RevisionTag tag = fs2.commit();
-		assertFalse(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+		try(ZKFS fs2 = archive.openBlank()) {
+			RevisionTag tag = fs2.commit();
+			assertFalse(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+		}
 	}
 	
 	@Test
 	public void testNewRevisionsAreNotCheckedOutWhenNewRevisionNotDescendentOfCurrentRevision() throws IOException {
-		RevisionTag tag = archive.openBlank().commit();
+		RevisionTag tag = archive.openBlank().commitAndClose();
 		manager.fs.rebase(tag);
 		manager.setAutofollow(true);
-		RevisionTag tag2 = archive.openBlank().commit();
+		RevisionTag tag2 = archive.openBlank().commitAndClose();
 		assertFalse(Util.waitUntil(100, ()->fs.baseRevision.equals(tag2)));
 	}
 	
 	@Test
 	public void testNewRevisionsAreNotCheckedOutWhenAutofollowDisabled() throws IOException {
 		manager.setAutofollow(false);
-		ZKFS fs2 = archive.openBlank();
-		RevisionTag tag = fs2.commit();
-		assertFalse(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+		try(ZKFS fs2 = archive.openBlank()) {
+			RevisionTag tag = fs2.commit();
+			assertFalse(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+		}
 	}
 	
 	@Test
@@ -336,13 +343,14 @@ public class ZKFSManagerTest {
 		manager.setAutofollow(true);
 		manager.setAutomirrorPath(mirrorFs.getRoot());
 
-		ZKFS fs2 = archive.openBlank();
-		fs2.write("file", "somebytes".getBytes());
-		RevisionTag tag = fs2.commit();
-		
-		assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
-		assertTrue(Util.waitUntil(100, ()->mirrorFs.exists("file")));
-		assertArrayEquals("somebytes".getBytes(), mirrorFs.read("file"));
+		try(ZKFS fs2 = archive.openBlank()) {
+			fs2.write("file", "somebytes".getBytes());
+			RevisionTag tag = fs2.commit();
+			
+			assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+			assertTrue(Util.waitUntil(100, ()->mirrorFs.exists("file")));
+			assertArrayEquals("somebytes".getBytes(), mirrorFs.read("file"));
+		}
 	}
 
 	@Test
@@ -350,9 +358,10 @@ public class ZKFSManagerTest {
 		manager.setAutofollow(false);
 		manager.setAutomirrorPath(mirrorFs.getRoot());
 
-		ZKFS fs2 = archive.openBlank();
-		fs2.write("file", "somebytes".getBytes());
-		fs2.commit();
+		try(ZKFS fs2 = archive.openBlank()) {
+			fs2.write("file", "somebytes".getBytes());
+			fs2.commit();
+		}
 		
 		assertFalse(Util.waitUntil(100, ()->mirrorFs.exists("file")));
 	}
@@ -362,12 +371,12 @@ public class ZKFSManagerTest {
 		manager.setAutofollow(true);
 		manager.setAutomirrorPath(null);
 
-		ZKFS fs2 = archive.openBlank();
-		fs2.write("file", "somebytes".getBytes());
-		RevisionTag tag = fs2.commit();
-		
-		assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
-		assertFalse(Util.waitUntil(100, ()->mirrorFs.exists("file")));
+		try(ZKFS fs2 = archive.openBlank()) {
+			fs2.write("file", "somebytes".getBytes());
+			RevisionTag tag = fs2.commit();
+			assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
+			assertFalse(Util.waitUntil(100, ()->mirrorFs.exists("file")));
+		}
 	}
 	
 	@Test
@@ -404,27 +413,28 @@ public class ZKFSManagerTest {
 		manager.setAutomirror(true);
 		manager.write();
 		
-		ZKFSManager persistent = new ZKFSManager(archive.getConfig());
-		assertEquals(manager.isAutofollowing(), persistent.isAutofollowing());
-		assertEquals(manager.isAutocommiting(), persistent.isAutocommiting());
-		assertEquals(manager.isAutomerging(), persistent.isAutomerging());
-		assertEquals(manager.isAutomirroring(), persistent.isAutomirroring());
-		assertEquals(manager.getAutocommitIntervalMs(), persistent.getAutocommitIntervalMs());
-		assertEquals(manager.getAutomirrorPath(), persistent.getAutomirrorPath());
-		assertEquals(notLatest, persistent.fs.getBaseRevision());
-		persistent.close();
+		try(ZKFSManager persistent = new ZKFSManager(archive.getConfig())) {
+			assertEquals(manager.isAutofollowing(), persistent.isAutofollowing());
+			assertEquals(manager.isAutocommiting(), persistent.isAutocommiting());
+			assertEquals(manager.isAutomerging(), persistent.isAutomerging());
+			assertEquals(manager.isAutomirroring(), persistent.isAutomirroring());
+			assertEquals(manager.getAutocommitIntervalMs(), persistent.getAutocommitIntervalMs());
+			assertEquals(manager.getAutomirrorPath(), persistent.getAutomirrorPath());
+			assertEquals(notLatest, persistent.fs.getBaseRevision());
+		}
 	}
 
 	@Test
 	public void testPersistentManagerInitializesFromDefault() throws IOException {
-		RevisionTag latest = archive.openBlank().commit();
+		RevisionTag latest = archive.openBlank().commitAndClose();
 		
-		ZKFSManager persistent = new ZKFSManager(archive.getConfig());
-		assertFalse(persistent.isAutofollowing());
-		assertFalse(persistent.isAutocommiting());
-		assertFalse(persistent.isAutomirroring());
-		assertEquals(0, persistent.getAutocommitIntervalMs());
-		assertNull(persistent.getAutomirrorPath());
-		assertEquals(latest, persistent.fs.getBaseRevision());
+		try(ZKFSManager persistent = new ZKFSManager(archive.getConfig())) {
+			assertFalse(persistent.isAutofollowing());
+			assertFalse(persistent.isAutocommiting());
+			assertFalse(persistent.isAutomirroring());
+			assertEquals(0, persistent.getAutocommitIntervalMs());
+			assertNull(persistent.getAutomirrorPath());
+			assertEquals(latest, persistent.fs.getBaseRevision());
+		}
 	}
 }

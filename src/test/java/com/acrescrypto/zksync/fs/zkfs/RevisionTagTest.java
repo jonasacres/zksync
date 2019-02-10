@@ -137,7 +137,9 @@ public class RevisionTagTest {
 	
 	@Test
 	public void testGetFSReturnsAppropriateFilesystem() throws IOException {
-		assertEquals(revTag, revTag.getFS().baseRevision);
+		try(ZKFS fs = revTag.getFS()) {
+			assertEquals(revTag, fs.baseRevision);
+		}
 	}
 	
 	@Test

@@ -229,11 +229,11 @@ public class FSMirror {
 					zstat.getMtime(),
 					tstat.getMtime());
 		} else if(tstat.getMode() != zstat.getMode()) {
-			logger.trace("FS {}: FSMirror detects difference at {} due to differing size (zkfs {}, target {})",
+			logger.trace("FS {}: FSMirror detects difference at {} due to differing mode (zkfs 0{}, target 0{})",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					path,
-					zstat.getMode(),
-					tstat.getMode());
+					Integer.toOctalString(zstat.getMode()),
+					Integer.toOctalString(tstat.getMode()));
 		} else {
 			return; // nothing was different
 		}
@@ -462,7 +462,11 @@ public class FSMirror {
 		if(file == null) return;
 		try {
 			file.close();
-		} catch(IOException exc) {}
+		} catch(IOException exc) {
+			logger.error("FS {}: FSMirror caught exception closing file {}",
+					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+					file.getPath());
+		}
 	}
 
 	protected void remove(FS fs, String path, Stat stat) throws IOException {

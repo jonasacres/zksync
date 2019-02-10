@@ -6,6 +6,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
@@ -16,7 +19,7 @@ import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
 
-public class ZKArchive {
+public class ZKArchive implements AutoCloseable {
 	public final static String GLOBAL_DATA_DIR = ".zksync/archive/data/";
 	public final static String CONFIG_DIR = ".zksync/archive/config/";
 	public final static String REVISION_DIR = ".zksync/archive/revisions/";
@@ -24,6 +27,8 @@ public class ZKArchive {
 	public final static String ACTIVE_REVISION = ".zskync/local/active-revision";
 	
 	public final static int DEFAULT_PAGE_SIZE = 65536;
+
+	protected Logger logger = LoggerFactory.getLogger(ZKArchive.class);
 
 	// TODO Someday: (refactor) it'll hurt, but crypto and storage need to go away and everyone needs to access through config
 	protected CryptoSupport crypto;
@@ -46,7 +51,9 @@ public class ZKArchive {
 			} else {
 				return tag.getFS();
 			}
-		}, (tag, fs) -> {});
+		}, (tag, fs) -> {
+			fs.close();
+		});
 		
 		if(!isCacheOnly()) { // only need the list for non-networked archives, which are not cache-only
 			rescanPageTags();
@@ -54,6 +61,16 @@ public class ZKArchive {
 	}
 	
 	public void close() {
+		readOnlyFilesystems.cachedKeys().forEach((tag)->{
+			try {
+				readOnlyFilesystems.get(tag).close();
+			} catch (IOException exc) {
+				logger.error("ZKFS {}: Caught exception closing filesystem for tag {}",
+						Util.formatArchiveId(config.getArchiveId()),
+						Util.formatRevisionTag(tag),
+						exc);
+			}
+		});
 		config.close();
 	}
 	
@@ -134,8 +151,8 @@ public class ZKArchive {
 		PageTree inodeTableTree = new PageTree(revTag.getRefTag());
 		if(!inodeTableTree.exists()) return false;
 
-		try {
-			Inode inode = revTag.getFS().inodeTable.inodeWithId(inodeId);
+		try(ZKFS fs = revTag.getFS()) {
+			Inode inode = fs.inodeTable.inodeWithId(inodeId);
 			if(inode.isDeleted()) return false;
 			
 			PageTree tree = new PageTree(inode);
@@ -159,12 +176,13 @@ public class ZKArchive {
 		PageTree inodeTableTree = new PageTree(revTag.getRefTag());
 		if(!inodeTableTree.exists()) return false;
 
-		ZKFS fs = openRevision(revTag);
-		for(int i = 0; i < fs.inodeTable.nextInodeId(); i++) {
-			Inode inode = fs.inodeTable.inodeWithId(i);
-			if(inode.isDeleted()) continue;
-			PageTree tree = new PageTree(inode);
-			if(!tree.exists()) return false;
+		try(ZKFS fs = openRevision(revTag)) {
+			for(int i = 0; i < fs.inodeTable.nextInodeId(); i++) {
+				Inode inode = fs.inodeTable.inodeWithId(i);
+				if(inode.isDeleted()) continue;
+				PageTree tree = new PageTree(inode);
+				if(!tree.exists()) return false;
+			}
 		}
 		
 		return true;

@@ -36,12 +36,29 @@ public class ZKFS extends FS {
 		rebase(revision);
 	}
 	
+	@Override
+	public void close() throws IOException {
+		inodeTable.close();
+		for(String path : directoriesByPath.cachedKeys()) {
+			directoriesByPath.get(path).close();
+		}
+		super.close();
+	}
+	
 	public ZKFS(RevisionTag revision) throws IOException {
 		this(revision, "/");
 	}
 	
 	public RevisionTag commit(RevisionTag[] additionalParents) throws IOException {
 		return commitWithTimestamp(additionalParents, -1);
+	}
+	
+	public RevisionTag commitAndCloseWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
+		try {
+			return commitWithTimestamp(additionalParents, timestamp);
+		} finally {
+			close();
+		}
 	}
 	
 	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
@@ -64,6 +81,15 @@ public class ZKFS extends FS {
 	
 	public RevisionTag commit() throws IOException {
 		return commit(new RevisionTag[0]);
+	}
+	
+	public RevisionTag commitAndClose() throws IOException {
+		try {
+			RevisionTag rev = commit(new RevisionTag[0]);
+			return rev;
+		} finally {
+			close();
+		}
 	}
 	
 	public Inode inodeForPath(String path) throws IOException {
@@ -181,9 +207,9 @@ public class ZKFS extends FS {
 	public void write(String path, byte[] contents, int offset, int length) throws IOException {
 		mkdirp(dirname(path));
 		
-		ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT|ZKFile.O_TRUNC);
-		file.write(contents, offset, length);
-		file.close();
+		try(ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT|ZKFile.O_TRUNC)) {
+			file.write(contents, offset, length);
+		}
 	}
 
 	@Override
@@ -206,9 +232,9 @@ public class ZKFS extends FS {
 	
 	@Override
 	public void truncate(String path, long size) throws IOException {
-		ZKFile file = open(path, File.O_RDWR);
-		file.truncate(size);
-		file.close();
+		try(ZKFile file = open(path, File.O_RDWR)) {
+			file.truncate(size);
+		}
 	}
 
 	@Override
@@ -220,9 +246,9 @@ public class ZKFS extends FS {
 	public void mkdir(String path) throws IOException {
 		assertPathIsDirectory(dirname(path));
 		assertPathDoesntExist(path);
-		ZKDirectory dir = opendir(dirname(path));
-		dir.mkdir(basename(path));
-		dir.close();
+		try(ZKDirectory dir = opendir(dirname(path))) {
+			dir.mkdir(basename(path)).close();
+		}
 	}
 	
 	@Override
@@ -269,9 +295,9 @@ public class ZKFS extends FS {
 		Inode instance = create(dest);
 		instance.getStat().makeSymlink();
 		
-		ZKFile symlink = open(dest, File.O_WRONLY|File.O_NOFOLLOW|File.O_CREAT|ZKFile.O_LINK_LITERAL);
-		symlink.write(source.getBytes());
-		symlink.close();
+		try(ZKFile symlink = open(dest, File.O_WRONLY|File.O_NOFOLLOW|File.O_CREAT|ZKFile.O_LINK_LITERAL)) {
+			symlink.write(source.getBytes());
+		}
 	}
 	
 	@Override
@@ -282,9 +308,10 @@ public class ZKFS extends FS {
 	@Override
 	public String readlink(String link) throws IOException {
 		if(!lstat(link).isSymlink()) throw new EINVALException(link);
-		ZKFile symlink = open(link, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL);
-		String target = new String(symlink.read());
-		return target;
+		try(ZKFile symlink = open(link, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL)) {
+			String target = new String(symlink.read());
+			return target;
+		}
 	}
 	
 	@Override
@@ -426,8 +453,12 @@ public class ZKFS extends FS {
 			return new ZKDirectory(this, path);
 		}, (String path, ZKDirectory dir) -> {
 			dir.commit();
+			dir.close();
 		});
 		this.baseRevision = revision;
+		if(this.inodeTable != null) {
+			this.inodeTable.close();
+		}
 		this.inodeTable = new InodeTable(this, revision);
 		this.dirty = false;
 	}
@@ -449,5 +480,11 @@ public class ZKFS extends FS {
 		for(ZKFSDirtyMonitor monitor : dirtyMonitors) {
 			monitor.notifyDirty(this);
 		}
+	}
+
+	public String toString() {
+		return this.getClass().getSimpleName() + " "
+				+ Util.formatArchiveId(archive.getConfig().getArchiveId()) + " "
+				+ Util.formatRevisionTag(this.baseRevision);
 	}
 }

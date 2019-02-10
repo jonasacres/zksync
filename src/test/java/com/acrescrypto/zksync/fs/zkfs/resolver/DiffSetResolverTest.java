@@ -63,13 +63,13 @@ public class DiffSetResolverTest {
 	public void testMergesInheritFromAllParents() throws IOException, DiffResolutionException {
 		// do merges correctly list all their parents in their RevisionInfo?
 		ZKFS fs = archive.openRevision(base);
-		RevisionTag parent = fs.commit();
+		RevisionTag parent = fs.commitAndClose();
 		RevisionTag[] children = new RevisionTag[8];
 		
 		for(int i = 0; i < 8; i++) {
 			fs = parent.getFS();
 			fs.write("file", ("contents " + i).getBytes());
-			children[i] = fs.commit();
+			children[i] = fs.commitAndClose();
 		}
 		
 		ArrayList<RevisionTag> leaves = fs.getArchive().getConfig().getRevisionList().branchTips();
@@ -102,14 +102,14 @@ public class DiffSetResolverTest {
 		for(int i = 0; i < numFiles; i++) {
 			baseFs.write("file" + i, "base version".getBytes());
 		}
-		RevisionTag baseRev = baseFs.commit();
+		RevisionTag baseRev = baseFs.commitAndClose();
 		
 		for(int i = 0; i < versions.length; i++) {
 			ZKFS fs = archive.openRevision(baseRev);
 			for(int j = 0; j < numFiles; j++) {
 				fs.write("file" + j, ("version " + i).getBytes());
 			}
-			versions[i] = fs.commit();
+			versions[i] = fs.commitAndClose();
 		}
 		
 		ArrayList<Inode> solutions = new ArrayList<Inode>();
@@ -159,11 +159,10 @@ public class DiffSetResolverTest {
 			RevisionTag base = fs.commit();
 			
 			fs.unlink("file");
-			RevisionTag revDeleted = fs.commit();
+			RevisionTag revDeleted = fs.commitAndClose();
 			
-			fs.close();
 			fs = archive.openRevision(base);
-			RevisionTag revNotDeleted = fs.commit();
+			RevisionTag revNotDeleted = fs.commitAndClose();
 			
 			DiffSet diffset = new DiffSet(new RevisionTag[] { revDeleted, revNotDeleted });
 			InodeDiffResolver inodeResolver = (DiffSetResolver r, InodeDiff diff) -> {
@@ -180,7 +179,6 @@ public class DiffSetResolverTest {
 
 			RevisionTag tag = diffset.resolver(inodeResolver, pathResolver).resolve();
 			
-			fs.close();
 			fs = archive.openRevision(tag);
 			assertFalse(fs.exists("file"));
 			fs.close();
@@ -199,7 +197,7 @@ public class DiffSetResolverTest {
 			ZKFS child = base.getFS();
 			Util.setCurrentTimeNanos(n);
 			child.write("file", ("version " + n).getBytes());
-			child.commit();
+			child.commitAndClose();
 		}
 		
 		RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
@@ -222,7 +220,7 @@ public class DiffSetResolverTest {
 			int n = (i + r) % numChildren;
 			ZKFS child = base.getFS();
 			child.link("file" + n, "file");
-			child.commit();
+			child.commitAndClose();
 		}
 		
 		RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
@@ -237,7 +235,7 @@ public class DiffSetResolverTest {
 		// Make /a in one rev, /b in another. Merge them. Should have /a and /b in a merged directory.
 		for(byte i = 0; i < 4; i++) {
 			fs.write(""+i, (""+i).getBytes());
-			fs.commit();
+			fs.commitAndClose();
 			if(i == 1) fs = base.getFS();
 		}
 		
@@ -252,6 +250,8 @@ public class DiffSetResolverTest {
 	@Test
 	public void testDefaultPrefersPathExistence() throws IOException, DiffResolutionException {
 		// Prefer to keep a path in a merge conflict vs. deleting it
+		fs.close();
+		
 		for(int i = 0; i < 8; i++) {
 			fs = archive.openBlank();
 			fs.write("file", "foo".getBytes());
@@ -259,14 +259,14 @@ public class DiffSetResolverTest {
 			
 			if(i % 2 == 0) {
 				fs.write("file", "bar".getBytes());
-				fs.commit();
-				base.getFS().commit();
+				fs.commitAndClose();
+				base.getFS().commitAndClose();
 			} else {
 				fs.write("file", "bar".getBytes());
-				fs.commit();
+				fs.commitAndClose();
 				fs = base.getFS();
 				fs.unlink("file");
-				fs.commit();
+				fs.commitAndClose();
 			}
 			
 			ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
@@ -280,13 +280,14 @@ public class DiffSetResolverTest {
 		fs.write("file", "foo".getBytes());
 		base = fs.commit();
 		
-		fs.commit(); // tip 1 (empty)
+		fs.commitAndClose(); // tip 1 (empty)
 		fs = base.getFS();
 		fs.unlink("file");
-		fs.commit(); // tip 2 (contains deletion)
+		fs.commitAndClose(); // tip 2 (contains deletion)
 		
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		assertFalse(mergeFs.exists("file"));
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			assertFalse(mergeFs.exists("file"));
+		}
 	}
 	
 	@Test
@@ -296,11 +297,12 @@ public class DiffSetResolverTest {
 		base = fs.commit();
 		
 		fs.unlink("file");
-		fs.commit(); // tip 1 (contains deletion)
-		base.getFS().commit(); // tip 2 (empty)
+		fs.commitAndClose(); // tip 1 (contains deletion)
+		base.getFS().commitAndClose(); // tip 2 (empty)
 		
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		assertFalse(mergeFs.exists("file"));
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			assertFalse(mergeFs.exists("file"));
+		}
 	}
 	
 	@Test
@@ -310,10 +312,11 @@ public class DiffSetResolverTest {
 		base = fs.commit();
 		
 		fs.write("dir/file", "should get deleted".getBytes());
-		fs.commit();
+		fs.commitAndClose();
+		
 		fs = base.getFS();
 		fs.rmdir("dir");
-		fs.commit();
+		fs.commitAndClose();
 		
 		PathDiffResolver pathResolver = (DiffSetResolver setResolver, PathDiff diff) -> {
 			if(diff.path.equals("dir")) return null;
@@ -324,9 +327,10 @@ public class DiffSetResolverTest {
 				DiffSetResolver.latestInodeResolver(),
 				pathResolver);
 		
-		ZKFS mergeFs = resolver.resolve().readOnlyFS();
-		assertFalse(mergeFs.exists("dir"));
-		assertFalse(mergeFs.exists("dir/file"));
+		try(ZKFS mergeFs = resolver.resolve().readOnlyFS()) {
+			assertFalse(mergeFs.exists("dir"));
+			assertFalse(mergeFs.exists("dir/file"));
+		}
 	}
 	
 	@Test
@@ -340,14 +344,15 @@ public class DiffSetResolverTest {
 			if(j == 2) fs = base.getFS();
 			Util.setCurrentTimeNanos(1+j%2);
 			fs.write("file", (""+j).getBytes());
-			revs[j] = fs.commit();
+			revs[j] = fs.commitAndClose();
 		}
 		
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		if(Arrays.compareUnsigned(revs[0].getBytes(), revs[2].getBytes()) < 0) {
-			assertEquals("3", new String(mergeFs.read("file")));
-		} else {
-			assertEquals("1", new String(mergeFs.read("file")));
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			if(Arrays.compareUnsigned(revs[0].getBytes(), revs[2].getBytes()) < 0) {
+				assertEquals("3", new String(mergeFs.read("file")));
+			} else {
+				assertEquals("1", new String(mergeFs.read("file")));
+			}
 		}
 	}
 	
@@ -355,14 +360,14 @@ public class DiffSetResolverTest {
 	public void testSerializedInodeIsSecondTiebraker() throws IOException, DiffResolutionException {
 		Util.setCurrentTimeNanos(0);
 		fs.write("file", "foo".getBytes());
-		base = fs.commit();
+		base = fs.commitAndClose();
 		byte[][] serializations = new byte[2][];
 		
 		for(int j = 0; j < 2; j++) {
 			fs = base.getFS();
 			Util.setCurrentTimeNanos(1);
 			fs.write("file", (""+j).getBytes());
-			fs.commit();
+			fs.commitAndClose();
 			serializations[j] = fs.inodeForPath("file").serialize();
 		}
 		
@@ -380,11 +385,11 @@ public class DiffSetResolverTest {
 		
 		base = fs.commit();
 		fs.link("file", "link-a");
-		fs.commit();
+		fs.commitAndClose();
 		
 		fs = base.getFS();
 		fs.link("file", "link-b");
-		fs.commit();
+		fs.commitAndClose();
 		
 		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
 		assertEquals(mergeFs.inodeForPath("file"), mergeFs.inodeForPath("link-a"));
@@ -397,15 +402,18 @@ public class DiffSetResolverTest {
 		fs.write("file", "foo".getBytes());
 		fs.link("file", "link-a");
 		fs.link("file", "link-b");
+		
 		assertEquals(fs.inodeForPath("file"), fs.inodeForPath("link-a"));
 		assertEquals(fs.inodeForPath("file"), fs.inodeForPath("link-b"));
 		assertEquals(3, fs.inodeForPath("file").getNlink());
-		base = fs.commit();
+		base = fs.commitAndClose();
+		
 		fs.unlink("link-a");
-		fs.commit();
+		fs.commitAndClose();
+		
 		fs = base.getFS();
 		fs.unlink("link-b");
-		fs.commit();
+		fs.commitAndClose();
 		
 		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
 		assertFalse(mergeFs.exists("link-a"));
@@ -420,16 +428,17 @@ public class DiffSetResolverTest {
 		base = fs.commit();
 		
 		fs.mv("file", "new");
-		fs.commit();
+		fs.commitAndClose();
 		
 		fs = base.getFS();
 		fs.write("file", "bbb".getBytes());
-		fs.commit();
+		fs.commitAndClose();
 		
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		assertFalse(mergeFs.exists("file"));
-		assertTrue(mergeFs.exists("new"));
-		assertArrayEquals("bbb".getBytes(), mergeFs.read("new"));
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			assertFalse(mergeFs.exists("file"));
+			assertTrue(mergeFs.exists("new"));
+			assertArrayEquals("bbb".getBytes(), mergeFs.read("new"));
+		}
 	}
 	
 	@Test
@@ -439,16 +448,17 @@ public class DiffSetResolverTest {
 		base = fs.commit();
 		
 		fs.mv("file", "new");
-		fs.commit();
+		fs.commitAndClose();
 		
 		fs = base.getFS();
 		fs.unlink("file");
-		fs.commit();
+		fs.commitAndClose();
 		
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		assertFalse(mergeFs.exists("file"));
-		assertTrue(mergeFs.exists("new"));
-		assertArrayEquals("a".getBytes(), mergeFs.read("new"));
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			assertFalse(mergeFs.exists("file"));
+			assertTrue(mergeFs.exists("new"));
+			assertArrayEquals("a".getBytes(), mergeFs.read("new"));
+		}
 	}
 	
 	@Test
@@ -457,18 +467,19 @@ public class DiffSetResolverTest {
 		base = fs.commit();
 		
 		fs.mv("file", "newA");
-		fs.commit();
+		fs.commitAndClose();
 		
 		fs = base.getFS();
 		fs.mv("file", "newB");
-		fs.commit();
+		fs.commitAndClose();
 		
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		assertFalse(mergeFs.exists("file"));
-		assertTrue(mergeFs.exists("newA"));
-		assertTrue(mergeFs.exists("newB"));
-		assertEquals(mergeFs.inodeForPath("newA"), mergeFs.inodeForPath("newB"));
-		assertArrayEquals("a".getBytes(), mergeFs.read("newA"));
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			assertFalse(mergeFs.exists("file"));
+			assertTrue(mergeFs.exists("newA"));
+			assertTrue(mergeFs.exists("newB"));
+			assertEquals(mergeFs.inodeForPath("newA"), mergeFs.inodeForPath("newB"));
+			assertArrayEquals("a".getBytes(), mergeFs.read("newA"));
+		}
 	}
 	
 	@Test
@@ -477,15 +488,16 @@ public class DiffSetResolverTest {
 		base = fs.commit();
 		
 		fs.write("file", "bb".getBytes());
-		fs.commit();
+		fs.commitAndClose();
 		
 		fs = base.getFS();
 		fs.unlink("file");
-		fs.commit();
+		fs.commitAndClose();
 		
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		assertTrue(mergeFs.exists("file"));
-		assertArrayEquals("bb".getBytes(), mergeFs.read("file"));
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			assertTrue(mergeFs.exists("file"));
+			assertArrayEquals("bb".getBytes(), mergeFs.read("file"));
+		}
 	}
 	
 	@Test
@@ -494,16 +506,17 @@ public class DiffSetResolverTest {
 		base = fs.commit();
 		
 		fs.unlink("file");
-		fs.commit();
+		fs.commitAndClose();
 		
 		fs = base.getFS();
 		fs.unlink("file");
 		fs.write("file", "b".getBytes());
-		fs.commit();
+		fs.commitAndClose();
 
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		assertTrue(mergeFs.exists("file"));
-		assertArrayEquals("b".getBytes(), mergeFs.read("file"));
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			assertTrue(mergeFs.exists("file"));
+			assertArrayEquals("b".getBytes(), mergeFs.read("file"));
+		}
 	}
 	
 	@Test
@@ -514,30 +527,31 @@ public class DiffSetResolverTest {
 		
 		fs.unlink("orig-link");
 		fs.link("file", "link-a");
-		fs.commit();
+		fs.commitAndClose();
 		
 		fs = base.getFS();
 		fs.link("file", "link-b");
-		fs.commit();
+		fs.commitAndClose();
 		
-		base.getFS().commit();
+		base.getFS().commitAndClose();
 		
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		assertFalse(mergeFs.exists("orig-link"));
-		assertEquals(mergeFs.inodeForPath("link-a"), mergeFs.inodeForPath("file"));
-		assertEquals(mergeFs.inodeForPath("link-a"), mergeFs.inodeForPath("link-b"));
-		assertEquals(3, mergeFs.inodeForPath("file").getNlink());
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			assertFalse(mergeFs.exists("orig-link"));
+			assertEquals(mergeFs.inodeForPath("link-a"), mergeFs.inodeForPath("file"));
+			assertEquals(mergeFs.inodeForPath("link-a"), mergeFs.inodeForPath("link-b"));
+			assertEquals(3, mergeFs.inodeForPath("file").getNlink());
+		}
 	}
 	
 	@Test
 	public void testResolverConsistency() throws IOException, DiffResolutionException {
 		RevisionTag[] revs = new RevisionTag[2], merges = new RevisionTag[2];
 		fs.write("file1", "some data".getBytes());
-		revs[0] = fs.commit();
+		revs[0] = fs.commitAndClose();
 		
 		fs = archive.openBlank();
 		fs.write("file2", "more data".getBytes());
-		revs[1] = fs.commit();
+		revs[1] = fs.commitAndClose();
 		
 		for(int i = 0; i < 2; i++) {
 			DiffSet diffset = new DiffSet(revs);
@@ -577,6 +591,8 @@ public class DiffSetResolverTest {
 			assertFalse(fs.exists("file"+(i+1)));
 			fs.close();
 		}
+		
+		archive.close();
 	}
 	
 	@Test
@@ -584,7 +600,7 @@ public class DiffSetResolverTest {
 		LinkedList<RevisionTag> revs = new LinkedList<>();
 		int max = RevisionInfo.maxParentsForConfig(archive.getConfig());
 		for(int i = 0; i < max; i++) {
-			revs.add(archive.openBlank().commit());
+			revs.add(archive.openBlank().commitAndClose());
 		}
 		
 		revs.sort((a,b)->b.compareTo(a));
@@ -605,7 +621,7 @@ public class DiffSetResolverTest {
 		LinkedList<RevisionTag> revs = new LinkedList<>();
 		int max = RevisionInfo.maxParentsForConfig(archive.getConfig());
 		for(int i = 0; i < 2*max; i++) {
-			revs.add(archive.openBlank().commit());
+			revs.add(archive.openBlank().commitAndClose());
 		}
 		
 		DiffSet diffset = DiffSet.withCollection(revs);
@@ -646,7 +662,7 @@ public class DiffSetResolverTest {
 		LinkedList<RevisionTag> revs = new LinkedList<>();
 		int max = RevisionInfo.maxParentsForConfig(archive.getConfig());
 		for(int i = 0; i < max*(max+1); i++) {
-			revs.add(archive.openBlank().commit());
+			revs.add(archive.openBlank().commitAndClose());
 		}
 		
 		DiffSet diffset = DiffSet.withCollection(revs);

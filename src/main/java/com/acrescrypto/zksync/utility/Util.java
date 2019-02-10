@@ -338,6 +338,7 @@ public class Util {
 	}
 	
 	public static String formatRevisionTag(RevisionTag rev) {
+		if(rev == null) return "rev-null";
 		return "rev-" + formatLongId(rev.getBytes());
 	}
 	

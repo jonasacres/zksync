@@ -71,13 +71,12 @@ public class ArchiveCrud {
 			}
 			
 			length = (int) Math.min(size-offset, length);
-			ZKFile file = fs.open(path, File.O_RDONLY);
-			byte[] data = new byte[length];
-			file.seek(offset, File.SEEK_SET);
-			file.read(data, 0, length);
-			file.close();
-			
-			return data;
+			try(ZKFile file = fs.open(path, File.O_RDONLY)) {
+				byte[] data = new byte[length];
+				file.seek(offset, File.SEEK_SET);
+				file.read(data, 0, length);
+				return data;
+			}
 		} catch(ENOENTException exc) {
 			throw XAPIResponse.notFoundErrorResponse();
 		} catch(EISDIRException exc) {
@@ -125,13 +124,13 @@ public class ArchiveCrud {
 		}
 
 		try {
-			ZKFile file = fs.open(path, File.O_WRONLY|File.O_CREAT);
-			file.seek(offset, File.SEEK_SET);
-			file.write(contents);
-			if(truncate) {
-				file.truncate(file.pos());
+			try(ZKFile file = fs.open(path, File.O_WRONLY|File.O_CREAT)) {
+				file.seek(offset, File.SEEK_SET);
+				file.write(contents);
+				if(truncate) {
+					file.truncate(file.pos());
+				}
 			}
-			file.close();
 		} catch(ENOENTException exc) {
 			throw XAPIResponse.notFoundErrorResponse();
 		} catch(EISDIRException exc) {

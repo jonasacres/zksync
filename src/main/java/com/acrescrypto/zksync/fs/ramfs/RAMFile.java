@@ -3,6 +3,9 @@ package com.acrescrypto.zksync.fs.ramfs;
 import java.io.IOException;
 import java.util.ArrayList;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
@@ -17,6 +20,9 @@ public class RAMFile extends File {
 	RAMFS fs;
 	DataBacking data;
 	int mode;
+	boolean closed;
+	
+	protected Logger logger = LoggerFactory.getLogger(RAMFS.class);
 	
 	class DataBacking {
 		int pageSize = 1024*512;
@@ -87,31 +93,42 @@ public class RAMFile extends File {
 
 	protected RAMFile(RAMFS fs, String path, int mode) throws EMLINKException, IOException {
 		super(fs);
-		this.fs = fs;
-		this.path = path;
-		this.mode = mode;
-		
 		try {
-			if((mode & O_NOFOLLOW) != 0 && fs.lstat(path).isSymlink()) throw new EMLINKException(path);
-			if((mode & O_NOFOLLOW) == 0) {
-				this.inode = fs.lookup(path);
-			} else {
-				this.inode = fs.llookup(path);
+			this.fs = fs;
+			this.path = path;
+			this.mode = mode;
+			
+			logger.trace("RAMFS {}: open {} - (0x{}), {} open",
+					fs.getRoot(),
+					path,
+					Integer.toHexString(mode),
+					fs.getOpenFiles().size());
+	
+			try {
+				if((mode & O_NOFOLLOW) != 0 && fs.lstat(path).isSymlink()) throw new EMLINKException(path);
+				if((mode & O_NOFOLLOW) == 0) {
+					this.inode = fs.lookup(path);
+				} else {
+					this.inode = fs.llookup(path);
+				}
+			} catch(ENOENTException exc) {
+				if((mode & O_CREAT) == 0) throw exc;
+				else this.inode = fs.makeInode(path, (inode)->{});
 			}
-		} catch(ENOENTException exc) {
-			if((mode & O_CREAT) == 0) throw exc;
-			else this.inode = fs.makeInode(path, (inode)->{});
-		}
-		
-		if(inode.stat.isDirectory()) throw new EISDIRException(path);
-		
-		if((mode & O_TRUNC) != 0) {
-			inode.data = new byte[0];
-		}
-		
-		resync();
-		if((mode & O_APPEND) != 0) {
-			data.pos = data.size;
+			
+			if(inode.stat.isDirectory()) throw new EISDIRException(path);
+			
+			if((mode & O_TRUNC) != 0) {
+				inode.data = new byte[0];
+			}
+			
+			resync();
+			if((mode & O_APPEND) != 0) {
+				data.pos = data.size;
+			}
+		} catch(Throwable exc) {
+			close();
+			throw exc;
 		}
 	}
 
@@ -174,12 +191,22 @@ public class RAMFile extends File {
 
 	@Override
 	public void flush() throws IOException {
+		if(inode == null || data == null) return;
+		
 		inode.data = data.toArray();
 		inode.stat.setSize(data.size);
 	}
 
 	@Override
 	public void close() throws IOException {
+		if(closed) return;
+		closed = true;
+		
+		fs.reportClosedFile(this);
+		logger.trace("RAMFS {}: close {}, {} open",
+				fs.getRoot(),
+				path,
+				fs.getOpenFiles().size());
 		flush();
 	}
 

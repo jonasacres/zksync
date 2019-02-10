@@ -47,10 +47,13 @@ public class ZKArchiveConfigTest {
 		assertTrue(Arrays.equals(config.privKey.getBytes(), clone.privKey.getBytes()));
 		assertTrue(Arrays.equals(config.pubKey.getBytes(), clone.pubKey.getBytes()));
 
-		ZKFS fs = clone.getArchive().openBlank();
-		fs.write("foo", "bar".getBytes());
-		RevisionTag tag = fs.commit();
-		assertTrue(Arrays.equals("bar".getBytes(), clone.getArchive().openRevision(tag).read("foo")));
+		try(ZKFS fs = clone.getArchive().openBlank()) {
+			fs.write("foo", "bar".getBytes());
+			RevisionTag tag = fs.commit();
+			try(ZKFS fs2 = clone.getArchive().openRevision(tag)) {
+				assertTrue(Arrays.equals("bar".getBytes(), fs2.read("foo")));
+			}
+		}
 		
 		clone.close();
 	}
@@ -70,13 +73,15 @@ public class ZKArchiveConfigTest {
 	
 	public byte[][] makeValidPageInfo() throws IOException {
 		byte[][] info = new byte[2][];
-		ZKFS fs = config.archive.openBlank();
-		fs.write("foo", new byte[config.pageSize]);
-		fs.commit();
-		PageTree tree = new PageTree(fs.inodeForPath("foo"));
-		info[0] = tree.getPageTag(0);
-		info[1] = fs.archive.storage.read(Page.pathForTag(info[0]));
-		return info;
+		try(ZKFS fs = config.archive.openBlank()) {
+			fs.write("foo", new byte[config.pageSize]);
+			fs.commit();
+			
+			PageTree tree = new PageTree(fs.inodeForPath("foo"));
+			info[0] = tree.getPageTag(0);
+			info[1] = fs.archive.storage.read(Page.pathForTag(info[0]));
+			return info;
+		}
 	}
 	
 	@BeforeClass
@@ -120,7 +125,9 @@ public class ZKArchiveConfigTest {
 		ZKFS fs = config.getArchive().openBlank();
 		fs.write("foo", "bar".getBytes());
 		RevisionTag tag = fs.commit();
-		assertTrue(Arrays.equals("bar".getBytes(), config.getArchive().openRevision(tag).read("foo")));
+		try(ZKFS fs2 = config.getArchive().openRevision(tag)) {
+			assertTrue(Arrays.equals("bar".getBytes(), fs2.read("foo")));
+		}
 		fs.close();
 	}
 	

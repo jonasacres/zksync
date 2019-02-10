@@ -357,9 +357,9 @@ public class LocalFS extends FS {
 	@Override
 	public void write(String path, byte[] contents, int offset, int length) throws IOException {
 		if(!exists(dirname(path))) mkdirp(dirname(path));
-		LocalFile file = open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
-		file.write(contents, offset, length);
-		file.close();
+		try(LocalFile file = open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC)) {
+			file.write(contents, offset, length);
+		}
 	}
 
 	@Override
@@ -423,5 +423,9 @@ public class LocalFS extends FS {
 		Path p = Paths.get(root, path).normalize();
 		if(!p.startsWith(root)) throw new ENOENTException(path);
 		return p;
+	}
+	
+	public String toString() {
+		return this.getClass().getSimpleName() + " " + this.getRoot();
 	}
 }

@@ -56,7 +56,7 @@ public class DiffSetTest {
 		fs.write("unmodified", "parent".getBytes());
 		fs.write("modified", "replaceme".getBytes());
 		fs.squash("modified");
-		parent = fs.commit();
+		parent = fs.commitAndClose();
 		children = new RevisionTag[NUM_CHILDREN];
 		
 		for(int i = 0; i < NUM_CHILDREN; i++) {
@@ -65,14 +65,15 @@ public class DiffSetTest {
 			fs.write("child", ("text " + i).getBytes()); // don't forget -- making this means / is also changed, so factor that in
 			fs.squash("modified");
 			children[i] = fs.commit();
+			fs.close();
 		}
-		
-		fs.close();
-		archive.close();
 	}
 	
 	@After
-	public void afterEach() {
+	public void afterEach() throws IOException {
+		for(RevisionTag child : children) {
+			child.getArchive().close();
+		}
 		master.close();		
 	}
 	
@@ -91,7 +92,7 @@ public class DiffSetTest {
 		byte[] buf = new byte[fs.getArchive().getConfig().getPageSize()+1];
 		fs.write("unmodified", buf);
 		fs.write("modified", buf);
-		RevisionTag parent = fs.commit();
+		RevisionTag parent = fs.commitAndClose();
 		RevisionTag[] children = new RevisionTag[2];
 		
 		for(int i = 0; i < children.length; i++) {
@@ -100,7 +101,7 @@ public class DiffSetTest {
 			fs.write("modified", buf);
 			fs.setAtime("modified", 12345l);
 			fs.setMtime("modified", 12345l);
-			children[i] = fs.commit();
+			children[i] = fs.commitAndClose();
 		}
 
 		DiffSet diffset = new DiffSet(children);
@@ -108,7 +109,6 @@ public class DiffSetTest {
 		assertEquals(1, diffset.inodeDiffs.size()); // modified
 		assertEquals(0, diffset.pathDiffs.size());
 		fs.getArchive().close();
-		fs.close();
 	}
 	
 	@Test

@@ -22,6 +22,7 @@ public abstract class File implements Closeable {
 	protected FS fs;
 	protected File(FS fs) {
 		this.fs = fs;
+		fs.reportOpenFile(this);
 	}
 	
 	public abstract void truncate(long size) throws IOException;
@@ -64,4 +65,5 @@ public abstract class File implements Closeable {
 	public abstract boolean hasData() throws IOException;
 	
 	public abstract int available() throws IOException;
+	public FS getFs() { return fs; }
 }

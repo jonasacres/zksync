@@ -113,8 +113,8 @@ public class RevisionListTest {
 		list.automergeDelayMs = 10;
 		list.maxAutomergeDelayMs = 3*list.automergeDelayMs;
 		
-		RevisionTag a = archive.openBlank().commit(),
-				    b = archive.openBlank().commit();
+		RevisionTag a = archive.openBlank().commitAndClose(),
+				    b = archive.openBlank().commitAndClose();
 		assertEquals(2, list.branchTips().size());
 		Util.sleep(2*list.automergeDelayMs + 100);
 		RevisionTag m = list.branchTips().get(0);
@@ -132,8 +132,8 @@ public class RevisionListTest {
 		list.automergeDelayMs = 1;
 		list.maxAutomergeDelayMs = list.automergeDelayMs;
 		
-		RevisionTag a = archive.openBlank().commit(),
-				    b = archive.openBlank().commit();
+		RevisionTag a = archive.openBlank().commitAndClose(),
+				    b = archive.openBlank().commitAndClose();
 		Util.sleep(5*list.maxAutomergeDelayMs + 100);
 		
 		assertEquals(2, list.branchTips().size());
@@ -144,9 +144,12 @@ public class RevisionListTest {
 	@Test
 	public void testConsolidateRemovesAnyTipsAncestralToSpecifiedBranch() throws IOException {
 		LinkedList<RevisionTag> tags = new LinkedList<>();
-		tags.add(archive.openBlank().getBaseRevision());
+		ZKFS fs = archive.openBlank();
+		RevisionTag rev = fs.getBaseRevision();
+		fs.close();
+		tags.add(rev);
 		for(int i = 0; i < 16; i++) {
-			tags.add(tags.getLast().getFS().commit());
+			tags.add(tags.getLast().getFS().commitAndClose());
 		}
 		
 		for(RevisionTag tag : tags) {
@@ -165,20 +168,24 @@ public class RevisionListTest {
 	public void testConsolidateRemovesAnyTipsEncompassedBySpecifiedBranch() throws IOException, DiffResolutionException {
 		LinkedList<RevisionTag> baseTags = new LinkedList<>();
 		for(int i = 0; i < 3; i++) {
-			baseTags.add(archive.openBlank().commit());
+			try(ZKFS fs = archive.openBlank()) {
+				baseTags.add(fs.commit());
+			}
 		}
 		
-		RevisionTag smallMerge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
-		baseTags.add(archive.openBlank().commit());
-		RevisionTag largeMerge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
-		
-		assertEquals(smallMerge.getHeight(), largeMerge.getHeight());
-		list.addBranchTip(smallMerge);
-		assertEquals(2, list.branchTips().size());
-		assertTrue(list.branchTips().contains(smallMerge));
-		list.consolidate(largeMerge);
-		assertEquals(1, list.branchTips().size());
-		assertEquals(largeMerge, list.branchTips.get(0));
+		try(ZKFS fs = archive.openBlank()) {
+			RevisionTag smallMerge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+			baseTags.add(fs.commit());
+			RevisionTag largeMerge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+			
+			assertEquals(smallMerge.getHeight(), largeMerge.getHeight());
+			list.addBranchTip(smallMerge);
+			assertEquals(2, list.branchTips().size());
+			assertTrue(list.branchTips().contains(smallMerge));
+			list.consolidate(largeMerge);
+			assertEquals(1, list.branchTips().size());
+			assertEquals(largeMerge, list.branchTips.get(0));
+		}
 	}
 	
 	@Test
@@ -190,7 +197,7 @@ public class RevisionListTest {
 	}
 	
 	@Test
-	public void testRemoveBranchTipUpdatesLatsetBranchTip() throws IOException {
+	public void testRemoveBranchTipUpdatesLatestBranchTip() throws IOException {
 		LinkedList<RevisionTag> revTags = setupFakeRevisions(16);
 		RevisionTag victim = list.latest();
 		assertTrue(revTags.contains(victim));

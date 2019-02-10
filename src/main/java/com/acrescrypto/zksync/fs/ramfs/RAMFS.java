@@ -316,4 +316,8 @@ public class RAMFS extends FS {
 	public String getRoot() {
 		return scope;
 	}
+	
+	public String toString() {
+		return this.getClass().getSimpleName() + " " + this.getRoot();
+	}
 }

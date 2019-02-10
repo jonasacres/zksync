@@ -540,41 +540,49 @@ public class BackedFSTest extends FSTestBase {
 	
 	@Test
 	public void testOpenReturnsCacheFileHandleForCachedFiles() throws IOException {
-		File file = backedFS.open(CACHED_FILE, File.O_RDONLY);
-		File ref = cacheFS.open(CACHED_FILE, File.O_RDONLY);
-		assertEquals(ref.getClass(), file.getClass());
-		assertNoBackupAccess();
+		try(File file = backedFS.open(CACHED_FILE, File.O_RDONLY)) {
+			try(File ref = cacheFS.open(CACHED_FILE, File.O_RDONLY)) {
+				assertEquals(ref.getClass(), file.getClass());
+				assertNoBackupAccess();
+			}
+		}
 	}
 	
 	@Test
 	public void testOpenReturnsCacheFileHandleForUncachedFiles() throws IOException {
 		expectRead(UNCACHED_FILE, ()->{
 			assertFalse(cacheFS.exists(UNCACHED_FILE));
-			File file = backedFS.open(UNCACHED_FILE, File.O_RDONLY);
-			File ref = cacheFS.open(UNCACHED_FILE, File.O_RDONLY);
-			assertEquals(ref.getClass(), file.getClass());
+			try(File file = backedFS.open(UNCACHED_FILE, File.O_RDONLY)) {
+				try(File ref = cacheFS.open(UNCACHED_FILE, File.O_RDONLY)) {
+					assertEquals(ref.getClass(), file.getClass());
+				}
+			}
 		});
 	}
 	
 	@Test
 	public void testOpenThrowsENOENT() throws IOException {
 		expectENOENT(()->{
-			backedFS.open(NONEXISTENT_FILE, File.O_RDONLY);
+			try(File file = backedFS.open(NONEXISTENT_FILE, File.O_RDONLY)) {}
 		});
 	}
 	
 	@Test
 	public void testOpenReadsCachedContents() throws IOException {
-		byte[] data = backedFS.open(CACHED_FILE, File.O_RDONLY).read();
-		assertTrue(Arrays.equals(cacheFS.read(CACHED_FILE), data));
-		assertNoBackupAccess();
+		try(File file = backedFS.open(CACHED_FILE, File.O_RDONLY)) {
+			byte[] data = file.read();
+			assertTrue(Arrays.equals(cacheFS.read(CACHED_FILE), data));
+			assertNoBackupAccess();
+		}
 	}
 	
 	@Test
 	public void testOpenReadsUncachedContents() throws IOException {
 		expectRead(UNCACHED_FILE, ()->{
-			byte[] data = backedFS.open(UNCACHED_FILE, File.O_RDONLY).read();
-			assertTrue(Arrays.equals(cacheFS.read(UNCACHED_FILE), data));
+			try(File file = backedFS.open(UNCACHED_FILE, File.O_RDONLY)) {
+				byte[] data = file.read();
+				assertTrue(Arrays.equals(cacheFS.read(UNCACHED_FILE), data));
+			}
 		});
 	}
 	
@@ -583,9 +591,9 @@ public class BackedFSTest extends FSTestBase {
 		expectPathStat(NONEXISTENT_FILE, ()->{
 			byte[] data = { 1,2,3,4 };
 			backedFS.mkdirp(backedFS.dirname(NONEXISTENT_FILE));
-			File file = backedFS.open(NONEXISTENT_FILE, File.O_WRONLY|File.O_CREAT|File.O_APPEND);
-			file.write(data);
-			file.close();
+			try(File file = backedFS.open(NONEXISTENT_FILE, File.O_WRONLY|File.O_CREAT|File.O_APPEND)) {
+				file.write(data);
+			}
 			assertTrue(Arrays.equals(data, cacheFS.read(NONEXISTENT_FILE)));
 		});
 	}

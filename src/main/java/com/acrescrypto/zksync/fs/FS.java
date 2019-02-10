@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,7 +12,21 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 
-public abstract class FS {
+public abstract class FS implements AutoCloseable {
+	protected static HashMap<File,Throwable> globalFileBacktraces = new HashMap<>();
+	
+	public synchronized static void addOpenFileHandle(File file, Throwable backtrace) {
+		globalFileBacktraces.put(file, backtrace);
+	}
+	
+	public synchronized static void removeOpenFileHandle(File file) {
+		globalFileBacktraces.remove(file);
+	}
+	
+	public static HashMap<File,Throwable> getGlobalOpenFiles() {
+		return globalFileBacktraces;
+	}
+	
 	public abstract Stat stat(String path) throws IOException;
 	public abstract Stat lstat(String path) throws IOException;
 	
@@ -44,6 +59,7 @@ public abstract class FS {
 	public abstract void truncate(String path, long size) throws IOException;
 	
 	private Logger logger = LoggerFactory.getLogger(FS.class);
+	protected HashMap<File,Throwable> localFileBacktraces = new HashMap<>();
 	
 	public long maxFileSize() {
 		return Long.MAX_VALUE;
@@ -54,10 +70,10 @@ public abstract class FS {
 	}
 	
 	public byte[] read(String path) throws IOException {
-		File file = open(path, File.O_RDONLY);
-		byte[] bytes = file.read();
-		file.close();
-		return bytes;
+		try(File file = open(path, File.O_RDONLY)) {
+			byte[] bytes = file.read();
+			return bytes;
+		}
 	}
 	
 	public void rmrf(String path) throws IOException {
@@ -252,5 +268,20 @@ public abstract class FS {
 		}
 		
 		return totalSize;
+	}
+
+	public synchronized void reportOpenFile(File file) {
+		Throwable backtrace = new Throwable();
+		addOpenFileHandle(file, backtrace);
+		localFileBacktraces.put(file, backtrace);
+	}
+	
+	public synchronized void reportClosedFile(File file) {
+		removeOpenFileHandle(file);
+		localFileBacktraces.remove(file);
+	}
+	
+	public synchronized HashMap<File,Throwable> getOpenFiles() {
+		return localFileBacktraces;
 	}
 }

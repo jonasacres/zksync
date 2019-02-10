@@ -256,9 +256,10 @@ public class ArchiveResource {
 						if(automirrorPath.equals("")) {
 							automirrorPath = null;
 						} else {
-							LocalFS fs = new LocalFS("/");
-							if(!fs.exists(automirrorPath) || !fs.stat(automirrorPath).isDirectory()) {
-								throw XAPIResponse.withError(409, "requested automirror path not found or is not directory");
+							try(LocalFS fs = new LocalFS("/")) {
+								if(!fs.exists(automirrorPath) || !fs.stat(automirrorPath).isDirectory()) {
+									throw XAPIResponse.withError(409, "requested automirror path not found or is not directory");
+								}
 							}
 						}
 						

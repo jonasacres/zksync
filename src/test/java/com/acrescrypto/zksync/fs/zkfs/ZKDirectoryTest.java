@@ -213,10 +213,18 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 		String name = "i'm sure glad we have these 🖕 to deal with now";
 		zkscratch.mkdir("dir");
 		zkscratch.write("normalfile", "blah".getBytes());
+		
 		ZKDirectory dir = zkscratch.opendir("dir");
 		dir.link("normalfile", name);
 		dir.close();
-		assertEquals(name, zkscratch.commit().getFS().opendir("dir").list()[0]);
+		
+		try(ZKFS fs = zkscratch.commit().getFS()) {
+			dir = fs.opendir("dir");
+			String[] list = dir.list();
+			dir.close();
+			
+			assertEquals(name, list[0]);
+		}
 	}
 	
 	@Test
