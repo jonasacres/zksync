@@ -35,6 +35,7 @@ public class ZKArchive implements AutoCloseable {
 	protected FS storage;
 
 	protected ZKArchiveConfig config;
+	protected ZKArchive cacheOnlyArchive;
 	protected ZKMaster master;
 	protected HashCache<RevisionTag,ZKFS> readOnlyFilesystems;
 	protected HashMap<Long,byte[]> allPageTags;
@@ -71,6 +72,11 @@ public class ZKArchive implements AutoCloseable {
 						exc);
 			}
 		});
+		
+		if(cacheOnlyArchive != null) {
+			cacheOnlyArchive.close();
+		}
+		
 		config.close();
 	}
 	
@@ -84,11 +90,12 @@ public class ZKArchive implements AutoCloseable {
 	
 	public ZKArchive cacheOnlyArchive() throws IOException {
 		if(isCacheOnly()) return this;
+		if(cacheOnlyArchive != null) return cacheOnlyArchive;
 		
 		assertOpen();
-		ZKArchive cacheOnly = new ZKArchive(config);
-		cacheOnly.storage = config.getCacheStorage();
-		return cacheOnly;
+		cacheOnlyArchive = new ZKArchive(config);
+		cacheOnlyArchive.storage = config.getCacheStorage();
+		return cacheOnlyArchive;
 	}
 	
 	public ZKFS openRevision(RevisionTag revision) throws IOException {

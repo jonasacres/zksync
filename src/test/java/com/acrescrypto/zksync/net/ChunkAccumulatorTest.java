@@ -131,25 +131,26 @@ public class ChunkAccumulatorTest {
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		
-		ZKFS fs = archive.openBlank();
-		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		fs.commit();
-		PageTree tree = new PageTree(fs.inodeForPath("file"));
-		tag = tree.getPageTag(0);
-		page = archive.getStorage().read(Page.pathForTag(tag));
-		
-		ByteBuffer buf = ByteBuffer.wrap(page);
-		int i = 0;
-		chunks = new byte[(int) Math.ceil((double) page.length/PeerMessage.FILE_CHUNK_SIZE)][];
-		while(buf.hasRemaining()) {
-			int size = Math.min(PeerMessage.FILE_CHUNK_SIZE, buf.remaining());
-			chunks[i] = new byte[size];
-			buf.get(chunks[i]);
-			i++;
+		try(ZKFS fs = archive.openBlank()) {
+			fs.write("file", new byte[archive.getConfig().getPageSize()]);
+			fs.commit();
+			PageTree tree = new PageTree(fs.inodeForPath("file"));
+			tag = tree.getPageTag(0);
+			page = archive.getStorage().read(Page.pathForTag(tag));
+			
+			ByteBuffer buf = ByteBuffer.wrap(page);
+			int i = 0;
+			chunks = new byte[(int) Math.ceil((double) page.length/PeerMessage.FILE_CHUNK_SIZE)][];
+			while(buf.hasRemaining()) {
+				int size = Math.min(PeerMessage.FILE_CHUNK_SIZE, buf.remaining());
+				chunks[i] = new byte[size];
+				buf.get(chunks[i]);
+				i++;
+			}
+			
+			archive.getStorage().purge();
+			localStorage = ((BackedFS) archive.getStorage()).getCacheFS();
 		}
-		
-		archive.getStorage().purge();
-		localStorage = ((BackedFS) archive.getStorage()).getCacheFS();
 	}
 	
 	@Before

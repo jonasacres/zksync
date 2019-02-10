@@ -182,15 +182,16 @@ public class PeerSwarmTest {
 		
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		
-		ZKFS fs = archive.openBlank();
-		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		PageTree tree = new PageTree(fs.inodeForPath("file"));
-		pageTag = tree.getPageTag(0);
-
-		swarm = archive.getConfig().getSwarm();
-		exploded = false;
-		connection = new DummyConnection(new DummySocket("127.0.0.1", swarm));
-		connection.socket.ad = new DummyAdvertisement();
+		try(ZKFS fs = archive.openBlank()) {
+			fs.write("file", new byte[archive.getConfig().getPageSize()]);
+			PageTree tree = new PageTree(fs.inodeForPath("file"));
+			pageTag = tree.getPageTag(0);
+	
+			swarm = archive.getConfig().getSwarm();
+			exploded = false;
+			connection = new DummyConnection(new DummySocket("127.0.0.1", swarm));
+			connection.socket.ad = new DummyAdvertisement();
+		}
 	}
 	
 	@After

@@ -222,7 +222,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testAddInode() throws IOException {
-		RevisionTag refTag = archive.openBlank().commit();
+		RevisionTag refTag = archive.openBlank().commitAndClose();
 		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
 		pool.addInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE);
 		assertTrue(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
@@ -232,7 +232,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testAddInodeAllowsReprioritization() throws IOException {
-		RevisionTag refTag = archive.openBlank().commit();
+		RevisionTag refTag = archive.openBlank().commitAndClose();
 		pool.addInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE);
 		pool.addInode(314159265, refTag, InodeTable.INODE_ID_INODE_TABLE);
 		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
@@ -242,20 +242,20 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testPriorityForInodeBytesReturnsAppropriatePriority() throws IOException {
-		RevisionTag refTag = archive.openBlank().commit();
+		RevisionTag refTag = archive.openBlank().commitAndClose();
 		pool.addInode(1234, refTag, 4321);
 		assertEquals(1234, pool.priorityForInode(refTag, 4321));
 	}
 	
 	@Test
 	public void testPriorityForInodeReturnsCancelPriorityIfNoSuchRequest() throws IOException {
-		RevisionTag refTag = archive.openBlank().commit();
+		RevisionTag refTag = archive.openBlank().commitAndClose();
 		assertEquals(PageQueue.CANCEL_PRIORITY, pool.priorityForInode(refTag, 1234));
 	}
 	
 	@Test
 	public void testCancelInode() throws IOException {
-		RevisionTag refTag = archive.openBlank().commit();
+		RevisionTag refTag = archive.openBlank().commitAndClose();
 		assertFalse(pool.hasInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE));
 		pool.addInode(271828183, refTag, InodeTable.INODE_ID_INODE_TABLE);
 		defaultConn.requestedInodeIds.clear();
@@ -267,7 +267,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testAddRevision() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		assertFalse(pool.hasRevision(-123456, revTag));
 		pool.addRevision(-123456, revTag);
 		assertTrue(pool.hasRevision(-123456, revTag));
@@ -277,7 +277,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testAddRevisionAllowsReprioritization() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		pool.addRevision(-123456, revTag);
 		pool.addRevision(-654321, revTag);
 		assertFalse(pool.hasRevision(-123456, revTag));
@@ -287,7 +287,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testCancelRevision() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		pool.addRevision(-123456, revTag);
 		defaultConn.requestedRevisions.clear();
 		pool.cancelRevision(revTag);
@@ -299,20 +299,20 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testPriorityForRevisionReturnsCancelPriorityIfNoSuchRequest() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		assertEquals(PageQueue.CANCEL_PRIORITY, pool.priorityForRevision(revTag));
 	}
 	
 	@Test
 	public void testPriorityForRevisionReturnsAppropriatePriority() throws IOException {
-		RevisionTag refTag = archive.openBlank().commit();
+		RevisionTag refTag = archive.openBlank().commitAndClose();
 		pool.addRevision(1234, refTag);
 		assertEquals(1234, pool.priorityForRevision(refTag));
 	}
 	
 	@Test
 	public void testAddRevisionDetails() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		assertFalse(pool.hasRevisionDetails(-123456, revTag));
 		pool.addRevisionDetails(-123456, revTag);
 		assertTrue(pool.hasRevisionDetails(-123456, revTag));
@@ -322,7 +322,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testAddRevisionDetailsAllowsReprioritization() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		pool.addRevisionDetails(-123456, revTag);
 		pool.addRevisionDetails(-654321, revTag);
 		assertFalse(pool.hasRevisionDetails(-123456, revTag));
@@ -332,13 +332,13 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testPriorityForRevisionDetailsReturnsCancelPriorityIfNoSuchRequest() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		assertEquals(PageQueue.CANCEL_PRIORITY, pool.priorityForRevisionDetails(revTag));
 	}
 	
 	@Test
 	public void testPriorityForRevisionDetailsReturnsAppropriatePriority() throws IOException {
-		RevisionTag refTag = archive.openBlank().commit();
+		RevisionTag refTag = archive.openBlank().commitAndClose();
 		pool.addRevisionDetails(1234, refTag);
 		assertEquals(1234, pool.priorityForRevisionDetails(refTag));
 	}
@@ -481,11 +481,12 @@ public class RequestPoolTest {
 		}
 		
 		assertFalse(pool.hasInode(-1, fs.getBaseRevision(), realInode.getStat().getInodeId()));
+		fs.close();
 	}
 	
 	@Test
 	public void testPruneRemovesAcquiredRevisions() throws IOException {
-		RevisionTag realTag = archive.openBlank().commit();
+		RevisionTag realTag = archive.openBlank().commitAndClose();
 
 		LinkedList<RevisionTag> tags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
@@ -510,7 +511,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testPruneRemovesAcquiredRevisionDetails() throws IOException {
-		RevisionTag realTag = archive.openBlank().commit();
+		RevisionTag realTag = archive.openBlank().commitAndClose();
 
 		LinkedList<RevisionTag> tags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
@@ -536,7 +537,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testPruneThreadCallsPrune() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		RequestPool.pruneIntervalMs = 10;
 		RequestPool pool2 = new RequestPool(config);
 		pool2.addRevision(0, revTag);
@@ -547,7 +548,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testStopCancelsPruneThread() throws IOException {
-		RevisionTag revTag = archive.openBlank().commit();
+		RevisionTag revTag = archive.openBlank().commitAndClose();
 		RequestPool.pruneIntervalMs = 10;
 		RequestPool pool2 = new RequestPool(config);
 		pool2.addRevision(0, revTag);

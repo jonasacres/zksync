@@ -504,15 +504,15 @@ public class PeerConnectionTest {
 	public void testAnnounceTips() throws IOException {
 		ZKFS fs = archive.openBlank();
 		fs.write("path", "test".getBytes());
-		fs.commit();
+		fs.commitAndClose();
 		
 		fs = archive.openBlank();
 		fs.write("path", "fork".getBytes());
-		fs.commit();
+		fs.commitAndClose();
 
 		fs = archive.openBlank();
 		fs.write("path", "fork two".getBytes());
-		fs.commit();
+		fs.commitAndClose();
 
 		conn.announceTips();
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TIPS);
@@ -524,7 +524,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testAnnounceRevisionDetails() throws IOException {
-		RevisionTag tag = archive.openBlank().commit();
+		RevisionTag tag = archive.openBlank().commitAndClose();
 		conn.announceRevisionDetails(tag);
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_REVISION_DETAILS);
 		assertReceivedBytes(tag.serialize());
@@ -969,12 +969,14 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleAnnounceRevisionDetailsAddsInfoToRevisionTree() throws ProtocolViolationException, IOException {
-		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commit().getFS().commit();
+		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commitAndClose().getFS().commitAndClose();
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_REVISION_DETAILS);
 		msg.receivedData((byte) 0, tag.getBytes());
-		for(RevisionTag parent : tag.getFS().getRevisionInfo().getParents()) {
-			msg.receivedData((byte) 0, parent.getBytes());
+		try(ZKFS fs = tag.getFS()) {
+			for(RevisionTag parent : fs.getRevisionInfo().getParents()) {
+				msg.receivedData((byte) 0, parent.getBytes());
+			}
 		}
 		
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
@@ -988,7 +990,7 @@ public class PeerConnectionTest {
 	
 	@Test(expected=ProtocolViolationException.class)
 	public void testHandleAnnounceRevisionDetailsTriggersViolationIfParentsNotCorrect() throws IOException, ProtocolViolationException {
-		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commit().getFS().commit();
+		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commitAndClose().getFS().commitAndClose();
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_REVISION_DETAILS);
 		msg.receivedData((byte) 0, tag.getBytes());
@@ -1049,7 +1051,7 @@ public class PeerConnectionTest {
 			inodes[i] = fs.inodeForPath("file"+i);
 		}
 		
-		msg.receivedData((byte) 0, fs.commit().getBytes());
+		msg.receivedData((byte) 0, fs.commitAndClose().getBytes());
 		
 		for(Inode inode : inodes) {
 			msg.receivedData((byte) 0, Util.serializeLong(inode.getStat().getInodeId()));
@@ -1111,6 +1113,8 @@ public class PeerConnectionTest {
 				return item.tree != null && inode.getStat().getInodeId() == item.tree.getInodeId();
 			});
 		}
+		
+		fs.close();
 	}
 	
 	@Test
@@ -1179,6 +1183,8 @@ public class PeerConnectionTest {
 				assertQueuedItemLike(test);
 			}
 		}
+		
+		fs.close();
 	}
 	
 	@Test
@@ -1188,10 +1194,11 @@ public class PeerConnectionTest {
 		
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 		for(int i = 0; i < tags.length; i++) {
-			ZKFS fs = archive.openBlank();
-			fs.write("file"+i, "content".getBytes());
-			tags[i] = fs.commit();
-			msg.receivedData((byte) 0, tags[i].getBytes());
+			try(ZKFS fs = archive.openBlank()) {
+				fs.write("file"+i, "content".getBytes());
+				tags[i] = fs.commit();
+				msg.receivedData((byte) 0, tags[i].getBytes());
+			}
 		}
 		
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
@@ -1219,14 +1226,15 @@ public class PeerConnectionTest {
 		
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 		for(int i = 0; i < tags.length; i++) {
-			ZKFS fs = archive.openBlank();
-			fs.write("file"+i, "content".getBytes());
-			tags[i] = fs.commit();
-			msg.receivedData((byte) 0, tags[i].getBytes());
-			if(i == tags.length/2) {
-				RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
-				RevisionTag fakeRevTag = new RevisionTag(refTag, 0, 0);
-				msg.receivedData((byte) 0, fakeRevTag.getBytes());
+			try(ZKFS fs = archive.openBlank()) {
+				fs.write("file"+i, "content".getBytes());
+				tags[i] = fs.commit();
+				msg.receivedData((byte) 0, tags[i].getBytes());
+				if(i == tags.length/2) {
+					RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+					RevisionTag fakeRevTag = new RevisionTag(refTag, 0, 0);
+					msg.receivedData((byte) 0, fakeRevTag.getBytes());
+				}
 			}
 		}
 		
@@ -1245,55 +1253,57 @@ public class PeerConnectionTest {
 	@Test
 	public void testHandleRequestPageTagsAddsRequestedShortTagsToPageQueue() throws ProtocolViolationException, IOException {
 		byte[][] tags = new byte[16][];
-		ZKFS fs = archive.openBlank();		
-		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_PAGE_TAGS);
-		fs.write("file", new byte[tags.length*archive.getConfig().getPageSize()]);
-		fs.commit();
-		PageTree treee = new PageTree(fs.inodeForPath("file"));
-		
-		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
-		for(int i = 0; i < tags.length; i++) {
-			tags[i] = treee.getPageTag(i);
-			msg.receivedData((byte) 0, ByteBuffer.allocate(8).putLong(Util.shortTag(tags[i])).array());
-		}
-		
-		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
-		conn.handle(msg);
-		
-		for(byte[] tag : tags) {
-			assertQueuedItemLike((_item) -> {
-				if(!(_item instanceof PageQueueItem)) return false;
-				PageQueueItem item = (PageQueueItem) _item;
-				return Arrays.equals(tag, item.tag);
-			});
+		try(ZKFS fs = archive.openBlank()) {
+			DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_PAGE_TAGS);
+			fs.write("file", new byte[tags.length*archive.getConfig().getPageSize()]);
+			fs.commit();
+			PageTree treee = new PageTree(fs.inodeForPath("file"));
+			
+			msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
+			for(int i = 0; i < tags.length; i++) {
+				tags[i] = treee.getPageTag(i);
+				msg.receivedData((byte) 0, ByteBuffer.allocate(8).putLong(Util.shortTag(tags[i])).array());
+			}
+			
+			msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+			conn.handle(msg);
+			
+			for(byte[] tag : tags) {
+				assertQueuedItemLike((_item) -> {
+					if(!(_item instanceof PageQueueItem)) return false;
+					PageQueueItem item = (PageQueueItem) _item;
+					return Arrays.equals(tag, item.tag);
+				});
+			}
 		}
 	}
 	
 	@Test
 	public void testHandleRequestPageTagsToleratesNonexistentTags() throws ProtocolViolationException, IOException {
 		byte[][] tags = new byte[16][];
-		ZKFS fs = archive.openBlank();		
-		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_PAGE_TAGS);
-		fs.write("file", new byte[tags.length*archive.getConfig().getPageSize()]);
-		fs.commit();
-		PageTree tree = new PageTree(fs.inodeForPath("file"));
-		
-		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
-		for(int i = 0; i < tags.length; i++) {
-			tags[i] = tree.getPageTag(i);
-			msg.receivedData((byte) 0, ByteBuffer.allocate(8).putLong(Util.shortTag(tags[i])).array());
-			if(i == tags.length/2) msg.receivedData((byte) 0, ByteBuffer.allocate(8).put(crypto.rng(8)).array());
-		}
-		
-		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
-		conn.handle(msg);
-		
-		for(byte[] tag : tags) {
-			assertQueuedItemLike((_item) -> {
-				if(!(_item instanceof PageQueueItem)) return false;
-				PageQueueItem item = (PageQueueItem) _item;
-				return Arrays.equals(tag, item.tag);
-			});
+		try(ZKFS fs = archive.openBlank()) {
+			DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_PAGE_TAGS);
+			fs.write("file", new byte[tags.length*archive.getConfig().getPageSize()]);
+			fs.commit();
+			PageTree tree = new PageTree(fs.inodeForPath("file"));
+			
+			msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
+			for(int i = 0; i < tags.length; i++) {
+				tags[i] = tree.getPageTag(i);
+				msg.receivedData((byte) 0, ByteBuffer.allocate(8).putLong(Util.shortTag(tags[i])).array());
+				if(i == tags.length/2) msg.receivedData((byte) 0, ByteBuffer.allocate(8).put(crypto.rng(8)).array());
+			}
+			
+			msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+			conn.handle(msg);
+			
+			for(byte[] tag : tags) {
+				assertQueuedItemLike((_item) -> {
+					if(!(_item instanceof PageQueueItem)) return false;
+					PageQueueItem item = (PageQueueItem) _item;
+					return Arrays.equals(tag, item.tag);
+				});
+			}
 		}
 	}
 	
@@ -1305,7 +1315,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleRequestRevisionDetailsRespondsWithRequestedInformation() throws IOException, ProtocolViolationException {
-		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commit().getFS().commit();
+		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commitAndClose().getFS().commitAndClose();
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REVISION_DETAILS);
 		msg.receivedData((byte) 0, Util.serializeInt(0));
 		msg.receivedData(PeerMessage.FLAG_FINAL, tag.getBytes());
@@ -1327,7 +1337,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleRequestRevisionDetailsIgnoresRequestIfRevisionNotFound() throws IOException, ProtocolViolationException {
-		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commit().getFS().commit();
+		RevisionTag tag = conn.socket.swarm.config.getArchive().openBlank().commitAndClose().getFS().commitAndClose();
 		conn.socket.swarm.config.getRevisionTree().clear();
 		conn.socket.swarm.config.getCacheStorage().purge();
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REVISION_DETAILS);
@@ -1349,6 +1359,7 @@ public class PeerConnectionTest {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
 		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		fs.close();
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
 		int numChunks = (int) Math.ceil(((double) buf.limit())/PeerMessage.FILE_CHUNK_SIZE);
@@ -1391,6 +1402,7 @@ public class PeerConnectionTest {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
 		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		fs.close();
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
 		byte[] chunk = new byte[PeerMessage.MESSAGE_SIZE];
@@ -1409,6 +1421,7 @@ public class PeerConnectionTest {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
 		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		fs.close();
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
 		int numChunks = (int) Math.ceil(((double) buf.limit())/PeerMessage.FILE_CHUNK_SIZE);
@@ -1427,6 +1440,7 @@ public class PeerConnectionTest {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
 		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		fs.close();
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
 		byte[] chunk = new byte[PeerMessage.MESSAGE_SIZE];
@@ -1669,7 +1683,7 @@ public class PeerConnectionTest {
 	public void testPageQueueThreadSendsIfUnpaused() throws ProtocolViolationException, IOException {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		fs.commit();
+		fs.commitAndClose();
 		
 		int pagesExpected = archive.getStorage().opendir("/").listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES).length;
 		
@@ -1719,7 +1733,7 @@ public class PeerConnectionTest {
 	public void testPageQueueThreadDoesNotSendIfLocalPaused() throws IOException, ProtocolViolationException {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		fs.commit();
+		fs.commitAndClose();
 		
 		conn.setLocalPaused(true);
 		
@@ -1734,7 +1748,7 @@ public class PeerConnectionTest {
 	public void testPageQueueThreadDoesNotSendIfRemotePaused() throws IOException, ProtocolViolationException {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		fs.commit();
+		fs.commitAndClose();
 		
 		conn.setLocalPaused(false);
 		
@@ -1753,7 +1767,7 @@ public class PeerConnectionTest {
 	public void testPageQueueThreadSkipsTagsThatHaveBeenAnnounced() throws IOException, ProtocolViolationException {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		fs.commit();
+		fs.commitAndClose();
 		
 		conn.setLocalPaused(false);
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_ANNOUNCE_TAGS);

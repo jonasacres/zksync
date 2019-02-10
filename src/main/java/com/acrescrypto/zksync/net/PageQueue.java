@@ -21,6 +21,7 @@ import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -147,17 +148,19 @@ public class PageQueue {
 				PageTree inodeTableTree = new PageTree(revTag.getRefTag());
 				inodeTableTree.assertExists();
 				
-				Inode inode = revTag.getFS().getInodeTable().inodeWithId(inodeId);
-				if(inode.isDeleted()) throw new EINVALException("inode " + inodeId + " not issued in requested revtag");
-				tree = new PageTree(inode);
-				tree.assertExists();
-				if(tree.numPages() > Integer.MAX_VALUE) {
-					throw new EINVALException("inode contents has too many pages"); // forces abort of this request
+				try(ZKFS fs = revTag.getFS()) {
+					Inode inode = fs.getInodeTable().inodeWithId(inodeId);
+					if(inode.isDeleted()) throw new EINVALException("inode " + inodeId + " not issued in requested revtag");
+					tree = new PageTree(inode);
+					tree.assertExists();
+					if(tree.numPages() > Integer.MAX_VALUE) {
+						throw new EINVALException("inode contents has too many pages"); // forces abort of this request
+					}
+					
+					int count = (int) tree.numPages();
+					if(tree.getRefTag().getRefType() == RefTag.REF_TYPE_2INDIRECT) count += tree.numChunks();
+					shuffler = Shuffler.fixedShuffler(count);
 				}
-				
-				int count = (int) tree.numPages();
-				if(tree.getRefTag().getRefType() == RefTag.REF_TYPE_2INDIRECT) count += tree.numChunks();
-				shuffler = Shuffler.fixedShuffler(count);
 			} catch(IOException exc) {
 				shuffler = Shuffler.fixedShuffler(0);
 			}

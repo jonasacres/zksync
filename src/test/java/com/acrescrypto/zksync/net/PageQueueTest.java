@@ -71,7 +71,8 @@ public class PageQueueTest {
 		
 		Inode inode = addFile(fs, null, "sample", new byte[10*archive.getConfig().getPageSize()]);
 		pageTag = new PageTree(inode).getPageTag(1);
-		fs.commit();
+		fs.commitAndClose();
+		
 		fs = archive.openRevision(revTag);		
 		
 		byte[] ones = new byte[2*archive.getConfig().getPageSize()];
@@ -81,7 +82,7 @@ public class PageQueueTest {
 		for(int i = 0; i < 64; i++) {
 			addFile(fs, inodesInSecondRevision, "filler"+i, new byte[archive.getConfig().getPageSize()]);
 		}
-		secondRevTag = fs.commit();
+		secondRevTag = fs.commitAndClose();
 	}
 	
 	@Before
