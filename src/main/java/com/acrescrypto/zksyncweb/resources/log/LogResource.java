@@ -72,24 +72,26 @@ public class LogResource {
 		if(level == null) level = "info";
 		else level = level.toLowerCase();
 		
+		String text = "API log entry: " + (injection.getText() == null ? "(null)" : injection.getText());
+		
 		switch(level) {
 		case "trace":
-			logger.trace(injection.getText());
+			logger.trace(text);
 			break;
 		case "debug":
-			logger.debug(injection.getText());
+			logger.debug(text);
 			break;
 		case "info":
-			logger.info(injection.getText());
+			logger.info(text);
 			break;
 		case "warn":
-			logger.warn(injection.getText());
+			logger.warn(text);
 			break;
 		case "error":
-			logger.error(injection.getText());
+			logger.error(text);
 			break;
 		default:
-			logger.info(injection.getText());
+			logger.info(text);
 		}
 		
 		throw XAPIResponse.successResponse();

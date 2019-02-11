@@ -237,9 +237,10 @@ public class LogResourceTest {
 		XLogInjection injection = new XLogInjection();
 		injection.setText("hello world!");
 		WebTestUtils.requestPost(target, "/logs", injection);
+		String expectedText = "API log entry: " + injection.getText();
 		
 		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
-		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals(expectedText, entry.getMessage());
 		assertEquals("INFO", entry.getLevel().levelStr);
 	}
 	
@@ -249,9 +250,10 @@ public class LogResourceTest {
 		injection.setText("hello world!");
 		injection.setSeverity("TRACE");
 		WebTestUtils.requestPost(target, "/logs", injection);
+		String expectedText = "API log entry: " + injection.getText();
 		
 		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
-		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals(expectedText, entry.getMessage());
 		assertEquals(injection.getSeverity().toUpperCase(), entry.getLevel().levelStr);
 	}
 	
@@ -261,9 +263,10 @@ public class LogResourceTest {
 		injection.setText("hello world!");
 		injection.setSeverity("Debug");
 		WebTestUtils.requestPost(target, "/logs", injection);
+		String expectedText = "API log entry: " + injection.getText();
 		
 		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
-		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals(expectedText, entry.getMessage());
 		assertEquals(injection.getSeverity().toUpperCase(), entry.getLevel().levelStr);
 	}
 	
@@ -273,9 +276,10 @@ public class LogResourceTest {
 		injection.setText("hello world!");
 		injection.setSeverity("info");
 		WebTestUtils.requestPost(target, "/logs", injection);
+		String expectedText = "API log entry: " + injection.getText();
 		
 		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
-		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals(expectedText, entry.getMessage());
 		assertEquals(injection.getSeverity().toUpperCase(), entry.getLevel().levelStr);
 	}
 	
@@ -285,9 +289,10 @@ public class LogResourceTest {
 		injection.setText("hello world!");
 		injection.setSeverity("wARN");
 		WebTestUtils.requestPost(target, "/logs", injection);
+		String expectedText = "API log entry: " + injection.getText();
 		
 		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
-		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals(expectedText, entry.getMessage());
 		assertEquals(injection.getSeverity().toUpperCase(), entry.getLevel().levelStr);
 	}
 	
@@ -297,9 +302,10 @@ public class LogResourceTest {
 		injection.setText("test of error message injection");
 		injection.setSeverity("eRrOr");
 		WebTestUtils.requestPost(target, "/logs", injection);
+		String expectedText = "API log entry: " + injection.getText();
 		
 		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
-		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals(expectedText, entry.getMessage());
 		assertEquals(injection.getSeverity().toUpperCase(), entry.getLevel().levelStr);
 	}
 }
