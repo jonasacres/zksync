@@ -65,7 +65,6 @@ public class LogResource {
 	
 	@POST
 	@Produces(MediaType.APPLICATION_JSON)
-	@Consumes(MediaType.APPLICATION_JSON)
 	public void postLogs(String json) throws JsonParseException, JsonMappingException, IOException {
 		XLogInjection injection = new ObjectMapper().readValue(json, XLogInjection.class);
 		
