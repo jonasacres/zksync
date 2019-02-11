@@ -210,9 +210,8 @@ public class TCPPeerSocketListenerTest {
 	
 	@Test
 	public void testReusesPreviousPort() throws IOException, InterruptedException {
-		Util.waitUntil(100, ()->listener.listenSocket != null);
+		Util.waitUntil(100, ()->listener.listenSocket != null && listener.port != 0);
 		int port = listener.port;
-		assertNotEquals(0, port);
 		listener.close();
 		
 		Thread.sleep(10); // give OS some time to free up the socket

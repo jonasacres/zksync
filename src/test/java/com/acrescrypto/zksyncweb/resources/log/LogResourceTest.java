@@ -23,18 +23,20 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.utility.MemLogAppender;
+import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.Main;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.WebTestUtils;
+import com.acrescrypto.zksyncweb.data.XLogInjection;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
 
 /* This is ignored unless needed because these tests are a pain to maintain.
  * They're very sensitive to WHICH log events come back... but we can have all sorts of log
  * events happening asynchronously during our test. So these are only used when needed.
  */
-@Ignore
 public class LogResourceTest {
 	private HttpServer server;
 	private WebTarget target;
@@ -81,7 +83,7 @@ public class LogResourceTest {
 
 	@Test
 	public void testGetLogsReturnsMostRecentInfoEventsByDefault() {
-		int expectedLength = 1000 - 1; // minus one because of request log entry
+		int expectedLength = 1000;
 		for(int i = 0; i < expectedLength + 1; i++) {
 			logger.info("msg " + i);
 		}
@@ -173,8 +175,7 @@ public class LogResourceTest {
 		logger.info("info 1");
 		logger.info("info 2");
 
-		// ask for -3 because one will be the request log entry
-		JsonNode resp = WebTestUtils.requestGet(target, "/logs?offset=-3");
+		JsonNode resp = WebTestUtils.requestGet(target, "/logs?offset=-2");
 		ArrayList<JsonNode> filteredEntries = filterEntries(resp.get("entries"));
 		assertEquals(2, filteredEntries.size());
 		assertEquals("info 0", filteredEntries.get(0).get("msg").asText());
@@ -187,10 +188,118 @@ public class LogResourceTest {
 		logger.info("info 1");
 		logger.info("info 2");
 		
-		// we have to ask for 2 because one of them will be the request log
-		JsonNode resp = WebTestUtils.requestGet(target, "/logs?length=2");
+		JsonNode resp = WebTestUtils.requestGet(target, "/logs?length=1");
 		ArrayList<JsonNode> filteredEntries = filterEntries(resp.get("entries"));
 		assertEquals(1, filteredEntries.size());
 		assertEquals("info 2", filteredEntries.get(0).get("msg").asText());
+	}
+	
+	@Test
+	public void testGetLogsReturnsLaunchTime() {
+		JsonNode resp = WebTestUtils.requestGet(target, "/logs");
+		assertEquals(Util.launchTime(), resp.get("launchTime").longValue());
+	}
+	
+	@Test
+	public void testGetLogsAppliesFiltersIfLaunchTimeMatches() {
+		for(int i = 0; i < 10; i++) {
+			logger.info("info " + i);
+		}
+		
+		JsonNode resp = WebTestUtils.requestGet(target,
+				  "/logs" 
+				+ "?launchTime=" + Util.launchTime()
+				+ "&offset=1"
+				+ "&after=1"
+				+ "&before=9");
+		ArrayList<JsonNode> filteredEntries = filterEntries(resp.get("entries"));
+		assertEquals(7, filteredEntries.size());
+	}
+	
+	@Test
+	public void testGetLogsDoesNotApplyFiltersIfLaunchTimeDoesNotMatch() {
+		for(int i = 0; i < 10; i++) {
+			logger.info("info " + i);
+		}
+		
+		JsonNode resp = WebTestUtils.requestGet(target,
+				  "/logs" 
+				+ "?launchTime=" + (Util.launchTime()-1)
+				+ "&offset=1"
+				+ "&after=1"
+				+ "&before=9");
+		ArrayList<JsonNode> filteredEntries = filterEntries(resp.get("entries"));
+		assertEquals(10, filteredEntries.size());
+	}
+	
+	@Test
+	public void testPostLogsCreatesLogEntry() {
+		XLogInjection injection = new XLogInjection();
+		injection.setText("hello world!");
+		WebTestUtils.requestPost(target, "/logs", injection);
+		
+		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
+		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals("INFO", entry.getLevel().levelStr);
+	}
+	
+	@Test
+	public void testPostLogsCreatesLogEntryWithTraceSeverity() {
+		XLogInjection injection = new XLogInjection();
+		injection.setText("hello world!");
+		injection.setSeverity("TRACE");
+		WebTestUtils.requestPost(target, "/logs", injection);
+		
+		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
+		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals(injection.getSeverity().toUpperCase(), entry.getLevel().levelStr);
+	}
+	
+	@Test
+	public void testPostLogsCreatesLogEntryWithDebugSeverity() {
+		XLogInjection injection = new XLogInjection();
+		injection.setText("hello world!");
+		injection.setSeverity("Debug");
+		WebTestUtils.requestPost(target, "/logs", injection);
+		
+		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
+		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals(injection.getSeverity().toUpperCase(), entry.getLevel().levelStr);
+	}
+	
+	@Test
+	public void testPostLogsCreatesLogEntryWithInfoSeverity() {
+		XLogInjection injection = new XLogInjection();
+		injection.setText("hello world!");
+		injection.setSeverity("info");
+		WebTestUtils.requestPost(target, "/logs", injection);
+		
+		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
+		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals(injection.getSeverity().toUpperCase(), entry.getLevel().levelStr);
+	}
+	
+	@Test
+	public void testPostLogsCreatesLogEntryWithWarnSeverity() {
+		XLogInjection injection = new XLogInjection();
+		injection.setText("hello world!");
+		injection.setSeverity("wARN");
+		WebTestUtils.requestPost(target, "/logs", injection);
+		
+		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
+		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals(injection.getSeverity().toUpperCase(), entry.getLevel().levelStr);
+	}
+	
+	@Test @Ignore
+	public void testPostLogsCreatesLogEntryWithErrorSeverity() {
+		XLogInjection injection = new XLogInjection();
+		injection.setText("test of error message injection");
+		injection.setSeverity("eRrOr");
+		WebTestUtils.requestPost(target, "/logs", injection);
+		
+		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
+		assertEquals(injection.getText(), entry.getMessage());
+		assertEquals(injection.getSeverity().toUpperCase(), entry.getLevel().levelStr);
 	}
 }
