@@ -34,6 +34,7 @@ public class ConfigFile {
 	protected HashMap<String,Object> defaults = new HashMap<>();
 	
 	protected Logger logger = LoggerFactory.getLogger(ConfigFile.class);
+	protected boolean autowriteEnabled = true;
 	
 	public ConfigFile(FS storage, String path) throws IOException {
 		this.storage = storage;
@@ -41,7 +42,9 @@ public class ConfigFile {
 		
 		try {
 			read();
+			logger.info("Config: Loaded existing file");
 		} catch(ENOENTException exc) {
+			logger.info("Config: No pre-existing config file");
 		}
 	}
 	
@@ -53,6 +56,16 @@ public class ConfigFile {
 		info.clear();
 		JsonReader reader = Json.createReader(new StringReader(new String(serialized)));
 		JsonObject json = reader.readObject();
+		
+		boolean oldAutowriteEnabled = autowriteEnabled;
+		this.autowriteEnabled = false; // don't rewrite config when calling set()
+		
+		json.asJsonObject().entrySet().forEach((m)->{
+			this.set(m.getKey(), m.getValue());
+		});
+		
+		this.autowriteEnabled = oldAutowriteEnabled;
+		
 		sub.updatedConfig(json);
 	}
 	
@@ -75,7 +88,7 @@ public class ConfigFile {
 	
 	protected synchronized void writeQuietly() {
 		try {
-			storage.write(path(), serialize());
+			write();
 		} catch(IOException exc) {
 			logger.error("Caught exception logging " + path, exc);
 		}

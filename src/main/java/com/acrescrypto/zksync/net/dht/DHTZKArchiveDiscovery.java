@@ -95,7 +95,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		Util.setThreadName("DHTZKArchiveDiscovery discovery thread");
 		while(isDiscovering(entry.accessor)) {
 			try {
-				Util.blockOn(()->isDiscovering(entry.accessor) && !entry.accessor.getMaster().getDHTClient().initialized);
+				Util.blockOn(()->isDiscovering(entry.accessor) && !entry.accessor.getMaster().getDHTClient().isInitialized());
 				if(isDiscovering(entry.accessor)) {
 					discover(entry);
 				}
