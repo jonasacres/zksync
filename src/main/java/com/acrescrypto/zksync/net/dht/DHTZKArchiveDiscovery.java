@@ -74,7 +74,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		
 		DiscoveryEntry entry = activeDiscoveries.get(accessor);
 		if(entry.increment()) {
-			logger.info("Starting discovery thread for accessor with temporal seed ID {}",
+			logger.info("DHT -: Starting discovery thread for accessor with temporal seed ID {}",
 					Util.bytesToHex(accessor.temporalSeedId(0)));
 			new Thread(accessor.getThreadGroup(), ()->discoveryThread(entry)).start();
 			new Thread(accessor.getThreadGroup(), ()->advertisementThread(entry)).start();
@@ -104,11 +104,11 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 					entry.wait(discoveryIntervalMs);
 				}
 			} catch(Exception exc) {
-				logger.error("Caught exception in DHTZKArchiveDiscovery discovery thread", exc);
+				logger.error("DHT -: Caught exception in DHTZKArchiveDiscovery discovery thread", exc);
 			}
 		}
 		
-		logger.info("Stopping discovery thread for accessor with temporal seed ID {}",
+		logger.info("DHT -: Stopping discovery thread for accessor with temporal seed ID {}",
 				Util.bytesToHex(entry.accessor.temporalSeedId(0)));
 	}
 	
@@ -125,7 +125,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 					entry.wait(advertisementIntervalMs);
 				}
 			} catch(Exception exc) {
-				logger.error("Caught exception on DHTZKArchiveDiscovery advertisement thread", exc);
+				logger.error("DHT -: Caught exception on DHTZKArchiveDiscovery advertisement thread", exc);
 			}
 		}
 	}
@@ -141,11 +141,11 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	public void forceUpdate(ArchiveAccessor accessor) {
 		DiscoveryEntry entry = activeDiscoveries.get(accessor);
 		if(entry == null) {
-			logger.info("Cannot force DHT update for non-advertised archive accessor");
+			logger.info("DHT -: Cannot force update for non-advertised archive accessor");
 			return;
 		}
 		
-		logger.info("Forcing DHT update for archive accessor with temporal ID {}",
+		logger.info("DHT -: forcing update for archive accessor with temporal ID {}",
 				Util.bytesToHex(accessor.temporalSeedId(0)));
 		synchronized(entry) {
 			entry.notifyAll();
@@ -169,7 +169,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 				ZKArchiveConfig config = entry.accessor.discoveredArchiveId(archiveId);
 				config.getSwarm().addPeerAdvertisement(ad);
 			} catch (IOException exc) {
-				logger.warn("Caught IOException processing TCP ad", exc);
+				logger.warn("DHT -: Caught IOException processing TCP ad", exc);
 			}
 		});
 	}
