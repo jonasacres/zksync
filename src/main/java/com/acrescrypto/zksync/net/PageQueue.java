@@ -44,7 +44,9 @@ public class PageQueue {
 			try(File file = fs.open(Page.pathForTag(tag), File.O_RDONLY)) {
 				long offset = index * PeerMessage.FILE_CHUNK_SIZE;
 				int len = Math.min((int) (file.getStat().getSize() - offset), PeerMessage.FILE_CHUNK_SIZE);
-				if(len < 0) throw new RuntimeException("attempted to read offset " + offset + " beyond end of file for chunk " + index + " of page " + Util.bytesToHex(tag));
+				if(len < 0) {
+					throw new RuntimeException("attempted to read offset " + offset + " beyond end of file for chunk " + index + " of page " + Util.bytesToHex(tag) + ", file size " + file.getStat().getSize());
+				}
 				
 				byte[] data = new byte[len];
 				file.seek(offset, File.SEEK_SET);
