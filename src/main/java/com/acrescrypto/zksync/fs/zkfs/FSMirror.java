@@ -283,7 +283,9 @@ public class FSMirror {
 		String[] localList = fs.opendir("/").listRecursive();
 		for(String path : localList) {
 			if(paths.contains(path)) continue;
-			remove(fs, path, fs.lstat(path));
+			try {
+				remove(fs, path, fs.lstat(path));
+			} catch(ENOENTException exc) {}
 		}
 	}
 
