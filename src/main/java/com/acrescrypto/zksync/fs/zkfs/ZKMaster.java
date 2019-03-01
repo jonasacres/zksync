@@ -425,6 +425,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		globalConfig.setDefault("fs.default.groupname", "root");
 		globalConfig.setDefault("fs.default.gid", 0);
 		globalConfig.setDefault("fs.default.directoryMode", 0755);
+		globalConfig.setDefault("fs.fileHandleTelemetry", FS.fileHandleTelemetryEnabled);
 		
 		globalConfig.setDefault("net.limits.tx", -1);
 		globalConfig.setDefault("net.limits.rx", -1);
@@ -435,6 +436,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	}
 	
 	protected void setupSubscriptions() {
+		globalConfig.subscribe("fs.fileHandleTelemetry").asBoolean((enabled)->FS.fileHandleTelemetryEnabled = enabled);
 		globalConfig.subscribe("net.limits.tx").asLong((v)->bandwidthAllocatorTx.setBytesPerSecond(v));
 		globalConfig.subscribe("net.limits.rx").asLong((v)->bandwidthAllocatorRx.setBytesPerSecond(v));
 		

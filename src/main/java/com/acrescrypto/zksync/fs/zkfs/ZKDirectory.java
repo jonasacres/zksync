@@ -242,34 +242,42 @@ public class ZKDirectory extends ZKFile implements Directory {
 	private void deserialize(byte[] serialized) {
 		entries.clear();
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		
-		while(buf.hasRemaining()) {
-			long inodeId = buf.getLong();
-			int pathLen = Util.unsignShort(buf.getShort());
-
-			// Don't check existence of inodes; it will trip up merges
-			assertIntegrity(inodeId >= 0, String.format("Directory references invalid inode %d", inodeId));
-			assertIntegrity(pathLen >= 0, "Directory references negative path length");
-			assertIntegrity(pathLen <= buf.remaining(), "Directory appears truncated");
-			assertIntegrity(pathLen <= MAX_NAME_LEN, "Directory references name of illegal length");
-			
-			byte[] pathBuf = new byte[pathLen];
-			buf.get(pathBuf);
-			
-			String path = new String(pathBuf);
-			if(isValidName(path)) {
-				/* Don't let maliciously-crafted directories deserialize evil paths.
-				 * It does mean we have non-unlinkable files, but we're already dealing with
-				 * an archive manually created by bad people, so who knows what else is going on?
-				 * 
-				 * Because of that, I considered maybe throwing an exception here, but there's
-				 * also no guarantee that someone opens the directory, and potentially a form
-				 * of attack in which an attacker sabotages a directory the user is depending on
-				 * being able to read. Not entirely sure this is the right way to go, but...
-				 * seemed like a good idea at the time. :p 
-				 * */
-				entries.put(path, inodeId);
+		try {
+			while(buf.hasRemaining()) {
+				long inodeId = buf.getLong();
+				int pathLen = Util.unsignShort(buf.getShort());
+	
+				// Don't check existence of inodes; it will trip up merges
+				assertIntegrity(inodeId >= 0, String.format("Directory references invalid inode %d", inodeId));
+				assertIntegrity(pathLen >= 0, "Directory references negative path length (" + pathLen + ")");
+				assertIntegrity(pathLen <= buf.remaining(), "Directory appears truncated; next name is " + pathLen + " bytes, directory only has " + buf.remaining() + " remaining");
+				assertIntegrity(pathLen <= MAX_NAME_LEN, "Directory references name of illegal length " + pathLen);
+				
+				byte[] pathBuf = new byte[pathLen];
+				buf.get(pathBuf);
+				
+				String path = new String(pathBuf);
+				if(isValidName(path)) {
+					/* Don't let maliciously-crafted directories deserialize evil paths.
+					 * It does mean we have non-unlinkable files, but we're already dealing with
+					 * an archive manually created by bad people, so who knows what else is going on?
+					 * 
+					 * Because of that, I considered maybe throwing an exception here, but there's
+					 * also no guarantee that someone opens the directory, and potentially a form
+					 * of attack in which an attacker sabotages a directory the user is depending on
+					 * being able to read. Not entirely sure this is the right way to go, but...
+					 * seemed like a good idea at the time. :p 
+					 * */
+					entries.put(path, inodeId);
+				}
 			}
+		} catch(Exception exc) {
+			logger.warn("FS {}: Unable to deserialize directory {} - encountered exception at offset {} of length {}",
+					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+					path,
+					buf.position(),
+					buf.limit());
+			throw exc;
 		}
 		
 		dirty = false;

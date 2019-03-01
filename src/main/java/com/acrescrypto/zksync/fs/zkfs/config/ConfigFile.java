@@ -2,8 +2,10 @@ package com.acrescrypto.zksync.fs.zkfs.config;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -237,8 +239,11 @@ public class ConfigFile {
 	}
 	
 	public HashMap<String, Object> asHash() {
-		HashMap<String,Object> r = new HashMap<>();
-		for(String key : keys()) {
+		HashMap<String,Object> r = new LinkedHashMap<>();
+		ArrayList<String> sorted = new ArrayList<>(keys());
+		sorted.sort(null);
+		
+		for(String key : sorted) {
 			Object o = null;
 			
 			JsonValue v = info.get(key);

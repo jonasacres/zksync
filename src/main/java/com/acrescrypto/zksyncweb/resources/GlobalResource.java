@@ -1,6 +1,8 @@
 package com.acrescrypto.zksyncweb.resources;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.LinkedList;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.PUT;
@@ -8,6 +10,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
+import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.State;
@@ -69,5 +72,28 @@ public class GlobalResource {
 	@Path("/uptime")
 	public XAPIResponse getUptime() throws IOException {
 		throw XAPIResponse.withWrappedPayload("uptime", System.currentTimeMillis() - Util.launchTime());
+	}
+	
+	@GET
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("/filehandles")
+	public XAPIResponse getFileHandles() throws IOException {
+		LinkedList<HashMap<String,Object>> files = new LinkedList<>();
+		FS.getGlobalOpenFiles().forEach((file, trace) -> {
+			HashMap<String, Object> info = new HashMap<>();
+			LinkedList<HashMap<String,Object>> traceListing = new LinkedList<>();
+			info.put("path", file.getPath());
+			info.put("fsClass", file.getFs().getClass().getCanonicalName());
+			for(StackTraceElement element : trace.getStackTrace()) {
+				HashMap<String,Object> frame = new HashMap<>();
+				frame.put("file", element.getFileName());
+				frame.put("method", element.getMethodName());
+				frame.put("line", element.getLineNumber());
+				traceListing.add(frame);
+			}
+			info.put("trace", traceListing);
+			files.add(info);
+		});
+		throw XAPIResponse.withWrappedPayload("files", files);
 	}
 }

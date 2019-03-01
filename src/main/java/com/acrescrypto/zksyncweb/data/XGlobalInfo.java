@@ -3,6 +3,7 @@ package com.acrescrypto.zksyncweb.data;
 import java.io.IOException;
 import java.util.HashMap;
 
+import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksyncweb.State;
 
@@ -17,6 +18,7 @@ public class XGlobalInfo {
 	private Long memoryUsed;
 	private Long memoryTotal;
 	private Long memoryMax;
+	private Integer numOpenFileHandles;
 	
 	public static XGlobalInfo globalInfo() throws IOException {
 		ZKMaster master = State.sharedState().getMaster();
@@ -32,6 +34,7 @@ public class XGlobalInfo {
 		info.memoryUsed = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
 		info.memoryTotal = Runtime.getRuntime().totalMemory();
 		info.memoryMax = Runtime.getRuntime().maxMemory();
+		info.numOpenFileHandles = FS.fileHandleTelemetryEnabled ? FS.getGlobalOpenFiles().size() : null;
 		
 		return info;
 	}
@@ -114,5 +117,13 @@ public class XGlobalInfo {
 
 	public void setMemoryTotal(Long memoryTotal) {
 		this.memoryTotal = memoryTotal;
+	}
+
+	public Integer getNumOpenFileHandles() {
+		return numOpenFileHandles;
+	}
+
+	public void setNumOpenFileHandles(Integer openFileHandles) {
+		this.numOpenFileHandles = openFileHandles;
 	}
 }

@@ -21,6 +21,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
+import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.Util;
@@ -106,6 +108,26 @@ public class GlobalResourceTest {
 	}
 
 	@Test
+	public void testGetGlobalReturnsOpenFileHandleCountWhenFileTelemetryEnabled() throws IOException {
+		try(File f = master.getStorage().open("test", File.O_CREAT|File.O_WRONLY)) {
+			JsonNode resp = WebTestUtils.requestGet(target, "/global");
+			assertEquals(FS.getGlobalOpenFiles().size(), resp.get("numOpenFileHandles").intValue());
+		}
+	}
+	
+	@Test
+	public void testGetGlobalReturnsNullOpenFileHandleCountWhenFileTelemetryDisabled() throws IOException {
+		boolean oldFSTelemetryState = FS.fileHandleTelemetryEnabled;
+		FS.fileHandleTelemetryEnabled = false;
+		try(File f = master.getStorage().open("test", File.O_CREAT|File.O_WRONLY)) {
+			JsonNode resp = WebTestUtils.requestGet(target, "/global");
+			assertTrue(resp.get("numOpenFileHandles").isNull());
+		} finally {
+			FS.fileHandleTelemetryEnabled = oldFSTelemetryState;
+		}
+	}
+
+	@Test
 	public void testGetGlobalReturnsIsListeningTrueIfTcpListenerActive() throws IOException {
 		master.getGlobalConfig().set("net.swarm.enabled", true);
 		assertTrue(Util.waitUntil(100, ()->master.getTCPListener().isListening()));
@@ -161,7 +183,7 @@ public class GlobalResourceTest {
 		JsonNode resp = WebTestUtils.requestGet(target, "/global/settings");
 		assertEquals(master.getTCPListener().getPort(), resp.get("net.swarm.lastport").intValue());
 	}
-
+	
 	@Test
 	public void testPutSettingsWithOmittedRxLimitDoesNotChangeRxLimit() {
 		HashMap<String,Object> settings = new HashMap<>();
@@ -308,5 +330,24 @@ public class GlobalResourceTest {
 		JsonNode resp = WebTestUtils.requestGet(target, "/global/uptime");
 		long expectedUptime = System.currentTimeMillis() - Util.launchTime();
 		assertEquals(resp.get("uptime").longValue(), expectedUptime, 10);
+	}
+	
+	@Test
+	public void testGetFileHandlesReturnsFileHandleListWhenFileTelemetryEnabled() throws IOException {
+		try(File f = master.getStorage().open("test", File.O_CREAT|File.O_TRUNC|File.O_WRONLY)) {
+			JsonNode resp = WebTestUtils.requestGet(target, "/global/filehandles");
+			assertTrue(resp.get("files").isArray());
+			assertTrue(resp.get("files").size() == FS.getGlobalOpenFiles().size());
+			resp.get("files").forEach((entry)->{
+				assertTrue(entry.get("path").isTextual());
+				assertTrue(entry.get("fsClass").isTextual());
+				assertTrue(entry.get("trace").isArray());
+				entry.get("trace").forEach((frame)->{
+					assertTrue(frame.get("file").isTextual());
+					assertTrue(frame.get("method").isTextual());
+					assertTrue(frame.get("line").isIntegralNumber());
+				});
+			});
+		}
 	}
 }
