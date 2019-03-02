@@ -179,6 +179,7 @@ public class ZKFS extends FS {
 	
 	public void assertPathIsDirectory(String path) throws IOException {
 		Inode inode = inodeForPath(path);
+		logger.trace("Is directory: {} ({}) -> {}",path, inode.getStat().getInodeId(), inode.getStat().isDirectory());
 		if(!inode.getStat().isDirectory()) throw new EISNOTDIRException(path);
 	}
 	

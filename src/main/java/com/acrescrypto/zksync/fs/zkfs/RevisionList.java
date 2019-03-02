@@ -252,7 +252,7 @@ public class RevisionList {
 		}
 	}
 	
-	protected void queueAutomerge() throws IOException, DiffResolutionException {
+	protected synchronized void queueAutomerge() throws IOException, DiffResolutionException {
 		if(automergeSnoozeThread == null || automergeSnoozeThread.isCancelled()) {
 			automergeSnoozeThread = new SnoozeThread(automergeDelayMs, maxAutomergeDelayMs, true, ()-> {
 				if(config.getArchive().isClosed()) return;

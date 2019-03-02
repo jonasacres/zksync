@@ -748,7 +748,8 @@ public class PeerConnection {
 		
 		while(!accumulator.isFinished() && msg.rxBuf.hasRemaining()) {
 			long offset = Util.unsignInt(msg.rxBuf.getInt());
-			assertState(0 <= offset && offset < expectedChunks && offset <= Integer.MAX_VALUE);
+			assertState(0 <= offset && offset < expectedChunks && offset <= Integer.MAX_VALUE,
+					String.format("Invalid offset: offset=%d, expected 0 <= offset < %d <= %d", offset, expectedChunks, Integer.MAX_VALUE));
 			int readLen = offset == expectedChunks - 1 ? finalChunkSize : PeerMessage.FILE_CHUNK_SIZE;
 			byte[] chunkData = msg.rxBuf.read(readLen);
 			accumulator.addChunk((int) offset, chunkData, this);
@@ -818,6 +819,13 @@ public class PeerConnection {
 
 	protected void assertState(boolean state) throws ProtocolViolationException {
 		if(!state) throw new ProtocolViolationException();
+	}
+	
+	protected void assertState(boolean state, String message) throws ProtocolViolationException {
+		if(!state) {
+			logger.error(message);
+			throw new ProtocolViolationException();
+		}
 	}
 	
 	protected void pageQueueThread() {
