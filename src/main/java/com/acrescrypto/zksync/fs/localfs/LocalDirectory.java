@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.localfs;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -30,10 +31,13 @@ public class LocalDirectory implements Directory {
 	@Override
 	public String[] list(int opts) throws IOException {
 		ArrayList<String> paths = new ArrayList<String>();
-		for(Path entry: Files.newDirectoryStream(Paths.get(fs.root, path))) {
-			String entryPath = Paths.get(path, entry.getFileName().toString()).toString();
-			if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(entryPath).isDirectory()) continue;
-			paths.add(entry.getFileName().toString());
+		// Files.newDirectoryStream(Paths.get(fs.root, path));
+		try(DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(fs.root, path))) {
+			for(Path entry: stream) {
+				String entryPath = Paths.get(path, entry.getFileName().toString()).toString();
+				if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(entryPath).isDirectory()) continue;
+				paths.add(entry.getFileName().toString());
+			}
 		}
 		
 		int size = paths.size();

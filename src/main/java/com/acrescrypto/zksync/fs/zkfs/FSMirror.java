@@ -12,6 +12,7 @@ import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
@@ -146,6 +147,13 @@ public class FSMirror {
 	
 	protected boolean watchThreadBody(MutableBoolean flag, WatchService watcher, HashMap<WatchKey, Path> pathsByKey) {
 		try {
+			try {
+				checkDirectories(pathsByKey);
+			} catch (IOException exc) {
+				logger.error("FS {}: FSMirror caught exception verifying directory existence",
+						Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+						exc);
+			}
 			WatchKey key = watcher.poll(10, TimeUnit.MILLISECONDS);
 			if(key == null || flag.isFalse()) {
 				return true;
@@ -196,6 +204,24 @@ public class FSMirror {
 		}
 		
 		return true;
+	}
+	
+	public synchronized void checkDirectories(HashMap<WatchKey, Path> pathsByKey) throws IOException {
+		/* We're not guaranteed to get a delete callback if a directory is unlinked.
+		 * So periodically we have to check if all our directories are still there.
+		 */
+		LinkedList<String> suspected = new LinkedList<>();
+		for(Path path : pathsByKey.values()) {
+			if(!target.exists(path.toString())) {
+				Path basePath = Paths.get(((LocalFS) target).getRoot());
+				String realPath = basePath.relativize(path).toString();
+				suspected.add(realPath.toString());
+			}
+		}
+		
+		for(String path : suspected) {
+			suspectedTargetPathChange(path);
+		}
 	}
 
 	public synchronized void observedTargetPathChange(String path) throws IOException {
