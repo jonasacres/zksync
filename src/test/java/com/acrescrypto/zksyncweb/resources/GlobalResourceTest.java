@@ -334,6 +334,7 @@ public class GlobalResourceTest {
 	
 	@Test
 	public void testGetFileHandlesReturnsFileHandleListWhenFileTelemetryEnabled() throws IOException {
+		// TODO ITF: UniversalTests 3/3/19 a13698c+
 		try(File f = master.getStorage().open("test", File.O_CREAT|File.O_TRUNC|File.O_WRONLY)) {
 			JsonNode resp = WebTestUtils.requestGet(target, "/global/filehandles");
 			assertTrue(resp.get("files").isArray());
