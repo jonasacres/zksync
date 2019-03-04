@@ -8,6 +8,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
@@ -17,6 +20,7 @@ public class Util {
 	static long launchTime = -1;
 	
 	private final static char[] hexArray = "0123456789abcdef".toCharArray();
+	private final static Logger logger = LoggerFactory.getLogger(Util.class);
 	
 	public interface WaitTest {
 		boolean test();
@@ -70,13 +74,18 @@ public class Util {
 
 	public static byte[] hexToBytes(String s) {
 		// credit: https://stackoverflow.com/questions/140131/convert-a-string-representation-of-a-hex-dump-to-a-byte-array-using-java/140861#140861
-		int len = s.getBytes().length;
-		byte[] data = new byte[len / 2];
-		for (int i = 0; i < len; i += 2) {
-			data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
-					+ Character.digit(s.charAt(i+1), 16));
+		try {
+			int len = s.getBytes().length;
+			byte[] data = new byte[len / 2];
+			for (int i = 0; i < len; i += 2) {
+				data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
+						+ Character.digit(s.charAt(i+1), 16));
+			}
+			return data;
+		} catch(Exception exc) {
+			logger.error("Unable to decode hex string: {}", s, exc);
+			throw exc;
 		}
-		return data;
 	}
 
 	public static String bytesToHex(byte[] b) {

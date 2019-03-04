@@ -84,7 +84,7 @@ public class TCPPeerSocket extends PeerSocket {
 		swarm.openedConnection(new PeerConnection(this));
 		makeThreads();
 		
-		logger.debug("Swarm {} {}:{}: received connection",
+		logger.debug("Swarm {} {}:{}: TCPSocket opened from received connection",
 				Util.formatArchiveId(swarm.config.getArchiveId()),
 				this.address,
 				socket.getPort());
@@ -100,7 +100,7 @@ public class TCPPeerSocket extends PeerSocket {
 		try {
 			ad.resolve();
 		} catch (UnconnectableAdvertisementException exc) {
-			logger.warn("Swarm {} {}:{}: Unable to resolve host: {}",
+			logger.warn("Swarm {} {}:{}: TCPSocket connect failed, to resolve host: {}",
 					Util.formatArchiveId(swarm.config.getArchiveId()),
 					this.address,
 					this.getPort(),
@@ -124,7 +124,7 @@ public class TCPPeerSocket extends PeerSocket {
 	protected void connect(PeerConnection connection) throws IOException {
 		String effectiveHost = ad.host;
 		if(effectiveHost.equals("127.0.0.1") && ad.getSenderHost() != null) {
-			logger.info("Swarm {} {}:{}: Overriding ad from {} to {}",
+			logger.info("Swarm {} {}:{}: TCPSocket connect overriding ad from {} to {}",
 					Util.formatArchiveId(swarm.config.getArchiveId()),
 					this.address,
 					this.getPort(),
@@ -134,7 +134,7 @@ public class TCPPeerSocket extends PeerSocket {
 		this.socket = new Socket(ad.host, ad.port);
 		this.address = socket.getInetAddress().getHostAddress();
 		makeStreams();
-		logger.debug("Swarm {} {}:{}: connecting to ad (host={})",
+		logger.debug("Swarm {} {}:{}: TCPSocket connecting to ad (host={})",
 				Util.formatArchiveId(swarm.config.getArchiveId()),
 				this.address,
 				ad.port,
@@ -215,7 +215,7 @@ public class TCPPeerSocket extends PeerSocket {
 	}
 	
 	protected void sendHandshake() throws IOException {
-		logger.trace("Swarm {} {}:{}: sending handshake",
+		logger.trace("Swarm {} {}:{}: TCPSocket sending handshake",
 				Util.formatArchiveId(swarm.config.getArchiveId()),
 				address,
 				socket.getPort());
@@ -229,7 +229,7 @@ public class TCPPeerSocket extends PeerSocket {
 		}
 		
 		this.sharedSecret = handshake.getHash();
-		logger.debug("Swarm {} {}:{}: completed handshake",
+		logger.debug("Swarm {} {}:{}: TCPSocket completed handshake",
 				Util.formatArchiveId(swarm.config.getArchiveId()),
 				address,
 				socket.getPort());
@@ -240,7 +240,7 @@ public class TCPPeerSocket extends PeerSocket {
 		ByteBuffer buf = ByteBuffer.wrap(data, offset, length);
 		
 		while(buf.hasRemaining()) {
-			logger.trace("Swarm {} {}:{}: sending {} bytes",
+			logger.trace("Swarm {} {}:{}: TCPSocket sending {} bytes",
 					Util.formatArchiveId(swarm.config.getArchiveId()),
 					address,
 					socket.getPort(),
@@ -261,7 +261,7 @@ public class TCPPeerSocket extends PeerSocket {
 		if(remainingReadData != null && remainingReadData.hasRemaining()) {
 			int readLen = Math.min(length, remainingReadData.remaining());
 			remainingReadData.get(data, offset, readLen);
-			logger.trace("Swarm {} {}:{}: read {} bytes from existing buffer, {} remaining",
+			logger.trace("Swarm {} {}:{}: TCPSocket read {} bytes from existing buffer, {} remaining",
 					Util.formatArchiveId(swarm.config.getArchiveId()),
 					address,
 					socket.getPort(),
@@ -289,7 +289,7 @@ public class TCPPeerSocket extends PeerSocket {
 		int readLen = Math.min(length, remainingReadData.remaining());
 		remainingReadData.get(data, totalRead + offset, readLen);
 		totalRead += readLen;
-		logger.trace("Swarm {} {}:{}: read {} bytes from new buffer, {} total read, {} remaining in buffer",
+		logger.trace("Swarm {} {}:{}: TCPSocket read {} bytes from new buffer, {} total read, {} remaining in buffer",
 				Util.formatArchiveId(swarm.config.getArchiveId()),
 				address,
 				socket.getPort(),
@@ -307,7 +307,7 @@ public class TCPPeerSocket extends PeerSocket {
 	@Override
 	public void _close() throws IOException {
 		if(socket != null && !socket.isClosed()) {
-			logger.trace("Swarm {} {}:{}: closing socket",
+			logger.trace("Swarm {} {}:{}: TCPSocket closing",
 					Util.formatArchiveId(swarm.config.getArchiveId()),
 					address,
 					socket.getPort());

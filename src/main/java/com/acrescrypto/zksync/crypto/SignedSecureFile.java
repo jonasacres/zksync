@@ -6,9 +6,12 @@ import java.util.Arrays;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.Page;
+import com.acrescrypto.zksync.utility.Util;
 
 public class SignedSecureFile {
 	protected FS fs;
@@ -74,7 +77,7 @@ public class SignedSecureFile {
 			Key derivedKey = textKey.derive("easysafe-file-encryption", salt);
 			byte[] paddedPlaintext = derivedKey.decryptUnauthenticated(fixedIV(), contents, salt.length, contents.length - salt.length);
 			return crypto.unpad(paddedPlaintext);
-		} catch (IOException exc) {
+		} catch (Exception exc) {
 			long size = -1;
 			try {
 				size = fs.stat(path()).getSize();
@@ -83,11 +86,16 @@ public class SignedSecureFile {
 						path(),
 						exc2);
 			}
-			logger.warn("Encountered exception loading file {}, size {}",
+			logger.warn("Encountered exception loading file {}, size {}, fs type {}",
 					path(),
 					size,
+					fs.getClass().getSimpleName(),
 					exc);
-			throw new InaccessibleStorageException();
+			if(exc instanceof IOException) {
+				throw new InaccessibleStorageException();
+			} else {
+				throw exc;
+			}
 		}
 	}
 	
@@ -112,7 +120,16 @@ public class SignedSecureFile {
 			System.arraycopy(signature, 0, result, salt.length + ciphertext.length, signature.length);
 			
 			tag = authKey.authenticate(result);
-			fs.write(path(), result);
+			try {
+				Stat stat = fs.stat(path());
+				// SwarmFS will always say the file exists at the appropriate size, but it always shows mtime 0, and inode id equal to the short tag
+				// If we have the SwarmFS answer, we don't 'really' have this file and we have to write. Else, no need to write the same data twice.
+				if(stat.getMtime() != 0 || stat.getInodeId() != Util.shortTag(tag)) {
+					return tag;
+				}
+			} catch(ENOENTException exc) {}
+			
+			fs.safeWrite(path(), result);
 			fs.squash(path());
 			return tag;
 		} catch(IOException exc) {

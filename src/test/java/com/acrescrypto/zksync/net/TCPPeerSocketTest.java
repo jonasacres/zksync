@@ -793,7 +793,7 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
 		
-		MessageSegment[] segments = new MessageSegment[PeerMessage.MAX_OPEN_MESSAGES];
+		MessageSegment[] segments = new MessageSegment[PeerMessage.DEFAULT_MAX_OPEN_MESSAGES];
 		for(int i = 0; i < segments.length; i++) {
 			segments[i] = new MessageSegment(i, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 			conn.serverWrite(segments[i].content.array());

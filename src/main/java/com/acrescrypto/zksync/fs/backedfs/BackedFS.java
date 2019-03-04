@@ -3,12 +3,16 @@ package com.acrescrypto.zksync.fs.backedfs;
 import java.io.IOException;
 import java.util.HashSet;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.utility.Util;
 
 /** This is written, and partially tested, as a generic FS. In truth, there are some MAJOR gaps.
  * Because right now BackedFS only has one use case, and that's to pair a LocalFS to a SwarmFS to retrieve pages,
@@ -27,6 +31,7 @@ import com.acrescrypto.zksync.fs.Stat;
 public class BackedFS extends FS {
 	protected FS cacheFS; // We check this first, and if something isn't here, we try to download it and write it here.
 	protected FS backupFS; // This is where we go to look for data we don't have.
+	protected final Logger logger = LoggerFactory.getLogger(BackedFS.class);
 
 	HashSet<String> pendingPaths = new HashSet<String>();
 
@@ -254,8 +259,25 @@ public class BackedFS extends FS {
 			if(!cacheFS.exists(path)) {
 				Stat stat = backupFS.stat(path);
 				byte[] data = backupFS.read(path);
-				cacheFS.write(path, data);
-				cacheFS.applyStat(path, stat);
+				if(!cacheFS.exists(path) || cacheFS.stat(path).getSize() != stat.getSize()) {
+					cacheFS.safeWrite(path, data);
+					cacheFS.applyStat(path, stat);
+					boolean settled = Util.waitUntil(1000,
+							()->{
+								try {
+									return cacheFS.stat(path).getSize() == stat.getSize();
+								} catch(IOException exc) {
+									logger.error("BackedFS: Caught exception syncing path {}", path, exc);
+									return false;
+								}
+							});
+					if(!settled) {
+						logger.error("BackedFS: Unable to sync path {}, expected size {}, got {}",
+								path,
+								stat.getSize(),
+								cacheFS.stat(path).getSize());
+					}
+				}
 			}
 		} finally {			
 			synchronized(this) {

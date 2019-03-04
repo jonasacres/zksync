@@ -13,6 +13,7 @@ import java.util.concurrent.RejectedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
@@ -26,7 +27,8 @@ public abstract class PeerSocket {
 	protected PeerConnection connection;
 	protected PublicDHKey remoteIdentityKey;
 	protected LinkedList<PeerMessageOutgoing> outgoing = new LinkedList<PeerMessageOutgoing>();
-	protected LinkedList<MessageSegment> ready = new LinkedList<MessageSegment>();	
+	protected LinkedList<MessageSegment> ready = new LinkedList<MessageSegment>();
+	protected LinkedList<Integer> recentRejections = new LinkedList<>();
 	protected HashMap<Integer,PeerMessageIncoming> incoming = new HashMap<Integer,PeerMessageIncoming>();
 	protected GroupedThreadPool threadPool;
 	
@@ -60,7 +62,7 @@ public abstract class PeerSocket {
 	}
 	
 	public final void close() throws IOException {
-		logger.trace("Swarm {} {}:{}: tidying up closed connection",
+		logger.trace("Swarm {} {}:{}: PeerSocket tidying up closed connection",
 				Util.formatArchiveId(swarm.config.getArchiveId()),
 				getAddress(),
 				getPort());		
@@ -73,7 +75,7 @@ public abstract class PeerSocket {
 	/** Immediately close socket and blacklist due to a clear protocol violation. 
 	 * @throws IOException */
 	public void violation() {
-		logger.warn("Swarm {} {}:{}: logging protocol violation",
+		logger.warn("Swarm {} {}:{}: PeerSocket logging protocol violation",
 				Util.formatArchiveId(swarm.config.getArchiveId()),
 				getAddress(),
 				getPort());
@@ -82,7 +84,11 @@ public abstract class PeerSocket {
 			close();
 			swarm.config.getAccessor().getMaster().getBlacklist().add(getAddress(), Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
 		} catch (IOException exc) {
-			logger.warn("Caught exception closing socket to peer {}", getAddress(), exc);
+			logger.warn("Swarm {} {}:{}: PeerSocket caught exception closing socket",
+					Util.formatArchiveId(swarm.getConfig().getArchiveId()),
+					getAddress(),
+					getPort(),
+					exc);
 		}
 	}
 
@@ -138,6 +144,11 @@ public abstract class PeerSocket {
 	}
 	
 	public synchronized void finishedMessage(PeerMessageIncoming message) throws IOException {
+		logger.debug("Swarm {} {}:{}: PeerSocket finished incoming message {}",
+				Util.formatArchiveId(swarm.config.getArchiveId()),
+				getAddress(),
+				getPort(),
+				message.msgId);
 		message.rxBuf.setEOF();
 		incoming.remove(message.msgId);
 	}
@@ -157,7 +168,7 @@ public abstract class PeerSocket {
 	/** Handle some sort of I/O exception */
 	protected void ioexception(IOException exc) {
 		/* These are probably our fault. There is the possibility that they are caused by malicious actors. */
-		logger.debug("Swarm {} {}:{}: caught IOException",
+		logger.debug("Swarm {} {}:{}: PeerSocket caught IOException",
 				Util.formatArchiveId(swarm.config.getArchiveId()),
 				getAddress(),
 				getPort(),
@@ -165,7 +176,11 @@ public abstract class PeerSocket {
 		try {
 			close();
 		} catch (IOException e) {
-			logger.warn("Caught exception closing socket to peer {}", getAddress(), exc);
+			logger.warn("Swarm {} {}:{}: PeerSocket caught exception closing socket",
+					Util.formatArchiveId(swarm.config.getArchiveId()),
+					getAddress(),
+					getPort(),
+					exc);
 		}
 	}
 	
@@ -173,6 +188,7 @@ public abstract class PeerSocket {
 	protected void sendMessage(MessageSegment segment) throws IOException, ProtocolViolationException {
 		if(segment.msg.msgId == Integer.MIN_VALUE) segment.assignMsgId(issueMessageId());
 		try {
+			logger.trace("KILL THIS ENTRY sending msgId={} |data|={} H(data)={}", segment.msg.msgId, segment.content.limit(), Util.bytesToHex(CryptoSupport.defaultCrypto().hash(segment.content.array()), 8));			
 			write(segment.content.array(), 0, segment.content.limit());
 		} finally {
 			segment.delivered();
@@ -204,7 +220,11 @@ public abstract class PeerSocket {
 					} catch (IOException exc) {
 						ioexception(exc);
 					} catch(Exception exc) {
-						logger.error("Socket send thread for peer {} caught exception", getAddress(), exc);
+						logger.error("Swarm {} {}:{}: PeerSocket send thread caught exception",
+								Util.formatArchiveId(swarm.config.getArchiveId()),
+								getAddress(),
+								getPort(),
+								exc);
 					}
 				}
 			});
@@ -235,14 +255,14 @@ public abstract class PeerSocket {
 						processMessage(msgId, cmd, flags, payload);
 					}
 				} catch(ProtocolViolationException exc) {
-					logger.debug("Swarm {} {}:{}: caught protocol violation",
+					logger.debug("Swarm {} {}:{}: PeerSocket caught protocol violation",
 							Util.formatArchiveId(swarm.config.getArchiveId()),
 							getAddress(),
 							getPort(),
 							exc);
 					violation();
 				} catch(SocketException|EOFException exc) { // socket closed; just ignore it
-					logger.debug("Swarm {} {}:{}: unable to read socket, closed={}",
+					logger.debug("Swarm {} {}:{}: PeerSocket unable to read socket, closed={}",
 							Util.formatArchiveId(swarm.config.getArchiveId()),
 							getAddress(),
 							getPort(),
@@ -251,14 +271,14 @@ public abstract class PeerSocket {
 					try {
 						close();
 					} catch (IOException exc2) {
-						logger.debug("Swarm {} {}:{}: encountered exception closing socket {}",
+						logger.debug("Swarm {} {}:{}: PeerSocket encountered exception closing socket {}",
 								Util.formatArchiveId(swarm.config.getArchiveId()),
 								getAddress(),
 								getPort(),
 								exc2);
 					}
 				} catch(Exception exc) {					
-					logger.debug("Swarm {} {}:{}: caught exception in socket receive thread",
+					logger.debug("Swarm {} {}:{}: PeerSocket caught exception in socket receive thread",
 							Util.formatArchiveId(swarm.config.getArchiveId()),
 							getAddress(),
 							getPort(),
@@ -270,6 +290,7 @@ public abstract class PeerSocket {
 	}
 	
 	protected void processMessage(int msgId, byte cmd, byte flags, byte[] payload) throws IOException {
+		// TODO: these log statements are HUGE!!! factor that out...
 		PeerMessageIncoming msg;
 		if((flags & PeerMessage.FLAG_CANCEL) != 0) {
 			cancelMessage(msgId);
@@ -278,21 +299,50 @@ public abstract class PeerSocket {
 		
 		synchronized(this) {
 			if(msgId > maxReceivedMessageId) { // new message
+				logger.trace("Swarm {} {}:{}: PeerSocket received new message msgId={}, cmd={}, flags={}, |payload|={}",
+						Util.formatArchiveId(swarm.config.getArchiveId()),
+						getAddress(),
+						getPort(),
+						msgId,
+						cmd,
+						flags,
+						payload.length);
 				msg = new PeerMessageIncoming(connection, cmd, flags, msgId);
 				synchronized(this) {
 					incoming.put(msgId, msg);
 					maxReceivedMessageId = msgId;
 					if(isClosed()) {
+						logger.debug("Swarm {} {}:{}: PeerSocket pruning msgId={} since socket is closed",
+								Util.formatArchiveId(swarm.config.getArchiveId()),
+								getAddress(),
+								getPort(),
+								msgId);
 						finishedMessage(msg);
 					}
 				}
 				pruneMessages();
 			} else if(incoming.containsKey(msgId)) { // existing message
+				logger.trace("Swarm {} {}:{}: PeerSocket received continued message msgId={}, cmd={}, flags={}, |payload|={}",
+						Util.formatArchiveId(swarm.config.getArchiveId()),
+						getAddress(),
+						getPort(),
+						msgId,
+						cmd,
+						flags,
+						payload.length);
 				msg = incoming.get(msgId);
 			} else { // pruned message
+				logger.debug("Swarm {} {}:{}: PeerSocket received continuation of pruned message msgId={}, cmd={}, flags={}, |payload|={}",
+						Util.formatArchiveId(swarm.config.getArchiveId()),
+						getAddress(),
+						getPort(),
+						msgId,
+						cmd,
+						flags,
+						payload.length);
 				if(maxReceivedMessageId == Integer.MAX_VALUE) {
 					// we can accept no new messages since we've exceeded the limits of the 32-bit ID field; close and force a reconnect
-					logger.debug("Swarm {} {}:{}: terminating connection due to maximum message count being reached",
+					logger.info("Swarm {} {}:{}: PeerSocket terminating connection due to maximum message count being reached",
 							Util.formatArchiveId(swarm.config.getArchiveId()),
 							getAddress(),
 							getPort());
@@ -311,7 +361,8 @@ public abstract class PeerSocket {
 	}
 	
 	protected void pruneMessages() throws IOException {
-		while(incoming.size() > PeerMessage.MAX_OPEN_MESSAGES) {
+		int limit = swarm.getConfig().getMaster().getGlobalConfig().getInt("net.swarm.rejectionCacheSize");
+		while(incoming.size() > limit) {
 			PeerMessageIncoming pruneMsg = null;
 			
 			for(PeerMessageIncoming msg : incoming.values()) {
@@ -321,12 +372,24 @@ public abstract class PeerSocket {
 			}
 			
 			if(pruneMsg != null) {
+				logger.debug("Swarm {} {}:{}: PeerSocket pruning incoming message {}; limit {} incoming, have {}",
+						Util.formatArchiveId(swarm.config.getArchiveId()),
+						getAddress(),
+						getPort(),
+						pruneMsg.msgId,
+						limit,
+						incoming.size());
 				finishedMessage(pruneMsg);
 			}
 		}
 	}
 	
 	protected void cancelMessage(int msgId) {
+		logger.debug("Swarm {} {}:{}: PeerSocket cancelling outgoing message {}",
+				Util.formatArchiveId(swarm.config.getArchiveId()),
+				getAddress(),
+				getPort(),
+				msgId);
 		synchronized(outgoing) {
 			for(PeerMessageOutgoing msg : outgoing) {
 				if(msg.msgId == msgId) {
@@ -337,6 +400,22 @@ public abstract class PeerSocket {
 	}
 	
 	protected void rejectMessage(int msgId, byte cmd) {
+		if(recentRejections.contains(msgId)) return;
+		int maxSize = swarm.config.getMaster().getGlobalConfig().getInt("net.swarm.rejectionCacheSize");
+
+		synchronized(this) {
+			if(recentRejections.contains(msgId)) return;
+			recentRejections.add(msgId);
+			while(recentRejections.size() > maxSize) {
+				recentRejections.poll();
+			}
+		}
+
+		logger.debug("Swarm {} {}:{}: PeerSocket rejecting message {}",
+				Util.formatArchiveId(swarm.config.getArchiveId()),
+				getAddress(),
+				getPort(),
+				msgId);
 		new PeerMessageOutgoing(connection, msgId, cmd, PeerMessage.FLAG_CANCEL, new ByteArrayInputStream(new byte[0]));
 	}
 	

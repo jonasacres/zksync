@@ -9,6 +9,9 @@ import java.nio.file.attribute.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.CommandFailedException;
 import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
@@ -19,6 +22,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class LocalFS extends FS {
 	protected String root;
+	private Logger logger = LoggerFactory.getLogger(LocalFS.class);
 	
 	public LocalFS(String root) {
 		this.root = root;
@@ -156,16 +160,19 @@ public class LocalFS extends FS {
 
 	@Override
 	public void mkdir(String path) throws IOException {
+		logger.debug("LocalFS {}: mkdir {}", root, path);
 		Files.createDirectory(qualifiedPath(path));
 	}
 	
 	@Override
 	public void mkdirp(String path) throws IOException {
+		logger.debug("LocalFS {}: mkdirp {}", root, path);
 		Files.createDirectories(qualifiedPath(path));
 	}
 
 	@Override
 	public void rmdir(String path) throws IOException {
+		logger.debug("LocalFS {}: rmdir {}", root, path);
 		Path p = qualifiedPath(path);
 		if(!Files.exists(p)) throw new ENOENTException(path);
 		if(!Files.isDirectory(p)) throw new IOException(path + ": not a directory");
@@ -174,6 +181,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void unlink(String path) throws IOException {
+		logger.debug("LocalFS {}: unlink {}", root, path);
 		try {
 			Files.delete(qualifiedPath(path));
 		} catch(NoSuchFileException exc) {
@@ -183,6 +191,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void link(String source, String dest) throws IOException {
+		logger.debug("LocalFS {}: link {} -> {}", root, source, dest);
 		try {
 			Files.createLink(qualifiedPath(dest), qualifiedPath(source));
 		} catch(FileAlreadyExistsException exc) {
@@ -194,6 +203,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void symlink(String source, String dest) throws IOException {
+		logger.debug("LocalFS {}: symlink {} -> {}", root, source, dest);
 		Path trueSource = source.substring(0, 1).equals("/")
 				? qualifiedPath(source)
 				: Paths.get(source);
@@ -209,6 +219,7 @@ public class LocalFS extends FS {
 	
 	@Override
 	public void symlink_unsafe(String source, String dest) throws IOException {
+		logger.debug("LocalFS {}: symlink_unsafe {} -> {}", root, source, dest);
 		Path psource = Paths.get(source);
 		Files.createSymbolicLink(qualifiedPath(dest), psource);
 	}
@@ -238,6 +249,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void mknod(String path, int type, int major, int minor) throws IOException {
+		logger.debug("LocalFS {}: mknod {} {} {} {}", root, path, type, major, minor);
 		if(isWindows()) throw new FileTypeNotSupportedException(path + ": Windows does not support devices");
 		String typeStr;
 		switch(type) {
@@ -261,6 +273,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void mkfifo(String path) throws IOException {
+		logger.debug("LocalFS {}: mkfifo {}", root, path);
 		if(isWindows()) throw new FileTypeNotSupportedException(path + ": Windows does not support named pipes");
 		try {
 			runCommand(new String[] { "mkfifo", expandPath(path) });
@@ -271,6 +284,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void chmod(String path, int mode) throws IOException {
+		logger.debug("LocalFS {}: chmod {} {}", root, path, mode);
 		Set<PosixFilePermission> modeSet = new HashSet<PosixFilePermission>();
 		
 		if((mode & 0100) != 0) modeSet.add(PosixFilePermission.OWNER_EXECUTE);
@@ -301,6 +315,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void chown(String path, String user) throws IOException {
+		logger.debug("LocalFS {}: chown {} {}", root, path, user);
 		try {
 			UserPrincipal userPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByName(user);
 			java.io.File targetFile = new java.io.File(expandPath(path));
@@ -317,6 +332,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void chgrp(String path, String group) throws IOException {
+		logger.debug("LocalFS {}: chgrp {} {}", root, path, group);
 		try {
 			GroupPrincipal groupPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByGroupName(group);
 			java.io.File targetFile = new java.io.File(expandPath(path));
@@ -328,6 +344,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void setMtime(String path, long mtime) throws IOException {
+		logger.debug("LocalFS {}: set_mtime {} {}", root, path, mtime);
 		// attempting to use java.nio to set timestamps causes an indefinite block on linux (btrfs/Ubuntu 18.04)
 		if(stat(path).isFifo()) throw new UnsupportedOperationException("can't set atime on fifo");
 		FileTime fileTime = FileTime.from(mtime, TimeUnit.NANOSECONDS);
@@ -345,6 +362,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void setAtime(String path, long atime) throws IOException {
+		logger.debug("LocalFS {}: set_atime {} {}", root, path, atime);
 		if(stat(path).isFifo()) throw new UnsupportedOperationException("can't set atime on fifo");
 		FileTime fileTime = FileTime.from(atime, TimeUnit.NANOSECONDS);
 		try {
@@ -356,6 +374,7 @@ public class LocalFS extends FS {
 
 	@Override
 	public void write(String path, byte[] contents, int offset, int length) throws IOException {
+		logger.debug("LocalFS {}: write {}, offset {}, {} bytes", root, path, offset, length);
 		if(!exists(dirname(path))) mkdirp(dirname(path));
 		try(LocalFile file = open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC)) {
 			file.write(contents, offset, length);
@@ -369,12 +388,11 @@ public class LocalFS extends FS {
 	
 	@Override
 	public void truncate(String path, long size) throws IOException {
-		FileOutputStream stream = null;
-		FileChannel chan = null;
-		
-		try {
-			stream = new FileOutputStream(expandPath(path), true);
-			chan = stream.getChannel();
+		logger.debug("LocalFS {}: truncate {} {}", root, path, size);
+		try(
+			FileOutputStream stream = new FileOutputStream(expandPath(path), true);
+			FileChannel chan = stream.getChannel();
+		) {
 			long oldSize = chan.size();
 			if(size > oldSize) {
 				chan.position(oldSize);
@@ -382,9 +400,6 @@ public class LocalFS extends FS {
 			} else {
 				chan.truncate(size);
 			}
-		} finally {
-			if(chan != null) chan.close();
-			if(stream != null) stream.close();
 		}
 	}
 	

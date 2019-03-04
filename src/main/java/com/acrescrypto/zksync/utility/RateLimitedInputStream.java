@@ -43,10 +43,10 @@ public class RateLimitedInputStream extends InputStream {
 	public int read(byte[] buf, int offset, int length) throws IOException {
 		int readLen = (int) allocation.requestBytes(length);
 		int actualReadLen = input.read(buf, offset, readLen);
-		logger.trace("RateLimitedInputStream rx {} bytes, authorized {}, requested {}",
-				actualReadLen,
-				readLen,
-				length);
+//		logger.trace("RateLimitedInputStream rx {} bytes, authorized {}, requested {}",
+//				actualReadLen,
+//				readLen,
+//				length);
 		return (int) monitor.observeTraffic(actualReadLen);
 	}
 	
@@ -64,7 +64,6 @@ public class RateLimitedInputStream extends InputStream {
 	
 	@Override
 	public void close() throws IOException {
-		logger.trace("RateLimitedInputStream close");
 		input.close();
 	}
 	

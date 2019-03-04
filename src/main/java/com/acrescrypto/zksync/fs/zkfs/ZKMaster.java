@@ -418,6 +418,8 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		globalConfig.setDefault("net.swarm.backlog", 50);
 		globalConfig.setDefault("net.swarm.port", 0);
 		globalConfig.setDefault("net.swarm.upnp", false);
+		globalConfig.setDefault("net.swarm.maxOpenMessages", 16);
+		globalConfig.setDefault("net.swarm.rejectionCacheSize", 16);
 		
 		globalConfig.setDefault("fs.default.fileMode", 0644);
 		globalConfig.setDefault("fs.default.username", "root");

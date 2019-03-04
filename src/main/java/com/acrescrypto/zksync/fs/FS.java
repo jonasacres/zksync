@@ -212,11 +212,19 @@ public abstract class FS implements AutoCloseable {
 		String safety = path + ".safety";
 		write(safety, contents);
 		try {
-			if(exists(path)) unlink(path);
+			// remove the old one (if it exists), then link the new one in its place
+			try {
+				unlink(path);
+			} catch(ENOENTException exc) {
+			}
 			link(safety, path);
 		} finally {
 			try {
-				unlink(safety);
+				// remove the safety if there's a file at the proper path (whether it is old or new)
+				// but if there's no file, we probably died when trying to link the safety in, so keep that!
+				if(exists(path)) {
+					unlink(safety);
+				}
 			} catch(IOException exc) {
 				// permissions or directory contents may have changed underneath us
 			}

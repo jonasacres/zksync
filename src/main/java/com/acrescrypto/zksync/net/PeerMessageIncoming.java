@@ -8,6 +8,7 @@ import java.util.concurrent.RejectedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -145,6 +146,7 @@ public class PeerMessageIncoming extends PeerMessage {
 	public void receivedData(byte flags, byte[] data) {
 		bytesReceived += data.length; // used for testing so not bothering with synchronization
 		this.lastSeen = Util.currentTimeMillis();
+		logger.trace("KILL THIS ENTRY received msgId={} |data|={} H(data)={}", this.msgId, data.length, Util.bytesToHex(CryptoSupport.defaultCrypto().hash(data), 8));
 		flags |= this.flags;
 		boolean isFinal = (flags & FLAG_FINAL) != 0;
 		rxBuf.write(data);

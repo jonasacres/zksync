@@ -31,7 +31,6 @@ public class RateLimitedOutputStream extends OutputStream {
 
 	@Override
 	public void close() throws IOException {
-		logger.trace("RateLimitedOutputStream close");
 		output.close();
 	}
 	
@@ -52,7 +51,7 @@ public class RateLimitedOutputStream extends OutputStream {
 		int written = 0;
 		while(written < len) {
 			int writeLen = (int) allocation.requestBytes(len - written);
-			logger.trace("RateLimitedOutputStream tx {} bytes, requested {}", writeLen, len);
+//			logger.trace("RateLimitedOutputStream tx {} bytes, requested {}", writeLen, len);
 			output.write(b,  off + written, writeLen);
 			if(!allocator.isUnlimited()) flush(); // buffering weakens our control over bandwidth usage 
 			monitor.observeTraffic(writeLen);

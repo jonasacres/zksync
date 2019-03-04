@@ -3,7 +3,7 @@ package com.acrescrypto.zksync.net;
 public abstract class PeerMessage {
 	public final static int HEADER_LENGTH = 4 + 4 + 1 + 1 + 2; // msgId[4] + payloadLen[4] + cmd[1] + flags[1] + reserved[2]
 	public final static int MESSAGE_SIZE = 8192 + HEADER_LENGTH;
-	public final static int MAX_OPEN_MESSAGES = 16;
+	public final static int DEFAULT_MAX_OPEN_MESSAGES = 16;
 	
 	/** I'm not thrilled about MESSAGE_SIZE and FILE_CHUNK_SIZE being kept constant.
 	 * There's no "right" value for these, and it's based on how much RAM/bandwidth is available to the

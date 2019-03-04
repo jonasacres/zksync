@@ -265,7 +265,11 @@ public class PageQueue {
 			}
 			
 			try {
-				String path = traverser.next();
+				String path;
+				do {
+					path = traverser.next();
+				} while(path.endsWith(".safety")); // filter out "safety" files that aren't fully written yet
+				logger.trace("Enqueuing path {}", path);
 				return new PageQueueItem(priority, archive, Page.tagForPath(path));
 			} catch (IOException exc) {
 				logger.error("Caught exception queuing next tag in EverythingQueueItem", exc);
@@ -295,20 +299,23 @@ public class PageQueue {
 	public void addPageTag(int priority, long shortTag) {
 		try {
 			addPageTag(priority, config.getArchive().expandShortTag(shortTag));
-		} catch (IOException exc) {
+		} catch (Exception exc) {
 			logger.error("Caught exception queuing short tag {}", String.format("%16x", shortTag), exc);
 		}
 	}
 	
 	public void addPageTag(int priority, byte[] pageTag) {
+		logger.debug("Enqueuing page tag {}", Util.bytesToHex(pageTag));
 		addItem(new PageQueueItem(priority, config.getArchive(), pageTag));
 	}
 	
 	public void addInodeContents(int priority, RevisionTag revTag, long inodeId) {
+		logger.debug("Enqueuing inode {} of {}", inodeId, Util.formatRevisionTag(revTag));
 		addItem(new InodeContentsQueueItem(priority, revTag, inodeId));
 	}
 	
 	public void addRevisionTag(int priority, RevisionTag revTag) {
+		logger.debug("Enqueuing {}", Util.formatRevisionTag(revTag));
 		addItem(new RevisionQueueItem(priority, revTag));
 	}
 	
