@@ -871,7 +871,7 @@ public class PeerConnection {
 	
 	protected void assertState(boolean state, String message) throws ProtocolViolationException {
 		if(!state) {
-			logger.error(message);
+			logger.warn(message);
 			throw new ProtocolViolationException();
 		}
 	}

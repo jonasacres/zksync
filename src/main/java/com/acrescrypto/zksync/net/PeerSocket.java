@@ -13,7 +13,6 @@ import java.util.concurrent.RejectedExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
@@ -188,7 +187,6 @@ public abstract class PeerSocket {
 	protected void sendMessage(MessageSegment segment) throws IOException, ProtocolViolationException {
 		if(segment.msg.msgId == Integer.MIN_VALUE) segment.assignMsgId(issueMessageId());
 		try {
-			logger.trace("KILL THIS ENTRY sending msgId={} |data|={} H(data)={}", segment.msg.msgId, segment.content.limit(), Util.bytesToHex(CryptoSupport.defaultCrypto().hash(segment.content.array()), 8));			
 			write(segment.content.array(), 0, segment.content.limit());
 		} finally {
 			segment.delivered();

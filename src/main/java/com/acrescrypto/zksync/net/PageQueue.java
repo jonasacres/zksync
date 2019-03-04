@@ -298,9 +298,15 @@ public class PageQueue {
 	
 	public void addPageTag(int priority, long shortTag) {
 		try {
-			addPageTag(priority, config.getArchive().expandShortTag(shortTag));
+			byte[] tag = config.getArchive().expandShortTag(shortTag);
+			if(tag == null) {
+				logger.warn("Cannot enqueue non-existent short tag {}", shortTag);
+				return;
+			}
+			
+			addPageTag(priority, tag);
 		} catch (Exception exc) {
-			logger.error("Caught exception queuing short tag {}", String.format("%16x", shortTag), exc);
+			logger.warn("Caught exception queuing short tag {}", String.format("%16x", shortTag), exc);
 		}
 	}
 	

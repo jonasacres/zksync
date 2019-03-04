@@ -185,19 +185,18 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testHashChunkReturnsFalseIfQueueEmpty() {
+	public void testHasNextChunkReturnsFalseIfQueueEmpty() {
 		assertFalse(queue.hasNextChunk());
 	}
 	
 	@Test
-	public void testHashChunkReturnsFalseIfQueueHasOnlyGarbage() {
+	public void testHasNextChunkReturnsFalseIfQueueHasOnlyGarbage() {
 		queue.addPageTag(0, 0); // non-existent page, can't expand into any chunks
-		assertFalse(queue.itemsByPriority.isEmpty());
 		assertFalse(queue.hasNextChunk());
 	}
 	
 	@Test
-	public void testHashChunkReturnsTrueIfQueueHasChunkAtHead() {
+	public void testHasNextChunkReturnsTrueIfQueueHasChunkAtHead() {
 		queue.addPageTag(0, pageTag);
 		queue.unpackNextReference();
 		assertTrue(queue.itemsByPriority.peek() instanceof ChunkQueueItem);
@@ -205,7 +204,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testHashChunkReturnsTrueIfQueueHasNonchunkAtHead() {
+	public void testHasNextChunkReturnsTrueIfQueueHasNonchunkAtHead() {
 		queue.addPageTag(0, pageTag);
 		assertFalse(queue.itemsByPriority.peek() instanceof ChunkQueueItem);
 		assertTrue(queue.hasNextChunk());
