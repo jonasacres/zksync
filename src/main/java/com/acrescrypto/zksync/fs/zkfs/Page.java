@@ -9,6 +9,7 @@ import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.utility.Util;
 
 /** represents a fixed-size page of data from a file. handles encryption/decryption/storage of said page. */
@@ -191,7 +192,11 @@ public class Page {
 			return;
 		}
 		
-		file.getFS().getArchive().getConfig().waitForPageReady(pageTag);
+		if(file.getFS().getArchive().getStorage() instanceof BackedFS) {
+			// make sure the page is ready if this is a non-cached filesystem
+			file.getFS().getArchive().getConfig().waitForPageReady(pageTag);
+		}
+		
 		byte[] plaintext = SignedSecureFile
 		  .withTag(pageTag, file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.pubKey)
 		  .read(!file.trusted);
