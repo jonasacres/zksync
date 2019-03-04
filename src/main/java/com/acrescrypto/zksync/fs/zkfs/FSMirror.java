@@ -267,26 +267,28 @@ public class FSMirror {
 		observedTargetPathChange(path);
 	}
 
-	public synchronized void syncArchiveToTarget() throws IOException {
+	public void syncArchiveToTarget() throws IOException {
 		ZKFS oldFs = lastRev != null ? lastRev.getFS() : null;
 		boolean wasWatching = isWatching();
 		if(wasWatching) {
 			stopWatch();
 		}
 
-		try {
-			String[] list = zkfs.opendir("/").listRecursive();
-			for(String path : list) {
-				syncPathArchiveToTarget(oldFs, path);
+		synchronized(this) {
+			try {
+				String[] list = zkfs.opendir("/").listRecursive();
+				for(String path : list) {
+					syncPathArchiveToTarget(oldFs, path);
+				}
+	
+				pruneFsToList(target, list);
+			} finally {
+				oldFs.close();
 			}
-
-			pruneFsToList(target, list);
-		} finally {
-			oldFs.close();
-		}
-		
-		if(wasWatching) {
-			startWatch();
+			
+			if(wasWatching && !isWatching()) {
+				startWatch();
+			}
 		}
 	}
 

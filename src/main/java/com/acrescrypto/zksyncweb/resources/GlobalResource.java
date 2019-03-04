@@ -96,4 +96,11 @@ public class GlobalResource {
 		});
 		throw XAPIResponse.withWrappedPayload("files", files);
 	}
+	
+	@GET
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("/threads")
+	public XAPIResponse getThreads() throws IOException {
+		throw XAPIResponse.withWrappedPayload("report", Util.threadReport(true));
+	}
 }
