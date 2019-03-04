@@ -658,6 +658,7 @@ public class ZKArchiveConfig {
 		int attempts = 0;
 		int maxAttempts = getMaster().getGlobalConfig().getInt("fs.settings.pageReadyMaxRetries");
 		int delay = getMaster().getGlobalConfig().getInt("fs.settings.pageReadyRetryDelayMs");
+		storage.ensurePresent(path);
 		
 		while(stat == null || stat.getSize() != this.getSerializedPageSize()) {
 			if(++attempts >= maxAttempts) {
@@ -670,7 +671,7 @@ public class ZKArchiveConfig {
 			}
 			
 			try {
-				stat = storage.stat(path);
+				stat = storage.getCacheFS().stat(path);
 			} catch(ENOENTException exc) {}
 		}
 	}

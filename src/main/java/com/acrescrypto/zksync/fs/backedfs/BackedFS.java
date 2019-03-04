@@ -243,7 +243,7 @@ public class BackedFS extends FS {
 	 * @param path
 	 * @throws IOException
 	 */
-	protected void ensurePresent(String path) throws IOException {
+	public void ensurePresent(String path) throws IOException {
 		if(!pendingPaths.contains(path) && cacheFS.exists(path, false)) return;
 		synchronized(this) {
 			while(pendingPaths.contains(path)) {
