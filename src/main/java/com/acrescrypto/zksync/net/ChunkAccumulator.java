@@ -152,7 +152,7 @@ public class ChunkAccumulator {
 		}
 		
 		finished = true;
-		swarm.config.getStorage().safeWrite(Page.pathForTag(tag), allegedPage);
+		swarm.config.getStorage().write(Page.pathForTag(tag), allegedPage);
 		burnHeretics(chunks);
 		closeFiles();
 		swarm.receivedPage(tag);

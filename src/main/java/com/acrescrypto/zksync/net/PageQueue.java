@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.Page;
@@ -41,26 +40,9 @@ public class PageQueue {
 		}
 		
 		public byte[] getData() throws IOException {
-			try(File file = fs.open(Page.pathForTag(tag), File.O_RDONLY)) {
-				long offset = -1;
-				int len = -1;
-				
-				for(int i = 0; i < 3; i++) {
-					offset = index * PeerMessage.FILE_CHUNK_SIZE;
-					len = Math.min((int) (file.getStat().getSize() - offset), PeerMessage.FILE_CHUNK_SIZE);
-					if(len < 0) {
-						Util.sleep(1);
-						continue;
-					}
-					
-					byte[] data = new byte[len];
-					file.seek(offset, File.SEEK_SET);
-					file.read(data, 0, len);
-					return data;
-				}
-				
-				throw new RuntimeException("attempted to read offset " + offset + " beyond end of file for chunk " + index + " of page " + Util.bytesToHex(tag) + ", file size " + file.getStat().getSize());
-			}
+			int offset = index * PeerMessage.FILE_CHUNK_SIZE;
+			int len = Math.min((int) (config.getSerializedPageSize() - offset), PeerMessage.FILE_CHUNK_SIZE);
+			return config.readPageData(tag, offset, len);
 		}
 	}
 	
@@ -266,9 +248,7 @@ public class PageQueue {
 			
 			try {
 				String path;
-				do {
-					path = traverser.next();
-				} while(path.endsWith(".safety")); // filter out "safety" files that aren't fully written yet
+				path = traverser.next();
 				logger.trace("Enqueuing path {}", path);
 				return new PageQueueItem(priority, archive, Page.tagForPath(path));
 			} catch (IOException exc) {

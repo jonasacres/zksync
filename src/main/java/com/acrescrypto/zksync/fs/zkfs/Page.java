@@ -191,6 +191,7 @@ public class Page {
 			return;
 		}
 		
+		file.getFS().getArchive().getConfig().waitForPageReady(pageTag);
 		byte[] plaintext = SignedSecureFile
 		  .withTag(pageTag, file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.pubKey)
 		  .read(!file.trusted);

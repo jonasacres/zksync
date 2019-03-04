@@ -77,8 +77,10 @@ public class ArchiveAccessor {
 	}
 	
 	public ZKArchiveConfig discoveredArchiveId(byte[] archiveId) throws IOException {
-		for(ZKArchiveConfig config : knownArchiveConfigs) {
-			if(Arrays.equals(config.archiveId, archiveId)) return config;
+		synchronized(this) {
+			for(ZKArchiveConfig config : knownArchiveConfigs) {
+				if(Arrays.equals(config.archiveId, archiveId)) return config;
+			}
 		}
 		
 		// TODO API: (coverage) branch
@@ -93,8 +95,10 @@ public class ArchiveAccessor {
 	}
 	
 	public void discoveredArchiveConfig(ZKArchiveConfig config) {
-		knownArchiveConfigs.remove(config);
-		knownArchiveConfigs.add(config);
+		synchronized(this) {
+			knownArchiveConfigs.remove(config);
+			knownArchiveConfigs.add(config);
+		}
 		forceAdvertisement();
 		for(ArchiveAccessorDiscoveryCallback callback : callbacks) {
 			callback.discoveredArchiveConfig(config);

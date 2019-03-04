@@ -129,7 +129,7 @@ public class SignedSecureFile {
 				}
 			} catch(ENOENTException exc) {}
 			
-			fs.safeWrite(path(), result);
+			fs.write(path(), result);
 			fs.squash(path());
 			return tag;
 		} catch(IOException exc) {

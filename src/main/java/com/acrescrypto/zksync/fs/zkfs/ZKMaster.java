@@ -427,6 +427,8 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		globalConfig.setDefault("fs.default.groupname", "root");
 		globalConfig.setDefault("fs.default.gid", 0);
 		globalConfig.setDefault("fs.default.directoryMode", 0755);
+		globalConfig.setDefault("fs.settings.pageReadyMaxRetries", 3);
+		globalConfig.setDefault("fs.settings.pageReadyRetryDelayMs", 1);
 		globalConfig.setDefault("fs.fileHandleTelemetry", FS.fileHandleTelemetryEnabled);
 		
 		globalConfig.setDefault("net.limits.tx", -1);

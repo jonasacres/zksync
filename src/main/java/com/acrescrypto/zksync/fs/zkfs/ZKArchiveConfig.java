@@ -12,9 +12,12 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateSigningKey;
 import com.acrescrypto.zksync.crypto.PublicSigningKey;
 import com.acrescrypto.zksync.crypto.SignedSecureFile;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.InvalidPageException;
 import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 import com.acrescrypto.zksync.fs.zkfs.config.SectionedBuffer;
@@ -291,6 +294,7 @@ public class ZKArchiveConfig {
 	
 	public void read() throws IOException {
 		// TODO EasySafe: (implement) config read
+		waitForPageReady(tag());
 		try(File configFile = storage.open(Page.pathForTag(tag()), File.O_RDONLY)) {
 			// TODO EasySafe: (refactor) read the file exactly once
 			byte[] prefix = calculatePrefix(configFile.read());
@@ -643,5 +647,42 @@ public class ZKArchiveConfig {
 		}
 		
 		return false;
-	}	
+	}
+	
+	public void waitForPageReady(byte[] tag) throws IOException {
+		String path = Page.pathForTag(tag);
+		Stat stat = null;
+		int attempts = 0;
+		int maxAttempts = getMaster().getGlobalConfig().getInt("fs.settings.pageReadyMaxRetries");
+		int delay = getMaster().getGlobalConfig().getInt("fs.settings.pageReadyRetryDelayMs");
+		
+		while(stat == null || stat.getSize() != this.getSerializedPageSize()) {
+			if(++attempts >= maxAttempts) {
+				if(stat == null) {
+					throw new ENOENTException(path);
+				}
+				throw new InvalidPageException(path);
+			} else if(attempts > 1) {
+				Util.sleep(delay);
+			}
+			
+			try {
+				stat = storage.stat(path);
+			} catch(ENOENTException exc) {}
+		}
+	}
+
+	public byte[] readPageData(byte[] tag) throws IOException {
+		return readPageData(tag, 0, this.getSerializedPageSize());
+	}
+	
+	public byte[] readPageData(byte[] tag, int offset, int length) throws IOException {
+		// ensure that a page is fully written to disk before reading it
+		waitForPageReady(tag);
+		
+		try(File page = storage.open(Page.pathForTag(tag), File.O_RDONLY)) {
+			page.seek(offset, File.SEEK_SET);
+			return page.read(length);
+		}
+	}
 }

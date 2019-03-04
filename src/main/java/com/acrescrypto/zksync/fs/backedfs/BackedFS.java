@@ -260,7 +260,7 @@ public class BackedFS extends FS {
 				Stat stat = backupFS.stat(path);
 				byte[] data = backupFS.read(path);
 				if(!cacheFS.exists(path) || cacheFS.stat(path).getSize() != stat.getSize()) {
-					cacheFS.safeWrite(path, data);
+					cacheFS.write(path, data);
 					cacheFS.applyStat(path, stat);
 					boolean settled = Util.waitUntil(1000,
 							()->{
