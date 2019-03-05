@@ -81,7 +81,11 @@ public class RevisionInfo {
 		buf.get(titleBytes);
 		int numParents = buf.getInt();
 		
-		this.title = new String(titleBytes);		
+		this.title = new String(titleBytes);
+		if(this.title.indexOf(0) >= 0) {
+			this.title = this.title.substring(0, this.title.indexOf(0));
+		}
+		
 		int revTagSize = RevisionTag.sizeForConfig(inodeTable.zkfs.archive.config);
 		byte[] parentBytes = new byte[revTagSize];
 		for(int i = 0; i < numParents; i++) {
