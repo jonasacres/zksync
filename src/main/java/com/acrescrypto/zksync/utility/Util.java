@@ -6,6 +6,7 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 
 import org.slf4j.Logger;
@@ -30,42 +31,54 @@ public class Util {
 		void cb() throws Exception;
 	}
 	
-	public static synchronized void hexdump(String caption, byte[] data) {
+	public static void hexdump(String caption, byte[] data) {
 		hexdump(caption, data, 0, data.length);
 	}
 	
 	public static synchronized void hexdump(String caption, byte[] data, int offset, int len) {
+		System.out.println(hexdumpStr(caption, data, offset, len) + "\n\n");
+	}
+	
+	public static String hexdumpStr(String caption, byte[] data) {
+		return hexdumpStr(caption, data, 0, data.length);
+	}
+	
+	public static String hexdumpStr(String caption, byte[] data, int offset, int len) {
+		LinkedList<String> lines = new LinkedList<>();
 		if(data == null) {
-			System.out.printf("%s (null, no fingerprint)\n", caption);
-			return;
+			return String.format("%s (null, no fingerprint)", caption);
 		}
 
-		System.out.printf("%s (%d bytes, fingerprint %s)\n", caption, len, fingerprint(data, offset, len));
+		lines.add(String.format("%s (%d bytes, fingerprint %s)", caption, len, fingerprint(data, offset, len)));
 		
+		String line = "";
 		for(int i = 0; i <= 16 * (int) Math.ceil((double) len/16); i++) {
 			if((i % 16) == 0) {
 				if(i != 0) {
-					System.out.print("  |");
+					line += "  |";
 					for(int j = 0; j < 16; j++) {
 						byte b = i+j-16 < len ? data[offset+i+j-16] : 0;
 						char c = '.';
 						if(b >= 0x20 && b < 0x7f) c = (char) b;
-						System.out.printf("%c", c);
+						line += String.format("%c", c);
 					}
-					System.out.println("|");
+					
+					line += "|";
+					lines.add(line);
+					line = "";
 				}
 
-				System.out.printf("%04x  ", i);
+				line += String.format("%04x  ", i);
 			}
 
-			if(i < len) System.out.printf("%02x", data[offset+i]);
-			else System.out.print("  ");
-			if((i % 2) == 1) System.out.print(" ");
-			if((i % 8) == 7) System.out.print(" ");
+			if(i < len) line += String.format("%02x", data[offset+i]);
+			else line += "  ";
+			if((i % 2) == 1) line += " ";
+			if((i % 8) == 7) line += " ";
 		}
-
-		System.out.println();
-		System.out.println();
+		
+		lines.add(line);
+		return String.join("\n", lines);
 	}
 
 	public static String fingerprint(byte[] data, int offset, int len) {

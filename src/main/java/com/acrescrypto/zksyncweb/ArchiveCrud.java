@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -90,6 +91,11 @@ public class ArchiveCrud {
 				listings = fs.opendir(path).list();
 			}
 			
+			Map<String,Object> payload = new HashMap<>(), fsMap = new HashMap<>();
+			payload.put("fs", fsMap);
+			fsMap.put("revtag", fs.getBaseRevision());
+			fsMap.put("dirty", fs.isDirty());			
+			
 			if(isListStat) {
 				// ?liststat=true causes stat information to be included with directory listings
 				ArrayList<XPathStat> pathStats = new ArrayList<>(listings.length);
@@ -100,10 +106,11 @@ public class ArchiveCrud {
 					pathStats.add(new XPathStat(subpath, stat, treeStat, existingPriority));
 				}
 				
-				throw XAPIResponse.withWrappedPayload("entries", pathStats);
+				payload.put("entries", pathStats);
 			} else {
-				throw XAPIResponse.withWrappedPayload("entries", listings);
+				payload.put("entries", listings);
 			}
+			throw XAPIResponse.withPayload(payload);
 		}
 	}
 	

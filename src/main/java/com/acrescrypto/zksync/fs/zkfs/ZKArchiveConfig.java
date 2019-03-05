@@ -393,9 +393,6 @@ public class ZKArchiveConfig {
 		
 		archiveRoot = new Key(getCrypto(), archiveRootBytes);
 		description = new String(descriptionBytes);
-		if(description.indexOf('\0') >= 0) {
-			description = description.substring(0, description.indexOf('\0'));
-		}
 	}
 	
 	protected byte[] calculatePrefix(byte[] serialized) {

@@ -15,6 +15,7 @@ public class XArchiveIdentification {
 	private Boolean haveWriteKey;
 	private Boolean haveReadKey;
 	private Boolean ready;
+	private Boolean dirty;
 
 	private Integer connectedPeers;
 
@@ -42,6 +43,11 @@ public class XArchiveIdentification {
 		id.haveWriteKey = !config.isReadOnly();
 		id.haveReadKey = !config.getAccessor().isSeedOnly();
 		id.ready = config.haveConfigLocally();
+		try {
+			id.dirty = State.sharedState().activeFs(config).isDirty();
+		} catch (IOException e) {
+			id.dirty = null;
+		}
 		
 		id.connectedPeers = config.getSwarm().getConnections().size();
 		id.bytesPerSecondRx = config.getSwarm().getBandwidthMonitorRx().getBytesPerSecond();
@@ -203,5 +209,13 @@ public class XArchiveIdentification {
 
 	public void setLifetimeBytesTx(Long lifetimeBytesTx) {
 		this.lifetimeBytesTx = lifetimeBytesTx;
+	}
+
+	public Boolean getDirty() {
+		return dirty;
+	}
+
+	public void setDirty(Boolean dirty) {
+		this.dirty = dirty;
 	}
 }

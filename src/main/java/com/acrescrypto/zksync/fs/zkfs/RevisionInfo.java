@@ -5,6 +5,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.TooManyParentsException;
 
 /* Stores a revision of the archive. This is needed to bootstrap reading the archive.
@@ -18,6 +21,8 @@ public class RevisionInfo {
 	protected long generation; // longest path to this revision from root
 	protected InodeTable inodeTable;
 	protected String title;
+	
+	protected Logger logger = LoggerFactory.getLogger(RevisionInfo.class);
 	
 	public static String REVISION_INFO_PATH = "(revision info)";
 	
@@ -76,8 +81,7 @@ public class RevisionInfo {
 		buf.get(titleBytes);
 		int numParents = buf.getInt();
 		
-		this.title = new String(titleBytes);
-		
+		this.title = new String(titleBytes);		
 		int revTagSize = RevisionTag.sizeForConfig(inodeTable.zkfs.archive.config);
 		byte[] parentBytes = new byte[revTagSize];
 		for(int i = 0; i < numParents; i++) {
