@@ -149,6 +149,7 @@ public class ZKFile extends File {
 
 		while(numToRead > 0) {
 			int neededPageNum = (int) (offset/zkfs.archive.config.pageSize);
+			if(neededPageNum < 0) throw new IndexOutOfBoundsException();
 			bufferPage(neededPageNum);
 			bufferedPage.seek((int) (offset % zkfs.archive.config.pageSize));
 			int numRead = bufferedPage.read(buf, bufOffset + readLen - numToRead, numToRead);

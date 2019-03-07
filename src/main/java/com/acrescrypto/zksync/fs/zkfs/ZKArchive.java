@@ -185,6 +185,7 @@ public class ZKArchive implements AutoCloseable {
 		if(!inodeTableTree.exists()) return false;
 
 		try(ZKFS fs = revTag.readOnlyFS()) {
+			if(!fs.inodeTable.hasInodeWithId(inodeId)) return false;
 			Inode inode = fs.inodeTable.inodeWithId(inodeId);
 			if(inode.isDeleted()) return false;
 			
