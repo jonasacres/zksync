@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
+import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 
 public class Util {
@@ -356,12 +357,12 @@ public class Util {
 	}
 	
 	public static String formatArchiveId(byte[] archiveId) {
-		return "a-" + formatLongId(archiveId);
+		return "a-" + formatLongIdB64(archiveId);
 	}
 	
 	public static String formatRevisionTag(RevisionTag rev) {
 		if(rev == null) return "rev-null";
-		return "rev-" + formatLongId(rev.getBytes());
+		return "rev-" + formatLongIdB64(rev.getBytes());
 	}
 	
 	public static String formatPubKey(PublicDHKey key) {
@@ -370,5 +371,17 @@ public class Util {
 	
 	public static String formatLongId(byte[] longId) {
 		return Util.bytesToHex(longId, 4);
+	}
+	
+	public static String formatLongIdB64(byte[] longId) {
+		return Util.toWebSafeBase64(Util.encode64(longId)).substring(0, 8);
+	}
+
+	public static String formatRefTag(RefTag refTag) {
+		return "ref-" + Util.toWebSafeBase64(Util.encode64(refTag.getBytes())).substring(0, 8);
+	}
+
+	public static String formatPageTag(byte[] pageTag) {
+		return "page-" + Util.bytesToHex(pageTag, 8);
 	}
 }

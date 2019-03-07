@@ -40,10 +40,12 @@ public class DiffSet {
 	/** build a DiffSet from an array of RefTags */
 	public DiffSet(RevisionTag[] revisions) throws IOException {
 		this.revisions = revisions;
-		Arrays.sort(this.revisions);
 		
-		try(ZKFS fs = pickMergeFs()) {
-			findPathDiffs(findInodeDiffs(fs));
+		if(revisions.length > 1) {
+			Arrays.sort(this.revisions);
+			try(ZKFS fs = pickMergeFs()) {
+				findPathDiffs(findInodeDiffs(fs));
+			}
 		}
 	}
 	

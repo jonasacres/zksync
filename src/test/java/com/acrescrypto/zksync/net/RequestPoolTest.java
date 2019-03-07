@@ -459,28 +459,28 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testPruneRemovesAcquiredInodes() throws IOException {
-		ZKFS fs = archive.openBlank();
-		fs.write("testpath", new byte[2*archive.getConfig().getPageSize()]);
-		fs.commit();
-		
-		Inode realInode = fs.inodeForPath("testpath");
-		LinkedList<Long> inodeIds = new LinkedList<>();
-		
-		for(int i = 0; i < 16; i++) {
-			inodeIds.add(crypto.defaultPrng().getLong());
-			pool.addInode(i, fs.getBaseRevision(), inodeIds.getLast());
+		try(ZKFS fs = archive.openBlank()) {
+			fs.write("testpath", new byte[2*archive.getConfig().getPageSize()]);
+			fs.commit();
+			
+			Inode realInode = fs.inodeForPath("testpath");
+			LinkedList<Long> inodeIds = new LinkedList<>();
+			
+			for(int i = 0; i < 16; i++) {
+				inodeIds.add(crypto.defaultPrng().getLong());
+				pool.addInode(i, fs.getBaseRevision(), inodeIds.getLast());
+			}
+			
+			pool.addInode(-1, fs.getBaseRevision(), realInode.getStat().getInodeId());
+			assertTrue(pool.hasInode(-1, fs.getBaseRevision(), realInode.getStat().getInodeId()));
+			pool.prune();
+			
+			for(int i = 0; i < inodeIds.size(); i++) {
+				assertTrue(pool.hasInode(i, fs.getBaseRevision(), inodeIds.get(i)));
+			}
+			
+			assertFalse(pool.hasInode(-1, fs.getBaseRevision(), realInode.getStat().getInodeId()));
 		}
-		
-		pool.addInode(-1, fs.getBaseRevision(), realInode.getStat().getInodeId());
-		assertTrue(pool.hasInode(-1, fs.getBaseRevision(), realInode.getStat().getInodeId()));
-		pool.prune();
-		
-		for(int i = 0; i < inodeIds.size(); i++) {
-			assertTrue(pool.hasInode(i, fs.getBaseRevision(), inodeIds.get(i)));
-		}
-		
-		assertFalse(pool.hasInode(-1, fs.getBaseRevision(), realInode.getStat().getInodeId()));
-		fs.close();
 	}
 	
 	@Test

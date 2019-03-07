@@ -46,7 +46,9 @@ public class ZKArchive implements AutoCloseable {
 		this.crypto = config.accessor.master.crypto;
 		this.allPageTags = new HashMap<>();
 		this.config = config;
-		this.readOnlyFilesystems = new HashCache<RevisionTag,ZKFS>(64, (tag) -> {
+		
+		int cacheSize = config.getMaster().getGlobalConfig().getInt("fs.settings.readOnlyFilesystemCacheSize");
+		this.readOnlyFilesystems = new HashCache<RevisionTag,ZKFS>(cacheSize, (tag) -> {
 			if(this.isCacheOnly() && !tag.cacheOnly) {
 				return tag.makeCacheOnly().getFS();
 			} else {
@@ -56,6 +58,21 @@ public class ZKArchive implements AutoCloseable {
 			fs.close();
 		});
 		
+		config.getMaster().getGlobalConfig().subscribe("fs.settings.readOnlyFilesystemCacheSize").asInt((s)->{
+			try {
+				logger.info("ZKFS {} -: Setting read only filesystem cache size to {}, was {}",
+						Util.formatArchiveId(config.getArchiveId()),
+						s,
+						readOnlyFilesystems.getCapacity());
+				readOnlyFilesystems.setCapacity(s);
+			} catch (IOException exc) {
+				logger.error("ZKFS {} -: Caught exception setting read only cache size to {}",
+						Util.formatArchiveId(config.getArchiveId()),
+						s,
+						exc);
+			}
+		});
+
 		if(!isCacheOnly()) { // only need the list for non-networked archives, which are not cache-only
 			rescanPageTags();
 		}
@@ -167,12 +184,12 @@ public class ZKArchive implements AutoCloseable {
 		PageTree inodeTableTree = new PageTree(revTag.getRefTag());
 		if(!inodeTableTree.exists()) return false;
 
-		try(ZKFS fs = revTag.getFS()) {
+		try(ZKFS fs = revTag.readOnlyFS()) {
 			Inode inode = fs.inodeTable.inodeWithId(inodeId);
 			if(inode.isDeleted()) return false;
 			
 			PageTree tree = new PageTree(inode);
-			return tree.exists();	
+			return tree.exists();
 		} catch(InaccessibleStorageException|IllegalArgumentException exc) {
 			return false;
 		}

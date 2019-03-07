@@ -117,4 +117,13 @@ public class HashCache<K,V> {
 	public int cachedSize() {
 		return cache.size();
 	}
+	
+	public synchronized void setCapacity(int capacity) throws IOException {
+		this.capacity = capacity;
+		enforceCapacityLimit();
+	}
+	
+	public int getCapacity() {
+		return capacity;
+	}
 }

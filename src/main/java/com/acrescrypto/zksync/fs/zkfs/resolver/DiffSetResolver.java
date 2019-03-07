@@ -7,6 +7,9 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.SearchFailedException;
@@ -14,8 +17,10 @@ import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RevisionInfo;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
+import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
+import com.acrescrypto.zksync.utility.Util;
 
 public class DiffSetResolver {
 	public interface InodeDiffResolver {
@@ -31,6 +36,7 @@ public class DiffSetResolver {
 	InodeDiffResolver inodeResolver;
 	PathDiffResolver pathResolver;
 	RevisionTag commonAncestor;
+	Logger logger = LoggerFactory.getLogger(DiffSetResolver.class);
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
 		Collection<RevisionTag> tips = archive.getConfig().getRevisionList().branchTips();
@@ -132,14 +138,28 @@ public class DiffSetResolver {
 		this.diffset = diffset;
 		this.inodeResolver = inodeResolver;
 		this.pathResolver = pathResolver;
-		this.fs = new ZKFS(diffset.latestRevision());
+		if(diffset.revisions.length > 1) {
+			// no need to open an FS if we're not going to have to merge anything
+			this.fs = new ZKFS(diffset.latestRevision());
+		}
 	}
 	
 	public RevisionTag resolve() throws IOException, DiffResolutionException {
+		ZKArchiveConfig config = diffset.revisions[0].getArchive().getConfig();
+		
+		String revList = "";
+		for(RevisionTag rev : diffset.revisions) {
+			if(revList.length() != 0) revList += ", ";
+			revList += Util.formatRevisionTag(rev);
+		}
+		
+		logger.info("Diff {}: Merging {} revisions ({})",
+				Util.formatArchiveId(config.getArchiveId()),
+				diffset.revisions.length,
+				revList);
 		try {
 			if(diffset.revisions.length == 1) {
-				fs.getArchive().getConfig().getRevisionList().consolidate(diffset.revisions[0]);
-				fs.close();
+				config.getRevisionList().consolidate(diffset.revisions[0]);
 				return diffset.revisions[0];
 			}
 			
@@ -151,11 +171,13 @@ public class DiffSetResolver {
 			applyResolutions();
 			RevisionTag revTag = fs.commitWithTimestamp(diffset.revisions, 0);
 			fs.getArchive().getConfig().getRevisionList().consolidate(revTag);
-			fs.close();
 			return revTag;
 		} catch(Throwable exc) {
-			fs.close();
 			throw exc;
+		} finally {
+			if(fs != null) {
+				fs.close();
+			}
 		}
 	}
 	

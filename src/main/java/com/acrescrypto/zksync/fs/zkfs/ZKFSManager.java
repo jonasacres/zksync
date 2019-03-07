@@ -112,16 +112,18 @@ public class ZKFSManager implements AutoCloseable {
 				&& !fs.baseRevision.equals(latest)
 				&& isDescendent) {
 			try {
-				logger.info("FS {}: Automatically rebasing to new revtag {} from {}",
+				logger.info("ZKFS {} {}: Automatically rebasing to new revtag {}",
 						Util.formatArchiveId(fs.archive.config.archiveId),
-						Util.formatRevisionTag(latest),
-						Util.formatRevisionTag(fs.baseRevision));
+						Util.formatRevisionTag(fs.baseRevision),
+						Util.formatRevisionTag(latest));
 				fs.rebase(latest);
 				if(mirror != null) {
 					mirror.syncArchiveToTarget();
 				}
 			} catch (IOException exc) {
-				logger.error("FS {}: Unable to rebase to revtag",
+				logger.error("ZKFS {} {}: Unable to rebase to revtag {}",
+						Util.formatArchiveId(fs.archive.config.archiveId),
+						Util.formatRevisionTag(fs.baseRevision),
 						Util.formatArchiveId(fs.archive.config.archiveId),
 						exc);
 			}
@@ -187,8 +189,9 @@ public class ZKFSManager implements AutoCloseable {
 				
 				setupAutocommitTimer();
 			} catch (IOException exc) {
-				logger.error("FS {}: IOException performing autocommit",
+				logger.error("ZKFS {} {}: IOException performing autocommit",
 						Util.formatArchiveId(fs.archive.config.archiveId),
+						Util.formatRevisionTag(fs.baseRevision),
 						exc);
 			}
 		});
@@ -260,8 +263,9 @@ public class ZKFSManager implements AutoCloseable {
 		try {
 			write();
 		} catch(IOException exc) {
-			logger.error("FS {}: Unable to write ZKFSManager file",
+			logger.error("ZKFS {} {}: Unable to write ZKFSManager file",
 					Util.formatArchiveId(fs.archive.config.archiveId),
+					Util.formatRevisionTag(fs.baseRevision),
 					exc);
 		}
 	}

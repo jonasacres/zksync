@@ -72,7 +72,7 @@ public class ZKFS extends FS {
 		}
 		baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
 		dirty = false;
-		logger.info("FS {}: Created revtag {} from {}",
+		logger.info("ZKFS {}: Created revtag {} from {}",
 				Util.formatArchiveId(archive.getConfig().getArchiveId()),
 				Util.formatRevisionTag(baseRevision),
 				parents);
@@ -179,7 +179,12 @@ public class ZKFS extends FS {
 	
 	public void assertPathIsDirectory(String path) throws IOException {
 		Inode inode = inodeForPath(path);
-		logger.trace("Is directory: {} ({}) -> {}",path, inode.getStat().getInodeId(), inode.getStat().isDirectory());
+		logger.trace("ZKFS {} {}: Is directory: {} ({}) -> {}",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				Util.formatRevisionTag(baseRevision),
+				path,
+				inode.getStat().getInodeId(),
+				inode.getStat().isDirectory());
 		if(!inode.getStat().isDirectory()) throw new EISNOTDIRException(path);
 	}
 	
@@ -421,47 +426,78 @@ public class ZKFS extends FS {
 		return baseRevision;
 	}
 	
-	public void dump() throws IOException {
-		System.out.println("Revision " + baseRevision);
-		dump("/", 1);
+	public String dump() throws IOException {
+		StringBuilder builder = new StringBuilder();
+		builder.append("Revision " + baseRevision + "\n");
+		dump("/", 1, builder);
+		return builder.toString();
 	}
 	
-	public void dump(String path, int depth) throws IOException {
+	public void dump(String path, int depth, StringBuilder builder) throws IOException {
 		String padding = new String(new char[depth]).replace("\0", "  ");
 		ZKDirectory dir = opendir(path);
 		for(String subpath : dir.list()) {
 			Inode inode = inodeForPath(Paths.get(path, subpath).toString());
-			System.out.printf("%s%30s inodeId=%d size=%d ref=%s\n",
+			builder.append(String.format("%s%30s inodeId=%d size=%d ref=%s\n",
 					padding,
 					subpath,
 					inode.stat.getInodeId(),
 					inode.stat.getSize(),
-					Util.bytesToHex(inode.getRefTag().getHash(), 8) + "...");
+					Util.bytesToHex(inode.getRefTag().getHash(), 8) + "..."));
 			if(inode.stat.isDirectory()) {
-				dump(subpath, depth+1);
+				dump(subpath, depth+1, builder);
 			}
 		}
 	}
 
 	public void rebase(RevisionTag revision) throws IOException {
-		logger.info("FS {}: Rebasing to revision {}, was {}",
+		logger.info("ZKFS {} {}: Rebasing to revision {}",
 				Util.formatArchiveId(revision.getConfig().getArchiveId()),
+				baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
 				Util.formatRevisionTag(revision),
-				baseRevision != null ? Util.formatRevisionTag(baseRevision) : "null");
+				new Throwable());
 		this.archive = revision.getArchive();
-		this.directoriesByPath = new HashCache<String,ZKDirectory>(128, (String path) -> {
+		if(this.directoriesByPath != null) {
+			this.directoriesByPath.removeAll();
+		}
+		
+		int cacheSize = archive.getMaster().getGlobalConfig().getInt("fs.settings.directoryCacheSize");
+		this.directoriesByPath = new HashCache<String,ZKDirectory>(cacheSize, (String path) -> {
 			assertPathIsDirectory(path);
 			return new ZKDirectory(this, path);
 		}, (String path, ZKDirectory dir) -> {
 			dir.commit();
 			dir.close();
 		});
-		this.baseRevision = revision;
+		
+		archive.getMaster().getGlobalConfig().subscribe("fs.settings.directoryCacheSize").asInt((s)->{
+			try {
+				logger.info("ZKFS {} {}: Setting directory cache size to {}; was {}",
+						Util.formatArchiveId(revision.getConfig().getArchiveId()),
+						baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
+						s,
+						this.directoriesByPath.getCapacity());
+				this.directoriesByPath.setCapacity(s);
+			} catch(IOException exc) {
+				logger.error("ZKFS {} {}: Caught exception updating directory cache size to {}",
+						Util.formatArchiveId(revision.getConfig().getArchiveId()),
+						baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
+						s);
+			}
+		});
+		
 		if(this.inodeTable != null) {
 			this.inodeTable.close();
 		}
+		
+		this.baseRevision = revision;
 		this.inodeTable = new InodeTable(this, revision);
 		this.dirty = false;
+		
+		logger.info("ZKFS {} {}: {}",
+				Util.formatArchiveId(revision.getConfig().getArchiveId()),
+				baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
+				dump());
 	}
 	
 	public void addMonitor(ZKFSDirtyMonitor monitor) {

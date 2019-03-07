@@ -230,6 +230,24 @@ public class RevisionTree {
 	
 	public RevisionTree(ZKArchiveConfig config) {
 		this.config = config;
+		
+		try {
+			this.map.setCapacity(config.getMaster().getGlobalConfig().getInt("fs.settings.revisionTreeCacheSize"));
+		} catch(IOException exc) {
+			logger.error("Caught exception setting RevisionTree capacity; proceeding anyway", exc);
+		}
+		
+		config.getMaster().getGlobalConfig().subscribe("fs.settings.revisionTreeCacheSize").asInt((s)-> {
+			try {
+				logger.info("Setting revision tree capacity to {}; was {}",
+						s,
+						this.map.getCapacity());
+				this.map.setCapacity(s);
+			} catch(IOException exc) {
+				logger.error("Caught exception setting RevisionTree capacity", exc);
+			}
+		});
+		
 		threadPool = GroupedThreadPool.newWorkStealingThreadPool(config.getThreadGroup(), "RevisionTree lookup");
 	}
 	

@@ -427,8 +427,15 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		globalConfig.setDefault("fs.default.groupname", "root");
 		globalConfig.setDefault("fs.default.gid", 0);
 		globalConfig.setDefault("fs.default.directoryMode", 0755);
+		
 		globalConfig.setDefault("fs.settings.pageReadyMaxRetries", 3);
 		globalConfig.setDefault("fs.settings.pageReadyRetryDelayMs", 1);
+		globalConfig.setDefault("fs.settings.pageTreeChunkCacheSize", 16);
+		globalConfig.setDefault("fs.settings.directoryCacheSize", 128);
+		globalConfig.setDefault("fs.settings.inodeTablePageCacheSize", 16);
+		globalConfig.setDefault("fs.settings.revisionTreeCacheSize", 256);
+		globalConfig.setDefault("fs.settings.readOnlyFilesystemCacheSize", 64);
+		
 		globalConfig.setDefault("fs.fileHandleTelemetry", FS.fileHandleTelemetryEnabled);
 		
 		globalConfig.setDefault("net.limits.tx", -1);

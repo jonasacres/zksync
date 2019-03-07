@@ -45,7 +45,7 @@ public class XArchiveIdentification {
 		id.ready = config.haveConfigLocally();
 		try {
 			id.dirty = State.sharedState().activeFs(config).isDirty();
-		} catch (IOException e) {
+		} catch (Throwable exc) {
 			id.dirty = null;
 		}
 		

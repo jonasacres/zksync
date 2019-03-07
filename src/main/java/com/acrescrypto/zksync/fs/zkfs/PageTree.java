@@ -5,9 +5,14 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Queue;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.utility.HashCache;
+import com.acrescrypto.zksync.utility.HashCache.CacheEvict;
+import com.acrescrypto.zksync.utility.HashCache.CacheLookup;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PageTree {
@@ -18,6 +23,7 @@ public class PageTree {
 	protected long inodeId, inodeIdentity;
 	protected long numChunks, maxNumPages, numPages;
 	protected boolean trusted; // if true, do not validate public key signature on each page chunk
+	protected Logger logger = LoggerFactory.getLogger(PageTree.class);
 	
 	public class PageTreeStats {
 		public long numCachedPages, numCachedChunks, totalPages, totalChunks;
@@ -63,11 +69,7 @@ public class PageTree {
 			original.chunkCache.get(chunkId).tree = this;
 		}
 		
-		this.chunkCache = new HashCache<>(original.chunkCache,
-				(index)->loadChunkAtIndex(index),
-				(index, chunk)->{
-					if(chunk.dirty) chunk.write(); }
-				);
+		setupChunkCache(original.chunkCache);
 	}
 	
 	protected PageTree() {} // used for testing
@@ -89,12 +91,45 @@ public class PageTree {
 		}
 		
 		this.dirtyChunks = new LinkedList<>();
-		this.chunkCache = new HashCache<>(16,
-				(index)->loadChunkAtIndex(index),
-				(index, chunk)->{
-					if(chunk.dirty) chunk.write();
-				}
-				);
+		setupChunkCache(null);
+	}
+	
+	protected void setupChunkCache(HashCache<Long, PageTreeChunk> original) {
+		int cacheSize = archive.getMaster().getGlobalConfig().getInt("fs.settings.pageTreeChunkCacheSize");
+		CacheLookup<Long, PageTreeChunk> lookup = (index)->loadChunkAtIndex(index);
+		CacheEvict<Long, PageTreeChunk> evict = (index, chunk)->{
+			logger.trace("PageTree {} {} {}: Evicting chunk {}, dirty = {}",
+					Util.formatArchiveId(archive.getConfig().getArchiveId()),
+					inodeId,
+					Util.formatRefTag(refTag),
+					index,
+					chunk.dirty);
+			if(chunk.dirty) chunk.write();
+		};
+		
+		if(original == null) {
+			this.chunkCache = new HashCache<>(cacheSize,
+					lookup,
+					evict);
+		} else {
+			this.chunkCache = new HashCache<>(original,
+					lookup,
+					evict);
+		}
+		
+		archive.getMaster().getGlobalConfig().subscribe("fs.settings.pageTreeChunkCacheSize").asInt((s)->{
+			try {
+				logger.info("PageTree {} {} {}: Setting PageTree chunk cache size to {}; was {}",
+						Util.formatArchiveId(archive.getConfig().getArchiveId()),
+						inodeId,
+						Util.formatRefTag(refTag),
+						s,
+						chunkCache.getCapacity());
+				chunkCache.setCapacity(s);
+			} catch(IOException exc) {
+				logger.error("Unable to set page tree chunk cache size", exc);
+			}
+		});
 	}
 	
 	public boolean exists() throws IOException {
@@ -145,6 +180,13 @@ public class PageTree {
 			resize(1+pageNum);
 		}
 		
+		logger.debug("PageTree {} {} {}: Setting page tag for page {} to {}",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				inodeId,
+				Util.formatRefTag(refTag),
+				pageNum,
+				Util.formatPageTag(pageTag));
+
 		chunkForPageNum(pageNum).setTag(pageNum % tagsPerChunk(), pageTag);
 		numPages = Math.max(numPages, 1+pageNum);
 	}
@@ -206,12 +248,23 @@ public class PageTree {
 	public RefTag commit() throws IOException {
 		if(numPages > 1) {
 			while(dirtyChunks.peek() != null) {
-				dirtyChunks.poll().write();
+				PageTreeChunk chunk = dirtyChunks.poll();
+				logger.trace("PageTree {} {} {}: Committing dirty chunk {}",
+						Util.formatArchiveId(archive.getConfig().getArchiveId()),
+						inodeId,
+						Util.formatRefTag(refTag),
+						chunk.index);
+				chunk.write();
 			}
 		} else if(numPages <= 1) {
 			setTag(chunkAtIndex(0).getTag(0));
 		}
 
+		logger.debug("PageTree {} {} {}: Committed",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				inodeId,
+				Util.formatRefTag(refTag));
+		
 		return getRefTag();
 	}
 	
@@ -224,6 +277,13 @@ public class PageTree {
 		
 		long currentLevel = levelOfChunkId(chunkIndexForPageNum(0));
 		long newLevel = (int) Math.max(0, Math.floor(Math.log(newMinPages-1)/Math.log(tagsPerChunk())));
+		
+		logger.debug("PageTree {} {} {}: Resizing to support minimum of {} pages, previously supported max of {}",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				inodeId,
+				Util.formatRefTag(refTag),
+				newMinPages,
+				maxNumPages);
 		
 		if(newLevel == currentLevel) {
 			resizeToSameLevel(newMinPages);
@@ -374,6 +434,11 @@ public class PageTree {
 	}
 	
 	protected void markDirty(PageTreeChunk chunk) {
+		logger.trace("PageTree {} {} {}: Marking chunk {} as dirty",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				inodeId,
+				Util.formatRefTag(refTag),
+				chunk.index);
 		dirtyChunks.add(chunk);
 	}
 	
@@ -382,9 +447,9 @@ public class PageTree {
 	}
 	
 	protected long levelOfChunkId(long chunkId) {
-	    if(chunkId <= 0) return 0;
-	    long offset = (chunkId - 1) % tagsPerChunk();
-	    return (long) Math.floor(Math.log(1-(chunkId-offset)*(1-tagsPerChunk()))/Math.log(tagsPerChunk()));
+		if(chunkId <= 0) return 0;
+		long offset = (chunkId - 1) % tagsPerChunk();
+		return (long) Math.floor(Math.log(1-(chunkId-offset)*(1-tagsPerChunk()))/Math.log(tagsPerChunk()));
 	}
 	
 	protected long offsetOfChunkId(long chunkId) {

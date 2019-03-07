@@ -268,7 +268,7 @@ public class FSMirror {
 	}
 
 	public void syncArchiveToTarget() throws IOException {
-		ZKFS oldFs = lastRev != null ? lastRev.getFS() : null;
+		ZKFS oldFs = lastRev != null ? lastRev.readOnlyFS() : null;
 		boolean wasWatching = isWatching();
 		if(wasWatching) {
 			stopWatch();

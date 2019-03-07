@@ -57,10 +57,24 @@ public class InodeTable extends ZKFile {
 			this.trusted = false;
 			this.path = INODE_TABLE_PATH;
 			this.mode = O_RDWR;
-			this.inodesByPage = new HashCache<Long,Inode[]>(16, (Long pageNum) -> {
+			int cacheSize = fs.getArchive().getMaster().getGlobalConfig().getInt("fs.settings.inodeTablePageCacheSize");
+			this.inodesByPage = new HashCache<Long,Inode[]>(cacheSize, (Long pageNum) -> {
 				return inodesForPage(pageNum);
 			}, (Long pageNum, Inode[] inodes) -> {
 				commitInodePage(pageNum, inodes);
+			});
+			
+			fs.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.inodeTablePageCacheSize").asInt((s)->{
+				try {
+					logger.info("ZKFS {} {}: Setting InodeTable page cache size to {}; was {}",
+							Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
+							Util.formatRevisionTag(fs.baseRevision),
+							s,
+							this.inodesByPage.getCapacity());
+					this.inodesByPage.setCapacity(s);
+				} catch(IOException exc) {
+					logger.error("Unable to set inode table page cache size", exc);
+				}
 			});
 			
 			if(tag.getRefTag().isBlank()) initialize();
