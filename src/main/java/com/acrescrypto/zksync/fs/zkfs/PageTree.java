@@ -116,20 +116,6 @@ public class PageTree {
 					lookup,
 					evict);
 		}
-		
-		archive.getMaster().getGlobalConfig().subscribe("fs.settings.pageTreeChunkCacheSize").asInt((s)->{
-			try {
-				logger.info("PageTree {} {} {}: Setting PageTree chunk cache size to {}; was {}",
-						Util.formatArchiveId(archive.getConfig().getArchiveId()),
-						inodeId,
-						Util.formatRefTag(refTag),
-						s,
-						chunkCache.getCapacity());
-				chunkCache.setCapacity(s);
-			} catch(IOException exc) {
-				logger.error("Unable to set page tree chunk cache size", exc);
-			}
-		});
 	}
 	
 	public boolean exists() throws IOException {

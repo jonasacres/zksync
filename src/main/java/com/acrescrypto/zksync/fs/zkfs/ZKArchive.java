@@ -16,6 +16,7 @@ import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
+import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -39,6 +40,7 @@ public class ZKArchive implements AutoCloseable {
 	protected ZKMaster master;
 	protected HashCache<RevisionTag,ZKFS> readOnlyFilesystems;
 	protected HashMap<Long,byte[]> allPageTags;
+	protected SubscriptionToken<Integer> tok;
 	
 	protected ZKArchive(ZKArchiveConfig config) throws IOException {
 		this.master = config.accessor.master;
@@ -58,7 +60,7 @@ public class ZKArchive implements AutoCloseable {
 			fs.close();
 		});
 		
-		config.getMaster().getGlobalConfig().subscribe("fs.settings.readOnlyFilesystemCacheSize").asInt((s)->{
+		tok = config.getMaster().getGlobalConfig().subscribe("fs.settings.readOnlyFilesystemCacheSize").asInt((s)->{
 			try {
 				logger.info("ZKFS {} -: Setting read only filesystem cache size to {}, was {}",
 						Util.formatArchiveId(config.getArchiveId()),
@@ -79,6 +81,7 @@ public class ZKArchive implements AutoCloseable {
 	}
 	
 	public void close() {
+		if(tok != null) tok.close();
 		try {
 			readOnlyFilesystems.removeAll();
 		} catch (IOException exc) {

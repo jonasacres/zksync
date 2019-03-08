@@ -95,6 +95,7 @@ public class ArchiveCrud {
 			payload.put("fs", fsMap);
 			fsMap.put("revtag", fs.getBaseRevision());
 			fsMap.put("dirty", fs.isDirty());			
+			fsMap.put("identity", System.identityHashCode(fs));
 			
 			if(isListStat) {
 				// ?liststat=true causes stat information to be included with directory listings
@@ -103,6 +104,7 @@ public class ArchiveCrud {
 					String fqSubpath = path + "/" + subpath;
 					Stat stat = fs.stat(fqSubpath);
 					PageTreeStats treeStat = new PageTree(fs.inodeForPath(fqSubpath)).getStats();
+					
 					pathStats.add(new XPathStat(subpath, stat, treeStat, existingPriority));
 				}
 				

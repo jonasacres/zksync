@@ -58,9 +58,7 @@ public class ZKFS extends FS {
 	public void close() throws IOException {
 		cacheToken.close();
 		inodeTable.close();
-		for(String path : directoriesByPath.cachedKeys()) {
-			directoriesByPath.get(path).close();
-		}
+		this.directoriesByPath.removeAll();
 		super.close();
 	}
 	
@@ -456,7 +454,7 @@ public class ZKFS extends FS {
 		String padding = new String(new char[depth]).replace("\0", "  ");
 		ZKDirectory dir = opendir(path);
 		for(String subpath : dir.list()) {
-			Inode inode = inodeForPath(Paths.get(path, subpath).toString());
+			Inode inode = inodeForPath(Paths.get(path, subpath).toString(), false);
 			builder.append(String.format("%s%30s inodeId=%d size=%d ref=%s\n",
 					padding,
 					subpath,
@@ -500,9 +498,10 @@ public class ZKFS extends FS {
 		this.inodeTable = new InodeTable(this, revision);
 		this.dirty = false;
 		
-		logger.info("ZKFS {} {}: {}",
+		logger.info("ZKFS {} {}: {}\n{}",
 				Util.formatArchiveId(revision.getConfig().getArchiveId()),
 				baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
+				System.identityHashCode(this),
 				dump());
 	}
 	
