@@ -616,7 +616,7 @@ public class ZKArchiveConfig {
 	}
 
 	public void close() {
-		logger.info("FS {}: Closing archive",
+		logger.info("ZKFS {} -: Closing archive",
 				Util.formatArchiveId(archiveId));
 		swarm.close();
 		stopAdvertising();
@@ -660,8 +660,17 @@ public class ZKArchiveConfig {
 		while(stat == null || stat.getSize() != this.getSerializedPageSize()) {
 			if(++attempts >= maxAttempts) {
 				if(stat == null) {
+					logger.info("ZKFS {} -: Timed out waiting for page {}, page not received",
+							Util.formatArchiveId(archiveId),
+							Util.formatPageTag(tag));
 					throw new ENOENTException(path);
 				}
+				
+				logger.info("ZKFS {} -: Timed out waiting for page {}, page has size {}, expected {}",
+						Util.formatArchiveId(archiveId),
+						Util.formatPageTag(tag),
+						stat.getSize(),
+						this.getSerializedPageSize());
 				throw new InvalidPageException(path);
 			} else if(attempts > 1) {
 				Util.sleep(delay);
