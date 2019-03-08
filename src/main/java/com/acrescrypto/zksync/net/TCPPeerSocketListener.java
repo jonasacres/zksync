@@ -262,8 +262,7 @@ public class TCPPeerSocketListener {
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(IOException exc) {
-			logger.info("Swarm - {}: Caught IOException on connection to peer", peerSocketRaw.getInetAddress().getHostAddress());
-			logger.debug("Swarm - {}: Caught IOException on connection to peer, exception presented", peerSocketRaw.getInetAddress().getHostAddress(), exc);
+			logger.info("Swarm - {}: Caught IOException on connection to peer", peerSocketRaw.getInetAddress().getHostAddress(), exc);
 			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
 			Util.delay(delay, ()->peerSocketRaw.close());
 		} catch(SecurityException exc) {
