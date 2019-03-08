@@ -55,7 +55,7 @@ public class DiffSetResolverTest {
 	
 	@After
 	public void afterEach() throws IOException {
-		fs.close();
+		if(!fs.isClosed()) fs.close();
 		archive.close();
 	}
 	
@@ -141,9 +141,11 @@ public class DiffSetResolverTest {
 		
 		RevisionTag merge = resolver.resolve();
 		assertEquals(numFiles, solutions.size());
-		for(Inode inode : solutions) {
-			Inode mergedVersion = merge.readOnlyFS().getInodeTable().inodeWithId(inode.getStat().getInodeId());
-			assertEquals(inode, mergedVersion);
+		try(ZKFS fs = merge.readOnlyFS()) {
+			for(Inode inode : solutions) {
+				Inode mergedVersion = fs.getInodeTable().inodeWithId(inode.getStat().getInodeId());
+				assertEquals(inode, mergedVersion);
+			}
 		}
 	}
 		
@@ -201,7 +203,9 @@ public class DiffSetResolverTest {
 		}
 		
 		RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
-		assertEquals("version " + (numChildren-1), new String(merge.readOnlyFS().read("file")));
+		try(ZKFS fs = merge.readOnlyFS()) {
+			assertEquals("version " + (numChildren-1), new String(fs.read("file")));
+		}
 	}
 	
 	@Test
@@ -224,10 +228,11 @@ public class DiffSetResolverTest {
 		}
 		
 		RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
-		ZKFS mergeFs = merge.readOnlyFS();
-		long linkedId = mergeFs.inodeForPath("file").getStat().getInodeId(),
-			 expectedId = fs.inodeForPath("file"+(numChildren-1)).getStat().getInodeId();
-		assertEquals(expectedId, linkedId);
+		try(ZKFS mergeFs = merge.readOnlyFS()) {
+			long linkedId = mergeFs.inodeForPath("file").getStat().getInodeId(),
+				 expectedId = fs.inodeForPath("file"+(numChildren-1)).getStat().getInodeId();
+			assertEquals(expectedId, linkedId);
+		}
 	}
 	
 	@Test
@@ -243,10 +248,10 @@ public class DiffSetResolverTest {
 		}
 		
 		RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
-		ZKFS mergeFs = merge.readOnlyFS();
-		
-		for(byte i = 0; i < 4; i++) {
-			assertEquals(""+i, new String(mergeFs.read(""+i)));	
+		try(ZKFS mergeFs = merge.readOnlyFS()) {
+			for(byte i = 0; i < 4; i++) {
+				assertEquals(""+i, new String(mergeFs.read(""+i)));	
+			}
 		}
 	}
 	
@@ -272,8 +277,9 @@ public class DiffSetResolverTest {
 				fs.commitAndClose();
 			}
 			
-			ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-			assertEquals("bar", new String(mergeFs.read("file")));
+			try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+				assertEquals("bar", new String(mergeFs.read("file")));
+			}
 		}
 	}
 	
@@ -378,11 +384,12 @@ public class DiffSetResolverTest {
 			fs.close();
 		}
 		
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		if(Arrays.compareUnsigned(serializations[0], serializations[1]) < 0) {
-			assertEquals("1", new String(mergeFs.read("file")));
-		} else {
-			assertEquals("0", new String(mergeFs.read("file")));
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			if(Arrays.compareUnsigned(serializations[0], serializations[1]) < 0) {
+				assertEquals("1", new String(mergeFs.read("file")));
+			} else {
+				assertEquals("0", new String(mergeFs.read("file")));
+			}
 		}
 	}
 	
@@ -398,10 +405,11 @@ public class DiffSetResolverTest {
 		fs.link("file", "link-b");
 		fs.commitAndClose();
 		
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		assertEquals(mergeFs.inodeForPath("file"), mergeFs.inodeForPath("link-a"));
-		assertEquals(mergeFs.inodeForPath("file"), mergeFs.inodeForPath("link-b"));
-		assertEquals(3, mergeFs.inodeForPath("file").getNlink());
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			assertEquals(mergeFs.inodeForPath("file"), mergeFs.inodeForPath("link-a"));
+			assertEquals(mergeFs.inodeForPath("file"), mergeFs.inodeForPath("link-b"));
+			assertEquals(3, mergeFs.inodeForPath("file").getNlink());
+		}
 	}
 	
 	@Test
@@ -422,10 +430,11 @@ public class DiffSetResolverTest {
 		fs.unlink("link-b");
 		fs.commitAndClose();
 		
-		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
-		assertFalse(mergeFs.exists("link-a"));
-		assertFalse(mergeFs.exists("link-b"));
-		assertEquals(1, mergeFs.inodeForPath("file").getNlink());
+		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
+			assertFalse(mergeFs.exists("link-a"));
+			assertFalse(mergeFs.exists("link-b"));
+			assertEquals(1, mergeFs.inodeForPath("file").getNlink());
+		}
 	}
 	
 	@Test

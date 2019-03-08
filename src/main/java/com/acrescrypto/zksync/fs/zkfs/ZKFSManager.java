@@ -86,7 +86,7 @@ public class ZKFSManager implements AutoCloseable {
 		if(fs != null) {
 			fs.removeMonitor(fsMonitor);
 			fs.getArchive().getConfig().getRevisionList().removeMonitor(revMonitor);
-			fs.close();
+			if(!fs.isClosed()) fs.close();
 		}
 		
 		if(mirror != null) {

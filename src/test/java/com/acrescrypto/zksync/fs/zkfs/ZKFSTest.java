@@ -216,8 +216,9 @@ public class ZKFSTest extends FSTestBase {
 		assertTrue(Arrays.equals(content, zkscratch.read("basic-archive-test")));
 		RevisionTag rev = zkscratch.commit();
 		
-		ZKFS readFs = rev.readOnlyFS();
-		assertTrue(Arrays.equals(content, readFs.read("basic-archive-test")));
+		try(ZKFS readFs = rev.readOnlyFS()) {
+			assertTrue(Arrays.equals(content, readFs.read("basic-archive-test")));
+		}
 	}
 	
 	// ---- cut here ----
@@ -297,11 +298,11 @@ public class ZKFSTest extends FSTestBase {
 		
 		RevisionTag rev = zkscratch.commit();
 		assertTrue(zkscratch.inodeTable.getStat().getSize() > zkscratch.archive.config.pageSize);
-		ZKFS revFs = rev.readOnlyFS();
-		
-		assertTrue(Arrays.equals(revFs.inodeTable.tree.getRefTag().getBytes(), zkscratch.inodeTable.tree.getRefTag().getBytes()));
-		assertEquals(zkscratch.inodeTable.tree.maxNumPages, revFs.inodeTable.tree.maxNumPages);
-		assertEquals(zkscratch.inodeTable.getStat().getSize(), revFs.inodeTable.getStat().getSize());
+		try(ZKFS revFs = rev.readOnlyFS()) {
+			assertTrue(Arrays.equals(revFs.inodeTable.tree.getRefTag().getBytes(), zkscratch.inodeTable.tree.getRefTag().getBytes()));
+			assertEquals(zkscratch.inodeTable.tree.maxNumPages, revFs.inodeTable.tree.maxNumPages);
+			assertEquals(zkscratch.inodeTable.getStat().getSize(), revFs.inodeTable.getStat().getSize());
+		}
 	}
 	
 	@Test

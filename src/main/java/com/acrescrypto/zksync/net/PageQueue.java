@@ -193,8 +193,8 @@ public class PageQueue {
 				return;
 			}
 			
-			try {
-				this.inodeTable = revTag.makeCacheOnly().readOnlyFS().getInodeTable();
+			try(ZKFS fs = revTag.makeCacheOnly().readOnlyFS()) {
+				this.inodeTable = fs.getInodeTable();
 				assert(inodeTable.nextInodeId() <= Integer.MAX_VALUE);
 				this.shuffler = Shuffler.fixedShuffler((int) inodeTable.nextInodeId());
 			} catch(IOException|SecurityException exc) {

@@ -59,12 +59,14 @@ public class DiffSet {
 		 */
 		HashSet<Long> allInodes = new HashSet<Long>();
 		for(RevisionTag rev : revisions) {
-			for(Inode inode : rev.readOnlyFS().getInodeTable().values()) {
-				issuedInodeIds.add(inode.getStat().getInodeId());
-				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_INODE_TABLE) continue;
-				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_FREELIST) continue;
-				if(inode.isDeleted()) continue;
-				allInodes.add(inode.getStat().getInodeId());
+			try(ZKFS fs = rev.readOnlyFS()) {
+				for(Inode inode : fs.getInodeTable().values()) {
+					issuedInodeIds.add(inode.getStat().getInodeId());
+					if(inode.getStat().getInodeId() == InodeTable.INODE_ID_INODE_TABLE) continue;
+					if(inode.getStat().getInodeId() == InodeTable.INODE_ID_FREELIST) continue;
+					if(inode.isDeleted()) continue;
+					allInodes.add(inode.getStat().getInodeId());
+				}
 			}
 		}
 		
@@ -77,7 +79,10 @@ public class DiffSet {
 		allPaths.add("/");
 		
 		for(RevisionTag rev : revisions) {
-			try(ZKDirectory dir = rev.readOnlyFS().opendir("/")) {
+			try(
+				ZKFS fs = rev.readOnlyFS();
+				ZKDirectory dir = fs.opendir("/")
+			) {
 				for(String path : dir.listRecursive()) {
 					allPaths.add(path);
 				}

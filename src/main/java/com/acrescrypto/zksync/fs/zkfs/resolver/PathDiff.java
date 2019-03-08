@@ -7,6 +7,7 @@ import java.util.Map;
 
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
 public class PathDiff implements Comparable<PathDiff> {
 	protected HashMap<Long,ArrayList<RevisionTag>> resolutions = new HashMap<Long,ArrayList<RevisionTag>>();
@@ -22,8 +23,8 @@ public class PathDiff implements Comparable<PathDiff> {
 		this.path = path;
 		for(RevisionTag candidate : candidates) {
 			Long inodeId = null;
-			try {
-				inodeId = candidate.readOnlyFS().inodeForPath(path).getStat().getInodeId();
+			try(ZKFS fs = candidate.readOnlyFS()) {
+				inodeId = fs.inodeForPath(path).getStat().getInodeId();
 				if(idMap != null && idMap.containsKey(inodeId)) inodeId = idMap.get(inodeId).getOrDefault(candidate, inodeId);
 			} catch (ENOENTException e) {}
 			getResolutions().putIfAbsent(inodeId, new ArrayList<>());

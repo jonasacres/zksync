@@ -269,25 +269,27 @@ public class FSMirror {
 
 	public void syncArchiveToTarget() throws IOException {
 		ZKFS oldFs = lastRev != null ? lastRev.readOnlyFS() : null;
-		boolean wasWatching = isWatching();
-		if(wasWatching) {
-			stopWatch();
-		}
-
-		synchronized(this) {
-			try {
+		try {
+			boolean wasWatching = isWatching();
+			if(wasWatching) {
+				stopWatch();
+			}
+	
+			synchronized(this) {
 				String[] list = zkfs.opendir("/").listRecursive();
 				for(String path : list) {
 					syncPathArchiveToTarget(oldFs, path);
 				}
 	
 				pruneFsToList(target, list);
-			} finally {
-				oldFs.close();
+				
+				if(wasWatching && !isWatching()) {
+					startWatch();
+				}
 			}
-			
-			if(wasWatching && !isWatching()) {
-				startWatch();
+		} finally {
+			if(oldFs != null) {
+				oldFs.close();
 			}
 		}
 	}

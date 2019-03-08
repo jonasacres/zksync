@@ -6,6 +6,7 @@ import java.util.HashMap;
 
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
 public class InodeDiff {
 	protected HashMap<Inode,ArrayList<RevisionTag>> resolutions = new HashMap<Inode,ArrayList<RevisionTag>>();
@@ -21,10 +22,12 @@ public class InodeDiff {
 	public InodeDiff(long inodeId, RevisionTag[] candidates) throws IOException {
 		this.inodeId = this.originalInodeId = inodeId;
 		for(RevisionTag candidate : candidates) {
-			Inode inode = candidate.readOnlyFS().getInodeTable().inodeWithId(inodeId);
-			if(inode.isDeleted()) inode = null;
-			getResolutions().putIfAbsent(inode, new ArrayList<>());
-			getResolutions().get(inode).add(candidate);
+			try(ZKFS fs = candidate.readOnlyFS()) {
+				Inode inode = fs.getInodeTable().inodeWithId(inodeId);
+				if(inode.isDeleted()) inode = null;
+				getResolutions().putIfAbsent(inode, new ArrayList<>());
+				getResolutions().get(inode).add(candidate);
+			}
 		}
 	}
 	

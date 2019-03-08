@@ -132,11 +132,11 @@ public class PageQueueTest {
 
 	public HashSet<Long> expectedPageTagsForRevTag(RevisionTag revTag) throws IOException {
 		HashSet<Long> expectedTags = new HashSet<Long>();
-		ZKFS fs = revTag.readOnlyFS();
-		
-		expectedTags.add(Util.shortTag(fs.getInodeTable().getInode().getRefTag().getHash()));
-		for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
-			expectedTags.addAll(expectedPageTagsForInode(fs.getInodeTable().inodeWithId(i)));
+		try(ZKFS fs = revTag.readOnlyFS()) {
+			expectedTags.add(Util.shortTag(fs.getInodeTable().getInode().getRefTag().getHash()));
+			for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
+				expectedTags.addAll(expectedPageTagsForInode(fs.getInodeTable().inodeWithId(i)));
+			}
 		}
 		
 		return expectedTags;
@@ -719,19 +719,20 @@ public class PageQueueTest {
 	}
 	
 	public Inode inodeForPageTag(RevisionTag revTag, byte[] pageTag) throws IOException {
-		ZKFS fs = revTag.readOnlyFS();
-		for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
-			Inode inode = fs.getInodeTable().inodeWithId(i);
-			PageTree tree = new PageTree(inode);
-			for(int j = 0; j < tree.numPages(); j++) {
-				if(Arrays.equals(pageTag, tree.getPageTag(j))) {
-					return inode;
+		try(ZKFS fs = revTag.readOnlyFS()) {
+			for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
+				Inode inode = fs.getInodeTable().inodeWithId(i);
+				PageTree tree = new PageTree(inode);
+				for(int j = 0; j < tree.numPages(); j++) {
+					if(Arrays.equals(pageTag, tree.getPageTag(j))) {
+						return inode;
+					}
 				}
-			}
-
-			for(int j = 0; j < tree.numChunks(); j++) {
-				if(Arrays.equals(pageTag, tree.tagForChunk(j))) {
-					return inode;
+	
+				for(int j = 0; j < tree.numChunks(); j++) {
+					if(Arrays.equals(pageTag, tree.tagForChunk(j))) {
+						return inode;
+					}
 				}
 			}
 		}

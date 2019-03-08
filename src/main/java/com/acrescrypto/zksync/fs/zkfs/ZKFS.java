@@ -58,8 +58,14 @@ public class ZKFS extends FS {
 	
 	@Override
 	public void close() throws IOException {
-		if(--retainCount > 0) return;
-		assert(retainCount == 0);
+		synchronized(this) {
+			/* We allow synchronization here because the readOnlyFilesystems cache might evict a ZKFS
+			 * (and therefore call close()) independent of a threat actually using the FS. In general,
+			 * ZKFS operations are non-threadsafe.
+			 */
+			if(--retainCount > 0) return;
+			assert(retainCount == 0);
+		}
 		
 		cacheToken.close();
 		this.directoriesByPath.removeAll();
@@ -67,7 +73,11 @@ public class ZKFS extends FS {
 		super.close();
 	}
 	
-	public ZKFS retain() {
+	public boolean isClosed() {
+		return retainCount == 0;
+	}
+	
+	public synchronized ZKFS retain() {
 		retainCount++;
 		return this;
 	}

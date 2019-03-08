@@ -51,7 +51,7 @@ public class ZKFSManagerTest {
 	@After
 	public void afterEach() throws IOException {
 		manager.close();
-		fs.close();
+		if(!fs.isClosed()) fs.close();
 		archive.close();
 		master.close();
 		mirrorFs.purge();

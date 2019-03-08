@@ -79,8 +79,10 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public RevisionInfo getInfo() throws IOException {
-		if(info == null) info = readOnlyFS().getRevisionInfo();
-		return info;
+		try(ZKFS fs = readOnlyFS()) {
+			if(info == null) info = fs.getRevisionInfo();
+			return info;
+		}
 	}
 	
 	public ZKFS readOnlyFS() throws IOException {

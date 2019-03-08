@@ -26,56 +26,56 @@ import com.acrescrypto.zksyncweb.WebTestUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 
 public class ArchiveRevisionLatestResourceTest {
-    private HttpServer server;
-    private WebTarget target;
-    private ZKArchive archive;
-    private ZKFS fs;
-    private String basePath;
-    
-    @BeforeClass
-    public static void beforeAll() {
-    	TestUtils.startDebugMode();
-    	WebTestUtils.squelchGrizzlyLogs();
-    }
+	private HttpServer server;
+	private WebTarget target;
+	private ZKArchive archive;
+	private ZKFS fs;
+	private String basePath;
 
-    @Before
-    public void beforeEach() throws Exception {
-    	State.setTestState();
-        server = Main.startServer();
-        Client c = ClientBuilder.newClient();
-        target = c.target(Main.BASE_URI);
-        
-    	archive = State.sharedState().getMaster().createDefaultArchive("passphrase".getBytes());
-    	archive.getConfig().advertise();
-    	archive.getMaster().storedAccess().storeArchiveAccess(archive.getConfig(), StoredAccess.ACCESS_LEVEL_READWRITE);
-    	State.sharedState().addOpenConfig(archive.getConfig());
-    	
-    	fs = State.sharedState().activeFs(archive.getConfig());
-    	basePath = "/archives/" + WebTestUtils.transformArchiveId(archive) + "/revisions/latest";
-    }
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+		WebTestUtils.squelchGrizzlyLogs();
+	}
 
-    @After
-    public void afterEach() throws Exception {
-    	fs.close();
-    	archive.close();
-        server.shutdownNow();
-        State.clearState();
-    }
-    
-    @AfterClass
-    public static void afterAll() {
-    	TestUtils.stopDebugMode();
-    }
-    
-    @Test
-    public void testGetReturnsInfoOfLatestRevtag() throws IOException {
-    	ZKFS fs = archive.openBlank();
-    	RevisionTag revTag = fs.commit();
-    	fs.commit();
-    	State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
-    	
-    	JsonNode resp = WebTestUtils.requestGet(target, basePath);
-    	assertArrayEquals(archive.getConfig().getRevisionList().latest().getBytes(), resp.get("revTag").binaryValue());
-    	WebTestUtils.validateRevisionInfo(archive.getConfig(), resp);
-    }
+	@Before
+	public void beforeEach() throws Exception {
+		State.setTestState();
+		server = Main.startServer();
+		Client c = ClientBuilder.newClient();
+		target = c.target(Main.BASE_URI);
+
+		archive = State.sharedState().getMaster().createDefaultArchive("passphrase".getBytes());
+		archive.getConfig().advertise();
+		archive.getMaster().storedAccess().storeArchiveAccess(archive.getConfig(), StoredAccess.ACCESS_LEVEL_READWRITE);
+		State.sharedState().addOpenConfig(archive.getConfig());
+
+		fs = State.sharedState().activeFs(archive.getConfig());
+		basePath = "/archives/" + WebTestUtils.transformArchiveId(archive) + "/revisions/latest";
+	}
+
+	@After
+	public void afterEach() throws Exception {
+		if(!fs.isClosed()) fs.close();
+		archive.close();
+		server.shutdownNow();
+		State.clearState();
+	}
+
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.stopDebugMode();
+	}
+
+	@Test
+	public void testGetReturnsInfoOfLatestRevtag() throws IOException {
+		ZKFS fs = archive.openBlank();
+		RevisionTag revTag = fs.commit();
+		fs.commit();
+		State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
+
+		JsonNode resp = WebTestUtils.requestGet(target, basePath);
+		assertArrayEquals(archive.getConfig().getRevisionList().latest().getBytes(), resp.get("revTag").binaryValue());
+		WebTestUtils.validateRevisionInfo(archive.getConfig(), resp);
+	}
 }

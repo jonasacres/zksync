@@ -79,7 +79,9 @@ public class DiffSetResolver {
 					}
 				}
 				
-				inodeIdentity = revsWithPath.get(0).readOnlyFS().inodeForPath(diff.path).getIdentity();
+				try(ZKFS fs = revsWithPath.get(0).readOnlyFS()) {
+					inodeIdentity = fs.inodeForPath(diff.path).getIdentity();
+				}
 				
 				try {
 					ancestor = setResolver.commonAncestor();
@@ -91,20 +93,27 @@ public class DiffSetResolver {
 				if(inodeDiff != null) originalInodeId = inodeDiff.originalInodeId;
 				else originalInodeId = inodeId;
 				
-				existed = ancestor.readOnlyFS().exists(diff.path);
+				try(ZKFS fs = ancestor.readOnlyFS()) {
+					existed = fs.exists(diff.path);
+				}
+				
 				if(!existed) return inodeId; // the path was created after the fork, so keep it.
 				
 				for(RevisionTag tag : revsWithoutPath) {
 					// if one of the revisions without this path has the same inode, then it must have moved
-					Inode inode = tag.readOnlyFS().getInodeTable().inodeWithId(originalInodeId);
-					if(inode.isDeleted()) continue;
-					if(inode.getIdentity() == inodeIdentity) return null; // we moved the inode
+					try(ZKFS fs = tag.readOnlyFS()) {
+						Inode inode = fs.getInodeTable().inodeWithId(originalInodeId);
+						if(inode.isDeleted()) continue;
+						if(inode.getIdentity() == inodeIdentity) return null; // we moved the inode
+					}
 				}
 				
 				// it was created before the fork and no one moved it, so did someone edit it?
 				for(RevisionTag tag : revsWithPath) {
-					long changeHeight = tag.readOnlyFS().inodeForPath(diff.path).getChangedFrom().getHeight() + 1;
-					if(changeHeight > ancestor.getHeight()) return inodeId; // edited; keep the file.
+					try(ZKFS fs = tag.readOnlyFS()) {
+						long changeHeight = fs.inodeForPath(diff.path).getChangedFrom().getHeight() + 1;
+						if(changeHeight > ancestor.getHeight()) return inodeId; // edited; keep the file.
+					}
 				}
 				
 				// the file is deleted on one side of the fork, and unchanged on the other. keep the deletion.
@@ -175,7 +184,7 @@ public class DiffSetResolver {
 		} catch(Throwable exc) {
 			throw exc;
 		} finally {
-			if(fs != null) {
+			if(fs != null && !fs.isClosed()) {
 				fs.close();
 			}
 		}
