@@ -203,7 +203,6 @@ public class IntegrationTest {
 		fs.write("1page", expected1page);
 		fs.write("multipage", expectedMultipage);
 		fs.commit();
-		fs.close();
 		
 		// now make a seed-only peer
 		ZKMaster seedMaster = ZKMaster.openBlankTestVolume("seed");
@@ -243,6 +242,7 @@ public class IntegrationTest {
 		assertArrayEquals(expected1page, fs.read("1page"));
 		assertArrayEquals(expectedMultipage, fs.read("multipage"));
 
+		fs.close();
 		cloneFs.close();
 		cloneConfig.getArchive().close();
 		cloneMaster.close();

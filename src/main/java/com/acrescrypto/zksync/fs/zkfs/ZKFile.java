@@ -61,6 +61,12 @@ public class ZKFile extends File {
 				if(this.inode.getStat().isSymlink() && (mode & O_LINK_LITERAL) == 0) {
 					throw new EMLINKException(path);
 				}
+				logger.trace("ZKFS {} {}: Loading path {} from inode {} {}",
+						Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
+						Util.formatRevisionTag(fs.getBaseRevision()),
+						path,
+						inode.getStat().getInodeId(),
+						Util.formatRefTag(inode.getRefTag()));
 			} catch(ENOENTException e) {
 				if((mode & O_CREAT) == 0) throw e;
 				this.inode = fs.create(path);

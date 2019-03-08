@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.HashContext;
+import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
@@ -300,6 +301,10 @@ public class RevisionTree {
 			} catch(SearchFailedException exc) {
 				if(config.isClosed()) return null;
 				logger.error("Encountered IOException looking up cached revTag", exc);
+			} catch(ClosedException exc) {
+				logger.info("Cannot look up cached revTag {} in closed archive {}",
+						Util.formatArchiveId(config.getArchiveId()),
+						Util.formatRevisionTag(revTag));
 			} catch (IOException exc) {
 				logger.error("Encountered IOException looking up cached revTag", exc);
 			}

@@ -114,6 +114,9 @@ public class Inode implements Comparable<Inode> {
 	
 	/** serialize to plaintext byte array */
 	public byte[] serialize() {
+		// force revtag serialization if needed
+		if(changedFrom.getBytes() == null) changedFrom.serialize();
+		
 		ByteBuffer buf = ByteBuffer.allocate(InodeTable.inodeSize(fs.archive));
 		buf.put(stat.serialize());
 		buf.putLong(modifiedTime);

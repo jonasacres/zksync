@@ -120,6 +120,7 @@ public class RequestPoolTest {
 	public void afterEach() {
 		pool.stop();
 		archive.close();
+		config.getArchive().close();
 		config.close();
 		conn.close();
 		RequestPool.pruneIntervalMs = RequestPool.DEFAULT_PRUNE_INTERVAL_MS;

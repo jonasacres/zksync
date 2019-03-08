@@ -60,8 +60,16 @@ public class InodeTable extends ZKFile {
 			this.mode = O_RDWR;
 			int cacheSize = fs.getArchive().getMaster().getGlobalConfig().getInt("fs.settings.inodeTablePageCacheSize");
 			this.inodesByPage = new HashCache<Long,Inode[]>(cacheSize, (Long pageNum) -> {
+				logger.trace("ZKFS {} {}: Caching inode table page {}",
+						Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
+						Util.formatRevisionTag(fs.baseRevision),
+						pageNum);
 				return inodesForPage(pageNum);
 			}, (Long pageNum, Inode[] inodes) -> {
+				logger.trace("ZKFS {} {}: Evicting inode table page {} from cache",
+						Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
+						Util.formatRevisionTag(fs.baseRevision),
+						pageNum);
 				commitInodePage(pageNum, inodes);
 			});
 			
@@ -93,6 +101,12 @@ public class InodeTable extends ZKFile {
 		}
 		
 		super.close();
+		if(inodesByPage != null) {
+			if(!this.getFS().getArchive().getConfig().isReadOnly()) {
+				inodesByPage.removeAll();
+			}
+			inodesByPage = null;
+		}
 	}
 	
 	/** calculate the next inode ID to be issued (by scanning for the largest issued inode ID) */

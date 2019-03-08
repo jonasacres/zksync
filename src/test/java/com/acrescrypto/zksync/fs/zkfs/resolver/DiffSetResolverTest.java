@@ -235,8 +235,11 @@ public class DiffSetResolverTest {
 		// Make /a in one rev, /b in another. Merge them. Should have /a and /b in a merged directory.
 		for(byte i = 0; i < 4; i++) {
 			fs.write(""+i, (""+i).getBytes());
-			fs.commitAndClose();
-			if(i == 1) fs = base.getFS();
+			fs.commit();
+			if(i == 1) {
+				fs.close();
+				fs = base.getFS();
+			}
 		}
 		
 		RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
@@ -341,10 +344,13 @@ public class DiffSetResolverTest {
 		RevisionTag[] revs = new RevisionTag[4];
 		
 		for(int j = 0; j < 4; j++) {
-			if(j == 2) fs = base.getFS();
+			if(j == 2) {
+				fs.close();
+				fs = base.getFS();
+			}
 			Util.setCurrentTimeNanos(1+j%2);
 			fs.write("file", (""+j).getBytes());
-			revs[j] = fs.commitAndClose();
+			revs[j] = fs.commit();
 		}
 		
 		try(ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS()) {
@@ -367,8 +373,9 @@ public class DiffSetResolverTest {
 			fs = base.getFS();
 			Util.setCurrentTimeNanos(1);
 			fs.write("file", (""+j).getBytes());
-			fs.commitAndClose();
+			fs.commit();
 			serializations[j] = fs.inodeForPath("file").serialize();
+			fs.close();
 		}
 		
 		ZKFS mergeFs = DiffSetResolver.canonicalMergeResolver(archive).resolve().readOnlyFS();
@@ -406,7 +413,7 @@ public class DiffSetResolverTest {
 		assertEquals(fs.inodeForPath("file"), fs.inodeForPath("link-a"));
 		assertEquals(fs.inodeForPath("file"), fs.inodeForPath("link-b"));
 		assertEquals(3, fs.inodeForPath("file").getNlink());
-		base = fs.commitAndClose();
+		base = fs.commit();
 		
 		fs.unlink("link-a");
 		fs.commitAndClose();
