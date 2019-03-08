@@ -52,9 +52,9 @@ public class ZKArchive implements AutoCloseable {
 		int cacheSize = config.getMaster().getGlobalConfig().getInt("fs.settings.readOnlyFilesystemCacheSize");
 		this.readOnlyFilesystems = new HashCache<RevisionTag,ZKFS>(cacheSize, (tag) -> {
 			if(this.isCacheOnly() && !tag.cacheOnly) {
-				return tag.makeCacheOnly().getFS();
+				return tag.makeCacheOnly().getFS().setReadOnly();
 			} else {
-				return tag.getFS();
+				return tag.getFS().setReadOnly();
 			}
 		}, (tag, fs) -> {
 			fs.close();

@@ -28,6 +28,8 @@ public class ZKFS extends FS {
 	protected boolean dirty;
 	protected LinkedList<ZKFSDirtyMonitor> dirtyMonitors = new LinkedList<>();
 	protected SubscriptionToken<?> cacheToken; 
+	protected boolean isReadOnly; // was this specific ZKFS opened RO? (not the whole archive)
+	protected int retainCount = 1;
 		
 	public final static int MAX_PATH_LEN = 65535;
 	
@@ -56,10 +58,18 @@ public class ZKFS extends FS {
 	
 	@Override
 	public void close() throws IOException {
+		if(--retainCount > 0) return;
+		assert(retainCount == 0);
+		
 		cacheToken.close();
 		this.directoriesByPath.removeAll();
 		inodeTable.close();
 		super.close();
+	}
+	
+	public ZKFS retain() {
+		retainCount++;
+		return this;
 	}
 	
 	public ZKFS(RevisionTag revision) throws IOException {
@@ -222,12 +232,17 @@ public class ZKFS extends FS {
 		if(dir.list().length > 0) throw new ENOTEMPTYException(path);
 	}
 
+	public void assertWritable(String path) throws EACCESException {
+		if(isReadOnly) throw new EACCESException(path);
+	}
+
 	public InodeTable getInodeTable() {
 		return inodeTable;
 	}
 	
 	@Override
 	public void write(String path, byte[] contents, int offset, int length) throws IOException {
+		assertWritable(path);
 		mkdirp(dirname(path));
 		
 		try(ZKFile file = open(path, ZKFile.O_WRONLY|ZKFile.O_CREAT|ZKFile.O_TRUNC)) {
@@ -237,6 +252,9 @@ public class ZKFS extends FS {
 
 	@Override
 	public ZKFile open(String path, int mode) throws IOException {
+		if(isReadOnly && ((mode & File.O_WRONLY) != 0)) {
+			throw new EACCESException(path);
+		}
 		assertPathIsNotDirectory(path, (mode & File.O_NOFOLLOW) == 0);
 		return new ZKFile(this, path, mode, true);
 	}
@@ -255,6 +273,7 @@ public class ZKFS extends FS {
 	
 	@Override
 	public void truncate(String path, long size) throws IOException {
+		assertWritable(path);
 		try(ZKFile file = open(path, File.O_RDWR)) {
 			file.truncate(size);
 		}
@@ -267,6 +286,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void mkdir(String path) throws IOException {
+		assertWritable(path);
 		assertPathIsDirectory(dirname(path));
 		assertPathDoesntExist(path);
 		try(ZKDirectory dir = opendir(dirname(path))) {
@@ -277,6 +297,7 @@ public class ZKFS extends FS {
 	@Override
 	public void mkdirp(String path) throws IOException {
 		try {
+			assertWritable(path);
 			assertPathIsDirectory(path);
 		} catch(ENOENTException e) {
 			mkdirp(dirname(path));
@@ -286,6 +307,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void rmdir(String path) throws IOException {
+		assertWritable(path);
 		assertDirectoryIsEmpty(path);
 		if(path.equals("/")) return; // quietly ignore for rmrf("/") support; used to throw new EINVALException("cannot delete root directory");
 		
@@ -297,6 +319,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void unlink(String path) throws IOException {
+		assertWritable(path);
 		if(inodeForPath(path, false).getStat().isDirectory()) throw new EISDIRException(path);
 		
 		ZKDirectory dir = opendir(dirname(path));
@@ -307,6 +330,7 @@ public class ZKFS extends FS {
 	
 	@Override
 	public void link(String source, String dest) throws IOException {
+		assertWritable(dest);
 		Inode target = inodeForPath(source);
 		ZKDirectory destDir = opendir(dirname(dest));
 		destDir.link(target, basename(dest));
@@ -315,6 +339,7 @@ public class ZKFS extends FS {
 	
 	@Override
 	public void symlink(String source, String dest) throws IOException {
+		assertWritable(dest);
 		Inode instance = create(dest);
 		instance.getStat().makeSymlink();
 		
@@ -344,6 +369,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void mknod(String path, int type, int major, int minor) throws IOException {
+		assertWritable(path);
 		switch(type) {
 		case Stat.TYPE_CHARACTER_DEVICE:
 			create(path).getStat().makeCharacterDevice(major, minor);
@@ -358,11 +384,13 @@ public class ZKFS extends FS {
 	
 	@Override
 	public void mkfifo(String path) throws IOException {
+		assertWritable(path);
 		create(path).getStat().makeFifo();
 	}
 	
 	@Override
 	public void chmod(String path, int mode) throws IOException {
+		assertWritable(path);
 		Inode inode = inodeForPath(path);
 		inode.getStat().setMode(mode);
 		markDirty();
@@ -370,6 +398,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void chown(String path, int uid) throws IOException {
+		assertWritable(path);
 		Inode inode = inodeForPath(path);
 		inode.getStat().setUid(uid);
 		markDirty();
@@ -377,6 +406,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void chown(String path, String name) throws IOException {
+		assertWritable(path);
 		Inode inode = inodeForPath(path);
 		inode.getStat().setUser(name);
 		markDirty();
@@ -384,6 +414,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void chgrp(String path, int gid) throws IOException {
+		assertWritable(path);
 		Inode inode = inodeForPath(path);
 		inode.getStat().setGid(gid);
 		markDirty();
@@ -391,6 +422,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void chgrp(String path, String group) throws IOException {
+		assertWritable(path);
 		Inode inode = inodeForPath(path);
 		inode.getStat().setGroup(group);
 		markDirty();
@@ -398,6 +430,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void setMtime(String path, long mtime) throws IOException {
+		assertWritable(path);
 		Inode inode = inodeForPath(path, false);
 		inode.getStat().setMtime(mtime);
 		markDirty();
@@ -405,6 +438,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void setCtime(String path, long ctime) throws IOException {
+		assertWritable(path);
 		Inode inode = inodeForPath(path, false);
 		inode.getStat().setCtime(ctime);
 		markDirty();
@@ -412,6 +446,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public void setAtime(String path, long atime) throws IOException {
+		assertWritable(path);
 		Inode inode = inodeForPath(path, false);
 		inode.getStat().setAtime(atime);
 		markDirty();
@@ -424,7 +459,11 @@ public class ZKFS extends FS {
 	
 	@Override
 	public ZKFS unscopedFS() throws IOException {
-		return new ZKFS(baseRevision);
+		ZKFS unscoped = new ZKFS(baseRevision);
+		if(isReadOnly) {
+			unscoped.setReadOnly();
+		}
+		return unscoped;
 	}
 	
 	public void uncache(String path) throws IOException {
@@ -535,5 +574,14 @@ public class ZKFS extends FS {
 		return this.getClass().getSimpleName() + " "
 				+ Util.formatArchiveId(archive.getConfig().getArchiveId()) + " "
 				+ Util.formatRevisionTag(this.baseRevision);
+	}
+	
+	public ZKFS setReadOnly() {
+		this.isReadOnly = true;
+		return this;
+	}
+	
+	public boolean isReadOnly() {
+		return isReadOnly;
 	}
 }
