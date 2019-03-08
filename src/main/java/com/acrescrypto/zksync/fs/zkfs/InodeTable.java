@@ -10,6 +10,7 @@ import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.FreeList.FreeListExhaustedException;
 import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
@@ -348,6 +349,10 @@ public class InodeTable extends ZKFile {
 	protected RevisionInfo readRevisionInfo() throws IOException {
 		seek(0, SEEK_SET);
 		byte[] serializedRevInfo = read(RevisionInfo.FIXED_SIZE);
+		if(serializedRevInfo.length < RevisionInfo.FIXED_SIZE) {
+			throw new NonexistentPageException(inode.refTag, 0);
+		}
+		
 		return new RevisionInfo(this, serializedRevInfo);
 	}
 	

@@ -97,8 +97,9 @@ public class TestUtils {
 			}
 			
 			FS.getGlobalOpenFiles().forEach((file, backtrace)->{
-				System.out.printf("Open file: [%s] -- %s\nOpened from:\n",
+				System.out.printf("Open file: [%s] %s -- %s\nOpened from:\n",
 						file.getFs(),
+						System.identityHashCode(file),
 						file.getPath());
 				backtrace.printStackTrace();
 			});

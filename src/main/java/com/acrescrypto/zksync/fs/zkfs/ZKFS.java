@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
+import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -26,6 +27,7 @@ public class ZKFS extends FS {
 	protected String root;
 	protected boolean dirty;
 	protected LinkedList<ZKFSDirtyMonitor> dirtyMonitors = new LinkedList<>();
+	protected SubscriptionToken<?> cacheToken; 
 		
 	public final static int MAX_PATH_LEN = 65535;
 	
@@ -33,11 +35,28 @@ public class ZKFS extends FS {
 	
 	public ZKFS(RevisionTag revision, String root) throws IOException {
 		this.root = root;
+		cacheToken = revision.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.directoryCacheSize").asInt((s)->{
+			if(this.directoriesByPath == null) return;
+			try {
+				logger.info("ZKFS {} {}: Setting directory cache size to {}; was {}",
+						Util.formatArchiveId(revision.getConfig().getArchiveId()),
+						baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
+						s,
+						this.directoriesByPath.getCapacity());
+				this.directoriesByPath.setCapacity(s);
+			} catch(IOException exc) {
+				logger.error("ZKFS {} {}: Caught exception updating directory cache size to {}",
+						Util.formatArchiveId(revision.getConfig().getArchiveId()),
+						baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
+						s);
+			}
+		});
 		rebase(revision);
 	}
 	
 	@Override
 	public void close() throws IOException {
+		cacheToken.close();
 		inodeTable.close();
 		for(String path : directoriesByPath.cachedKeys()) {
 			directoriesByPath.get(path).close();
@@ -457,11 +476,19 @@ public class ZKFS extends FS {
 				Util.formatRevisionTag(revision),
 				new Throwable());
 		this.archive = revision.getArchive();
+		
+		int cacheSize = archive.getMaster().getGlobalConfig().getInt("fs.settings.directoryCacheSize");
+		
+		if(this.inodeTable != null) {
+			this.inodeTable.close();
+		}
+		
+		this.baseRevision = revision;
+		
 		if(this.directoriesByPath != null) {
 			this.directoriesByPath.removeAll();
 		}
 		
-		int cacheSize = archive.getMaster().getGlobalConfig().getInt("fs.settings.directoryCacheSize");
 		this.directoriesByPath = new HashCache<String,ZKDirectory>(cacheSize, (String path) -> {
 			assertPathIsDirectory(path);
 			return new ZKDirectory(this, path);
@@ -470,27 +497,6 @@ public class ZKFS extends FS {
 			dir.close();
 		});
 		
-		archive.getMaster().getGlobalConfig().subscribe("fs.settings.directoryCacheSize").asInt((s)->{
-			try {
-				logger.info("ZKFS {} {}: Setting directory cache size to {}; was {}",
-						Util.formatArchiveId(revision.getConfig().getArchiveId()),
-						baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
-						s,
-						this.directoriesByPath.getCapacity());
-				this.directoriesByPath.setCapacity(s);
-			} catch(IOException exc) {
-				logger.error("ZKFS {} {}: Caught exception updating directory cache size to {}",
-						Util.formatArchiveId(revision.getConfig().getArchiveId()),
-						baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
-						s);
-			}
-		});
-		
-		if(this.inodeTable != null) {
-			this.inodeTable.close();
-		}
-		
-		this.baseRevision = revision;
 		this.inodeTable = new InodeTable(this, revision);
 		this.dirty = false;
 		

@@ -707,9 +707,10 @@ public class PeerConnection {
 		assertPeerCapability(PEER_TYPE_FULL);
 		int priority = msg.rxBuf.getInt();
 		
-		byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
 		while(msg.rxBuf.hasRemaining()) {
-			RevisionTag tag = new RevisionTag(archive.getConfig(), msg.rxBuf.read(revTagBytes), false);
+			byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
+			msg.rxBuf.read(revTagBytes);
+			RevisionTag tag = new RevisionTag(archive.getConfig(), revTagBytes, false);
 			sendRevisionContents(priority, tag);
 		}
 	}

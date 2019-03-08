@@ -1223,15 +1223,19 @@ public class PeerConnectionTest {
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REVISION_CONTENTS);
 		RevisionTag[] tags = new RevisionTag[16];
 		
-		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
+		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array()); // priority 0
 		for(int i = 0; i < tags.length; i++) {
 			try(ZKFS fs = archive.openBlank()) {
 				fs.write("file"+i, "content".getBytes());
 				tags[i] = fs.commit();
 				msg.receivedData((byte) 0, tags[i].getBytes());
 				if(i == tags.length/2) {
-					RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+					byte[] refTagBytes = crypto.prng(crypto.symNonce(i+3)).getBytes(archive.getConfig().refTagSize());
+					RefTag refTag = new RefTag(archive, refTagBytes);
 					RevisionTag fakeRevTag = new RevisionTag(refTag, 0, 0);
+					
+					// making this non-immediate gives us more interesting branches
+					assertFalse(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);
 					msg.receivedData((byte) 0, fakeRevTag.getBytes());
 				}
 			}

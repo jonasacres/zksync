@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.EINVALException;
+import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
@@ -194,10 +195,15 @@ public class PageQueue {
 			}
 			
 			try {
-				this.inodeTable = revTag.makeCacheOnly().readOnlyFS().getInodeTable();
-				assert(inodeTable.nextInodeId() <= Integer.MAX_VALUE);
-				this.shuffler = Shuffler.fixedShuffler((int) inodeTable.nextInodeId());
+				try {
+					this.inodeTable = revTag.makeCacheOnly().readOnlyFS().getInodeTable();
+					assert(inodeTable.nextInodeId() <= Integer.MAX_VALUE);
+					this.shuffler = Shuffler.fixedShuffler((int) inodeTable.nextInodeId());
+				} catch(NonexistentPageException exc) {
+					// garbage revtags leave null inode table
+				}
 			} catch(IOException|SecurityException exc) {
+				exc.printStackTrace();
 				this.shuffler = Shuffler.fixedShuffler(0);
 			}
 		}
@@ -205,7 +211,7 @@ public class PageQueue {
 		@Override
 		QueueItem nextChildActual() {
 			try {
-				while(shuffler.hasNext()) {
+				while(inodeTable != null && shuffler.hasNext()) {
 					int inodeId = shuffler.next();
 					RefTag refTag = inodeTable.inodeWithId(inodeId).getRefTag();
 					if(refTag.getRefType() != RefTag.REF_TYPE_IMMEDIATE) {
