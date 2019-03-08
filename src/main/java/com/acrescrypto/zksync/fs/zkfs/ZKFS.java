@@ -471,8 +471,7 @@ public class ZKFS extends FS {
 		logger.info("ZKFS {} {}: Rebasing to revision {}",
 				Util.formatArchiveId(revision.getConfig().getArchiveId()),
 				baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
-				Util.formatRevisionTag(revision),
-				new Throwable());
+				Util.formatRevisionTag(revision));
 		this.archive = revision.getArchive();
 		
 		int cacheSize = archive.getMaster().getGlobalConfig().getInt("fs.settings.directoryCacheSize");
