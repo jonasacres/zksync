@@ -408,7 +408,7 @@ public class RevisionTree implements AutoCloseable {
 	 * @throws SearchFailedException */
 	public boolean isSuperceded(RevisionTag revTag) throws SearchFailedException {
 		ArrayList<RevisionTag> tips = config.getRevisionList().branchTips();
-		logger.debug("RevisionTree {}: Checling superceded status of {}",
+		logger.debug("RevisionTree {}: Checking superceded status of {}",
 				Util.formatArchiveId(config.getArchiveId()),
 				Util.formatRevisionTag(revTag));
 

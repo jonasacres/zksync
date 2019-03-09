@@ -256,7 +256,7 @@ public class FSMirror {
 					path,
 					zstat.getMtime(),
 					tstat.getMtime());
-		} else if(tstat.getMode() != zstat.getMode()) {
+		} else if(tstat.getMode() != zstat.getMode() && zstat.getType() != Stat.TYPE_SYMLINK) {
 			logger.trace("FS {}: FSMirror detects difference at {} due to differing mode (zkfs 0{}, target 0{})",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					path,
