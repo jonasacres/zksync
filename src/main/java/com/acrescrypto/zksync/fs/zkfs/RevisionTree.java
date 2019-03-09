@@ -18,11 +18,12 @@ import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
+import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
 
-public class RevisionTree {
+public class RevisionTree implements AutoCloseable {
 	public final static int DEFAULT_TREE_SEARCH_TIMEOUT_MS = 30000; // when finding ancestors, how long to wait before giving up on a lookup?
 	public static int treeSearchTimeoutMs = DEFAULT_TREE_SEARCH_TIMEOUT_MS;
 	
@@ -38,6 +39,8 @@ public class RevisionTree {
 		}
 		
 		boolean hasAncestor(RevisionTag tag) throws SearchFailedException {
+			if(this.height <= tag.getHeight()) return false;
+			
 			while(height >= 0) {
 				if(revTags.contains(tag)) {
 					return true;
@@ -212,11 +215,18 @@ public class RevisionTree {
 	}
 	
 	ZKArchiveConfig config;
+	protected final Logger logger = LoggerFactory.getLogger(RevisionTree.class);
 	HashCache<RevisionTag, HashSet<RevisionTag>> map = new HashCache<>(256,
 			(tag)->{
 				if(hasParentsForTag(tag)) {
+					logger.trace("RevisionTree {}: Caching parent list for locally-stored revision {}",
+							Util.formatArchiveId(config.getArchiveId()),
+							Util.formatRevisionTag(tag));
 					return new HashSet<>(tag.getInfo().parents);
 				} else {
+					logger.trace("RevisionTree {}: Caching parent list for non-locally-stored revision {}",
+							Util.formatArchiveId(config.getArchiveId()),
+							Util.formatRevisionTag(tag));
 					Collection<RevisionTag> parents = parentsForTag(tag);
 					if(parents == null) {
 						throw new SearchFailedException();
@@ -225,9 +235,13 @@ public class RevisionTree {
 					return new HashSet<>(parents);
 				}
 			},
-			(tag,parents)->{});
+			(tag,parents)->{
+				logger.trace("RevisionTree {}: Evicting cached parent list for revision {}",
+						Util.formatArchiveId(config.getArchiveId()),
+						Util.formatRevisionTag(tag));
+			});
 	protected GroupedThreadPool threadPool;
-	protected final Logger logger = LoggerFactory.getLogger(RevisionTree.class); 
+	protected LinkedList<SubscriptionToken<?>> subscriptions = new LinkedList<>();
 	
 	public RevisionTree(ZKArchiveConfig config) {
 		this.config = config;
@@ -235,21 +249,40 @@ public class RevisionTree {
 		try {
 			this.map.setCapacity(config.getMaster().getGlobalConfig().getInt("fs.settings.revisionTreeCacheSize"));
 		} catch(IOException exc) {
-			logger.error("Caught exception setting RevisionTree capacity; proceeding anyway", exc);
+			logger.error("RevisionTree {}: Caught exception setting RevisionTree capacity; proceeding anyway",
+					Util.formatArchiveId(config.getArchiveId()),
+					exc);
 		}
 		
-		config.getMaster().getGlobalConfig().subscribe("fs.settings.revisionTreeCacheSize").asInt((s)-> {
+		subscriptions.add(config.getMaster().getGlobalConfig().subscribe("fs.settings.revisionTreeCacheSize").asInt((s)-> {
 			try {
-				logger.info("Setting revision tree capacity to {}; was {}",
+				logger.info("RevisionTree {}: Setting revision tree capacity to {}; was {}",
+						Util.formatArchiveId(config.getArchiveId()),
 						s,
 						this.map.getCapacity());
 				this.map.setCapacity(s);
 			} catch(IOException exc) {
-				logger.error("Caught exception setting RevisionTree capacity", exc);
+				logger.error("RevisionTree {}: Caught exception setting RevisionTree capacity",
+						Util.formatArchiveId(config.getArchiveId()),
+						exc);
 			}
-		});
+		}));
 		
 		threadPool = GroupedThreadPool.newWorkStealingThreadPool(config.getThreadGroup(), "RevisionTree lookup");
+	}
+	
+	public void close() {
+		for(SubscriptionToken<?> subscription : subscriptions) {
+			subscription.close();
+		}
+		
+		try {
+			map.removeAll();
+		} catch (IOException exc) {
+			logger.error("RevisionTree {}: Caught exception purging RevisionTree cache",
+					Util.formatArchiveId(config.getArchiveId()),
+					exc);
+		}
 	}
 	
 	public synchronized void clear() throws IOException {
@@ -266,7 +299,9 @@ public class RevisionTree {
 				map.add(revTag, parentSet);
 				this.notifyAll();
 			} catch(IOException exc) {
-				logger.error("Caught exception adding parents for tag", exc);
+				logger.error("RevisionTree {}: Caught exception adding parents for tag",
+						Util.formatArchiveId(config.getArchiveId()),
+						exc);
 			}
 		}
 	}
@@ -277,7 +312,9 @@ public class RevisionTree {
 			if(config.archive.isClosed()) return false;
 			if(config.archive.hasInodeTableFirstPage(revTag)) return true;
 		} catch(IOException exc) {
-			logger.error("Caught IOException checking status of revTag", exc);
+			logger.error("RevisionTree {}: Caught IOException checking status of revTag",
+					Util.formatArchiveId(config.getArchiveId()),
+					exc);
 		}
 		
 		return false;
@@ -300,13 +337,17 @@ public class RevisionTree {
 				return map.get(revTag);
 			} catch(SearchFailedException exc) {
 				if(config.isClosed()) return null;
-				logger.error("Encountered IOException looking up cached revTag", exc);
+				logger.error("RevisionTree {}: Encountered IOException looking up cached revTag",
+						Util.formatArchiveId(config.getArchiveId()),
+						exc);
 			} catch(ClosedException exc) {
-				logger.info("Cannot look up cached revTag {} in closed archive {}",
+				logger.info("RevisionTree {}: Cannot look up cached revTag {} in closed archive",
 						Util.formatArchiveId(config.getArchiveId()),
 						Util.formatRevisionTag(revTag));
 			} catch (IOException exc) {
-				logger.error("Encountered IOException looking up cached revTag", exc);
+				logger.error("RevisionTree {}: Encountered IOException looking up cached revTag",
+						Util.formatArchiveId(config.getArchiveId()),
+						exc);
 			}
 		}
 		
@@ -322,6 +363,7 @@ public class RevisionTree {
 	}
 	
 	public boolean descendentOf(RevisionTag tag, RevisionTag possibleAncestor) throws SearchFailedException {
+		if(tag.equals(possibleAncestor)) return true;
 		return new TreeSearchItem(tag).hasAncestor(possibleAncestor);
 	}
 	
@@ -366,6 +408,9 @@ public class RevisionTree {
 	 * @throws SearchFailedException */
 	public boolean isSuperceded(RevisionTag revTag) throws SearchFailedException {
 		ArrayList<RevisionTag> tips = config.getRevisionList().branchTips();
+		logger.debug("RevisionTree {}: Checling superceded status of {}",
+				Util.formatArchiveId(config.getArchiveId()),
+				Util.formatRevisionTag(revTag));
 
 		for(RevisionTag tip : tips) {
 			if(tip.equals(revTag)) continue;
@@ -374,32 +419,32 @@ public class RevisionTree {
 			}
 		}
 		
-		if(revTag.getHeight() > 1) { // this micro-optimization helps simplify test-writing (no need to provide parent lists for revtags of height 1)
-			Collection<RevisionTag> parents = parentsForTag(revTag);
-			if(parents == null) {
-				if(config.isClosed()) return false; // avoid needless log spam
-				throw new SearchFailedException();
-			}
-			
-			if(parents.size() > 1) {
-				for(RevisionTag tip : tips) {
-					if(tip.equals(revTag)) continue;
-					// if this is a merge, do we already have a merge including everything this one does?
-					Collection<RevisionTag> tipParents = parentsForTagLocal(tip);
-					if(tipParents != null && tipParents.containsAll(parents)) {
-						return true;
-					}
-					
-					boolean containsParents = true;
-					for(RevisionTag parent : parents) {
-						if(!descendentOf(tip, parent)) {
-							containsParents = false;
-							break;
-						}
-					}
-					
-					if(containsParents) return true;
+		if(revTag.getHeight() <= 1) return false; // this micro-optimization helps simplify test-writing (no need to provide parent lists for revtags of height 1)
+		
+		Collection<RevisionTag> parents = parentsForTag(revTag);
+		if(parents == null) {
+			if(config.isClosed()) return false; // avoid needless log spam
+			throw new SearchFailedException();
+		}
+		
+		if(parents.size() > 1) {
+			for(RevisionTag tip : tips) {
+				if(tip.equals(revTag)) continue;
+				// if this is a merge, do we already have a merge including everything this one does?
+				Collection<RevisionTag> tipParents = parentsForTagLocal(tip);
+				if(tipParents != null && tipParents.containsAll(parents)) {
+					return true;
 				}
+				
+				boolean containsParents = true;
+				for(RevisionTag parent : parents) {
+					if(!descendentOf(tip, parent)) {
+						containsParents = false;
+						break;
+					}
+				}
+				
+				if(containsParents) return true;
 			}
 		}
 		
@@ -416,6 +461,7 @@ public class RevisionTree {
 		for(RevisionTag parent : sorted) {
 			ctx.update(parent.getBytes());
 		}
+		
 		parentHash = Util.shortTag(ctx.finish());
 		
 		if(parentHash != revTag.getParentHash()) {
@@ -425,6 +471,10 @@ public class RevisionTree {
 	
 	protected synchronized boolean fetchParentsForTag(RevisionTag revTag, long timeoutMs) {
 		// priority just a bit superior to the default for file lookups since these should go fast
+		logger.debug("RevisionList {}: Fetching parents for tag {}, timeout {}ms",
+				Util.formatArchiveId(config.getArchiveId()),
+				Util.formatRevisionTag(revTag),
+				timeoutMs);
 		config.swarm.requestRevisionDetails(SwarmFS.REQUEST_PRIORITY+1, revTag);
 		long endTime = timeoutMs < 0 ? Long.MAX_VALUE : System.currentTimeMillis() + timeoutMs;
 		
@@ -434,6 +484,13 @@ public class RevisionTree {
 			} catch(InterruptedException exc) {}
 		}
 		
-		return parentsForTagLocal(revTag) != null;
+		if(parentsForTagLocal(revTag) == null) {
+			logger.info("RevisionList {}: Timed out fetching parents for tag {}, timeout {}ms",
+					Util.formatArchiveId(config.getArchiveId()),
+					timeoutMs);
+			return false;
+		}
+		
+		return true;
 	}
 }

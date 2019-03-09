@@ -129,19 +129,21 @@ public class FSMirror {
 	}
 
 	protected void watchThread(MutableBoolean flag, WatchService watcher, HashMap<WatchKey, Path> pathsByKey) {
-		while(flag.booleanValue()) {
-			if(!watchThreadBody(flag, watcher, pathsByKey)) {
-				break;
-			}
-		}
-
 		try {
-			watcher.close();
+			while(flag.booleanValue()) {
+				if(!watchThreadBody(flag, watcher, pathsByKey)) {
+					break;
+				}
+			}
+		} finally {
+			try {
+				watcher.close();
+			} catch (IOException exc) {
+				logger.error("FS {}: FSMirror unable to close watcher",
+						Util.formatArchiveId(zkfs.archive.config.archiveId),
+						exc);
+			}
 			decrementActive();
-		} catch (IOException exc) {
-			logger.error("FS {}: FSMirror unable to close watcher",
-					Util.formatArchiveId(zkfs.archive.config.archiveId),
-					exc);
 		}
 	}
 	

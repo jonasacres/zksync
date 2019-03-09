@@ -619,6 +619,8 @@ public class ZKArchiveConfig {
 		logger.info("ZKFS {} -: Closing archive",
 				Util.formatArchiveId(archiveId));
 		swarm.close();
+		if(revisionList != null) revisionList.close();
+		if(revisionTree != null) revisionTree.close();
 		stopAdvertising();
 	}
 	

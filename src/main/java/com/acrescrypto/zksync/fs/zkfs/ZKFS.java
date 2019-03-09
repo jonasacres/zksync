@@ -553,12 +553,6 @@ public class ZKFS extends FS {
 		
 		this.inodeTable = new InodeTable(this, revision);
 		this.dirty = false;
-		
-		logger.info("ZKFS {} {}: {}\n{}",
-				Util.formatArchiveId(revision.getConfig().getArchiveId()),
-				baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
-				System.identityHashCode(this),
-				dump());
 	}
 	
 	public void addMonitor(ZKFSDirtyMonitor monitor) {

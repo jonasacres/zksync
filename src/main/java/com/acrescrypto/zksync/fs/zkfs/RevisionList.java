@@ -16,17 +16,15 @@ import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 
-public class RevisionList {
+public class RevisionList implements AutoCloseable {
 	public interface RevisionMonitor {
 		public void notifyNewRevision(RevisionTag revTag);
 	}
-	
-	public final static long DEFAULT_AUTOMERGE_DELAY_MS = 10000;
-	public final static long DEFAULT_MAX_AUTOMERGE_DELAY_MS = 60000;
 	
 	protected ArrayList<RevisionTag> branchTips = new ArrayList<>();
 	protected LinkedList<RevisionMonitor> monitors = new LinkedList<>();
@@ -34,17 +32,34 @@ public class RevisionList {
 	protected RevisionTag latest; // "latest" tip; understood to mean tip with greatest height, using hash comparison as tiebreaker.
 	protected boolean automerge;
 	protected SnoozeThread automergeSnoozeThread;
-	public long automergeDelayMs = DEFAULT_AUTOMERGE_DELAY_MS;
-	public long maxAutomergeDelayMs = DEFAULT_MAX_AUTOMERGE_DELAY_MS;
+	public long automergeDelayMs;
+	public long maxAutomergeDelayMs;
 	private Logger logger = LoggerFactory.getLogger(RevisionList.class);
+	protected LinkedList<SubscriptionToken<?>> toks = new LinkedList<>();
 	
 	public RevisionList(ZKArchiveConfig config) throws IOException {
 		this.config = config;
+		automergeDelayMs = config.getMaster().getGlobalConfig().getInt("fs.settings.automergeDelayMs");
+		maxAutomergeDelayMs = config.getMaster().getGlobalConfig().getInt("fs.settings.maxAutomergeDelayMs");
+		
+		toks.add(config.getMaster().getGlobalConfig().subscribe("fs.settings.automergeDelayMs").asInt((delay)->{
+			this.automergeDelayMs = delay;
+		}));
+		
+		toks.add(config.getMaster().getGlobalConfig().subscribe("fs.settings.maxAutomergeDelayMs").asInt((delay)->{
+			this.maxAutomergeDelayMs = delay;
+		}));
 		
 		try {
 			read();
 		} catch(ENOENTException exc) {
 			branchTips = new ArrayList<>();
+		}
+	}
+	
+	public void close() {
+		for(SubscriptionToken<?> tok : toks) {
+			tok.close();
 		}
 	}
 	
@@ -65,11 +80,18 @@ public class RevisionList {
 		
 		synchronized(this) {
 			if(config.revisionTree.isSuperceded(newBranch)) return false;
-			logger.info("FS {}: Adding branch tip {} to revision list",
-					Util.formatArchiveId(config.archiveId),
-					Util.formatRevisionTag(newBranch));
-			if(branchTips.contains(newBranch)) return false;
+			if(branchTips.contains(newBranch)) {
+				logger.debug("RevisionList {}: Not adding branch tip {} to revision list, already in list, current size = {}",
+						Util.formatArchiveId(config.archiveId),
+						Util.formatRevisionTag(newBranch),
+						branchTips.size());
+				return false;
+			}
 			branchTips.add(newBranch);
+			logger.info("RevisionList {}: Added branch tip {} to revision list, current size = {}",
+					Util.formatArchiveId(config.archiveId),
+					Util.formatRevisionTag(newBranch),
+					branchTips.size());
 			config.swarm.announceTip(newBranch);
 			updateLatest(newBranch);
 		}
@@ -82,7 +104,7 @@ public class RevisionList {
 			try {
 				queueAutomerge();
 			} catch (DiffResolutionException exc) {
-				logger.error("FS {}: Unable to automerge with new branch {}: ",
+				logger.error("RevisionList {}: Unable to automerge with new branch {}: ",
 						Util.formatArchiveId(config.archiveId),
 						newBranch,
 						exc);
@@ -93,6 +115,10 @@ public class RevisionList {
 	}
 	
 	public void consolidate(RevisionTag newBranch) throws IOException {
+		logger.info("RevisionList {}: Consolidating to branch tip {}",
+				Util.formatArchiveId(config.getArchiveId()),
+				Util.formatRevisionTag(newBranch));
+
 		Collection<RevisionTag> tips, parents;
 		ArrayList<RevisionTag> toRemove = new ArrayList<>();
 		RevisionTree tree = config.getRevisionTree();
@@ -115,6 +141,10 @@ public class RevisionList {
 		}
 		
 		synchronized(this) {
+			logger.info("RevisionList {}: Removing {} branch tips due to consolidation to tip {}",
+					Util.formatArchiveId(config.getArchiveId()),
+					toRemove.size(),
+					Util.formatRevisionTag(newBranch));
 			for(RevisionTag tip : toRemove) {
 				removeBranchTip(tip);
 			}
@@ -124,6 +154,9 @@ public class RevisionList {
 	public void consolidate() throws IOException {
 		ArrayList<RevisionTag> tips, toRemove = new ArrayList<>();
 		RevisionTree tree = config.getRevisionTree();
+		
+		logger.info("RevisionList {}: Starting general consolidation",
+				Util.formatArchiveId(config.getArchiveId()));
 
 		synchronized(this) {
 			tips = new ArrayList<>(branchTips);
@@ -136,6 +169,9 @@ public class RevisionList {
 		}
 		
 		synchronized(this) {
+			logger.info("RevisionList {}: Removing {} branch tips due to general consolidation",
+					Util.formatArchiveId(config.getArchiveId()),
+					toRemove.size());
 			for(RevisionTag tip : toRemove) {
 				removeBranchTip(tip);
 			}
@@ -143,11 +179,17 @@ public class RevisionList {
 	}
 	
 	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
-		logger.info("FS {}: Removed branch tip {}",
-				Util.formatArchiveId(config.archiveId),
-				Util.formatRevisionTag(oldBranch));
 		branchTips.remove(oldBranch);
-		if(latest != null && latest.equals(oldBranch)) recalculateLatest();
+		logger.info("RevisionList {}: Removed branch tip {}, remaining list size = {}",
+				Util.formatArchiveId(config.archiveId),
+				Util.formatRevisionTag(oldBranch),
+				branchTips.size());
+		if(latest != null && latest.equals(oldBranch)) {
+			logger.debug("RevisionList {}: Recalculating latest branch tip due to removal of previous latest tip {}",
+					Util.formatArchiveId(config.archiveId),
+					Util.formatRevisionTag(oldBranch));
+			recalculateLatest();
+		}
 	}
 	
 	public String getPath() {
@@ -185,7 +227,7 @@ public class RevisionList {
 				branchTips.add(revTag);
 				updateLatest(revTag);
 			} catch (SecurityException exc) {
-				logger.error("FS {}: Invalid signature on stored revision tag; skipping",
+				logger.error("RevisionList {}: Invalid signature on stored revision tag; skipping",
 						Util.formatArchiveId(config.archiveId),
 						exc);
 			}
@@ -207,6 +249,9 @@ public class RevisionList {
 	}
 	
 	public void setAutomerge(boolean automerge) {
+		logger.info("RevisionList {}: Set automerge = {}",
+				Util.formatArchiveId(config.getArchiveId()),
+				automerge);
 		this.automerge = automerge;
 	}
 	
@@ -231,7 +276,7 @@ public class RevisionList {
 	
 	protected void updateLatest(RevisionTag newTip) {
 		if(latest == null || newTip.compareTo(latest) > 0) {
-			logger.info("FS {}: New latest revtag {}, was {}",
+			logger.info("RevisionList {}: New latest revtag {}, was {}",
 					Util.formatArchiveId(config.archiveId),
 					Util.formatRevisionTag(newTip),
 					latest != null ? Util.formatRevisionTag(latest) : "null");
@@ -243,7 +288,7 @@ public class RevisionList {
 		latest = null;
 		for(RevisionTag tip : branchTips) {
 			if(latest == null || tip.compareTo(latest) > 0) {
-				logger.info("FS {}: Recalculated latest revtag {}, was {}",
+				logger.info("RevisionList {}: Recalculated latest revtag {}, was {}",
 						Util.formatArchiveId(config.archiveId),
 						Util.formatRevisionTag(tip),
 						latest != null ? Util.formatRevisionTag(latest) : "null");
@@ -253,24 +298,35 @@ public class RevisionList {
 	}
 	
 	protected synchronized void queueAutomerge() throws IOException, DiffResolutionException {
+		logger.debug("RevisionList {}: Queuing automerge",
+				Util.formatArchiveId(config.getArchiveId()));
+
 		if(automergeSnoozeThread == null || automergeSnoozeThread.isCancelled()) {
 			automergeSnoozeThread = new SnoozeThread(automergeDelayMs, maxAutomergeDelayMs, true, ()-> {
-				if(config.getArchive().isClosed()) return;
+				if(config.getArchive().isClosed()) {
+					logger.debug("RevisionList {}: Skipping automerge of closed archive",
+							Util.formatArchiveId(config.getArchiveId()));
+					return;
+				}
 				try {
 					if(config.isReadOnly()) {
 						/* obviously we're not doing any merging if we don't have the write key, so
 						 * let's just consolidate instead.
 						 */
 						// TODO API: (coverage) branch
+						logger.debug("RevisionList {}: Consolidating branches on read-only archive due to automerge thread",
+								Util.formatArchiveId(config.getArchiveId()));
 						consolidate();
 					} else {
+						logger.info("RevisionList {}: Automerge started",
+								Util.formatArchiveId(config.getArchiveId()));
 						DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
 					}
 				} catch(ClosedException exc) {
-					logger.debug("FS {}: Automerge aborted since archive clsoed",
-							config.getArchiveId());
+					logger.debug("RevisionList {}: Automerge aborted since archive clsoed",
+							Util.formatArchiveId(config.getArchiveId()));
 				} catch (IOException|DiffResolutionException exc) {
-					logger.error("FS {}: Error performing automerge",
+					logger.error("RevisionList {}: Error performing automerge",
 							Util.formatArchiveId(config.archiveId),
 							exc);
 				}

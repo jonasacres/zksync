@@ -23,7 +23,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public final static int MAX_NAME_LEN = 255;
 	
 	public ZKDirectory(ZKFS fs, String path) throws IOException {
-		super(fs, path, fs.archive.config.isReadOnly() ? O_RDONLY : O_RDWR, true);
+		super(fs, path, fs.archive.config.isReadOnly() || fs.isReadOnly ? O_RDONLY : O_RDWR, true);
 		try {
 			entries = new HashMap<String,Long>();
 			byte[] contents = read((int) inode.getStat().getSize());

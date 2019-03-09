@@ -234,9 +234,10 @@ public class RevisionListTest {
 		
 		list.write();
 		
-		RevisionList newList = new RevisionList(config);
-		assertEquals(revTags, list.branchTips());
-		assertEquals(revTags, newList.branchTips());
+		try(RevisionList newList = new RevisionList(config)) {
+			assertEquals(revTags, list.branchTips());
+			assertEquals(revTags, newList.branchTips());
+		}
 	}
 	
 	@Test

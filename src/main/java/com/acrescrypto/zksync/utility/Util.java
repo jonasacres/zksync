@@ -361,8 +361,12 @@ public class Util {
 	}
 	
 	public static String formatRevisionTag(RevisionTag rev) {
-		if(rev == null) return "rev-null";
-		return "rev-" + formatLongIdB64(rev.getBytes());
+		if(rev == null) return "rev-?-?-null";
+		if(rev.isUnpacked()) {
+			return "rev-" + rev.getHeight() + "-" + formatLongIdB64(rev.getBytes());
+		} else {
+			return "rev-?-?-" + formatLongIdB64(rev.getBytes());
+		}
 	}
 	
 	public static String formatPubKey(PublicDHKey key) {
@@ -378,7 +382,7 @@ public class Util {
 	}
 
 	public static String formatRefTag(RefTag refTag) {
-		return "ref-" + Util.toWebSafeBase64(Util.encode64(refTag.getBytes())).substring(0, 8);
+		return "ref-" + refTag.getRefType() + "-" + Util.toWebSafeBase64(Util.encode64(refTag.getBytes())).substring(0, 8);
 	}
 
 	public static String formatPageTag(byte[] pageTag) {
