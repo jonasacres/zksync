@@ -129,7 +129,7 @@ public class ZKArchiveConfig {
 	/** Create a new archive. 
 	 * @throws IOException */
 	protected ZKArchiveConfig(ArchiveAccessor accessor, String description, int pageSize, Key archiveRoot, Key writeRoot) throws IOException {
-		assert(pageSize > 0);
+		assert(pageSize >= RevisionInfo.FIXED_SIZE);
 		assert(!accessor.isSeedOnly());
 		
 		this.accessor = accessor;
@@ -660,7 +660,7 @@ public class ZKArchiveConfig {
 		storage.ensurePresent(path);
 		
 		while(stat == null || stat.getSize() != this.getSerializedPageSize()) {
-			if(++attempts >= maxAttempts) {
+			if(++attempts > maxAttempts) {
 				if(stat == null) {
 					logger.info("ZKFS {} -: Timed out waiting for page {}, page not received",
 							Util.formatArchiveId(archiveId),

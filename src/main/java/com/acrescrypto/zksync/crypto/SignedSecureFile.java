@@ -57,6 +57,11 @@ public class SignedSecureFile {
 
 			byte[] contents = fs.read(path());
 			if(!Arrays.equals(authKey.authenticate(contents), tag)) {
+				logger.error("SignedSecureFile {}: Unable to authenticate, |contents|={}, H(contents)={}, H(expected)={}",
+						path(),
+						contents.length,
+						Util.formatLongId(contents),
+						Util.formatLongId(tag));
 				throw new SecurityException();
 			}
 			
@@ -75,7 +80,10 @@ public class SignedSecureFile {
 			System.arraycopy(contents, 0, salt, 0, salt.length);
 			
 			Key derivedKey = textKey.derive("easysafe-file-encryption", salt);
-			byte[] paddedPlaintext = derivedKey.decryptUnauthenticated(fixedIV(), contents, salt.length, contents.length - salt.length);
+			byte[] paddedPlaintext = derivedKey.decryptUnauthenticated(fixedIV(),
+					contents,
+					salt.length,
+					sigOffset - salt.length);
 			return crypto.unpad(paddedPlaintext);
 		} catch (Exception exc) {
 			long size = -1;

@@ -154,6 +154,13 @@ public class ZKFile extends File {
 		if(bufOffset < 0 || maxLength > buf.length - bufOffset) throw new IndexOutOfBoundsException();
 		
 		int numToRead = (int) Math.min(maxLength, getStat().getSize()-offset), readLen = Math.max(0, numToRead);
+		logger.trace("ZKFS {}: read {}, numToRead={}, readLen={}, offset={}, |buf|={}",
+				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+				path,
+				numToRead,
+				readLen,
+				offset,
+				buf.length);
 		if(numToRead == 0) return -1;
 
 		while(numToRead > 0) {
@@ -162,7 +169,14 @@ public class ZKFile extends File {
 			bufferPage(neededPageNum);
 			bufferedPage.seek((int) (offset % zkfs.archive.config.pageSize));
 			int numRead = bufferedPage.read(buf, bufOffset + readLen - numToRead, numToRead);
-			if(numRead == 0) return readLen;
+			logger.trace("ZKFS {} {}: read {} page {}, numRead={}, bufOffset={}",
+					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+					Util.formatRevisionTag(zkfs.baseRevision),
+					path,
+					neededPageNum,
+					numRead,
+					bufOffset + readLen - numToRead);
+			if(numRead == 0) return numRead;
 			numToRead -= numRead;
 			offset += numRead;
 		}
@@ -180,8 +194,18 @@ public class ZKFile extends File {
 		bufferedPage = new Page(this, pageNum);
 		
 		if(tree.hasTag(pageNum) && pageNum < tree.numPages) {
+			logger.trace("ZKFS {} {}: {} buffering pre-existing page {}",
+					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+					Util.formatRevisionTag(zkfs.baseRevision),
+					this.getPath(),
+					pageNum);
 			bufferedPage.load();
 		} else {
+			logger.trace("ZKFS {} {}: {} buffering blank page {}",
+					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+					Util.formatRevisionTag(zkfs.baseRevision),
+					this.getPath(),
+					pageNum);
 			bufferedPage.blank();
 		}
 	}
@@ -246,6 +270,15 @@ public class ZKFile extends File {
 		}
 		
 		if(newOffset < 0) throw new IllegalArgumentException();
+		
+		logger.trace("ZKFS {} {}: {} seek pos={} mode={} offset={} newOffset={}",
+				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(zkfs.baseRevision),
+				this.getPath(),
+				pos,
+				mode,
+				offset,
+				newOffset);
 		return offset = newOffset;
 	}
 	

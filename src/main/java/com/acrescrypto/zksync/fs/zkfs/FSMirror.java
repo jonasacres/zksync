@@ -234,39 +234,59 @@ public class FSMirror {
 	}
 
 	protected synchronized void suspectedTargetPathChange(String path) throws IOException {
-		if(path.equals("") || path.equals("/")) return;
+		if(!isChanged(path)) return;
+		observedTargetPathChange(path);
+	}
+	
+	protected boolean isChanged(String path) throws IOException {
+		if(path.equals("") || path.equals("/")) return false;
 		Stat tstat = getLstat(target, path), zstat = getLstat(zkfs, path);
-		if(tstat == null && zstat == null) return;
+		if(tstat == null && zstat == null) return false;
 		if(tstat == null || zstat == null) {
+			logger.trace("FS {}: FSMirror detects difference at {} due to existence (zkfs {}, target {})",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					path,
+					zstat != null,
+					tstat != null);
+			return true;
 		} else if(tstat.getType() != zstat.getType()) {
 			logger.trace("FS {}: FSMirror detects difference at {} due to differing type (zkfs {}, target {})",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					path,
 					zstat.getType(),
 					tstat.getType());
+			return true;
 		} else if(zstat.getType() == Stat.TYPE_REGULAR_FILE && tstat.getSize() != zstat.getSize()) {
 			logger.trace("FS {}: FSMirror detects difference at {} due to differing size (zkfs {}, target {})",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					path,
 					zstat.getSize(),
 					tstat.getSize());
+			return true;
 		} else if(zstat.getType() == Stat.TYPE_REGULAR_FILE && tstat.getMtime() != zstat.getMtime()) {
 			logger.trace("FS {}: FSMirror detects difference at {} due to differing mtime (zkfs {}, target {})",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					path,
 					zstat.getMtime(),
 					tstat.getMtime());
+			return true;
 		} else if(tstat.getMode() != zstat.getMode() && zstat.getType() != Stat.TYPE_SYMLINK) {
 			logger.trace("FS {}: FSMirror detects difference at {} due to differing mode (zkfs 0{}, target 0{})",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					path,
 					Integer.toOctalString(zstat.getMode()),
 					Integer.toOctalString(tstat.getMode()));
-		} else {
-			return; // nothing was different
+			return true;
+		} else if(zstat.getType() == Stat.TYPE_SYMLINK && !target.readlink(path).equals(zkfs.readlink(path))) {
+			logger.trace("FS {}: FSMirror detects difference at {} due to differing target (zkfs {}, target {})",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					path,
+					zkfs.readlink(path),
+					target.readlink(path));
+			return true;
 		}
-
-		observedTargetPathChange(path);
+		
+		return false; // nothing changed
 	}
 
 	public void syncArchiveToTarget() throws IOException {
@@ -280,6 +300,7 @@ public class FSMirror {
 			synchronized(this) {
 				String[] list = zkfs.opendir("/").listRecursive();
 				for(String path : list) {
+					if(!isChanged(path)) continue;
 					syncPathArchiveToTarget(oldFs, path);
 				}
 	
@@ -412,7 +433,7 @@ public class FSMirror {
 
 			destFile = dest.open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
 			while(srcFile.hasData()) {
-				logger.trace("FS {}: FSMirror write {} chunk offset {} length {}",
+				logger.trace("FS {}: FSMirror write {}, offset {} of file size {}",
 						Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 						path,
 						srcFile.seek(0, File.SEEK_CUR),

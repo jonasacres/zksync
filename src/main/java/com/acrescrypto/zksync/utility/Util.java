@@ -12,6 +12,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
@@ -387,5 +388,13 @@ public class Util {
 
 	public static String formatPageTag(byte[] pageTag) {
 		return "page-" + Util.bytesToHex(pageTag, 8);
+	}
+
+	public static String formatChunkTag(byte[] chunkTag) {
+		return "chunk-" + Util.bytesToHex(chunkTag, 8);
+	}
+
+	public static String strhash(byte[] result) {
+		return Util.bytesToHex(CryptoSupport.defaultCrypto().hash(result), 8) + "-" + result.length;
 	}
 }

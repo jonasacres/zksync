@@ -3,6 +3,9 @@ package com.acrescrypto.zksync.fs;
 import java.io.Closeable;
 import java.io.IOException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public abstract class File implements Closeable {
 	public final static int O_RDONLY = 1 << 0;
 	public final static int O_WRONLY = 1 << 1;
@@ -25,6 +28,8 @@ public abstract class File implements Closeable {
 		fs.reportOpenFile(this);
 	}
 	
+	protected Logger logger = LoggerFactory.getLogger(File.class);
+	
 	public abstract void truncate(long size) throws IOException;
 	public abstract int read(byte[] buf, int offset, int maxLength) throws IOException;
 
@@ -38,6 +43,13 @@ public abstract class File implements Closeable {
 			for(int i = 0; i < newBuf.length; i++) newBuf[i] = buf[i];
 			buf = newBuf;
 		}
+		
+		logger.trace("FS -: read {} maxLen={} actualLen={} newOffset={} readBytes={}",
+				this.getPath(),
+				maxLength,
+				buf.length,
+				this.seek(0, SEEK_CUR),
+				readBytes);
 		return buf;
 	}
 		

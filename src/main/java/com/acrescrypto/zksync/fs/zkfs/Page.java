@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
@@ -19,6 +22,7 @@ public class Page {
 	protected int size; /** size of actual page contents (may be less than fixed page size from filesystem) */
 	private ByteBuffer contents; /** page contents */
 	boolean dirty; /** true if page has been written to since last read/flush */
+	protected Logger logger = LoggerFactory.getLogger(Page.class);
 	
 	private final static char[] hexArray = "0123456789abcdef".toCharArray();
 	public static String pathForTag(byte[] bytes) {
@@ -122,6 +126,17 @@ public class Page {
 	 */
 	public int read(byte[] buf, int offset, int maxLength) {
 		int readLen = (int) Math.min(maxLength, Math.max(0, size-contents.position()));
+		logger.trace("ZKFS {} {}: read {} page {} buffer, pageOffset={}, pageMaxLength={}, pageSize={}, size={}, position={}, readLen={}",
+				Util.formatArchiveId(file.zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(file.zkfs.baseRevision),
+				file.path,
+				pageNum,
+				offset,
+				maxLength,
+				contents.limit(),
+				size,
+				contents.position(),
+				readLen);
 		contents.get(buf, offset, readLen);
 		return readLen;
 	}
@@ -204,6 +219,13 @@ public class Page {
 		contents = ByteBuffer.allocate(pageSize);
 		contents.put(plaintext);
 		size = contents.position();
+		logger.trace("ZKFS {} {}: Page {} ({}) of {} has {} bytes",
+				Util.formatArchiveId(file.zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(file.zkfs.getBaseRevision()),
+				pageNum,
+				Util.formatPageTag(pageTag),
+				file.getPath(),
+				size);
 		dirty = false;
 	}
 	

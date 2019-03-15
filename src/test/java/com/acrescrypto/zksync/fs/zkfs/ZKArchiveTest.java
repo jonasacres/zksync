@@ -187,7 +187,7 @@ public class ZKArchiveTest {
 	@Test
 	public void testNondefaultArchive() throws IOException {
 		Key writeKey = new Key(crypto);
-		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
+		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 4321, accessor.passphraseRoot, writeKey);
 		ZKArchive archive = config.getArchive();
 		
 		try(ZKFS fs = archive.openBlank()) {
@@ -205,7 +205,7 @@ public class ZKArchiveTest {
 	public void testReadOnlyArchiveAllowsReads() throws IOException {
 		Key writeKey = new Key(crypto);
 		
-		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
+		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 4321, accessor.passphraseRoot, writeKey);
 		ZKArchive archive = config.getArchive();
 		RevisionTag revTag;
 		
@@ -227,7 +227,7 @@ public class ZKArchiveTest {
 	public void testReadOnlyArchiveThrowsExceptionOnWrites() throws IOException {
 		Key writeKey = new Key(crypto);
 		
-		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
+		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 4321, accessor.passphraseRoot, writeKey);
 		ZKArchive archive = config.getArchive();
 		try(ZKFS fs = archive.openBlank()) {
 			byte[] data = "some data".getBytes();
@@ -253,7 +253,7 @@ public class ZKArchiveTest {
 	public void testReadOnlyArchiveThrowsExceptionOnCommits() throws IOException {
 		Key writeKey = new Key(crypto);
 		
-		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 1234, accessor.passphraseRoot, writeKey);
+		ZKArchiveConfig config = ZKArchiveConfig.create(accessor, "i'm unique and special", 4321, accessor.passphraseRoot, writeKey);
 		ZKArchive archive = config.getArchive();
 		try(ZKFS fs = archive.openBlank()) {
 			byte[] data = "some data".getBytes();

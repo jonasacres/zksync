@@ -358,7 +358,9 @@ public class CryptoSupport {
 	public byte[] unpad(byte[] raw) {
 		ByteBuffer buf = ByteBuffer.wrap(raw);
 		int length = buf.getInt();
-		if(length > buf.remaining() || length < 0) throw new SecurityException("invalid ciphertext");
+		if(length > buf.remaining() || length < 0) {
+			throw new SecurityException("invalid ciphertext");
+		}
 
 		byte[] unpadded = new byte[length];
 		buf.get(unpadded, 0, length);

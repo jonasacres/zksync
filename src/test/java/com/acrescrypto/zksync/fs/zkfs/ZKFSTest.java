@@ -376,9 +376,7 @@ public class ZKFSTest extends FSTestBase {
 		CryptoSupport crypto = CryptoSupport.defaultCrypto();
 		
 		int[] pageSizes = {
-				RevisionInfo.FIXED_SIZE >> 1,
-				RevisionInfo.FIXED_SIZE,
-				RevisionInfo.FIXED_SIZE << 1,
+				2*RevisionInfo.FIXED_SIZE,
 				59049, // power of 3
 				50625, // power of 3*5
 				131071, // mersenne prime

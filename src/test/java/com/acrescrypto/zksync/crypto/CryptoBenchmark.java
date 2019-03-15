@@ -34,6 +34,15 @@ public class CryptoBenchmark {
 	}
 	
 	@Test
+	public void testSymmetricEncryptThroughputNoAuthentication() {
+		byte[] oneMiB = new byte[1024*1024];
+		
+		Benchmarks.run("MiB", (i)->{
+			crypto.encryptUnauthenticated(key, iv, oneMiB, 0, oneMiB.length);
+		});
+	}
+	
+	@Test
 	public void testSymmetricEncryptThroughputNoADNoPad() {
 		byte[] oneMiB = new byte[1024*1024];
 		

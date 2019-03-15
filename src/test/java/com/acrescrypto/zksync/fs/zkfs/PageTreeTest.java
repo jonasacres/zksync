@@ -14,6 +14,7 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -300,7 +301,7 @@ public class PageTreeTest {
 	
 	@Test
 	public void testGetStatsReturnsPagesCachedForDoubleIndirects() throws IOException {
-		ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
+		ZKArchive smallPageArchive = master.createArchive(RevisionInfo.FIXED_SIZE, "adopt a tinypage now!");
 		ZKFS smallPageFs = smallPageArchive.openBlank();
 		int size = 512*1024;
 		smallPageFs.write("test", new byte[size]);
@@ -334,7 +335,7 @@ public class PageTreeTest {
 
 	@Test
 	public void testGetStatsReturnsChunksCachedForDoubleIndirects() throws IOException {
-		ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
+		ZKArchive smallPageArchive = master.createArchive(RevisionInfo.FIXED_SIZE, "adopt a tinypage now!");
 		try(ZKFS smallPageFs = smallPageArchive.openBlank()) {
 			int size = 512*1024;
 			smallPageFs.write("test", new byte[size]);
@@ -516,7 +517,7 @@ public class PageTreeTest {
 	
 	@Test
 	public void testResizeDownwardInHeightMultipleLevels() throws IOException {
-		ZKArchive smallPageArchive = master.createArchive(1024, "i have small, lovable pages!");
+		ZKArchive smallPageArchive = master.createArchive(RevisionInfo.FIXED_SIZE, "i have small, lovable pages!");
 		try(ZKFS smallPageFs = smallPageArchive.openBlank()) {
 			smallPageFs.write("test", new byte[0]);
 			PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
@@ -561,7 +562,7 @@ public class PageTreeTest {
 
 	@Test
 	public void testResizeUpwardInHeightMultipleLevels() throws IOException {
-		ZKArchive smallPageArchive = master.createArchive(1024, "adopt a tinypage now!");
+		ZKArchive smallPageArchive = master.createArchive(RevisionInfo.FIXED_SIZE, "adopt a tinypage now!");
 		try(ZKFS smallPageFs = smallPageArchive.openBlank()) {
 			smallPageFs.write("test", new byte[0]);
 			PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
@@ -582,12 +583,16 @@ public class PageTreeTest {
 			}
 			
 			for(int i = original; i < max; i++) {
-				assertArrayEquals(blank, tree.getPageTag(i));
+				assertArrayEquals(blank, smallPageTree.getPageTag(i));
 			}
 		}
 	}
 	
-	@Test
+	@Test @Ignore
+	/* this is insanely slow now that we have a minimum page size (and therefore large trees have huge numbers of pages).
+	 * The code is retained in case PageTree changes are made and it becomes worthwhile to test large scale tree scaling.
+	 * Last run 2019-03-15
+	 */
 	public void testLargeScaleTree() throws IOException {
 		/** A chunk is not in the cache, so we look it up
 		 * In the process of looking it up, we evict one of its children
@@ -598,8 +603,9 @@ public class PageTreeTest {
 		// TODO Someday: (bug) If page size is 512, chunk cache has a capacity of 8, and the tree depth is 6, this fails.
 		;
 		try(
-				ZKArchive smallPageArchive = master.createArchive(512, "adopt a tinypage now!");
-				ZKFS smallPageFs = smallPageArchive.openBlank()) {
+				ZKArchive smallPageArchive = master.createArchive(RevisionInfo.FIXED_SIZE, "adopt a tinypage now!");
+				ZKFS smallPageFs = smallPageArchive.openBlank())
+		{
 			smallPageFs.write("test", new byte[0]);
 			PageTree smallPageTree = new PageTree(smallPageFs.inodeForPath("test"));
 			
