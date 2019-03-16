@@ -73,6 +73,13 @@ public class Page {
 	/** truncate page to a given size */
 	public void truncate(int newSize) {
 		if(size == newSize) return;
+		logger.trace("ZKFS {} {}: {} page {} truncate to size {}, was {}",
+				Util.formatArchiveId(file.zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(file.zkfs.getBaseRevision()),
+				file.getPath(),
+				pageNum,
+				newSize,
+				size);
 		size = newSize;
 		contents.position(size);
 		if(size < contents.capacity()) {
@@ -86,6 +93,15 @@ public class Page {
 	 */
 	public int write(byte[] plaintext, int offset, int length) throws IOException {
 		contents.put(plaintext, offset, length);
+		logger.trace("ZKFS {} {}: {} page {} write offset {} length {}, newSize={}, size={}",
+				Util.formatArchiveId(file.zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(file.zkfs.getBaseRevision()),
+				file.getPath(),
+				pageNum,
+				offset,
+				length,
+				contents.position(),
+				size);
 		if(contents.position() > size) size = contents.position();
 		dirty = true;
 		return length;
@@ -126,7 +142,7 @@ public class Page {
 	 */
 	public int read(byte[] buf, int offset, int maxLength) {
 		int readLen = (int) Math.min(maxLength, Math.max(0, size-contents.position()));
-		logger.trace("ZKFS {} {}: read {} page {} buffer, pageOffset={}, pageMaxLength={}, pageSize={}, size={}, position={}, readLen={}",
+		logger.trace("ZKFS {} {}: (PAGE READ) {} page {} buffer, pageOffset={}, pageMaxLength={}, pageSize={}, size={}, position={}, readLen={}, tag={}",
 				Util.formatArchiveId(file.zkfs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(file.zkfs.baseRevision),
 				file.path,
@@ -198,26 +214,24 @@ public class Page {
 	/** load page contents from underlying storage */
 	public void load() throws IOException {
 		int pageSize = file.zkfs.archive.config.pageSize;
+		contents = ByteBuffer.allocate(pageSize);
 		
 		byte[] pageTag = file.getPageTag(pageNum);
 		if(pageNum == 0 && file.tree.numPages == 1 && pageTag.length < file.getFS().getArchive().getCrypto().hashLength()) {
-			contents = ByteBuffer.allocate((int) file.zkfs.archive.config.pageSize);
 			contents.put(file.inode.refTag.getLiteral());
-			size = contents.position();
-			return;
+		} else {
+			if(file.getFS().getArchive().getStorage() instanceof BackedFS) {
+				// make sure the page is ready if this is a non-cached filesystem
+				file.getFS().getArchive().getConfig().waitForPageReady(pageTag);
+			}
+			
+			byte[] plaintext = SignedSecureFile
+			  .withTag(pageTag, file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.pubKey)
+			  .read(!file.trusted);
+			
+			contents.put(plaintext);
 		}
 		
-		if(file.getFS().getArchive().getStorage() instanceof BackedFS) {
-			// make sure the page is ready if this is a non-cached filesystem
-			file.getFS().getArchive().getConfig().waitForPageReady(pageTag);
-		}
-		
-		byte[] plaintext = SignedSecureFile
-		  .withTag(pageTag, file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.pubKey)
-		  .read(!file.trusted);
-		
-		contents = ByteBuffer.allocate(pageSize);
-		contents.put(plaintext);
 		size = contents.position();
 		logger.trace("ZKFS {} {}: Page {} ({}) of {} has {} bytes",
 				Util.formatArchiveId(file.zkfs.getArchive().getConfig().getArchiveId()),

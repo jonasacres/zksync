@@ -154,7 +154,7 @@ public class ZKFile extends File {
 		if(bufOffset < 0 || maxLength > buf.length - bufOffset) throw new IndexOutOfBoundsException();
 		
 		int numToRead = (int) Math.min(maxLength, getStat().getSize()-offset), readLen = Math.max(0, numToRead);
-		logger.trace("ZKFS {}: read {}, numToRead={}, readLen={}, offset={}, |buf|={}",
+		logger.trace("ZKFS {}: (ZKFile READ 1) {}, numToRead={}, readLen={}, offset={}, |buf|={}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 				path,
 				numToRead,
@@ -169,7 +169,7 @@ public class ZKFile extends File {
 			bufferPage(neededPageNum);
 			bufferedPage.seek((int) (offset % zkfs.archive.config.pageSize));
 			int numRead = bufferedPage.read(buf, bufOffset + readLen - numToRead, numToRead);
-			logger.trace("ZKFS {} {}: read {} page {}, numRead={}, bufOffset={}",
+			logger.trace("ZKFS {} {}: (ZKFile READ 2) {} page {}, numRead={}, bufOffset={}",
 					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 					Util.formatRevisionTag(zkfs.baseRevision),
 					path,

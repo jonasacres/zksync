@@ -12,6 +12,7 @@ import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 import com.acrescrypto.zksync.utility.Util;
 
 /** This is written, and partially tested, as a generic FS. In truth, there are some MAJOR gaps.
@@ -260,8 +261,12 @@ public class BackedFS extends FS {
 				Stat stat = backupFS.stat(path);
 				byte[] data = backupFS.read(path);
 				if(!cacheFS.exists(path) || cacheFS.stat(path).getSize() != stat.getSize()) {
-					cacheFS.write(path, data);
-					cacheFS.applyStat(path, stat);
+					if(!(backupFS instanceof SwarmFS)) {
+						// hacky, but SwarmFS already writes our data, and this becomes redundant...
+						cacheFS.write(path, data);
+						cacheFS.applyStat(path, stat);
+					}
+					
 					boolean settled = Util.waitUntil(1000,
 							()->{
 								try {

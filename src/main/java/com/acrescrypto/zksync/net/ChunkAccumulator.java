@@ -152,6 +152,9 @@ public class ChunkAccumulator {
 		}
 		
 		finished = true;
+		logger.debug("Swarm {} -: Storing validated page {}",
+				Util.formatArchiveId(swarm.getConfig().getArchiveId()),
+				Util.formatPageTag(tag));
 		swarm.config.getStorage().write(Page.pathForTag(tag), allegedPage);
 		burnHeretics(chunks);
 		closeFiles();

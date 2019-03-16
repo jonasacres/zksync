@@ -374,7 +374,6 @@ public class LocalFS extends FS {
 
 	@Override
 	public void write(String path, byte[] contents, int offset, int length) throws IOException {
-		logger.debug("LocalFS {}: write {}, offset {}, {} bytes", root, path, offset, length);
 		if(!exists(dirname(path))) mkdirp(dirname(path));
 		try(LocalFile file = open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC)) {
 			file.write(contents, offset, length);

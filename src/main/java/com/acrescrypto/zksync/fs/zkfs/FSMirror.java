@@ -433,12 +433,13 @@ public class FSMirror {
 
 			destFile = dest.open(path, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
 			while(srcFile.hasData()) {
-				logger.trace("FS {}: FSMirror write {}, offset {} of file size {}",
+				byte[] chunk = srcFile.read(65536);
+				logger.trace("FS {}: FSMirror write {}, offset {} of file size {}, chunk len {}",
 						Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 						path,
 						srcFile.seek(0, File.SEEK_CUR),
-						srcFile.getStat().getSize());
-				byte[] chunk = srcFile.read(65536);
+						srcFile.getStat().getSize(),
+						chunk.length);
 				destFile.write(chunk);
 			}
 
