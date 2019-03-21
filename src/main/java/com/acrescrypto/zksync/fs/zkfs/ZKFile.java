@@ -106,6 +106,8 @@ public class ZKFile extends File {
 			}
 			if((mode & O_TRUNC) != 0) truncate(0);
 			if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();
+			
+			zkfs.addOpenFile(this);
 		} catch(Throwable exc) {
 			this.close();
 			throw exc;
@@ -123,14 +125,14 @@ public class ZKFile extends File {
 	}
 	
 	/** Updates the page tree reference to a specific page number. Updates inode reftag automatically. */
-	public void setPageTag(int pageNum, byte[] hash) throws IOException {
+	protected void setPageTag(int pageNum, byte[] hash) throws IOException {
 		assertWritable();
 		tree.setPageTag(pageNum, hash);
 	}
 	
 	/** Obtain page tree reference for a specific page number. 
 	 * @throws IOException */
-	public byte[] getPageTag(int pageNum) throws IOException {
+	protected byte[] getPageTag(int pageNum) throws IOException {
 		return tree.getPageTag(pageNum);
 	}
 
@@ -145,7 +147,7 @@ public class ZKFile extends File {
 	}
 
 	@Override
-	public void truncate(long size) throws IOException {
+	public synchronized void truncate(long size) throws IOException {
 		assertWritable();
 		if(size == inode.getStat().getSize()) return;
 		
@@ -176,7 +178,7 @@ public class ZKFile extends File {
 	}
 
 	@Override
-	public int read(byte[] buf, int bufOffset, int maxLength) throws IOException {
+	public synchronized int read(byte[] buf, int bufOffset, int maxLength) throws IOException {
 		assertReadable();
 		if(bufOffset < 0 || maxLength > buf.length - bufOffset) throw new IndexOutOfBoundsException();
 		
@@ -212,7 +214,7 @@ public class ZKFile extends File {
 	}
 	
 	/** Load a given page into the buffer, writing out the currently buffered page if one exists and is dirty */
-	protected void bufferPage(int pageNum) throws IOException {
+	protected synchronized void bufferPage(int pageNum) throws IOException {
 		if(bufferedPage != null) {
 			if(bufferedPage.pageNum == pageNum) return;
 			bufferedPage.flush();
@@ -250,7 +252,7 @@ public class ZKFile extends File {
 	 * @throws IOException
 	 */
 	@Override
-	public void write(byte[] data, int bufOffset, int length) throws IOException {
+	public synchronized void write(byte[] data, int bufOffset, int length) throws IOException {
 		assertWritable();
 		dirty = true;
 		int leftToWrite = length;
@@ -281,7 +283,7 @@ public class ZKFile extends File {
 	}
 
 	@Override
-	public long seek(long pos, int mode) {
+	public synchronized long seek(long pos, int mode) {
 		long newOffset = -1;
 		
 		switch(mode) {
@@ -310,7 +312,7 @@ public class ZKFile extends File {
 	}
 	
 	@Override
-	public void flush() throws IOException {
+	public synchronized void flush() throws IOException {
 		logger.trace("ZKFS {} {}: flush {}, dirty={}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(zkfs.getBaseRevision()),
@@ -334,7 +336,7 @@ public class ZKFile extends File {
 	}
 
 	@Override
-	public void close() throws IOException {
+	public synchronized void close() throws IOException {
 		if(closed) return;
 		closed = true;
 		
@@ -345,10 +347,11 @@ public class ZKFile extends File {
 				path,
 				fs.getOpenFiles().size());
 		flush();
+		zkfs.removeOpenFile(this);
 	}
 
 	@Override
-	public void copy(File file) throws IOException {
+	public synchronized void copy(File file) throws IOException {
 		assertWritable();
 		file.rewind();
 		int pageSize = zkfs.archive.config.pageSize;
@@ -365,7 +368,7 @@ public class ZKFile extends File {
 		inode.getStat().setMode(file.getStat().getMode());
 	}
 		
-	public int available() throws IOException {
+	public synchronized int available() throws IOException {
 		// TODO DHT: (test) coverage on this...
 		if(bufferedPage == null) return 0;
 		return bufferedPage.remaining();

@@ -668,6 +668,19 @@ public class ZKFSTest extends FSTestBase {
 		assertEquals("testing", zkscratch.getRevisionInfo().getTitle());
 	}
 	
+	@Test
+	public void testCommitWithOpenFileWithPendingChangesCommitsFile() throws IOException {
+		try(ZKFile file = zkscratch.open("afile", File.O_CREAT|File.O_RDWR|File.O_TRUNC)) {
+			byte[] contents = "We must part now.\nMy life goes on,\nbut my heart wont give you up\nEre I walk away,\nlet me hear you say,\nI meant as much to you...".getBytes();
+			file.write(contents);
+			zkscratch.commit();
+			
+			assertArrayEquals(contents, zkscratch.read(file.getPath()));
+			Inode inode = zkscratch.inodeTable.inodeWithId(file.getStat().getInodeId());
+			assertFalse(inode.getRefTag().isBlank());
+		}
+	}
+	
 	protected byte[] generateFileData(String key, int length) {
 		ByteBuffer buf = ByteBuffer.allocate(4);
 		buf.putInt(length);

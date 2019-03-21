@@ -95,7 +95,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	@Override
-	public void close() throws IOException {
+	public synchronized void close() throws IOException {
 		if(freelist != null) {
 			freelist.close();
 		}
@@ -110,7 +110,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	/** calculate the next inode ID to be issued (by scanning for the largest issued inode ID) */
-	protected long lookupNextInodeId() throws IOException {
+	protected synchronized long lookupNextInodeId() throws IOException {
 		Inode[] inodes = inodesByPage.get(inode.refTag.numPages-1);
 		
 		long maxInodeId = USER_INODE_ID_START-1;
@@ -185,7 +185,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	/** write out all cached inodes */
-	protected void syncInodes() throws IOException {
+	protected synchronized void syncInodes() throws IOException {
 		for(Long pageNum : inodesByPage.cachedKeys()) {
 			commitInodePage(pageNum, inodesByPage.get(pageNum));
 		}
@@ -281,7 +281,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	/** issue next inode ID (draw from freelist if available, or issue next sequential ID if freelist is empty) */
-	public long issueInodeId() throws IOException {
+	public synchronized long issueInodeId() throws IOException {
 		try {
 			return freelist.issueInodeId();
 		} catch(FreeListExhaustedException exc) {
@@ -617,7 +617,7 @@ public class InodeTable extends ZKFile {
 		};
 	}
 
-	public void uncache() throws IOException {
+	public synchronized void uncache() throws IOException {
 		logger.info("ZKFS {} {}: Purging inode table cache, has {} pages",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(zkfs.getBaseRevision()),

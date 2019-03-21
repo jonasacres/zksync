@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.HashSet;
 import java.util.LinkedList;
 
 import org.slf4j.Logger;
@@ -30,6 +31,7 @@ public class ZKFS extends FS {
 	protected SubscriptionToken<?> cacheToken; 
 	protected boolean isReadOnly; // was this specific ZKFS opened RO? (not the whole archive)
 	protected int retainCount = 1;
+	protected HashSet<ZKFile> openFiles = new HashSet<>();
 		
 	public final static int MAX_PATH_LEN = 65535;
 	
@@ -57,24 +59,45 @@ public class ZKFS extends FS {
 	}
 	
 	@Override
-	public void close() throws IOException {
-		synchronized(this) {
-			/* We allow synchronization here because the readOnlyFilesystems cache might evict a ZKFS
-			 * (and therefore call close()) independent of a threat actually using the FS. In general,
-			 * ZKFS operations are non-threadsafe.
-			 */
-			if(--retainCount > 0) return;
-			assert(retainCount == 0);
-		}
+	public synchronized void close() throws IOException {
+		/* We allow synchronization here because the readOnlyFilesystems cache might evict a ZKFS
+		 * (and therefore call close()) independent of a threat actually using the FS. In general,
+		 * ZKFS operations are non-threadsafe.
+		 */
+		if(--retainCount > 0) return;
+		assert(retainCount == 0);
 		
 		cacheToken.close();
 		this.directoriesByPath.removeAll();
+		closeOpenFiles();
 		inodeTable.close();
 		super.close();
 	}
 	
+	protected void closeOpenFiles() {
+		for(ZKFile file : openFiles) {
+			try {
+				file.close();
+			} catch (IOException exc) {
+				logger.error("ZKFS {} {}: Caught exception closing file {}",
+						Util.formatArchiveId(archive.getConfig().getArchiveId()),
+						Util.formatRevisionTag(baseRevision),
+						file.path,
+						exc);
+			}
+		}
+	}
+	
 	public boolean isClosed() {
 		return retainCount == 0;
+	}
+	
+	protected synchronized void addOpenFile(ZKFile file) {
+		openFiles.add(file);
+	}
+	
+	protected synchronized void removeOpenFile(ZKFile file) {
+		openFiles.remove(file);
 	}
 	
 	public synchronized ZKFS retain() {
@@ -90,7 +113,7 @@ public class ZKFS extends FS {
 		return commitWithTimestamp(additionalParents, -1);
 	}
 	
-	public RevisionTag commitAndCloseWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
+	public synchronized RevisionTag commitAndCloseWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
 		try {
 			return commitWithTimestamp(additionalParents, timestamp);
 		} finally {
@@ -98,9 +121,13 @@ public class ZKFS extends FS {
 		}
 	}
 	
-	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
+	public synchronized RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) {
 			dir.commit();
+		}
+		
+		for(ZKFile file : openFiles) {
+			file.flush();
 		}
 		
 		String parents = Util.formatRevisionTag(baseRevision);
@@ -120,7 +147,7 @@ public class ZKFS extends FS {
 		return commit(new RevisionTag[0]);
 	}
 	
-	public RevisionTag commitAndClose() throws IOException {
+	public synchronized RevisionTag commitAndClose() throws IOException {
 		try {
 			RevisionTag rev = commit(new RevisionTag[0]);
 			return rev;
@@ -133,7 +160,7 @@ public class ZKFS extends FS {
 		return inodeForPath(path, true);
 	}
 	
-	public Inode inodeForPath(String path, boolean followSymlinks) throws IOException {
+	public synchronized Inode inodeForPath(String path, boolean followSymlinks) throws IOException {
 		if(followSymlinks) return inodeForPathWithSymlinks(path, 0);
 		String absPath = absolutePath(path);
 		if(path.equals("")) throw new ENOENTException(path);
@@ -155,7 +182,7 @@ public class ZKFS extends FS {
 		return inode;
 	}
 	
-	protected Inode inodeForPathWithSymlinks(String path, int depth) throws IOException {
+	protected synchronized Inode inodeForPathWithSymlinks(String path, int depth) throws IOException {
 		if(depth > MAX_SYMLINK_DEPTH) throw new ELOOPException(path);
 		String absPath = absolutePath(path);
 		if(path.equals("")) throw new ENOENTException(path);
@@ -304,7 +331,7 @@ public class ZKFS extends FS {
 	}
 
 	@Override
-	public ZKDirectory opendir(String path) throws IOException {
+	public synchronized ZKDirectory opendir(String path) throws IOException {
 		return directoriesByPath.get(absolutePath(path));
 	}
 
@@ -546,14 +573,14 @@ public class ZKFS extends FS {
 		return baseRevision;
 	}
 	
-	public String dump() throws IOException {
+	public synchronized String dump() throws IOException {
 		StringBuilder builder = new StringBuilder();
 		builder.append("Revision " + baseRevision + "\n");
 		dump("/", 1, builder);
 		return builder.toString();
 	}
 	
-	public void dump(String path, int depth, StringBuilder builder) throws IOException {
+	public synchronized void dump(String path, int depth, StringBuilder builder) throws IOException {
 		String padding = new String(new char[depth]).replace("\0", "  ");
 		ZKDirectory dir = opendir(path);
 		for(String subpath : dir.list()) {
@@ -570,7 +597,7 @@ public class ZKFS extends FS {
 		}
 	}
 
-	public void rebase(RevisionTag revision) throws IOException {
+	public synchronized void rebase(RevisionTag revision) throws IOException {
 		logger.info("ZKFS {} {}: Rebasing to revision {}",
 				Util.formatArchiveId(revision.getConfig().getArchiveId()),
 				baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
@@ -609,11 +636,11 @@ public class ZKFS extends FS {
 		this.dirty = false;
 	}
 	
-	public void addMonitor(ZKFSDirtyMonitor monitor) {
+	public synchronized void addMonitor(ZKFSDirtyMonitor monitor) {
 		dirtyMonitors.add(monitor);
 	}
 	
-	public void removeMonitor(ZKFSDirtyMonitor monitor) {
+	public synchronized void removeMonitor(ZKFSDirtyMonitor monitor) {
 		dirtyMonitors.remove(monitor);
 	}
 
@@ -643,7 +670,7 @@ public class ZKFS extends FS {
 		return isReadOnly;
 	}
 	
-	public void uncache() throws IOException {
+	public synchronized void uncache() throws IOException {
 		logger.info("ZKFS {} {}: Uncaching FS",
 				Util.formatArchiveId(archive.getConfig().getArchiveId()),
 				Util.formatRevisionTag(baseRevision));
