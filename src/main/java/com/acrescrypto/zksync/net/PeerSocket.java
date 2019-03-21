@@ -17,6 +17,7 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.net.dht.BenignProtocolViolationException;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
@@ -252,8 +253,23 @@ public abstract class PeerSocket {
 						
 						processMessage(msgId, cmd, flags, payload);
 					}
+				} catch(BenignProtocolViolationException exc) {
+					logger.info("Swarm {} {}:{}: PeerSocket caught suspicious protocol violation; closing socket",
+							Util.formatArchiveId(swarm.config.getArchiveId()),
+							getAddress(),
+							getPort(),
+							exc);
+					try {
+						close();
+					} catch (IOException exc2) {
+						logger.debug("Swarm {} {}:{}: PeerSocket encountered exception closing socket {}",
+								Util.formatArchiveId(swarm.config.getArchiveId()),
+								getAddress(),
+								getPort(),
+								exc2);
+					}
 				} catch(ProtocolViolationException exc) {
-					logger.debug("Swarm {} {}:{}: PeerSocket caught protocol violation",
+					logger.info("Swarm {} {}:{}: PeerSocket caught unacceptable protocol violation; blacklisting peer",
 							Util.formatArchiveId(swarm.config.getArchiveId()),
 							getAddress(),
 							getPort(),

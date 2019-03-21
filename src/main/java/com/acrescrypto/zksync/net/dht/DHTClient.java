@@ -539,12 +539,16 @@ public class DHTClient {
 			} else {
 				processRequest(message);
 			}
+		} catch(BenignProtocolViolationException exc) {
+			logger.info("DHT {}:{}: Received suspicious message; ignoring.",
+					senderAddress,
+					senderPort,
+					exc);
 		} catch(ProtocolViolationException exc) {
 			logger.warn("DHT {}:{}: Received illegal message; blacklisting.",
 					senderAddress,
 					senderPort,
 					exc);
-			logger.debug("Exception details: {} {}", exc.getMessage(), exc.getStackTrace());
 			try {
 				blacklist.add(senderAddress, Blacklist.DEFAULT_BLACKLIST_DURATION_MS);
 			} catch(IOException exc2) {

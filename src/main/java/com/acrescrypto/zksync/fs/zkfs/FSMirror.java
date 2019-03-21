@@ -440,6 +440,26 @@ public class FSMirror {
 						srcFile.seek(0, File.SEEK_CUR),
 						srcFile.getStat().getSize(),
 						chunk.length);
+				if(chunk.length == 0) {
+					ZKFile zk = (ZKFile) srcFile;
+					logger.error("FS {}: FSMirror DANGER ZONE -- {} reftag {}/{}, {} chunks, {} pages, revtag {}\n{}",
+							Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+							path,
+							Util.formatRefTag(zk.getInode().getRefTag()),
+							Util.hexdumpStr("hextag", zk.getInode().getRefTag().getBytes()),
+							zk.tree.numChunks,
+							zk.tree.numPages,
+							Util.formatRevisionTag(zk.zkfs.baseRevision),
+							zk.inode.dump());
+					InodeTable table = zk.getFS().getInodeTable();
+					for(int i = 0; i < zk.getFS().getInodeTable().nextInodeId(); i++) {
+						logger.info("FS {}: FSMirror Inode Dump {}\n{}",
+								Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+								i,
+								table.inodeWithId(i).dump());
+					}
+					throw new RuntimeException("FSMirror sync failed");
+				}
 				destFile.write(chunk);
 			}
 
@@ -544,6 +564,9 @@ public class FSMirror {
 		try {
 			op.op();
 		} catch(IOException|UnsupportedOperationException exc) {
+			logger.debug("FS {}: FSMirror could not complete operation due to {}",
+					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+					exc.getClass());
 		}
 	}
 	

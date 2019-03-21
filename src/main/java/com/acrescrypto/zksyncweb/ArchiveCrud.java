@@ -15,6 +15,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.PageTree.PageTreeStats;
 import com.acrescrypto.zksync.net.PageQueue;
@@ -28,14 +29,43 @@ public class ArchiveCrud {
 		int existingPriority = Integer.MIN_VALUE;
 		int priority = Integer.parseInt(params.getOrDefault("priority", "0"));
 		boolean isStat = Boolean.parseBoolean(params.getOrDefault("stat", "false"));
+		boolean isInode = Boolean.parseBoolean(params.getOrDefault("inode", "false"));
+		boolean isInodeRaw = Boolean.parseBoolean(params.getOrDefault("inodeRaw", "false"));
 		boolean isQueue = Boolean.parseBoolean(params.getOrDefault("queue", "false"));
 		boolean isCancel = Boolean.parseBoolean(params.getOrDefault("cancel", "false"));
+		
+		// TODO: DELETE THIS, FOR DEBUG PURPOSES ONLY
+		boolean flushCache = Boolean.parseBoolean(params.getOrDefault("flushCache", "false"));
+		boolean makeClone = Boolean.parseBoolean(params.getOrDefault("makeClone", "false"));
+		boolean rebase = Boolean.parseBoolean(params.getOrDefault("rebase", "false"));
 
 		try {
 			// TODO Someday: (refactor) Make ?queue=true non-blocking even if we don't have inode table or directory
 			/* (and no fair using a background thread, either -- these requests can really pile up!) */
-			Stat stat = fs.stat(path);
-			long inodeId = stat.getInodeId();
+			Stat stat;
+			long inodeId;
+			
+			if(makeClone) {
+				fs = fs.getBaseRevision().getFS();
+			}
+			
+			if(flushCache) {
+				fs.uncache();
+			}
+			
+			if(rebase) {
+				fs.rebase(fs.getBaseRevision());
+			}
+			
+			if(isInode) {
+				while(path.startsWith("/")) path = path.substring(1);
+				if(!path.matches("^\\d+$")) throw XAPIResponse.withError(400, "Path must be numeric inode ID when inode=true");
+				inodeId = Integer.parseInt(path);
+				stat = fs.getInodeTable().inodeWithId(inodeId).getStat();
+			} else {
+				stat = fs.stat(path);
+				inodeId = stat.getInodeId();
+			}
 			
 			if(isCancel) {
 				// ?cancel=true causes us to remove the path from the download queue, if already present
@@ -46,8 +76,9 @@ public class ArchiveCrud {
 			existingPriority = fs.getArchive().getConfig().getSwarm().priorityForInode(fs.getBaseRevision(), inodeId);
 			if(isStat) {
 				// ?stat=true causes us to return stat information instead of contents
-				PageTree tree = new PageTree(fs.inodeForPath(path));
-				throw XAPIResponse.withPayload(new XPathStat(path, stat, tree.getStats(), existingPriority));
+				Inode inode = fs.getInodeTable().inodeWithId(inodeId);
+				PageTree tree = new PageTree(inode);
+				throw XAPIResponse.withPayload(new XPathStat(path, inode, tree.getStats(), existingPriority));
 			}
 			
 			if(params.containsKey("priority") || existingPriority == PageQueue.CANCEL_PRIORITY) {
@@ -65,18 +96,39 @@ public class ArchiveCrud {
 			
 			long offset = Long.parseLong(params.getOrDefault("offset", "0"));
 			int length = Integer.parseInt(params.getOrDefault("length", "-1"));
-			long size = fs.stat(path).getSize();
+			long size = stat.getSize();
 			
 			if(length < 0) {
 				length = (int) (size - offset + length + 1);
 			}
 			
 			length = (int) Math.min(size-offset, length);
-			try(ZKFile file = fs.open(path, File.O_RDONLY)) {
-				byte[] data = new byte[length];
-				file.seek(offset, File.SEEK_SET);
-				file.read(data, 0, length);
-				return data;
+			
+			ZKFile file = null;
+			try {
+				if(isInode) {
+					// direct open using new ZKFile avoids EISDIR
+					file = new ZKFile(fs, fs.getInodeTable().inodeWithId(inodeId), File.O_RDONLY, true);
+				} else {
+					file = fs.open(path, File.O_RDONLY);
+				}
+				
+				if(isInodeRaw) {
+					return file.getInode().serialize();
+				} else {
+					byte[] data = new byte[length];
+					file.seek(offset, File.SEEK_SET);
+					file.read(data, 0, length);
+					return data;
+				}
+			} finally {
+				if(file != null) {
+					file.close();
+				}
+				
+				if(makeClone) {
+					fs.close();
+				}
 			}
 		} catch(ENOENTException exc) {
 			throw XAPIResponse.notFoundErrorResponse();
@@ -102,10 +154,10 @@ public class ArchiveCrud {
 				ArrayList<XPathStat> pathStats = new ArrayList<>(listings.length);
 				for(String subpath : listings) {
 					String fqSubpath = path + "/" + subpath;
-					Stat stat = fs.stat(fqSubpath);
+					Inode inode = fs.inodeForPath(fqSubpath);
 					PageTreeStats treeStat = new PageTree(fs.inodeForPath(fqSubpath)).getStats();
 					
-					pathStats.add(new XPathStat(subpath, stat, treeStat, existingPriority));
+					pathStats.add(new XPathStat(subpath, inode, treeStat, existingPriority));
 				}
 				
 				payload.put("entries", pathStats);

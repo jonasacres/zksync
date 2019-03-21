@@ -250,7 +250,12 @@ public class InodeTable extends ZKFile {
 		if(inode.nlink > 0) {
 			throw new EMLINKException(String.format("inode %d", inodeId));
 		}
-
+		
+		logger.debug("ZKFS {} {}: Unlinking inode {}",
+				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(zkfs.baseRevision),
+				inodeId);
+		
 		// no point in adding to the freelist if we're already in it
 		if(inode.identity != 0 || !inode.refTag.isBlank() || inode.flags != 0) {
 			inode.markDeleted();
@@ -297,6 +302,11 @@ public class InodeTable extends ZKFile {
 		/* The identity field in an inode is the only source of nondeterminism in a zksync archive,
 		 * at least as of this writing (10/30/18). */
 		inode.setIdentity(ByteBuffer.wrap(zkfs.archive.crypto.rng(8)).getLong());
+		logger.debug("ZKFS {} {}: Issuing inode {} with identity {}",
+				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(zkfs.getBaseRevision()),
+				inodeId,
+				inode.getIdentity());
 		inode.getStat().setInodeId(inodeId);
 		inode.getStat().setCtime(now);
 		inode.getStat().setAtime(now);
@@ -372,6 +382,11 @@ public class InodeTable extends ZKFile {
 	
 	/** write an array of inodes to a given page number */
 	protected void commitInodePage(long pageNum, Inode[] inodes) throws IOException {
+		logger.debug("ZKFS {} {}: Committing inode page {}, {} inodes",
+				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(zkfs.baseRevision),
+				pageNum,
+				inodes.length);
 		if(pageNum == 0) {
 			commitFirstInodePage(inodes);
 			return;
@@ -388,7 +403,16 @@ public class InodeTable extends ZKFile {
 	protected void commitFirstInodePage(Inode[] inodes) throws IOException {
 		seek(0, SEEK_SET);
 		write(revision.serialize());
-		for(Inode inode : inodes) write(inode.serialize());
+		for(Inode inode : inodes) {
+			logger.trace("ZKFS {} {}: Commit inode {} {} size {} at offset {}",
+					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+					Util.formatRevisionTag(zkfs.getBaseRevision()),
+					inode.stat.getInodeId(),
+					inode.stat.getSize(),
+					Util.formatRefTag(inode.getRefTag()),
+					this.pos());
+			write(inode.serialize());
+		}
 		if(offset < zkfs.archive.config.pageSize) {
 			write(new byte[(int) (zkfs.archive.config.pageSize - (offset % zkfs.archive.config.pageSize))]);
 		}
@@ -433,6 +457,12 @@ public class InodeTable extends ZKFile {
 	protected void setInode(Inode inode) throws IOException {
 		Inode existing = inodeWithId(inode.getStat().getInodeId());
 		if(existing == inode) return; // inode is already set
+		logger.trace("ZKFS {} {}: Replacing contents for inode {}, identity {} -> {}",
+				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(zkfs.baseRevision),
+				inode.getStat().getInodeId(),
+				existing.getIdentity(),
+				inode.getIdentity());
 		existing.deserialize(inode.serialize());
 		zkfs.markDirty();
 	}
@@ -483,6 +513,10 @@ public class InodeTable extends ZKFile {
 	
 	/** initialize from existing inode table data, identified by a reftag */
 	private void readExisting(RevisionTag tag) throws IOException {
+		logger.debug("ZKFS {} {}: Loading existing inode table from {}",
+				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(tag),
+				Util.formatRefTag(tag.getRefTag()));
 		this.tree = new PageTree(tag.getRefTag());
 		this.inode = new Inode(zkfs);
 		this.inode.setRefTag(tag.getRefTag());
@@ -527,11 +561,12 @@ public class InodeTable extends ZKFile {
 		}
 	}
 	
-	public void dumpInodes() throws IOException {
-		System.out.println("Inode table for " + zkfs.baseRevision + ", nextInodeId=" + nextInodeId());
+	public String dumpInodes() throws IOException {
+		String s = "";
+		s += "Inode table for " + zkfs.baseRevision + ", nextInodeId=" + nextInodeId() + "\n";
 		for(int i = 0; i < nextInodeId(); i++) {
 			Inode inode = inodeWithId(i);
-			System.out.printf("\tInode %d: tag=%s... refType=%d identity=%x hash=%s\n\t\t%s\n",
+			s += String.format("\tInode %d: tag=%s... refType=%d identity=%x hash=%s\n\t\t%s\n",
 					i,
 					Util.bytesToHex(inode.refTag.getLiteral(), 4),
 					inode.refTag.refType,
@@ -539,6 +574,8 @@ public class InodeTable extends ZKFile {
 					Util.bytesToHex(zkfs.archive.crypto.hash(inode.serialize()), 4),
 					inode.toString());
 		}
+		
+		return s;
 	}
 	
 	/** Iteraable for all inodes in the table */
@@ -578,5 +615,13 @@ public class InodeTable extends ZKFile {
 				}
 			};
 		};
+	}
+
+	public void uncache() throws IOException {
+		logger.info("ZKFS {} {}: Purging inode table cache, has {} pages",
+				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(zkfs.getBaseRevision()),
+				inodesByPage.cachedSize());
+		inodesByPage.removeAll();
 	}
 }

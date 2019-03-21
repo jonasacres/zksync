@@ -262,7 +262,7 @@ public class BackedFS extends FS {
 				byte[] data = backupFS.read(path);
 				if(!cacheFS.exists(path) || cacheFS.stat(path).getSize() != stat.getSize()) {
 					if(!(backupFS instanceof SwarmFS)) {
-						// hacky, but SwarmFS already writes our data, and this becomes redundant...
+						// hacky, but SwarmFS already writes our data, and this becomes redundant, and potentially race-inducing
 						cacheFS.write(path, data);
 						cacheFS.applyStat(path, stat);
 					}

@@ -1,12 +1,15 @@
 package com.acrescrypto.zksyncweb.data;
 
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.PageTree.PageTreeStats;
 import com.acrescrypto.zksync.net.PageQueue;
+import com.acrescrypto.zksync.utility.Util;
 
 public class XPathStat {
 	private String path;
 	private Stat stat;
+	private String reftagHex, reftag64;
 	private long numChunks;
 	private long numPages;
 	private long numChunksAcquired;
@@ -14,9 +17,11 @@ public class XPathStat {
 	private boolean isRequested;
 	private long priority;
 	
-	public XPathStat(String path, Stat stat, PageTreeStats treeStats, int priority) {
+	public XPathStat(String path, Inode inode, PageTreeStats treeStats, int priority) {
 		this.path = path;
-		this.stat = stat;
+		this.stat = inode.getStat();
+		this.reftagHex = Util.bytesToHex(inode.getRefTag().getBytes());
+		this.reftag64 = Util.encode64(inode.getRefTag().getBytes());
 		this.numChunks = treeStats.totalChunks;
 		this.numPages = treeStats.totalPages;
 		this.numChunksAcquired = treeStats.numCachedChunks;
@@ -91,5 +96,21 @@ public class XPathStat {
 
 	public void setPriority(long priority) {
 		this.priority = priority;
+	}
+
+	public String getReftagHex() {
+		return reftagHex;
+	}
+
+	public void setReftagHex(String reftagHex) {
+		this.reftagHex = reftagHex;
+	}
+
+	public String getReftag64() {
+		return reftag64;
+	}
+
+	public void setReftag64(String reftag64) {
+		this.reftag64 = reftag64;
 	}
 }

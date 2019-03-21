@@ -268,7 +268,21 @@ public class ZKFS extends FS {
 		assertPathIsNotDirectory(path, (mode & File.O_NOFOLLOW) == 0);
 		return new ZKFile(this, path, mode, true);
 	}
-
+	
+	public ZKFile open(Inode inode, int mode) throws IOException {
+		String path = "(inode " + inode.getStat().getInodeId() + ")";
+		
+		if(isReadOnly && ((mode & File.O_WRONLY) != 0)) {
+			throw new EACCESException(path);
+		}
+		
+		if(inode.getStat().isDirectory()) {
+			throw new EISDIRException(path);
+		}
+		
+		return new ZKFile(this, inode, mode, true);
+	}
+	
 	@Override
 	public Stat stat(String path) throws IOException {
 		Inode inode = inodeForPath(path, true);
@@ -401,6 +415,11 @@ public class ZKFS extends FS {
 	@Override
 	public void chmod(String path, int mode) throws IOException {
 		assertWritable(path);
+		logger.debug("ZKFS {} {}: chmod {} 0{}",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				Util.formatRevisionTag(baseRevision),
+				path,
+				String.format("%3o", mode));
 		Inode inode = inodeForPath(path);
 		inode.getStat().setMode(mode);
 		markDirty();
@@ -409,6 +428,11 @@ public class ZKFS extends FS {
 	@Override
 	public void chown(String path, int uid) throws IOException {
 		assertWritable(path);
+		logger.debug("ZKFS {} {}: chown {} {}",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				Util.formatRevisionTag(baseRevision),
+				path,
+				uid);
 		Inode inode = inodeForPath(path);
 		inode.getStat().setUid(uid);
 		markDirty();
@@ -417,6 +441,11 @@ public class ZKFS extends FS {
 	@Override
 	public void chown(String path, String name) throws IOException {
 		assertWritable(path);
+		logger.debug("ZKFS {} {}: chown {} '{}'",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				Util.formatRevisionTag(baseRevision),
+				path,
+				name);
 		Inode inode = inodeForPath(path);
 		inode.getStat().setUser(name);
 		markDirty();
@@ -425,6 +454,11 @@ public class ZKFS extends FS {
 	@Override
 	public void chgrp(String path, int gid) throws IOException {
 		assertWritable(path);
+		logger.debug("ZKFS {} {}: chgrp {} {}",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				Util.formatRevisionTag(baseRevision),
+				path,
+				gid);
 		Inode inode = inodeForPath(path);
 		inode.getStat().setGid(gid);
 		markDirty();
@@ -433,6 +467,11 @@ public class ZKFS extends FS {
 	@Override
 	public void chgrp(String path, String group) throws IOException {
 		assertWritable(path);
+		logger.debug("ZKFS {} {}: chgrp {} '{}'",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				Util.formatRevisionTag(baseRevision),
+				path,
+				group);
 		Inode inode = inodeForPath(path);
 		inode.getStat().setGroup(group);
 		markDirty();
@@ -441,6 +480,11 @@ public class ZKFS extends FS {
 	@Override
 	public void setMtime(String path, long mtime) throws IOException {
 		assertWritable(path);
+		logger.debug("ZKFS {} {}: set mtime {} {}",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				Util.formatRevisionTag(baseRevision),
+				path,
+				mtime);
 		Inode inode = inodeForPath(path, false);
 		inode.getStat().setMtime(mtime);
 		markDirty();
@@ -449,6 +493,11 @@ public class ZKFS extends FS {
 	@Override
 	public void setCtime(String path, long ctime) throws IOException {
 		assertWritable(path);
+		logger.debug("ZKFS {} {}: set ctime {} {}",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				Util.formatRevisionTag(baseRevision),
+				path,
+				ctime);
 		Inode inode = inodeForPath(path, false);
 		inode.getStat().setCtime(ctime);
 		markDirty();
@@ -457,6 +506,11 @@ public class ZKFS extends FS {
 	@Override
 	public void setAtime(String path, long atime) throws IOException {
 		assertWritable(path);
+		logger.debug("ZKFS {} {}: set atime {} {}",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				Util.formatRevisionTag(baseRevision),
+				path,
+				atime);
 		Inode inode = inodeForPath(path, false);
 		inode.getStat().setAtime(atime);
 		markDirty();
@@ -587,5 +641,15 @@ public class ZKFS extends FS {
 	
 	public boolean isReadOnly() {
 		return isReadOnly;
+	}
+	
+	public void uncache() throws IOException {
+		logger.info("ZKFS {} {}: Uncaching FS",
+				Util.formatArchiveId(archive.getConfig().getArchiveId()),
+				Util.formatRevisionTag(baseRevision));
+		inodeTable.uncache();
+		inodeTable.close();
+		directoriesByPath.removeAll();
+		this.inodeTable = new InodeTable(this, baseRevision);
 	}
 }

@@ -20,6 +20,7 @@ import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
+import com.acrescrypto.zksync.net.dht.BenignProtocolViolationException;
 import com.acrescrypto.zksync.net.noise.CipherState;
 import com.acrescrypto.zksync.net.noise.HandshakeState;
 import com.acrescrypto.zksync.net.noise.SipObfuscator;
@@ -284,19 +285,28 @@ public class TCPPeerSocket extends PeerSocket {
 		byte[] ciphertext = new byte[msgLen];
 		IOUtils.readFully(in, ciphertext);
 		
-		byte[] plaintext = readState.decryptWithAssociatedData(new byte[0], ciphertext); 
-		remainingReadData = ByteBuffer.wrap(plaintext);
-		int readLen = Math.min(length, remainingReadData.remaining());
-		remainingReadData.get(data, totalRead + offset, readLen);
-		totalRead += readLen;
-		logger.trace("Swarm {} {}:{}: TCPSocket read {} bytes from new buffer, {} total read, {} remaining in buffer",
-				Util.formatArchiveId(swarm.config.getArchiveId()),
-				address,
-				socket.getPort(),
-				readLen,
-				totalRead,
-				remainingReadData.remaining());
-		return totalRead;
+		try {
+			byte[] plaintext = readState.decryptWithAssociatedData(new byte[0], ciphertext); 
+			remainingReadData = ByteBuffer.wrap(plaintext);
+			int readLen = Math.min(length, remainingReadData.remaining());
+			remainingReadData.get(data, totalRead + offset, readLen);
+			totalRead += readLen;
+			logger.trace("Swarm {} {}:{}: TCPSocket read {} bytes from new buffer, {} total read, {} remaining in buffer",
+					Util.formatArchiveId(swarm.config.getArchiveId()),
+					address,
+					socket.getPort(),
+					readLen,
+					totalRead,
+					remainingReadData.remaining());
+			return totalRead;
+		} catch(SecurityException exc) {
+			logger.trace("Swarm {} {}:{}: TCPSocket failed to decrypt ciphertext of length {}",
+					Util.formatArchiveId(swarm.config.getArchiveId()),
+					address,
+					socket.getPort(),
+					ciphertext.length);
+			throw new BenignProtocolViolationException();
+		}
 	}
 	
 	@Override

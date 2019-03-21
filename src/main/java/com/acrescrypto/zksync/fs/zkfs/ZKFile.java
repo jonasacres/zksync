@@ -46,31 +46,58 @@ public class ZKFile extends File {
 	/** Open a file handle at a path */
 	public ZKFile(ZKFS fs, String path, int mode, boolean trusted) throws IOException {
 		super(fs);
+		this.zkfs = fs;
+		try {
+			this.path = path;
+			Inode inode;
+			
+			try {
+				inode = fs.inodeForPath(path, (mode & O_NOFOLLOW) == 0);
+			} catch(ENOENTException exc) {
+				if((mode & O_CREAT) == 0) throw exc;
+				inode = fs.create(path);
+			}
+			
+			initWithInode(fs, inode, mode, trusted);
+		} catch(Throwable exc) {
+			this.close();
+			throw exc;
+		}
+	}
+	
+	public ZKFile(ZKFS fs, Inode inode, int mode, boolean trusted) throws IOException {
+		super(fs);
+		this.zkfs = fs;
+		try {
+			this.path = "(inode " + inode.getStat().getInodeId() + ")";
+			initWithInode(fs, inode, mode, trusted);
+		} catch(Throwable exc) {
+			this.close();
+			throw exc;
+		}
+	}
+	
+	protected void initWithInode(ZKFS fs, Inode inode, int mode, boolean trusted) throws IOException {
 		try {
 			this.zkfs = fs;
-			this.path = path;
 			this.mode = mode;
 			this.trusted = trusted;
+			this.inode = inode;
 			
 			if((mode & (O_NOFOLLOW | O_LINK_LITERAL)) == O_LINK_LITERAL) {
 				throw new EINVALException("O_LINK_LITERAL not valid without O_NOFOLLOW");
 			}
 			
-			try {
-				this.inode = fs.inodeForPath(path, (mode & O_NOFOLLOW) == 0);
-				if(this.inode.getStat().isSymlink() && (mode & O_LINK_LITERAL) == 0) {
-					throw new EMLINKException(path);
-				}
-				logger.trace("ZKFS {} {}: Loading path {} from inode {} {}",
-						Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
-						Util.formatRevisionTag(fs.getBaseRevision()),
-						path,
-						inode.getStat().getInodeId(),
-						Util.formatRefTag(inode.getRefTag()));
-			} catch(ENOENTException e) {
-				if((mode & O_CREAT) == 0) throw e;
-				this.inode = fs.create(path);
+			if(this.inode.getStat().isSymlink() && (mode & O_LINK_LITERAL) == 0) {
+				throw new EMLINKException(path);
 			}
+
+			logger.trace("ZKFS {} {}: Loading path {} from inode {} {}",
+					Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
+					Util.formatRevisionTag(fs.getBaseRevision()),
+					path,
+					inode.getStat().getInodeId(),
+					Util.formatRefTag(inode.getRefTag()));
 			
 			this.tree = new PageTree(this.inode);
 			if((mode & O_WRONLY) != 0) {
@@ -284,6 +311,11 @@ public class ZKFile extends File {
 	
 	@Override
 	public void flush() throws IOException {
+		logger.trace("ZKFS {} {}: flush {}, dirty={}",
+				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(zkfs.getBaseRevision()),
+				path,
+				dirty);
 		if(!dirty) return;
 		long now = Util.currentTimeNanos();
 		inode.getStat().setMtime(now);
@@ -293,6 +325,11 @@ public class ZKFile extends File {
 		inode.setRefTag(tree.commit());
 		zkfs.inodeTable.setInode(inode);
 		zkfs.markDirty();
+		logger.trace("ZKFS {} {}: flush {} complete, new reftag={}",
+				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(zkfs.getBaseRevision()),
+				path,
+				Util.formatRefTag(inode.getRefTag()));
 		dirty = false;
 	}
 

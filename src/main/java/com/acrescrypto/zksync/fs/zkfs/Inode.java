@@ -230,4 +230,19 @@ public class Inode implements Comparable<Inode> {
 	public Inode clone(ZKFS fs) {
 		return new Inode(fs, serialize());
 	}
+	
+	public String dump() {
+		String s = "Inode " + stat.getInodeId() + " size: " + stat.getSize() + "\n";
+		s += "\tMode: " + String.format("0%03o", stat.getMode()) + "\n";
+		s += "\tUID: " + stat.getUid() + " " + stat.getUser() + "\n";
+		s += "\tGID: " + stat.getGid() + " " + stat.getGroup() + "\n";
+		s += "\tType: " + stat.getType() + " major: " + stat.getDevMajor() + " minor: " + stat.getDevMinor() + "\n";
+		s += "\tMtime: " + stat.getMtime() + " Ctime: " + stat.getCtime() + " Atime: " + stat.getAtime() + "\n";
+		s += "\tNlink: " + nlink + " Flags: " + String.format("0x%02x", flags) + "\n";
+		s += "\tModTime: " + modifiedTime + "\n";
+		s += "\tIdentity: " + identity + "\n";
+		s += "\trefTag: " + Util.formatRefTag(refTag) + "\n";
+		s += "\tchangedFrom: " + Util.formatRevisionTag(changedFrom) + "\n";
+		return s;
+	}
 }

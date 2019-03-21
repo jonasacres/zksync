@@ -186,7 +186,10 @@ public class DHTMessage {
 	protected void deserialize(DHTClient client, String senderAddress, int senderPort, ByteBuffer serialized) throws ProtocolViolationException {
 		byte[] keyBytes = new byte[client.crypto.asymPublicDHKeySize()];
 
-		assertState(serialized.remaining() > keyBytes.length);
+		/* issues that crop up before/as we decrypt are benign and could be caused by anything
+		 * from mistaken keys to misrouted or corrupted packets. Don't blacklist for these.
+		 */
+		assertStateWithoutBlacklist(serialized.remaining() > keyBytes.length);
 		serialized.get(keyBytes);
 		
 		PublicDHKey pubKey = new PublicDHKey(client.crypto, keyBytes);
@@ -199,13 +202,16 @@ public class DHTMessage {
 			byte[] plaintext = key.decrypt(new byte[client.crypto.symIvLength()], serialized.array(), serialized.position(), serialized.remaining());
 			serialized = ByteBuffer.wrap(plaintext);
 		} catch(SecurityException exc) {
-			logger.warn("DHT {}:{}: Cannot decrypt message from peer",
+			logger.info("DHT {}:{}: Cannot decrypt message from peer",
 					senderAddress,
 					senderPort,
 					exc);
-			throw new ProtocolViolationException();
+			throw new BenignProtocolViolationException();
 		}
 		
+		/* We just did an authenticated decrypt that validated the message, so we know this was
+		 * meant for us and received correctly. If it's invalid, assume the worst and blacklist.
+		 */
 		assertState(serialized.remaining() >= keyBytes.length + DHTClient.AUTH_TAG_SIZE + 4 + 1 + 1 + 1);
 		serialized.get(keyBytes);
 
@@ -235,5 +241,9 @@ public class DHTMessage {
 	
 	protected void assertState(boolean state) throws ProtocolViolationException {
 		if(!state) throw new ProtocolViolationException();
+	}
+	
+	protected void assertStateWithoutBlacklist(boolean state) throws ProtocolViolationException {
+		if(!state) throw new BenignProtocolViolationException();
 	}
 }

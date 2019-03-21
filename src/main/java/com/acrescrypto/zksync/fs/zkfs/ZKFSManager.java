@@ -96,6 +96,12 @@ public class ZKFSManager implements AutoCloseable {
 	
 	public void notifyLocalChanges() {
 		if(autocommitTimer != null && !autocommitTimer.isExpired()) {
+			logger.info("ZKFS {} {}: ZKFSManager snoozing autocommit timer, interval={}ms (id={})",
+					Util.formatArchiveId(fs.archive.config.archiveId),
+					Util.formatRevisionTag(fs.baseRevision),
+					autocommitIntervalMs,
+					System.identityHashCode(this)
+					);
 			autocommitTimer.snooze();
 		}
 	}
@@ -111,21 +117,23 @@ public class ZKFSManager implements AutoCloseable {
 				&& !fs.isDirty()
 				&& !fs.baseRevision.equals(latest)
 				&& isDescendent) {
-			try {
-				logger.info("ZKFS {} {}: Automatically rebasing to new revtag {}",
-						Util.formatArchiveId(fs.archive.config.archiveId),
-						Util.formatRevisionTag(fs.baseRevision),
-						Util.formatRevisionTag(latest));
-				fs.rebase(latest);
-				if(mirror != null) {
-					mirror.syncArchiveToTarget();
+			if(!fs.isDirty() && !fs.baseRevision.equals(latest)) {
+				try {
+					logger.info("ZKFS {} {}: Automatically rebasing to new revtag {}",
+							Util.formatArchiveId(fs.archive.config.archiveId),
+							Util.formatRevisionTag(fs.baseRevision),
+							Util.formatRevisionTag(latest));
+					fs.rebase(latest);
+					if(mirror != null) {
+						mirror.syncArchiveToTarget();
+					}
+				} catch (IOException exc) {
+					logger.error("ZKFS {} {}: Unable to rebase to revtag {}",
+							Util.formatArchiveId(fs.archive.config.archiveId),
+							Util.formatRevisionTag(fs.baseRevision),
+							Util.formatArchiveId(fs.archive.config.archiveId),
+							exc);
 				}
-			} catch (IOException exc) {
-				logger.error("ZKFS {} {}: Unable to rebase to revtag {}",
-						Util.formatArchiveId(fs.archive.config.archiveId),
-						Util.formatRevisionTag(fs.baseRevision),
-						Util.formatArchiveId(fs.archive.config.archiveId),
-						exc);
 			}
 		}
 	}
@@ -174,6 +182,14 @@ public class ZKFSManager implements AutoCloseable {
 				autocommitTimer = null;
 			}
 			
+			if(fs != null) {
+				logger.info("ZKFS {} {}: ZKFSManager disabling autocommit (id={})",
+						fs == null ? "-" : Util.formatArchiveId(fs.archive.config.archiveId),
+						fs == null ? "-" : Util.formatRevisionTag(fs.baseRevision),
+						System.identityHashCode(this)
+						);
+			}
+			
 			return;
 		}
 		
@@ -181,9 +197,20 @@ public class ZKFSManager implements AutoCloseable {
 			autocommitTimer.cancel();
 		}
 		
+		logger.debug("ZKFS {} {}: ZKFSManager starting autocommit, interval={}ms (id={})",
+				Util.formatArchiveId(fs.archive.config.archiveId),
+				Util.formatRevisionTag(fs.baseRevision),
+				autocommitIntervalMs,
+				System.identityHashCode(this)
+				);
 		autocommitTimer = new SnoozeThread(autocommitIntervalMs, false, ()->{
 			try {
 				if(fs.isDirty()) {
+					logger.info("ZKFS {} {}: ZKFSManager triggering autocommit (id={})",
+							Util.formatArchiveId(fs.archive.config.archiveId),
+							Util.formatRevisionTag(fs.baseRevision),
+							System.identityHashCode(this)
+							);
 					fs.commit();
 				}
 				
