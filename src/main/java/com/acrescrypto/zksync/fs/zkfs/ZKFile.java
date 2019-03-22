@@ -205,7 +205,7 @@ public class ZKFile extends File {
 					neededPageNum,
 					numRead,
 					bufOffset + readLen - numToRead);
-			if(numRead == 0) return numRead;
+			if(numRead == 0) return readLen - numToRead;
 			numToRead -= numRead;
 			offset += numRead;
 		}
@@ -221,7 +221,6 @@ public class ZKFile extends File {
 		}
 		
 		bufferedPage = new Page(this, pageNum);
-		
 		if(tree.hasTag(pageNum) && pageNum < tree.numPages) {
 			logger.trace("ZKFS {} {}: {} buffering pre-existing page {}",
 					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
@@ -312,42 +311,50 @@ public class ZKFile extends File {
 	}
 	
 	@Override
-	public synchronized void flush() throws IOException {
+	public void flush() throws IOException {
 		logger.trace("ZKFS {} {}: flush {}, dirty={}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(zkfs.getBaseRevision()),
 				path,
 				dirty);
 		if(!dirty) return;
-		long now = Util.currentTimeNanos();
-		inode.getStat().setMtime(now);
-		inode.setChangedFrom(zkfs.baseRevision);
-		inode.setModifiedTime(now);
-		if(bufferedPage != null) bufferedPage.flush();
-		inode.setRefTag(tree.commit());
+		synchronized(this) {
+			if(!dirty) return;
+			long now = Util.currentTimeNanos();
+			inode.getStat().setMtime(now);
+			inode.setChangedFrom(zkfs.baseRevision);
+			inode.setModifiedTime(now);
+			if(bufferedPage != null) bufferedPage.flush();
+			inode.setRefTag(tree.commit());
+			dirty = false;
+		}
+		
 		zkfs.inodeTable.setInode(inode);
 		zkfs.markDirty();
+		
 		logger.trace("ZKFS {} {}: flush {} complete, new reftag={}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(zkfs.getBaseRevision()),
 				path,
 				Util.formatRefTag(inode.getRefTag()));
-		dirty = false;
 	}
 
 	@Override
-	public synchronized void close() throws IOException {
-		if(closed) return;
-		closed = true;
+	public void close() throws IOException {
+		synchronized(this) {
+			if(closed) return;
+			closed = true;
+			
+			logger.trace("ZKFS {} {}: close {}, {} open",
+					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+					Util.formatRevisionTag(zkfs.baseRevision),
+					path,
+					fs.getOpenFiles().size());
+			flush();
+		}
 		
-		fs.reportClosedFile(this);
-		logger.trace("ZKFS {} {}: close {}, {} open",
-				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
-				Util.formatRevisionTag(zkfs.baseRevision),
-				path,
-				fs.getOpenFiles().size());
-		flush();
 		zkfs.removeOpenFile(this);
+		fs.reportClosedFile(this);
 	}
 
 	@Override
@@ -368,7 +375,7 @@ public class ZKFile extends File {
 		inode.getStat().setMode(file.getStat().getMode());
 	}
 		
-	public synchronized int available() throws IOException {
+	public int available() throws IOException {
 		// TODO DHT: (test) coverage on this...
 		if(bufferedPage == null) return 0;
 		return bufferedPage.remaining();

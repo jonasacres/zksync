@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.Security;
 import java.util.Arrays;
+import java.util.LinkedList;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -13,6 +14,8 @@ import org.junit.*;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.HashContext;
+import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
@@ -678,6 +681,76 @@ public class ZKFSTest extends FSTestBase {
 			assertArrayEquals(contents, zkscratch.read(file.getPath()));
 			Inode inode = zkscratch.inodeTable.inodeWithId(file.getStat().getInodeId());
 			assertFalse(inode.getRefTag().isBlank());
+		}
+	}
+	
+	@Test
+	public void testMultithreadedHell() throws IOException {
+		// spin up some write threads to put random data to separate files.
+		// another thread commits while this is happening.
+		// in the end, all the files should have all the data.
+		
+		int numDemons = 8; // number of simultaneous writers
+		int durationMs = 1000; // how long should demon threads run for
+		long deadline = System.currentTimeMillis() + durationMs;
+		LinkedList<Thread> threads = new LinkedList<>();
+		final CryptoSupport crypto = zkscratch.getArchive().getMaster().getCrypto();
+		int[] lengths = new int[numDemons];
+		HashContext[] hashes = new HashContext[numDemons];
+		
+		for(int i = 0; i < numDemons; i++) {
+			final int ii = i;
+			Thread t = new Thread(()->{
+				PRNG prng = crypto.prng(Util.serializeInt(ii));
+				hashes[ii] = crypto.startHash();
+				try(ZKFile file = zkscratch.open("file" + ii, File.O_CREAT|File.O_RDWR|File.O_TRUNC)) {
+					while(System.currentTimeMillis() < deadline) {
+						byte[] data = prng.getBytes(prng.getInt(1024));
+						hashes[ii].update(data);
+						lengths[ii] += data.length;
+						file.write(data);
+					}
+				} catch (IOException exc) {
+					exc.printStackTrace();
+					fail();
+				}
+			});
+			threads.add(t);
+			t.start();
+		}
+		
+		Thread commitThread = new Thread(()->{
+			try {
+				while(System.currentTimeMillis() < deadline) {
+					zkscratch.commit();
+				}
+			} catch(IOException exc) {
+				exc.printStackTrace();
+				fail();
+			}
+			
+		});
+		
+		commitThread.start();
+		
+		Util.sleep(deadline - System.currentTimeMillis());
+		assertTrue(Util.waitUntil(2000, ()->{
+			if(commitThread.isAlive()) return false;
+			for(Thread t : threads) {
+				if(t.isAlive()) return false;
+			}
+			
+			return true;
+		}));
+		
+		zkscratch.commit();
+		
+		for(int i = 0; i < numDemons; i++) {
+			String path = "file" + i;
+			byte[] actualHash = crypto.hash(zkscratch.read(path));
+			byte[] expectedHash = hashes[i].finish();
+			assertEquals(lengths[i], zkscratch.stat("file"+i).getSize());
+			assertArrayEquals(expectedHash, actualHash);
 		}
 	}
 	

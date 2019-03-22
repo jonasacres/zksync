@@ -2,8 +2,8 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,8 +31,8 @@ public class ZKFS extends FS {
 	protected SubscriptionToken<?> cacheToken; 
 	protected boolean isReadOnly; // was this specific ZKFS opened RO? (not the whole archive)
 	protected int retainCount = 1;
-	protected HashSet<ZKFile> openFiles = new HashSet<>();
-		
+	protected ConcurrentHashMap<ZKFile,Object> openFiles = new ConcurrentHashMap<>();
+	
 	public final static int MAX_PATH_LEN = 65535;
 	
 	Logger logger = LoggerFactory.getLogger(ZKFS.class);
@@ -64,18 +64,21 @@ public class ZKFS extends FS {
 		 * (and therefore call close()) independent of a threat actually using the FS. In general,
 		 * ZKFS operations are non-threadsafe.
 		 */
-		if(--retainCount > 0) return;
-		assert(retainCount == 0);
+		synchronized(this) {
+			if(--retainCount > 0) return;
+			assert(retainCount == 0);
+
+			cacheToken.close();
+			this.directoriesByPath.removeAll();
+			inodeTable.close();
+			super.close();
+		}
 		
-		cacheToken.close();
-		this.directoriesByPath.removeAll();
 		closeOpenFiles();
-		inodeTable.close();
-		super.close();
 	}
 	
 	protected void closeOpenFiles() {
-		for(ZKFile file : openFiles) {
+		for(ZKFile file : openFiles.keySet()) {
 			try {
 				file.close();
 			} catch (IOException exc) {
@@ -92,11 +95,11 @@ public class ZKFS extends FS {
 		return retainCount == 0;
 	}
 	
-	protected synchronized void addOpenFile(ZKFile file) {
-		openFiles.add(file);
+	protected void addOpenFile(ZKFile file) {
+		openFiles.put(file, file);
 	}
 	
-	protected synchronized void removeOpenFile(ZKFile file) {
+	protected void removeOpenFile(ZKFile file) {
 		openFiles.remove(file);
 	}
 	
@@ -121,26 +124,28 @@ public class ZKFS extends FS {
 		}
 	}
 	
-	public synchronized RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
+	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
 		for(ZKDirectory dir : directoriesByPath.values()) {
 			dir.commit();
 		}
 		
-		for(ZKFile file : openFiles) {
+		for(ZKFile file : openFiles.keySet()) {
 			file.flush();
 		}
 		
-		String parents = Util.formatRevisionTag(baseRevision);
-		for(RevisionTag parent : additionalParents) {
-			parents += ", " + Util.formatRevisionTag(parent);
+		synchronized(this) {
+			String parents = Util.formatRevisionTag(baseRevision);
+			for(RevisionTag parent : additionalParents) {
+				parents += ", " + Util.formatRevisionTag(parent);
+			}
+			baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
+			dirty = false;
+			logger.info("ZKFS {}: Created revtag {} from {}",
+					Util.formatArchiveId(archive.getConfig().getArchiveId()),
+					Util.formatRevisionTag(baseRevision),
+					parents);
+			return baseRevision;
 		}
-		baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
-		dirty = false;
-		logger.info("ZKFS {}: Created revtag {} from {}",
-				Util.formatArchiveId(archive.getConfig().getArchiveId()),
-				Util.formatRevisionTag(baseRevision),
-				parents);
-		return baseRevision;
 	}
 	
 	public RevisionTag commit() throws IOException {

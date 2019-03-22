@@ -264,7 +264,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	/** return an inode with a given ID */
-	public Inode inodeWithId(long inodeId) throws IOException {
+	public synchronized Inode inodeWithId(long inodeId) throws IOException {
 		return inodesByPage.get(pageNumForInodeId(inodeId))[pageOffsetForInodeId(inodeId)];
 	}
 	
@@ -454,7 +454,7 @@ public class InodeTable extends ZKFile {
 	}
 	
 	/** place an inode into the table, overwriting what's already there (assumes inode id is properly set) */
-	protected void setInode(Inode inode) throws IOException {
+	protected synchronized void setInode(Inode inode) throws IOException {
 		Inode existing = inodeWithId(inode.getStat().getInodeId());
 		if(existing == inode) return; // inode is already set
 		logger.trace("ZKFS {} {}: Replacing contents for inode {}, identity {} -> {}",
