@@ -191,6 +191,14 @@ public class ZKFS extends FS {
 	}
 	
 	protected Inode inodeForPathWithSymlinks(String path, int depth) throws IOException {
+		if(directoriesByPath.hasCached(path)) {
+			synchronized(this) {
+				if(directoriesByPath.hasCached(path)) {
+					return directoriesByPath.get(path).getInode();
+				}
+			}
+		}
+		
 		if(depth > MAX_SYMLINK_DEPTH) throw new ELOOPException(path);
 		String absPath = absolutePath(path);
 		if(path.equals("")) throw new ENOENTException(path);
@@ -207,10 +215,10 @@ public class ZKFS extends FS {
 		}
 		
 		if(inode.getStat().isSymlink()) {
-			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL, true);
-			String linkPath = new String(symlink.read(MAX_PATH_LEN));
-			symlink.close();
-			return inodeForPathWithSymlinks(linkPath, depth + 1);
+			try(ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL, true)) {
+				String linkPath = new String(symlink.read(MAX_PATH_LEN));
+				return inodeForPathWithSymlinks(linkPath, depth + 1);
+			}
 		}
 		
 		return inode;
@@ -226,6 +234,7 @@ public class ZKFS extends FS {
 		assertPathLegal(path);
 		Inode inode = inodeTable.issueInode();
 		parent.link(inode, basename(path));
+		parent.flush();
 		return inode;
 	}
 	

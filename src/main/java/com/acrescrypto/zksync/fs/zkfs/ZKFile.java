@@ -47,6 +47,7 @@ public class ZKFile extends File {
 	/** Open a file handle at a path */
 	public ZKFile(ZKFS fs, String path, int mode, boolean trusted) throws IOException {
 		super(fs);
+		System.out.println("Open " + path + " " + String.format("%02x", mode));
 		logger.trace("ZKFS {} {}: open {} - (0x{}), {} open",
 				Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(fs.baseRevision),

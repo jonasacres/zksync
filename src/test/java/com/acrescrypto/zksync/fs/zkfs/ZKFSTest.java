@@ -19,6 +19,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
+import com.acrescrypto.zksync.exceptions.ELOOPException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.Directory;
@@ -695,6 +696,44 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	@Test
+	public void testFileTruncateToImmediateSize() throws IOException {
+		// mimics an observed bug: truncation to immediate size caused immediate reftag to be treated as non-immediate 
+		String path = "tricky-file";
+		PRNG prng = crypto.prng(crypto.symNonce(0));
+		
+		zkscratch.write(path, prng.getBytes(23610));
+		try(ZKFile file = zkscratch.open(path, File.O_RDWR)) {
+			file.seek(16785, File.SEEK_SET);
+			file.write(prng.getBytes(129805));
+		}
+		
+		zkscratch.truncate(path, 83154);
+		zkscratch.truncate(path, 17);
+		zkscratch.truncate(path, 11);
+		
+		// and if we don't lock up, we passed the test.
+	}
+	
+	@Test
+	public void testListRecursiveWithSymlinkLoopThrowsELOOP() throws IOException {
+		zkscratch.purge();
+		zkscratch.symlink("/", "a");
+		zkscratch.symlink("/", "b");
+		System.out.println("Test start");
+		// zkscratch.commit(); // TODO: this should not be necessary to trigger the bug
+		/* but it is necessary, because when we symlink to something, we ask zkfs to get the inode of the
+		 * symlink target... then we open it as a new file, which does not have the changes we've made.
+		 * hmmm...
+		 */
+		try(ZKDirectory dir = zkscratch.opendir("/")) {
+			String[] paths = dir.listRecursive();
+			for(String subpath : paths) {
+				System.out.println(subpath);
+			}
+		}
+	}
+	
+	@Test
 	public void testMultithreadedFileExtensions() throws IOException {
 		// spin up some write threads to put random data to separate files.
 		// another thread commits while this is happening.
@@ -762,25 +801,6 @@ public class ZKFSTest extends FSTestBase {
 			assertEquals(lengths[i], zkscratch.stat("file"+i).getSize());
 			assertArrayEquals(expectedHash, actualHash);
 		}
-	}
-	
-	@Test
-	public void testFileTruncateToImmediateSize() throws IOException {
-		// mimics an observed bug: truncation to immediate size caused immediate reftag to be treated as non-immediate 
-		String path = "tricky-file";
-		PRNG prng = crypto.prng(crypto.symNonce(0));
-		
-		zkscratch.write(path, prng.getBytes(23610));
-		try(ZKFile file = zkscratch.open(path, File.O_RDWR)) {
-			file.seek(16785, File.SEEK_SET);
-			file.write(prng.getBytes(129805));
-		}
-		
-		zkscratch.truncate(path, 83154);
-		zkscratch.truncate(path, 17);
-		zkscratch.truncate(path, 11);
-		
-		// and if we don't lock up, we passed the test.
 	}
 	
 	@Test
@@ -867,7 +887,7 @@ public class ZKFSTest extends FSTestBase {
 		// in the end, all the files should have all the data.
 		
 		int numDemons = 16; // number of simultaneous writers
-		int durationMs = 100000; // how long should demon threads run for
+		int durationMs = 10000; // how long should demon threads run for
 		long deadline = System.currentTimeMillis() + durationMs;
 		ConcurrentHashMap<Thread,Object> threads = new ConcurrentHashMap<>();
 		final CryptoSupport crypto = zkscratch.getArchive().getMaster().getCrypto();
@@ -910,6 +930,20 @@ public class ZKFSTest extends FSTestBase {
 		}
 	}
 	
+	public void addTag(String path, RefTag tag, ZKFS fs, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		if(!fs.exists(path)) return;
+		if(fs.lstat(path).isSymlink()) {
+			String target = fs.readlink(path);
+			addTag(target, null, fs, tags);
+		}
+		
+		if(tag == null) {
+			tag = fs.inodeForPath(path).getRefTag();
+		}
+		
+		tags.put(path, tag);
+	}
+	
 	public String pickRandomFile(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		/* pick a random existing file. to protect against multiple threads claiming the same file,
 		 * require the file to be listed in 'tags', then remove it from the list. all callers must then
@@ -922,9 +956,29 @@ public class ZKFSTest extends FSTestBase {
 			while(shuffler.hasNext()) {
 				String path = files[shuffler.next()];
 				if(!tags.containsKey(path)) continue;
+				String target = null;
+				if(fs.lstat(path).isSymlink()) {
+					target = fs.readlink(path);
+				}
+				
 				synchronized(tags) {
 					if(!tags.containsKey(path)) continue;
+					if(target != null && !tags.containsKey(target)) continue;
 					tags.remove(path);
+					
+					while(target != null) {
+						tags.remove(target);
+						try {
+							if(fs.lstat(target).isSymlink()) {
+								target = fs.readlink(target);
+							} else {
+								target = null;
+							}
+						} catch(ENOENTException exc) {
+							target = null;
+						}
+					}
+					
 					return path;
 				}
 			}
@@ -939,7 +993,7 @@ public class ZKFSTest extends FSTestBase {
 			LinkedList<String> directories = new LinkedList<>();
 			for(String file : files) {
 				try {
-					if(!fs.stat(file).isDirectory()) continue;
+					if(!fs.lstat(file).isDirectory()) continue;
 				} catch(ENOENTException exc) {
 					continue;
 				}
@@ -947,6 +1001,29 @@ public class ZKFSTest extends FSTestBase {
 			}
 			
 			directories.add("/");
+			
+			if(directories.isEmpty()) throw new CantDoThatRightNowException();
+			return directories.get(prng.getInt(directories.size()));
+		}
+	}
+	
+	public String pickRandomEmptyDirectory(ZKFS fs, PRNG prng) throws IOException {
+		try(ZKDirectory dir = fs.opendir("/")) {
+			String[] files = dir.listRecursive();
+			LinkedList<String> directories = new LinkedList<>();
+			for(String file : files) {
+				try {
+					if(!fs.lstat(file).isDirectory()) continue;
+				} catch(ENOENTException exc) {
+					continue;
+				}
+				
+				try(ZKDirectory dir2 = fs.opendir(file)) {
+					if(dir2.list().length == 0) {
+						directories.add(file);
+					}
+				}
+			}
 			
 			if(directories.isEmpty()) throw new CantDoThatRightNowException();
 			return directories.get(prng.getInt(directories.size()));
@@ -979,6 +1056,11 @@ public class ZKFSTest extends FSTestBase {
 			file.write(prng.getBytes(size));
 			file.flush();
 			tags.put(path, file.getInode().getRefTag());
+		} catch(ENOENTException exc) {
+			/* we have a race with the unlink directory action, where our parent directory might get unlinked
+			 * from underneath us. Just ignore it.
+			 */
+			throw new CantDoThatRightNowException();
 		}
 		
 		return path;
@@ -998,7 +1080,7 @@ public class ZKFSTest extends FSTestBase {
 			System.out.println("truncate " + path + " " + newSize);
 			file.truncate(prng.getInt((int) size));
 			file.flush();
-			tags.put(path, file.getInode().getRefTag());
+			addTag(path, file.getInode().getRefTag(), fs, tags);
 		}
 		
 		return path;
@@ -1013,7 +1095,7 @@ public class ZKFSTest extends FSTestBase {
 		try(ZKFile file = fs.open(path, File.O_RDWR|File.O_APPEND)) {
 			file.write(data);
 			file.flush();
-			tags.put(path, file.getInode().getRefTag());
+			addTag(path, file.getInode().getRefTag(), fs, tags);
 		}
 		
 		return path;
@@ -1030,7 +1112,7 @@ public class ZKFSTest extends FSTestBase {
 			file.seek(offset, File.SEEK_SET);
 			file.write(data);
 			file.flush();
-			tags.put(path, file.getInode().getRefTag());
+			addTag(path, file.getInode().getRefTag(), fs, tags);
 		}
 		
 		return path;
@@ -1053,12 +1135,16 @@ public class ZKFSTest extends FSTestBase {
 		return path;
 	}
 	
-	public String takeRandomAction(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
-		while(true) {
-			try {
-				return attemptRandomAction(fs, prng, tags);
-			} catch(CantDoThatRightNowException exc) {}
+	public String unlinkRandomDirectory(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		String path = pickRandomEmptyDirectory(fs, prng);
+		System.out.println("rmdir " + path);
+		try {
+			fs.rmdir(path);
+		} catch(ENOTEMPTYException exc) {
+			// there's a race here; nothing stops someone from making a file in this directory before we unlink it
+			throw new CantDoThatRightNowException();
 		}
+		return path;
 	}
 	
 	public String makeRandomCommit(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
@@ -1067,10 +1153,57 @@ public class ZKFSTest extends FSTestBase {
 		return null;
 	}
 	
+	public String makeRandomValidFileSymlink(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		String path = makeRandomPath(fs, prng) + "-symlink-file";
+		String target = pickRandomFile(fs, prng, tags);
+		System.out.println("symlink " + path + " -> " + target);
+		try {
+			fs.symlink(target, path);
+		} catch(ENOENTException exc) {
+			throw new CantDoThatRightNowException();
+		}
+		addTag(path, null, fs, tags);
+		return path;
+	}
+	
+	public String makeRandomInvalidSymlink(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		String path = makeRandomPath(fs, prng) + "-symlink-broken";
+		String target = makeRandomPath(fs, prng) + "-invalid";
+		System.out.println("symlink " + path + " -> " + target);
+		try {
+			fs.symlink(target, path);
+		} catch(ENOENTException exc) {
+			throw new CantDoThatRightNowException();
+		}
+		tags.put(path, fs.inodeForPath(path, false).getRefTag());
+		return path;
+	}
+	
+	public String makeRandomDirectorySymlink(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		String path = makeRandomPath(fs, prng) + "-symlink-dir";
+		String target = pickRandomDirectory(fs, prng);
+		System.out.println("symlink " + path + " -> " + target);
+		try {
+			fs.symlink(target, path);
+		} catch(ENOENTException exc) {
+			throw new CantDoThatRightNowException();
+		}
+		tags.put(path, fs.inodeForPath(path, false).getRefTag());
+		return path;
+	}
+	
+	public String takeRandomAction(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		while(true) {
+			try {
+				return attemptRandomAction(fs, prng, tags);
+			} catch(CantDoThatRightNowException exc) {}
+		}
+	}
+	
 	public String attemptRandomAction(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		int r = prng.getInt(100);
 		
-		if((r -= 40) < 0) {
+		if((r -= 30) < 0) {
 			return writeRandomFile(fs, prng, tags);
 		} else if((r -= 10) < 0) {
 			return truncateRandomFile(fs, prng, tags);
@@ -1082,6 +1215,14 @@ public class ZKFSTest extends FSTestBase {
 			return unlinkRandomFile(fs, prng, tags);
 		} else if((r -= 10) < 0) {
 			return makeRandomDirectory(fs, prng, tags);
+		} else if((r -= 2) < 0) {
+			return unlinkRandomDirectory(fs, prng, tags);
+		} else if((r -= 3) < 0) {
+			return makeRandomValidFileSymlink(fs, prng, tags);
+		} else if((r -= 2) < 0) {
+			return makeRandomInvalidSymlink(fs, prng, tags);
+		} else if((r -= 2) < 0) {
+			return makeRandomDirectorySymlink(fs, prng, tags);
 		} else {
 			return makeRandomCommit(fs, prng, tags);
 		}
@@ -1090,7 +1231,7 @@ public class ZKFSTest extends FSTestBase {
 	public void verifyTags(ZKFS fs, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		for(String path : tags.keySet()) {
 			RefTag expectedTag = tags.get(path);
-			RefTag actualTag = fs.inodeForPath(path).getRefTag();
+			RefTag actualTag = fs.inodeForPath(path, false).getRefTag();
 			assertEquals(expectedTag, actualTag);
 		}
 		
