@@ -185,6 +185,10 @@ public class PageTree {
 		return numPages;
 	}
 	
+	public void setNumPages(long numPages) {
+		this.numPages = numPages;
+	}
+	
 	protected long numPieces() {
 		return numPages() + numChunks();
 	}

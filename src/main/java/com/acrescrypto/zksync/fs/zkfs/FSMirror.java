@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.CommandFailedException;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
@@ -318,13 +319,18 @@ public class FSMirror {
 	}
 
 	public synchronized void syncTargetToArchive() throws IOException {
-		String[] list = target.opendir("/").listRecursive();
+		Directory dir = null;
+		try {
+			String[] list = target.opendir("/").listRecursive();
 
-		for(String path : list) {
-			copy(target, zkfs, path);
+			for(String path : list) {
+				copy(target, zkfs, path);
+			}
+
+			pruneFsToList(zkfs, list);
+		} finally {
+			if(dir != null) dir.close();
 		}
-
-		pruneFsToList(zkfs, list);
 	}
 
 	protected void pruneFsToList(FS fs, String[] list) throws IOException {
@@ -332,13 +338,21 @@ public class FSMirror {
 		for(String path : list) {
 			paths.add(path);
 		}
-
-		String[] localList = fs.opendir("/").listRecursive();
-		for(String path : localList) {
-			if(paths.contains(path)) continue;
-			try {
-				remove(fs, path, fs.lstat(path));
-			} catch(ENOENTException exc) {}
+		
+		Directory dir = null;
+		try {
+			dir = fs.opendir("/");
+			String[] localList = dir.listRecursive();
+			for(String path : localList) {
+				if(paths.contains(path)) continue;
+				try {
+					remove(fs, path, fs.lstat(path));
+				} catch(ENOENTException exc) {}
+			}
+		} finally {
+			if(dir != null) {
+				dir.close();
+			}
 		}
 	}
 

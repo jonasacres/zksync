@@ -4,9 +4,11 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Paths;
 import java.security.Security;
 import java.util.Arrays;
 import java.util.LinkedList;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -19,22 +21,30 @@ import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
+import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS.ZKFSDirtyMonitor;
+import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKFSTest extends FSTestBase {
+	public class CantDoThatRightNowException extends RuntimeException {
+		private static final long serialVersionUID = 1L;
+	}
+	
 	int oldDefaultTimeCost, oldDefaultParallelism, oldDefaultMemoryCost;
 	ZKFS zkscratch;
 	ZKMaster master;
+	CryptoSupport crypto;
 	
 	@Before
 	public void beforeEach() throws IOException {
 		TestUtils.startDebugMode();
 		master = ZKMaster.openBlankTestVolume();
 		scratch = zkscratch = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
+		crypto = master.getCrypto();
 		prepareExamples();
 	}
 	
@@ -685,7 +695,7 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	@Test
-	public void testMultithreadedHell() throws IOException {
+	public void testMultithreadedFileExtensions() throws IOException {
 		// spin up some write threads to put random data to separate files.
 		// another thread commits while this is happening.
 		// in the end, all the files should have all the data.
@@ -752,6 +762,349 @@ public class ZKFSTest extends FSTestBase {
 			assertEquals(lengths[i], zkscratch.stat("file"+i).getSize());
 			assertArrayEquals(expectedHash, actualHash);
 		}
+	}
+	
+	@Test
+	public void testFileTruncateToImmediateSize() throws IOException {
+		// mimics an observed bug: truncation to immediate size caused immediate reftag to be treated as non-immediate 
+		String path = "tricky-file";
+		PRNG prng = crypto.prng(crypto.symNonce(0));
+		
+		zkscratch.write(path, prng.getBytes(23610));
+		try(ZKFile file = zkscratch.open(path, File.O_RDWR)) {
+			file.seek(16785, File.SEEK_SET);
+			file.write(prng.getBytes(129805));
+		}
+		
+		zkscratch.truncate(path, 83154);
+		zkscratch.truncate(path, 17);
+		zkscratch.truncate(path, 11);
+		
+		// and if we don't lock up, we passed the test.
+	}
+	
+	@Test
+	public void testMultithreadedFileCreations() throws IOException {
+		// spin up some write threads to put random data to separate files.
+		// another thread commits while this is happening.
+		// in the end, all the files should have all the data.
+		
+		int numDemons = 8; // number of simultaneous writers
+		int durationMs = 1000; // how long should demon threads run for
+		long deadline = System.currentTimeMillis() + durationMs;
+		LinkedList<Thread> threads = new LinkedList<>();
+		final CryptoSupport crypto = zkscratch.getArchive().getMaster().getCrypto();
+		ConcurrentHashMap<String,byte[]> hashes = new ConcurrentHashMap<>();
+		ConcurrentHashMap<String,Long> lengths = new ConcurrentHashMap<>();
+		
+		for(int i = 0; i < numDemons; i++) {
+			final int ii = i;
+			Thread t = new Thread(()->{
+				PRNG prng = crypto.prng(Util.serializeInt(ii));
+				while(System.currentTimeMillis() < deadline) {
+					int pages = prng.getInt(3);
+					byte[] data;
+					if(pages == 0) {
+						data = prng.getBytes(prng.getInt(crypto.hashLength()));
+					} else {
+						int pageSize = zkscratch.getArchive().getConfig().getPageSize();
+						data = prng.getBytes((pages-1)*pageSize + prng.getInt(pageSize));
+					}
+					
+					String path = Util.bytesToHex(prng.getBytes(8));
+					hashes.put(path, crypto.hash(data, 0, data.length));
+					lengths.put(path, Long.valueOf(data.length));
+					try {
+						zkscratch.write(path, data);
+					} catch (IOException e) {
+						e.printStackTrace();
+						fail();
+					}
+				}
+			});
+			threads.add(t);
+			t.start();
+		}
+		
+		Thread commitThread = new Thread(()->{
+			try {
+				while(System.currentTimeMillis() < deadline) {
+					zkscratch.commit();
+				}
+			} catch(IOException exc) {
+				exc.printStackTrace();
+				fail();
+			}
+			
+		});
+		
+		commitThread.start();
+		
+		Util.sleep(deadline - System.currentTimeMillis());
+		assertTrue(Util.waitUntil(2000, ()->{
+			if(commitThread.isAlive()) return false;
+			for(Thread t : threads) {
+				if(t.isAlive()) return false;
+			}
+			
+			return true;
+		}));
+		
+		zkscratch.commit();
+		
+		for(String path : lengths.keySet()) {
+			byte[] actualHash = crypto.hash(zkscratch.read(path));
+			long actualLen = zkscratch.stat(path).getSize();
+			assertArrayEquals(hashes.get(path), actualHash);
+			assertEquals(lengths.get(path).longValue(), actualLen);
+		}
+	}
+	
+	@Test
+	public void testMultithreadedChaos() throws IOException {
+		// spin up some write threads to put random data to separate files.
+		// another thread commits while this is happening.
+		// in the end, all the files should have all the data.
+		
+		int numDemons = 16; // number of simultaneous writers
+		int durationMs = 100000; // how long should demon threads run for
+		long deadline = System.currentTimeMillis() + durationMs;
+		ConcurrentHashMap<Thread,Object> threads = new ConcurrentHashMap<>();
+		final CryptoSupport crypto = zkscratch.getArchive().getMaster().getCrypto();
+		ConcurrentHashMap<String,RefTag> tags = new ConcurrentHashMap<>();
+		zkscratch.rebase(RevisionTag.blank(zkscratch.getArchive().getConfig()));
+		
+		for(int i = 0; i < numDemons; i++) {
+			final int ii = i;
+			Thread t = new Thread(()->{
+				PRNG prng = crypto.prng(Util.serializeInt(ii));
+				while(System.currentTimeMillis() < deadline) {
+					try {
+						takeRandomAction(zkscratch, prng, tags);
+					} catch (IOException exc) {
+						exc.printStackTrace();
+						fail();
+					}
+				}
+				
+				threads.remove(Thread.currentThread());
+				System.out.println("Thread " + ii + " complete");
+			});
+			threads.put(t, t);
+			t.start();
+		}
+		
+		System.out.println("Sleeping");
+		Util.sleep(deadline - System.currentTimeMillis());
+		assertTrue(Util.waitUntil(2000, ()->threads.isEmpty()));
+		
+		System.out.println("Final commit");
+		zkscratch.commit();
+
+		System.out.println("Verifying tags (1)");
+		verifyTags(zkscratch, tags);
+		
+		System.out.println("Verifying tags (2)");
+		try(ZKFS fs = zkscratch.baseRevision.getFS()) {
+			verifyTags(fs, tags);
+		}
+	}
+	
+	public String pickRandomFile(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		/* pick a random existing file. to protect against multiple threads claiming the same file,
+		 * require the file to be listed in 'tags', then remove it from the list. all callers must then
+		 * return the file to the 'tags' list when done with file operation.
+		 */
+		try(ZKDirectory dir = fs.opendir("/")) {
+			String[] files = dir.listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES);
+			if(files.length == 0) throw new CantDoThatRightNowException();
+			Shuffler shuffler = new Shuffler(files.length);
+			while(shuffler.hasNext()) {
+				String path = files[shuffler.next()];
+				if(!tags.containsKey(path)) continue;
+				synchronized(tags) {
+					if(!tags.containsKey(path)) continue;
+					tags.remove(path);
+					return path;
+				}
+			}
+			
+			throw new CantDoThatRightNowException();
+		}
+	}
+	
+	public String pickRandomDirectory(ZKFS fs, PRNG prng) throws IOException {
+		try(ZKDirectory dir = fs.opendir("/")) {
+			String[] files = dir.listRecursive();
+			LinkedList<String> directories = new LinkedList<>();
+			for(String file : files) {
+				try {
+					if(!fs.stat(file).isDirectory()) continue;
+				} catch(ENOENTException exc) {
+					continue;
+				}
+				directories.add(file);
+			}
+			
+			directories.add("/");
+			
+			if(directories.isEmpty()) throw new CantDoThatRightNowException();
+			return directories.get(prng.getInt(directories.size()));
+		}
+	}
+	
+	public String makeRandomPath(ZKFS fs, PRNG prng) throws IOException {
+		String directory = pickRandomDirectory(fs, prng);
+		String filename = Util.bytesToHex(prng.getBytes(4));
+		String path = Paths.get(directory, filename).toString();
+		while(path.startsWith("/")) path = path.substring(1);
+		return path;
+	}
+	
+	public String writeRandomFile(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		int type = prng.getInt(3);
+		int size, pageSize = fs.getArchive().getConfig().getPageSize();
+		if(type == 0) {
+			size = prng.getInt(crypto.hashLength()-1);
+		} else if(type == 1) {
+			size = prng.getInt(pageSize);
+		} else {
+			int pages = prng.getInt(5)+2;
+			size = prng.getInt(pageSize*(pages-1) + pageSize);
+		}
+		
+		String path = makeRandomPath(fs, prng) + "-file";
+		System.out.println("write " + path + " " + size);
+		try(ZKFile file = fs.open(path, File.O_CREAT|File.O_TRUNC|File.O_RDWR)) {
+			file.write(prng.getBytes(size));
+			file.flush();
+			tags.put(path, file.getInode().getRefTag());
+		}
+		
+		return path;
+	}
+	
+	public String truncateRandomFile(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		String path = pickRandomFile(fs, prng, tags);
+		
+		try(ZKFile file = fs.open(path, File.O_RDWR)) {
+			long size = file.getStat().getSize();
+			long newSize = prng.getInt(Math.max(1, (int) size));
+			if(size == 0) {
+				tags.put(path, file.getInode().getRefTag());
+				throw new CantDoThatRightNowException();
+			}
+			
+			System.out.println("truncate " + path + " " + newSize);
+			file.truncate(prng.getInt((int) size));
+			file.flush();
+			tags.put(path, file.getInode().getRefTag());
+		}
+		
+		return path;
+	}
+	
+	public String extendRandomFile(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		String path = pickRandomFile(fs, prng, tags);
+		int pageSize = fs.getArchive().getConfig().getPageSize();
+		byte[] data = prng.getBytes(prng.getInt(2*pageSize));
+		System.out.println("extend " + path + " " + data.length);
+		
+		try(ZKFile file = fs.open(path, File.O_RDWR|File.O_APPEND)) {
+			file.write(data);
+			file.flush();
+			tags.put(path, file.getInode().getRefTag());
+		}
+		
+		return path;
+	}
+	
+	public String modifyRandomFile(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		String path = pickRandomFile(fs, prng, tags);
+		int pageSize = fs.getArchive().getConfig().getPageSize();
+		byte[] data = prng.getBytes(prng.getInt(2*pageSize));
+		
+		try(ZKFile file = fs.open(path, File.O_RDWR)) {
+			int offset = prng.getInt(Math.max(1, (int) file.inode.getStat().getSize()));
+			System.out.println("modify " + path + " " + data.length + " " + "@" + offset);
+			file.seek(offset, File.SEEK_SET);
+			file.write(data);
+			file.flush();
+			tags.put(path, file.getInode().getRefTag());
+		}
+		
+		return path;
+	}
+
+	public String unlinkRandomFile(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		String path = pickRandomFile(fs, prng, tags);
+		System.out.println("unlink " + path);
+		
+		fs.unlink(path);
+		tags.remove(path);
+		return path;
+	}
+	
+	public String makeRandomDirectory(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		String path = makeRandomPath(fs, prng) + "-dir";
+		System.out.println("mkdir " + path);
+		
+		fs.mkdirp(path);
+		return path;
+	}
+	
+	public String takeRandomAction(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		while(true) {
+			try {
+				return attemptRandomAction(fs, prng, tags);
+			} catch(CantDoThatRightNowException exc) {}
+		}
+	}
+	
+	public String makeRandomCommit(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		System.out.println("commit");
+		fs.commit();
+		return null;
+	}
+	
+	public String attemptRandomAction(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		int r = prng.getInt(100);
+		
+		if((r -= 40) < 0) {
+			return writeRandomFile(fs, prng, tags);
+		} else if((r -= 10) < 0) {
+			return truncateRandomFile(fs, prng, tags);
+		} else if((r -= 10) < 0) {
+			return extendRandomFile(fs, prng, tags);
+		} else if((r -= 10) < 0) {
+			return modifyRandomFile(fs, prng, tags);
+		} else if((r -= 10) < 0) {
+			return unlinkRandomFile(fs, prng, tags);
+		} else if((r -= 10) < 0) {
+			return makeRandomDirectory(fs, prng, tags);
+		} else {
+			return makeRandomCommit(fs, prng, tags);
+		}
+	}
+	
+	public void verifyTags(ZKFS fs, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		for(String path : tags.keySet()) {
+			RefTag expectedTag = tags.get(path);
+			RefTag actualTag = fs.inodeForPath(path).getRefTag();
+			assertEquals(expectedTag, actualTag);
+		}
+		
+		int numFails = 0;
+		
+		for(String path : fs.opendir("/").listRecursive()) {
+			if(!fs.stat(path).isRegularFile()) continue;
+			if(!tags.containsKey(path)) {
+				System.out.println("Path " + path);
+				numFails++;
+			}
+		}
+		
+		assertEquals(0, numFails);
 	}
 	
 	protected byte[] generateFileData(String key, int length) {

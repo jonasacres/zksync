@@ -25,7 +25,8 @@ public class ZKFile extends File {
 	protected Page bufferedPage; /** buffered page contents (page for current file pointer offset) */
 	protected boolean dirty; /** true if file has been modified since last flush */
 	protected boolean trusted; /** verify page signatures when reading <=> !trusted */
-	protected boolean closed; /** is this file closed? */
+	protected boolean closed, closing; /** is this file closed? */
+	protected int retainCount = 1;
 	
 	public final static int O_LINK_LITERAL = 1 << 16; /** treat symlinks as literal files, needed for lowlevel symlink operations */
 	
@@ -46,6 +47,12 @@ public class ZKFile extends File {
 	/** Open a file handle at a path */
 	public ZKFile(ZKFS fs, String path, int mode, boolean trusted) throws IOException {
 		super(fs);
+		logger.trace("ZKFS {} {}: open {} - (0x{}), {} open",
+				Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(fs.baseRevision),
+				path,
+				Integer.toHexString(mode),
+				fs.getOpenFiles().size());
 		this.zkfs = fs;
 		try {
 			this.path = path;
@@ -68,6 +75,12 @@ public class ZKFile extends File {
 	public ZKFile(ZKFS fs, Inode inode, int mode, boolean trusted) throws IOException {
 		super(fs);
 		this.zkfs = fs;
+		logger.trace("ZKFS {} {}: open inode {} - (0x{}), {} open",
+				Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
+				Util.formatRevisionTag(fs.baseRevision),
+				inode.getStat().getInodeId(),
+				Integer.toHexString(mode),
+				fs.getOpenFiles().size());
 		try {
 			this.path = "(inode " + inode.getStat().getInodeId() + ")";
 			initWithInode(fs, inode, mode, trusted);
@@ -161,11 +174,13 @@ public class ZKFile extends File {
 			seek(oldOffset, SEEK_SET);
 		} else {
 			int newPageCount = (int) Math.ceil((double) size/zkfs.archive.config.pageSize);
+			long oldPageCount = tree.numPages;
 			tree.resize(newPageCount);
-			for(int i = newPageCount; i < tree.maxNumPages; i++) {
+			for(long i = newPageCount; i < Math.min(oldPageCount, tree.maxNumPages); i++) {
 				tree.setPageTag(i, new byte[zkfs.archive.crypto.hashLength()]);
 			}
-
+			
+			tree.setNumPages(newPageCount);
 			inode.getStat().setSize(size);
 			if(offset >= size) offset = size;
 			
@@ -312,25 +327,29 @@ public class ZKFile extends File {
 	
 	@Override
 	public void flush() throws IOException {
-		logger.trace("ZKFS {} {}: flush {}, dirty={}",
+		logger.trace("ZKFS {} {}: flush {}, dirty={}, closed={}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(zkfs.getBaseRevision()),
 				path,
-				dirty);
-		if(!dirty) return;
-		synchronized(this) {
-			if(!dirty) return;
-			long now = Util.currentTimeNanos();
-			inode.getStat().setMtime(now);
-			inode.setChangedFrom(zkfs.baseRevision);
-			inode.setModifiedTime(now);
-			if(bufferedPage != null) bufferedPage.flush();
-			inode.setRefTag(tree.commit());
-			dirty = false;
-		}
+				dirty,
+				closed);
+		if(!dirty || closed) return;
 		
-		zkfs.inodeTable.setInode(inode);
-		zkfs.markDirty();
+		zkfs.lockedOperation(()->{
+			synchronized(this) {
+				if(!dirty || closed) return null;
+				long now = Util.currentTimeNanos();
+				inode.getStat().setMtime(now);
+				inode.setChangedFrom(zkfs.baseRevision);
+				inode.setModifiedTime(now);
+				if(bufferedPage != null) bufferedPage.flush();
+				inode.setRefTag(tree.commit());
+				dirty = false;
+				zkfs.inodeTable.setInode(inode);
+				zkfs.markDirty();
+				return null;
+			}
+		});
 		
 		logger.trace("ZKFS {} {}: flush {} complete, new reftag={}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
@@ -338,31 +357,54 @@ public class ZKFile extends File {
 				path,
 				Util.formatRefTag(inode.getRefTag()));
 	}
-
-	@Override
-	public void close() throws IOException {
-		synchronized(this) {
-			if(closed) return;
-			closed = true;
-			
-			logger.trace("ZKFS {} {}: close {}, {} open",
-					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
-					Util.formatRevisionTag(zkfs.baseRevision),
-					path,
-					fs.getOpenFiles().size());
-			flush();
-		}
-		
-		zkfs.removeOpenFile(this);
-		fs.reportClosedFile(this);
+	
+	public synchronized ZKFile retain() {
+		retainCount++;
+		return this;
 	}
 
 	@Override
-	public synchronized void copy(File file) throws IOException {
+	public void close() throws IOException {
+		if(closed || closing) return;
+		
+		synchronized(this) {
+			retainCount--;
+			if(retainCount != 0 || closing) return;
+			closing = true;
+		}
+		
+		forceClose();
+	}
+	
+	public void forceClose() throws IOException {
+		if(closed) return;
+		zkfs.lockedOperation(()->{
+			synchronized(this) {
+				if(closed) return null;
+				logger.trace("ZKFS {} {}: close {}, {} open",
+						Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+						Util.formatRevisionTag(zkfs.baseRevision),
+						path,
+						fs.getOpenFiles().size());
+				flush();
+				zkfs.removeOpenFile(this);
+				fs.reportClosedFile(this);
+				
+				return null;
+			}
+		});
+	}
+
+	@Override
+	public void copy(File file) throws IOException {
 		assertWritable();
-		file.rewind();
 		int pageSize = zkfs.archive.config.pageSize;
-		while(file.hasData()) write(file.read(pageSize));
+		
+		synchronized(this) {
+			file.rewind();
+			while(file.hasData()) write(file.read(pageSize));
+		}
+		
 		flush();
 		
 		inode.getStat().setAtime(file.getStat().getAtime());
@@ -400,5 +442,9 @@ public class ZKFile extends File {
 	/** Throw an exception with an error message if the boolean condition is false. */
 	protected void assertIntegrity(boolean condition, String explanation) {
 		if(!condition) throw new InvalidArchiveException(String.format("%s (inode %d): %s", path, inode.getStat().getInodeId(), explanation));
+	}
+	
+	public int getRetainCount() {
+		return retainCount;
 	}
 }

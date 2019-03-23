@@ -2,9 +2,9 @@ package com.acrescrypto.zksync.utility;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class HashCache<K,V> {
 	public interface CacheLookup<K,V> {
@@ -16,7 +16,7 @@ public class HashCache<K,V> {
 		public void evict(K key, V value) throws IOException;
 	}
 
-	protected HashMap<K,V> cache = new HashMap<K,V>();
+	protected ConcurrentHashMap<K,V> cache = new ConcurrentHashMap<K,V>();
 	protected Queue<K> evictionQueue = new LinkedList<K>();
 	protected int capacity;
 	
@@ -31,7 +31,7 @@ public class HashCache<K,V> {
 	
 	public HashCache(HashCache<K,V> existing, CacheLookup<K,V> lookup, CacheEvict<K,V> evict) {
 		this(existing.capacity, lookup, evict);
-		cache = new HashMap<>(existing.cache);
+		cache = new ConcurrentHashMap<>(existing.cache);
 		evictionQueue = new LinkedList<>(existing.evictionQueue);
 	}
 	

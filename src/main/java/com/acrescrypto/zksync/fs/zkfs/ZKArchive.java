@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
+import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
@@ -262,11 +263,19 @@ public class ZKArchive implements AutoCloseable {
 	}
 	
 	public void rescanPageTags() throws IOException {
+		Directory dir = null;
 		allPageTags.clear();
-		DirectoryTraverser traverser = new DirectoryTraverser(storage, storage.opendir("/"));
-		while(traverser.hasNext()) {
-			byte[] tag = Page.tagForPath(traverser.next());
-			allPageTags.put(Util.shortTag(tag), tag);
+		try {
+			dir = storage.opendir("/");
+			DirectoryTraverser traverser = new DirectoryTraverser(storage, dir);
+			while(traverser.hasNext()) {
+				byte[] tag = Page.tagForPath(traverser.next());
+				allPageTags.put(Util.shortTag(tag), tag);
+			}
+		} finally {
+			if(dir != null) {
+				dir.close();
+			}
 		}
 	}
 }

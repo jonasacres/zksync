@@ -18,6 +18,7 @@ import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.PageTree.PageTreeStats;
+import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.net.PageQueue;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFile;
@@ -137,10 +138,12 @@ public class ArchiveCrud {
 			boolean isRecursive = Boolean.parseBoolean(params.getOrDefault("recursive", "false"));
 			boolean isListStat = Boolean.parseBoolean(params.getOrDefault("liststat", "false"));
 			
-			if(isRecursive) {
-				listings = fs.opendir(path).listRecursive();
-			} else {
-				listings = fs.opendir(path).list();
+			try(ZKDirectory dir = fs.opendir(path)) {
+				if(isRecursive) {
+					listings = dir.listRecursive();
+				} else {
+					listings = dir.list();
+				}
 			}
 			
 			Map<String,Object> payload = new HashMap<>(), fsMap = new HashMap<>();

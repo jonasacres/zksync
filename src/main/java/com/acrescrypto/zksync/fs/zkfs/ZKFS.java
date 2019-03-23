@@ -21,6 +21,10 @@ public class ZKFS extends FS {
 		public void notifyDirty(ZKFS fs);
 	}
 	
+	public interface ZKFSLockedOperation {
+		public Object op() throws IOException;
+	}
+	
 	protected InodeTable inodeTable;
 	protected HashCache<String,ZKDirectory> directoriesByPath;
 	protected ZKArchive archive;
@@ -69,6 +73,9 @@ public class ZKFS extends FS {
 			assert(retainCount == 0);
 
 			cacheToken.close();
+			for(String path : this.directoriesByPath.cachedKeys()) {
+				this.directoriesByPath.get(path).forceClose();
+			}
 			this.directoriesByPath.removeAll();
 			inodeTable.close();
 			super.close();
@@ -165,7 +172,7 @@ public class ZKFS extends FS {
 		return inodeForPath(path, true);
 	}
 	
-	public synchronized Inode inodeForPath(String path, boolean followSymlinks) throws IOException {
+	public Inode inodeForPath(String path, boolean followSymlinks) throws IOException {
 		if(followSymlinks) return inodeForPathWithSymlinks(path, 0);
 		String absPath = absolutePath(path);
 		if(path.equals("")) throw new ENOENTException(path);
@@ -173,21 +180,17 @@ public class ZKFS extends FS {
 			return inodeTable.inodeWithId(InodeTable.INODE_ID_ROOT_DIRECTORY);
 		}
 		
-		ZKDirectory root;
-		try {
-			root = opendir("/");
+		try(ZKDirectory root = opendir("/")) {
+			long inodeId = root.inodeForPath(absPath);
+			Inode inode = inodeTable.inodeWithId(inodeId);
+			
+			return inode;
 		} catch (EISNOTDIRException e) {
 			throw new ENOENTException(path);
 		}
-		
-		long inodeId = root.inodeForPath(absPath);
-		root.close();
-		Inode inode = inodeTable.inodeWithId(inodeId);
-		
-		return inode;
 	}
 	
-	protected synchronized Inode inodeForPathWithSymlinks(String path, int depth) throws IOException {
+	protected Inode inodeForPathWithSymlinks(String path, int depth) throws IOException {
 		if(depth > MAX_SYMLINK_DEPTH) throw new ELOOPException(path);
 		String absPath = absolutePath(path);
 		if(path.equals("")) throw new ENOENTException(path);
@@ -195,16 +198,13 @@ public class ZKFS extends FS {
 			return inodeTable.inodeWithId(InodeTable.INODE_ID_ROOT_DIRECTORY);
 		}
 		
-		ZKDirectory root;
-		try {
-			root = opendir("/");
+		Inode inode;
+		try(ZKDirectory root = opendir("/")) {
+			long inodeId = root.inodeForPath(absPath);
+			inode = inodeTable.inodeWithId(inodeId);
 		} catch (EISNOTDIRException e) {
 			throw new ENOENTException(path);
 		}
-		
-		long inodeId = root.inodeForPath(absPath);
-		root.close();
-		Inode inode = inodeTable.inodeWithId(inodeId);
 		
 		if(inode.getStat().isSymlink()) {
 			ZKFile symlink = new ZKFile(this, path, File.O_RDONLY|File.O_NOFOLLOW|ZKFile.O_LINK_LITERAL, true);
@@ -217,7 +217,9 @@ public class ZKFS extends FS {
 	}
 	
 	protected Inode create(String path) throws IOException {
-		return create(path, opendir(dirname(path)));
+		try(ZKDirectory dir = opendir(dirname(path))) {
+			return create(path, dir);
+		}
 	}
 	
 	protected Inode create(String path, ZKDirectory parent) throws IOException {
@@ -270,8 +272,9 @@ public class ZKFS extends FS {
 	}
 	
 	public void assertDirectoryIsEmpty(String path) throws IOException {
-		ZKDirectory dir = opendir(path);
-		if(dir.list().length > 0) throw new ENOTEMPTYException(path);
+		try(ZKDirectory dir = opendir(path)) {
+			if(dir.list().length > 0) throw new ENOTEMPTYException(path);
+		}
 	}
 
 	public void assertWritable(String path) throws EACCESException {
@@ -337,7 +340,7 @@ public class ZKFS extends FS {
 
 	@Override
 	public synchronized ZKDirectory opendir(String path) throws IOException {
-		return directoriesByPath.get(absolutePath(path));
+		return directoriesByPath.get(absolutePath(path)).retain();
 	}
 
 	@Override
@@ -367,10 +370,15 @@ public class ZKFS extends FS {
 		assertDirectoryIsEmpty(path);
 		if(path.equals("/")) return; // quietly ignore for rmrf("/") support; used to throw new EINVALException("cannot delete root directory");
 		
-		ZKDirectory dir = opendir(path);
-		dir.rmdir();
-		dir.close();
-		uncache(path);
+		synchronized(this) {
+			assertWritable(path);
+			assertDirectoryIsEmpty(path);
+			
+			try(ZKDirectory dir = opendir(path)) {
+				dir.rmdir();
+			}
+			uncache(path);
+		}
 	}
 
 	@Override
@@ -378,19 +386,28 @@ public class ZKFS extends FS {
 		assertWritable(path);
 		if(inodeForPath(path, false).getStat().isDirectory()) throw new EISDIRException(path);
 		
-		ZKDirectory dir = opendir(dirname(path));
-		dir.unlink(basename(path));
-		dir.close();
-		uncache(path);
+		synchronized(this) {
+			assertWritable(path);
+			if(inodeForPath(path, false).getStat().isDirectory()) throw new EISDIRException(path);
+			
+			try(ZKDirectory dir = opendir(dirname(path))) {
+				dir.unlink(basename(path));
+			}
+			uncache(path);
+		}
 	}
 	
 	@Override
 	public void link(String source, String dest) throws IOException {
 		assertWritable(dest);
-		Inode target = inodeForPath(source);
-		ZKDirectory destDir = opendir(dirname(dest));
-		destDir.link(target, basename(dest));
-		destDir.close();
+		
+		synchronized(this) {
+			assertWritable(dest);
+			Inode target = inodeForPath(source);
+			try(ZKDirectory destDir = opendir(dirname(dest))) {
+				destDir.link(target, basename(dest));
+			}
+		}
 	}
 	
 	@Override
@@ -562,7 +579,7 @@ public class ZKFS extends FS {
 		return unscoped;
 	}
 	
-	public void uncache(String path) throws IOException {
+	public synchronized void uncache(String path) throws IOException {
 		directoriesByPath.remove(path);
 	}
 	
@@ -587,17 +604,18 @@ public class ZKFS extends FS {
 	
 	public synchronized void dump(String path, int depth, StringBuilder builder) throws IOException {
 		String padding = new String(new char[depth]).replace("\0", "  ");
-		ZKDirectory dir = opendir(path);
-		for(String subpath : dir.list()) {
-			Inode inode = inodeForPath(Paths.get(path, subpath).toString(), false);
-			builder.append(String.format("%s%30s inodeId=%d size=%d ref=%s\n",
-					padding,
-					subpath,
-					inode.stat.getInodeId(),
-					inode.stat.getSize(),
-					Util.formatRefTag(inode.getRefTag())));
-			if(inode.stat.isDirectory()) {
-				dump(subpath, depth+1, builder);
+		try(ZKDirectory dir = opendir(path)) {
+			for(String subpath : dir.list()) {
+				Inode inode = inodeForPath(Paths.get(path, subpath).toString(), false);
+				builder.append(String.format("%s%30s inodeId=%d size=%d ref=%s\n",
+						padding,
+						subpath,
+						inode.stat.getInodeId(),
+						inode.stat.getSize(),
+						Util.formatRefTag(inode.getRefTag())));
+				if(inode.stat.isDirectory()) {
+					dump(subpath, depth+1, builder);
+				}
 			}
 		}
 	}
@@ -613,14 +631,14 @@ public class ZKFS extends FS {
 		
 		this.baseRevision = revision;
 		
-		if(this.inodeTable != null) {
-			this.inodeTable.close();
-		}
-
 		if(this.directoriesByPath != null) {
 			this.directoriesByPath.removeAll();
 		}
 		
+		if(this.inodeTable != null) {
+			this.inodeTable.close();
+		}
+
 		this.directoriesByPath = new HashCache<String,ZKDirectory>(cacheSize, (String path) -> {
 			logger.trace("ZKFS {} {}: Caching directory {}",
 					Util.formatArchiveId(revision.getConfig().getArchiveId()),
@@ -683,5 +701,10 @@ public class ZKFS extends FS {
 		inodeTable.close();
 		directoriesByPath.removeAll();
 		this.inodeTable = new InodeTable(this, baseRevision);
+	}
+	
+	/** Acts as a "big lock" on the filesystem. */
+	public synchronized Object lockedOperation(ZKFSLockedOperation op) throws IOException {
+		return op.op();
 	}
 }

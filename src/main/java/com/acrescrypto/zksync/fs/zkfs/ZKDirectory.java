@@ -6,9 +6,9 @@ import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.Directory;
@@ -17,7 +17,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class ZKDirectory extends ZKFile implements Directory {
 	// TODO Someday: (redesign) Allow partial reads of directories
-	HashMap<String,Long> entries;
+	ConcurrentHashMap<String,Long> entries;
 	boolean dirty;
 	
 	public final static int MAX_NAME_LEN = 255;
@@ -25,13 +25,19 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public ZKDirectory(ZKFS fs, String path) throws IOException {
 		super(fs, path, fs.archive.config.isReadOnly() || fs.isReadOnly ? O_RDONLY : O_RDWR, true);
 		try {
-			entries = new HashMap<String,Long>();
+			entries = new ConcurrentHashMap<String,Long>();
 			byte[] contents = read((int) inode.getStat().getSize());
 			deserialize(contents);
 		} catch(Throwable exc) {
 			close();
 			throw exc;
 		}
+	}
+	
+	@Override
+	public ZKDirectory retain() {
+		super.retain();
+		return this;
 	}
 	
 	@Override
@@ -90,15 +96,21 @@ public class ZKDirectory extends ZKFile implements Directory {
 						results.add(subpath);
 					}
 					
-					if(!isDotDir) zkfs.opendir(realSubpath).listRecursiveIterate(opts, results, subpath);
+					if(!isDotDir) {
+						try(ZKDirectory dir = zkfs.opendir(realSubpath)) {
+							dir.listRecursiveIterate(opts, results, subpath);
+						}
+					}
 				} else {
 					results.add(subpath);
 				}
 			} catch(ENOENTException exc) {
-				if(fs.lstat(realSubpath).isSymlink()) {
-					results.add(subpath);
-				} else {
-					throw exc;
+				try {
+					if(fs.lstat(realSubpath).isSymlink()) {
+						results.add(subpath);
+					}
+				} catch(ENOENTException exc2) {
+					// ignore ENOENTs that are not just broken symlinks since someone may have deleted the path as we traversed
 				}
 			}
 		}
@@ -117,8 +129,9 @@ public class ZKDirectory extends ZKFile implements Directory {
 			try {
 				String nextDir = Paths.get(this.path, comps[0]).toString();
 				String subpath = String.join("/", Arrays.copyOfRange(comps, 1, comps.length));
-				
-				return zkfs.opendir(nextDir).inodeForPath(subpath);
+				try(ZKDirectory dir = zkfs.opendir(nextDir)) {
+					return dir.inodeForPath(subpath);
+				}
 			} catch (EISNOTDIRException e) {
 				throw new ENOENTException(path);
 			}
@@ -128,44 +141,65 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	public void updateLink(Long inodeId, String link, ArrayList<Inode> toUnlink) throws IOException {
-		if(!isValidName(link)) throw new EINVALException(link + ": invalid name");
-		if(entries.containsKey(link)) {
-			Long existing = entries.get(link);
-			if(existing.equals(inodeId)) return;
-			
-			// we need to remove the old link, but defer action on the inode in case we're relinking this inode somewhere else
-			String fullPath = Paths.get(path, link).toString();
-			toUnlink.add(zkfs.inodeForPath(fullPath));
-			entries.remove(link);
-			zkfs.uncache(fullPath);
-			dirty = true;
-		}
-		
-		if(inodeId == null) return; // above if clause already unlinked
-		link(zkfs.inodeTable.inodeWithId(inodeId), link);
+		zkfs.lockedOperation(()->{
+			synchronized(this) {
+				if(!isValidName(link)) throw new EINVALException(link + ": invalid name");
+				if(entries.containsKey(link)) {
+					Long existing = entries.get(link);
+					if(existing.equals(inodeId)) return null;
+					
+					// we need to remove the old link, but defer action on the inode in case we're relinking this inode somewhere else
+					String fullPath = Paths.get(path, link).toString();
+					toUnlink.add(zkfs.inodeForPath(fullPath));
+					entries.remove(link);
+					zkfs.uncache(fullPath);
+					dirty = true;
+				}
+				
+				if(inodeId == null) return null; // above if clause already unlinked
+				link(zkfs.inodeTable.inodeWithId(inodeId), link);
+				return null;
+			}
+		});
 	}
 
 	public void link(Inode inode, String link) throws IOException {
 		assertWritable();
-		if(!isValidName(link)) throw new EINVALException(link + ": invalid filename");
-		if(entries.containsKey(link)) {
-			throw new EEXISTSException(Paths.get(path, link).toString());
-		}
-		entries.put(link, inode.getStat().getInodeId());
-		inode.addLink();
-		dirty = true;
-		zkfs.markDirty();
+		zkfs.lockedOperation(()->{
+			synchronized(this) {
+				assertWritable();
+				if(!isValidName(link)) throw new EINVALException(link + ": invalid filename");
+				if(entries.containsKey(link)) {
+					throw new EEXISTSException(Paths.get(path, link).toString());
+				}
+				entries.put(link, inode.getStat().getInodeId());
+				inode.addLink();
+				dirty = true;
+				zkfs.markDirty();
+				return null;
+			}
+		});
 	}
 	
 	@Override
 	public void link(String target, String link) throws IOException {
-		link(zkfs.inodeForPath(target), link);
+		zkfs.lockedOperation(()->{
+			synchronized(this) {
+				link(zkfs.inodeForPath(target), link);
+				return null;
+			}
+		});
 	}
 
 	@Override
 	public void link(File target, String link) throws IOException {
-		ZKFile zkfile = (ZKFile) target;
-		link(zkfile.getInode(), link);
+		zkfs.lockedOperation(()->{
+			synchronized(this) {
+				ZKFile zkfile = (ZKFile) target;
+				link(zkfile.getInode(), link);
+				return null;
+			}
+		});
 	}
 	
 	public boolean isValidName(String name) {
@@ -185,58 +219,84 @@ public class ZKDirectory extends ZKFile implements Directory {
 	@Override
 	public void unlink(String name) throws IOException {
 		assertWritable();
-		if(name.equals(".") || name.equals("..")) throw new EINVALException("cannot unlink " + name);
-		
-		String fullPath = Paths.get(path, name).toString();
-		
-		try {
-			Inode inode = zkfs.inodeForPath(fullPath, false);
-			inode.removeLink();
-		} catch(ENOENTException exc) {
-			// if we have a dead reference, we should be able to unlink it no questions asked
-		}
-		
-		entries.remove(name);
-		zkfs.uncache(fullPath);
-		dirty = true;
-		zkfs.markDirty();
+		zkfs.lockedOperation(()->{
+			synchronized(this) {
+				assertWritable();
+				if(name.equals(".") || name.equals("..")) throw new EINVALException("cannot unlink " + name);
+				
+				String fullPath = Paths.get(path, name).toString();
+				
+				try {
+					Inode inode = zkfs.inodeForPath(fullPath, false);
+					inode.removeLink();
+				} catch(ENOENTException exc) {
+					// if we have a dead reference, we should be able to unlink it no questions asked
+				}
+				
+				entries.remove(name);
+				zkfs.uncache(fullPath);
+				dirty = true;
+				zkfs.markDirty();
+				return null;
+			}
+		});
 	}
 	
 	public void rmdir() throws IOException {
 		assertWritable();
-		if(!entries.get("..").equals(this.getStat().getInodeId())) {
-			ZKDirectory parent = zkfs.opendir(fs.dirname(this.path));
-			parent.getInode().removeLink();
-			parent.unlink(fs.basename(this.path));
-			parent.close();
-		}
-		
-		entries.clear();
+		zkfs.lockedOperation(()->{
+			synchronized(this) {
+				assertWritable();
+				if(!entries.get("..").equals(this.getStat().getInodeId())) {
+					try(ZKDirectory parent = zkfs.opendir(fs.dirname(this.path))) {
+						parent.getInode().removeLink();
+						parent.unlink(fs.basename(this.path));
+					}
+				}
+				
+				entries.clear();
+				return null;
+			}
+		});
 	}
 	
 	public Directory mkdir(String name) throws IOException {
-		String fullPath = Paths.get(path, name).toString();
-		if(entries.containsKey(name)) throw new EEXISTSException(fullPath);
-		zkfs.create(fullPath, this).getStat().makeDirectory();
-
-		ZKDirectory dir = zkfs.opendir(fullPath);
-		dir.link(dir, ".");
-		dir.link(inode, "..");
-		dir.flush();
-		fs.chmod(fullPath, zkfs.archive.master.getGlobalConfig().getInt("fs.default.directoryMode"));
-
-		return dir;
+		return (Directory) zkfs.lockedOperation(()->{
+			synchronized(this) {
+				String fullPath = Paths.get(path, name).toString();
+				if(entries.containsKey(name)) throw new EEXISTSException(fullPath);
+				zkfs.create(fullPath, this).getStat().makeDirectory();
+	
+				ZKDirectory dir = zkfs.opendir(fullPath);
+				dir.link(dir, ".");
+				dir.link(inode, "..");
+				dir.flush();
+				fs.chmod(fullPath, zkfs.archive.master.getGlobalConfig().getInt("fs.default.directoryMode"));
+	
+				return dir;
+			}
+		});
 	}
 	
 	public void commit() throws IOException {
 		if(!dirty) return;
 		assertWritable();
-		rewind();
-		truncate(0);
 		
-		write(serialize());
-		flush();
-		dirty = false;
+		zkfs.lockedOperation(()->{
+			synchronized(this) {
+				if(!dirty) return null;
+				assertWritable();
+				
+				rewind();
+				truncate(0);
+				
+				write(serialize());
+				flush();
+				dirty = false;
+				
+				return null;
+			}
+		});
 	}
 	
 	private void deserialize(byte[] serialized) {

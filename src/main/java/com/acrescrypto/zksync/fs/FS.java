@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +13,7 @@ import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 
 public abstract class FS implements AutoCloseable {
-	protected static HashMap<File,Throwable> globalFileBacktraces = new HashMap<>();
+	protected static ConcurrentHashMap<File,Throwable> globalFileBacktraces = new ConcurrentHashMap<>();
 	
 	public synchronized static void addOpenFileHandle(File file, Throwable backtrace) {
 		globalFileBacktraces.put(file, backtrace);
@@ -23,7 +23,7 @@ public abstract class FS implements AutoCloseable {
 		globalFileBacktraces.remove(file);
 	}
 	
-	public static HashMap<File,Throwable> getGlobalOpenFiles() {
+	public static ConcurrentHashMap<File,Throwable> getGlobalOpenFiles() {
 		return globalFileBacktraces;
 	}
 	
@@ -61,7 +61,7 @@ public abstract class FS implements AutoCloseable {
 	public abstract void truncate(String path, long size) throws IOException;
 	
 	private Logger logger = LoggerFactory.getLogger(FS.class);
-	protected HashMap<File,Throwable> localFileBacktraces = new HashMap<>();
+	protected ConcurrentHashMap<File,Throwable> localFileBacktraces = new ConcurrentHashMap<>();
 	
 	public long maxFileSize() {
 		return Long.MAX_VALUE;
@@ -270,8 +270,16 @@ public abstract class FS implements AutoCloseable {
 		
 		Stat s = stat(path);
 		if(s.isDirectory()) {
-			for(String item : opendir(path).listRecursive(0)) {
-				totalSize += stat(item).size;
+			Directory dir = null;
+			try {
+				dir = opendir(path);
+				for(String item : dir.listRecursive(0)) {
+					totalSize += stat(item).size;
+				}
+			} finally {
+				if(dir != null) {
+					dir.close();
+				}
 			}
 		} else if(s.isRegularFile() || s.isSymlink()) {
 			totalSize = s.size;
@@ -295,7 +303,7 @@ public abstract class FS implements AutoCloseable {
 		localFileBacktraces.remove(file);
 	}
 	
-	public synchronized HashMap<File,Throwable> getOpenFiles() {
+	public synchronized ConcurrentHashMap<File,Throwable> getOpenFiles() {
 		return localFileBacktraces;
 	}
 }

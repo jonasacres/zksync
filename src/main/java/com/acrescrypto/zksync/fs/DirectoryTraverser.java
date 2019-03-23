@@ -53,6 +53,7 @@ public class DirectoryTraverser {
 		for(String path : subpaths) {
 			paths.add(Paths.get(dir.getPath(), path).toString());
 		}
+		dir.close();
 	}
 	
 	protected String popPath() {

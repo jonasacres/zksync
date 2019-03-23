@@ -51,15 +51,22 @@ public class Page {
 		String path = pathForTag(ByteBuffer.allocate(8).putLong(shortTag).array());
 		String parent = storage.dirname(path);
 		String basename = storage.basename(path);
+		Directory dir = null;
 		
 		try {
-			Directory dir = storage.opendir(parent);
+			dir = storage.opendir(parent);
 			for(String subpath : dir.list()) {
 				if(storage.basename(subpath).startsWith(basename)) {
 					return tagForPath(Paths.get(parent, subpath).toString());
 				}
 			}
-		} catch(ENOENTException exc) {}
+		} catch(ENOENTException exc) {
+			// ignore
+		} finally {
+			if(dir != null) {
+				dir.close();
+			}
+		}
 		
 		return null;
 	}

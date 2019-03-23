@@ -8,6 +8,7 @@ import java.util.Map;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.FSMirror;
+import com.acrescrypto.zksync.fs.zkfs.ZKFile;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.SnoozeThreadSupervisor;
 import com.acrescrypto.zksync.utility.Util;
@@ -97,7 +98,8 @@ public class TestUtils {
 			}
 			
 			FS.getGlobalOpenFiles().forEach((file, backtrace)->{
-				System.out.printf("Open file: [%s] %s -- %s\nOpened from:\n",
+				System.out.printf("Open file: %d [%s] %s -- %s\nOpened from:\n",
+						(file instanceof ZKFile) ? ((ZKFile) file).getRetainCount() : -1,
 						file.getFs(),
 						System.identityHashCode(file),
 						file.getPath());

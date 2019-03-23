@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.EINVALException;
+import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
@@ -232,10 +233,20 @@ public class PageQueue {
 		EverythingQueueItem(int priority, ZKArchive archive) {
 			super(priority);
 			this.archive = archive;
+			Directory dir = null;
 			try {
+				dir = this.archive.getStorage().opendir("/");
 				traverser = new DirectoryTraverser(this.archive.getStorage(), this.archive.getStorage().opendir("/"));
 			} catch(IOException exc) {
 				logger.error("Caught exception establishing EverythingQueueItem", exc);
+			} finally {
+				if(dir != null) {
+					try {
+						dir.close();
+					} catch (IOException exc2) {
+						logger.error("Caught exception closing directory {}", dir.getPath(), exc2);
+					}
+				}
 			}
 		}
 		

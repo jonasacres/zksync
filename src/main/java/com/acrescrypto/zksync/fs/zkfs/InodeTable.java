@@ -126,7 +126,7 @@ public class InodeTable extends ZKFile {
 	 * 
 	 * @return RefTag for the newly created revision
 	 *  */
-	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
+	public synchronized RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
 		// TODO Someday: (design) Objective merge logic breaks down if we have additional parents AND we had changes to the filesystem. Throw an exception if someone tries to do that.
 		// TODO Someday: (refactor) I regret doing these as arrays instead of collections. Refactor.
 		if(zkfs.archive.config.isReadOnly()) throw new EACCESException("cannot commit new revisions when archive is opened read-only");
