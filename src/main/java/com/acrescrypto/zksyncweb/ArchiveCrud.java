@@ -39,6 +39,8 @@ public class ArchiveCrud {
 		boolean flushCache = Boolean.parseBoolean(params.getOrDefault("flushCache", "false"));
 		boolean makeClone = Boolean.parseBoolean(params.getOrDefault("makeClone", "false"));
 		boolean rebase = Boolean.parseBoolean(params.getOrDefault("rebase", "false"));
+		
+		while(path.startsWith("//")) path = path.substring(1);
 
 		try {
 			// TODO Someday: (refactor) Make ?queue=true non-blocking even if we don't have inode table or directory
@@ -172,6 +174,8 @@ public class ArchiveCrud {
 	}
 	
 	public static XAPIResponse post(ZKFS fs, String path, Map<String, String> params, byte[] contents) throws IOException {
+		while(path.startsWith("//")) path = path.substring(1);
+		
 		long offset = Long.parseLong(params.getOrDefault("offset", "0"));
 		boolean truncate = Boolean.parseBoolean(params.getOrDefault("truncate", "true"));
 		String user = params.getOrDefault("user", null);
@@ -179,6 +183,7 @@ public class ArchiveCrud {
 		int uid = Integer.parseInt(params.getOrDefault("uid", "-1"));
 		int gid = Integer.parseInt(params.getOrDefault("gid", "-1"));
 		int mode;
+		
 		if(params.getOrDefault("mode", "-1").startsWith("0")) {
 			// octal
 			mode = Integer.parseInt(params.getOrDefault("mode", "-1"), 8);
@@ -227,6 +232,8 @@ public class ArchiveCrud {
 	}
 	
 	public static XAPIResponse delete(ZKFS fs, String path, Map<String, String> params) throws IOException {
+		while(path.startsWith("//")) path = path.substring(1);
+		
 		try {
 			fs.unlink(path);
 		} catch(ENOENTException exc) {

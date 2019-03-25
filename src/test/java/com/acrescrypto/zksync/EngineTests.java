@@ -10,6 +10,6 @@ import org.junit.runners.Suite;
 	IntegrationTest.class
 })
 
-public class AllTests {
+public class EngineTests {
 
 }

@@ -5,7 +5,7 @@ import org.junit.runners.Suite;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-	AllTests.class
+	EngineTests.class
 })
 
 public class SuperuserTests {

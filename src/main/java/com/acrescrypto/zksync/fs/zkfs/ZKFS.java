@@ -720,13 +720,16 @@ public class ZKFS extends FS {
 	}
 	
 	public String canonicalPath(String path) throws IOException {
+		while(path.startsWith("//")) path = path.substring(1);
 		if(path.equals("/")) return path;
+		if(path.equals(".")) return "/";
 		if(path.charAt(0) != '/') path = absolutePath(path);
 		if(directoriesByPath.hasCached(path)) return path; // only canonical paths are in the cache
 		
 		try {
 			return canonicalPath(readlink(path));
 		} catch(EINVALException exc) {}
+		
 		
 		String parent = dirname(path);
 		String parentCanon = canonicalPath(parent);
