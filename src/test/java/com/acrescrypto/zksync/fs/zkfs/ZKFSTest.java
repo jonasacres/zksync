@@ -927,7 +927,15 @@ public class ZKFSTest extends FSTestBase {
 		
 		System.out.println("Sleeping");
 		Util.sleep(deadline - System.currentTimeMillis());
-		assertTrue(Util.waitUntil(2000, ()->threads.isEmpty()));
+		long lastUpdate = System.currentTimeMillis();
+		int lastThreadCount = threads.size();
+		while(lastThreadCount != 0 && System.currentTimeMillis() - lastUpdate < 5000) {
+			if(threads.size() != lastThreadCount) {
+				lastThreadCount = threads.size();
+				lastUpdate = System.currentTimeMillis();
+			}
+		}
+		assertEquals(0, lastThreadCount);
 		
 		System.out.println("Final commit");
 		zkscratch.commit();
@@ -942,6 +950,7 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	public void addTag(String path, RefTag tag, ZKFS fs, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		path = fs.absolutePath(path);
 		if(!fs.exists(path)) return;
 		if(fs.stat(path).isDirectory()) return;
 		if(fs.lstat(path).isSymlink()) {
@@ -1070,7 +1079,7 @@ public class ZKFSTest extends FSTestBase {
 		try(ZKFile file = fs.open(path, File.O_CREAT|File.O_TRUNC|File.O_RDWR)) {
 			file.write(prng.getBytes(size));
 			file.flush();
-			tags.put(path, file.getInode().getRefTag());
+			addTag(path, file.getInode().getRefTag(), fs, tags);
 		} catch(ENOENTException|EISNOTDIRException exc) {
 			/* we have a race with the unlink directory action, where our parent directory might get unlinked
 			 * from underneath us. Just ignore it.
@@ -1091,7 +1100,7 @@ public class ZKFSTest extends FSTestBase {
 			long size = file.getStat().getSize();
 			long newSize = prng.getInt(Math.max(1, (int) size));
 			if(size == 0) {
-				tags.put(path, file.getInode().getRefTag());
+				addTag(path, file.getInode().getRefTag(), fs, tags);
 				throw new CantDoThatRightNowException();
 			}
 			
@@ -1184,13 +1193,8 @@ public class ZKFSTest extends FSTestBase {
 		String path = makeRandomPath(fs, prng) + "-symlink-file";
 		String target = pickRandomFile(fs, prng, tags);
 		try {
-			synchronized(this) {
-				System.out.println("symlink " + path + " -> " + target);
-				fs.symlink(target, path);
-				System.out.println("SYMLINK " + path + " -> " + target);
-				System.out.println(fs.inodeForPath(path, false).dump());
-				System.out.println(fs.inodeForPath(target, false).dump());
-			}
+			System.out.println("symlink " + path + " -> " + target);
+			fs.symlink(target, path);
 		} catch(ENOENTException exc) {
 			throw new CantDoThatRightNowException();
 		}
@@ -1261,6 +1265,8 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	public void verifyTags(ZKFS fs, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		LinkedList<String> allowablePaths = new LinkedList<>();
+		
 		for(String path : tags.keySet()) {
 			RefTag expectedTag = tags.get(path);
 			RefTag actualTag = fs.inodeForPath(path, false).getRefTag();
@@ -1268,14 +1274,16 @@ public class ZKFSTest extends FSTestBase {
 				System.out.println(path + " expected=" + Util.formatRefTag(expectedTag) + " actual=" + Util.formatRefTag(actualTag));
 			}
 			assertEquals(expectedTag, actualTag);
+			
+			allowablePaths.add(fs.canonicalPath(path));
 		}
 		
 		int numFails = 0;
 		
 		for(String path : fs.opendir("/").listRecursive()) {
-			if(!fs.stat(path).isRegularFile()) continue;
-			if(!tags.containsKey(path)) {
-				System.out.println("Path " + path);
+			if(!fs.lstat(path).isRegularFile()) continue;
+			if(!allowablePaths.contains(fs.canonicalPath(path))) {
+				System.out.println("Path " + fs.canonicalPath(path));
 				numFails++;
 			}
 		}

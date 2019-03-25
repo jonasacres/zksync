@@ -61,9 +61,6 @@ public class ZKFile extends File {
 			try {
 				inode = fs.inodeForPath(path, (mode & O_NOFOLLOW) == 0);
 			} catch(ENOENTException exc) {
-				if(mode == 65550) {
-					exc.printStackTrace();
-				}
 				if((mode & O_CREAT) == 0) throw exc;
 				inode = fs.create(path);
 			}

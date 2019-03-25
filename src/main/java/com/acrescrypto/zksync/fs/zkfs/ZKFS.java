@@ -656,14 +656,12 @@ public class ZKFS extends FS {
 					path);
 			assertPathIsDirectory(path);
 			ZKDirectory dir = new ZKDirectory(this, path);
-			System.out.println("Caching directory: " + path + " " + System.identityHashCode(dir));
 			return dir;
 		}, (String path, ZKDirectory dir) -> {
 			logger.trace("ZKFS {} {}: Evicting directory {} from cache",
 					Util.formatArchiveId(revision.getConfig().getArchiveId()),
 					Util.formatRevisionTag(baseRevision),
 					path);
-			System.out.println("Evicting directory: " + path + " " + System.identityHashCode(dir));
 			dir.commit();
 			dir.close();
 		});

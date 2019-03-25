@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.Iterator;
 
 import com.acrescrypto.zksync.crypto.HashContext;
+import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
@@ -265,6 +266,9 @@ public class InodeTable extends ZKFile {
 	
 	/** return an inode with a given ID */
 	public synchronized Inode inodeWithId(long inodeId) throws IOException {
+		if(closed) {
+			throw new ClosedException();
+		}
 		return inodesByPage.get(pageNumForInodeId(inodeId))[pageOffsetForInodeId(inodeId)];
 	}
 	

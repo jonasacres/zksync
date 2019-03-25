@@ -125,11 +125,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	public long inodeForName(String name) throws IOException {
 		if(!entries.containsKey(name)) {
-			if(name.contains("symlink")) {
-				System.out.println("NOT INCLUDED IN entries " + System.identityHashCode(entries) + "/" + System.identityHashCode(this) + " -- " + name);
-				System.out.println(entries);
-				System.out.println("\n");
-			}
 			throw new ENOENTException(Paths.get(path, name).toString());
 		}
 		return entries.get(name);
@@ -180,20 +175,11 @@ public class ZKDirectory extends ZKFile implements Directory {
 		zkfs.lockedOperation(()->{
 			synchronized(this) {
 				assertWritable();
-				System.out.println("INSTALLING LINK -- " + link + " in " + path + " " + System.identityHashCode(this));
 				if(!isValidName(link)) throw new EINVALException(link + ": invalid filename");
 				if(entries.containsKey(link)) {
-					System.out.println("ALREADY EXISTS IN entries " + System.identityHashCode(entries) + "/" + System.identityHashCode(this));
-					System.out.println(entries);
-					System.out.println("\n");
 					throw new EEXISTSException(Paths.get(path, link).toString());
 				}
 				entries.put(link, inode.getStat().getInodeId());
-				if(link.contains("symlink")) {
-					System.out.println("UPDATED entries " + System.identityHashCode(entries) + "/" + System.identityHashCode(this));
-					System.out.println(entries);
-					System.out.println("\n");
-				}
 				inode.addLink();
 				dirty = true;
 				zkfs.markDirty();
