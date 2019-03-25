@@ -15,11 +15,11 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 public abstract class FS implements AutoCloseable {
 	protected static ConcurrentHashMap<File,Throwable> globalFileBacktraces = new ConcurrentHashMap<>();
 	
-	public synchronized static void addOpenFileHandle(File file, Throwable backtrace) {
+	public static void addOpenFileHandle(File file, Throwable backtrace) {
 		globalFileBacktraces.put(file, backtrace);
 	}
 	
-	public synchronized static void removeOpenFileHandle(File file) {
+	public static void removeOpenFileHandle(File file) {
 		globalFileBacktraces.remove(file);
 	}
 	
@@ -288,7 +288,7 @@ public abstract class FS implements AutoCloseable {
 		return totalSize;
 	}
 
-	public synchronized void reportOpenFile(File file) {
+	public void reportOpenFile(File file) {
 		if(!fileHandleTelemetryEnabled) return;
 		
 		Throwable backtrace = new Throwable();
@@ -296,14 +296,14 @@ public abstract class FS implements AutoCloseable {
 		localFileBacktraces.put(file, backtrace);
 	}
 	
-	public synchronized void reportClosedFile(File file) {
+	public void reportClosedFile(File file) {
 		if(!fileHandleTelemetryEnabled) return;
 		
 		removeOpenFileHandle(file);
 		localFileBacktraces.remove(file);
 	}
 	
-	public synchronized ConcurrentHashMap<File,Throwable> getOpenFiles() {
+	public ConcurrentHashMap<File,Throwable> getOpenFiles() {
 		return localFileBacktraces;
 	}
 }

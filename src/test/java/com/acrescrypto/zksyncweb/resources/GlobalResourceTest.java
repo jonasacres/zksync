@@ -23,6 +23,7 @@ import org.junit.Test;
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.Util;
@@ -340,6 +341,24 @@ public class GlobalResourceTest {
 			assertTrue(resp.get("files").size() == FS.getGlobalOpenFiles().size());
 			resp.get("files").forEach((entry)->{
 				assertTrue(entry.get("path").isTextual());
+				assertTrue(entry.get("fsClass").isTextual());
+				assertTrue(entry.get("trace").isArray());
+				entry.get("trace").forEach((frame)->{
+					assertTrue(frame.get("file").isTextual() || frame.get("file").isNull());
+					assertTrue(frame.get("method").isTextual());
+					assertTrue(frame.get("line").isIntegralNumber());
+				});
+			});
+		}
+	}
+	
+	@Test
+	public void testGetFilesystemssReturnsFilesystemListWhenFileTelemetryEnabled() throws IOException {
+		try(File f = master.getStorage().open("test", File.O_CREAT|File.O_TRUNC|File.O_WRONLY)) {
+			JsonNode resp = WebTestUtils.requestGet(target, "/global/filesystems");
+			assertTrue(resp.get("filesystems").isArray());
+			assertTrue(resp.get("filesystems").size() == ZKFS.getOpenInstances().size());
+			resp.get("filesystems").forEach((entry)->{
 				assertTrue(entry.get("fsClass").isTextual());
 				assertTrue(entry.get("trace").isArray());
 				entry.get("trace").forEach((frame)->{

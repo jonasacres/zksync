@@ -17,6 +17,21 @@ import com.acrescrypto.zksync.utility.Util;
 // A ZKSync archive.
 public class ZKFS extends FS {
 	public final static int MAX_SYMLINK_DEPTH = 32;
+	
+	protected static ConcurrentHashMap<ZKFS, Throwable> openInstances = new ConcurrentHashMap<>();
+	
+	protected static void addOpenInstance(ZKFS fs) {
+		openInstances.put(fs, new Throwable());
+	}
+	
+	protected static void removeOpenInstance(ZKFS fs) {
+		openInstances.remove(fs);
+	}
+	
+	public static ConcurrentHashMap<ZKFS,Throwable> getOpenInstances() {
+		return openInstances;
+	}
+	
 	public interface ZKFSDirtyMonitor {
 		public void notifyDirty(ZKFS fs);
 	}
@@ -42,6 +57,10 @@ public class ZKFS extends FS {
 	Logger logger = LoggerFactory.getLogger(ZKFS.class);
 	
 	public ZKFS(RevisionTag revision, String root) throws IOException {
+		if(FS.fileHandleTelemetryEnabled) {
+			addOpenInstance(this);
+		}
+		
 		this.root = root;
 		cacheToken = revision.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.directoryCacheSize").asInt((s)->{
 			if(this.directoriesByPath == null) return;
@@ -82,6 +101,9 @@ public class ZKFS extends FS {
 		}
 		
 		closeOpenFiles();
+		if(FS.fileHandleTelemetryEnabled) {
+			removeOpenInstance(this);
+		}
 	}
 	
 	protected void closeOpenFiles() {

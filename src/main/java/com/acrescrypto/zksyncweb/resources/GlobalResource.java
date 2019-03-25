@@ -11,6 +11,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.State;
@@ -95,6 +96,28 @@ public class GlobalResource {
 			files.add(info);
 		});
 		throw XAPIResponse.withWrappedPayload("files", files);
+	}
+	
+	@GET
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("/filesystems")
+	public XAPIResponse getFilesystems() throws IOException {
+		LinkedList<HashMap<String,Object>> filesystems = new LinkedList<>();
+		ZKFS.getOpenInstances().forEach((fs, trace) -> {
+			HashMap<String, Object> info = new HashMap<>();
+			LinkedList<HashMap<String,Object>> traceListing = new LinkedList<>();
+			info.put("fsClass", fs.getClass().getCanonicalName());
+			for(StackTraceElement element : trace.getStackTrace()) {
+				HashMap<String,Object> frame = new HashMap<>();
+				frame.put("file", element.getFileName());
+				frame.put("method", element.getMethodName());
+				frame.put("line", element.getLineNumber());
+				traceListing.add(frame);
+			}
+			info.put("trace", traceListing);
+			filesystems.add(info);
+		});
+		throw XAPIResponse.withWrappedPayload("filesystems", filesystems);
 	}
 	
 	@GET
