@@ -19,6 +19,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
+import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
@@ -898,7 +899,7 @@ public class ZKFSTest extends FSTestBase {
 		// in the end, all the files should have all the data.
 		
 		int numDemons = 16; // number of simultaneous writers
-		int durationMs = 10000; // how long should demon threads run for
+		int durationMs = 3000; // how long should demon threads run for
 		long deadline = System.currentTimeMillis() + durationMs;
 		ConcurrentHashMap<Thread,Object> threads = new ConcurrentHashMap<>();
 		final CryptoSupport crypto = zkscratch.getArchive().getMaster().getCrypto();
@@ -919,13 +920,11 @@ public class ZKFSTest extends FSTestBase {
 				}
 				
 				threads.remove(Thread.currentThread());
-				System.out.println("Thread " + ii + " complete");
 			});
 			threads.put(t, t);
 			t.start();
 		}
 		
-		System.out.println("Sleeping");
 		Util.sleep(deadline - System.currentTimeMillis());
 		long lastUpdate = System.currentTimeMillis();
 		int lastThreadCount = threads.size();
@@ -937,13 +936,10 @@ public class ZKFSTest extends FSTestBase {
 		}
 		assertEquals(0, lastThreadCount);
 		
-		System.out.println("Final commit");
 		zkscratch.commit();
 
-		System.out.println("Verifying tags (1)");
 		verifyTags(zkscratch, tags);
 		
-		System.out.println("Verifying tags (2)");
 		try(ZKFS fs = zkscratch.baseRevision.getFS()) {
 			verifyTags(fs, tags);
 		}
@@ -962,8 +958,24 @@ public class ZKFSTest extends FSTestBase {
 			tag = fs.inodeForPath(path, false).getRefTag();
 		}
 		
-		System.out.println("addTag -- " + path + " " + Util.formatRefTag(tag));
+//		System.out.println("addTag -- " + path + " " + Util.formatRefTag(tag));
+		addTagToHardlinks(path, tag, fs, tags);
+	}
+	
+	public void addTagToHardlinks(String path, RefTag tag, ZKFS fs, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		tags.put(path, tag);
+
+		Inode inode = fs.inodeForPath(path, false);
+		if(inode.nlink <= 1) return;
+		
+		tags.forEach((otherPath, otherTag)->{
+			try {
+				Inode otherStat = fs.inodeForPath(otherPath, false);
+				if(otherStat.stat.getInodeId() == inode.stat.getInodeId()) {
+					tags.put(otherPath, tag);
+				}
+			} catch(IOException exc) {}
+		});
 	}
 	
 	public String pickRandomFile(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
@@ -976,16 +988,16 @@ public class ZKFSTest extends FSTestBase {
 			if(files.length == 0) throw new CantDoThatRightNowException();
 			Shuffler shuffler = new Shuffler(files.length);
 			while(shuffler.hasNext()) {
-				String path = files[shuffler.next()];
+				String path = fs.absolutePath(files[shuffler.next()]);
 				if(!tags.containsKey(path)) continue;
 				String target = null;
 				if(fs.lstat(path).isSymlink()) {
-					target = fs.readlink(path);
+					target = fs.absolutePath(fs.readlink(path));
 				}
 				
 				synchronized(tags) {
 					if(!tags.containsKey(path)) continue;
-					if(target != null && !tags.containsKey(target)) continue;
+					if(target != null && !tags.containsKey(path)) continue;
 					tags.remove(path);
 					
 					while(target != null) {
@@ -1075,7 +1087,7 @@ public class ZKFSTest extends FSTestBase {
 		}
 		
 		String path = makeRandomPath(fs, prng) + "-file";
-		System.out.println("write " + path + " " + size);
+//		System.out.println("write " + path + " " + size);
 		try(ZKFile file = fs.open(path, File.O_CREAT|File.O_TRUNC|File.O_RDWR)) {
 			file.write(prng.getBytes(size));
 			file.flush();
@@ -1104,8 +1116,8 @@ public class ZKFSTest extends FSTestBase {
 				throw new CantDoThatRightNowException();
 			}
 			
-			System.out.println("truncate " + path + " " + newSize);
-			file.truncate(prng.getInt((int) size));
+//			System.out.println("truncate " + path + " " + newSize);
+			file.truncate(newSize);
 			file.flush();
 			addTag(path, null, fs, tags);
 		} catch(ENOENTException exc) {
@@ -1119,7 +1131,7 @@ public class ZKFSTest extends FSTestBase {
 		String path = pickRandomFile(fs, prng, tags);
 		int pageSize = fs.getArchive().getConfig().getPageSize();
 		byte[] data = prng.getBytes(prng.getInt(2*pageSize));
-		System.out.println("extend " + path + " " + data.length);
+//		System.out.println("extend " + path + " " + data.length);
 		
 		try(ZKFile file = fs.open(path, File.O_RDWR|File.O_APPEND)) {
 			file.write(data);
@@ -1137,7 +1149,7 @@ public class ZKFSTest extends FSTestBase {
 		
 		try(ZKFile file = fs.open(path, File.O_RDWR)) {
 			int offset = prng.getInt(Math.max(1, (int) file.inode.getStat().getSize()));
-			System.out.println("modify " + path + " " + data.length + " " + "@" + offset);
+//			System.out.println("modify " + path + " " + data.length + " " + "@" + offset);
 			file.seek(offset, File.SEEK_SET);
 			file.write(data);
 			file.flush();
@@ -1149,16 +1161,23 @@ public class ZKFSTest extends FSTestBase {
 
 	public String unlinkRandomFile(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		String path = pickRandomFile(fs, prng, tags);
-		System.out.println("unlink " + path);
+//		System.out.println("unlink " + path);
+		
+		String target = null;
+		try {
+			target = fs.readlink(path);
+		} catch(EINVALException exc) {}
 		
 		fs.unlink(path);
-		tags.remove(path);
+		if(target != null) {
+			addTag(target, null, fs, tags);
+		}
 		return path;
 	}
 	
 	public String makeRandomDirectory(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		String path = makeRandomPath(fs, prng) + "-dir";
-		System.out.println("mkdir " + path);
+//		System.out.println("mkdir " + path);
 		
 		try {
 			fs.mkdirp(path);
@@ -1171,7 +1190,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	public String unlinkRandomDirectory(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		String path = pickRandomEmptyDirectory(fs, prng);
-		System.out.println("rmdir " + path);
+//		System.out.println("rmdir " + path);
 		try {
 			fs.rmdir(path);
 		} catch(ENOENTException|ENOTEMPTYException exc) {
@@ -1184,7 +1203,7 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	public String makeRandomCommit(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
-		System.out.println("commit");
+//		System.out.println("commit");
 		fs.commit();
 		return null;
 	}
@@ -1193,9 +1212,10 @@ public class ZKFSTest extends FSTestBase {
 		String path = makeRandomPath(fs, prng) + "-symlink-file";
 		String target = pickRandomFile(fs, prng, tags);
 		try {
-			System.out.println("symlink " + path + " -> " + target);
+//			System.out.println("symlink " + path + " -> " + target);
 			fs.symlink(target, path);
 		} catch(ENOENTException exc) {
+			addTag(target, null, fs, tags);
 			throw new CantDoThatRightNowException();
 		}
 		addTag(path, fs.inodeForPath(path, false).getRefTag(), fs, tags);
@@ -1205,7 +1225,7 @@ public class ZKFSTest extends FSTestBase {
 	public String makeRandomInvalidSymlink(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		String path = makeRandomPath(fs, prng) + "-symlink-broken";
 		String target = makeRandomPath(fs, prng) + "-invalid";
-		System.out.println("symlink " + path + " -> " + target);
+//		System.out.println("symlink " + path + " -> " + target);
 		try {
 			fs.symlink(target, path);
 		} catch(ENOENTException exc) {
@@ -1218,7 +1238,7 @@ public class ZKFSTest extends FSTestBase {
 	public String makeRandomDirectorySymlink(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		String path = makeRandomPath(fs, prng) + "-symlink-dir";
 		String target = pickRandomDirectory(fs, prng);
-		System.out.println("symlink " + path + " -> " + target);
+//		System.out.println("symlink " + path + " -> " + target);
 		try {
 			fs.symlink(target, path);
 		} catch(ENOENTException exc) {
@@ -1226,6 +1246,23 @@ public class ZKFSTest extends FSTestBase {
 		}
 		addTag(path, fs.inodeForPath(path, false).getRefTag(), fs, tags);
 		return path;
+	}
+	
+	public String makeRandomHardlink(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		String link = makeRandomPath(fs, prng) + "-hardlink";
+		String target = pickRandomFile(fs, prng, tags);
+		try {
+//			System.out.println("hardlink " + link + " -> " + target);
+			fs.link(target, link);
+		} catch(ENOENTException exc) {
+			addTag(target, null, fs, tags);
+			throw new CantDoThatRightNowException();
+		}
+		
+		addTag(link, null, fs, tags);
+		addTag(target, null, fs, tags);
+		
+		return link;
 	}
 	
 	public String takeRandomAction(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
@@ -1253,29 +1290,64 @@ public class ZKFSTest extends FSTestBase {
 			return makeRandomDirectory(fs, prng, tags);
 		} else if((r -= 2) < 0) {
 			return unlinkRandomDirectory(fs, prng, tags);
-		} else if((r -= 3) < 0) {
+		} else if((r -= 2) < 0) {
 			return makeRandomValidFileSymlink(fs, prng, tags);
 		} else if((r -= 2) < 0) {
 			return makeRandomInvalidSymlink(fs, prng, tags);
 		} else if((r -= 2) < 0) {
 			return makeRandomDirectorySymlink(fs, prng, tags);
+		} else if((r -= 2) < 0) {
+			return makeRandomHardlink(fs, prng, tags);
 		} else {
 			return makeRandomCommit(fs, prng, tags);
 		}
+	}
+	
+	public boolean pathHasRefTag(String path, ZKFS fs, ConcurrentHashMap<String, RefTag> tags) throws IOException {
+		Inode inode = fs.inodeForPath(path, false);
+		RefTag expectedRefTag = tags.get(path), actualRefTag = inode.getRefTag();
+		if(expectedRefTag.equals(actualRefTag)) return true;
+		if(inode.nlink <= 1) return false;
+		
+		// if we wrote to a hardlink, we might have an outdated reftag for this path.
+		MutableBoolean found = new MutableBoolean();
+		
+		tags.forEach((otherPath, otherRefTag)->{
+			if(found.isTrue()) return;
+			if(!otherRefTag.equals(actualRefTag)) return;
+			try {
+				Inode otherInode = fs.inodeForPath(otherPath, false);
+				if(inode.getStat().getInodeId() == otherInode.getStat().getInodeId()) {
+					found.setTrue();
+					return;
+				}
+			} catch (IOException exc) {
+				exc.printStackTrace();
+				fail();
+			}
+		});
+		
+		return found.booleanValue();
 	}
 	
 	public void verifyTags(ZKFS fs, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		LinkedList<String> allowablePaths = new LinkedList<>();
 		
 		for(String path : tags.keySet()) {
-			RefTag expectedTag = tags.get(path);
-			RefTag actualTag = fs.inodeForPath(path, false).getRefTag();
-			if(!expectedTag.equals(actualTag)) {
-				System.out.println(path + " expected=" + Util.formatRefTag(expectedTag) + " actual=" + Util.formatRefTag(actualTag));
+			if(!pathHasRefTag(path, fs, tags)) {
+				String text = String.format("Path %s -- expected reftag %s, have %s",
+						path,
+						Util.formatRefTag(tags.get(path)),
+						Util.formatRefTag(fs.inodeForPath(path, false).getRefTag()));
+//				System.out.println(text);
+				fail(text);
 			}
-			assertEquals(expectedTag, actualTag);
 			
-			allowablePaths.add(fs.canonicalPath(path));
+			try {
+				allowablePaths.add(fs.canonicalPath(path));
+			} catch(ENOENTException exc) {
+				// ignore broken symlinks
+			}
 		}
 		
 		int numFails = 0;
@@ -1283,7 +1355,7 @@ public class ZKFSTest extends FSTestBase {
 		for(String path : fs.opendir("/").listRecursive()) {
 			if(!fs.lstat(path).isRegularFile()) continue;
 			if(!allowablePaths.contains(fs.canonicalPath(path))) {
-				System.out.println("Path " + fs.canonicalPath(path));
+//				System.out.println("Path " + fs.canonicalPath(path) + " (as " + path + ")");
 				numFails++;
 			}
 		}
