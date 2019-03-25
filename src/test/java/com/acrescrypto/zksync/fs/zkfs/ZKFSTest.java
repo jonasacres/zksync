@@ -19,7 +19,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
-import com.acrescrypto.zksync.exceptions.ELOOPException;
+import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.Directory;
@@ -715,21 +715,32 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	@Test
-	public void testListRecursiveWithSymlinkLoopThrowsELOOP() throws IOException {
+	public void testListRecursiveWithSymlinkLoopIsFinite() throws IOException {
 		zkscratch.purge();
 		zkscratch.symlink("/", "a");
 		zkscratch.symlink("/", "b");
-		System.out.println("Test start");
-		// zkscratch.commit(); // TODO: this should not be necessary to trigger the bug
-		/* but it is necessary, because when we symlink to something, we ask zkfs to get the inode of the
-		 * symlink target... then we open it as a new file, which does not have the changes we've made.
-		 * hmmm...
-		 */
+		
 		try(ZKDirectory dir = zkscratch.opendir("/")) {
-			String[] paths = dir.listRecursive();
-			for(String subpath : paths) {
-				System.out.println(subpath);
-			}
+			dir.listRecursive();
+		}
+		
+		// if we don't halt and catch fire, that's a victory
+	}
+	
+	@Test
+	public void testDirectoryCacheIsNotDeceivedBySymlinks() throws IOException {
+		zkscratch.purge();
+		zkscratch.mkdir("dir");
+		zkscratch.symlink("dir", "link");
+		zkscratch.symlink("link", "double-link");
+		
+		try(
+			ZKDirectory direct = zkscratch.opendir("dir");
+			ZKDirectory linked = zkscratch.opendir("link");
+			ZKDirectory doubleLinked = zkscratch.opendir("double-link");
+		) {
+			assertTrue(direct == linked);
+			assertTrue(direct == doubleLinked);
 		}
 	}
 	
@@ -932,15 +943,17 @@ public class ZKFSTest extends FSTestBase {
 	
 	public void addTag(String path, RefTag tag, ZKFS fs, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		if(!fs.exists(path)) return;
+		if(fs.stat(path).isDirectory()) return;
 		if(fs.lstat(path).isSymlink()) {
 			String target = fs.readlink(path);
 			addTag(target, null, fs, tags);
 		}
 		
 		if(tag == null) {
-			tag = fs.inodeForPath(path).getRefTag();
+			tag = fs.inodeForPath(path, false).getRefTag();
 		}
 		
+		System.out.println("addTag -- " + path + " " + Util.formatRefTag(tag));
 		tags.put(path, tag);
 	}
 	
@@ -983,6 +996,8 @@ public class ZKFSTest extends FSTestBase {
 				}
 			}
 			
+			throw new CantDoThatRightNowException();
+		} catch(ENOENTException exc) {
 			throw new CantDoThatRightNowException();
 		}
 	}
@@ -1056,9 +1071,12 @@ public class ZKFSTest extends FSTestBase {
 			file.write(prng.getBytes(size));
 			file.flush();
 			tags.put(path, file.getInode().getRefTag());
-		} catch(ENOENTException exc) {
+		} catch(ENOENTException|EISNOTDIRException exc) {
 			/* we have a race with the unlink directory action, where our parent directory might get unlinked
 			 * from underneath us. Just ignore it.
+			 * 
+			 * EISNOTDIRException might seem a bit odd, but it can happen if the unlink occurs during
+			 * assertPathIsDirectory after we get the inode (so no ENOENT) but before we check the file type.
 			 */
 			throw new CantDoThatRightNowException();
 		}
@@ -1080,7 +1098,9 @@ public class ZKFSTest extends FSTestBase {
 			System.out.println("truncate " + path + " " + newSize);
 			file.truncate(prng.getInt((int) size));
 			file.flush();
-			addTag(path, file.getInode().getRefTag(), fs, tags);
+			addTag(path, null, fs, tags);
+		} catch(ENOENTException exc) {
+			throw new CantDoThatRightNowException();
 		}
 		
 		return path;
@@ -1095,8 +1115,8 @@ public class ZKFSTest extends FSTestBase {
 		try(ZKFile file = fs.open(path, File.O_RDWR|File.O_APPEND)) {
 			file.write(data);
 			file.flush();
-			addTag(path, file.getInode().getRefTag(), fs, tags);
-		}
+			addTag(path, null, fs, tags);
+		} catch(ENOENTException exc) {}
 		
 		return path;
 	}
@@ -1112,8 +1132,8 @@ public class ZKFSTest extends FSTestBase {
 			file.seek(offset, File.SEEK_SET);
 			file.write(data);
 			file.flush();
-			addTag(path, file.getInode().getRefTag(), fs, tags);
-		}
+			addTag(path, null, fs, tags);
+		} catch(ENOENTException exc) {}
 		
 		return path;
 	}
@@ -1131,7 +1151,12 @@ public class ZKFSTest extends FSTestBase {
 		String path = makeRandomPath(fs, prng) + "-dir";
 		System.out.println("mkdir " + path);
 		
-		fs.mkdirp(path);
+		try {
+			fs.mkdirp(path);
+		} catch(ENOENTException exc) {
+			// parent directory can get unlinked before we finish
+			throw new CantDoThatRightNowException();
+		}
 		return path;
 	}
 	
@@ -1140,8 +1165,10 @@ public class ZKFSTest extends FSTestBase {
 		System.out.println("rmdir " + path);
 		try {
 			fs.rmdir(path);
-		} catch(ENOTEMPTYException exc) {
-			// there's a race here; nothing stops someone from making a file in this directory before we unlink it
+		} catch(ENOENTException|ENOTEMPTYException exc) {
+			/* there's a race here; nothing stops someone else from linking into this directory,
+			 * or unlinking it themselves before we finish
+			 */
 			throw new CantDoThatRightNowException();
 		}
 		return path;
@@ -1156,13 +1183,18 @@ public class ZKFSTest extends FSTestBase {
 	public String makeRandomValidFileSymlink(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		String path = makeRandomPath(fs, prng) + "-symlink-file";
 		String target = pickRandomFile(fs, prng, tags);
-		System.out.println("symlink " + path + " -> " + target);
 		try {
-			fs.symlink(target, path);
+			synchronized(this) {
+				System.out.println("symlink " + path + " -> " + target);
+				fs.symlink(target, path);
+				System.out.println("SYMLINK " + path + " -> " + target);
+				System.out.println(fs.inodeForPath(path, false).dump());
+				System.out.println(fs.inodeForPath(target, false).dump());
+			}
 		} catch(ENOENTException exc) {
 			throw new CantDoThatRightNowException();
 		}
-		addTag(path, null, fs, tags);
+		addTag(path, fs.inodeForPath(path, false).getRefTag(), fs, tags);
 		return path;
 	}
 	
@@ -1175,7 +1207,7 @@ public class ZKFSTest extends FSTestBase {
 		} catch(ENOENTException exc) {
 			throw new CantDoThatRightNowException();
 		}
-		tags.put(path, fs.inodeForPath(path, false).getRefTag());
+		addTag(path, fs.inodeForPath(path, false).getRefTag(), fs, tags);
 		return path;
 	}
 	
@@ -1188,7 +1220,7 @@ public class ZKFSTest extends FSTestBase {
 		} catch(ENOENTException exc) {
 			throw new CantDoThatRightNowException();
 		}
-		tags.put(path, fs.inodeForPath(path, false).getRefTag());
+		addTag(path, fs.inodeForPath(path, false).getRefTag(), fs, tags);
 		return path;
 	}
 	
@@ -1232,6 +1264,9 @@ public class ZKFSTest extends FSTestBase {
 		for(String path : tags.keySet()) {
 			RefTag expectedTag = tags.get(path);
 			RefTag actualTag = fs.inodeForPath(path, false).getRefTag();
+			if(!expectedTag.equals(actualTag)) {
+				System.out.println(path + " expected=" + Util.formatRefTag(expectedTag) + " actual=" + Util.formatRefTag(actualTag));
+			}
 			assertEquals(expectedTag, actualTag);
 		}
 		

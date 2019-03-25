@@ -80,12 +80,17 @@ public class ZKDirectory extends ZKFile implements Directory {
 	@Override
 	public String[] listRecursive(int opts) throws IOException {
 		ArrayList<String> results = new ArrayList<String>();
-		listRecursiveIterate(opts, results, "");
+		HashSet<Long> inodeHistory = new HashSet<>();
+		listRecursiveIterate(opts, inodeHistory, results, "");
 		String[] buf = new String[results.size()];
 		return results.toArray(buf);
 	}
 	
-	public void listRecursiveIterate(int opts, ArrayList<String> results, String prefix) throws IOException {
+	protected void listRecursiveIterate(int opts, HashSet<Long> inodeHistory, ArrayList<String> results, String prefix) throws IOException {
+		long inodeId = inode.stat.getInodeId();
+		if(inodeHistory.contains(inodeId)) return;
+		inodeHistory.add(inodeId);
+		
 		for(String entry : list(opts & ~Directory.LIST_OPT_OMIT_DIRECTORIES)) {
 			String subpath = Paths.get(prefix, entry).toString(); // what we return in our results
 			String realSubpath = Paths.get(path, entry).toString(); // what we can look up directly in fs
@@ -98,7 +103,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 					
 					if(!isDotDir) {
 						try(ZKDirectory dir = zkfs.opendir(realSubpath)) {
-							dir.listRecursiveIterate(opts, results, subpath);
+							dir.listRecursiveIterate(opts, inodeHistory, results, subpath);
 						}
 					}
 				} else {
@@ -114,10 +119,17 @@ public class ZKDirectory extends ZKFile implements Directory {
 				}
 			}
 		}
+		
+		inodeHistory.remove(inodeId);
 	}
 	
 	public long inodeForName(String name) throws IOException {
 		if(!entries.containsKey(name)) {
+			if(name.contains("symlink")) {
+				System.out.println("NOT INCLUDED IN entries " + System.identityHashCode(entries) + "/" + System.identityHashCode(this) + " -- " + name);
+				System.out.println(entries);
+				System.out.println("\n");
+			}
 			throw new ENOENTException(Paths.get(path, name).toString());
 		}
 		return entries.get(name);
@@ -168,11 +180,20 @@ public class ZKDirectory extends ZKFile implements Directory {
 		zkfs.lockedOperation(()->{
 			synchronized(this) {
 				assertWritable();
+				System.out.println("INSTALLING LINK -- " + link + " in " + path + " " + System.identityHashCode(this));
 				if(!isValidName(link)) throw new EINVALException(link + ": invalid filename");
 				if(entries.containsKey(link)) {
+					System.out.println("ALREADY EXISTS IN entries " + System.identityHashCode(entries) + "/" + System.identityHashCode(this));
+					System.out.println(entries);
+					System.out.println("\n");
 					throw new EEXISTSException(Paths.get(path, link).toString());
 				}
 				entries.put(link, inode.getStat().getInodeId());
+				if(link.contains("symlink")) {
+					System.out.println("UPDATED entries " + System.identityHashCode(entries) + "/" + System.identityHashCode(this));
+					System.out.println(entries);
+					System.out.println("\n");
+				}
 				inode.addLink();
 				dirty = true;
 				zkfs.markDirty();

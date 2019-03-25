@@ -349,7 +349,8 @@ public class ZKFS extends FS {
 
 	@Override
 	public synchronized ZKDirectory opendir(String path) throws IOException {
-		return directoriesByPath.get(absolutePath(path)).retain();
+		String canonPath = canonicalPath(path);
+		return directoriesByPath.get(canonPath).retain();
 	}
 
 	@Override
@@ -654,12 +655,15 @@ public class ZKFS extends FS {
 					Util.formatRevisionTag(baseRevision),
 					path);
 			assertPathIsDirectory(path);
-			return new ZKDirectory(this, path);
+			ZKDirectory dir = new ZKDirectory(this, path);
+			System.out.println("Caching directory: " + path + " " + System.identityHashCode(dir));
+			return dir;
 		}, (String path, ZKDirectory dir) -> {
 			logger.trace("ZKFS {} {}: Evicting directory {} from cache",
 					Util.formatArchiveId(revision.getConfig().getArchiveId()),
 					Util.formatRevisionTag(baseRevision),
 					path);
+			System.out.println("Evicting directory: " + path + " " + System.identityHashCode(dir));
 			dir.commit();
 			dir.close();
 		});
@@ -715,5 +719,20 @@ public class ZKFS extends FS {
 	/** Acts as a "big lock" on the filesystem. */
 	public synchronized Object lockedOperation(ZKFSLockedOperation op) throws IOException {
 		return op.op();
+	}
+	
+	public String canonicalPath(String path) throws IOException {
+		if(path.equals("/")) return path;
+		if(path.charAt(0) != '/') path = absolutePath(path);
+		if(directoriesByPath.hasCached(path)) return path; // only canonical paths are in the cache
+		
+		try {
+			return canonicalPath(readlink(path));
+		} catch(EINVALException exc) {}
+		
+		String parent = dirname(path);
+		String parentCanon = canonicalPath(parent);
+		if(!parentCanon.endsWith("/")) parentCanon += "/";
+		return parentCanon + basename(path);
 	}
 }

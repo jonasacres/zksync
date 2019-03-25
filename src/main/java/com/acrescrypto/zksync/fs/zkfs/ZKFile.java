@@ -47,7 +47,6 @@ public class ZKFile extends File {
 	/** Open a file handle at a path */
 	public ZKFile(ZKFS fs, String path, int mode, boolean trusted) throws IOException {
 		super(fs);
-		System.out.println("Open " + path + " " + String.format("%02x", mode));
 		logger.trace("ZKFS {} {}: open {} - (0x{}), {} open",
 				Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(fs.baseRevision),
@@ -62,6 +61,9 @@ public class ZKFile extends File {
 			try {
 				inode = fs.inodeForPath(path, (mode & O_NOFOLLOW) == 0);
 			} catch(ENOENTException exc) {
+				if(mode == 65550) {
+					exc.printStackTrace();
+				}
 				if((mode & O_CREAT) == 0) throw exc;
 				inode = fs.create(path);
 			}
