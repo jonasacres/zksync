@@ -212,6 +212,7 @@ public class ArchiveNetPeersResourceTest {
     @AfterClass
     public static void afterAll() {
     	TestUtils.stopDebugMode();
+		TestUtils.assertTidy();
     }
     
     @Test

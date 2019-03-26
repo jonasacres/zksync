@@ -19,6 +19,7 @@ public class LocalFileTest extends FileTestBase {
 
 	@BeforeClass
 	public static void beforeClass() {
+		TestUtils.startDebugMode();
 		java.io.File scratchDir = new java.io.File(LocalFSTest.SCRATCH_DIR);
 		try {
 			FileUtils.deleteDirectory(scratchDir);
@@ -30,5 +31,6 @@ public class LocalFileTest extends FileTestBase {
 	public static void afterAll() {
 		LocalFSTest.deleteFiles();
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 }

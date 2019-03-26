@@ -8,9 +8,12 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
 
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.utility.Util;
@@ -19,10 +22,21 @@ public class CipherStateTest {
 	CryptoSupport crypto;
 	CipherState ct;
 	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+	
 	@Before
 	public void beforeEach() {
 		crypto = CryptoSupport.defaultCrypto();
 		ct = new CipherState();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

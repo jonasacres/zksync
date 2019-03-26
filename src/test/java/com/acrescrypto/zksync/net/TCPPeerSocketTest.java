@@ -341,6 +341,7 @@ public class TCPPeerSocketTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
+		TestUtils.startDebugMode();
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		crypto = master.getCrypto();
@@ -374,6 +375,7 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		TCPPeerSocket.maxHandshakeTimeMillis = TCPPeerSocket.DEFAULT_MAX_HANDSHAKE_TIME_MILLIS;
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 
 	@Test

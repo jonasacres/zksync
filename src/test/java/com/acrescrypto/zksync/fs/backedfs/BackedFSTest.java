@@ -14,6 +14,7 @@ import java.util.HashMap;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -234,6 +235,11 @@ public class BackedFSTest extends FSTestBase {
 		assertFalse(backupFS.readPaths.getOrDefault(path, 0) > 0);
 	}
 
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+	
 	@Before
 	public void beforeEach() throws IOException {
 		cacheFS = new RAMFS();
@@ -252,6 +258,7 @@ public class BackedFSTest extends FSTestBase {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

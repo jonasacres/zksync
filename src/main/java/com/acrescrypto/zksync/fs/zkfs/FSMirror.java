@@ -80,14 +80,20 @@ public class FSMirror {
 		WatchService watcher = dir.getFileSystem().newWatchService();
 		HashMap<WatchKey, Path> pathsByKey = new HashMap<>();
 		incrementActive();
-		logger.info("FS {}: FSMirror starting watch of {}, {} active",
-				Util.formatArchiveId(zkfs.archive.config.archiveId),
-				localTarget.getRoot(),
-				numActive());
-		watchDirectory(dir, watcher, pathsByKey);
-
-		watchThread = new Thread( () -> watchThread(flag, watcher, pathsByKey) );
-		watchThread.start();
+		
+		try {
+			logger.info("FS {}: FSMirror starting watch of {}, {} active",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					localTarget.getRoot(),
+					numActive());
+			watchDirectory(dir, watcher, pathsByKey);
+	
+			watchThread = new Thread( () -> watchThread(flag, watcher, pathsByKey) );
+			watchThread.start();
+		} catch(Throwable exc) {
+			decrementActive();
+			throw exc;
+		}
 	}
 
 	public void stopWatch() {

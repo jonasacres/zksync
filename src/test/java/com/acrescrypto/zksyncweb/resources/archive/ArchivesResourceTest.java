@@ -62,6 +62,7 @@ public class ArchivesResourceTest {
 
 	@AfterClass
 	public static void afterAll() {
+		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 	}
 
@@ -325,8 +326,9 @@ public class ArchivesResourceTest {
 		spec.setSavedAccessLevel(StoredAccess.ACCESS_LEVEL_READWRITE);
 		WebTestUtils.requestPost(target, "archives", spec);
 
-		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		assertEquals(1, state2.getOpenConfigs().size());
+		try(State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage())) {
+			assertEquals(1, state2.getOpenConfigs().size());
+		}
 	}
 
 	@Test
@@ -338,8 +340,9 @@ public class ArchivesResourceTest {
 		spec.setSavedAccessLevel(StoredAccess.ACCESS_LEVEL_NONE);
 		WebTestUtils.requestPost(target, "archives", spec);
 
-		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		assertEquals(0, state2.getOpenConfigs().size());
+		try(State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage())) {
+			assertEquals(0, state2.getOpenConfigs().size());
+		}
 	}
 
 	@Test
@@ -351,8 +354,9 @@ public class ArchivesResourceTest {
 		spec.setSavedAccessLevel(null);
 		WebTestUtils.requestPost(target, "archives", spec);
 
-		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		assertEquals(1, state2.getOpenConfigs().size());
+		try(State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage())) {
+			assertEquals(1, state2.getOpenConfigs().size());
+		}
 	}
 
 	@Test

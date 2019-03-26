@@ -20,12 +20,14 @@ public class PRNGTest {
 	
 	@BeforeClass
 	public static void beforeClass() {
+		TestUtils.startDebugMode();
 		Security.addProvider(new BouncyCastleProvider());
 	}
 	
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 
 	/* These aren't comprehensive tests by any stretch, and I don't know any tests that can "prove" the

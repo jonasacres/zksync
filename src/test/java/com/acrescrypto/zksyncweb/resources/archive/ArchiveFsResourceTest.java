@@ -74,6 +74,7 @@ public class ArchiveFsResourceTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.stopDebugMode();
+		TestUtils.assertTidy();
 	}
 
 	long setupMissingFile() throws IOException {

@@ -22,7 +22,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFSManager;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.Util;
 
-public class State {
+public class State implements AutoCloseable {
 	public class TrackedFS {
 		ZKFS fs;
 		ZKFSManager manager;
@@ -72,7 +72,9 @@ public class State {
 	}
 	
 	public static void resetState() throws IOException {
-		sharedState = new State(defaultPassphrase(), sharedState.getMaster().getStorage());
+		FS storage = sharedState.getMaster().getStorage();
+		clearState();
+		sharedState = new State(defaultPassphrase(), storage);
 	}
 	
 	class OneTimePassphraseProvider implements PassphraseProvider {

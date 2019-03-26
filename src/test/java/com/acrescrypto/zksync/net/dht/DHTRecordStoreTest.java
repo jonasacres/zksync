@@ -88,11 +88,13 @@ public class DHTRecordStoreTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 	}
 	
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Before

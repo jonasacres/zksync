@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,8 +50,10 @@ public class ZKFS extends FS {
 	protected LinkedList<ZKFSDirtyMonitor> dirtyMonitors = new LinkedList<>();
 	protected SubscriptionToken<?> cacheToken; 
 	protected boolean isReadOnly; // was this specific ZKFS opened RO? (not the whole archive)
-	protected int retainCount = 1;
+	protected int retainCount;
 	protected ConcurrentHashMap<ZKFile,Object> openFiles = new ConcurrentHashMap<>();
+	protected ConcurrentLinkedQueue<Throwable> retentions = new ConcurrentLinkedQueue<>();
+	protected ConcurrentLinkedQueue<Throwable> closures = new ConcurrentLinkedQueue<>();
 	
 	public final static int MAX_PATH_LEN = 65535;
 	
@@ -61,6 +64,7 @@ public class ZKFS extends FS {
 			addOpenInstance(this);
 		}
 		
+		retain();
 		this.root = root;
 		cacheToken = revision.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.directoryCacheSize").asInt((s)->{
 			if(this.directoriesByPath == null) return;
@@ -87,6 +91,10 @@ public class ZKFS extends FS {
 		 * (and therefore call close()) independent of a threat actually using the FS. In general,
 		 * ZKFS operations are non-threadsafe.
 		 */
+		if(FS.fileHandleTelemetryEnabled) {
+			closures.add(new Throwable());
+		}
+		
 		synchronized(this) {
 			if(--retainCount > 0) return;
 			assert(retainCount == 0);
@@ -133,6 +141,9 @@ public class ZKFS extends FS {
 	}
 	
 	public synchronized ZKFS retain() {
+		if(FS.fileHandleTelemetryEnabled) {
+			retentions.add(new Throwable());
+		}
 		retainCount++;
 		return this;
 	}
@@ -757,5 +768,17 @@ public class ZKFS extends FS {
 		String parentCanon = canonicalPath(parent);
 		if(!parentCanon.endsWith("/")) parentCanon += "/";
 		return parentCanon + basename(path);
+	}
+	
+	public ConcurrentLinkedQueue<Throwable> getRetentions() {
+		return retentions;
+	}
+	
+	public ConcurrentLinkedQueue<Throwable> getClosures() {
+		return closures;
+	}
+	
+	public int getRetainCount() {
+		return retainCount;
 	}
 }

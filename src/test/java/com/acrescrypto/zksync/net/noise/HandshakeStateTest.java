@@ -16,9 +16,12 @@ import java.io.PipedOutputStream;
 import java.nio.ByteBuffer;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
@@ -44,6 +47,11 @@ public class HandshakeStateTest {
 		public void write(int b) { buf.put((byte) b); }
 	};
 	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+	
 	@Before
 	public void beforeEach() {
 		crypto = CryptoSupport.defaultCrypto();
@@ -60,6 +68,12 @@ public class HandshakeStateTest {
 		messagePatterns = NoiseHandshakes.XX;
 		
 		remakeHandshakeState();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	void remakeHandshakeState() {

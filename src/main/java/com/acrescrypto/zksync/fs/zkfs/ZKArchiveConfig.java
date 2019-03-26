@@ -40,7 +40,7 @@ import com.acrescrypto.zksync.utility.Util;
  * of whether we've obtained the config file yet.
  */
 
-public class ZKArchiveConfig {
+public class ZKArchiveConfig implements AutoCloseable {
 	public class InvalidArchiveConfigException extends RuntimeException {
 		private static final long serialVersionUID = 1L;
 	}
@@ -65,6 +65,7 @@ public class ZKArchiveConfig {
 	protected RevisionList revisionList;
 	protected RevisionTree revisionTree;
 	protected boolean advertising;
+	protected boolean closed;
 	protected Logger logger = LoggerFactory.getLogger(ZKArchiveConfig.class);
 	
 	public static byte[] decryptArchiveId(ArchiveAccessor accessor, byte[] iv, byte[] encryptedArchiveId) {
@@ -616,12 +617,17 @@ public class ZKArchiveConfig {
 	}
 
 	public void close() {
+		if(closed) return;
+		closed = true;
 		logger.info("ZKFS {} -: Closing archive",
 				Util.formatArchiveId(archiveId));
 		swarm.close();
 		if(revisionList != null) revisionList.close();
 		if(revisionTree != null) revisionTree.close();
 		stopAdvertising();
+		if(archive != null) {
+			archive.close();
+		}
 	}
 	
 	public boolean isClosed() {

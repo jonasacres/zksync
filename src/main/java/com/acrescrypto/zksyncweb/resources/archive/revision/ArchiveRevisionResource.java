@@ -11,6 +11,7 @@ import javax.ws.rs.core.MediaType;
 import com.acrescrypto.zksync.exceptions.InvalidRevisionTagException;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 import com.acrescrypto.zksyncweb.data.XRevisionInfo;
@@ -25,8 +26,8 @@ public class ArchiveRevisionResource {
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
 		
-		try {
-			RevisionTag tag = State.sharedState().fsForRevision(config, revTag).getBaseRevision();
+		try(ZKFS fs = State.sharedState().fsForRevision(config, revTag)) {
+			RevisionTag tag = fs.getBaseRevision();
 			XRevisionInfo xInfo = new XRevisionInfo(tag);
 			return XAPIResponse.withPayload(xInfo);
 		} catch(InvalidRevisionTagException exc) {

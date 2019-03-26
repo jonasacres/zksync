@@ -8,6 +8,7 @@ import java.io.IOException;
 
 import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -18,6 +19,11 @@ public class ConfigFileTest {
 	ConfigFile config;
 	FS fs;
 	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+	
 	@Before
 	public void beforeEach() throws IOException {
 		fs = new RAMFS();
@@ -27,6 +33,7 @@ public class ConfigFileTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

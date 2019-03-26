@@ -8,6 +8,7 @@ import java.util.Arrays;
 
 import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -23,9 +24,15 @@ public class AppendableInputStreamTest {
 		assertTrue(Arrays.equals(expected, read));
 	}
 	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+	
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Before

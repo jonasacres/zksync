@@ -5,20 +5,25 @@ import static org.junit.Assert.fail;
 import java.util.HashSet;
 import java.util.Map;
 
+import org.apache.commons.lang3.mutable.MutableInt;
+
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.FSMirror;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFile;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.SnoozeThreadSupervisor;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksync.utility.WaitSupervisor;
 import com.acrescrypto.zksync.utility.WaitSupervisor.WaitTask;
+import com.dosse.upnp.UPnP;
 
 public class TestUtils {
 	static HashSet<Long> knownZombieThreads = new HashSet<>();
 	static HashSet<SnoozeThread> knownSnoozeThreads = new HashSet<>();
 	static HashSet<WaitTask> knownWaitTasks = new HashSet<>();
+	static HashSet<ZKFS> knownZombieFilesystems = new HashSet<>();
 	static int knownZombieWatches = 0, knownOpenFiles = 0;
 	
 	public static boolean isThreadAcceptable(Thread thread, StackTraceElement[] backtrace) {
@@ -90,7 +95,7 @@ public class TestUtils {
 			knownZombieThreads.clear();
 			for(Thread t : traces.keySet()) {
 				if(!isThreadAcceptable(t, traces.get(t))) {
-					System.out.println("Unacceptable thread: " + t);
+					System.out.println("Unacceptable thread: " + t + "\n" + Util.dumpStackTrace(traces.get(t), 1));
 					for(StackTraceElement element : t.getStackTrace()) {
 						System.out.println("\t" + element);
 					}
@@ -98,12 +103,50 @@ public class TestUtils {
 			}
 			
 			FS.getGlobalOpenFiles().forEach((file, backtrace)->{
-				System.out.printf("Open file: %d [%s] %s -- %s\nOpened from:\n",
+				System.out.printf("Open file: %d [%s] %s -- %s\nOpened from:\n%s",
 						(file instanceof ZKFile) ? ((ZKFile) file).getRetainCount() : -1,
 						file.getFs(),
 						System.identityHashCode(file),
-						file.getPath());
-				backtrace.printStackTrace();
+						file.getPath(),
+						Util.dumpStackTrace(backtrace.getStackTrace(), 1));
+			});
+			
+			ZKFS.getOpenInstances().forEach((zkfs, backtrace)->{
+				if(knownZombieFilesystems.contains(zkfs)) return;
+				knownZombieFilesystems.add(zkfs);
+				System.out.printf("Open ZKFS: %s\n\tOpen from:\n%s",
+						System.identityHashCode(zkfs),
+						Util.dumpStackTrace(backtrace.getStackTrace(), 2));
+				
+				System.out.printf("\t%d open files:\n", zkfs.getOpenFiles().size());
+				MutableInt i = new MutableInt(0);
+				zkfs.getOpenFiles().forEach((file, trace)->{
+					i.increment();
+					System.out.printf("\t\t#%3d %s\n", i.getValue(), file.getPath());
+				});
+				
+				System.out.printf("\t%d total retentions, %d active:\n",
+						zkfs.getRetentions().size(),
+						zkfs.getRetainCount());
+				i.setValue(0);
+				
+				zkfs.getRetentions().forEach((trace)->{
+					i.increment();
+					System.out.printf("\t\tRetention %d\n%s",
+							i.getValue(),
+							Util.dumpStackTrace(trace.getStackTrace(), 3));
+				});
+
+				System.out.printf("\t%d total closures:\n",
+						zkfs.getClosures().size());
+				i.setValue(0);
+				
+				zkfs.getClosures().forEach((trace)->{
+					i.increment();
+					System.out.printf("\t\tClosure %d\n%s",
+							i.getValue(),
+							Util.dumpStackTrace(trace.getStackTrace(), 3));
+				});
 			});
 			
 			knownZombieWatches = FSMirror.numActive();
@@ -111,19 +154,23 @@ public class TestUtils {
 			
 			// System.out.println("Thread untidiness detected!");
 			// Util.threadReport(true);
+			System.out.println("FS telemetry enabled: " + FS.fileHandleTelemetryEnabled);
 			System.out.println("Active FS monitors: " + FSMirror.numActive());
 			System.out.println("Open file handles: " + FS.getGlobalOpenFiles().size());
+			System.out.println("Open ZKFS instances: " + ZKFS.getOpenInstances().size());
 			fail();
 		}
 	}
-
+	
 	public static void stopDebugMode() {
 		CryptoSupport.cheapArgon2 = false;
 		FS.fileHandleTelemetryEnabled = false;
+		UPnP.debug = false;
 	}
 
 	public static void startDebugMode() {
 		CryptoSupport.cheapArgon2 = true;
 		FS.fileHandleTelemetryEnabled = true;
+		UPnP.debug = true;
 	}
 }

@@ -10,9 +10,12 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 import org.apache.commons.lang3.mutable.MutableInt;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.net.TCPPeerSocket;
@@ -21,6 +24,11 @@ import com.acrescrypto.zksync.utility.Util;
 public class VariableLengthHandshakeStateTest {
 	CryptoSupport crypto;
 	VariableLengthHandshakeState init, resp;
+	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
 	
 	@Before
 	public void beforeEach() {
@@ -55,6 +63,12 @@ public class VariableLengthHandshakeStateTest {
 				null,
 				null,
 				psk);
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	public void checkHandshake() {

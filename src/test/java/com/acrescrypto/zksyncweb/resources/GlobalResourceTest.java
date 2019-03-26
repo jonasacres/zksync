@@ -72,6 +72,7 @@ public class GlobalResourceTest {
 
 	@AfterClass
 	public static void afterAll() {
+		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 	}
 

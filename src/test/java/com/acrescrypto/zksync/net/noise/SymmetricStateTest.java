@@ -7,9 +7,12 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -17,10 +20,21 @@ public class SymmetricStateTest {
 	CryptoSupport crypto;
 	SymmetricState symState;
 	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+	
 	@Before
 	public void beforeEach() {
 		crypto = CryptoSupport.defaultCrypto();
 		symState = new SymmetricState(crypto, "Noise_Dummy_WhateverWeHappenToBeUsing");
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

@@ -64,18 +64,24 @@ public class ArchiveRevisionLatestResourceTest {
 
 	@AfterClass
 	public static void afterAll() {
+		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 	}
 
 	@Test
 	public void testGetReturnsInfoOfLatestRevtag() throws IOException {
-		ZKFS fs = archive.openBlank();
-		RevisionTag revTag = fs.commit();
-		fs.commit();
-		State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
-
-		JsonNode resp = WebTestUtils.requestGet(target, basePath);
-		assertArrayEquals(archive.getConfig().getRevisionList().latest().getBytes(), resp.get("revTag").binaryValue());
-		WebTestUtils.validateRevisionInfo(archive.getConfig(), resp);
+		RevisionTag revTag;
+		try(ZKFS fs = archive.openBlank()) {
+			revTag = fs.commit();
+			fs.commit();
+		}
+		
+		try(ZKFS fs = revTag.getFS()) {
+			State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
+	
+			JsonNode resp = WebTestUtils.requestGet(target, basePath);
+			assertArrayEquals(archive.getConfig().getRevisionList().latest().getBytes(), resp.get("revTag").binaryValue());
+			WebTestUtils.validateRevisionInfo(archive.getConfig(), resp);
+		}
 	}
 }

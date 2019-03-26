@@ -85,6 +85,7 @@ public class DHTModuleTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 		TCPPeerAdvertisement.disableReachabilityTest = true;
 		// DHTRoutingTable.freshenIntervalMs = 400;
 		DHTClient.messageExpirationTimeMs = 500;
@@ -113,6 +114,7 @@ public class DHTModuleTest {
 	public static void afterAll() {
 		Util.waitUntil(1000, ()->TestUtils.isTidy()); // add a ton of grace time to wrap up threads on this test
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 		TCPPeerAdvertisement.disableReachabilityTest = false;
 		DHTRoutingTable.freshenIntervalMs = DHTRoutingTable.DEFAULT_FRESHEN_INTERVAL_MS;
 		DHTClient.messageExpirationTimeMs = DHTClient.DEFAULT_MESSAGE_EXPIRATION_TIME_MS;

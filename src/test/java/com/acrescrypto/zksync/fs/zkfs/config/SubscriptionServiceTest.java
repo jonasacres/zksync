@@ -11,17 +11,31 @@ import javax.json.JsonValue;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.apache.commons.lang3.mutable.MutableInt;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 
 public class SubscriptionServiceTest {
 	SubscriptionService sub;
 	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+	
 	@Before
 	public void beforeEach() {
 		sub = new SubscriptionService();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	JsonObject makeTestJson() {

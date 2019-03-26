@@ -13,10 +13,12 @@ import javax.ws.rs.core.Response;
 
 import org.glassfish.grizzly.http.server.HttpServer;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksyncweb.Main;
 import com.acrescrypto.zksyncweb.WebTestUtils;
 
@@ -27,6 +29,7 @@ public class GenericResourceTest {
 
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 		WebTestUtils.squelchGrizzlyLogs();
 	}
 
@@ -42,6 +45,12 @@ public class GenericResourceTest {
 		server.shutdownNow();
 	}
 
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
+	}
+	
 	@Test
 	public void testInvalidJsonTriggers400() {
 		Entity<Object> entity = Entity.entity("{I AM NOT REALLY JSON}", MediaType.APPLICATION_JSON);

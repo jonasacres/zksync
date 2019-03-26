@@ -7,15 +7,22 @@ import static org.junit.Assert.assertTrue;
 import java.util.HashSet;
 
 import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.utility.Shuffler.ShuffleOrdering;
 
 public class ShufflerTest {
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+	
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

@@ -21,6 +21,7 @@ public class DHTAdvertisementRecordTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 		crypto = CryptoSupport.defaultCrypto();
 		ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234, crypto.rng(crypto.hashLength()));
 	}
@@ -28,6 +29,7 @@ public class DHTAdvertisementRecordTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

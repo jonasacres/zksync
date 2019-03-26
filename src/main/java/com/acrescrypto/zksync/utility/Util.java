@@ -397,4 +397,32 @@ public class Util {
 	public static String strhash(byte[] result) {
 		return Util.bytesToHex(CryptoSupport.defaultCrypto().hash(result), 8) + "-" + result.length;
 	}
+	
+	public static String dumpStackTrace(StackTraceElement[] trace) {
+		return dumpStackTrace(trace, 0);
+	}
+	
+	public static String dumpStackTrace(StackTraceElement[] trace, int depth) {
+		int m = 0;
+		String s = "";
+		int longest = 0;
+		for(StackTraceElement e : trace) {
+			String f = e.getFileName();
+			if(f != null && f.length() > longest) {
+				longest = f.length();
+			}
+		}
+		
+		for(StackTraceElement e : trace) {
+			m += 1;
+			s += String.format("%s#%2d    %"+longest+"s:%4d %s\n",
+					"\t".repeat(depth),
+					m,
+					e.getFileName(),
+					e.getLineNumber(),
+					e.getMethodName());
+		}
+		
+		return s;
+	}
 }

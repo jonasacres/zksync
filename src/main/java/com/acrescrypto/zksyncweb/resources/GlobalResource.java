@@ -82,17 +82,9 @@ public class GlobalResource {
 		LinkedList<HashMap<String,Object>> files = new LinkedList<>();
 		FS.getGlobalOpenFiles().forEach((file, trace) -> {
 			HashMap<String, Object> info = new HashMap<>();
-			LinkedList<HashMap<String,Object>> traceListing = new LinkedList<>();
+			info.put("trace", renderStackTrace(trace));
 			info.put("path", file.getPath());
 			info.put("fsClass", file.getFs().getClass().getCanonicalName());
-			for(StackTraceElement element : trace.getStackTrace()) {
-				HashMap<String,Object> frame = new HashMap<>();
-				frame.put("file", element.getFileName());
-				frame.put("method", element.getMethodName());
-				frame.put("line", element.getLineNumber());
-				traceListing.add(frame);
-			}
-			info.put("trace", traceListing);
 			files.add(info);
 		});
 		throw XAPIResponse.withWrappedPayload("files", files);
@@ -105,16 +97,21 @@ public class GlobalResource {
 		LinkedList<HashMap<String,Object>> filesystems = new LinkedList<>();
 		ZKFS.getOpenInstances().forEach((fs, trace) -> {
 			HashMap<String, Object> info = new HashMap<>();
-			LinkedList<HashMap<String,Object>> traceListing = new LinkedList<>();
 			info.put("fsClass", fs.getClass().getCanonicalName());
-			for(StackTraceElement element : trace.getStackTrace()) {
-				HashMap<String,Object> frame = new HashMap<>();
-				frame.put("file", element.getFileName());
-				frame.put("method", element.getMethodName());
-				frame.put("line", element.getLineNumber());
-				traceListing.add(frame);
+			info.put("trace", renderStackTrace(trace));
+			
+			LinkedList<LinkedList<HashMap<String, Object>>> retentions = new LinkedList<>();
+			for(Throwable retention : fs.getRetentions()) {
+				retentions.add(renderStackTrace(retention));				
 			}
-			info.put("trace", traceListing);
+			info.put("retentions", retentions);
+			
+			LinkedList<LinkedList<HashMap<String, Object>>> closures = new LinkedList<>();
+			for(Throwable closure : fs.getClosures()) {
+				closures.add(renderStackTrace(closure));				
+			}
+			info.put("closures", closures);
+			
 			filesystems.add(info);
 		});
 		throw XAPIResponse.withWrappedPayload("filesystems", filesystems);
@@ -125,5 +122,18 @@ public class GlobalResource {
 	@Path("/threads")
 	public XAPIResponse getThreads() throws IOException {
 		throw XAPIResponse.withWrappedPayload("report", Util.threadReport(true));
+	}
+	
+	public LinkedList<HashMap<String,Object>> renderStackTrace(Throwable trace) {
+		LinkedList<HashMap<String,Object>> traceListing = new LinkedList<>();
+		for(StackTraceElement element : trace.getStackTrace()) {
+			HashMap<String,Object> frame = new HashMap<>();
+			frame.put("file", element.getFileName());
+			frame.put("method", element.getMethodName());
+			frame.put("line", element.getLineNumber());
+			traceListing.add(frame);
+		}
+		
+		return traceListing;
 	}
 }

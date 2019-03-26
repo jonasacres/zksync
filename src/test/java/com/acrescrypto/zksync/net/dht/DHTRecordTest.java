@@ -29,6 +29,7 @@ public class DHTRecordTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 		crypto = CryptoSupport.defaultCrypto();
 	}
 	
@@ -44,6 +45,7 @@ public class DHTRecordTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

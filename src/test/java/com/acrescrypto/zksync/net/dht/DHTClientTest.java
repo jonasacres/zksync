@@ -347,6 +347,7 @@ public class DHTClientTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 		TCPPeerAdvertisement.disableReachabilityTest = true;
 	}
 	
@@ -385,6 +386,7 @@ public class DHTClientTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 		TCPPeerAdvertisement.disableReachabilityTest = false;
 		DHTClient.lookupResultMaxWaitTimeMs = DHTClient.DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS;
 		DHTClient.messageExpirationTimeMs = DHTClient.DEFAULT_MESSAGE_EXPIRATION_TIME_MS;

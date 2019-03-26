@@ -40,6 +40,7 @@ public class MemLogAppenderTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 	}
 	
 	@Before
@@ -67,6 +68,7 @@ public class MemLogAppenderTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

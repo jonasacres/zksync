@@ -65,6 +65,7 @@ public class ArchiveRevisionActiveResourceTest {
 
 	@AfterClass
 	public static void afterAll() {
+		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 	}
 
@@ -78,39 +79,42 @@ public class ArchiveRevisionActiveResourceTest {
 
 	@Test
 	public void testGetReturnsInfoOfActiveRevtagIfActiveRevtagSetNondefault() throws IOException {
-		ZKFS fs = archive.openBlank();
-		RevisionTag revTag = fs.commit();
-		fs.commit();
-		State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
-
-		JsonNode resp = WebTestUtils.requestGet(target, basePath);
-		assertArrayEquals(revTag.getBytes(), resp.get("revTag").binaryValue());
-		WebTestUtils.validateRevisionInfo(archive.getConfig(), resp);
+		try(ZKFS fs = archive.openBlank()) {
+			RevisionTag revTag = fs.commit();
+			fs.commit();
+			State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
+	
+			JsonNode resp = WebTestUtils.requestGet(target, basePath);
+			assertArrayEquals(revTag.getBytes(), resp.get("revTag").binaryValue());
+			WebTestUtils.validateRevisionInfo(archive.getConfig(), resp);
+		}
 	}
 
 	@Test
 	public void testPutSetsActiveRevtag() throws IOException {
-		ZKFS fs = archive.openBlank();
-		RevisionTag revTag = fs.commit();
-		fs.commit();
-		State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
-
-		XRevisionInfo xinfo = new XRevisionInfo();
-		xinfo.setRevTag(revTag.getBytes());
-
-		WebTestUtils.requestPut(target, basePath, xinfo);
-		assertArrayEquals(revTag.getBytes(), State.sharedState().activeFs(archive.getConfig()).getBaseRevision().getBytes());
+		try(ZKFS fs = archive.openBlank()) {
+			RevisionTag revTag = fs.commit();
+			fs.commit();
+			State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
+	
+			XRevisionInfo xinfo = new XRevisionInfo();
+			xinfo.setRevTag(revTag.getBytes());
+	
+			WebTestUtils.requestPut(target, basePath, xinfo);
+			assertArrayEquals(revTag.getBytes(), State.sharedState().activeFs(archive.getConfig()).getBaseRevision().getBytes());
+		}
 	}
 
 	@Test
 	public void testDeleteClearsActiveRevtag() throws IOException {
-		ZKFS fs = archive.openBlank();
-		RevisionTag revTag = fs.commit();
-		fs.commit();
-		State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
-
-		WebTestUtils.requestDelete(target, basePath);
-		assertArrayEquals(archive.getConfig().getRevisionList().latest().getBytes(),
-				State.sharedState().activeFs(archive.getConfig()).getBaseRevision().getBytes());
+		try(ZKFS fs = archive.openBlank()) {
+			RevisionTag revTag = fs.commit();
+			fs.commit();
+			State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
+	
+			WebTestUtils.requestDelete(target, basePath);
+			assertArrayEquals(archive.getConfig().getRevisionList().latest().getBytes(),
+					State.sharedState().activeFs(archive.getConfig()).getBaseRevision().getBytes());
+		}
 	}
 }

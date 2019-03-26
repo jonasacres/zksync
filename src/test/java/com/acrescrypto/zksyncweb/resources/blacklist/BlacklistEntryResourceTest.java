@@ -18,6 +18,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksyncweb.Main;
 import com.acrescrypto.zksyncweb.State;
@@ -25,39 +26,42 @@ import com.acrescrypto.zksyncweb.WebTestUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 
 public class BlacklistEntryResourceTest {
-    private HttpServer server;
-    private WebTarget target;
-    private Blacklist blacklist;
+	private HttpServer server;
+	private WebTarget target;
+	private Blacklist blacklist;
 
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 	}
-	
+
 	@Before
 	public void beforeEach() throws IOException, URISyntaxException {
-    	State.setTestState();
-        server = Main.startServer();
-        Client c = ClientBuilder.newClient();
-        target = c.target(Main.BASE_URI);
-        blacklist = State.sharedState().getMaster().getBlacklist();
-    }
-	
+		State.setTestState();
+		server = Main.startServer();
+		Client c = ClientBuilder.newClient();
+		target = c.target(Main.BASE_URI);
+		blacklist = State.sharedState().getMaster().getBlacklist();
+	}
+
 	@After
 	public void afterEach() {
-        server.shutdownNow();
-        State.clearState();
+		server.shutdownNow();
+		State.clearState();
 	}
-	
+
 	@AfterClass
 	public static void afterAll() {
+		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
-	
+
 	@Test
 	public void testGetReturnsEntryIfIpIsBlacklisted() throws IOException {
 		long expTime = System.currentTimeMillis() + 1234;
 		blacklist.addWithAbsoluteTime("1.2.3.4", expTime);
 		JsonNode resp = WebTestUtils.requestGet(target, "/blacklist/1.2.3.4");
-		
+
 		assertEquals("1.2.3.4", resp.get("address").textValue());
 		assertEquals(expTime, resp.get("expiration").asLong());
 	}
@@ -66,7 +70,7 @@ public class BlacklistEntryResourceTest {
 	public void testGetReturns404IfIpIsNotBlacklisted() {
 		WebTestUtils.requestGetWithError(target, 404, "/blacklist/1.2.3.4");
 	}
-	
+
 	@Test
 	public void testDeleteRemovesIpFromBlacklistIfPresent() throws IOException {
 		blacklist.add("1.2.3.4", 1234);
@@ -74,7 +78,7 @@ public class BlacklistEntryResourceTest {
 		WebTestUtils.requestDelete(target, "/blacklist/1.2.3.4");
 		assertFalse(blacklist.contains("1.2.3.4"));
 	}
-	
+
 	@Test
 	public void testDeleteReturns404IfIpIsNotBlacklisted() {
 		WebTestUtils.requestDeleteWithError(target, 404, "/blacklist/1.2.3.4");

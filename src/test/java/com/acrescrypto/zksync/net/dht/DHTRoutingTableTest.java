@@ -14,6 +14,7 @@ import java.util.LinkedList;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -69,6 +70,11 @@ public class DHTRoutingTableTest {
 		return peer;
 	}
 	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+	
 	@Before
 	public void beforeEach() {
 		client = new DummyClient();
@@ -85,6 +91,7 @@ public class DHTRoutingTableTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

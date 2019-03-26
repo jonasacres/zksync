@@ -57,7 +57,7 @@ public class SignedSecureFile {
 
 			byte[] contents = fs.read(path());
 			if(!Arrays.equals(authKey.authenticate(contents), tag)) {
-				logger.error("SignedSecureFile {}: Unable to authenticate, |contents|={}, H(contents)={}, H(expected)={}",
+				logger.warn("SignedSecureFile {}: Unable to authenticate, |contents|={}, H(contents)={}, H(expected)={}",
 						path(),
 						contents.length,
 						Util.formatLongId(contents),

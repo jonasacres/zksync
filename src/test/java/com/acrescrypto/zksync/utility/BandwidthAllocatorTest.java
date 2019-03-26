@@ -6,14 +6,22 @@ import static org.junit.Assert.assertTrue;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.utility.BandwidthAllocator.BandwidthAllocation;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 public class BandwidthAllocatorTest {
 	BandwidthAllocator allocator;
+	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
 	
 	@Before
 	public void beforeEach() {
@@ -24,6 +32,12 @@ public class BandwidthAllocatorTest {
 	@After
 	public void afterEach() {
 		Util.setCurrentTimeMillis(-1);
+		TestUtils.stopDebugMode();
+	}
+	
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
 	}
 	
 	@Test

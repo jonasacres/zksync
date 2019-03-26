@@ -66,6 +66,7 @@ public class ArchiveRevisionsResourceTest {
 
 	@AfterClass
 	public static void afterAll() {
+		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 	}
 
@@ -73,7 +74,7 @@ public class ArchiveRevisionsResourceTest {
 	public void testGetReturnsListOfBranchTips() throws IOException {
 		ArrayList<RevisionTag> tags = new ArrayList<>();
 		for(int i = 0; i < 10; i++) {
-			tags.add(archive.openBlank().commit());
+			tags.add(archive.openBlank().commitAndClose());
 		}
 
 		JsonNode resp = WebTestUtils.requestGet(target, basePath);
@@ -95,8 +96,10 @@ public class ArchiveRevisionsResourceTest {
 		ArrayList<byte[]> tags = new ArrayList<>();
 		info.setParents(new byte[10][]);
 		for(int i = 0; i < info.getParents().length; i++) {
-			info.getParents()[i] = archive.openBlank().commit().getBytes();
-			tags.add(info.getParents()[i]);
+			try(ZKFS fs = archive.openBlank()) {
+				info.getParents()[i] = fs.commit().getBytes();
+				tags.add(info.getParents()[i]);
+			}
 		}
 
 		JsonNode resp = WebTestUtils.requestPost(target, basePath, info);
@@ -152,10 +155,11 @@ public class ArchiveRevisionsResourceTest {
 		int bases = 3, depth = 3, expected = bases*depth+1;
 		tags.add(RevisionTag.blank(archive.getConfig()));
 		for(int i = 0; i < bases; i++) {
-			ZKFS fs = archive.openBlank();
-			for(int j = 0; j < depth; j++) {
-				RevisionTag tag = fs.commit();
-				tags.add(tag);
+			try(ZKFS fs = archive.openBlank()) {
+				for(int j = 0; j < depth; j++) {
+					RevisionTag tag = fs.commit();
+					tags.add(tag);
+				}
 			}
 		}
 		

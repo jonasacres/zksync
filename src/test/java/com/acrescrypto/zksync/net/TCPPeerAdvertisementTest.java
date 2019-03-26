@@ -34,6 +34,7 @@ public class TCPPeerAdvertisementTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 		crypto = CryptoSupport.defaultCrypto();
 		pubKey = crypto.rng(crypto.asymPublicSigningKeySize());
 		host = "localhost";
@@ -50,6 +51,7 @@ public class TCPPeerAdvertisementTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

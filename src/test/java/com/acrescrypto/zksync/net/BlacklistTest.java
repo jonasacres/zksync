@@ -26,6 +26,7 @@ public class BlacklistTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
+		TestUtils.startDebugMode();
 		fs = new RAMFS();
 		if(fs.exists("/")) fs.rmrf("/");
 	}
@@ -33,6 +34,7 @@ public class BlacklistTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Before

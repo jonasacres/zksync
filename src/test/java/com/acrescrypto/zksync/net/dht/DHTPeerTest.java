@@ -174,6 +174,7 @@ public class DHTPeerTest {
 
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 		crypto = CryptoSupport.defaultCrypto();
 	}
 	
@@ -190,6 +191,7 @@ public class DHTPeerTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 
 	@Test

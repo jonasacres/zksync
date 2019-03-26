@@ -53,6 +53,7 @@ public class DHTMessageStubTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 		DHTClient.messageExpirationTimeMs = 100;
 		DHTClient.messageRetryTimeMs = 50;
 	}
@@ -76,6 +77,7 @@ public class DHTMessageStubTest {
 		TestUtils.assertTidy();
 		DHTClient.messageExpirationTimeMs = DHTClient.DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
 		DHTClient.messageRetryTimeMs = DHTClient.DEFAULT_MESSAGE_RETRY_TIME_MS;
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

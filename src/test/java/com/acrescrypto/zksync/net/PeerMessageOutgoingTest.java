@@ -15,6 +15,7 @@ import java.util.concurrent.TimeoutException;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -137,6 +138,11 @@ public class PeerMessageOutgoingTest {
 		writePRNG = crypto.prng(new byte[] {1, 2, 4, 8});
 	}
 	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+	
 	@After
 	public void afterEach() throws IOException {
 		connection.unpause();
@@ -149,6 +155,7 @@ public class PeerMessageOutgoingTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

@@ -53,22 +53,21 @@ public class ArchiveRevisionFsResourceTest {
 		archive.getMaster().storedAccess().storeArchiveAccess(archive.getConfig(), StoredAccess.ACCESS_LEVEL_READWRITE);
 		State.sharedState().addOpenConfig(archive.getConfig());
 
-		ZKFS fs = archive.openBlank();
-		fs.write("a", "i'm a teapot".getBytes());
-		fs.write("b", "i exist".getBytes());
-		fs.write("dir/d", "some bytes".getBytes());
-		revTag = fs.commit();
-		fs.close();
+		try(ZKFS fs = archive.openBlank()) {
+			fs.write("a", "i'm a teapot".getBytes());
+			fs.write("b", "i exist".getBytes());
+			fs.write("dir/d", "some bytes".getBytes());
+			revTag = fs.commit();
+		}
+	
+		try(ZKFS fs = archive.openBlank()) {
+			fs.write("a", "i'm not a teapot".getBytes());
+			fs.write("c", "i'm over here".getBytes());
+			fs.commit();
+			RevisionTag latest = fs.commit();
+			assertEquals(latest, archive.getConfig().getRevisionList().latest());
+		}
 
-		fs = archive.openBlank();
-		fs.write("a", "i'm not a teapot".getBytes());
-		fs.write("c", "i'm over here".getBytes());
-		fs.commit();
-		RevisionTag latest = fs.commit();
-		assertEquals(latest, archive.getConfig().getRevisionList().latest());
-		fs.close();
-
-		fs = State.sharedState().activeFs(archive.getConfig());
 		basePath = "/archives/" + WebTestUtils.transformArchiveId(archive) + "/revisions/" + WebTestUtils.transformRevTag(revTag) + "/fs/";
 	}
 
@@ -81,6 +80,7 @@ public class ArchiveRevisionFsResourceTest {
 
 	@AfterClass
 	public static void afterAll() {
+		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 	}
 
@@ -122,7 +122,9 @@ public class ArchiveRevisionFsResourceTest {
 	@Test
 	public void testGetReturnsFileStatIfRequested() throws IOException {
 		JsonNode resp = WebTestUtils.requestGet(target, basePath + "a?stat=true");
-		WebTestUtils.validatePathStat(revTag.getFS(), "/", resp);
+		try(ZKFS fs = revTag.getFS()) {
+			WebTestUtils.validatePathStat(fs, "/", resp);
+		}
 	}
 
 	@Test

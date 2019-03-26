@@ -5,12 +5,18 @@ import static org.junit.Assert.assertEquals;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 
 public class BandwidthMonitorTest {
 	BandwidthMonitor monitor;
+	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
 	
 	@Before
 	public void beforeEach() {
@@ -26,6 +32,7 @@ public class BandwidthMonitorTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

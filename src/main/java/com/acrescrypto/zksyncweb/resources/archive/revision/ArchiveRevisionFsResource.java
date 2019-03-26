@@ -31,7 +31,8 @@ public class ArchiveRevisionFsResource {
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
 		
-		ZKFS fs = State.sharedState().fsForRevision(config, revTag);
-		return ArchiveCrud.get(fs, path, params);
+		try(ZKFS fs = State.sharedState().fsForRevision(config, revTag)) {
+			return ArchiveCrud.get(fs, path, params);
+		}
 	}
 }

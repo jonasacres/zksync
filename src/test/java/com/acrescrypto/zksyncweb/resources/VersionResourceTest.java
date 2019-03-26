@@ -13,10 +13,12 @@ import javax.ws.rs.client.WebTarget;
 import org.glassfish.grizzly.http.server.HttpServer;
 
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.zkfs.ZKVersion;
 import com.acrescrypto.zksyncweb.Main;
 import com.acrescrypto.zksyncweb.VersionInfo;
@@ -35,6 +37,7 @@ public class VersionResourceTest {
 	@BeforeClass
 	public static void beforeAll() {
 		WebTestUtils.squelchGrizzlyLogs();
+		TestUtils.startDebugMode();
 	}
 
 	@Before
@@ -49,6 +52,12 @@ public class VersionResourceTest {
 		server.shutdownNow();
 	}
 
+	@AfterClass
+	public static void afterAll() {
+		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
+	}
+	
 	@Test
 	public void testVersion() throws JsonParseException, JsonMappingException, IOException {
 		String responseMsg = target.path("version").request().get(String.class);

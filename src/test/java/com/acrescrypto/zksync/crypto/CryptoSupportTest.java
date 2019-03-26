@@ -19,12 +19,14 @@ public class CryptoSupportTest  {
 
 	@BeforeClass
 	public static void beforeClass() {
+		TestUtils.startDebugMode();
 		Security.addProvider(new BouncyCastleProvider());
 	}
 
 	@AfterClass
 	public static void afterClass() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 
 	@Test
@@ -111,6 +113,7 @@ public class CryptoSupportTest  {
 
 	@Test
 	public void testKeyDerivation() {
+		CryptoSupport.cheapArgon2 = false;
 		byte[] derived = crypto.deriveKeyFromPassphrase("test".getBytes(), CryptoSupport.PASSPHRASE_SALT_READ);
 
 		/* This is a non-standard test vector. Generated using:

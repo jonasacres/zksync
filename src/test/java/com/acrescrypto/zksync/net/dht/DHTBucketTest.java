@@ -74,6 +74,7 @@ public class DHTBucketTest {
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException, InvalidBlacklistException {
+		TestUtils.startDebugMode();
 		crypto = CryptoSupport.defaultCrypto();
 	}
 	
@@ -90,6 +91,7 @@ public class DHTBucketTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 
 	@Test

@@ -76,13 +76,14 @@ public class ArchiveResourceTest {
 		WebTestUtils.rigMonitors(new BandwidthMonitor[] { archive.getConfig().getSwarm().getBandwidthMonitorRx(), archive.getConfig().getSwarm().getBandwidthMonitorTx() }, 1000);
 		archive.getConfig().advertise();
 		archive.getMaster().storedAccess().storeArchiveAccess(archive.getConfig(), StoredAccess.ACCESS_LEVEL_READWRITE);
-		ZKFS fs = archive.openBlank();
-		fs.write("foo", "bar".getBytes());
-		tag = fs.commit();
-		State.sharedState().addOpenConfig(archive.getConfig());
-		
-		try(LocalFS lfs = new LocalFS("/")) {
-			lfs.mkdirp(TESTDIR);
+		try(ZKFS fs = archive.openBlank()) {
+			fs.write("foo", "bar".getBytes());
+			tag = fs.commit();
+			State.sharedState().addOpenConfig(archive.getConfig());
+			
+			try(LocalFS lfs = new LocalFS("/")) {
+				lfs.mkdirp(TESTDIR);
+			}
 		}
 	}
 
@@ -92,12 +93,14 @@ public class ArchiveResourceTest {
 			lfs.rmrf(TESTDIR);
 		}
 		archive.close();
+		archive.getMaster().close();
 		server.shutdownNow();
 		State.clearState();
 	}
 
 	@AfterClass
 	public static void afterAll() {
+		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 	}
 
@@ -162,12 +165,16 @@ public class ArchiveResourceTest {
 
 	void assertReadable(ZKArchive archive) throws IOException {
 		assertFalse(archive.getConfig().getAccessor().isSeedOnly());
-		assertArrayEquals("bar".getBytes(), tag.getFS().read("foo"));
+		try(ZKFS fs = tag.getFS()) {
+			assertArrayEquals("bar".getBytes(), fs.read("foo"));
+		}
 	}
 
 	void assertWritable(ZKArchive archive) throws IOException {
 		assertFalse(archive.getConfig().isReadOnly());
-		archive.openBlank().commit();
+		try(ZKFS fs = archive.openBlank()) {
+			fs.commit();
+		}
 	}
 
 	@Test
@@ -265,13 +272,14 @@ public class ArchiveResourceTest {
 		assertTrue(archive.getConfig().isReadOnly());
 		assertFalse(archive.getConfig().getAccessor().isSeedOnly());
 
-		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		StoredAccessRecord record2 = state2.getMaster().storedAccess().recordForArchiveId(archive.getConfig().getArchiveId());
-		assertNotNull(record2);
-		assertEquals(StoredAccess.ACCESS_LEVEL_READ, record2.getAccessLevel());
-		ZKArchiveConfig config2 = state2.getMaster().allConfigs().iterator().next();
-		assertTrue(config2.isReadOnly());
-		assertFalse(config2.getAccessor().isSeedOnly());
+		try(State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage())) {
+			StoredAccessRecord record2 = state2.getMaster().storedAccess().recordForArchiveId(archive.getConfig().getArchiveId());
+			assertNotNull(record2);
+			assertEquals(StoredAccess.ACCESS_LEVEL_READ, record2.getAccessLevel());
+			ZKArchiveConfig config2 = state2.getMaster().allConfigs().iterator().next();
+			assertTrue(config2.isReadOnly());
+			assertFalse(config2.getAccessor().isSeedOnly());
+		}
 	}
 
 	@Test
@@ -282,13 +290,14 @@ public class ArchiveResourceTest {
 		assertTrue(archive.getConfig().isReadOnly());
 		assertTrue(archive.getConfig().getAccessor().isSeedOnly());
 
-		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		StoredAccessRecord record2 = state2.getMaster().storedAccess().recordForArchiveId(archive.getConfig().getArchiveId());
-		assertNotNull(record2);
-		assertEquals(StoredAccess.ACCESS_LEVEL_SEED, record2.getAccessLevel());
-		ZKArchiveConfig config2 = state2.getMaster().allConfigs().iterator().next();
-		assertTrue(config2.getAccessor().isSeedOnly());
-		assertTrue(config2.isReadOnly());
+		try(State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage())) {
+			StoredAccessRecord record2 = state2.getMaster().storedAccess().recordForArchiveId(archive.getConfig().getArchiveId());
+			assertNotNull(record2);
+			assertEquals(StoredAccess.ACCESS_LEVEL_SEED, record2.getAccessLevel());
+			ZKArchiveConfig config2 = state2.getMaster().allConfigs().iterator().next();
+			assertTrue(config2.getAccessor().isSeedOnly());
+			assertTrue(config2.isReadOnly());
+		}
 	}
 
 	@Test
@@ -298,13 +307,14 @@ public class ArchiveResourceTest {
 		StoredAccessRecord record = State.sharedState().getMaster().storedAccess().recordForArchiveId(archive.getConfig().getArchiveId());
 		assertNull(record);
 
-		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		StoredAccessRecord record2 = state2.getMaster().storedAccess().recordForArchiveId(archive.getConfig().getArchiveId());
-		assertNull(record2);
-
-		// make sure we kept the cached pages and local data
-		long size = archive.getConfig().getCacheStorage().storageSize("/") + archive.getConfig().getLocalStorage().storageSize("/");
-		assertEquals(expectedSize, size);
+		try(State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage())) {
+			StoredAccessRecord record2 = state2.getMaster().storedAccess().recordForArchiveId(archive.getConfig().getArchiveId());
+			assertNull(record2);
+	
+			// make sure we kept the cached pages and local data
+			long size = archive.getConfig().getCacheStorage().storageSize("/") + archive.getConfig().getLocalStorage().storageSize("/");
+			assertEquals(expectedSize, size);
+		}
 	}
 
 	@Test
@@ -317,19 +327,21 @@ public class ArchiveResourceTest {
 		WebTestUtils.requestDelete(target, "archives/" + transformArchiveId(archive).substring(0, 8));
 
 		// make sure we still have the stored accessor
-		State state2 = new State(State.defaultPassphrase(), archive.getMaster().getStorage());
-		StoredAccessRecord record2 = state2.getMaster().storedAccess().recordForArchiveId(archive2.getConfig().getArchiveId());
-		assertNotNull(record2);
-
-		// make sure we kept the cached pages and local data
-		long size = archive2.getConfig().getCacheStorage().storageSize("/") + archive2.getConfig().getLocalStorage().storageSize("/");
-		assertEquals(expectedSize, size);
-
-		ZKArchiveConfig loadedConfig = state2.getMaster().allConfigs().iterator().next();
-		assertEquals(1, state2.getMaster().allConfigs().size());
-		assertArrayEquals(archive2.getConfig().getArchiveId(), loadedConfig.getArchiveId());
-
-		WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive2));
+		try(State state2 = new State(State.defaultPassphrase(), archive.getMaster().getStorage())) {
+			StoredAccessRecord record2 = state2.getMaster().storedAccess().recordForArchiveId(archive2.getConfig().getArchiveId());
+			assertNotNull(record2);
+			
+			
+			// make sure we kept the cached pages and local data
+			long size = archive2.getConfig().getCacheStorage().storageSize("/") + archive2.getConfig().getLocalStorage().storageSize("/");
+			assertEquals(expectedSize, size);
+	
+			ZKArchiveConfig loadedConfig = state2.getMaster().allConfigs().iterator().next();
+			assertEquals(1, state2.getMaster().allConfigs().size());
+			assertArrayEquals(archive2.getConfig().getArchiveId(), loadedConfig.getArchiveId());
+	
+			WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive2));
+		}
 	}
 
 	@Test
@@ -342,19 +354,20 @@ public class ArchiveResourceTest {
 		WebTestUtils.requestDelete(target, "archives/" + transformArchiveId(archive).substring(0, 8));
 
 		// make sure we still have the stored accessor
-		State state2 = new State(State.defaultPassphrase(), archive.getMaster().getStorage());
-		StoredAccessRecord record2 = state2.getMaster().storedAccess().recordForArchiveId(config2.getArchiveId());
-		assertNotNull(record2);
-
-		// make sure we kept the cached pages and local data
-		long size = config2.getCacheStorage().storageSize("/") + config2.getLocalStorage().storageSize("/");
-		assertEquals(expectedSize, size);
-
-		ZKArchiveConfig loadedConfig = state2.getMaster().allConfigs().iterator().next();
-		assertEquals(1, state2.getMaster().allConfigs().size());
-		assertArrayEquals(config2.getArchiveId(), loadedConfig.getArchiveId());
-
-		WebTestUtils.requestGet(target, "archives/" + transformArchiveId(config2.getArchive()));
+		try(State state2 = new State(State.defaultPassphrase(), archive.getMaster().getStorage())) {
+			StoredAccessRecord record2 = state2.getMaster().storedAccess().recordForArchiveId(config2.getArchiveId());
+			assertNotNull(record2);
+	
+			// make sure we kept the cached pages and local data
+			long size = config2.getCacheStorage().storageSize("/") + config2.getLocalStorage().storageSize("/");
+			assertEquals(expectedSize, size);
+	
+			ZKArchiveConfig loadedConfig = state2.getMaster().allConfigs().iterator().next();
+			assertEquals(1, state2.getMaster().allConfigs().size());
+			assertArrayEquals(config2.getArchiveId(), loadedConfig.getArchiveId());
+	
+			WebTestUtils.requestGet(target, "archives/" + transformArchiveId(config2.getArchive()));
+		}
 	}
 
 	@Test
@@ -1000,8 +1013,9 @@ public class ArchiveResourceTest {
 
 		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/keys", spec);
 
-		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		assertTrue(state2.configForArchiveId(archive.getConfig().getArchiveId()).getAccessor().isSeedOnly());
+		try(State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage())) {
+			assertTrue(state2.configForArchiveId(archive.getConfig().getArchiveId()).getAccessor().isSeedOnly());
+		}
 	}
 
 	@Test
@@ -1012,10 +1026,13 @@ public class ArchiveResourceTest {
 		archive.getConfig().getMaster().storedAccess().storeArchiveAccess(archive.getConfig(), StoredAccess.ACCESS_LEVEL_SEED);
 		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/keys", spec);
 
-		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		ZKArchiveConfig config2 = state2.configForArchiveId(archive.getConfig().getArchiveId());
-		assertWritable(config2.getArchive());
-		assertReadable(config2.getArchive());
+		try(
+			State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
+			ZKArchiveConfig config2 = state2.configForArchiveId(archive.getConfig().getArchiveId());
+		) {
+			assertWritable(config2.getArchive());
+			assertReadable(config2.getArchive());
+		}
 	}
 
 	@Test
@@ -1027,10 +1044,13 @@ public class ArchiveResourceTest {
 		archive.getConfig().getMaster().storedAccess().storeArchiveAccess(archive.getConfig(), StoredAccess.ACCESS_LEVEL_SEED);
 		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/keys", spec);
 
-		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		ZKArchiveConfig config2 = state2.configForArchiveId(archive.getConfig().getArchiveId());
-		assertTrue(config2.isReadOnly());
-		assertReadable(config2.getArchive());
+		try(
+			State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
+			ZKArchiveConfig config2 = state2.configForArchiveId(archive.getConfig().getArchiveId());
+		) {
+			assertTrue(config2.isReadOnly());
+			assertReadable(config2.getArchive());
+		}
 	}
 
 	@Test
@@ -1042,10 +1062,13 @@ public class ArchiveResourceTest {
 
 		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/keys", spec);
 
-		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		ZKArchiveConfig config2 = state2.configForArchiveId(archive.getConfig().getArchiveId());
-		assertTrue(config2.isReadOnly());
-		assertTrue(config2.getAccessor().isSeedOnly());
+		try(
+			State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
+			ZKArchiveConfig config2 = state2.configForArchiveId(archive.getConfig().getArchiveId());
+		) {
+			assertTrue(config2.isReadOnly());
+			assertTrue(config2.getAccessor().isSeedOnly());
+		}
 	}
 
 	@Test
@@ -1057,13 +1080,16 @@ public class ArchiveResourceTest {
 
 		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/keys", spec);
 
-		State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
-		ZKArchiveConfig config2 = state2.configForArchiveId(archive.getConfig().getArchiveId());
-		assertNull(config2);
+		try(
+			State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage());
+			ZKArchiveConfig config2 = state2.configForArchiveId(archive.getConfig().getArchiveId());
+		) {
+			assertNull(config2);
+		}
 
 		// test that we still have in-memory access
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archive.getConfig().getArchiveId());
-		config.getArchive().openBlank().commit();
+		config.getArchive().openBlank().commitAndClose();
 	}
 	
 	@SuppressWarnings("deprecation")

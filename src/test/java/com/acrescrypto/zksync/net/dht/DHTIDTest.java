@@ -19,12 +19,14 @@ public class DHTIDTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
+		TestUtils.startDebugMode();
 		crypto = CryptoSupport.defaultCrypto();
 	}
 	
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

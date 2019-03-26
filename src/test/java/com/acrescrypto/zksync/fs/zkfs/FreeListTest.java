@@ -19,8 +19,8 @@ public class FreeListTest {
 	
 	@BeforeClass
 	public static void beforeClass() throws IOException {
-		master = ZKMaster.openBlankTestVolume();
 		TestUtils.startDebugMode();
+		master = ZKMaster.openBlankTestVolume();
 		Security.addProvider(new BouncyCastleProvider());
 	}
 	
@@ -41,6 +41,7 @@ public class FreeListTest {
 	public static void afterAll() {
 		master.close();
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test

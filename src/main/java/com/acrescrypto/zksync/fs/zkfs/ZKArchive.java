@@ -42,6 +42,7 @@ public class ZKArchive implements AutoCloseable {
 	protected HashCache<RevisionTag,ZKFS> readOnlyFilesystems;
 	protected HashMap<Long,byte[]> allPageTags;
 	protected SubscriptionToken<Integer> tok;
+	protected boolean closed;
 	
 	protected ZKArchive(ZKArchiveConfig config) throws IOException {
 		this.master = config.accessor.master;
@@ -82,6 +83,9 @@ public class ZKArchive implements AutoCloseable {
 	}
 	
 	public void close() {
+		if(closed) return;
+		closed = true;
+		
 		if(tok != null) tok.close();
 		try {
 			readOnlyFilesystems.removeAll();
@@ -132,6 +136,9 @@ public class ZKArchive implements AutoCloseable {
 		}
 		
 		if(isClosed()) {
+			synchronized(readOnlyFilesystems) {
+				readOnlyFilesystems.removeAll();
+			}
 			fs.close();
 			throw new ClosedException();
 		}

@@ -65,6 +65,7 @@ public class LogResourceTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.stopDebugMode();
+		TestUtils.assertTidy();
 	}
 	
 	public ArrayList<JsonNode> filterEntries(JsonNode entries) {
@@ -119,13 +120,18 @@ public class LogResourceTest {
 	}
 
 	@Test
-	public void testGetLogsFiltersToRequestedThreshold() {
+	public void testGetLogsFiltersToRequestedThreshold() throws IOException, URISyntaxException {
+		MemLogAppender.sharedInstance().hardPurge();
 		logger.debug("debug");
 		logger.info("info");
 		logger.warn("warn");
 
 		JsonNode resp = WebTestUtils.requestGet(target, "/logs?level=" + Level.ALL_INT);
 		ArrayList<JsonNode> filteredEntries = filterEntries(resp.get("entries"));
+		if(filteredEntries.size() > 3) {
+			System.out.println(filteredEntries);
+		}
+		
 		assertEquals(3, filteredEntries.size());
 		assertEquals("debug", filteredEntries.get(0).get("msg").asText());
 		assertEquals("info", filteredEntries.get(1).get("msg").asText());

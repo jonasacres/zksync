@@ -20,12 +20,14 @@ public class KeyTest {
 	
 	@BeforeClass
 	public static void beforeClass() {
+		TestUtils.startDebugMode();
 		Security.addProvider(new BouncyCastleProvider());
 	}
 	
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 
 	@Test

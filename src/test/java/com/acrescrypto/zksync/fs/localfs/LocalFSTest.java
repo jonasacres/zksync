@@ -19,6 +19,11 @@ import com.acrescrypto.zksync.utility.Util;
 public class LocalFSTest extends FSTestBase {
 	public final static String SCRATCH_DIR = "/tmp/zksync-test/localfs";
 
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+
 	@Before
 	public void beforeEach() throws IOException {
 		deleteFiles();
@@ -31,19 +36,20 @@ public class LocalFSTest extends FSTestBase {
 	public static void afterClass() {
 		deleteFiles();
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
-	
+
 	protected static int getCurrentId(char type) {
 		try {
-		    String userName = System.getProperty("user.name");
-		    String command = "id -" + type + " "+userName;
-		    Process child = Runtime.getRuntime().exec(command);
+			String userName = System.getProperty("user.name");
+			String command = "id -" + type + " "+userName;
+			Process child = Runtime.getRuntime().exec(command);
 
-		    // Get the input stream and read from it
-		    InputStream in = child.getInputStream();
-		    int uid = Integer.parseInt(new String(IOUtils.toByteArray(in)).replaceAll("\n", ""));
-		    in.close();
-		    return uid;
+			// Get the input stream and read from it
+			InputStream in = child.getInputStream();
+			int uid = Integer.parseInt(new String(IOUtils.toByteArray(in)).replaceAll("\n", ""));
+			in.close();
+			return uid;
 		} catch (IOException e) {
 			return -1;
 		}
@@ -58,7 +64,7 @@ public class LocalFSTest extends FSTestBase {
 			exc.printStackTrace();
 		}
 	}
-	
+
 	@Override
 	public int expectedUid() {
 		return getCurrentId('u');
@@ -84,7 +90,7 @@ public class LocalFSTest extends FSTestBase {
 			}
 		}
 	}
-	
+
 	@Test @Override
 	public void testStatIdentifiesFifos() throws IOException {
 		if(Util.isWindows()) return;

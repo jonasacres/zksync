@@ -13,6 +13,7 @@ import java.util.Collection;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -187,6 +188,11 @@ public class DHTSearchOperationTest {
 		return new DummyPeer(client, "10.0.0."+i, 1000+i, pubKey);
 	}
 	
+	@BeforeClass
+	public static void beforeAll() {
+		TestUtils.startDebugMode();
+	}
+	
 	@Before
 	public void beforeEach() {
 		crypto = CryptoSupport.defaultCrypto();
@@ -211,6 +217,7 @@ public class DHTSearchOperationTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
+		TestUtils.stopDebugMode();
 	}
 	
 	@Test
