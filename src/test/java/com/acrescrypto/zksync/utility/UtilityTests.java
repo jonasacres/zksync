@@ -9,7 +9,8 @@ import org.junit.runners.Suite;
 	AppendableInputStreamTest.class,
 	BandwidthMonitorTest.class,
 	BandwidthAllocatorTest.class,
-	MemLogAppenderTest.class
+	MemLogAppenderTest.class,
+	HashCacheTest.class
 })
 
 public class UtilityTests {

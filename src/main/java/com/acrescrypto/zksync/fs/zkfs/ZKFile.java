@@ -34,20 +34,21 @@ public class ZKFile extends File {
 	
 	protected ZKFile(ZKFS fs) {
 		super(fs);
+		retain();
+		this.zkfs = fs;
+		this.trusted = true; // set to false for inode table
 		logger.trace("ZKFS {} {}: open {} - (0x{}), {} open",
 				Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(fs.baseRevision),
 				path,
 				Integer.toHexString(mode),
 				fs.getOpenFiles().size());
-		this.zkfs = fs;
-		this.trusted = true; // set to false for inode table
-		retain();
 	}
 	
 	/** Open a file handle at a path */
 	public ZKFile(ZKFS fs, String path, int mode, boolean trusted) throws IOException {
 		super(fs);
+		retain();
 		logger.trace("ZKFS {} {}: open {} - (0x{}), {} open",
 				Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(fs.baseRevision),
@@ -75,6 +76,7 @@ public class ZKFile extends File {
 	
 	public ZKFile(ZKFS fs, Inode inode, int mode, boolean trusted) throws IOException {
 		super(fs);
+		retain();
 		this.zkfs = fs;
 		logger.trace("ZKFS {} {}: open inode {} - (0x{}), {} open",
 				Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),

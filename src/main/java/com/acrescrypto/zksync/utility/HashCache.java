@@ -45,15 +45,15 @@ public class HashCache<K,V> {
 		return result;
 	}
 	
-	protected synchronized V add(K key) throws IOException {
+	protected V add(K key) throws IOException {
 		V result = lookup.getValue(key);
 		if(result == null) return null;
 		return add(key, result);
 	}
 	
 	public synchronized V add(K key, V value) throws IOException {
-		resetKey(key);
 		cache.put(key, value);
+		resetKey(key);
 		enforceCapacityLimit();
 		return value;
 	}
@@ -76,10 +76,12 @@ public class HashCache<K,V> {
 			}
 			
 			cache.clear();
+			evictionQueue.clear();
 		} catch(IOException exc) {
 			// remove the stuff we successfully evicted before re-raising the exception
 			for(K key : toRemove) {
 				cache.remove(key);
+				evictionQueue.remove(key);
 			}
 			
 			throw exc;
