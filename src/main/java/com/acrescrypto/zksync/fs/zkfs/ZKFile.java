@@ -26,7 +26,7 @@ public class ZKFile extends File {
 	protected boolean dirty; /** true if file has been modified since last flush */
 	protected boolean trusted; /** verify page signatures when reading <=> !trusted */
 	protected boolean closed, closing; /** is this file closed? */
-	protected int retainCount = 1;
+	protected int retainCount = 0;
 	
 	public final static int O_LINK_LITERAL = 1 << 16; /** treat symlinks as literal files, needed for lowlevel symlink operations */
 	
@@ -42,6 +42,7 @@ public class ZKFile extends File {
 				fs.getOpenFiles().size());
 		this.zkfs = fs;
 		this.trusted = true; // set to false for inode table
+		retain();
 	}
 	
 	/** Open a file handle at a path */

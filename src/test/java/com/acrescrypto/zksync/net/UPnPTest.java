@@ -15,7 +15,7 @@ public class UPnPTest {
 	@BeforeClass
 	public static void beforeAll() {
 		TestUtils.startDebugMode();
-		UPnP.debug = false;
+		UPnP.disableDebug();
 	}
 	
 	@AfterClass

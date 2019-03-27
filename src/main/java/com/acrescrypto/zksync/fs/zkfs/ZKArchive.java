@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,8 @@ public class ZKArchive implements AutoCloseable {
 	
 	public final static int DEFAULT_PAGE_SIZE = 65536;
 
+	protected static ConcurrentHashMap<ZKArchive,Throwable> activeArchives = new ConcurrentHashMap<>();
+	
 	protected Logger logger = LoggerFactory.getLogger(ZKArchive.class);
 
 	// TODO Someday: (refactor) it'll hurt, but crypto and storage need to go away and everyone needs to access through config
@@ -43,6 +46,18 @@ public class ZKArchive implements AutoCloseable {
 	protected HashMap<Long,byte[]> allPageTags;
 	protected SubscriptionToken<Integer> tok;
 	protected boolean closed;
+	
+	public static void addActiveArchive(ZKArchive archive) {
+		activeArchives.put(archive, new Throwable());
+	}
+	
+	public static void removeActiveArchive(ZKArchive archive) {
+		activeArchives.remove(archive);
+	}
+	
+	public static ConcurrentHashMap<ZKArchive,Throwable> getActiveArchives() {
+		return activeArchives;
+	}
 	
 	protected ZKArchive(ZKArchiveConfig config) throws IOException {
 		this.master = config.accessor.master;
@@ -80,6 +95,10 @@ public class ZKArchive implements AutoCloseable {
 		if(!isCacheOnly()) { // only need the list for non-networked archives, which are not cache-only
 			rescanPageTags();
 		}
+		
+		if(FS.fileHandleTelemetryEnabled) {
+			addActiveArchive(this);
+		}
 	}
 	
 	public void close() {
@@ -100,6 +119,10 @@ public class ZKArchive implements AutoCloseable {
 		}
 		
 		config.close();
+		
+		if(FS.fileHandleTelemetryEnabled) {
+			removeActiveArchive(this);
+		}
 	}
 	
 	public boolean isClosed() {

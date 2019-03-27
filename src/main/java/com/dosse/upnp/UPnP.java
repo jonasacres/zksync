@@ -31,10 +31,21 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Federico
  */
 public class UPnP {
-	public static boolean debug = false;
+	private static boolean debug = false;
 	private static ConcurrentHashMap<Integer,Boolean> tcpMappings = new ConcurrentHashMap<>();
 	private static ConcurrentHashMap<Integer,Boolean> udpMappings = new ConcurrentHashMap<>();
 	private static Gateway defaultGW = null;
+
+	public static void enableDebug() {
+		debug = true;
+	}
+	
+	public static void disableDebug() {
+		debug = false;
+		tcpMappings.clear();
+		udpMappings.clear();
+	}	
+	
 	private static final GatewayFinder finder = new GatewayFinder() {
 		@Override
 		public void gatewayFound(Gateway g) {
@@ -184,5 +195,4 @@ public class UPnP {
 		if(debug) return "127.0.0.1";
 		return defaultGW.getLocalIP();
 	}
-
 }

@@ -165,6 +165,7 @@ public class TCPPeerSocketListenerTest {
 		listener.close();
 		archive.close();
 		master.close();
+		UPnP.closePortTCP(TEST_PORT);
 	}
 	
 	@AfterClass
@@ -349,7 +350,6 @@ public class TCPPeerSocketListenerTest {
 	}
 	
 	
-	// TODO: capability to stub these out... don't need live queries!
 	@Test
 	public void testDoesNotInvokeUPnPIfDisabled() {
 		assertFalse(UPnP.isMappedTCP(listener.getPort()));

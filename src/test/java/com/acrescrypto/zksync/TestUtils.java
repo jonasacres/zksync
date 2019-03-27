@@ -165,12 +165,12 @@ public class TestUtils {
 	public static void stopDebugMode() {
 		CryptoSupport.cheapArgon2 = false;
 		FS.fileHandleTelemetryEnabled = false;
-		UPnP.debug = false;
+		UPnP.disableDebug();
 	}
 
 	public static void startDebugMode() {
 		CryptoSupport.cheapArgon2 = true;
 		FS.fileHandleTelemetryEnabled = true;
-		UPnP.debug = true;
+		UPnP.enableDebug();
 	}
 }
