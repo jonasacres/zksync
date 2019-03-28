@@ -114,25 +114,37 @@ public class HashCacheTest {
 	
 	@Test
 	public void testRemoveEvictsObjectFromCache() throws IOException {
-		cache.get(1234);
+		CacheTestObject obj = cache.get(1234);
+		assertFalse(obj.isEvicted());
 		cache.remove(1234);
+		assertTrue(obj.isEvicted());
 		assertFalse(cache.hasCached(1234));
 	}
 	
 	@Test
 	public void testRemoveAllEvictsAllObjectsFromCache() throws IOException {
+		LinkedList<CacheTestObject> objs = new LinkedList<>();
 		for(int i = 0; i < cacheCapacity; i++) {
-			cache.get(i);
+			objs.add(cache.get(i));
 		}
 		
 		cache.removeAll();
 		assertEquals(0, cache.cachedSize());
+		
+		for(CacheTestObject obj : objs) {
+			assertTrue(obj.isEvicted());
+		}
 	}
 	
 	@Test
 	public void testAddEvictsObjectsWhenCapacityHit() throws IOException {
+		LinkedList<CacheTestObject> objs = new LinkedList<>();
 		for(int i = 0; i < 2*cacheCapacity; i++) {
-			cache.get(i);
+			objs.add(cache.get(i));
+		}
+		
+		for(CacheTestObject obj : objs) {
+			assertEquals(obj.key < cacheCapacity, obj.isEvicted());
 		}
 		
 		assertEquals(cacheCapacity, cache.cachedSize());

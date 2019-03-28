@@ -305,16 +305,18 @@ public class FSMirror {
 			}
 	
 			synchronized(this) {
-				String[] list = zkfs.opendir("/").listRecursive();
-				for(String path : list) {
-					if(!isChanged(path)) continue;
-					syncPathArchiveToTarget(oldFs, path);
-				}
-	
-				pruneFsToList(target, list);
-				
-				if(wasWatching && !isWatching()) {
-					startWatch();
+				try(ZKDirectory dir = zkfs.opendir("/")) {
+					String[] list = dir.listRecursive();
+					for(String path : list) {
+						if(!isChanged(path)) continue;
+						syncPathArchiveToTarget(oldFs, path);
+					}
+		
+					pruneFsToList(target, list);
+					
+					if(wasWatching && !isWatching()) {
+						startWatch();
+					}
 				}
 			}
 		} finally {

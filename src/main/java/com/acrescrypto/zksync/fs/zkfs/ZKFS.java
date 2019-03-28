@@ -82,6 +82,25 @@ public class ZKFS extends FS {
 						s);
 			}
 		});
+		
+		int cacheSize = revision.getArchive().getMaster().getGlobalConfig().getInt("fs.settings.directoryCacheSize");
+		this.directoriesByPath = new HashCache<String,ZKDirectory>(cacheSize, (String path) -> {
+			logger.trace("ZKFS {} {}: Caching directory {}",
+					Util.formatArchiveId(revision.getConfig().getArchiveId()),
+					Util.formatRevisionTag(baseRevision),
+					path);
+			assertPathIsDirectory(path);
+			ZKDirectory dir = new ZKDirectory(this, path);
+			return dir;
+		}, (String path, ZKDirectory dir) -> {
+			logger.trace("ZKFS {} {}: Evicting directory {} from cache",
+					Util.formatArchiveId(revision.getConfig().getArchiveId()),
+					Util.formatRevisionTag(baseRevision),
+					path);
+			dir.commit();
+			dir.close();
+		});
+
 		rebase(revision);
 	}
 	
@@ -381,9 +400,11 @@ public class ZKFS extends FS {
 	}
 
 	@Override
-	public synchronized ZKDirectory opendir(String path) throws IOException {
+	public ZKDirectory opendir(String path) throws IOException {
 		String canonPath = canonicalPath(path);
-		return directoriesByPath.get(canonPath).retain();
+		synchronized(this) {
+			return directoriesByPath.get(canonPath).retain();
+		}
 	}
 
 	@Override
@@ -670,8 +691,6 @@ public class ZKFS extends FS {
 				Util.formatRevisionTag(revision));
 		this.archive = revision.getArchive();
 		
-		int cacheSize = archive.getMaster().getGlobalConfig().getInt("fs.settings.directoryCacheSize");
-		
 		this.baseRevision = revision;
 		
 		if(this.directoriesByPath != null) {
@@ -682,23 +701,6 @@ public class ZKFS extends FS {
 			this.inodeTable.close();
 		}
 
-		this.directoriesByPath = new HashCache<String,ZKDirectory>(cacheSize, (String path) -> {
-			logger.trace("ZKFS {} {}: Caching directory {}",
-					Util.formatArchiveId(revision.getConfig().getArchiveId()),
-					Util.formatRevisionTag(baseRevision),
-					path);
-			assertPathIsDirectory(path);
-			ZKDirectory dir = new ZKDirectory(this, path);
-			return dir;
-		}, (String path, ZKDirectory dir) -> {
-			logger.trace("ZKFS {} {}: Evicting directory {} from cache",
-					Util.formatArchiveId(revision.getConfig().getArchiveId()),
-					Util.formatRevisionTag(baseRevision),
-					path);
-			dir.commit();
-			dir.close();
-		});
-		
 		this.inodeTable = new InodeTable(this, revision);
 		this.dirty = false;
 	}
@@ -780,5 +782,9 @@ public class ZKFS extends FS {
 	
 	public int getRetainCount() {
 		return retainCount;
+	}
+
+	public int getDirectoryCacheSize() {
+		return directoriesByPath.cachedSize();
 	}
 }

@@ -13,6 +13,7 @@ import javax.ws.rs.core.MediaType;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKFile;
 import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.State;
@@ -85,6 +86,10 @@ public class GlobalResource {
 			HashMap<String, Object> info = new HashMap<>();
 			info.put("trace", renderStackTrace(trace));
 			info.put("path", file.getPath());
+			if(file instanceof ZKFile) {
+				ZKFile zkfile = (ZKFile) file;
+				info.put("retainCount", zkfile.getRetainCount());
+			}
 			info.put("fsClass", file.getFs().getClass().getCanonicalName());
 			files.add(info);
 		});
@@ -114,6 +119,7 @@ public class GlobalResource {
 			HashMap<String, Object> info = new HashMap<>();
 			info.put("fsClass", fs.getClass().getCanonicalName());
 			info.put("trace", renderStackTrace(trace));
+			info.put("directoryCacheSize", fs.getDirectoryCacheSize());
 			
 			LinkedList<LinkedList<HashMap<String, Object>>> retentions = new LinkedList<>();
 			for(Throwable retention : fs.getRetentions()) {
