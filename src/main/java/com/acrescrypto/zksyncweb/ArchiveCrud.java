@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -136,7 +137,7 @@ public class ArchiveCrud {
 		} catch(ENOENTException exc) {
 			throw XAPIResponse.notFoundErrorResponse();
 		} catch(EISDIRException exc) {
-			String[] listings = null;
+			Collection<String> listings = null;
 			boolean isRecursive = Boolean.parseBoolean(params.getOrDefault("recursive", "false"));
 			boolean isListStat = Boolean.parseBoolean(params.getOrDefault("liststat", "false"));
 			
@@ -156,7 +157,7 @@ public class ArchiveCrud {
 			
 			if(isListStat) {
 				// ?liststat=true causes stat information to be included with directory listings
-				ArrayList<XPathStat> pathStats = new ArrayList<>(listings.length);
+				ArrayList<XPathStat> pathStats = new ArrayList<>(listings.size());
 				for(String subpath : listings) {
 					String fqSubpath = path + "/" + subpath;
 					Inode inode = fs.inodeForPath(fqSubpath);

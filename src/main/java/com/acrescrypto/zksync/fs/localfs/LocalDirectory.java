@@ -6,12 +6,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
 
 import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.fs.Stat;
 
 public class LocalDirectory implements Directory {
 	
@@ -24,12 +26,12 @@ public class LocalDirectory implements Directory {
 		if(!fs.stat(path).isDirectory()) throw new EISNOTDIRException(path + ": not a directory");
 	}
 	
-	public String[] list() throws IOException {
+	public Collection<String> list() throws IOException {
 		return list(0);
 	}
 
 	@Override
-	public String[] list(int opts) throws IOException {
+	public Collection<String> list(int opts) throws IOException {
 		ArrayList<String> paths = new ArrayList<String>();
 		// Files.newDirectoryStream(Paths.get(fs.root, path));
 		try(DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(fs.root, path))) {
@@ -40,49 +42,77 @@ public class LocalDirectory implements Directory {
 			}
 		}
 		
-		int size = paths.size();
-		if((opts & LIST_OPT_INCLUDE_DOT_DOTDOT) != 0) size += 2;
-		String[] retval = new String[size];
 		if((opts & LIST_OPT_INCLUDE_DOT_DOTDOT) != 0) {
-			retval[retval.length-2] = ".";
-			retval[retval.length-1] = "..";
+			paths.add(".");
+			paths.add("..");
 		}
 		
-		for(int i = 0; i < paths.size(); i++) retval[i] = paths.get(i);
-		return retval;
+		return paths;
 	}
 	
 	@Override
-	public String[] listRecursive() throws IOException {
+	public boolean walk(DirectoryWalkCallback cb) throws IOException {
+		return walk(0, cb);
+	}
+	
+	@Override
+	public boolean walk(int opts, DirectoryWalkCallback cb) throws IOException {
+		try {
+			walkRecursiveIterate(opts, "", cb);
+			return true;
+		} catch(WalkAbortException exc) {
+			return false;
+		}
+	}
+	
+	@Override
+	public Collection<String> listRecursive() throws IOException {
 		return listRecursive(0);
 	}
 	
 	@Override
-	public String[] listRecursive(int opts) throws IOException {
+	public Collection<String> listRecursive(int opts) throws IOException {
 		ArrayList<String> results = new ArrayList<String>();
-		listRecursiveIterate(opts, results, "");
-		String[] buf = new String[results.size()];
-		return results.toArray(buf);
+		walk(opts, (path, stat, isBrokenSymlink)->{
+			results.add(path);
+		});
+		return results;
 	}
 	
-	protected void listRecursiveIterate(int opts, ArrayList<String> results, String prefix) throws IOException {
+	protected void walkRecursiveIterate(int opts, String prefix, DirectoryWalkCallback cb) throws IOException {
 		for(String entry : list(opts & ~Directory.LIST_OPT_OMIT_DIRECTORIES)) {
 			String subpath = Paths.get(prefix, entry).toString(); // what we return in our results
 			String realSubpath = Paths.get(path, entry).toString(); // what we can look up directly in fs
 			try {
-				if(fs.stat(Paths.get(path, entry).toString()).isDirectory()) {
+				Stat stat;
+				boolean isBrokenSymlink = false;
+				
+				if((opts & Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS) == 0) {
+					stat = fs.stat(realSubpath);
+				} else {
+					stat = fs.lstat(realSubpath);
+					if(stat.isSymlink() && !fs.exists(realSubpath)) {
+						isBrokenSymlink = true;
+					}
+				}
+				
+				if(stat.isDirectory()) {
 					boolean isDotDir = entry.equals(".") || entry.equals("..");
 					if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
-						results.add(subpath);
+						cb.foundPath(subpath, stat, isBrokenSymlink);
 					}
 					
-					if(!isDotDir) fs.opendir(realSubpath).listRecursiveIterate(opts, results, subpath);
+					if(!isDotDir) fs.opendir(realSubpath).walkRecursiveIterate(opts, subpath, cb);
 				} else {
-					results.add(subpath);
+					cb.foundPath(subpath, stat, isBrokenSymlink);
 				}
-			} catch(ENOENTException|EACCESException exc) {
-				// we can get an ENOENT on a broken symlink, and an EACCES on a directory with bad permissions
-				results.add(subpath);
+			} catch(ENOENTException exc) {
+				// busted symlink
+				Stat lstat = fs.lstat(realSubpath);
+				cb.foundPath(subpath, lstat, true);
+			} catch(EACCESException exc) {
+				// directory with bad permissions
+				cb.foundPath(subpath, null, false);
 			}
 		}
 	}

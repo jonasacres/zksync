@@ -11,7 +11,6 @@ import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.concurrent.TimeUnit;
 
@@ -306,13 +305,12 @@ public class FSMirror {
 	
 			synchronized(this) {
 				try(ZKDirectory dir = zkfs.opendir("/")) {
-					String[] list = dir.listRecursive();
-					for(String path : list) {
-						if(!isChanged(path)) continue;
+					dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink)->{
+						if(!isChanged(path)) return;
 						syncPathArchiveToTarget(oldFs, path);
-					}
+					});
 		
-					pruneFsToList(target, list);
+					pruneFs(target, zkfs);
 					
 					if(wasWatching && !isWatching()) {
 						startWatch();
@@ -329,38 +327,30 @@ public class FSMirror {
 	public synchronized void syncTargetToArchive() throws IOException {
 		Directory dir = null;
 		try {
-			String[] list = target.opendir("/").listRecursive();
-
-			for(String path : list) {
+			target.opendir("/").walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, brokenSymlink)->{
 				copy(target, zkfs, path);
-			}
+			});
 
-			pruneFsToList(zkfs, list);
+			pruneFs(zkfs, target);
 		} finally {
 			if(dir != null) dir.close();
 		}
 	}
 
-	protected void pruneFsToList(FS fs, String[] list) throws IOException {
-		HashSet<String> paths = new HashSet<>();
-		for(String path : list) {
-			paths.add(path);
+	protected void pruneFs(FS pruned, FS reference) throws IOException {
+		LinkedList<String> toPrune = new LinkedList<>();
+		
+		try(Directory dir = pruned.opendir("/")) {
+			dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink)->{
+				if(reference.exists(path, false)) return;
+				toPrune.add(path);
+			});
 		}
 		
-		Directory dir = null;
-		try {
-			dir = fs.opendir("/");
-			String[] localList = dir.listRecursive();
-			for(String path : localList) {
-				if(paths.contains(path)) continue;
-				try {
-					remove(fs, path, fs.lstat(path));
-				} catch(ENOENTException exc) {}
-			}
-		} finally {
-			if(dir != null) {
-				dir.close();
-			}
+		for(String path : toPrune) {
+			try {
+				remove(pruned, path, pruned.lstat(path));
+			} catch(ENOENTException exc) {}
 		}
 	}
 

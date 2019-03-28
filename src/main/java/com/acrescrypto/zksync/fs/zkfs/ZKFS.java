@@ -334,7 +334,7 @@ public class ZKFS extends FS {
 	
 	public void assertDirectoryIsEmpty(String path) throws IOException {
 		try(ZKDirectory dir = opendir(path)) {
-			if(dir.list().length > 0) throw new ENOTEMPTYException(path);
+			if(dir.list().size() > 0) throw new ENOTEMPTYException(path);
 		}
 	}
 

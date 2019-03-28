@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -84,7 +85,7 @@ public class DirectoryTestBase {
 			scratch.write(file, "foo".getBytes());
 		}
 		
-		String[] listed = scratch.opendir("listr").listRecursive();
+		Collection<String> listed = scratch.opendir("listr").listRecursive();
 		Set<String> listSet = new HashSet<String>();
 		for(String listItem : listed) listSet.add(listItem);
 		
@@ -101,7 +102,7 @@ public class DirectoryTestBase {
 			scratch.write(file, "foo".getBytes());
 		}
 		
-		String[] listed = scratch.opendir("listr").listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES);
+		Collection<String> listed = scratch.opendir("listr").listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES);
 		Set<String> listSet = new HashSet<String>();
 		for(String listItem : listed) listSet.add(listItem);
 		
@@ -118,12 +119,144 @@ public class DirectoryTestBase {
 			scratch.write(file, "foo".getBytes());
 		}
 		
-		String[] listed = scratch.opendir("listr").listRecursive(Directory.LIST_OPT_INCLUDE_DOT_DOTDOT);
+		Collection<String> listed = scratch.opendir("listr").listRecursive(Directory.LIST_OPT_INCLUDE_DOT_DOTDOT);
 		Set<String> listSet = new HashSet<String>();
 		for(String listItem : listed) listSet.add(listItem);
 		
+		assertEquals(listSet.size(), listed.size()); // no dupes
 		assertEquals(expected.length, listSet.size());
 		for(String expectedItem : expected) assertTrue(listSet.contains(expectedItem));
+	}
+	
+	@Test
+	public void testWalkCallsBackForEachEntry() throws IOException {
+		String[] files = { "listr/files/a/1", "listr/files/a/2", "listr/files/a/3", "listr/files/b/1", "listr/files/b/2", "listr/files/b/3" };
+		String[] expectedArray = { "files", "files/a", "files/a/1", "files/a/2", "files/a/3", "files/b", "files/b/1", "files/b/2", "files/b/3" };
+		HashSet<String> expected = new HashSet<>();
+		
+		for(String expectedPath : expectedArray) {
+			expected.add(expectedPath);
+		}
+		
+		for(String file : files) {
+			scratch.write(file, "foo".getBytes());
+		}
+		
+		try(Directory dir = scratch.opendir("listr")) {
+			dir.walk((path, stat, isBrokenSymlink)->{
+				assertTrue(expected.contains(path));
+				assertFalse(isBrokenSymlink);
+				assertEquals(stat, scratch.stat("listr/" + path));
+				expected.remove(path);
+			});
+		}
+		
+		assertTrue(expected.isEmpty());
+	}
+	
+	@Test
+	public void testWalkCallsBackForEachEntryExceptDirectoriesWhenOmitDirectoriesSpecified() throws IOException {
+		String[] files = { "listr/files/a/1", "listr/files/a/2", "listr/files/a/3", "listr/files/b/1", "listr/files/b/2", "listr/files/b/3" };
+		String[] expectedArray = { "files/a/1", "files/a/2", "files/a/3", "files/b/1", "files/b/2", "files/b/3" };
+		HashSet<String> expected = new HashSet<>();
+		
+		for(String expectedPath : expectedArray) {
+			expected.add(expectedPath);
+		}
+		
+		for(String file : files) {
+			scratch.write(file, "foo".getBytes());
+		}
+		
+		try(Directory dir = scratch.opendir("listr")) {
+			dir.walk(Directory.LIST_OPT_OMIT_DIRECTORIES, (path, stat, isBrokenSymlink)->{
+				assertTrue(expected.contains(path));
+				assertFalse(isBrokenSymlink);
+				assertEquals(stat, scratch.stat("listr/" + path));
+				expected.remove(path);
+			});
+		}
+		
+		assertTrue(expected.isEmpty());
+	}
+	
+	@Test
+	public void testWalkCallsBackForEachEntryIncludingDotAndDotDotIfRequested() throws IOException {
+		String[] files = { "listr/files/a/1", "listr/files/a/2", "listr/files/a/3", "listr/files/b/1", "listr/files/b/2", "listr/files/b/3" };
+		String[] expectedArray = { ".", "..", "files", "files/.", "files/..", "files/a", "files/a/.", "files/a/..", "files/a/1", "files/a/2", "files/a/3", "files/b", "files/b/.", "files/b/..", "files/b/1", "files/b/2", "files/b/3" };
+		HashSet<String> expected = new HashSet<>();
+		
+		for(String expectedPath : expectedArray) {
+			expected.add(expectedPath);
+		}
+		
+		for(String file : files) {
+			scratch.write(file, "foo".getBytes());
+		}
+		
+		try(Directory dir = scratch.opendir("listr")) {
+			dir.walk(Directory.LIST_OPT_INCLUDE_DOT_DOTDOT, (path, stat, isBrokenSymlink)->{
+				assertTrue(expected.contains(path));
+				assertFalse(isBrokenSymlink);
+				assertEquals(stat, scratch.stat("listr/" + path));
+				expected.remove(path);
+			});
+		}
+		
+		assertTrue(expected.isEmpty());
+	}
+	
+	@Test
+	public void testWalkSetsBrokenSymlinkFlagWhenAppropriate() throws IOException {
+		scratch.write("foo", "yadda".getBytes());
+		scratch.symlink("foo", "valid");
+		scratch.symlink("bar", "invalid");
+		
+		try(Directory dir = scratch.opendir("/")) {
+			dir.walk(0, (path, stat, isBrokenSymlink)->{
+				assertEquals(path.equals("invalid"), isBrokenSymlink);
+			});
+		}
+	}
+	
+	@Test
+	public void testWalkFollowsSymlinksByDefault() throws IOException {
+		scratch.write("a/1", "yadda".getBytes());
+		scratch.symlink("a", "b");
+		
+		HashSet<String> seen = new HashSet<>();
+		
+		try(Directory dir = scratch.opendir("/")) {
+			dir.walk(0, (path, stat, isBrokenSymlink)->{
+				assertFalse(isBrokenSymlink);
+				seen.add(path);
+			});
+		}
+		
+		assertTrue(seen.contains("a"));
+		assertTrue(seen.contains("b"));
+		assertTrue(seen.contains("a/1"));
+		assertTrue(seen.contains("b/1"));
+	}
+	
+	@Test
+	public void testWalkDoesNotFollowSymlinksWhenDontFollowSymlinksSpecified() throws IOException {
+		scratch.write("a/1", "yadda".getBytes());
+		scratch.symlink("a", "b");
+		
+		HashSet<String> seen = new HashSet<>();
+		
+		try(Directory dir = scratch.opendir("/")) {
+			dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink)->{
+				assertFalse(isBrokenSymlink);
+				seen.add(path);
+			});
+		}
+		
+		assertTrue(seen.contains("a"));
+		assertTrue(seen.contains("b"));
+		assertTrue(seen.contains("a/1"));
+		assertFalse(seen.contains("b/1"));
 	}
 
 	@Test

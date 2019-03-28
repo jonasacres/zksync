@@ -277,8 +277,8 @@ public class ZKMasterTest {
 			master.storage.write(path, ("test"+i).getBytes());
 		}
 		
-		assertNotEquals(0, master.storage.opendir("/").listRecursive().length);
+		assertNotEquals(0, master.storage.opendir("/").listRecursive().size());
 		master.purge();
-		assertEquals(0, master.storage.opendir("/").listRecursive().length);
+		assertEquals(0, master.storage.opendir("/").listRecursive().size());
 	}
 }

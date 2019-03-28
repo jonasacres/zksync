@@ -1688,7 +1688,7 @@ public class PeerConnectionTest {
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
 		fs.commitAndClose();
 		
-		int pagesExpected = archive.getStorage().opendir("/").listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES).length;
+		int pagesExpected = archive.getStorage().opendir("/").listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES).size();
 		
 		conn.setLocalPaused(false);
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_REQUEST_ALL);

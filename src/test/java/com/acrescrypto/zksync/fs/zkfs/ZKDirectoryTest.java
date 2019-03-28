@@ -8,6 +8,7 @@ import static org.junit.Assert.fail;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.Security;
+import java.util.ArrayList;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.After;
@@ -202,8 +203,8 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 			
 			zkscratch.directoriesByPath.removeAll();
 			ZKDirectory innocentDirectory = zkscratch.opendir("evil" + n);
-			assertEquals(1, innocentDirectory.list().length);
-			assertEquals("valid", innocentDirectory.list()[0]);
+			assertEquals(1, innocentDirectory.list().size());
+			assertEquals("valid", new ArrayList<String>(innocentDirectory.list()).get(0));
 		}
 	}
 	
@@ -220,10 +221,10 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 		
 		try(ZKFS fs = zkscratch.commit().getFS()) {
 			dir = fs.opendir("dir");
-			String[] list = dir.list();
+			ArrayList<String> list = new ArrayList<>(dir.list());
 			dir.close();
 			
-			assertEquals(name, list[0]);
+			assertEquals(name, list.get(0));
 		}
 	}
 	

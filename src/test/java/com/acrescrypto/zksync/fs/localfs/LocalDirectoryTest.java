@@ -13,8 +13,9 @@ import com.acrescrypto.zksync.fs.DirectoryTestBase;
 public class LocalDirectoryTest extends DirectoryTestBase {
 	
 	@Before
-	public void beforeEach() {
+	public void beforeEach() throws IOException {
 		scratch = new LocalFS(LocalFSTest.SCRATCH_DIR);
+		scratch.purge();
 	}
 	
 	@BeforeClass

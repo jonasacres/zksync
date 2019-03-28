@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.Collection;
 import java.util.LinkedList;
 
 public class DirectoryTraverser {
@@ -49,7 +50,7 @@ public class DirectoryTraverser {
 	}
 	
 	protected void addDirectory(Directory dir) throws IOException {
-		String[] subpaths = dir.list();
+		Collection<String> subpaths = dir.list();
 		for(String path : subpaths) {
 			paths.add(Paths.get(dir.getPath(), path).toString());
 		}

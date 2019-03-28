@@ -255,7 +255,7 @@ public class RAMFS extends FS {
 		return new RAMFS("/", this);
 	}
 	
-	protected Inode lookup(String path) throws ENOENTException {
+	protected Inode lookup(String path) throws IOException {
 		Inode inode = llookup(path);
 		if(inode.stat.isSymlink()) {
 			return lookup(new String(inode.data));
@@ -264,11 +264,27 @@ public class RAMFS extends FS {
 		return inode;
 	}
 	
-	protected Inode llookup(String path) throws ENOENTException {
+	protected Inode llookup(String path) throws IOException {
 		if(path.equals("")) path = "/";
 		synchronized(inodesByPath) {
 			Inode inode = inodesByPath.getOrDefault(unscopedPath(path), null);
-			if(inode == null) throw new ENOENTException(path);
+			if(inode == null) {
+				String parent = path;
+				do {
+					parent = dirname(parent);
+					Inode parentInode = inodesByPath.getOrDefault(unscopedPath(parent), null); 
+					if(parentInode != null) {
+						if(parentInode.stat.isSymlink()) {
+							String target = readlink(parent);
+							String rewrittenPath = target + "/" + path.substring(parent.length());
+							return llookup(rewrittenPath);
+						} else {
+							break;
+						}
+					}
+				} while(!parent.equals("/"));
+				throw new ENOENTException(path);
+			}
 			return inode;
 		}
 	}

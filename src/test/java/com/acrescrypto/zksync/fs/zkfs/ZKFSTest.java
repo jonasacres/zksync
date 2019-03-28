@@ -6,7 +6,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.security.Security;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -984,11 +986,11 @@ public class ZKFSTest extends FSTestBase {
 		 * return the file to the 'tags' list when done with file operation.
 		 */
 		try(ZKDirectory dir = fs.opendir("/")) {
-			String[] files = dir.listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES);
-			if(files.length == 0) throw new CantDoThatRightNowException();
-			Shuffler shuffler = new Shuffler(files.length);
+			ArrayList<String> files = new ArrayList<>(dir.listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES));
+			if(files.size() == 0) throw new CantDoThatRightNowException();
+			Shuffler shuffler = new Shuffler(files.size());
 			while(shuffler.hasNext()) {
-				String path = fs.absolutePath(files[shuffler.next()]);
+				String path = fs.absolutePath(files.get(shuffler.next()));
 				if(!tags.containsKey(path)) continue;
 				String target = null;
 				if(fs.lstat(path).isSymlink()) {
@@ -1025,7 +1027,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	public String pickRandomDirectory(ZKFS fs, PRNG prng) throws IOException {
 		try(ZKDirectory dir = fs.opendir("/")) {
-			String[] files = dir.listRecursive();
+			Collection<String> files = dir.listRecursive();
 			LinkedList<String> directories = new LinkedList<>();
 			for(String file : files) {
 				try {
@@ -1045,7 +1047,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	public String pickRandomEmptyDirectory(ZKFS fs, PRNG prng) throws IOException {
 		try(ZKDirectory dir = fs.opendir("/")) {
-			String[] files = dir.listRecursive();
+			Collection<String> files = dir.listRecursive();
 			LinkedList<String> directories = new LinkedList<>();
 			for(String file : files) {
 				try {
@@ -1055,7 +1057,7 @@ public class ZKFSTest extends FSTestBase {
 				}
 				
 				try(ZKDirectory dir2 = fs.opendir(file)) {
-					if(dir2.list().length == 0) {
+					if(dir2.list().size() == 0) {
 						directories.add(file);
 					}
 				}

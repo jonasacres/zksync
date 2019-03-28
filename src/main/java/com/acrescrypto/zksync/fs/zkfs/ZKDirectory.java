@@ -6,13 +6,16 @@ import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKDirectory extends ZKFile implements Directory {
@@ -41,12 +44,12 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	@Override
-	public String[] list() throws IOException {
+	public Collection<String> list() throws IOException {
 		return list(0);
 	}
 	
 	@Override
-	public String[] list(int opts) throws IOException {
+	public Collection<String> list(int opts) throws IOException {
 		Set<String> entrySet = new HashSet<String>(entries.keySet());
 		if((opts & LIST_OPT_INCLUDE_DOT_DOTDOT) == 0) {
 			entrySet.remove(".");
@@ -61,10 +64,9 @@ public class ZKDirectory extends ZKFile implements Directory {
 			}
 		}
 		
-		String[] sortedPaths = new String[entrySet.size()];
-		entrySet.toArray(sortedPaths);
-		Arrays.sort(sortedPaths);
-		return sortedPaths;
+		LinkedList<String> sorted = new LinkedList<>(entrySet);
+		sorted.sort(null);
+		return sorted;
 	}
 	
 	@Override
@@ -73,20 +75,36 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	@Override
-	public String[] listRecursive() throws IOException {
+	public LinkedList<String> listRecursive() throws IOException {
 		return listRecursive(0);
 	}
 	
 	@Override
-	public String[] listRecursive(int opts) throws IOException {
-		ArrayList<String> results = new ArrayList<String>();
-		HashSet<Long> inodeHistory = new HashSet<>();
-		listRecursiveIterate(opts, inodeHistory, results, "");
-		String[] buf = new String[results.size()];
-		return results.toArray(buf);
+	public LinkedList<String> listRecursive(int opts) throws IOException {
+		LinkedList<String> results = new LinkedList<String>();
+		walk(opts, (subpath, stat, broken)->{
+			results.add(subpath);
+		});
+		return results;
 	}
 	
-	protected void listRecursiveIterate(int opts, HashSet<Long> inodeHistory, ArrayList<String> results, String prefix) throws IOException {
+	@Override
+	public boolean walk(DirectoryWalkCallback cb) throws IOException {
+		return walk(0, cb);
+	}
+	
+	@Override
+	public boolean walk(int opts, DirectoryWalkCallback cb) throws IOException {
+		HashSet<Long> inodeHistory = new HashSet<>();
+		try {
+			walkRecursiveIterate(opts, inodeHistory, "", cb);
+			return true;
+		} catch(WalkAbortException exc) {
+			return false;
+		}
+	}
+	
+	protected void walkRecursiveIterate(int opts, HashSet<Long> inodeHistory, String prefix, DirectoryWalkCallback cb) throws IOException {
 		long inodeId = inode.stat.getInodeId();
 		if(inodeHistory.contains(inodeId)) return;
 		inodeHistory.add(inodeId);
@@ -95,24 +113,37 @@ public class ZKDirectory extends ZKFile implements Directory {
 			String subpath = Paths.get(prefix, entry).toString(); // what we return in our results
 			String realSubpath = Paths.get(path, entry).toString(); // what we can look up directly in fs
 			try {
-				if(fs.stat(realSubpath).isDirectory()) {
+				Stat stat;
+				boolean isInvalidSymlink = false;
+				
+				if((opts & Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS) == 0) {
+					stat = fs.stat(realSubpath);
+				} else {
+					stat = fs.lstat(realSubpath);
+					if(stat.isSymlink() && !fs.exists(realSubpath)) {
+						isInvalidSymlink = true;
+					}
+				}
+				
+				if(stat.isDirectory()) {
 					boolean isDotDir = entry.equals(".") || entry.equals("..");
 					if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
-						results.add(subpath);
+						cb.foundPath(subpath, stat, isInvalidSymlink);
 					}
 					
 					if(!isDotDir) {
 						try(ZKDirectory dir = zkfs.opendir(realSubpath)) {
-							dir.listRecursiveIterate(opts, inodeHistory, results, subpath);
+							dir.walkRecursiveIterate(opts, inodeHistory, subpath, cb);
 						}
 					}
 				} else {
-					results.add(subpath);
+					cb.foundPath(subpath, stat, isInvalidSymlink);
 				}
 			} catch(ENOENTException exc) {
 				try {
-					if(fs.lstat(realSubpath).isSymlink()) {
-						results.add(subpath);
+					Stat lstat = fs.lstat(realSubpath);
+					if(lstat.isSymlink()) {
+						cb.foundPath(subpath, lstat, true);
 					}
 				} catch(ENOENTException exc2) {
 					// ignore ENOENTs that are not just broken symlinks since someone may have deleted the path as we traversed

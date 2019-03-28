@@ -8,6 +8,7 @@ import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -272,7 +273,7 @@ public class PageQueueTest {
 	
 	@Test
 	public void testStartSendingEverythingSendsEverything() throws IOException {
-		String[] paths = archive.getStorage().opendir("/").listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES);
+		Collection<String> paths = archive.getStorage().opendir("/").listRecursive(Directory.LIST_OPT_OMIT_DIRECTORIES);
 		HashSet<String> tags = new HashSet<String>();
 		HashMap<String,Integer> seenCount = new HashMap<String,Integer>();
 		
