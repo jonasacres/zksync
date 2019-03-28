@@ -83,9 +83,9 @@ public class DiffSet {
 				ZKFS fs = rev.readOnlyFS();
 				ZKDirectory dir = fs.opendir("/")
 			) {
-				for(String path : dir.listRecursive()) {
+				dir.walk((path, stat, isBrokenSymlink)->{
 					allPaths.add(path);
-				}
+				});
 			}
 		}
 		return allPaths;
