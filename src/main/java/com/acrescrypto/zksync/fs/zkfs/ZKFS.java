@@ -203,8 +203,10 @@ public class ZKFS extends FS {
 					Util.formatArchiveId(archive.getConfig().getArchiveId()),
 					Util.formatRevisionTag(baseRevision),
 					parents);
-			return baseRevision;
 		}
+		
+		System.gc();
+		return baseRevision;
 	}
 	
 	public RevisionTag commit() throws IOException {
@@ -703,6 +705,7 @@ public class ZKFS extends FS {
 
 		this.inodeTable = new InodeTable(this, revision);
 		this.dirty = false;
+		System.gc();
 	}
 	
 	public synchronized void addMonitor(ZKFSDirtyMonitor monitor) {
