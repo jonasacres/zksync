@@ -29,6 +29,8 @@ import com.acrescrypto.zksync.utility.AppendableInputStream;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerConnection {
+	public final static boolean DISABLE_TAG_LIST = true;
+	
 	public final static byte CMD_ACCESS_PROOF = 0x00;
 	public final static byte CMD_ANNOUNCE_PEERS = 0x01;
 	public final static byte CMD_ANNOUNCE_SELF_AD = 0x02;
@@ -141,6 +143,7 @@ public class PeerConnection {
 	 * Note that the alternative forms of announceTags do NOT automatically send pages to the remote peer at this time.
 	 */
 	public void announceTag(long shortTag) {
+		if(DISABLE_TAG_LIST) return;
 		logger.trace("Swarm {} {}:{}: PeerConnection send announceTag",
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
@@ -148,6 +151,7 @@ public class PeerConnection {
 		ByteBuffer tag = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
 		tag.putLong(shortTag);
 		send(CMD_ANNOUNCE_TAGS, tag.array());
+		
 		if(wantsEverything && !hasFile(shortTag)) {
 			queue.addPageTag(PageQueue.DEFAULT_EVERYTHING_PRIORITY, shortTag);
 		}
@@ -222,6 +226,7 @@ public class PeerConnection {
 	}
 	
 	public void announceShortTags(Collection<Long> tags) {
+		if(DISABLE_TAG_LIST) return;
 		logger.trace("Swarm {} {}:{}: PeerConnection send announceShortTags",
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
@@ -235,6 +240,7 @@ public class PeerConnection {
 	}
 	
 	public void announceTags(Collection<byte[]> tags) {
+		if(DISABLE_TAG_LIST) return;
 		logger.trace("Swarm {} {}:{}: PeerConnection send announceTags",
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
@@ -248,6 +254,7 @@ public class PeerConnection {
 	}
 	
 	public void announceTags() {
+		if(DISABLE_TAG_LIST) return;
 		ZKArchive archive = socket.swarm.config.getArchive();
 		if(archive == null) {
 			send(CMD_ANNOUNCE_TAGS, new byte[0]);
@@ -573,6 +580,7 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceTags(PeerMessageIncoming msg) throws EOFException {
+		if(DISABLE_TAG_LIST) return;
 		logger.trace("Swarm {} {}:{}: PeerConnection recv announceTags",
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
@@ -766,7 +774,9 @@ public class PeerConnection {
 					socket.getPort(),
 					msg.msgId,
 					Util.bytesToHex(tag, 8));
-			announceTag(Util.shortTag(tag));
+			if(!DISABLE_TAG_LIST) {
+				announceTag(Util.shortTag(tag));
+			}
 			return;
 		}
 		

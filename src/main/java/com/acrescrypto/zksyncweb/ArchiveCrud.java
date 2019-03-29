@@ -36,11 +36,6 @@ public class ArchiveCrud {
 		boolean isQueue = Boolean.parseBoolean(params.getOrDefault("queue", "false"));
 		boolean isCancel = Boolean.parseBoolean(params.getOrDefault("cancel", "false"));
 		
-		// TODO: DELETE THIS, FOR DEBUG PURPOSES ONLY
-		boolean flushCache = Boolean.parseBoolean(params.getOrDefault("flushCache", "false"));
-		boolean makeClone = Boolean.parseBoolean(params.getOrDefault("makeClone", "false"));
-		boolean rebase = Boolean.parseBoolean(params.getOrDefault("rebase", "false"));
-		
 		while(path.startsWith("//")) path = path.substring(1);
 
 		try {
@@ -48,18 +43,6 @@ public class ArchiveCrud {
 			/* (and no fair using a background thread, either -- these requests can really pile up!) */
 			Stat stat;
 			long inodeId;
-			
-			if(makeClone) {
-				fs = fs.getBaseRevision().getFS();
-			}
-			
-			if(flushCache) {
-				fs.uncache();
-			}
-			
-			if(rebase) {
-				fs.rebase(fs.getBaseRevision());
-			}
 			
 			if(isInode) {
 				while(path.startsWith("/")) path = path.substring(1);
@@ -128,10 +111,6 @@ public class ArchiveCrud {
 			} finally {
 				if(file != null) {
 					file.close();
-				}
-				
-				if(makeClone) {
-					fs.close();
 				}
 			}
 		} catch(ENOENTException exc) {
