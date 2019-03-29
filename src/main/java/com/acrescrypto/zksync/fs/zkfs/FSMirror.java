@@ -188,9 +188,11 @@ public class FSMirror {
 						if(kind == ENTRY_CREATE && stat != null && stat.isDirectory()) {
 							watchDirectory(fullPath, watcher, pathsByKey);
 						}
-
-						if(kind != ENTRY_CREATE || stat == null || !stat.isRegularFile()) {
-							// we don't want ENTRY_CREATE for files, because that also generates ENTRY_MODIFY
+						
+						if(kind != ENTRY_CREATE || stat == null || !stat.isRegularFile() || stat.getSize() == 0) {
+							/* we don't want ENTRY_CREATE for files, because that also generates ENTRY_MODIFY...
+							 * but we DO want it if the file size is zero, because we DON'T get the MODIFY for empty files.
+							 */
 							observedTargetPathChange(realPath);
 						}
 					} catch(ENOENTException|CommandFailedException exc) {

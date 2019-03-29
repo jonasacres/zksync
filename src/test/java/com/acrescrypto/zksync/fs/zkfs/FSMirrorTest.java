@@ -981,6 +981,13 @@ public class FSMirrorTest {
 	}
 	
 	@Test
+	public void testWatchMonitorsEmptyFileCreations() throws IOException {
+		watcherTest("foo", (p)->{
+			target.write(p, new byte[0]);
+		});
+	}
+	
+	@Test
 	public void testWatchMonitorsFileCreationsInSubdirectory() throws IOException {
 		target.mkdirp("a/b/c");
 		watcherTest("a/b/c/foo", (p)->{
