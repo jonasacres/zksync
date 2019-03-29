@@ -29,7 +29,7 @@ import com.acrescrypto.zksync.utility.AppendableInputStream;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerConnection {
-	public final static boolean DISABLE_TAG_LIST = true;
+	public final static boolean DISABLE_TAG_LIST = false;
 	
 	public final static byte CMD_ACCESS_PROOF = 0x00;
 	public final static byte CMD_ANNOUNCE_PEERS = 0x01;

@@ -116,7 +116,7 @@ public class RevisionListTest {
 		RevisionTag a = archive.openBlank().commitAndClose(),
 				    b = archive.openBlank().commitAndClose();
 		assertEquals(2, list.branchTips().size());
-		Util.sleep(2*list.automergeDelayMs + 100);
+		Util.sleep(2*list.automergeDelayMs + 200);
 		RevisionTag m = list.branchTips().get(0);
 		assertEquals(1, list.branchTips().size());
 		assertNotEquals(a, m);
@@ -134,7 +134,7 @@ public class RevisionListTest {
 		
 		RevisionTag a = archive.openBlank().commitAndClose(),
 				    b = archive.openBlank().commitAndClose();
-		Util.sleep(5*list.maxAutomergeDelayMs + 100);
+		Util.sleep(5*list.maxAutomergeDelayMs + 200);
 		
 		assertEquals(2, list.branchTips().size());
 		assertTrue(list.branchTips().contains(a));

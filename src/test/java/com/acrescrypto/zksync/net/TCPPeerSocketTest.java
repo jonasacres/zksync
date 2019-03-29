@@ -254,7 +254,7 @@ public class TCPPeerSocketTest {
 			
 			if(!TCPPeerSocket.disableMakeThreads) {
 				serverReadNext();
-				serverReadNext();
+				if(!PeerConnection.DISABLE_TAG_LIST) serverReadNext();
 			}
 			
 			return this;
@@ -630,7 +630,7 @@ public class TCPPeerSocketTest {
 		ByteBuffer msgBuf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH + payload.length);
 		msgBuf.position(PeerMessage.HEADER_LENGTH);
 		msgBuf.put(payload);
-		MessageSegment segment = new MessageSegment(1234, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, msgBuf);
+		MessageSegment segment = new MessageSegment(1234, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, msgBuf);
 		
 		socket.dataReady(segment);
 		ByteBuffer received = ByteBuffer.wrap(conn.serverReadNext());
@@ -651,7 +651,7 @@ public class TCPPeerSocketTest {
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
-		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		conn.serverWrite(segment.content.array());
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
 		assertEquals(msgId, socket.messageWithId(msgId).msgId);
@@ -662,7 +662,7 @@ public class TCPPeerSocketTest {
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
-		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH+1));
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH+1));
 		conn.serverWrite(segment.content.array());
 		
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
@@ -679,7 +679,7 @@ public class TCPPeerSocketTest {
 		ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
 		buf.putInt(1234);
 		buf.putInt(-1);
-		buf.put(PeerConnection.CMD_ANNOUNCE_TAGS);
+		buf.put(PeerConnection.CMD_REQUEST_PAGE_TAGS);
 		buf.put((byte) 0);
 		buf.putShort((short) 0);
 		
@@ -693,7 +693,7 @@ public class TCPPeerSocketTest {
 		ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
 		buf.putInt(1234);
 		buf.putInt(socket.maxPayloadSize()+1);
-		buf.put(PeerConnection.CMD_ANNOUNCE_TAGS);
+		buf.put(PeerConnection.CMD_REQUEST_PAGE_TAGS);
 		buf.put((byte) 0);
 		buf.putShort((short) 0);
 		
@@ -708,7 +708,7 @@ public class TCPPeerSocketTest {
 		ByteBuffer buf = ByteBuffer.allocate(PeerMessage.HEADER_LENGTH);
 		buf.putInt(1234);
 		buf.putInt(socket.maxPayloadSize());
-		buf.put(PeerConnection.CMD_ANNOUNCE_TAGS);
+		buf.put(PeerConnection.CMD_REQUEST_PAGE_TAGS);
 		buf.put((byte) 0);
 		buf.putShort((short) 0);
 		
@@ -723,18 +723,18 @@ public class TCPPeerSocketTest {
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
-		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		conn.serverWrite(segment.content.array());
 		
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
 		PeerMessageIncoming msg = socket.messageWithId(msgId);
 		
-		segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		segment = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		conn.serverWrite(segment.content.array());
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) == null));
 		assertEquals(0, msg.bytesReceived);
 		
-		segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH+8));
+		segment = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH+8));
 		conn.serverWrite(segment.content.array());
 		assertFalse(Util.waitUntil(100, ()->msg.bytesReceived > 0));
 		assertNull(socket.messageWithId(msgId));
@@ -746,8 +746,8 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
 		
-		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
-		MessageSegment segment1 = new MessageSegment(msgId-1, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment1 = new MessageSegment(msgId-1, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		
 		conn.serverWrite(segment0.content.array());
 		conn.serverWrite(segment1.content.array());
@@ -761,12 +761,12 @@ public class TCPPeerSocketTest {
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
-		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		
 		conn.serverWrite(segment.content.array());
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
 		
-		segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		segment = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		conn.serverWrite(segment.content.array());
 		
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) == null));
@@ -777,7 +777,7 @@ public class TCPPeerSocketTest {
 		int msgId = 1234;
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
-		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		conn.serverWrite(segment.content.array());
 		
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
@@ -785,7 +785,7 @@ public class TCPPeerSocketTest {
 		socket.finishedMessage(msg);
 		assertNull(socket.messageWithId(msgId));
 		
-		segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH+8));
+		segment = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH+8));
 		conn.serverWrite(segment.content.array());
 		assertFalse(Util.waitUntil(100, ()->msg.bytesReceived > 0));
 	}
@@ -797,7 +797,7 @@ public class TCPPeerSocketTest {
 		
 		MessageSegment[] segments = new MessageSegment[PeerMessage.DEFAULT_MAX_OPEN_MESSAGES];
 		for(int i = 0; i < segments.length; i++) {
-			segments[i] = new MessageSegment(i, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+			segments[i] = new MessageSegment(i, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 			conn.serverWrite(segments[i].content.array());
 			Util.sleep(1); // make sure we get differing timestamps on everything
 		}
@@ -807,7 +807,7 @@ public class TCPPeerSocketTest {
 			assertTrue(Util.waitUntil(100, ()->socket.messageWithId(iFixed) != null));
 		}
 		
-		MessageSegment oneMore = new MessageSegment(segments.length, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment oneMore = new MessageSegment(segments.length, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		conn.serverWrite(oneMore.content.array());
 		
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(0) == null));
@@ -821,8 +821,8 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
 
-		MessageSegment segment0 = new MessageSegment(Integer.MAX_VALUE, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
-		MessageSegment segment1 = new MessageSegment(Integer.MIN_VALUE+1, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment0 = new MessageSegment(Integer.MAX_VALUE, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment1 = new MessageSegment(Integer.MIN_VALUE+1, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		
 		conn.serverWrite(segment0.content.array());
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(Integer.MAX_VALUE) != null));
@@ -839,8 +839,8 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
 
-		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
-		MessageSegment segment1 = new MessageSegment(msgId-1, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment1 = new MessageSegment(msgId-1, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		
 		conn.serverWrite(segment0.content.array());
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
@@ -861,8 +861,8 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
 
-		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
-		MessageSegment segment1 = new MessageSegment(msgId-1, PeerConnection.CMD_ANNOUNCE_TAGS, PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment1 = new MessageSegment(msgId-1, PeerConnection.CMD_REQUEST_PAGE_TAGS, PeerMessage.FLAG_FINAL, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		
 		conn.serverWrite(segment0.content.array());
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
@@ -877,8 +877,8 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
 
-		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
-		MessageSegment segment1 = new MessageSegment(msgId+1, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment1 = new MessageSegment(msgId+1, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		
 		conn.serverWrite(segment0.content.array());
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
@@ -893,7 +893,7 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
 
-		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment0 = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		
 		conn.serverWrite(segment0.content.array());
 		assertTrue(Util.waitUntil(100, ()->socket.messageWithId(msgId) != null));
@@ -907,7 +907,7 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		DummyConnection conn = new DummyConnection(socket).handshake();
 		InfiniteCircularInputStream stream = new InfiniteCircularInputStream(new byte[] { 4, 8, 15, 16, 23, 42 });
-		PeerMessageOutgoing msg = socket.makeOutgoingMessage(PeerConnection.CMD_ANNOUNCE_TAGS, stream);
+		PeerMessageOutgoing msg = socket.makeOutgoingMessage(PeerConnection.CMD_REQUEST_PAGE_TAGS, stream);
 		assertTrue(Util.waitUntil(100, ()->conn.hasAvailable()));
 		
 		MessageSegment cancel = new MessageSegment(msg.msgId, msg.cmd, (byte) (PeerMessage.FLAG_CANCEL | PeerMessage.FLAG_FINAL), ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
@@ -925,7 +925,7 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		new DummyConnection(socket).handshake();
 
-		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		assertEquals(msgId, segment.msg.msgId);
 		socket.sendMessage(segment);
 		assertNotEquals(msgId, segment.msg.msgId);
@@ -937,7 +937,7 @@ public class TCPPeerSocketTest {
 		TCPPeerSocket.disableMakeThreads = false;
 		new DummyConnection(socket).handshake();
 
-		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_ANNOUNCE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
+		MessageSegment segment = new MessageSegment(msgId, PeerConnection.CMD_REQUEST_PAGE_TAGS, (byte) 0, ByteBuffer.allocate(PeerMessage.HEADER_LENGTH));
 		assertEquals(msgId, segment.msg.msgId);
 		socket.sendMessage(segment);
 		assertEquals(msgId, segment.msg.msgId);

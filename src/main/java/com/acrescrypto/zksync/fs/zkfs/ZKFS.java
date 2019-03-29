@@ -205,7 +205,6 @@ public class ZKFS extends FS {
 					parents);
 		}
 		
-		System.gc();
 		return baseRevision;
 	}
 	
@@ -705,7 +704,6 @@ public class ZKFS extends FS {
 
 		this.inodeTable = new InodeTable(this, revision);
 		this.dirty = false;
-		System.gc();
 	}
 	
 	public synchronized void addMonitor(ZKFSDirtyMonitor monitor) {
