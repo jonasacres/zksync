@@ -106,7 +106,7 @@ public class RequestPool {
 			this.deserializer = deserializer;
 		}
 		
-		public byte[] serialize() {
+		public synchronized byte[] serialize() {
 			int recordSize = 0;
 			if(!list.isEmpty()) {
 				recordSize = serializer.serialize(list.getFirst().item).length;
@@ -135,7 +135,7 @@ public class RequestPool {
 			}
 		}
 		
-		public boolean add(int priority, T item) {
+		public synchronized boolean add(int priority, T item) {
 			long hash = getHash(item);
 			HashListEntry<T> entry = map.get(hash);
 			if(entry != null) {
@@ -150,7 +150,7 @@ public class RequestPool {
 			return true;
 		}
 		
-		public void remove(T entry) {
+		public synchronized void remove(T entry) {
 			long hash = getHash(entry);
 			list.remove(entry);
 			map.remove(hash);

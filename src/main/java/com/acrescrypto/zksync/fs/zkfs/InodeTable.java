@@ -266,10 +266,15 @@ public class InodeTable extends ZKFile {
 	
 	/** return an inode with a given ID */
 	public synchronized Inode inodeWithId(long inodeId) throws IOException {
-		if(closed) {
+		if(closed || closing) {
 			throw new ClosedException();
 		}
-		return inodesByPage.get(pageNumForInodeId(inodeId))[pageOffsetForInodeId(inodeId)];
+		try {
+			return inodesByPage.get(pageNumForInodeId(inodeId))[pageOffsetForInodeId(inodeId)];
+		} catch(NullPointerException exc) {
+			exc.printStackTrace();
+			throw exc;
+		}
 	}
 	
 	/** test if table contains an inode with the given ID 

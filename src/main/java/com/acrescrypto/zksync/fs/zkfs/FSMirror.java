@@ -61,6 +61,14 @@ public class FSMirror {
 		this.target = target;
 		this.lastRev = zkfs.baseRevision;
 	}
+	
+	public FS getTarget() {
+		return target;
+	}
+	
+	public ZKFS getZKFS() {
+		return zkfs;
+	}
 
 	public boolean isWatching() {
 		return watchFlag.isTrue();
@@ -119,6 +127,7 @@ public class FSMirror {
 
 				Path basePath = Paths.get(((LocalFS) target).getRoot());
 				String realPath = basePath.relativize(subdir).toString();
+				
 				suspectedTargetPathChange(realPath);
 
 				return FileVisitResult.CONTINUE;
@@ -141,6 +150,10 @@ public class FSMirror {
 					break;
 				}
 			}
+		} catch(Throwable exc) {
+			logger.error("FS {}: Watch thread caught exception", exc);
+			exc.printStackTrace();
+			throw exc;
 		} finally {
 			try {
 				watcher.close();
@@ -208,7 +221,7 @@ public class FSMirror {
 						Util.formatArchiveId(zkfs.archive.config.archiveId),
 						exc);
 			} finally {
-				if(!key.reset()) return false;
+				key.reset();
 			}
 		} catch (InterruptedException e) {
 		}
@@ -222,10 +235,12 @@ public class FSMirror {
 		 */
 		LinkedList<String> suspected = new LinkedList<>();
 		for(Path path : pathsByKey.values()) {
-			if(!target.exists(path.toString())) {
-				Path basePath = Paths.get(((LocalFS) target).getRoot());
-				String realPath = basePath.relativize(path).toString();
-				suspected.add(realPath.toString());
+			Path basePath = Paths.get(((LocalFS) target).getRoot());
+			String realPath = basePath.relativize(path).toString();
+			if(!target.exists(realPath.toString())) {
+				if(realPath.length() > 0) {
+					suspected.add(realPath.toString());
+				}
 			}
 		}
 		
@@ -396,6 +411,7 @@ public class FSMirror {
 
 	protected Stat copy(FS src, FS dest, String path) throws IOException {
 		Stat srcStat = null, destStat = null;
+
 		copyParentDirectories(src, dest, path);
 		try {
 			srcStat = src.lstat(path);
@@ -428,6 +444,8 @@ public class FSMirror {
 	}
 
 	protected void copyParentDirectories(FS src, FS dest, String path) throws IOException {
+		if(path.equals("/")) return;
+		
 		tracelog(src, dest, path, "copy parent directories");
 		String dir = src.dirname(path);
 		if(!dest.exists(dir)) {

@@ -930,7 +930,7 @@ public class ZKFSTest extends FSTestBase {
 		Util.sleep(deadline - System.currentTimeMillis());
 		long lastUpdate = System.currentTimeMillis();
 		int lastThreadCount = threads.size();
-		while(lastThreadCount != 0 && System.currentTimeMillis() - lastUpdate < 5000) {
+		while(lastThreadCount != 0 && System.currentTimeMillis() - lastUpdate < 10000) {
 			if(threads.size() != lastThreadCount) {
 				lastThreadCount = threads.size();
 				lastUpdate = System.currentTimeMillis();

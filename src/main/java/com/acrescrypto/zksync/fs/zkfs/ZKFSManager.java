@@ -106,7 +106,7 @@ public class ZKFSManager implements AutoCloseable {
 		}
 	}
 	
-	public void notifyNewRevtag(RevisionTag revtag) {
+	public synchronized void notifyNewRevtag(RevisionTag revtag) {
 		RevisionTag latest = fs.archive.config.revisionList.latest();
 		boolean isDescendent = false;
 		try {
@@ -391,5 +391,9 @@ public class ZKFSManager implements AutoCloseable {
 	
 	public void setAutomerge(boolean automerging) {
 		fs.getArchive().getConfig().getRevisionList().setAutomerge(automerging);
+	}
+	
+	public FSMirror getMirror() {
+		return mirror;
 	}
 }

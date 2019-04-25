@@ -38,4 +38,14 @@ public class PRNG {
 	public long getLong() {
 		return rng.nextLong();
 	}
+
+	public long getLong(long bound) {
+		if(bound <= 0) throw new IllegalArgumentException("Bound " + bound + " not legal; must be strictly positive.");
+		long max = bound * (Long.MAX_VALUE/bound);
+		while(true) {
+			long v = rng.nextLong();
+			if(v < 0 || v >= max) continue;
+			return v % bound;
+		}
+	}
 }

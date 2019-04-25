@@ -164,13 +164,15 @@ public class Util {
 	
 	public static boolean waitUntil(int maxDelay, WaitTest test) {
 		long endTime = maxDelay <= 0 ? Long.MAX_VALUE : System.currentTimeMillis() + maxDelay;
-		while(System.currentTimeMillis() < endTime && !test.test()) {
-			try {
-				Thread.sleep(1);
-			} catch(InterruptedException exc) {}
+		boolean passed = false;
+		while(System.currentTimeMillis() < endTime && !passed) {
+			passed = test.test();
+			if(!passed) {
+				sleep(1);
+			}
 		}
 		
-		return System.currentTimeMillis() < endTime;
+		return passed || System.currentTimeMillis() < endTime;
 	}
 	
 	public static void blockOn(WaitTest test) {

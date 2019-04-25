@@ -165,7 +165,7 @@ public class TCPPeerSocketListenerTest {
 		listener.close();
 		archive.close();
 		master.close();
-		UPnP.closePortTCP(TEST_PORT);
+		UPnP.clearDebugMappings();
 	}
 	
 	@AfterClass

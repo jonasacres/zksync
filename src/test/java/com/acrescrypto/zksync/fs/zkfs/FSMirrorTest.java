@@ -1198,4 +1198,22 @@ public class FSMirrorTest {
 		mirror.syncArchiveToTarget();
 		assertEquals(linkTarget, target.readlink_unsafe(link));
 	}
+	
+	@Test
+	public void testDeleteDoesNotCauseDeafening() throws IOException {
+		target.write("somefile", "just here to make the data directory".getBytes());
+		mirror.syncTargetToArchive();
+		mirror.startWatch();
+		
+		String path = "testdir/dir2";
+		target.mkdirp(path);
+		assertTrue(Util.waitUntil(100, ()->zkfs.exists(path)));
+		
+		target.rmrf(path);
+		assertTrue(Util.waitUntil(100, ()->!zkfs.exists(path)));
+		
+		String path2 = "testfile";
+		target.write(path2, "somebytes".getBytes());
+		assertTrue(Util.waitUntil(100, ()->zkfs.exists(path2)));
+	}
 }

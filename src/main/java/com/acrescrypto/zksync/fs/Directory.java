@@ -7,10 +7,6 @@ public interface Directory extends AutoCloseable {
 	public interface DirectoryWalkCallback {
 		void foundPath(String path, Stat stat, boolean isBrokenSymlink) throws IOException;
 	}
-	
-	public class WalkAbortException extends RuntimeException {
-		private static final long serialVersionUID = 1L;
-	}
 
 	public final static int LIST_OPT_OMIT_DIRECTORIES = 1 << 0;
 	public final static int LIST_OPT_INCLUDE_DOT_DOTDOT = 1 << 1;

@@ -38,13 +38,18 @@ public class UPnP {
 
 	public static void enableDebug() {
 		debug = true;
+		clearDebugMappings();
 	}
 	
 	public static void disableDebug() {
 		debug = false;
+		clearDebugMappings();
+	}
+	
+	public static void clearDebugMappings() {
 		tcpMappings.clear();
 		udpMappings.clear();
-	}	
+	}
 	
 	private static final GatewayFinder finder = new GatewayFinder() {
 		@Override

@@ -10,6 +10,7 @@ import java.util.Set;
 import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.WalkAbortException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
