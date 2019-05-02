@@ -285,7 +285,8 @@ public class ZKDirectory extends ZKFile implements Directory {
 		zkfs.lockedOperation(()->{
 			synchronized(this) {
 				assertWritable();
-				if(!entries.get("..").equals(this.getStat().getInodeId())) {
+				Long parentInodeId = entries.get("..");
+				if(parentInodeId != null && !parentInodeId.equals(this.getStat().getInodeId())) {
 					try(ZKDirectory parent = zkfs.opendir(fs.dirname(this.path))) {
 						parent.getInode().removeLink();
 						parent.unlink(fs.basename(this.path));

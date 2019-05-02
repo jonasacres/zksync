@@ -47,10 +47,15 @@ public class TestUtils {
 			if(thread.getName().equals(name)) return true;
 		}
 		
+		/* Commenting this block out in case the issue noted below reappears, but on JDK 11.0.2 there
+		 * appears to be no issue with stale cache worker threads when running UniversalTests as of
+		 * 99d77cb (testing May 2019).
+		 * 
+		 * Delete this entirely in 2020 if the issue does not reappear.
 		// Since moving to JDK11, cached worker threads seem to wait 60s to close. Ugh! Just tolerate those...
 		if(backtrace.length > 0 && backtrace[0].getClassName().equals("jdk.internal.misc.Unsafe")) {
 			return true;
-		}
+		} */
 		
 		return false;
 	}

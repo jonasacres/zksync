@@ -232,11 +232,15 @@ public class Page {
 				file.getFS().getArchive().getConfig().waitForPageReady(pageTag);
 			}
 			
-			byte[] plaintext = SignedSecureFile
-			  .withTag(pageTag, file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.pubKey)
-			  .read(!file.trusted);
-			
-			contents.put(plaintext);
+			try {
+				byte[] plaintext = SignedSecureFile
+				  .withTag(pageTag, file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.pubKey)
+				  .read(!file.trusted);
+				contents.put(plaintext);
+			} catch(SecurityException exc) {
+				System.out.println("Failed to read page " + pageNum + " of file with inode " + file.getInode().getStat().getInodeId() + ", identity " + file.getInode().getIdentity());
+				throw exc;
+			}
 		}
 		
 		size = contents.position();

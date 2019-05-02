@@ -110,7 +110,7 @@ public class RevisionListTest {
 	@Test
 	public void testAddBranchTipAutomaticallyMergesBranchTipsOnDelayIfAutomergeEnabled() throws IOException {
 		list.setAutomerge(true);
-		list.automergeDelayMs = 10;
+		list.automergeDelayMs = 100;
 		list.maxAutomergeDelayMs = 3*list.automergeDelayMs;
 		
 		RevisionTag a = archive.openBlank().commitAndClose(),

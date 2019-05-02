@@ -48,7 +48,11 @@ public class LocalFS extends FS {
 			if(type >= 0) {
 				stat.setType(type);
 			} else {
-				scrapeLSForUnixSpecific(stat, path.toString());
+				try {
+					scrapeLSForUnixSpecific(stat, path.toString());
+				} catch(CommandFailedException exc) {
+					throw new ENOENTException(path.toString());
+				}
 			}
 			
 			if(stat.isSymlink()) {

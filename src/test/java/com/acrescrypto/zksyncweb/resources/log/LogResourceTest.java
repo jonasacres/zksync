@@ -2,6 +2,7 @@ package com.acrescrypto.zksyncweb.resources.log;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -23,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.utility.MemLogAppender;
+import com.acrescrypto.zksync.utility.MemLogAppender.LogEvent;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.Main;
 import com.acrescrypto.zksyncweb.State;
@@ -83,7 +85,7 @@ public class LogResourceTest {
 	}
 
 	@Test
-	public void testGetLogsReturnsMostRecentInfoEventsByDefault() {
+	public void testGetLogsReturnsMostRecentInfoEventsByDefault() throws IOException, URISyntaxException {
 		int expectedLength = 1000;
 		for(int i = 0; i < expectedLength + 1; i++) {
 			logger.info("msg " + i);
@@ -245,9 +247,15 @@ public class LogResourceTest {
 		WebTestUtils.requestPost(target, "/logs", injection);
 		String expectedText = "API log entry: " + injection.getText();
 		
-		ILoggingEvent entry = MemLogAppender.sharedInstance().getEntries(1).get(0).getEntry();
-		assertEquals(expectedText, entry.getMessage());
-		assertEquals("INFO", entry.getLevel().levelStr);
+		
+		for(LogEvent event : MemLogAppender.sharedInstance().getEntries(MemLogAppender.sharedInstance().numEntries())) {
+			ILoggingEvent entry = event.getEntry();
+			if(!expectedText.equals(entry.getMessage())) continue;
+			if(!"INFO".equals(entry.getLevel().levelStr)) continue;
+			return; // we got a match! test passed.
+		}
+		
+		fail("Inserted entry not found");
 	}
 	
 	@Test

@@ -266,8 +266,31 @@ public class RevisionList implements AutoCloseable {
 		sortedTips.sort(null);
 		for(RevisionTag tag : sortedTips) {
 			i++;
-			System.out.println("\t" + i + ": " + tag);
+			System.out.println("\t" + i + ": " + Util.formatRevisionTag(tag) + " parentHash=" + Util.bytesToHex(Util.serializeLong(tag.getParentHash())));
 		}
+	}
+	
+	public synchronized String recursiveDumpStr() {
+		String s = Util.formatArchiveId(config.getArchiveId()) + " recursive revision listing\n";
+		int i = 0;
+		
+		LinkedList<RevisionTag> sortedTips = new LinkedList<>(branchTips());
+		while(!sortedTips.isEmpty()) {
+			int j = 0;
+			sortedTips.sort(null);
+			RevisionTag tag = sortedTips.pollLast();
+			s += String.format("\tTag %3d %s\n", i++, Util.formatRevisionTag(tag));
+			try {
+				for(RevisionTag parent : tag.getInfo().getParents()) {
+					s += String.format("\t\tParent %3d %s\n", j++, Util.formatRevisionTag(parent));
+				}
+			} catch (IOException exc) {
+				s += "\t\t(Caught IOException processing parents, " + exc.getClass().getSimpleName() + " " + exc.getMessage() + ")";
+				exc.printStackTrace();
+			}
+		}
+		
+		return s;
 	}
 	
 	public RevisionTag latest() {
@@ -297,39 +320,43 @@ public class RevisionList implements AutoCloseable {
 		}
 	}
 	
+	public synchronized void executeAutomerge() {
+		if(config.getArchive().isClosed()) {
+			logger.debug("RevisionList {}: Skipping automerge of closed archive",
+					Util.formatArchiveId(config.getArchiveId()));
+			return;
+		}
+		try {
+			if(config.isReadOnly()) {
+				/* obviously we're not doing any merging if we don't have the write key, so
+				 * let's just consolidate instead.
+				 */
+				// TODO API: (coverage) branch
+				logger.debug("RevisionList {}: Consolidating branches on read-only archive due to automerge thread",
+						Util.formatArchiveId(config.getArchiveId()));
+				consolidate();
+			} else {
+				logger.info("RevisionList {}: Automerge started",
+						Util.formatArchiveId(config.getArchiveId()));
+				DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
+			}
+		} catch(ClosedException exc) {
+			logger.debug("RevisionList {}: Automerge aborted since archive clsoed",
+					Util.formatArchiveId(config.getArchiveId()));
+		} catch (IOException|DiffResolutionException exc) {
+			logger.error("RevisionList {}: Error performing automerge",
+					Util.formatArchiveId(config.archiveId),
+					exc);
+		}
+	}
+	
 	protected synchronized void queueAutomerge() throws IOException, DiffResolutionException {
 		logger.debug("RevisionList {}: Queuing automerge",
 				Util.formatArchiveId(config.getArchiveId()));
 
 		if(automergeSnoozeThread == null || automergeSnoozeThread.isCancelled()) {
 			automergeSnoozeThread = new SnoozeThread(automergeDelayMs, maxAutomergeDelayMs, true, ()-> {
-				if(config.getArchive().isClosed()) {
-					logger.debug("RevisionList {}: Skipping automerge of closed archive",
-							Util.formatArchiveId(config.getArchiveId()));
-					return;
-				}
-				try {
-					if(config.isReadOnly()) {
-						/* obviously we're not doing any merging if we don't have the write key, so
-						 * let's just consolidate instead.
-						 */
-						// TODO API: (coverage) branch
-						logger.debug("RevisionList {}: Consolidating branches on read-only archive due to automerge thread",
-								Util.formatArchiveId(config.getArchiveId()));
-						consolidate();
-					} else {
-						logger.info("RevisionList {}: Automerge started",
-								Util.formatArchiveId(config.getArchiveId()));
-						DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
-					}
-				} catch(ClosedException exc) {
-					logger.debug("RevisionList {}: Automerge aborted since archive clsoed",
-							Util.formatArchiveId(config.getArchiveId()));
-				} catch (IOException|DiffResolutionException exc) {
-					logger.error("RevisionList {}: Error performing automerge",
-							Util.formatArchiveId(config.archiveId),
-							exc);
-				}
+				executeAutomerge();
 			});
 		} else {
 			automergeSnoozeThread.snooze();

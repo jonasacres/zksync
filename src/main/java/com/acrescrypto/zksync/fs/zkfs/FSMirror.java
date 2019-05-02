@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -497,6 +498,8 @@ public class FSMirror {
 
 			destFile.close();
 			destFile = null;
+		} catch(FileNotFoundException exc) {
+			logger.warn("FS {}: FSMirror unable to copy file at " + path, exc);
 		} finally {
 			ensureClosed(srcFile);
 			ensureClosed(destFile);

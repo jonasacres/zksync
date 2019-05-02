@@ -99,10 +99,15 @@ public class PageTreeChunk {
 	
 	protected void read(boolean verify) throws IOException {
 		tree.getArchive().getConfig().waitForPageReady(chunkTag);
-		byte[] serialized = SignedSecureFile
-				  .withTag(chunkTag, tree.archive.storage, textKey(), saltKey(), authKey(), tree.archive.config.pubKey)
-				  .read(verify);
-		deserialize(ByteBuffer.wrap(serialized));
+		try {
+			byte[] serialized = SignedSecureFile
+					  .withTag(chunkTag, tree.archive.storage, textKey(), saltKey(), authKey(), tree.archive.config.pubKey)
+					  .read(verify);
+			deserialize(ByteBuffer.wrap(serialized));
+		} catch(SecurityException exc) {
+			System.out.println("Failed to read page tree chunk " + index + " of file with inode " + tree.getInodeId() + ", identity " + tree.inodeIdentity);
+			throw exc;
+		}
 	}
 	
 	protected byte[] serialize() {

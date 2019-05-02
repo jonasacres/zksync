@@ -177,6 +177,7 @@ public class Inode implements Comparable<Inode> {
 	 * @see compareTo
 	 */
 	public boolean equals(Object other) {
+		if(other == null) return false;
 		if(!other.getClass().equals(this.getClass())) return false;
 		Inode __other = (Inode) other;
 		
