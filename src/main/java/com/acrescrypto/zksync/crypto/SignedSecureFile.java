@@ -30,7 +30,7 @@ public class SignedSecureFile {
 	}
 	
 	public static int fileSize(CryptoSupport crypto, int padSize) {
-		return crypto.hashLength() + crypto.asymSignatureSize() + 4 + padSize;
+		return crypto.hashLength() + crypto.symPaddedCiphertextSize(padSize) + crypto.asymSignatureSize();
 	}
 	
 	public SignedSecureFile(FS fs, Key textKey, Key saltKey, Key authKey, PrivateSigningKey privKey) {
@@ -80,11 +80,11 @@ public class SignedSecureFile {
 			System.arraycopy(contents, 0, salt, 0, salt.length);
 			
 			Key derivedKey = textKey.derive("easysafe-file-encryption", salt);
-			byte[] paddedPlaintext = derivedKey.decryptUnauthenticated(fixedIV(),
+			byte[] plaintext = derivedKey.decrypt(fixedIV(),
 					contents,
 					salt.length,
 					sigOffset - salt.length);
-			return crypto.unpad(paddedPlaintext);
+			return plaintext;
 		} catch (Exception exc) {
 			long size = -1;
 			try {
@@ -116,10 +116,9 @@ public class SignedSecureFile {
 		try {
 			// TODO Someday: (refactor) there are a lot of unnecessary buffer copies here...
 			
-			byte[] paddedPlaintext = textKey.crypto.padToSize(plaintext, 0, plaintext.length, padSize);
 			byte[] salt = saltKey.authenticate(plaintext);
 			Key encKey = textKey.derive("easysafe-file-encryption", salt);
-			byte[] ciphertext = encKey.encryptUnauthenticated(fixedIV(), paddedPlaintext);
+			byte[] ciphertext = encKey.encrypt(fixedIV(), plaintext, padSize);
 			byte[] result = new byte[salt.length + ciphertext.length + privKey.crypto.asymSignatureSize()];
 			
 			System.arraycopy(salt, 0, result, 0, salt.length);
