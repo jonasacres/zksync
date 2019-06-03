@@ -105,7 +105,7 @@ public class PageTreeChunk {
 					  .read(verify);
 			deserialize(ByteBuffer.wrap(serialized));
 		} catch(SecurityException exc) {
-			System.out.println("Failed to read page tree chunk " + index + " of file with inode " + tree.getInodeId() + ", identity " + tree.inodeIdentity);
+			System.out.println("Failed to read page tree chunk " + index + " of file with inode " + tree.getInodeId() + ", identity " + tree.inodeIdentity + " " + Page.pathForTag(chunkTag));
 			throw exc;
 		}
 	}

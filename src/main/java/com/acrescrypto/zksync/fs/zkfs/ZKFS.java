@@ -199,6 +199,7 @@ public class ZKFS extends FS {
 			}
 			baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
 			dirty = false;
+			System.out.println("ZKFS " + archive.getMaster().getName() + ": created revtag " + Util.formatRevisionTag(baseRevision) + " from " + parents);
 			logger.info("ZKFS {}: Created revtag {} from {}",
 					Util.formatArchiveId(archive.getConfig().getArchiveId()),
 					Util.formatRevisionTag(baseRevision),

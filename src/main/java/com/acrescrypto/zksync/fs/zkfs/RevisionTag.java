@@ -193,7 +193,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public String toString() {
-		return Util.bytesToHex(serialized, 4) + " height=" + height + " parentHash=" + String.format("%016x", parentHash);
+		return Util.formatRevisionTag(this) + " parentHash=" + String.format("%016x", parentHash);
 	}
 	
 	public int hashCode() {

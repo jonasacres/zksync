@@ -412,6 +412,12 @@ public class FSMirror {
 
 	protected Stat copy(FS src, FS dest, String path) throws IOException {
 		Stat srcStat = null, destStat = null;
+		RevisionTag tag;
+		if(src instanceof ZKFS) {
+			tag = ((ZKFS) src).baseRevision;
+		} else {
+			tag = ((ZKFS) dest).baseRevision;
+		}
 
 		copyParentDirectories(src, dest, path);
 		try {
@@ -420,6 +426,7 @@ public class FSMirror {
 				destStat = dest.lstat(path);
 			} catch(ENOENTException exc) {}
 			
+			System.out.println("FSMirror " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(tag) + " " + src.getClass().getSimpleName() + " -> " + dest.getClass().getSimpleName() + " " + path + " size=" + srcStat.getSize() + " inodeId=" + srcStat.getInodeId());
 			if(srcStat.isRegularFile()) {
 				copyFile(src, dest, path, srcStat, destStat);
 			} else if(srcStat.isFifo()) {

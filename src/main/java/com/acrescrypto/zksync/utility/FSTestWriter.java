@@ -21,10 +21,21 @@ public class FSTestWriter {
 	boolean printLog = true;
 	
 	public FSTestWriter(FS fs, long nonce) {
+		this(fs, nonce, 0);
+	}
+	
+	public FSTestWriter(FS fs, long nonce, int offset) {
 		this.fs = fs;
 		this.prng = CryptoSupport.defaultCrypto().prng(Util.serializeLong(nonce));
 		actor = new RandomActor(prng);
+		burn(offset);
 		setupActor();
+	}
+	
+	public void burn(int count) {
+		for(int i = 0; i < count; i++) {
+			prng.getInt();
+		}
 	}
 	
 	public void setupActor() {
@@ -64,7 +75,7 @@ public class FSTestWriter {
 	
 	protected void log(String msg) {
 		if(printLog) {
-			System.out.println(msg);
+			System.out.println("FSTestWriter: " + msg);
 		}
 	}
 	

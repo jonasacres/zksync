@@ -137,6 +137,7 @@ public class NetworkedComplexTest {
 	public ZKArchiveConfig initConfig(String peerName) throws IOException {
 		ZKMaster master = ZKMaster.open(ZKMaster.demoPassphraseProvider(),
 				new LocalFS(encryptedDataPath(peerName)));
+		master.setName(peerName);
 		master.getGlobalConfig().set("net.swarm.enabled", true);
 		master.activateDHT("127.0.0.1", 0, dhtRoot.getDHTClient().getLocalPeer());
 		ZKArchive archive = master.createDefaultArchive("TwoPeersOneWay".getBytes());
@@ -157,10 +158,11 @@ public class NetworkedComplexTest {
 		manager.setAutocommit(true);
 		manager.setAutocommitIntervalMs(1000);
 		manager.setAutomirrorPath(automirrorPath(peerName));
-		manager.setAutomirror(true);;
+		manager.setAutomirror(true);
 		manager.setAutomerge(true);
 		config.getMaster().getGlobalConfig().set("fs.settings.automergeDelayMs", 1750);
 		config.getMaster().getGlobalConfig().set("fs.settings.maxAutomergeDelayMs", 5000);
+		config.getMaster().getGlobalConfig().set("fs.settings.maxAutomergeAcquireWaitTimeMs", 1000);
 		
 		return manager;
 	}
@@ -206,7 +208,25 @@ public class NetworkedComplexTest {
 					}
 				} catch(PathMismatchException exc) {
 					// TODO: ditch this and matches when done
-					log("Path mismatch: " + exc.path + " " + exc.reason);
+					Stat bobStat = null, aliceStat = null;
+					String out = "";
+					out += "Path mismatch: " + exc.path + " " + exc.reason + "\n";
+
+					try {
+						bobStat = bob.getFs().lstat(exc.path);
+						out += "  Bob's copy: " + bobStat.getSize() + " bytes, inode " + bobStat.getInodeId() + "\n";
+					} catch(ENOENTException exc2) {
+						out += "  Bob's copy: ENOENT\n";
+					}
+					
+					try {
+						aliceStat = alice.getFs().lstat(exc.path);
+						out += "Alice's copy: " + aliceStat.getSize() + " bytes, inode " + aliceStat.getInodeId() + "\n";
+					} catch(ENOENTException exc2) {
+						out += "Alice's copy: ENOENT\n";
+					}
+					
+					log(out);
 					matches.setFalse();
 				}
 			});
@@ -242,6 +262,7 @@ public class NetworkedComplexTest {
 			try {
 				return peersMatch();
 			} catch(ENOENTException exc) {
+				log("ENOENT: " + exc.getMessage());
 				return false;
 			} catch (IOException exc) {
 				exc.printStackTrace();
@@ -343,6 +364,74 @@ public class NetworkedComplexTest {
 		}
 	}
 
+	/* In this test, both Alice and Bob take turns writing changes, then we wait to ensure sync happens.
+	 * This ensures data flows correctly in both directions, but eliminates the need for merges.
+	 */
+	@Test
+	public void indefiniteTestComplexTwoPeerPingPongEquivalent() throws IOException {
+		FSTestWriter aliceWriter = new FSTestWriter(alice.getMirror().getTarget(), 2);
+		FSTestWriter bobWriter = new FSTestWriter(bob.getMirror().getTarget(), 3);
+		long writeIntervalMs = 1500;
+		
+		assertTrue(Util.waitUntil(1000, ()->numConnections(alice) > 0));
+		assertTrue(Util.waitUntil(1000, ()->numConnections(bob) > 0));
+		
+		log("Test ready.");
+		long startTime = System.currentTimeMillis();
+		long operations = 0;
+		boolean alicesTurn = true;
+		
+		while(true) {
+			if(operations++ % 10 == 0) {
+				long elapsed = (System.currentTimeMillis() - startTime)/1000;
+				log("Time: " + new java.util.Date());
+				log("Alice revision: " + Util.formatRevisionTag(alice.getFs().getBaseRevision()));
+				log("  Bob revision: " + Util.formatRevisionTag(bob.getFs().getBaseRevision()));
+				log("\n");
+				log("        Alice TX: " + alice.getFs().getArchive().getConfig().getSwarm().getBandwidthMonitorTx().getLifetimeBytes()/1024 + " KiB, " + alice.getFs().getArchive().getConfig().getSwarm().getBandwidthMonitorTx().getBytesPerSecond()/1024 + " KiB/s");
+				log("          Bob TX: " + bob.getFs().getArchive().getConfig().getSwarm().getBandwidthMonitorTx().getLifetimeBytes()/1024 + " KiB, " + bob.getFs().getArchive().getConfig().getSwarm().getBandwidthMonitorTx().getBytesPerSecond()/1024 + " KiB/s");
+				log("\n");
+				log("        Alice RX: " + alice.getFs().getArchive().getConfig().getSwarm().getBandwidthMonitorRx().getLifetimeBytes()/1024 + " KiB, " + alice.getFs().getArchive().getConfig().getSwarm().getBandwidthMonitorRx().getBytesPerSecond()/1024 + " KiB/s");
+				log("          Bob RX: " + bob.getFs().getArchive().getConfig().getSwarm().getBandwidthMonitorRx().getLifetimeBytes()/1024 + " KiB, " + bob.getFs().getArchive().getConfig().getSwarm().getBandwidthMonitorRx().getBytesPerSecond()/1024 + " KiB/s");
+				log(operations + " operations complete, running " + elapsed + "s");
+				try {
+					assertPeersMatch();
+				} catch(Throwable exc) {
+					log("Peers do not match");
+					System.out.println("Before manual merge");
+					System.out.println("Alice " + Util.formatRevisionTag(alice.getFs().getBaseRevision()));
+					alice.getFs().getArchive().getConfig().getRevisionList().dump();
+
+					System.out.println("Bob " + Util.formatRevisionTag(bob.getFs().getBaseRevision()));
+					bob.getFs().getArchive().getConfig().getRevisionList().dump();
+					
+					System.out.println("Automerging");
+					alice.getFs().getArchive().getConfig().getRevisionList().executeAutomerge();
+					System.out.println(alice.getFs().getArchive().getConfig().getRevisionList().recursiveDumpStr());
+					bob.getFs().getArchive().getConfig().getRevisionList().executeAutomerge();
+					System.out.println(bob.getFs().getArchive().getConfig().getRevisionList().recursiveDumpStr());
+					System.out.println("Alice " + Util.formatRevisionTag(alice.getFs().getBaseRevision()));
+					alice.getFs().getArchive().getConfig().getRevisionList().dump();
+					System.out.println("Bob " + Util.formatRevisionTag(bob.getFs().getBaseRevision()));
+					bob.getFs().getArchive().getConfig().getRevisionList().dump();
+					exc.printStackTrace();
+					throw exc;
+				}
+				log("Peers match: " + Util.formatRevisionTag(alice.getFs().getBaseRevision()));
+				log("\n");
+				alicesTurn = !alicesTurn;
+			}
+			
+			if(alicesTurn) {
+				aliceWriter.act();
+			} else {
+				bobWriter.act();
+			}
+			
+			Util.sleep(writeIntervalMs);
+		}
+	}
+
 	/* In this test, both Alice and Bob write continuous changes. This means data must flow in both
 	 * directions, and merges must also take place.
 	 */
@@ -376,14 +465,22 @@ public class NetworkedComplexTest {
 					assertPeersMatch();
 				} catch(Throwable exc) {
 					log("Peers do not match");
+					System.out.println("Before manual merge");
 					System.out.println("Alice " + Util.formatRevisionTag(alice.getFs().getBaseRevision()));
 					alice.getFs().getArchive().getConfig().getRevisionList().dump();
-					alice.getFs().getArchive().getConfig().getRevisionList().executeAutomerge();
-					System.out.println(alice.getFs().getArchive().getConfig().getRevisionList().recursiveDumpStr());
+
 					System.out.println("Bob " + Util.formatRevisionTag(bob.getFs().getBaseRevision()));
 					bob.getFs().getArchive().getConfig().getRevisionList().dump();
+					
+					System.out.println("Automerging");
+					alice.getFs().getArchive().getConfig().getRevisionList().executeAutomerge();
+					System.out.println(alice.getFs().getArchive().getConfig().getRevisionList().recursiveDumpStr());
 					bob.getFs().getArchive().getConfig().getRevisionList().executeAutomerge();
 					System.out.println(bob.getFs().getArchive().getConfig().getRevisionList().recursiveDumpStr());
+					System.out.println("Alice " + Util.formatRevisionTag(alice.getFs().getBaseRevision()));
+					alice.getFs().getArchive().getConfig().getRevisionList().dump();
+					System.out.println("Bob " + Util.formatRevisionTag(bob.getFs().getBaseRevision()));
+					bob.getFs().getArchive().getConfig().getRevisionList().dump();
 					exc.printStackTrace();
 					throw exc;
 				}

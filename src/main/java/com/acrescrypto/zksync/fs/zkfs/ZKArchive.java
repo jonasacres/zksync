@@ -234,6 +234,13 @@ public class ZKArchive implements AutoCloseable {
 		}
 	}
 	
+	/** Test if we have every page of a given inode table cached locally. */
+	public boolean hasInodeTable(RevisionTag revTag) throws IOException {
+		assertOpen();
+		PageTree inodeTableTree = new PageTree(revTag.getRefTag());
+		return inodeTableTree.exists();
+	}
+	
 	/** Test if we have the first page of a given revision inode table. */
 	public boolean hasInodeTableFirstPage(RevisionTag revTag) throws IOException {
 		assertOpen();

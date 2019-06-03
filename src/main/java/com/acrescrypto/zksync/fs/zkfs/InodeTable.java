@@ -120,6 +120,7 @@ public class InodeTable extends ZKFile {
 			maxInodeId = Math.max(maxInodeId, inode.stat.getInodeId());
 		}
 		
+		System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(zkfs.baseRevision) + " scanned next inode ID " + (maxInodeId+1) + " from table of size " + inode.getStat().getSize() + ", numPages=" + inode.refTag.getNumPages());
 		return maxInodeId+1;
 	}
 	
@@ -155,6 +156,8 @@ public class InodeTable extends ZKFile {
 		long baseHeight = zkfs.baseRevision.getHeight();
 		RevisionTag revTag = new RevisionTag(inode.refTag, parentHash, 1+baseHeight);
 		zkfs.archive.config.revisionTree.addParentsForTag(revTag, parents);
+		
+		System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": produced revtag " + Util.formatRevisionTag(revTag) + " with " + revTag.getRefTag().getNumPages() + " pages, size=" + inode.getStat().getSize() + ", maxInodeId=" + (nextInodeId()-1));
 		
 		return revTag;
 	}
@@ -257,10 +260,17 @@ public class InodeTable extends ZKFile {
 				Util.formatRevisionTag(zkfs.baseRevision),
 				inodeId);
 		
-		// no point in adding to the freelist if we're already in it
+		System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(zkfs.baseRevision) + " unlink inode ID " + inodeId);
+		
+		// don't need to clear the inode if it's already clear
 		if(inode.identity != 0 || !inode.refTag.isBlank() || inode.flags != 0) {
 			inode.markDeleted();
-			freelist.freeInodeId(inodeId);
+			
+			// don't need to add to the freelist if we're already in it implicitly (e.g. we deleted the last inode in the table)
+			if(inodeId < nextInodeId()) {
+				System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(zkfs.baseRevision) + " inode ID " + inodeId + " added to freelist");
+				freelist.freeInodeId(inodeId);
+			}
 		}
 	}
 	
@@ -292,9 +302,19 @@ public class InodeTable extends ZKFile {
 	/** issue next inode ID (draw from freelist if available, or issue next sequential ID if freelist is empty) */
 	public synchronized long issueInodeId() throws IOException {
 		try {
-			return freelist.issueInodeId();
+			/* try pulling an ID from the freelist, ignoring any ID that exceeds the next one in sequence.
+			 * we don't want to take a larger ID than our next sequential ID from the freelist, because we'll
+			 * be in danger of reissuing the same ID to someone else later!
+			 */
+			long inodeId = nextInodeId;
+			while(inodeId >= nextInodeId) {
+				inodeId = freelist.issueInodeId(); 
+			}
+			System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": issuing inodeId " + inodeId + " from freelist");
+			return inodeId;
 		} catch(FreeListExhaustedException exc) {
 			nextInodeId(); // ensure we have nextInodeId loaded
+			System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": issuing inodeId " + nextInodeId + " from sequence");
 			return nextInodeId++;
 		}
 	}
@@ -465,6 +485,7 @@ public class InodeTable extends ZKFile {
 	/** place an inode into the table, overwriting what's already there (assumes inode id is properly set) */
 	protected synchronized void setInode(Inode inode) throws IOException {
 		Inode existing = inodeWithId(inode.getStat().getInodeId());
+		System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": updating inode " + inode.getStat().getInodeId() + ", size=" + inode.getStat().getSize());
 		if(existing == inode) return; // inode is already set
 		logger.trace("ZKFS {} {}: Replacing contents for inode {}, identity {} -> {}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),

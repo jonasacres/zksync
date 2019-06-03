@@ -47,6 +47,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	protected ThreadGroup threadGroup;
 	protected ConfigFile globalConfig;
 	protected long debugTime = -1;
+	protected String name;
 	
 	private BandwidthMonitor bandwidthMonitorTx;
 	private BandwidthMonitor bandwidthMonitorRx;
@@ -437,6 +438,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		globalConfig.setDefault("fs.settings.readOnlyFilesystemCacheSize", 64);
 		globalConfig.setDefault("fs.settings.automergeDelayMs", 10000);
 		globalConfig.setDefault("fs.settings.maxAutomergeDelayMs", 60000);
+		globalConfig.setDefault("fs.settings.maxAutomergeAcquireWaitTimeMs", 60000);
 		
 		globalConfig.setDefault("fs.fileHandleTelemetry", FS.fileHandleTelemetryEnabled);
 		
@@ -467,5 +469,13 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		bandwidthMonitorRx = new BandwidthMonitor(100, 3000);
 		bandwidthAllocatorTx = new BandwidthAllocator(globalConfig.getLong("net.limits.tx"));
 		bandwidthAllocatorRx = new BandwidthAllocator(globalConfig.getLong("net.limits.rx"));
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
 	}
 }
