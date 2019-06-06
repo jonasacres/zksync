@@ -172,7 +172,7 @@ public class FSMirror {
 			try {
 				checkDirectories(pathsByKey);
 			} catch (IOException exc) {
-				logger.error("FS {}: FSMirror caught exception verifying directory existence",
+				logger.error("FS {}: FSMirror caught exception checking directories for changes",
 						Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 						exc);
 			}
@@ -426,7 +426,7 @@ public class FSMirror {
 				destStat = dest.lstat(path);
 			} catch(ENOENTException exc) {}
 			
-			System.out.println("FSMirror " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(tag) + " " + src.getClass().getSimpleName() + " -> " + dest.getClass().getSimpleName() + " " + path + " size=" + srcStat.getSize() + " inodeId=" + srcStat.getInodeId());
+			System.out.println("FSMirror " + zkfs.getArchive().getMaster().getName() + ": precopy " + Util.formatRevisionTag(tag) + " " + src.getClass().getSimpleName() + " -> " + dest.getClass().getSimpleName() + " " + path + " size " + srcStat.getSize());
 			if(srcStat.isRegularFile()) {
 				copyFile(src, dest, path, srcStat, destStat);
 			} else if(srcStat.isFifo()) {
@@ -440,6 +440,21 @@ public class FSMirror {
 			}
 
 			applyStat(srcStat, dest, path);
+			Stat zkstat = zkfs.lstat(path);
+			Stat tstat = target.lstat(path);
+			StringBuilder sb = new StringBuilder();
+			sb.append("FSMirror " + zkfs.getArchive().getMaster().getName() + ": postcopy " + Util.formatRevisionTag(tag) + " " + src.getClass().getSimpleName() + " -> " + dest.getClass().getSimpleName() + " " + path + "\n");
+			sb.append(String.format("\tLocalFS stat: size %d, mtime %d, type %02x\n",
+					tstat.getSize(),
+					tstat.getMtime(),
+					tstat.getType()));
+			sb.append(String.format("\t   ZKFS stat: size %d, mtime %d, type %02x, inodeId %d, identity %16x\n",
+					zkstat.getSize(),
+					zkstat.getMtime(),
+					zkstat.getType(),
+					zkstat.getInodeId(),
+					zkfs.inodeForPath(path, false).identity));
+			System.out.println(sb.toString());
 		} catch(ENOENTException exc) {
 			try {
 				dest.unlink(path);

@@ -157,7 +157,7 @@ public class InodeTable extends ZKFile {
 		RevisionTag revTag = new RevisionTag(inode.refTag, parentHash, 1+baseHeight);
 		zkfs.archive.config.revisionTree.addParentsForTag(revTag, parents);
 		
-		System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": produced revtag " + Util.formatRevisionTag(revTag) + " with " + revTag.getRefTag().getNumPages() + " pages, size=" + inode.getStat().getSize() + ", maxInodeId=" + (nextInodeId()-1));
+		System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": produced revtag " + Util.formatRevisionTag(revTag) + " with " + revTag.getRefTag().getNumPages() + " pages, size " + inode.getStat().getSize() + ", max inodeId " + (nextInodeId()-1));
 		
 		return revTag;
 	}
@@ -260,7 +260,11 @@ public class InodeTable extends ZKFile {
 				Util.formatRevisionTag(zkfs.baseRevision),
 				inodeId);
 		
-		System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(zkfs.baseRevision) + " unlink inode ID " + inodeId);
+		System.out.printf("InodeTable %s: %s unlink inodeId %d, identity %16x\n",
+				zkfs.getArchive().getMaster().getName(),
+				Util.formatRevisionTag(zkfs.baseRevision),
+				inodeId,
+				inode.identity);
 		
 		// don't need to clear the inode if it's already clear
 		if(inode.identity != 0 || !inode.refTag.isBlank() || inode.flags != 0) {
@@ -305,16 +309,20 @@ public class InodeTable extends ZKFile {
 			/* try pulling an ID from the freelist, ignoring any ID that exceeds the next one in sequence.
 			 * we don't want to take a larger ID than our next sequential ID from the freelist, because we'll
 			 * be in danger of reissuing the same ID to someone else later!
+			 * 
+			 * we also have to be careful that the inode really is deleted, since it's possible for these to
+			 * get reissued out-of-order in diff merges, meaning that they will remain in the freelist
+			 * despite being allocated...
 			 */
 			long inodeId = nextInodeId;
-			while(inodeId >= nextInodeId) {
+			while(inodeId >= nextInodeId || !inodeWithId(inodeId).isDeleted()) {
 				inodeId = freelist.issueInodeId(); 
 			}
-			System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": issuing inodeId " + inodeId + " from freelist");
+			System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(zkfs.baseRevision) + " issuing inodeId " + inodeId + " from freelist");
 			return inodeId;
 		} catch(FreeListExhaustedException exc) {
 			nextInodeId(); // ensure we have nextInodeId loaded
-			System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": issuing inodeId " + nextInodeId + " from sequence");
+			System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(zkfs.baseRevision) + " issuing inodeId " + nextInodeId + " from sequence, isDeleted=" + inodeWithId(nextInodeId).isDeleted());
 			return nextInodeId++;
 		}
 	}
@@ -340,11 +348,15 @@ public class InodeTable extends ZKFile {
 		inode.getStat().setCtime(now);
 		inode.getStat().setAtime(now);
 		inode.getStat().setMtime(now);
-		inode.getStat().setMode(zkfs.archive.master.getGlobalConfig().getInt("fs.default.fileMode"));
-		inode.getStat().setUser(zkfs.archive.master.getGlobalConfig().getString("fs.default.username"));
-		inode.getStat().setUid(zkfs.archive.master.getGlobalConfig().getInt("fs.default.uid"));
+		inode.getStat().setType(0);
+		inode.getStat().setDevMajor(0);
+		inode.getStat().setDevMinor(0);
+		inode.getStat().setSize(0);
+		inode.getStat().setMode (zkfs.archive.master.getGlobalConfig().getInt   ("fs.default.fileMode"));
+		inode.getStat().setUser (zkfs.archive.master.getGlobalConfig().getString("fs.default.username"));
+		inode.getStat().setUid  (zkfs.archive.master.getGlobalConfig().getInt   ("fs.default.uid"));
 		inode.getStat().setGroup(zkfs.archive.master.getGlobalConfig().getString("fs.default.groupname"));
-		inode.getStat().setGid(zkfs.archive.master.getGlobalConfig().getInt("fs.default.gid"));
+		inode.getStat().setGid  (zkfs.archive.master.getGlobalConfig().getInt   ("fs.default.gid"));
 		inode.setRefTag(RefTag.blank(zkfs.archive));
 		return inode;
 	}
@@ -484,8 +496,24 @@ public class InodeTable extends ZKFile {
 	
 	/** place an inode into the table, overwriting what's already there (assumes inode id is properly set) */
 	protected synchronized void setInode(Inode inode) throws IOException {
+		/* if we're closing, we're not creating a new revision; and if we're not making a new revision, we
+		 * don't need to be making inode table changes... (dodges some ClosedException issues)
+		 */
+		if(closing) return;
+		
 		Inode existing = inodeWithId(inode.getStat().getInodeId());
-		System.out.println("InodeTable " + zkfs.getArchive().getMaster().getName() + ": updating inode " + inode.getStat().getInodeId() + ", size=" + inode.getStat().getSize());
+		System.out.printf("InodeTable %s: %s updating inodeId %d, identity %16x, size %d, type %02x, reftag %s (previous identity: %16x, size %d, type %02x, reftag %s)\n",
+				zkfs.getArchive().getMaster().getName(),
+				Util.formatRevisionTag(zkfs.baseRevision),
+				inode.getStat().getInodeId(),
+				inode.getIdentity(),
+				inode.getStat().getSize(),
+				inode.getStat().getType(),
+				Util.formatRefTag(inode.refTag),
+				existing.identity,
+				existing.getStat().getSize(),
+				existing.getStat().getType(),
+				existing.refTag);
 		if(existing == inode) return; // inode is already set
 		logger.trace("ZKFS {} {}: Replacing contents for inode {}, identity {} -> {}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
@@ -573,7 +601,7 @@ public class InodeTable extends ZKFile {
 			 */
 			if(existing != null) {
 				duplicated.nlink = existing.nlink;
-				if(duplicated.stat.isDirectory()) {
+				if(duplicated.stat.isDirectory() && existing.identity == inodeDiff.getResolution().identity) {
 					duplicated.refTag = existing.refTag;
 					duplicated.stat.setSize(existing.stat.getSize());
 				}
@@ -593,14 +621,14 @@ public class InodeTable extends ZKFile {
 	
 	public String dumpInodes() throws IOException {
 		String s = "";
-		s += "Inode table for " + zkfs.baseRevision + ", nextInodeId=" + nextInodeId() + "\n";
+		s += "Inode table dump for " + Util.formatRevisionTag(zkfs.baseRevision) + ", nextInodeId=" + nextInodeId() + ", dirty=" + dirty + "\n";
 		for(int i = 0; i < nextInodeId(); i++) {
 			Inode inode = inodeWithId(i);
-			s += String.format("\tInode %d: tag=%s... refType=%d identity=%x hash=%s\n\t\t%s\n",
-					i,
-					Util.bytesToHex(inode.refTag.getLiteral(), 4),
-					inode.refTag.refType,
+			s += String.format("\tinodeId %4d: identity %16x, %s, mtime %10d, hash %s\n\t\t%s\n",
+					inode.stat.getInodeId(),
 					inode.identity,
+					Util.formatRefTag(inode.refTag),
+					inode.getStat().getMtime(),
 					Util.bytesToHex(zkfs.archive.crypto.hash(inode.serialize()), 4),
 					inode.toString());
 		}

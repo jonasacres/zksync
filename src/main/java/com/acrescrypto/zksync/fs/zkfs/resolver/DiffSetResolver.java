@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -180,6 +182,7 @@ public class DiffSetResolver {
 			applyResolutions();
 			RevisionTag revTag = fs.commitWithTimestamp(diffset.revisions, 0);
 			fs.getArchive().getConfig().getRevisionList().consolidate(revTag);
+			System.out.println("Diff " + fs.getArchive().getMaster().getName() + ": Produced merged revision " + Util.formatRevisionTag(revTag) + " from " + revList);
 			return revTag;
 		} catch(Throwable exc) {
 			throw exc;
@@ -234,7 +237,9 @@ public class DiffSetResolver {
 	}
 	
 	protected void applyResolutions() throws IOException {
+		dump();
 		for(InodeDiff diff : diffset.inodeDiffs.values()) {
+			System.out.println("DiffSetResolver " + fs.getArchive().getMaster().getName() + ": replace inode " + diff.getInodeId());
 			fs.getInodeTable().replaceInode(diff);
 		}
 		
@@ -248,10 +253,89 @@ public class DiffSetResolver {
 		}
 		
 		for(Inode inode : toUnlink) {
+			Inode inFilesystem = fs.getInodeTable().inodeWithId(inode.getIdentity());
+			if(inFilesystem.getIdentity() != inode.getIdentity()) {
+				// if we remapped the inode for this path, make sure we unlink from its new inode ID instead of the old one
+				inode.getStat().setInodeId(diffset.inodeRemappings.get(inode.getIdentity()));
+			}
+			
 			try {
 				inode.removeLink();
 			} catch(ENOENTException exc) {}
 		}
+	}
+	
+	public void dump() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("DiffSetResolver " + fs.getArchive().getMaster().getName() + ": " + diffset.revisions.length + " revisions\n");
+		for(RevisionTag tag : diffset.revisions) {
+			String symbol = tag.equals(fs.getBaseRevision()) ? "* " : "  "; 
+			sb.append("\t" + symbol + Util.formatRevisionTag(tag) + "\n");
+		}
+		sb.append("\n");
+		
+		sb.append("Common ancestor: " + Util.formatRevisionTag(commonAncestor) + "\n");
+		sb.append("Affected inodes: " + diffset.inodeDiffs.size() + "\n");
+		for(InodeDiff diff : diffset.inodeDiffs.values()) {
+			sb.append("Inode diff: inodeId " + diff.inodeId + " (" + diff.resolutions.size() + " versions)\n");
+			diff.resolutions.forEach((inode, tags)->{
+				String tagStr = "";
+				for(RevisionTag tag : tags) {
+					if(tagStr.length() > 0) tagStr += " ";
+					tagStr += Util.formatRevisionTag(tag);
+				}
+				
+				if(inode != null) {
+					sb.append(String.format("\t%sIdentity %016x, type %02x, mtime %19d, size %8d, changed from %s [%s]\n",
+							inode.equals(diff.resolution) ? "* " : "  ",
+							inode.getIdentity(),
+							inode.getStat().getType(),
+							inode.getStat().getMtime(),
+							inode.getStat().getSize(),
+							Util.formatRevisionTag(inode.getChangedFrom()),
+							tagStr));
+				} else {
+					sb.append(String.format("\t%sDeleted [%s]\n",
+							diff.resolution == null ? "* " : "  ",
+							tagStr));
+				}
+				
+				HashSet<String> inodePaths = new HashSet<>();
+				for(RevisionTag tag : tags) {
+					try(
+						ZKFS tfs = tag.readOnlyFS();
+						ZKDirectory dir = tfs.opendir("/")
+					) {
+						inodePaths.addAll(dir.findPathsForInode(diff.inodeId));
+					} catch(IOException exc) {
+						exc.printStackTrace();
+					}
+				}
+				
+				for(String path : inodePaths) {
+					sb.append("\t\t" + path + "\n");
+				}
+			});
+		}
+		
+		sb.append("Affected paths: " + diffset.pathDiffs.size() + "\n");
+		for(PathDiff diff : diffset.pathDiffs.values()) {
+			sb.append("\t" + diff.path + " (" + diff.resolutions.size() + " versions)\n");
+			diff.resolutions.forEach((inodeId, tags)->{
+				String tagStr = "";
+				for(RevisionTag tag : tags) {
+					if(tagStr.length() > 0) tagStr += " ";
+					tagStr += Util.formatRevisionTag(tag);
+				}
+				
+				sb.append(String.format("\t\t%sinodeId %d [%s]\n",
+						diff.resolution == inodeId ? "* " : "  ",
+						inodeId,
+						tagStr));
+			});
+		}
+		
+		System.out.println(sb.toString());
 	}
 	
 	protected List<PathDiff> sortedPathDiffs() {

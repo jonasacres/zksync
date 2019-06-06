@@ -154,6 +154,21 @@ public class ZKDirectory extends ZKFile implements Directory {
 		inodeHistory.remove(inodeId);
 	}
 	
+	public Collection<String> findPathsForInode(long inodeId) throws IOException {
+		LinkedList<String> paths = new LinkedList<>();
+		if(inodeId == inode.getStat().getInodeId()) {
+			paths.add(path);
+		}
+		
+		walk(LIST_OPT_DONT_FOLLOW_SYMLINKS, (subpath, stat, isInvalidSymlink)->{
+			if(stat.getInodeId() == inodeId) {
+				paths.add(Paths.get(this.path, subpath).toString());
+			}
+		});
+		
+		return paths;
+	}
+	
 	public long inodeForName(String name) throws IOException {
 		if(!entries.containsKey(name)) {
 			throw new ENOENTException(Paths.get(path, name).toString());
@@ -188,6 +203,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 					
 					// we need to remove the old link, but defer action on the inode in case we're relinking this inode somewhere else
 					String fullPath = Paths.get(path, link).toString();
+					System.out.println("ZKDirectory " + zkfs.getArchive().getMaster().getName() + " " + path + ": relink " + fullPath + " to inodeId " + inodeId + " (was: " + existing + ")");
 					toUnlink.add(zkfs.inodeForPath(fullPath));
 					entries.remove(link);
 					zkfs.uncache(fullPath);
@@ -343,13 +359,15 @@ public class ZKDirectory extends ZKFile implements Directory {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
 		try {
 			while(buf.hasRemaining()) {
+				assertIntegrity(buf.remaining() >= 8, "Directory seems truncated; does not contain enough bytes for next inodeId (expected 8, have " + buf.remaining() + ")");
 				long inodeId = buf.getLong();
+				assertIntegrity(buf.remaining() >= 2, "Directory seems truncated; does not contain enough bytes for next path length (expected 2, have " + buf.remaining() + ")");
 				int pathLen = Util.unsignShort(buf.getShort());
 	
 				// Don't check existence of inodes; it will trip up merges
-				assertIntegrity(inodeId >= 0, String.format("Directory references invalid inode %d", inodeId));
+				assertIntegrity(inodeId >= 0, String.format("Directory references invalid inodeId %d", inodeId));
 				assertIntegrity(pathLen >= 0, "Directory references negative path length (" + pathLen + ")");
-				assertIntegrity(pathLen <= buf.remaining(), "Directory appears truncated; next name is " + pathLen + " bytes, directory only has " + buf.remaining() + " remaining");
+				assertIntegrity(pathLen <= buf.remaining(), "Directory appears truncated; does not contain enough bytes for next path (expected " + pathLen + ", have " + buf.remaining() + ")");
 				assertIntegrity(pathLen <= MAX_NAME_LEN, "Directory references name of illegal length " + pathLen);
 				
 				byte[] pathBuf = new byte[pathLen];

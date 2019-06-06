@@ -216,6 +216,10 @@ public class ZKFSManager implements AutoCloseable {
 				
 				setupAutocommitTimer();
 			} catch (IOException exc) {
+				System.out.printf("ZKFS %s %s: IOException performing autocommit\n",
+						Util.formatArchiveId(fs.archive.config.archiveId),
+						fs.archive.master.getName());
+				exc.printStackTrace();
 				logger.error("ZKFS {} {}: IOException performing autocommit",
 						Util.formatArchiveId(fs.archive.config.archiveId),
 						Util.formatRevisionTag(fs.baseRevision),

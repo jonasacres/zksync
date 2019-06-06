@@ -15,6 +15,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.PathDiffResolver;
+import com.acrescrypto.zksync.utility.Util;
 
 /* Describes a difference between a set of revisions. */
 public class DiffSet {
@@ -25,6 +26,8 @@ public class DiffSet {
 	
 	/** differences in inode listings */
 	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>(); // differences in inode table entries
+	
+	HashMap<Long,Long> inodeRemappings = new HashMap<>();
 	
 	HashSet<Long> issuedInodeIds = new HashSet<Long>();
 	
@@ -158,24 +161,50 @@ public class DiffSet {
 		sortedIdentities.addAll(byIdentity.keySet());
 		sortedIdentities.sort(null);
 		
+		StringBuilder sb = new StringBuilder();
+		sb.append(String.format("DiffSet %s: Renumbering %d candidates of inodeId %d, minIdent %16x\n",
+				revisions[0].getArchive().getMaster().getName(),
+				sortedIdentities.size(),
+				diff.inodeId,
+				minIdent));
 		for(Long identity : sortedIdentities) {
-			long newId = identity.equals(minIdent) ? diff.inodeId : issueInodeId(fs);
+			long newId;
+			if(identity.equals(minIdent)) {
+				newId = diff.inodeId;
+			} else {
+				newId = issueInodeId(fs);
+			}
+			
+			sb.append(String.format("\t%sIdentity %16x, new inodeId %d,",
+					identity.equals(minIdent) ? "* " : "  ",
+					identity,
+					newId));
+
+			for(RevisionTag tag : byIdentity.get(identity)) {
+				sb.append(" ");
+				sb.append(Util.formatRevisionTag(tag));
+			}
+			
+			sb.append("\n");
+			
 			idMap.putIfAbsent(diff.inodeId, new HashMap<>());
 			for(RevisionTag tag : byIdentity.get(identity)) idMap.get(diff.inodeId).put(tag, newId);
 			inodeDiffs.put(newId, renumberInodeWithIdentity(fs, diff, newId, identity));
 		}
+		System.out.println(sb.toString());
 	}
 	
 	/** assign a new inode ID to a given identity constant in an inode diffset */
 	protected InodeDiff renumberInodeWithIdentity(ZKFS fs, InodeDiff diff, long newId, long identity) {
 		InodeDiff newDiff = new InodeDiff(newId, diff.inodeId);
+		inodeRemappings.put(identity, newId);
 		
 		for(Inode inode : diff.resolutions.keySet()) {
 			if(inode != null && inode.getIdentity() == identity) {
 				Inode newInode = inode.clone(fs);
 				newInode.getStat().setInodeId(newId);
 				newDiff.add(newInode, diff.resolutions.get(inode));
-			} else {
+			} else if(inode == null) {
 				newDiff.add(null, diff.resolutions.get(inode));
 			}
 		}

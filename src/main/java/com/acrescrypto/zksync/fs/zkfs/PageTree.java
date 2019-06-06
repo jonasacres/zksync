@@ -478,8 +478,8 @@ public class PageTree {
 	}
 	
 	public void dump() throws IOException {
-		System.out.println(this + ": inodeId=" + inodeId + ", inodeIdentity=" + inodeIdentity + ", refTag=" + Util.bytesToHex(refTag.getBytes()));
-		System.out.println("numChunks=" + numChunks + ", maxNumPages=" + maxNumPages + ", numPages=" + numPages);
+		System.out.println(this + ": inodeId " + inodeId + ", inodeIdentity " + inodeIdentity + ", " + Util.bytesToHex(refTag.getBytes()));
+		System.out.println("numChunks " + numChunks + ", maxNumPages " + maxNumPages + ", numPages " + numPages);
 		for(int i = 0; i < numChunks; i++) {
 			chunkAtIndex(i).dump();
 		}

@@ -238,7 +238,7 @@ public class Page {
 				  .read(!file.trusted);
 				contents.put(plaintext);
 			} catch(SecurityException exc) {
-				System.out.println("Failed to read page " + pageNum + " of file with inode " + file.getInode().getStat().getInodeId() + ", identity " + file.getInode().getIdentity() + " " + Page.pathForTag(pageTag));
+				System.out.println("Page " + file.getFS().getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(file.getFS().getBaseRevision()) + " inodeId " + file.getInode() + ", identity " + String.format("%16x", file.getInode().identity) + ", path " + Page.pathForTag(pageTag) + ", file path " + file.getPath());
 				throw exc;
 			}
 		}

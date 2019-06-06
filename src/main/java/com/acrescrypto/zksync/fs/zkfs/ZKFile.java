@@ -444,7 +444,12 @@ public class ZKFile extends File {
 	
 	/** Throw an exception with an error message if the boolean condition is false. */
 	protected void assertIntegrity(boolean condition, String explanation) {
-		if(!condition) throw new InvalidArchiveException(String.format("%s (inode %d): %s", path, inode.getStat().getInodeId(), explanation));
+		if(!condition) throw new InvalidArchiveException(String.format("%s %s %s (inodeId %d): %s",
+				zkfs.getArchive().getMaster().getName(),
+				Util.formatRevisionTag(zkfs.getBaseRevision()),
+				path,
+				inode.getStat().getInodeId(),
+				explanation));
 	}
 	
 	public int getRetainCount() {

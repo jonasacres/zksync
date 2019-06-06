@@ -29,7 +29,8 @@ public class FreeList extends ZKFile {
 		lastReadPage = this.inode.refTag.numPages;
 	}
 	
-	/** returns an available inode ID and removes it from the freelist */
+	/** returns an available inode ID and removes it from the freelist. The inode ID could already have been
+	 * reissued by other means, so the caller must ensure that the issued inode ID is not already in use! */
 	public synchronized long issueInodeId() throws IOException {
 		if(available.isEmpty()) loadNextPage();
 		dirty = true;

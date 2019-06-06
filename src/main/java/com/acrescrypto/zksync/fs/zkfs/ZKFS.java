@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -195,6 +196,7 @@ public class ZKFS extends FS {
 		synchronized(this) {
 			String parents = Util.formatRevisionTag(baseRevision);
 			for(RevisionTag parent : additionalParents) {
+				if(parent.equals(baseRevision)) continue;
 				parents += ", " + Util.formatRevisionTag(parent);
 			}
 			baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
@@ -205,6 +207,8 @@ public class ZKFS extends FS {
 					Util.formatRevisionTag(baseRevision),
 					parents);
 		}
+		
+		System.out.println("ZKFS " + archive.getMaster().getName() + ": " + dump() + "\n" + inodeTable.dumpInodes());
 		
 		return baseRevision;
 	}
@@ -287,6 +291,7 @@ public class ZKFS extends FS {
 	protected Inode create(String path, ZKDirectory parent) throws IOException {
 		assertPathLegal(path);
 		Inode inode = inodeTable.issueInode();
+		System.out.println("ZKFS " + archive.getMaster().getName() + ": Creating " + parent.getPath() + "/" + path + ", inodeId " + inode.getStat().getInodeId());
 		parent.link(inode, basename(path));
 		parent.flush();
 		return inode;
@@ -663,7 +668,7 @@ public class ZKFS extends FS {
 	
 	public synchronized String dump() throws IOException {
 		StringBuilder builder = new StringBuilder();
-		builder.append("Revision " + baseRevision + "\n");
+		builder.append("Revision " + Util.formatRevisionTag(baseRevision) + "\n");
 		dump("/", 1, builder);
 		return builder.toString();
 	}
@@ -671,16 +676,22 @@ public class ZKFS extends FS {
 	public synchronized void dump(String path, int depth, StringBuilder builder) throws IOException {
 		String padding = new String(new char[depth]).replace("\0", "  ");
 		try(ZKDirectory dir = opendir(path)) {
-			for(String subpath : dir.list()) {
-				Inode inode = inodeForPath(Paths.get(path, subpath).toString(), false);
-				builder.append(String.format("%s%30s inodeId=%d size=%d ref=%s\n",
+			LinkedList<String> sorted = new LinkedList<>(dir.list());
+			sorted.sort(null);
+			
+			for(String subpath : sorted) {
+				String fqSubpath = Paths.get(path, subpath).toString();
+				Inode inode = inodeForPath(fqSubpath, false);
+				int len = 30 - padding.length();
+				builder.append(String.format("%s%" + len + "s inodeId %4d, size %8d, identity %16x, %s\n",
 						padding,
 						subpath,
 						inode.stat.getInodeId(),
 						inode.stat.getSize(),
+						inode.identity,
 						Util.formatRefTag(inode.getRefTag())));
 				if(inode.stat.isDirectory()) {
-					dump(subpath, depth+1, builder);
+					dump(fqSubpath, depth+1, builder);
 				}
 			}
 		}

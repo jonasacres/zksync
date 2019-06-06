@@ -76,11 +76,15 @@ public class RevisionList implements AutoCloseable {
 	}
 	
 	public boolean addBranchTip(RevisionTag newBranch) throws IOException {
-		if(config.revisionTree.isSuperceded(newBranch)) return false;
+		if(config.revisionTree.isSuperceded(newBranch)) {
+			System.out.println("RevisionList " + config.getMaster().getName() + ": Not adding branch tip " + Util.formatRevisionTag(newBranch) + " (superceded)");
+			return false;
+		}
 		
 		synchronized(this) {
 			if(config.revisionTree.isSuperceded(newBranch)) return false;
 			if(branchTips.contains(newBranch)) {
+				System.out.println("RevisionList " + config.getMaster().getName() + ": Not adding branch tip " + Util.formatRevisionTag(newBranch) + " (duplicate)");
 				logger.debug("RevisionList {}: Not adding branch tip {} to revision list, already in list, current size = {}",
 						Util.formatArchiveId(config.archiveId),
 						Util.formatRevisionTag(newBranch),
@@ -92,6 +96,7 @@ public class RevisionList implements AutoCloseable {
 					Util.formatArchiveId(config.archiveId),
 					Util.formatRevisionTag(newBranch),
 					branchTips.size());
+			System.out.println("RevisionList " + config.getMaster().getName() + ": Adding branch tip " + Util.formatRevisionTag(newBranch));
 			config.swarm.announceTip(newBranch);
 			updateLatest(newBranch);
 		}
@@ -101,14 +106,7 @@ public class RevisionList implements AutoCloseable {
 		}
 		
 		if(getAutomerge() && branchTips.size() > 1) {
-			try {
-				queueAutomerge();
-			} catch (DiffResolutionException exc) {
-				logger.error("RevisionList {}: Unable to automerge with new branch {}: ",
-						Util.formatArchiveId(config.archiveId),
-						newBranch,
-						exc);
-			}
+			queueAutomerge();
 		}
 		
 		return true;
@@ -146,6 +144,7 @@ public class RevisionList implements AutoCloseable {
 					toRemove.size(),
 					Util.formatRevisionTag(newBranch));
 			for(RevisionTag tip : toRemove) {
+				System.out.println("RevisionList " + config.getArchive().getMaster().getName() + ": Removing branch tip " + Util.formatRevisionTag(tip) + " in consolidation to " + Util.formatRevisionTag(newBranch));
 				removeBranchTip(tip);
 			}
 		}
@@ -173,6 +172,7 @@ public class RevisionList implements AutoCloseable {
 					Util.formatArchiveId(config.getArchiveId()),
 					toRemove.size());
 			for(RevisionTag tip : toRemove) {
+				System.out.println("RevisionList " + config.getArchive().getMaster().getName() + ": Removing branch tip " + Util.formatRevisionTag(tip) + " in general consolidation");
 				removeBranchTip(tip);
 			}
 		}
@@ -350,7 +350,7 @@ public class RevisionList implements AutoCloseable {
 		}
 	}
 	
-	protected synchronized void queueAutomerge() throws IOException, DiffResolutionException {
+	protected synchronized void queueAutomerge() throws IOException {
 		logger.debug("RevisionList {}: Queuing automerge",
 				Util.formatArchiveId(config.getArchiveId()));
 

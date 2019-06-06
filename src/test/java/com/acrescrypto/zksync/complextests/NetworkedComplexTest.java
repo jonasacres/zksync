@@ -186,7 +186,7 @@ public class NetworkedComplexTest {
 		return manager.getFs().getArchive().getConfig().getSwarm().numConnections();
 	}
 	
-	public boolean fsMatch(FS ref, FS comp) throws IOException {
+	public boolean fsMatch(FS ref, FS comp, boolean dump) throws IOException {
 		MutableBoolean matches = new MutableBoolean();
 		matches.setTrue();
 		
@@ -226,50 +226,63 @@ public class NetworkedComplexTest {
 						out += "Alice's copy: ENOENT\n";
 					}
 					
-					log(out);
+					if(dump) log(out);
 					matches.setFalse();
 				}
 			});
 			return matches.booleanValue();
 		} catch(PathMismatchException exc) {
-			log("Path mismatch: " + exc.path + " " + exc.reason);
+			if(dump) log("Path mismatch: " + exc.path + " " + exc.reason);
 			return false;
 		}
 	}
 	
-	public boolean peersMatch() throws IOException {
+	public boolean peersMatch(boolean dump) throws IOException {
 		ZKFSManager[] managers = { bob, charlie };
 		for(ZKFSManager manager : managers) {
 			if(manager == null) continue;
 			if(!alice.getFs().getBaseRevision().equals(manager.getFs().getBaseRevision())) {
-				log("Mismatched revision: "
-					+ Util.formatRevisionTag(alice.getFs().getBaseRevision())
-					+ " vs "
-					+ Util.formatRevisionTag(bob.getFs().getBaseRevision()));
-				return false;		
+				if(dump) {
+					log("Mismatched revision: "
+						+ Util.formatRevisionTag(alice.getFs().getBaseRevision())
+						+ " vs "
+						+ Util.formatRevisionTag(bob.getFs().getBaseRevision()));
+				}
+				return false;
 			}
 			
-			if(!fsMatch(alice.getMirror().getTarget(), manager.getMirror().getTarget())) return false;
-			if(!fsMatch(manager.getMirror().getTarget(), alice.getMirror().getTarget())) return false;
+			if(!fsMatch(alice.getMirror().getTarget(), manager.getMirror().getTarget(), dump)) return false;
+			if(!fsMatch(manager.getMirror().getTarget(), alice.getMirror().getTarget(), dump)) return false;
 		}
 		
 		return true;
 	}
 	
 	public void assertPeersMatch() {
+		log("Testing match...");
 		long startTime = System.currentTimeMillis();
-		assertTrue(Util.waitUntil(20000, ()->{
+		if(!Util.waitUntil(20000, ()->{
 			try {
-				return peersMatch();
+				return peersMatch(false);
 			} catch(ENOENTException exc) {
-				log("ENOENT: " + exc.getMessage());
 				return false;
 			} catch (IOException exc) {
 				exc.printStackTrace();
 				fail();
 				return false;
 			}
-		}));
+		})) {
+			log("!!! PEERS FAILED TO MATCH\n\n\n\n\n");
+			try {
+				peersMatch(true);
+			} catch(ENOENTException exc) {
+				log("ENOENT: " + exc.getMessage());
+			} catch(IOException exc) {
+				exc.printStackTrace();
+			}
+			
+			fail("Peers did not match");
+		}
 		log("Match found in " + (System.currentTimeMillis() - startTime));
 	}
 
@@ -282,7 +295,7 @@ public class NetworkedComplexTest {
 	 */
 	@Test
 	public void indefiniteTestSimpleTwoPeerEquivalent() throws IOException {
-		FSTestWriter writer = new FSTestWriter(alice.getMirror().getTarget(), 2);
+		FSTestWriter writer = new FSTestWriter(alice.getMirror().getTarget(), 2, "alice");
 		long writeIntervalMs = 1500;
 		
 		assertTrue(Util.waitUntil(1000, ()->numConnections(alice) > 0));
@@ -322,7 +335,7 @@ public class NetworkedComplexTest {
 	public void indefiniteTestSimpleThreePeerEquivalent() throws IOException {
 		charlie = initCharlie();
 		
-		FSTestWriter writer = new FSTestWriter(alice.getMirror().getTarget(), 2);
+		FSTestWriter writer = new FSTestWriter(alice.getMirror().getTarget(), 2, "alice");
 		long writeIntervalMs = 1500;
 		
 		assertTrue(Util.waitUntil(1000, ()->numConnections(alice) >= 2));
@@ -369,8 +382,8 @@ public class NetworkedComplexTest {
 	 */
 	@Test
 	public void indefiniteTestComplexTwoPeerPingPongEquivalent() throws IOException {
-		FSTestWriter aliceWriter = new FSTestWriter(alice.getMirror().getTarget(), 2);
-		FSTestWriter bobWriter = new FSTestWriter(bob.getMirror().getTarget(), 3);
+		FSTestWriter aliceWriter = new FSTestWriter(alice.getMirror().getTarget(), 2, "alice");
+		FSTestWriter bobWriter = new FSTestWriter(bob.getMirror().getTarget(), 3, "bob");
 		long writeIntervalMs = 1500;
 		
 		assertTrue(Util.waitUntil(1000, ()->numConnections(alice) > 0));
@@ -437,8 +450,8 @@ public class NetworkedComplexTest {
 	 */
 	@Test
 	public void indefiniteTestComplexTwoPeerEquivalent() throws IOException {
-		FSTestWriter aliceWriter = new FSTestWriter(alice.getMirror().getTarget(), 2);
-		FSTestWriter bobWriter = new FSTestWriter(bob.getMirror().getTarget(), 3);
+		FSTestWriter aliceWriter = new FSTestWriter(alice.getMirror().getTarget(), 2, "alice");
+		FSTestWriter bobWriter = new FSTestWriter(bob.getMirror().getTarget(), 3, "bob");
 		long writeIntervalMs = 1500;
 		
 		assertTrue(Util.waitUntil(1000, ()->numConnections(alice) > 0));
@@ -481,6 +494,9 @@ public class NetworkedComplexTest {
 					alice.getFs().getArchive().getConfig().getRevisionList().dump();
 					System.out.println("Bob " + Util.formatRevisionTag(bob.getFs().getBaseRevision()));
 					bob.getFs().getArchive().getConfig().getRevisionList().dump();
+					
+					log("Final peer match: " + peersMatch(true));
+					
 					exc.printStackTrace();
 					throw exc;
 				}

@@ -385,7 +385,11 @@ public class Util {
 	}
 
 	public static String formatRefTag(RefTag refTag) {
-		return "ref-" + refTag.getRefType() + "-" + Util.toWebSafeBase64(Util.encode64(refTag.getBytes())).substring(0, 8);
+		try {
+			return "ref-" + refTag.getRefType() + "-" + Util.toWebSafeBase64(Util.encode64(refTag.getBytes())).substring(0, 8);
+		} catch(NullPointerException exc) {
+			return "ref-null";
+		}
 	}
 
 	public static String formatPageTag(byte[] pageTag) {

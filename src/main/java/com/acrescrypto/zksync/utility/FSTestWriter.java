@@ -19,13 +19,15 @@ public class FSTestWriter {
 	RandomActor actor;
 	PRNG prng;
 	boolean printLog = true;
+	String name;
 	
-	public FSTestWriter(FS fs, long nonce) {
-		this(fs, nonce, 0);
+	public FSTestWriter(FS fs, long nonce, String name) {
+		this(fs, nonce, 0, name);
 	}
 	
-	public FSTestWriter(FS fs, long nonce, int offset) {
+	public FSTestWriter(FS fs, long nonce, int offset, String name) {
 		this.fs = fs;
+		this.name = name;
 		this.prng = CryptoSupport.defaultCrypto().prng(Util.serializeLong(nonce));
 		actor = new RandomActor(prng);
 		burn(offset);
@@ -75,7 +77,7 @@ public class FSTestWriter {
 	
 	protected void log(String msg) {
 		if(printLog) {
-			System.out.println("FSTestWriter: " + msg);
+			System.out.println("FSTestWriter " + name + ": " + msg);
 		}
 	}
 	
