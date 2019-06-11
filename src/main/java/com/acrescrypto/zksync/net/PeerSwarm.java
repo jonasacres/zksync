@@ -602,7 +602,10 @@ public class PeerSwarm implements BlacklistCallback {
 		System.out.println("\tConnections: " + connections.size());
 		int i = 0;
 		for(PeerConnection connection : connections) {
-			System.out.printf("\t\tConnection %2d: %s\n", i++, Util.bytesToHex(connection.socket.remoteIdentityKey.getBytes()) + " " + (connection.socket.isLocalRoleClient() ? "client" : "server"));
+			Util.debugLog(String.format("\t\tConnection %2d: %s %s\n",
+					i++,
+					Util.bytesToHex(connection.socket.remoteIdentityKey.getBytes()),
+					(connection.socket.isLocalRoleClient() ? "client" : "server")));
 		}
 	}
 

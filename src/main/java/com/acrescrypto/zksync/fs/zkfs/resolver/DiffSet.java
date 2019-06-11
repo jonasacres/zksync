@@ -27,8 +27,6 @@ public class DiffSet {
 	/** differences in inode listings */
 	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>(); // differences in inode table entries
 	
-	HashMap<Long,Long> inodeRemappings = new HashMap<>();
-	
 	HashSet<Long> issuedInodeIds = new HashSet<Long>();
 	
 	/** build a DiffSet from a collection of RefTags */
@@ -86,7 +84,7 @@ public class DiffSet {
 				ZKFS fs = rev.readOnlyFS();
 				ZKDirectory dir = fs.opendir("/")
 			) {
-				dir.walk((path, stat, isBrokenSymlink)->{
+				dir.walk(ZKDirectory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink)->{
 					allPaths.add(path);
 				});
 			}
@@ -188,7 +186,10 @@ public class DiffSet {
 			sb.append("\n");
 			
 			idMap.putIfAbsent(diff.inodeId, new HashMap<>());
-			for(RevisionTag tag : byIdentity.get(identity)) idMap.get(diff.inodeId).put(tag, newId);
+			for(RevisionTag tag : byIdentity.get(identity)) {
+				idMap.get(diff.inodeId).put(tag, newId);
+			}
+			
 			inodeDiffs.put(newId, renumberInodeWithIdentity(fs, diff, newId, identity));
 		}
 		System.out.println(sb.toString());
@@ -197,7 +198,6 @@ public class DiffSet {
 	/** assign a new inode ID to a given identity constant in an inode diffset */
 	protected InodeDiff renumberInodeWithIdentity(ZKFS fs, InodeDiff diff, long newId, long identity) {
 		InodeDiff newDiff = new InodeDiff(newId, diff.inodeId);
-		inodeRemappings.put(identity, newId);
 		
 		for(Inode inode : diff.resolutions.keySet()) {
 			if(inode != null && inode.getIdentity() == identity) {

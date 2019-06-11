@@ -12,6 +12,8 @@ import java.util.LinkedList;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.commons.lang3.mutable.MutableBoolean;
+
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.File;
@@ -193,25 +195,35 @@ public class ZKDirectory extends ZKFile implements Directory {
 		return inodeForName(comps.length == 0 ? "/" : comps[0]);
 	}
 	
-	public void updateLink(Long inodeId, String link, ArrayList<Inode> toUnlink) throws IOException {
+	public void updateLink(Long inodeId, String link) throws IOException {
 		zkfs.lockedOperation(()->{
 			synchronized(this) {
-				if(!isValidName(link)) throw new EINVALException(link + ": invalid name");
+				String fullPath = Paths.get(path, link).toString();
+				if(!isValidName(link)) {
+					throw new EINVALException(link + ": invalid name");
+				}
+				
 				if(entries.containsKey(link)) {
 					Long existing = entries.get(link);
-					if(existing.equals(inodeId)) return null;
+					if(existing.equals(inodeId)) {
+						return null;
+					}
 					
-					// we need to remove the old link, but defer action on the inode in case we're relinking this inode somewhere else
-					String fullPath = Paths.get(path, link).toString();
-					System.out.println("ZKDirectory " + zkfs.getArchive().getMaster().getName() + " " + path + ": relink " + fullPath + " to inodeId " + inodeId + " (was: " + existing + ")");
-					toUnlink.add(zkfs.inodeForPath(fullPath));
+					Util.debugLog("ZKDirectory " + zkfs.getArchive().getMaster().getName() + " " + path + ": relink " + fullPath + " to inodeId " + inodeId + " (was: " + existing + ")");
 					entries.remove(link);
 					zkfs.uncache(fullPath);
 					dirty = true;
 				}
 				
-				if(inodeId == null) return null; // above if clause already unlinked
-				link(zkfs.inodeTable.inodeWithId(inodeId), link);
+				if(inodeId == null) {
+					return null;
+				}
+				
+				Inode newInode = zkfs.inodeTable.inodeWithId(inodeId);
+				Util.debugLog("ZKDirectory " + zkfs.getArchive().getMaster().getName() + " " + path + ": linking " + fullPath + " to inodeId " + inodeId + ", existing nlink " + newInode.getNlink());
+				entries.put(link, inodeId);
+				dirty = true;
+				
 				return null;
 			}
 		});

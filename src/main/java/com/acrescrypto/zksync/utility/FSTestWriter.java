@@ -77,7 +77,7 @@ public class FSTestWriter {
 	
 	protected void log(String msg) {
 		if(printLog) {
-			System.out.println("FSTestWriter " + name + ": " + msg);
+			Util.debugLog("FSTestWriter " + name + ": " + msg);
 		}
 	}
 	
@@ -108,7 +108,7 @@ public class FSTestWriter {
 	}
 	
 	protected String randomName() {
-		return randomString(8);
+		return name + "-" + randomString(8);
 	}
 	
 	protected String makePath() throws IOException {
@@ -181,7 +181,7 @@ public class FSTestWriter {
 	
 	protected void createSymlink() throws IOException {
 		String target = pickExistingFile();
-		String path = makePath();
+		String path = makePath() + "-sym";
 		needsNotNull(path);
 		needsNotNull(target);
 		

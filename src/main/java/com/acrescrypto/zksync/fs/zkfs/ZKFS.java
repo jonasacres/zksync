@@ -201,14 +201,16 @@ public class ZKFS extends FS {
 			}
 			baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
 			dirty = false;
-			System.out.println("ZKFS " + archive.getMaster().getName() + ": created revtag " + Util.formatRevisionTag(baseRevision) + " from " + parents);
+			Util.debugLog("ZKFS " + archive.getMaster().getName() + ": created revtag " + Util.formatRevisionTag(baseRevision) + " from " + parents);
 			logger.info("ZKFS {}: Created revtag {} from {}",
 					Util.formatArchiveId(archive.getConfig().getArchiveId()),
 					Util.formatRevisionTag(baseRevision),
 					parents);
+
+			Util.debugLog("ZKFS " + archive.getMaster().getName() + ": " + dump() + "\n" + inodeTable.dumpInodes() + "\n");
+			archive.getConfig().getRevisionList().dump();
+			archive.getConfig().getRevisionList().dumpDot();
 		}
-		
-		System.out.println("ZKFS " + archive.getMaster().getName() + ": " + dump() + "\n" + inodeTable.dumpInodes());
 		
 		return baseRevision;
 	}
@@ -291,7 +293,7 @@ public class ZKFS extends FS {
 	protected Inode create(String path, ZKDirectory parent) throws IOException {
 		assertPathLegal(path);
 		Inode inode = inodeTable.issueInode();
-		System.out.println("ZKFS " + archive.getMaster().getName() + ": Creating " + parent.getPath() + "/" + path + ", inodeId " + inode.getStat().getInodeId());
+		Util.debugLog("ZKFS " + archive.getMaster().getName() + ": Creating " + Paths.get(parent.getPath(), path).toString() + ", inodeId " + inode.getStat().getInodeId());
 		parent.link(inode, basename(path));
 		parent.flush();
 		return inode;
@@ -683,12 +685,14 @@ public class ZKFS extends FS {
 				String fqSubpath = Paths.get(path, subpath).toString();
 				Inode inode = inodeForPath(fqSubpath, false);
 				int len = 30 - padding.length();
-				builder.append(String.format("%s%" + len + "s inodeId %4d, size %8d, identity %16x, %s\n",
+				builder.append(String.format("%s%" + len + "s inodeId %4d, size %8d, identity %16x, type %02x, nlink %d, %s\n",
 						padding,
 						subpath,
 						inode.stat.getInodeId(),
 						inode.stat.getSize(),
 						inode.identity,
+						inode.getStat().getType(),
+						inode.nlink,
 						Util.formatRefTag(inode.getRefTag())));
 				if(inode.stat.isDirectory()) {
 					dump(fqSubpath, depth+1, builder);
@@ -750,16 +754,6 @@ public class ZKFS extends FS {
 	
 	public boolean isReadOnly() {
 		return isReadOnly;
-	}
-	
-	public synchronized void uncache() throws IOException {
-		logger.info("ZKFS {} {}: Uncaching FS",
-				Util.formatArchiveId(archive.getConfig().getArchiveId()),
-				Util.formatRevisionTag(baseRevision));
-		inodeTable.uncache();
-		inodeTable.close();
-		directoriesByPath.removeAll();
-		this.inodeTable = new InodeTable(this, baseRevision);
 	}
 	
 	/** Acts as a "big lock" on the filesystem. */

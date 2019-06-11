@@ -65,6 +65,8 @@ public class NetworkedComplexTest {
 	@After
 	public void afterEach() throws IOException {
 		dhtRoot.close();
+		alice.getFs().getArchive().getConfig().getRevisionList().dumpDot();
+		bob.getFs().getArchive().getConfig().getRevisionList().dumpDot();
 		alice.close();
 		bob.close();
 		if(charlie != null) {
@@ -261,7 +263,7 @@ public class NetworkedComplexTest {
 	public void assertPeersMatch() {
 		log("Testing match...");
 		long startTime = System.currentTimeMillis();
-		if(!Util.waitUntil(20000, ()->{
+		if(!Util.waitUntil(60000, ()->{
 			try {
 				return peersMatch(false);
 			} catch(ENOENTException exc) {

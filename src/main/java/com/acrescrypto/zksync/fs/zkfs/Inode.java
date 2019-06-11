@@ -209,9 +209,14 @@ public class Inode implements Comparable<Inode> {
 		return Arrays.compareUnsigned(serialize(), o.serialize());
 	}
 	
-	/** true <=> nlink == 0 and FLAG_RETAIN not set */
+	/** is this inode in a deleted state? true <=> nlink == 0 and FLAG_RETAIN not set */
 	public boolean isDeleted() {
 		return nlink == 0 && (flags & FLAG_RETAIN) == 0;
+	}
+	
+	/** has the deletion of this inode been processed? (ie. its contents are cleared) */
+	public boolean isMarkedDeleted() {
+		return nlink == 0 && identity == 0 && modifiedTime == 0;
 	}
 	
 	/** clear inode contents. */

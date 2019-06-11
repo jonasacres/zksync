@@ -1,10 +1,13 @@
 package com.acrescrypto.zksync.utility;
 
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -430,5 +433,11 @@ public class Util {
 		}
 		
 		return s;
+	}
+	
+	public static void debugLog(String message) {
+		String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss:nnnnnnnnn"));
+		String s = ts + " " + message;
+		System.out.println(s);
 	}
 }

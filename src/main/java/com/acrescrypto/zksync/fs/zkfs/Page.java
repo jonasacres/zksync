@@ -238,7 +238,7 @@ public class Page {
 				  .read(!file.trusted);
 				contents.put(plaintext);
 			} catch(SecurityException exc) {
-				System.out.println("Page " + file.getFS().getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(file.getFS().getBaseRevision()) + " inodeId " + file.getInode() + ", identity " + String.format("%16x", file.getInode().identity) + ", path " + Page.pathForTag(pageTag) + ", file path " + file.getPath());
+				Util.debugLog("Page " + file.getFS().getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(file.getFS().getBaseRevision()) + " inodeId " + file.getInode() + ", identity " + String.format("%16x", file.getInode().identity) + ", path " + Page.pathForTag(pageTag) + ", file path " + file.getPath());
 				throw exc;
 			}
 		}

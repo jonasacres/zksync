@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.Collection;
 
 import javax.json.Json;
 import javax.json.JsonObject;
@@ -111,18 +112,46 @@ public class ZKFSManager implements AutoCloseable {
 		boolean isDescendent = false;
 		try {
 			isDescendent = fs.archive.config.revisionTree.descendentOf(latest, fs.baseRevision);
+			if(!isDescendent) {
+				Collection<RevisionTag> baseParents = fs.archive.config.revisionTree.parentsForTag(fs.baseRevision);
+				if(baseParents.size() > 1) {
+					if(fs.baseRevision.getHeight() == revtag.getHeight()) {
+						/* if our latest tag is a merge, and the incoming tag is a "replacement merge" (one that
+						 * contains all the same parents as us, plus more), count that as a descendant
+						 */
+						Collection<RevisionTag> tagParents = fs.archive.config.revisionTree.parentsForTag(revtag);
+						isDescendent = tagParents.containsAll(baseParents);
+					} else if(fs.baseRevision.getHeight() < revtag.getHeight()) {
+						/* If the incoming tag is at a greater height, it could still be a merge containing all
+						 * of our parent merges, plus a node with a greater height. */
+						boolean couldBeDescendent = true;
+						for(RevisionTag parent : baseParents) {
+							if(!fs.archive.config.revisionTree.descendentOf(revtag, parent)) {
+								couldBeDescendent = false;
+								break;
+							}
+						}
+						
+						isDescendent = couldBeDescendent;
+					}
+				}
+			}
 		} catch(IOException exc) {}
 		
 		if(autofollow
-				&& !fs.isDirty()
-				&& !fs.baseRevision.equals(latest)
-				&& isDescendent) {
-			if(!fs.isDirty() && !fs.baseRevision.equals(latest)) {
+			&& !fs.isDirty()
+			&& !fs.baseRevision.equals(latest)
+			&& isDescendent) {
 				try {
 					logger.info("ZKFS {} {}: Automatically rebasing to new revtag {}",
 							Util.formatArchiveId(fs.archive.config.archiveId),
 							Util.formatRevisionTag(fs.baseRevision),
 							Util.formatRevisionTag(latest));
+					Util.debugLog(String.format("ZKFSManager %s: IS rebasing to new revtag %s from %s, latest is %s\n",
+							fs.archive.master.getName(),
+							Util.formatRevisionTag(revtag),
+							Util.formatRevisionTag(fs.baseRevision),
+							Util.formatRevisionTag(latest)));
 					fs.rebase(latest);
 					if(mirror != null) {
 						mirror.syncArchiveToTarget();
@@ -134,7 +163,17 @@ public class ZKFSManager implements AutoCloseable {
 							Util.formatArchiveId(fs.archive.config.archiveId),
 							exc);
 				}
-			}
+		} else {
+			Util.debugLog(String.format("ZKFSManager %s: NOT rebasing to new revtag %s from %s, latest is %s (autofollow=%s, !dirty=%s, !alreadyOnLatest=%s, isDescendent=%s)\n",
+					fs.archive.master.getName(),
+					Util.formatRevisionTag(revtag),
+					Util.formatRevisionTag(fs.baseRevision),
+					Util.formatRevisionTag(latest),
+					autofollow ? "true" : "false",
+					!fs.isDirty() ? "true" : "false",
+					!fs.baseRevision.equals(latest) ? "true" : "false",
+					isDescendent ? "true" : "false"
+					));
 		}
 	}
 	
@@ -216,9 +255,10 @@ public class ZKFSManager implements AutoCloseable {
 				
 				setupAutocommitTimer();
 			} catch (IOException exc) {
-				System.out.printf("ZKFS %s %s: IOException performing autocommit\n",
+				Util.debugLog(String.format("ZKFS %s %s: IOException performing autocommit on revision %s\n",
 						Util.formatArchiveId(fs.archive.config.archiveId),
-						fs.archive.master.getName());
+						fs.archive.master.getName(),
+						fs.getBaseRevision()));
 				exc.printStackTrace();
 				logger.error("ZKFS {} {}: IOException performing autocommit",
 						Util.formatArchiveId(fs.archive.config.archiveId),

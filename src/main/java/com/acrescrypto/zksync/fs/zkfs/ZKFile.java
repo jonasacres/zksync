@@ -19,6 +19,7 @@ public class ZKFile extends File {
 	protected ZKFS zkfs; /** filesystem to which this file belongs */
 	protected Inode inode; /** inode describing metadata of this file */
 	protected long offset; /** current location of file pointer (offset in bytes into file) */
+	protected Long overrideMtime; /** Time to set as mtime on next flush (set to null to use current time). Reset to null after flush(). */
 	protected String path; /** path from which the file was opened */
 	protected PageTree tree; /** Tree of page hashes, used to locate/validate page contents. */
 	protected int mode; /** file access mode bitmask */
@@ -342,14 +343,16 @@ public class ZKFile extends File {
 			synchronized(this) {
 				if(!dirty || closed) return null;
 				long now = Util.currentTimeNanos();
-				inode.getStat().setMtime(now);
+				long mtime = overrideMtime == null ? now : overrideMtime;
+				inode.getStat().setMtime(mtime);
 				inode.setChangedFrom(zkfs.baseRevision);
-				inode.setModifiedTime(now);
+				inode.setModifiedTime(mtime);
 				if(bufferedPage != null) bufferedPage.flush();
 				inode.setRefTag(tree.commit());
 				dirty = false;
 				zkfs.inodeTable.setInode(inode);
 				zkfs.markDirty();
+				setOverrideMtime(null);
 				return null;
 			}
 		});
@@ -454,5 +457,13 @@ public class ZKFile extends File {
 	
 	public int getRetainCount() {
 		return retainCount;
+	}
+	
+	public Long getOverrideMtime() {
+		return overrideMtime;
+	}
+	
+	public void setOverrideMtime(Long overrideMtime) {
+		this.overrideMtime = overrideMtime;
 	}
 }

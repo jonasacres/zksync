@@ -585,30 +585,55 @@ public class DiffSetResolverTest {
 		 * Then, for any decomposition A = A1 u A2, merge(A1, A2) = merge(A).
 		 */
 		
-		ZKArchive archive = master.createDefaultArchive();
-		ArrayList<RevisionTag> directTags = new ArrayList<>();
-		
-		for(int i = 0; i < 8; i++) {
-			ZKFS fs = archive.openBlank();
-			fs.write("file"+i, ("contents " + i).getBytes());
-			directTags.add(fs.commit());
-			fs.close();
+		try(ZKArchive archive = master.createDefaultArchive()) {
+			ArrayList<RevisionTag> directTags = new ArrayList<>();
 			
-			RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
-			DiffSet directSet = DiffSet.withCollection(directTags);
-			RevisionTag directTag = DiffSetResolver.latestVersionResolver(directSet).resolve();
-			assertEquals(directTag, merge);
-			
-			fs = merge.getFS();
-			for(int j = 0; j <= i; j++) {
-				assertArrayEquals(("contents " + i).getBytes(), fs.read("file" + i));
+			for(int i = 0; i < 8; i++) {
+				try(ZKFS fs = archive.openBlank()) {
+					fs.write("file"+i, ("contents " + i).getBytes());
+					directTags.add(fs.commit());
+				}
+				
+				RevisionTag merge = DiffSetResolver.canonicalMergeResolver(archive).resolve();
+				DiffSet directSet = DiffSet.withCollection(directTags);
+				RevisionTag directTag = DiffSetResolver.latestVersionResolver(directSet).resolve();
+				assertEquals(directTag, merge);
+				
+				try(ZKFS fs = merge.getFS()) {
+					for(int j = 0; j <= i; j++) {
+						assertArrayEquals(("contents " + i).getBytes(), fs.read("file" + i));
+					}
+					
+					assertFalse(fs.exists("file"+(i+1)));
+				}
 			}
-			
-			assertFalse(fs.exists("file"+(i+1)));
-			fs.close();
 		}
+	}
+	
+	@Test
+	public void testDirectoryObjectivity() throws IOException, DiffResolutionException {
+		/* Directories get modified in path merges, creating danger of inconsistent mtimes. */
+		fs.mkdir("dir");
+		RevisionTag base = fs.commit();
+		RevisionTag[] revs = new RevisionTag[2];
 		
-		archive.close();
+		fs.mkdir("dir/sub1");
+		revs[0] = fs.commit();
+		
+		fs.rebase(base);
+		fs.mkdir("dir/sub2");
+		revs[1] = fs.commit();
+		
+		RevisionTag[] merges = new RevisionTag[2];
+		for(int i = 0; i < merges.length; i++) {
+			if(i > 0) Util.sleep(1);
+			
+			DiffSet diffSet = new DiffSet(revs);
+			merges[i] = DiffSetResolver.latestVersionResolver(diffSet).resolve();
+			if(i > 0) {
+				assertEquals(merges[0], merges[i]);
+			}
+		}
 	}
 	
 	@Test

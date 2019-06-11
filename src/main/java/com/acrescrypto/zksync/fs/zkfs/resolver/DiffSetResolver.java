@@ -41,9 +41,26 @@ public class DiffSetResolver {
 	Logger logger = LoggerFactory.getLogger(DiffSetResolver.class);
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
+		StringBuilder sb = new StringBuilder();
+		sb.append(String.format("DiffSetResolver %s: Assembling branch tips.\nBranch tips:\n", archive.getMaster().getName()));
 		Collection<RevisionTag> tips = archive.getConfig().getRevisionList().branchTips();
+		for(RevisionTag tag : tips) {
+			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
+		}
+		
+		sb.append("Minimal tips:\n");
 		Collection<RevisionTag> minimalTips = archive.getConfig().getRevisionTree().minimalSet(tips);
+		for(RevisionTag tag : minimalTips) {
+			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
+		}
+		
+		sb.append("Base tips:\n");
 		Collection<RevisionTag> baseTips = archive.getConfig().getRevisionTree().canonicalBases(minimalTips);
+		for(RevisionTag tag : baseTips) {
+			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
+		}
+		
+		Util.debugLog(sb.toString());
 		DiffSet diffSet = DiffSet.withCollection(baseTips);
 		return latestVersionResolver(diffSet);
 	}
@@ -65,41 +82,76 @@ public class DiffSetResolver {
 	
 	public static PathDiffResolver latestPathResolver() {
 		return (DiffSetResolver setResolver, PathDiff diff) -> {
-			Inode result = null;
 			if(diff.getResolutions().size() == 2 && diff.getResolutions().containsKey(null)) {
+				/* In this case, the only disagreement is whether the path exists or not -- everyone who
+				 * says it exists agrees on the inode. Since this comes AFTER inode renumbering, we also
+				 * know that they also agree on inode identity.
+				 * 
+				 * This comes up when:
+				 *   - someone deletes a pre-existing file in one side of a fork
+				 *      (we want to delete in the merge to iff it wasn't also modified on the other side)
+				 *   - someone creates a file in one side of a fork (we want to keep it)
+				 * */
 				ArrayList<RevisionTag> revsWithPath = null, revsWithoutPath = null;
 				long inodeId = -1, inodeIdentity = -1, originalInodeId = -1;
 				boolean existed;
 				RevisionTag ancestor;
 				
+				// figure out which revisions have the path and which don't
 				for(Long listedInodeId : diff.getResolutions().keySet()) {
 					ArrayList<RevisionTag> revs = diff.getResolutions().get(listedInodeId);
-					if(listedInodeId == null) revsWithoutPath = revs;
-					else {
+					if(listedInodeId == null) {
+						revsWithoutPath = revs;
+					} else {
 						inodeId = listedInodeId;
 						revsWithPath = revs;
 					}
 				}
 				
-				try(ZKFS fs = revsWithPath.get(0).readOnlyFS()) {
-					inodeIdentity = fs.inodeForPath(diff.path).getIdentity();
+				// get the inode identity (remember, this is after renumbering, so all revsWithPath agree on this)
+				try(ZKFS fsWithPath = revsWithPath.get(0).readOnlyFS()) {
+					inodeIdentity = fsWithPath.inodeForPath(diff.path, false).getIdentity();
+				} catch(ENOENTException exc) {
+					StringBuilder sb = new StringBuilder();
+					sb.append(String.format("DiffSetResolver %s: ENOENTException on path %s in revision %s\n%d revisions with path %s (inodeId %d):",
+							revsWithPath.get(0).getArchive().getMaster().getName(),
+							diff.path,
+							Util.formatRevisionTag(revsWithPath.get(0)),
+							revsWithPath.size(),
+							diff.path,
+							inodeId));
+					
+					for(RevisionTag tag : revsWithPath) {
+						sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
+					}
+					
+					sb.append(String.format("%d revisions without path %s:\n",
+							revsWithoutPath.size(),
+							diff.path));
+					for(RevisionTag tag : revsWithoutPath) {
+						sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
+					}
+					exc.printStackTrace();
+					Util.debugLog(sb.toString());
+					throw exc;
 				}
 				
+				/* now figure out if the path was created before or after the fork by seeing if it exists
+				 * in the common ancestor */
 				try {
 					ancestor = setResolver.commonAncestor();
+					try(ZKFS fs = ancestor.readOnlyFS()) {
+						existed = fs.exists(diff.path);
+					}
+					
+					if(!existed) return inodeId; // not in ancestor => path created after the fork => keep it
 				} catch (SearchFailedException exc) {
 					throw new DiffResolutionException("Cannot find common ancestor to resolve merge");
 				}
-				
+								
+				// if the inode was renumbered, get the original inodeId so we can find look it up
 				InodeDiff inodeDiff = setResolver.diffset.inodeDiffs.get(inodeId);
-				if(inodeDiff != null) originalInodeId = inodeDiff.originalInodeId;
-				else originalInodeId = inodeId;
-				
-				try(ZKFS fs = ancestor.readOnlyFS()) {
-					existed = fs.exists(diff.path);
-				}
-				
-				if(!existed) return inodeId; // the path was created after the fork, so keep it.
+				originalInodeId = inodeDiff != null ? inodeDiff.originalInodeId : inodeId;
 				
 				for(RevisionTag tag : revsWithoutPath) {
 					// if one of the revisions without this path has the same inode, then it must have moved
@@ -122,6 +174,11 @@ public class DiffSetResolver {
 				return null;
 			}
 			
+			/* We have a path conflict between multiple inodeIds. In this case, we will not accept a resolution
+			 * where the path is unlinked, which simplifies the logic considerably. We'll pick whichever inode
+			 * sorts "highest" using compareTo, which is objective and typically the most recently modified.
+			 */
+			Inode result = null;
 			for(Long inodeId : diff.getResolutions().keySet()) {
 				if(inodeId == null) continue;
 
@@ -132,12 +189,15 @@ public class DiffSetResolver {
 						// no inode diff for this id; so any reftag's version will work since they're all identical
 						inode = setResolver.fs.getInodeTable().inodeWithId(inodeId);
 					} else {
+						/* there WAS an inode diff, but path diffs are resolved after inode diffs, so a resolution
+						 * must be available */
 						inode = idiff.getResolution();
 					}
 				} catch (IOException exc) {
 					throw new IllegalStateException("Encountered exception resolving path collision information for inode " + inodeId);
 				}
 				
+				// take the highest-sorted inode as the result
 				if(result == null || result.compareTo(inode) < 0) result = inode;
 			}
 			
@@ -169,6 +229,10 @@ public class DiffSetResolver {
 				diffset.revisions.length,
 				revList);
 		try {
+			Util.debugLog("Diff " + fs.getArchive().getMaster().getName() + ": Merging " + revList);
+		} catch(NullPointerException exc) {}
+		
+		try {
 			if(diffset.revisions.length == 1) {
 				config.getRevisionList().consolidate(diffset.revisions[0]);
 				return diffset.revisions[0];
@@ -182,7 +246,7 @@ public class DiffSetResolver {
 			applyResolutions();
 			RevisionTag revTag = fs.commitWithTimestamp(diffset.revisions, 0);
 			fs.getArchive().getConfig().getRevisionList().consolidate(revTag);
-			System.out.println("Diff " + fs.getArchive().getMaster().getName() + ": Produced merged revision " + Util.formatRevisionTag(revTag) + " from " + revList);
+			Util.debugLog("Diff " + fs.getArchive().getMaster().getName() + ": Produced merged revision " + Util.formatRevisionTag(revTag) + " from " + revList);
 			return revTag;
 		} catch(Throwable exc) {
 			throw exc;
@@ -237,31 +301,24 @@ public class DiffSetResolver {
 	}
 	
 	protected void applyResolutions() throws IOException {
-		dump();
-		for(InodeDiff diff : diffset.inodeDiffs.values()) {
-			System.out.println("DiffSetResolver " + fs.getArchive().getMaster().getName() + ": replace inode " + diff.getInodeId());
-			fs.getInodeTable().replaceInode(diff);
-		}
-		
-		ArrayList<Inode> toUnlink = new ArrayList<>();
-		for(PathDiff diff : sortedPathDiffs()) { // need to sort so we do parent directories before children
-			assert(diff.isResolved());
-			if(!parentExists(diff.path)) continue;
-			try(ZKDirectory dir = fs.opendir(fs.dirname(diff.path))) {
-				dir.updateLink(diff.resolution, fs.basename(diff.path), toUnlink);
-			}
-		}
-		
-		for(Inode inode : toUnlink) {
-			Inode inFilesystem = fs.getInodeTable().inodeWithId(inode.getIdentity());
-			if(inFilesystem.getIdentity() != inode.getIdentity()) {
-				// if we remapped the inode for this path, make sure we unlink from its new inode ID instead of the old one
-				inode.getStat().setInodeId(diffset.inodeRemappings.get(inode.getIdentity()));
+		try(ZKFS originalFs = fs.getBaseRevision().readOnlyFS()) {
+			dump();
+			for(InodeDiff diff : diffset.inodeDiffs.values()) {
+				Util.debugLog("DiffSetResolver " + fs.getArchive().getMaster().getName() + ": replace inode " + diff.getInodeId());
+				fs.getInodeTable().replaceInode(diff);
 			}
 			
-			try {
-				inode.removeLink();
-			} catch(ENOENTException exc) {}
+			List<PathDiff> sortedDiffs = sortedPathDiffs();
+			for(PathDiff diff : sortedDiffs) { // need to sort so we do parent directories before children
+				assert(diff.isResolved());
+				if(!parentExists(diff.path)) continue;
+				try(ZKDirectory dir = fs.opendir(fs.dirname(diff.path))) {
+					dir.setOverrideMtime(fs.getInodeTable().getStat().getMtime());
+					dir.updateLink(diff.resolution, fs.basename(diff.path));
+				}
+			}
+			
+			fs.getInodeTable().rebuildLinkCounts();
 		}
 	}
 	
@@ -277,7 +334,7 @@ public class DiffSetResolver {
 		sb.append("Common ancestor: " + Util.formatRevisionTag(commonAncestor) + "\n");
 		sb.append("Affected inodes: " + diffset.inodeDiffs.size() + "\n");
 		for(InodeDiff diff : diffset.inodeDiffs.values()) {
-			sb.append("Inode diff: inodeId " + diff.inodeId + " (" + diff.resolutions.size() + " versions)\n");
+			sb.append("Inode diff: inodeId " + diff.inodeId + " (" + diff.resolutions.size() + " versions, original inodeId " + diff.originalInodeId + ")\n");
 			diff.resolutions.forEach((inode, tags)->{
 				String tagStr = "";
 				for(RevisionTag tag : tags) {
@@ -286,12 +343,13 @@ public class DiffSetResolver {
 				}
 				
 				if(inode != null) {
-					sb.append(String.format("\t%sIdentity %016x, type %02x, mtime %19d, size %8d, changed from %s [%s]\n",
+					sb.append(String.format("\t%sIdentity %016x, type %02x, mtime %19d, size %8d, nlink %d, changed from %s [%s]\n",
 							inode.equals(diff.resolution) ? "* " : "  ",
 							inode.getIdentity(),
 							inode.getStat().getType(),
 							inode.getStat().getMtime(),
 							inode.getStat().getSize(),
+							inode.getNlink(),
 							Util.formatRevisionTag(inode.getChangedFrom()),
 							tagStr));
 				} else {
@@ -335,7 +393,7 @@ public class DiffSetResolver {
 			});
 		}
 		
-		System.out.println(sb.toString());
+		Util.debugLog(sb.toString());
 	}
 	
 	protected List<PathDiff> sortedPathDiffs() {

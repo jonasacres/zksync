@@ -24,9 +24,12 @@ public class PathDiff implements Comparable<PathDiff> {
 		for(RevisionTag candidate : candidates) {
 			Long inodeId = null;
 			try(ZKFS fs = candidate.readOnlyFS()) {
-				inodeId = fs.inodeForPath(path).getStat().getInodeId();
-				if(idMap != null && idMap.containsKey(inodeId)) inodeId = idMap.get(inodeId).getOrDefault(candidate, inodeId);
+				inodeId = fs.inodeForPath(path, false).getStat().getInodeId();
+				if(idMap != null && idMap.containsKey(inodeId)) {
+					inodeId = idMap.get(inodeId).getOrDefault(candidate, inodeId);
+				}
 			} catch (ENOENTException e) {}
+			
 			getResolutions().putIfAbsent(inodeId, new ArrayList<>());
 			getResolutions().get(inodeId).add(candidate);
 		}

@@ -389,19 +389,28 @@ public class RevisionTree implements AutoCloseable {
 	}
 	
 	public Collection<RevisionTag> canonicalBases(Collection<RevisionTag> revTags) throws SearchFailedException {
+		/* Common ancestry is expensive to find and calculated twice right now: once when determining the revisions
+		 * to merge, and again when doing the merge. It'd be good to refactor to avoid sometime.
+		 */
+		RevisionTag ancestor = commonAncestor(revTags);
+		
 		HashSet<RevisionTag> bases = new HashSet<>();
 		LinkedList<RevisionTag> toProcess = new LinkedList<>(revTags);
 		while(!toProcess.isEmpty()) {
 			RevisionTag current = toProcess.pop();
-			Collection<RevisionTag> parents = parentsForTag(current, treeSearchTimeoutMs);
-			if(parents.size() > 1) {
-				toProcess.addAll(parents);
-			} else {
+			if(current.equals(ancestor)) {
 				bases.add(current);
+			} else {				
+				Collection<RevisionTag> parents = parentsForTag(current, treeSearchTimeoutMs);
+				if(parents.size() > 1) {
+					toProcess.addAll(parents);
+				} else {
+					bases.add(current);
+				}
 			}
 		}
 		
-		return bases;
+		return minimalSet(bases);
 	}
 	
 	/** Do we already have a revtag superceding all the data in this revtag? 
@@ -415,6 +424,7 @@ public class RevisionTree implements AutoCloseable {
 		for(RevisionTag tip : tips) {
 			if(tip.equals(revTag)) continue;
 			if(descendentOf(tip, revTag)) {
+				Util.debugLog("RevisionTree " + config.getMaster().getName() + ": " + Util.formatRevisionTag(revTag) + " superceded by " + Util.formatRevisionTag(tip) + " (descendent)");
 				return true; // we have a tip that descends from this tag
 			}
 		}
@@ -428,23 +438,27 @@ public class RevisionTree implements AutoCloseable {
 		}
 		
 		if(parents.size() > 1) {
-			for(RevisionTag tip : tips) {
-				if(tip.equals(revTag)) continue;
+			for(RevisionTag possibleSuperset : tips) {
+				if(possibleSuperset.equals(revTag)) continue;
 				// if this is a merge, do we already have a merge including everything this one does?
-				Collection<RevisionTag> tipParents = parentsForTagLocal(tip);
+				Collection<RevisionTag> tipParents = parentsForTagLocal(possibleSuperset);
 				if(tipParents != null && tipParents.containsAll(parents)) {
+					Util.debugLog("RevisionTree " + config.getMaster().getName() + ": " + Util.formatRevisionTag(revTag) + " superceded by " + Util.formatRevisionTag(possibleSuperset) + " (already contains all contents)");
 					return true;
 				}
 				
 				boolean containsParents = true;
 				for(RevisionTag parent : parents) {
-					if(!descendentOf(tip, parent)) {
+					if(!descendentOf(possibleSuperset, parent)) {
 						containsParents = false;
 						break;
 					}
 				}
 				
-				if(containsParents) return true;
+				if(containsParents) {
+					Util.debugLog("RevisionTree " + config.getMaster().getName() + ": " + Util.formatRevisionTag(revTag) + " superceded by " + Util.formatRevisionTag(possibleSuperset) + " (contains descendents of parents)");
+					return true;
+				}
 			}
 		}
 		
