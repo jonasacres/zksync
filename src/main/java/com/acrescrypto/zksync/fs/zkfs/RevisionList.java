@@ -19,6 +19,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
+import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -34,6 +35,7 @@ public class RevisionList implements AutoCloseable {
 									// comparison as tiebreaker.
 	protected boolean automerge;
 	protected SnoozeThread automergeSnoozeThread;
+	protected GroupedThreadPool threadPool;
 	public long automergeDelayMs;
 	public long maxAutomergeDelayMs;
 	private Logger logger = LoggerFactory.getLogger(RevisionList.class);
@@ -41,6 +43,7 @@ public class RevisionList implements AutoCloseable {
 
 	public RevisionList(ZKArchiveConfig config) throws IOException {
 		this.config = config;
+		threadPool = GroupedThreadPool.newWorkStealingThreadPool(config.getThreadGroup(), "RevisionList callback");
 		automergeDelayMs = config.getMaster().getGlobalConfig().getInt("fs.settings.automergeDelayMs");
 		maxAutomergeDelayMs = config.getMaster().getGlobalConfig().getInt("fs.settings.maxAutomergeDelayMs");
 
@@ -107,7 +110,7 @@ public class RevisionList implements AutoCloseable {
 		}
 
 		for (RevisionMonitor monitor : monitors) {
-			monitor.notifyNewRevision(newBranch);
+			threadPool.submit(()->monitor.notifyNewRevision(newBranch));
 		}
 
 		if (getAutomerge() && branchTips.size() > 1) {

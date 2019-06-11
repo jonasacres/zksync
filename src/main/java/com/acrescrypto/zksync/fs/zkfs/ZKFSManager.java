@@ -115,13 +115,7 @@ public class ZKFSManager implements AutoCloseable {
 			if(!isDescendent) {
 				Collection<RevisionTag> baseParents = fs.archive.config.revisionTree.parentsForTag(fs.baseRevision);
 				if(baseParents.size() > 1) {
-					if(fs.baseRevision.getHeight() == revtag.getHeight()) {
-						/* if our latest tag is a merge, and the incoming tag is a "replacement merge" (one that
-						 * contains all the same parents as us, plus more), count that as a descendant
-						 */
-						Collection<RevisionTag> tagParents = fs.archive.config.revisionTree.parentsForTag(revtag);
-						isDescendent = tagParents.containsAll(baseParents);
-					} else if(fs.baseRevision.getHeight() < revtag.getHeight()) {
+					if(fs.baseRevision.getHeight() <= revtag.getHeight()) {
 						/* If the incoming tag is at a greater height, it could still be a merge containing all
 						 * of our parent merges, plus a node with a greater height. */
 						boolean couldBeDescendent = true;

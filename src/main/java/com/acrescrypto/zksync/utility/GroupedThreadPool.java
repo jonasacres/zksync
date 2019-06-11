@@ -8,7 +8,7 @@ import java.util.concurrent.ThreadFactory;
 public class GroupedThreadPool {
 	public ThreadGroup threadGroup;
 	protected ExecutorService executor;
-	
+
 	public final static int MODE_FIXED = 0;
 	public final static int MODE_CACHED = 1;
 	public final static int MODE_WORK_STEALING = 2;
@@ -16,7 +16,7 @@ public class GroupedThreadPool {
 	public static GroupedThreadPool newFixedThreadPool(String name, int maxThreads) {
 		return newFixedThreadPool(Thread.currentThread().getThreadGroup(), name, maxThreads);
 	}
-	
+
 	public static GroupedThreadPool newFixedThreadPool(ThreadGroup parent, String name, int maxThreads) {
 		return new GroupedThreadPool(parent, name, maxThreads, MODE_FIXED);
 	}
@@ -32,22 +32,22 @@ public class GroupedThreadPool {
 	public static GroupedThreadPool newCachedThreadPool(ThreadGroup parent, String name) {
 		return new GroupedThreadPool(parent, name, 0, MODE_CACHED);
 	}
-	
+
 	public GroupedThreadPool(ThreadGroup parent, String name, int maxThreads, int mode) {
 		threadGroup = new ThreadGroup(parent, name);
 		ThreadFactory factory = new ThreadFactory() {
 			public Thread newThread(Runnable r) {
-                return new Thread(threadGroup, ()->{
-                	Util.setThreadName(name + " active thread");
-                	try {
-                		r.run();
-                	} finally {
-                		Util.setThreadName(name + " idle thread");
-                	}
-                });
-            }
+				return new Thread(threadGroup, ()->{
+					Util.setThreadName(name + " active thread");
+					try {
+						r.run();
+					} finally {
+						Util.setThreadName(name + " idle thread");
+					}
+				});
+			}
 		};
-		
+
 		switch(mode) {
 		case MODE_FIXED:
 			executor = Executors.newFixedThreadPool(maxThreads, factory);
@@ -62,7 +62,7 @@ public class GroupedThreadPool {
 			throw new RuntimeException("Invalid GroupedThreadPool mode");
 		}
 	}
-	
+
 	public Future<?> submit(Runnable task) {
 		return executor.submit(task);
 	}

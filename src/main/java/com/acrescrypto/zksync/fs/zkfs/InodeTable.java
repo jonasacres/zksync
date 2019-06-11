@@ -129,7 +129,7 @@ public class InodeTable extends ZKFile {
 	 * 
 	 * @return RefTag for the newly created revision
 	 *  */
-	public synchronized RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
+	public synchronized Collection<RevisionTag> commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
 		// TODO Someday: (design) Objective merge logic breaks down if we have additional parents AND we had changes to the filesystem. Throw an exception if someone tries to do that.
 		// TODO Someday: (refactor) I regret doing these as arrays instead of collections. Refactor.
 		if(zkfs.archive.config.isReadOnly()) throw new EACCESException("cannot commit new revisions when archive is opened read-only");
@@ -151,11 +151,7 @@ public class InodeTable extends ZKFile {
 		}
 
 		syncInodes();
-		RevisionTag revTag = updateList(parents);		
-		
-		Util.debugLog("InodeTable " + zkfs.getArchive().getMaster().getName() + ": produced revtag " + Util.formatRevisionTag(revTag) + " with " + revTag.getRefTag().getNumPages() + " pages, size " + inode.getStat().getSize() + ", max inodeId " + (nextInodeId()-1));
-		
-		return revTag;
+		return parents;
 	}
 	
 	/** Sets the title to be used for the next commit.
@@ -191,34 +187,7 @@ public class InodeTable extends ZKFile {
 		}
 		flush();
 	}
-	
-	protected long makeParentHash(ArrayList<RevisionTag> parents) {
-		HashContext ctx = zkfs.archive.crypto.startHash();
-		parents.sort(null);
-		for(RevisionTag parent : parents) {
-			ctx.update(parent.getBytes());
-		}
 		
-		return Util.shortTag(ctx.finish());
-	}	
-
-	/** add our new commit to the list of branch tips, and remove our ancestors */
-	protected RevisionTag updateList(ArrayList<RevisionTag> parents) throws IOException {
-		long parentHash = makeParentHash(parents);
-		long height = 1 + zkfs.baseRevision.getHeight();
-		RevisionTag tag = new RevisionTag(inode.getRefTag(), parentHash, height);	
-		RevisionList list = zkfs.archive.config.getRevisionList();
-		RevisionTree tree = zkfs.archive.config.getRevisionTree();
-		tree.addParentsForTag(tag, parents);		
-		list.addBranchTip(tag);
-		list.consolidate(tag);
-		
-		list.write();
-		zkfs.archive.config.swarm.announceTips();
-		
-		return tag;
-	}
-	
 	protected ArrayList<RevisionTag> makeParentList(RevisionTag[] additionalParents) {
 		ArrayList<RevisionTag> parents = new ArrayList<>(1+additionalParents.length);
 		parents.add(zkfs.baseRevision);

@@ -2,6 +2,8 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
@@ -10,6 +12,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.*;
 import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
@@ -194,18 +197,18 @@ public class ZKFS extends FS {
 		}
 		
 		synchronized(this) {
-			String parents = Util.formatRevisionTag(baseRevision);
+			String parentStr = Util.formatRevisionTag(baseRevision);
 			for(RevisionTag parent : additionalParents) {
 				if(parent.equals(baseRevision)) continue;
-				parents += ", " + Util.formatRevisionTag(parent);
+				parentStr += ", " + Util.formatRevisionTag(parent);
 			}
-			baseRevision = inodeTable.commitWithTimestamp(additionalParents, timestamp);
-			dirty = false;
-			Util.debugLog("ZKFS " + archive.getMaster().getName() + ": created revtag " + Util.formatRevisionTag(baseRevision) + " from " + parents);
+			Collection<RevisionTag> parents = inodeTable.commitWithTimestamp(additionalParents, timestamp);
+			finalizeCommit(parents);
+			Util.debugLog("ZKFS " + archive.getMaster().getName() + ": created revtag " + Util.formatRevisionTag(baseRevision) + " from " + parentStr);
 			logger.info("ZKFS {}: Created revtag {} from {}",
 					Util.formatArchiveId(archive.getConfig().getArchiveId()),
 					Util.formatRevisionTag(baseRevision),
-					parents);
+					parentStr);
 
 			Util.debugLog("ZKFS " + archive.getMaster().getName() + ": " + dump() + "\n" + inodeTable.dumpInodes() + "\n");
 			archive.getConfig().getRevisionList().dump();
@@ -226,6 +229,32 @@ public class ZKFS extends FS {
 		} finally {
 			close();
 		}
+	}
+	
+	protected long makeParentHash(Collection<RevisionTag> parents) {
+		HashContext ctx = archive.crypto.startHash();
+		for(RevisionTag parent : parents) {
+			ctx.update(parent.getBytes());
+		}
+		
+		return Util.shortTag(ctx.finish());
+	}	
+
+	/** add our new commit to the list of branch tips, and remove our ancestors */
+	protected void finalizeCommit(Collection<RevisionTag> parents) throws IOException {
+		long parentHash = makeParentHash(parents);
+		long height = 1 + baseRevision.getHeight();
+		baseRevision = new RevisionTag(inodeTable.inode.getRefTag(), parentHash, height);
+		dirty = false;
+		
+		RevisionList list = archive.config.getRevisionList();
+		RevisionTree tree = archive.config.getRevisionTree();
+		tree.addParentsForTag(baseRevision, parents);		
+		list.addBranchTip(baseRevision);
+		list.consolidate(baseRevision);
+		list.write();
+		
+		archive.config.swarm.announceTips();
 	}
 	
 	public Inode inodeForPath(String path) throws IOException {
