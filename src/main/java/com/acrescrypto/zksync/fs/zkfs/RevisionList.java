@@ -17,6 +17,7 @@ import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
+import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
@@ -36,6 +37,8 @@ public class RevisionList implements AutoCloseable {
 	protected boolean automerge;
 	protected SnoozeThread automergeSnoozeThread;
 	protected GroupedThreadPool threadPool;
+	protected int totalAdds;
+	
 	public long automergeDelayMs;
 	public long maxAutomergeDelayMs;
 	private Logger logger = LoggerFactory.getLogger(RevisionList.class);
@@ -79,26 +82,40 @@ public class RevisionList implements AutoCloseable {
 	public void removeMonitor(RevisionMonitor monitor) {
 		this.monitors.remove(monitor);
 	}
-
+	
 	public boolean addBranchTip(RevisionTag newBranch) throws IOException {
+		return addBranchTip(newBranch, false);
+	}
+
+	public boolean addBranchTip(RevisionTag newBranch, boolean verify) throws IOException {
 		if (config.revisionTree.isSuperceded(newBranch)) {
 			Util.debugLog("RevisionList " + config.getMaster().getName() + ": Not adding branch tip "
 					+ Util.formatRevisionTag(newBranch) + " (superceded)");
 			return false;
 		}
-
-		synchronized (this) {
-			if (config.revisionTree.isSuperceded(newBranch))
-				return false;
-			if (branchTips.contains(newBranch)) {
-				Util.debugLog("RevisionList " + config.getMaster().getName() + ": Not adding branch tip "
-						+ Util.formatRevisionTag(newBranch) + " (duplicate)");
-				logger.debug(
-						"RevisionList {} {}: Not adding branch tip {} to revision list, already in list, current size = {}",
-						config.getArchive().getMaster().getName(), Util.formatArchiveId(config.archiveId),
-						Util.formatRevisionTag(newBranch), branchTips.size());
+		
+		int totalAddsPrevious = totalAdds;
+		if(verify) {
+			if(!acceptBranchTip(newBranch)) {
 				return false;
 			}
+			
+			/* public key verifications are expensive, so we defer revtag validation until after we know
+			 * we'd even consider inserting it */
+			newBranch.assertValid();
+		}
+
+		synchronized (this) {
+			/* if check superceded if we didn't do that last time, or if we added another branch tip before
+			 * we got into the synchronized block 
+			 */
+			boolean lastCheckStillGood = verify && totalAdds == totalAddsPrevious;
+			if(!lastCheckStillGood && !acceptBranchTip(newBranch)) {
+				return false;
+			}
+			
+			totalAdds++;
+			
 			branchTips.add(newBranch);
 			logger.info("RevisionList {} {}: Added branch tip {} to revision list, current size = {}",
 					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.archiveId),
@@ -117,6 +134,24 @@ public class RevisionList implements AutoCloseable {
 			queueAutomerge();
 		}
 
+		return true;
+	}
+	
+	protected boolean acceptBranchTip(RevisionTag newBranch) throws SearchFailedException {
+		if (config.revisionTree.isSuperceded(newBranch)) {
+			return false;
+		}
+		
+		if (branchTips.contains(newBranch)) {
+			Util.debugLog("RevisionList " + config.getMaster().getName() + ": Not adding branch tip "
+					+ Util.formatRevisionTag(newBranch) + " (duplicate)");
+			logger.debug(
+					"RevisionList {} {}: Not adding branch tip {} to revision list, already in list, current size = {}",
+					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.archiveId),
+					Util.formatRevisionTag(newBranch), branchTips.size());
+			return false;
+		}
+		
 		return true;
 	}
 
@@ -254,8 +289,10 @@ public class RevisionList implements AutoCloseable {
 	}
 
 	public void setAutomerge(boolean automerge) {
-		logger.info("RevisionList {} {}: Set automerge = {}", config.getArchive().getMaster().getName(),
-				Util.formatArchiveId(config.getArchiveId()), automerge);
+		logger.info("RevisionList {} {}: Set automerge = {}",
+				config.getArchive().getMaster().getName(),
+				Util.formatArchiveId(config.getArchiveId()),
+				automerge);
 		this.automerge = automerge;
 	}
 
@@ -351,9 +388,13 @@ public class RevisionList implements AutoCloseable {
 
 	protected void updateLatest(RevisionTag newTip) {
 		if (latest == null || newTip.compareTo(latest) > 0) {
-			logger.info("RevisionList {} {}: New latest revtag {}, was {}", config.getArchive().getMaster().getName(),
-					Util.formatArchiveId(config.archiveId), Util.formatRevisionTag(newTip),
-					latest != null ? Util.formatRevisionTag(latest) : "null");
+			try {
+				logger.info("RevisionList {} {}: New latest revtag {}, was {}",
+						config.getArchive().getMaster().getName(),
+						Util.formatArchiveId(config.archiveId),
+						Util.formatRevisionTag(newTip),
+						latest != null ? Util.formatRevisionTag(latest) : "null");
+			} catch(NullPointerException exc) {} // ignore null pointer for certain unit tests
 			latest = newTip;
 		}
 	}

@@ -22,7 +22,6 @@ import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
-import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSManager;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.dht.DHTClient;
@@ -165,6 +164,7 @@ public class NetworkedComplexTest {
 		config.getMaster().getGlobalConfig().set("fs.settings.automergeDelayMs", 1750);
 		config.getMaster().getGlobalConfig().set("fs.settings.maxAutomergeDelayMs", 5000);
 		config.getMaster().getGlobalConfig().set("fs.settings.maxAutomergeAcquireWaitTimeMs", 1000);
+		config.getMaster().getGlobalConfig().set("fs.settings.readOnlyFilesystemCacheSize", 512);
 		
 		return manager;
 	}

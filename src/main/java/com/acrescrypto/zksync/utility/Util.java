@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -346,7 +345,7 @@ public class Util {
 	}
 	
 	public static String toWebSafeBase64(String base64) {
-		return base64.replaceAll("\\+", ".").replaceAll("/", "_");
+		return base64.replace('+', '.').replace('/', '_');
 	}
 
 	public static byte[] zero(byte[] array) {

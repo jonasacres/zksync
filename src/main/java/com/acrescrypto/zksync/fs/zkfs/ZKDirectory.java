@@ -4,15 +4,12 @@ import java.io.IOException;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
-import org.apache.commons.lang3.mutable.MutableBoolean;
 
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.Directory;
@@ -209,7 +206,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 						return null;
 					}
 					
-					Util.debugLog("ZKDirectory " + zkfs.getArchive().getMaster().getName() + " " + path + ": relink " + fullPath + " to inodeId " + inodeId + " (was: " + existing + ")");
 					entries.remove(link);
 					zkfs.uncache(fullPath);
 					dirty = true;
@@ -219,8 +215,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 					return null;
 				}
 				
-				Inode newInode = zkfs.inodeTable.inodeWithId(inodeId);
-				Util.debugLog("ZKDirectory " + zkfs.getArchive().getMaster().getName() + " " + path + ": linking " + fullPath + " to inodeId " + inodeId + ", existing nlink " + newInode.getNlink());
 				entries.put(link, inodeId);
 				dirty = true;
 				

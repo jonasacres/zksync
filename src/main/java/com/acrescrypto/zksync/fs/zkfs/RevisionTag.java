@@ -6,9 +6,15 @@ import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.InvalidRevisionTagException;
+import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionTag implements Comparable<RevisionTag> {
+	protected static HashCache<RevisionTag,Boolean> verificationCache =
+			new HashCache<>(128,
+					(tag)->tag.isValidUncached(),
+					(tag, isValid)->{});
+	
 	private RefTag refTag;
 	private long height = -1;
 	private long parentHash = -1;
@@ -153,16 +159,38 @@ public class RevisionTag implements Comparable<RevisionTag> {
 			return;
 		}
 		
-		int signedLen = serialized.length - config.getCrypto().asymSignatureSize();
-		if(verifySignature) {
-			config.pubKey.assertValid(serialized, 0, signedLen,
-					serialized, signedLen, config.getCrypto().asymSignatureSize());
-		}
-		
 		hashCode = ByteBuffer.wrap(serialized).getInt();
 		this.serialized = serialized;
-	
+		
+		// we can move unpack after verification, but then we don't have height info available in debug logs
 		unpack();
+
+		if(verifySignature) {
+			assertValid();
+		}
+	}
+	
+	public boolean isValid() {
+		try {
+			return verificationCache.get(this);
+		} catch (IOException exc) {
+			// this shouldn't actually be possible, but HashCache contract requires IOException handling
+			throw new RuntimeException("Caught IOException in validating revision tag " + Util.formatRevisionTag(this), exc);
+		}
+	}
+	
+	public boolean isValidUncached() {
+		int signedLen = serialized.length - config.getCrypto().asymSignatureSize();
+		Util.debugLog(String.format("RevisionTag %s: Verifying tag %s",
+				config.getMaster().getName(),
+				Util.formatRevisionTag(this)));
+		return config.pubKey.verify(serialized, 0, signedLen,
+				serialized, signedLen, config.getCrypto().asymSignatureSize());
+	}
+	
+	public void assertValid() {
+		if(isValid()) return;
+		throw new SecurityException("Error authenticating revision tag: " + Util.formatRevisionTag(this));
 	}
 	
 	protected void unpack() {

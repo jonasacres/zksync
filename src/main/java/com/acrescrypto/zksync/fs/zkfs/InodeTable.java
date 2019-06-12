@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 
-import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EMLINKException;
@@ -121,7 +120,6 @@ public class InodeTable extends ZKFile {
 			maxInodeId = Math.max(maxInodeId, inode.stat.getInodeId());
 		}
 		
-		Util.debugLog("InodeTable " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(zkfs.baseRevision) + " scanned next inode ID " + (maxInodeId+1) + " from table of size " + inode.getStat().getSize() + ", numPages=" + inode.refTag.getNumPages());
 		return maxInodeId+1;
 	}
 	
@@ -227,19 +225,12 @@ public class InodeTable extends ZKFile {
 				Util.formatRevisionTag(zkfs.baseRevision),
 				inodeId);
 		
-		Util.debugLog(String.format("InodeTable %s: %s unlink inodeId %d, identity %16x\n",
-				zkfs.getArchive().getMaster().getName(),
-				Util.formatRevisionTag(zkfs.baseRevision),
-				inodeId,
-				inode.identity));
-		
 		// don't need to clear the inode if it's already clear
 		if(inode.identity != 0 || !inode.refTag.isBlank() || inode.flags != 0) {
 			inode.markDeleted();
 			
 			// don't need to add to the freelist if we're already in it implicitly (e.g. we deleted the last inode in the table)
 			if(inodeId < nextInodeId()) {
-				Util.debugLog("InodeTable " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(zkfs.baseRevision) + " inode ID " + inodeId + " added to freelist");
 				freelist.freeInodeId(inodeId);
 			}
 		}
@@ -285,11 +276,9 @@ public class InodeTable extends ZKFile {
 			while(inodeId >= nextInodeId || !inodeWithId(inodeId).isDeleted()) {
 				inodeId = freelist.issueInodeId(); 
 			}
-			Util.debugLog("InodeTable " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(zkfs.baseRevision) + " issuing inodeId " + inodeId + " from freelist");
 			return inodeId;
 		} catch(FreeListExhaustedException exc) {
 			nextInodeId(); // ensure we have nextInodeId loaded
-			Util.debugLog("InodeTable " + zkfs.getArchive().getMaster().getName() + ": " + Util.formatRevisionTag(zkfs.baseRevision) + " issuing inodeId " + nextInodeId + " from sequence, isDeleted=" + inodeWithId(nextInodeId).isDeleted());
 			return nextInodeId++;
 		}
 	}
@@ -346,7 +335,7 @@ public class InodeTable extends ZKFile {
 				});
 			}
 			
-			for(long i = USER_INODE_ID_START; i < nextInodeId(); i++) {
+			for(long i = nextInodeId()-1; i >= USER_INODE_ID_START; i--) {
 				Inode inode = inodeWithId(i);
 				if(inode.nlink == 0) {
 					if(inode.isMarkedDeleted()) {
@@ -504,20 +493,6 @@ public class InodeTable extends ZKFile {
 		if(closing) return;
 		
 		Inode existing = inodeWithId(inode.getStat().getInodeId());
-		Util.debugLog(String.format("InodeTable %s: %s updating inodeId %d, identity %16x, size %d, type %02x, nlink %d, reftag %s (previous identity: %16x, size %d, type %02x, nlink %d, reftag %s)\n",
-				zkfs.getArchive().getMaster().getName(),
-				Util.formatRevisionTag(zkfs.baseRevision),
-				inode.getStat().getInodeId(),
-				inode.getIdentity(),
-				inode.getStat().getSize(),
-				inode.getStat().getType(),
-				inode.nlink,
-				Util.formatRefTag(inode.refTag),
-				existing.identity,
-				existing.getStat().getSize(),
-				existing.getStat().getType(),
-				existing.nlink,
-				existing.refTag));
 		if(existing == inode) return; // inode is already set
 		logger.trace("ZKFS {} {}: Replacing contents for inode {}, identity {} -> {}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),

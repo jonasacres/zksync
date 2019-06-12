@@ -247,7 +247,7 @@ public class RevisionListTest {
 		RevisionTag expectedTag = new RevisionTag(refTag, 0, 1);
 		list.addMonitor((revTag)->receivedTag.setValue(revTag.equals(expectedTag)));
 		list.addBranchTip(expectedTag);
-		assertTrue(receivedTag.booleanValue());
+		assertTrue(Util.waitUntil(1000, ()->receivedTag.booleanValue()));
 	}
 	
 	@Test

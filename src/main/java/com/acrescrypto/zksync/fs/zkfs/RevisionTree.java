@@ -34,6 +34,9 @@ public class RevisionTree implements AutoCloseable {
 		long height;
 		
 		TreeSearchItem(RevisionTag tag) {
+			Util.debugLog(String.format("RevisionTree %s: Searching for %s",
+					config.getArchive().getMaster().getName(),
+					Util.formatRevisionTag(tag)));
 			this.height = tag.getHeight();
 			revTags.add(tag);
 		}
@@ -42,6 +45,8 @@ public class RevisionTree implements AutoCloseable {
 			if(this.height <= tag.getHeight()) return false;
 			
 			while(height >= 0) {
+				if(this.height < tag.getHeight()) return false;
+				
 				if(revTags.contains(tag)) {
 					return true;
 				}
@@ -364,6 +369,10 @@ public class RevisionTree implements AutoCloseable {
 	
 	public boolean descendentOf(RevisionTag tag, RevisionTag possibleAncestor) throws SearchFailedException {
 		if(tag.equals(possibleAncestor)) return true;
+		Util.debugLog(String.format("RevisionTree %s: is %s a descendent of %s?",
+				config.getMaster().getName(),
+				Util.formatRevisionTag(tag),
+				Util.formatRevisionTag(possibleAncestor)));
 		return new TreeSearchItem(tag).hasAncestor(possibleAncestor);
 	}
 	

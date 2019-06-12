@@ -45,7 +45,7 @@ public class TCPPeerSocket extends PeerSocket {
 			"  <- e, ee\n" + 
 			"  -> s, se\n" + 
 			"  <- psk";
-	public final static String HANDSHAKE_PROTOCOL = "Noise_XKpsk4+id+pskfromid_25519_AESOCB_BLAKE2b";
+	public final static String HANDSHAKE_PROTOCOL = "Noise_XKpsk4+id+pskfromid_25519_ChaChaPoly_BLAKE2b";
 
 	protected Socket socket;
 	protected RateLimitedOutputStream out;

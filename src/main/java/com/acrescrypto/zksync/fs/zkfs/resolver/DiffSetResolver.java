@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -112,27 +111,7 @@ public class DiffSetResolver {
 				try(ZKFS fsWithPath = revsWithPath.get(0).readOnlyFS()) {
 					inodeIdentity = fsWithPath.inodeForPath(diff.path, false).getIdentity();
 				} catch(ENOENTException exc) {
-					StringBuilder sb = new StringBuilder();
-					sb.append(String.format("DiffSetResolver %s: ENOENTException on path %s in revision %s\n%d revisions with path %s (inodeId %d):",
-							revsWithPath.get(0).getArchive().getMaster().getName(),
-							diff.path,
-							Util.formatRevisionTag(revsWithPath.get(0)),
-							revsWithPath.size(),
-							diff.path,
-							inodeId));
-					
-					for(RevisionTag tag : revsWithPath) {
-						sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
-					}
-					
-					sb.append(String.format("%d revisions without path %s:\n",
-							revsWithoutPath.size(),
-							diff.path));
-					for(RevisionTag tag : revsWithoutPath) {
-						sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
-					}
 					exc.printStackTrace();
-					Util.debugLog(sb.toString());
 					throw exc;
 				}
 				
@@ -228,10 +207,7 @@ public class DiffSetResolver {
 				Util.formatArchiveId(config.getArchiveId()),
 				diffset.revisions.length,
 				revList);
-		try {
-			Util.debugLog("Diff " + fs.getArchive().getMaster().getName() + ": Merging " + revList);
-		} catch(NullPointerException exc) {}
-		
+
 		try {
 			if(diffset.revisions.length == 1) {
 				config.getRevisionList().consolidate(diffset.revisions[0]);
@@ -304,7 +280,6 @@ public class DiffSetResolver {
 		try(ZKFS originalFs = fs.getBaseRevision().readOnlyFS()) {
 			dump();
 			for(InodeDiff diff : diffset.inodeDiffs.values()) {
-				Util.debugLog("DiffSetResolver " + fs.getArchive().getMaster().getName() + ": replace inode " + diff.getInodeId());
 				fs.getInodeTable().replaceInode(diff);
 			}
 			

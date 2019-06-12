@@ -184,7 +184,6 @@ public abstract class PeerSocket {
 		}
 	}
 	
-	@SuppressWarnings("unlikely-arg-type")
 	protected void sendMessage(MessageSegment segment) throws IOException, ProtocolViolationException {
 		if(segment.msg.msgId == Integer.MIN_VALUE) segment.assignMsgId(issueMessageId());
 		try {
@@ -195,7 +194,7 @@ public abstract class PeerSocket {
 		
 		if((segment.flags & PeerMessage.FLAG_FINAL) != 0) {
 			synchronized(outgoing) {
-				outgoing.remove((Integer) segment.msg.msgId);
+				outgoing.remove(segment.msg);
 			}
 		}
 	}

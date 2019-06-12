@@ -269,9 +269,6 @@ public class PeerConnection {
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
 				socket.getPort());
-		Util.debugLog(String.format("PeerConnection %s: Announcing revTag %s\n",
-				socket.swarm.config.getMaster().getName(),
-				Util.formatRevisionTag(tip)));
 		send(CMD_ANNOUNCE_TIPS, tip.getBytes());
 	}
 	
@@ -291,15 +288,6 @@ public class PeerConnection {
 		for(RevisionTag tag : branchTipsClone) {
 			buf.put(tag.getBytes());
 		}
-
-		StringBuilder sb = new StringBuilder();
-		sb.append(String.format("PeerConnection %s: announcing %d revtags\n",
-				socket.swarm.getConfig().getMaster().getName(),
-				branchTipsClone.size()));
-		for(RevisionTag tag : branchTipsClone) {
-			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
-		}
-		Util.debugLog(sb.toString());
 
 		send(CMD_ANNOUNCE_TIPS, buf.array());
 	}
@@ -628,17 +616,14 @@ public class PeerConnection {
 		byte[] revTagRaw = new byte[RevisionTag.sizeForConfig(socket.swarm.config)];
 		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(revTagRaw);
-			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw, true);
+			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw, false);
 			try {
 				logger.debug("Swarm {} {}:{}: PeerConnection announceTips considering revtag {}",
 						Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 						socket.getAddress(),
 						socket.getPort(),
 						Util.formatRevisionTag(revTag));
-				Util.debugLog(String.format("PeerConnection %s: Received announcement for revTag %s\n",
-						socket.swarm.config.getMaster().getName(),
-						Util.formatRevisionTag(revTag)));
-				if(socket.swarm.config.getRevisionList().addBranchTip(revTag)) {
+				if(socket.swarm.config.getRevisionList().addBranchTip(revTag, true)) {
 					logger.info("Swarm {} {}:{}: PeerConnection announceTips adopted new revTag {}",
 							Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 							socket.getAddress(),

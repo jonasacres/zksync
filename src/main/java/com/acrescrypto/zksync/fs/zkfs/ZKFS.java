@@ -2,9 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -204,15 +202,19 @@ public class ZKFS extends FS {
 			}
 			Collection<RevisionTag> parents = inodeTable.commitWithTimestamp(additionalParents, timestamp);
 			finalizeCommit(parents);
-			Util.debugLog("ZKFS " + archive.getMaster().getName() + ": created revtag " + Util.formatRevisionTag(baseRevision) + " from " + parentStr);
 			logger.info("ZKFS {}: Created revtag {} from {}",
 					Util.formatArchiveId(archive.getConfig().getArchiveId()),
 					Util.formatRevisionTag(baseRevision),
 					parentStr);
 
-			Util.debugLog("ZKFS " + archive.getMaster().getName() + ": " + dump() + "\n" + inodeTable.dumpInodes() + "\n");
+			Util.debugLog("ZKFS " + archive.getMaster().getName() + ": created revtag " + Util.formatRevisionTag(baseRevision) + " from " + parentStr);
+			Util.debugLog(String.format("ZKFS %s: created revtag %s from %s\n%s\n%s\n",
+					archive.getMaster().getName(),
+					Util.formatRevisionTag(baseRevision),
+					parentStr,
+					dump(),
+					inodeTable.dumpInodes()));
 			archive.getConfig().getRevisionList().dump();
-			archive.getConfig().getRevisionList().dumpDot();
 		}
 		
 		return baseRevision;
@@ -322,7 +324,6 @@ public class ZKFS extends FS {
 	protected Inode create(String path, ZKDirectory parent) throws IOException {
 		assertPathLegal(path);
 		Inode inode = inodeTable.issueInode();
-		Util.debugLog("ZKFS " + archive.getMaster().getName() + ": Creating " + Paths.get(parent.getPath(), path).toString() + ", inodeId " + inode.getStat().getInodeId());
 		parent.link(inode, basename(path));
 		parent.flush();
 		return inode;
