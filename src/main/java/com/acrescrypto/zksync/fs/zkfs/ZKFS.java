@@ -207,7 +207,6 @@ public class ZKFS extends FS {
 					Util.formatRevisionTag(baseRevision),
 					parentStr);
 
-			Util.debugLog("ZKFS " + archive.getMaster().getName() + ": created revtag " + Util.formatRevisionTag(baseRevision) + " from " + parentStr);
 			Util.debugLog(String.format("ZKFS %s: created revtag %s from %s\n%s\n%s\n",
 					archive.getMaster().getName(),
 					Util.formatRevisionTag(baseRevision),

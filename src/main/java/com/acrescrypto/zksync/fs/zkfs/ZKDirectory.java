@@ -116,8 +116,10 @@ public class ZKDirectory extends ZKFile implements Directory {
 				boolean isInvalidSymlink = false;
 				
 				if((opts & Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS) == 0) {
+					// DO follow symlinks
 					stat = fs.stat(realSubpath);
 				} else {
+					// DONT follow symlinks
 					stat = fs.lstat(realSubpath);
 					if(stat.isSymlink() && !fs.exists(realSubpath)) {
 						isInvalidSymlink = true;

@@ -181,9 +181,6 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	
 	public boolean isValidUncached() {
 		int signedLen = serialized.length - config.getCrypto().asymSignatureSize();
-		Util.debugLog(String.format("RevisionTag %s: Verifying tag %s",
-				config.getMaster().getName(),
-				Util.formatRevisionTag(this)));
 		return config.pubKey.verify(serialized, 0, signedLen,
 				serialized, signedLen, config.getCrypto().asymSignatureSize());
 	}

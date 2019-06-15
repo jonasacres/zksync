@@ -89,8 +89,6 @@ public class RevisionList implements AutoCloseable {
 
 	public boolean addBranchTip(RevisionTag newBranch, boolean verify) throws IOException {
 		if (config.revisionTree.isSuperceded(newBranch)) {
-			Util.debugLog("RevisionList " + config.getMaster().getName() + ": Not adding branch tip "
-					+ Util.formatRevisionTag(newBranch) + " (superceded)");
 			return false;
 		}
 		
@@ -120,8 +118,6 @@ public class RevisionList implements AutoCloseable {
 			logger.info("RevisionList {} {}: Added branch tip {} to revision list, current size = {}",
 					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.archiveId),
 					Util.formatRevisionTag(newBranch), branchTips.size());
-			Util.debugLog("RevisionList " + config.getMaster().getName() + ": Adding branch tip "
-					+ Util.formatRevisionTag(newBranch));
 			config.swarm.announceTip(newBranch);
 			updateLatest(newBranch);
 		}
@@ -143,8 +139,6 @@ public class RevisionList implements AutoCloseable {
 		}
 		
 		if (branchTips.contains(newBranch)) {
-			Util.debugLog("RevisionList " + config.getMaster().getName() + ": Not adding branch tip "
-					+ Util.formatRevisionTag(newBranch) + " (duplicate)");
 			logger.debug(
 					"RevisionList {} {}: Not adding branch tip {} to revision list, already in list, current size = {}",
 					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.archiveId),
@@ -186,9 +180,6 @@ public class RevisionList implements AutoCloseable {
 					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()),
 					toRemove.size(), Util.formatRevisionTag(newBranch));
 			for (RevisionTag tip : toRemove) {
-				Util.debugLog("RevisionList " + config.getArchive().getMaster().getName()
-						+ ": Removing branch tip " + Util.formatRevisionTag(tip) + " in consolidation to "
-						+ Util.formatRevisionTag(newBranch));
 				removeBranchTip(tip);
 			}
 		}
@@ -216,8 +207,6 @@ public class RevisionList implements AutoCloseable {
 					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()),
 					toRemove.size());
 			for (RevisionTag tip : toRemove) {
-				Util.debugLog("RevisionList " + config.getArchive().getMaster().getName()
-						+ ": Removing branch tip " + Util.formatRevisionTag(tip) + " in general consolidation");
 				removeBranchTip(tip);
 			}
 		}
@@ -289,8 +278,9 @@ public class RevisionList implements AutoCloseable {
 	}
 
 	public void setAutomerge(boolean automerge) {
+		// guard against null pointer exception if this is set early on
 		logger.info("RevisionList {} {}: Set automerge = {}",
-				config.getArchive().getMaster().getName(),
+				config.getMaster().getName(),
 				Util.formatArchiveId(config.getArchiveId()),
 				automerge);
 		this.automerge = automerge;

@@ -34,9 +34,6 @@ public class RevisionTree implements AutoCloseable {
 		long height;
 		
 		TreeSearchItem(RevisionTag tag) {
-			Util.debugLog(String.format("RevisionTree %s: Searching for %s",
-					config.getArchive().getMaster().getName(),
-					Util.formatRevisionTag(tag)));
 			this.height = tag.getHeight();
 			revTags.add(tag);
 		}
@@ -369,10 +366,6 @@ public class RevisionTree implements AutoCloseable {
 	
 	public boolean descendentOf(RevisionTag tag, RevisionTag possibleAncestor) throws SearchFailedException {
 		if(tag.equals(possibleAncestor)) return true;
-		Util.debugLog(String.format("RevisionTree %s: is %s a descendent of %s?",
-				config.getMaster().getName(),
-				Util.formatRevisionTag(tag),
-				Util.formatRevisionTag(possibleAncestor)));
 		return new TreeSearchItem(tag).hasAncestor(possibleAncestor);
 	}
 	
@@ -433,7 +426,6 @@ public class RevisionTree implements AutoCloseable {
 		for(RevisionTag tip : tips) {
 			if(tip.equals(revTag)) continue;
 			if(descendentOf(tip, revTag)) {
-				Util.debugLog("RevisionTree " + config.getMaster().getName() + ": " + Util.formatRevisionTag(revTag) + " superceded by " + Util.formatRevisionTag(tip) + " (descendent)");
 				return true; // we have a tip that descends from this tag
 			}
 		}
@@ -452,7 +444,6 @@ public class RevisionTree implements AutoCloseable {
 				// if this is a merge, do we already have a merge including everything this one does?
 				Collection<RevisionTag> tipParents = parentsForTagLocal(possibleSuperset);
 				if(tipParents != null && tipParents.containsAll(parents)) {
-					Util.debugLog("RevisionTree " + config.getMaster().getName() + ": " + Util.formatRevisionTag(revTag) + " superceded by " + Util.formatRevisionTag(possibleSuperset) + " (already contains all contents)");
 					return true;
 				}
 				
@@ -465,7 +456,6 @@ public class RevisionTree implements AutoCloseable {
 				}
 				
 				if(containsParents) {
-					Util.debugLog("RevisionTree " + config.getMaster().getName() + ": " + Util.formatRevisionTag(revTag) + " superceded by " + Util.formatRevisionTag(possibleSuperset) + " (contains descendents of parents)");
 					return true;
 				}
 			}
