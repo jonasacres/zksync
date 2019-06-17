@@ -713,10 +713,8 @@ public class ZKFS extends FS {
 			for(String subpath : sorted) {
 				String fqSubpath = Paths.get(path, subpath).toString();
 				Inode inode = inodeForPath(fqSubpath, false);
-				int len = 30 - padding.length();
-				builder.append(String.format("%s%" + len + "s inodeId %4d, size %8d, identity %16x, type %02x, nlink %d, %s\n",
-						padding,
-						subpath,
+				builder.append(String.format("%-30s inodeId %4d, size %8d, identity %16x, type %02x, nlink %02d, %s\n",
+						padding + subpath,
 						inode.stat.getInodeId(),
 						inode.stat.getSize(),
 						inode.identity,

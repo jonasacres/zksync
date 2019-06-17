@@ -412,6 +412,12 @@ public class FSMirror {
 
 	protected Stat copy(FS src, FS dest, String path) throws IOException {
 		Stat srcStat = null, destStat = null;
+		RevisionTag tag;
+		if(src instanceof ZKFS) {
+			tag = ((ZKFS) src).baseRevision;
+		} else {
+			tag = ((ZKFS) dest).baseRevision;
+		}
 
 		copyParentDirectories(src, dest, path);
 		try {
@@ -420,6 +426,7 @@ public class FSMirror {
 				destStat = dest.lstat(path);
 			} catch(ENOENTException exc) {}
 			
+			System.out.println("FSMirror " + zkfs.getArchive().getMaster().getName() + ": precopy " + Util.formatRevisionTag(tag) + " " + src.getClass().getSimpleName() + " -> " + dest.getClass().getSimpleName() + " " + path + " size " + srcStat.getSize());
 			if(srcStat.isRegularFile()) {
 				copyFile(src, dest, path, srcStat, destStat);
 			} else if(srcStat.isFifo()) {
@@ -433,6 +440,22 @@ public class FSMirror {
 			}
 
 			applyStat(srcStat, dest, path);
+			Stat zkstat = zkfs.lstat(path);
+			Stat tstat = target.lstat(path);
+			StringBuilder sb = new StringBuilder();
+			sb.append("FSMirror " + zkfs.getArchive().getMaster().getName() + ": postcopy " + Util.formatRevisionTag(tag) + " " + src.getClass().getSimpleName() + " -> " + dest.getClass().getSimpleName() + " " + path + "\n");
+			sb.append(String.format("\tLocalFS stat: size %d, mtime %d, type %02x\n",
+					tstat.getSize(),
+					tstat.getMtime(),
+					tstat.getType()));
+			sb.append(String.format("\t   ZKFS stat: size %d, mtime %d, type %02x, inodeId %d, nlink %d, identity %16x\n",
+					zkstat.getSize(),
+					zkstat.getMtime(),
+					zkstat.getType(),
+					zkstat.getInodeId(),
+					zkfs.inodeForPath(path, false).nlink,
+					zkfs.inodeForPath(path, false).identity));
+			Util.debugLog(sb.toString());
 		} catch(ENOENTException exc) {
 			try {
 				dest.unlink(path);

@@ -4,7 +4,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
+
+import org.apache.commons.lang3.mutable.MutableLong;
 
 import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.EACCESException;
@@ -322,30 +325,71 @@ public class InodeTable extends ZKFile {
 	public synchronized void rebuildLinkCounts() throws IOException {
 		zkfs.lockedOperation(()->{
 			freelist.clearList();
-			
-			for(long i = USER_INODE_ID_START; i < nextInodeId(); i++) {
-				Inode inode = inodeWithId(i);
-				inode.nlink = 0;
-			}
+			MutableLong maxInodeId = new MutableLong(nextInodeId()-1);
+			HashMap<Long,Integer> inodeCounts = new HashMap<>();
+			StringBuffer sb = new StringBuffer(String.format("InodeTable %s: rebuilding, base revision %s, nextInodeId %d\n",
+					zkfs.archive.master.getName(),
+					Util.formatRevisionTag(zkfs.baseRevision),
+					nextInodeId()));
 			
 			try(ZKDirectory dir = zkfs.opendir("/")) {
 				dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS|Directory.LIST_OPT_INCLUDE_DOT_DOTDOT, (path, stat, isBroken)->{
-					Inode inode = inodeWithId(stat.getInodeId());
-					inode.nlink++;
+					long inodeId = stat.getInodeId();
+					Inode inode = inodeWithId(inodeId);
+					int nlinkCount = inodeCounts.getOrDefault(inodeId, 0) + 1;
+					sb.append(String.format("\t%-50s, inodeId %4d, identity %16x, counted nlink %2d, existing nlink %2d\n",
+							path,
+							inodeId,
+							inode.identity,
+							nlinkCount,
+							inode.nlink));
+					inodeCounts.put(inodeId, nlinkCount);
+					if(inodeId > maxInodeId.longValue()) {
+						maxInodeId.setValue(inodeId);
+					}
 				});
 			}
 			
-			for(long i = nextInodeId()-1; i >= USER_INODE_ID_START; i--) {
-				Inode inode = inodeWithId(i);
-				if(inode.nlink == 0) {
-					if(inode.isMarkedDeleted()) {
-						freelist.freeInodeId(i); // we cleared the free list, so add this back in
+			// walk backwards through inode table, handling any 0 nlink inodes as we go
+			for(long inodeId = maxInodeId.longValue(); inodeId >= USER_INODE_ID_START; inodeId--) {
+				Inode inode = inodeWithId(inodeId);
+				int nlink = inodeCounts.getOrDefault(inodeId, 0);
+				if(inode.nlink != nlink) {
+					if(nlink == 0) {
+						sb.append(String.format("\tfree orphaned inodeId %3d, identity %16x, previous nlink %02d, type %02x, changedfrom %s\n",
+								inode.getStat().getInodeId(),
+								inode.identity,
+								inode.nlink,
+								inode.getStat().getType(),
+								Util.formatRevisionTag(inode.changedFrom)));
+						inode.nlink = 0;
+						unlink(inodeId); // found an orphaned inode, free it up
 					} else {
-						unlink(i); // found an orphaned inode, free it up
+						sb.append(String.format("\tupdate nlink for inodeId %3d, identity %16x, previous nlink %02d, new nlink %02d, type %02x, changedfrom %s\n",
+								inode.getStat().getInodeId(),
+								inode.identity,
+								inode.nlink,
+								nlink,
+								inode.getStat().getType(),
+								Util.formatRevisionTag(inode.changedFrom)));
+						inode.nlink = nlink;
 					}
+				} else if(nlink == 0) {
+					/* we cleared the free list, so add the inode ID back in
+					 * (freelist is a LIFO, so we want lowest inode IDs on top of the stack, hence why we
+					 * traverse the inode table from end to start) */
+					sb.append(String.format("\tadd to freelist previously freed inode inodeId %3d, identity %16x, previous nlink %02d, type %02x, changedfrom %s\n",
+							inode.getStat().getInodeId(),
+							inode.identity,
+							inode.nlink,
+							inode.getStat().getType(),
+							Util.formatRevisionTag(inode.changedFrom)));
+					freelist.freeInodeId(inodeId);
 				}
 			}
 			
+			this.nextInodeId = -1;
+			Util.debugLog(sb.toString());
 			dirty = true;
 			
 			return null;
@@ -603,13 +647,14 @@ public class InodeTable extends ZKFile {
 		s += "Inode table dump for " + Util.formatRevisionTag(zkfs.baseRevision) + ", nextInodeId=" + nextInodeId() + ", dirty=" + dirty + "\n";
 		for(int i = 0; i < nextInodeId(); i++) {
 			Inode inode = inodeWithId(i);
-			s += String.format("\tinodeId %4d: identity %16x, %s, mtime %10d, nlink %d, hash %s\n",
+			s += String.format("\tinodeId %4d: identity %16x, %s, size %7d, nlink %02d, type %02x, changedfrom %s\n",
 					inode.stat.getInodeId(),
 					inode.identity,
 					Util.formatRefTag(inode.refTag),
-					inode.getStat().getMtime(),
+					inode.getStat().getSize(),
 					inode.nlink,
-					Util.bytesToHex(zkfs.archive.crypto.hash(inode.serialize()), 4));
+					inode.getStat().getType(),
+					Util.formatRevisionTag(inode.changedFrom));
 		}
 		
 		return s;
