@@ -258,13 +258,54 @@ public class FSMirror {
 	}
 
 	protected synchronized void suspectedTargetPathChange(String path) throws IOException {
-		if(!isChanged(path)) return;
+		if(!isChanged(null, path)) return;
 		observedTargetPathChange(path);
 	}
 	
-	protected boolean isChanged(String path) throws IOException {
+	protected boolean isChanged(ZKFS oldFs, String path) throws IOException {
+		boolean changed = false;
 		if(path.equals("") || path.equals("/")) return false;
-		Stat tstat = getLstat(target, path), zstat = getLstat(zkfs, path);
+		Inode inode = getInode(zkfs, path), oldInode = null;
+		Stat tstat = getLstat(target, path), zstat = inode == null ? null : inode.stat;
+		if(oldFs != null) {
+			oldInode = getInode(oldFs, path);
+		}
+		
+		StringBuilder sb = new StringBuilder(String.format("FSMirror %s: isChanged (old %s), %s\n",
+				zkfs.archive.master.getName(),
+				oldFs != null ? Util.formatRevisionTag(oldFs.baseRevision) : "null",
+				path));
+		if(tstat == null) {
+			sb.append("\ttarget:[null]\n");
+		} else {
+			sb.append(String.format("\ttarget:[type %02x, size %7d, mtime %12d, mode 0%3o]\n",
+					tstat.getType(),
+					tstat.getSize(),
+					tstat.getMtime(),
+					tstat.getMode()));
+		}
+		if(zstat == null) {
+			sb.append(String.format("\t  zkfs:[null] %s",
+					Util.formatRevisionTag(zkfs.baseRevision)));
+		} else {
+			sb.append(String.format("\t  zkfs:[type %02x, size %7d, mtime %12d, mode 0%3o] %s, %s",
+					zstat.getType(),
+					zstat.getSize(),
+					zstat.getMtime(),
+					zstat.getMode(),
+					Util.formatRevisionTag(zkfs.baseRevision),
+					Util.formatRefTag(inode.getRefTag())));
+		}
+		
+		if(oldInode != null) {
+			sb.append(String.format("\n\t   old (%s): %s",
+					Util.formatRevisionTag(oldFs.baseRevision),
+					Util.formatRefTag(oldInode.getRefTag())));
+		} else if(oldFs != null) {
+			sb.append(String.format("\n\t   old (%s): null",
+					Util.formatRevisionTag(oldFs.baseRevision)));
+		}
+		
 		if(tstat == null && zstat == null) return false;
 		if(tstat == null || zstat == null) {
 			logger.trace("FS {}: FSMirror detects difference at {} due to existence (zkfs {}, target {})",
@@ -272,59 +313,70 @@ public class FSMirror {
 					path,
 					zstat != null,
 					tstat != null);
-			return true;
+			changed = true;
+		} else if(oldInode != null && !inode.getRefTag().equals(oldInode.getRefTag())) {
+			logger.trace("FS {}: FSMirror detects difference at {} since reftag has changed (new {}, old {})",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					path,
+					Util.formatRefTag(inode.getRefTag()),
+					Util.formatRefTag(oldInode.getRefTag()));
+			changed = true;
 		} else if(tstat.getType() != zstat.getType()) {
 			logger.trace("FS {}: FSMirror detects difference at {} due to differing type (zkfs {}, target {})",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					path,
 					zstat.getType(),
 					tstat.getType());
-			return true;
+			changed = true;
 		} else if(zstat.getType() == Stat.TYPE_REGULAR_FILE && tstat.getSize() != zstat.getSize()) {
 			logger.trace("FS {}: FSMirror detects difference at {} due to differing size (zkfs {}, target {})",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					path,
 					zstat.getSize(),
 					tstat.getSize());
-			return true;
+			changed = true;
 		} else if(zstat.getType() == Stat.TYPE_REGULAR_FILE && tstat.getMtime() != zstat.getMtime()) {
 			logger.trace("FS {}: FSMirror detects difference at {} due to differing mtime (zkfs {}, target {})",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					path,
 					zstat.getMtime(),
 					tstat.getMtime());
-			return true;
+			changed = true;
 		} else if(tstat.getMode() != zstat.getMode() && zstat.getType() != Stat.TYPE_SYMLINK) {
 			logger.trace("FS {}: FSMirror detects difference at {} due to differing mode (zkfs 0{}, target 0{})",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					path,
 					Integer.toOctalString(zstat.getMode()),
 					Integer.toOctalString(tstat.getMode()));
-			return true;
+			changed = true;
 		} else if(zstat.getType() == Stat.TYPE_SYMLINK && !target.readlink(path).equals(zkfs.readlink(path))) {
 			logger.trace("FS {}: FSMirror detects difference at {} due to differing target (zkfs {}, target {})",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					path,
 					zkfs.readlink(path),
 					target.readlink(path));
-			return true;
+			changed = true;
 		}
 		
-		return false; // nothing changed
+		sb.append(String.format("\n\tchanged: %s",
+				changed ? "true" : "false"));
+		Util.debugLog(sb.toString());
+		
+		return changed; // nothing changed
 	}
 
 	public void syncArchiveToTarget() throws IOException {
-		ZKFS oldFs = lastRev != null ? lastRev.readOnlyFS() : null;
-		try {
-			boolean wasWatching = isWatching();
-			if(wasWatching) {
-				stopWatch();
-			}
-	
-			synchronized(this) {
+		boolean wasWatching = isWatching();
+		if(wasWatching) {
+			stopWatch();
+		}
+
+		synchronized(this) {
+			ZKFS oldFs = lastRev != null ? lastRev.readOnlyFS() : null;
+			try {
 				try(ZKDirectory dir = zkfs.opendir("/")) {
 					dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink)->{
-						if(!isChanged(path)) return;
+						if(!isChanged(oldFs, path)) return;
 						syncPathArchiveToTarget(oldFs, path);
 					});
 		
@@ -334,12 +386,14 @@ public class FSMirror {
 						startWatch();
 					}
 				}
+				
+				lastRev = zkfs.baseRevision;
+			} finally {
+				if(oldFs != null) {
+					oldFs.close();
+				}
 			}
-		} finally {
-			if(oldFs != null) {
-				oldFs.close();
-			}
-		}
+		} 
 	}
 
 	public synchronized void syncTargetToArchive() throws IOException {
@@ -373,40 +427,31 @@ public class FSMirror {
 	}
 
 	protected void syncPathArchiveToTarget(ZKFS oldFs, String path) throws IOException {
-		Inode existing = null;
-		try {
-			existing = oldFs != null ? oldFs.inodeForPath(path) : null;
-		} catch(ENOENTException exc) {}
-
-		Inode incoming = null;
-		try {
-			incoming = zkfs.inodeForPath(path, false);
-		} catch(ENOENTException exc) {}
+		Inode incoming = getInode(zkfs, path);
 
 		// TODO Someday: Consider a way to preserve local changes.
 
-		if(existing == null) {
-			if(incoming == null) return; // should not actually be possible
-			try {
-				copy(zkfs, target, path);
-			} catch(IOException exc) {
-				logger.warn("FS {}: FSMirror caught exception copying path to target: {}",
-						Util.formatArchiveId(zkfs.archive.config.archiveId),
-						path,
-						exc);
-			} catch(UnsupportedOperationException exc) {
-				logger.info("FS {}: FSMirror skipping path due to lack of local support (maybe we need superuser?): {}",
-						Util.formatArchiveId(zkfs.archive.config.archiveId),
-						path,
-						exc);
-			}
-		} else if(incoming == null) {
+		if(incoming == null) {
+			// null inode means the path is deleted, so unlink it locally 
 			try {
 				target.unlink(path);
-			} catch(ENOENTException exc) {}
-		} else {
-			if(existing.compareTo(incoming) == 0) return;
+			} catch(ENOENTException exc) {} // enoent => file wasn't on target FS either, no big deal
+			
+			return;
+		}
+		
+		try {
 			copy(zkfs, target, path);
+		} catch(IOException exc) {
+			logger.warn("FS {}: FSMirror caught exception copying path to target: {}",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					path,
+					exc);
+		} catch(UnsupportedOperationException exc) {
+			logger.info("FS {}: FSMirror skipping path due to lack of local support (maybe we need superuser?): {}",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					path,
+					exc);
 		}
 	}
 
@@ -575,6 +620,14 @@ public class FSMirror {
 	protected Stat getLstat(FS fs, String path) {
 		try {
 			return fs.lstat(path);
+		} catch(IOException exc) {
+			return null;
+		}
+	}
+	
+	protected Inode getInode(ZKFS fs, String path) {
+		try {
+			return fs.inodeForPath(path, false);
 		} catch(IOException exc) {
 			return null;
 		}

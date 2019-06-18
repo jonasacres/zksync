@@ -115,7 +115,8 @@ public class InodeTable extends ZKFile {
 	
 	/** calculate the next inode ID to be issued (by scanning for the largest issued inode ID) */
 	protected synchronized long lookupNextInodeId() throws IOException {
-		Inode[] inodes = inodesByPage.get(inode.refTag.numPages-1);
+		long pageNum = inode.refTag.numPages-1;
+		Inode[] inodes = inodesByPage.get(pageNum);
 		
 		long maxInodeId = USER_INODE_ID_START-1;
 		for(Inode inode : inodes) {
@@ -123,6 +124,13 @@ public class InodeTable extends ZKFile {
 			maxInodeId = Math.max(maxInodeId, inode.stat.getInodeId());
 		}
 		
+		Util.debugLog(String.format("InodeTable %s: %s, dirty=%s last page is %d, scanned max inodeId %d (next inodeId %d)",
+				zkfs.archive.master.getName(),
+				Util.formatRevisionTag(zkfs.baseRevision),
+				zkfs.dirty ? "true" : "false",
+				pageNum,
+				maxInodeId,
+				maxInodeId + 1));
 		return maxInodeId+1;
 	}
 	
@@ -233,7 +241,7 @@ public class InodeTable extends ZKFile {
 			inode.markDeleted();
 			
 			// don't need to add to the freelist if we're already in it implicitly (e.g. we deleted the last inode in the table)
-			if(inodeId < nextInodeId()) {
+			if(USER_INODE_ID_START <= inodeId && inodeId < nextInodeId()) {
 				freelist.freeInodeId(inodeId);
 			}
 		}
@@ -275,13 +283,25 @@ public class InodeTable extends ZKFile {
 			 * get reissued out-of-order in diff merges, meaning that they will remain in the freelist
 			 * despite being allocated...
 			 */
-			long inodeId = nextInodeId;
-			while(inodeId >= nextInodeId || !inodeWithId(inodeId).isDeleted()) {
+			long inodeId = Long.MAX_VALUE;
+			while(inodeId >= nextInodeId() || !inodeWithId(inodeId).isDeleted()) {
 				inodeId = freelist.issueInodeId(); 
 			}
+
+			Util.debugLog(String.format("InodeTable %s: %s, dirty=%s issuing inodeId %d from freelist",
+					zkfs.archive.master.getName(),
+					Util.formatRevisionTag(zkfs.baseRevision),
+					zkfs.dirty ? "true" : "false",
+					inodeId));
+			
 			return inodeId;
 		} catch(FreeListExhaustedException exc) {
 			nextInodeId(); // ensure we have nextInodeId loaded
+			Util.debugLog(String.format("InodeTable %s: %s, dirty=%s issuing inodeId %d from sequence",
+					zkfs.archive.master.getName(),
+					Util.formatRevisionTag(zkfs.baseRevision),
+					zkfs.dirty ? "true" : "false",
+					nextInodeId));
 			return nextInodeId++;
 		}
 	}
@@ -351,19 +371,21 @@ public class InodeTable extends ZKFile {
 			}
 			
 			// walk backwards through inode table, handling any 0 nlink inodes as we go
-			for(long inodeId = maxInodeId.longValue(); inodeId >= USER_INODE_ID_START; inodeId--) {
+			for(long inodeId = maxInodeId.longValue(); inodeId >= 0; inodeId--) {
 				Inode inode = inodeWithId(inodeId);
 				int nlink = inodeCounts.getOrDefault(inodeId, 0);
 				if(inode.nlink != nlink) {
 					if(nlink == 0) {
-						sb.append(String.format("\tfree orphaned inodeId %3d, identity %16x, previous nlink %02d, type %02x, changedfrom %s\n",
-								inode.getStat().getInodeId(),
-								inode.identity,
-								inode.nlink,
-								inode.getStat().getType(),
-								Util.formatRevisionTag(inode.changedFrom)));
 						inode.nlink = 0;
-						unlink(inodeId); // found an orphaned inode, free it up
+						if((inode.flags & Inode.FLAG_RETAIN) == 0) {
+							sb.append(String.format("\tfree orphaned inodeId %3d, identity %16x, previous nlink %02d, type %02x, changedfrom %s\n",
+									inode.getStat().getInodeId(),
+									inode.identity,
+									inode.nlink,
+									inode.getStat().getType(),
+									Util.formatRevisionTag(inode.changedFrom)));
+							unlink(inodeId); // found an orphaned inode, free it up
+						}
 					} else {
 						sb.append(String.format("\tupdate nlink for inodeId %3d, identity %16x, previous nlink %02d, new nlink %02d, type %02x, changedfrom %s\n",
 								inode.getStat().getInodeId(),
@@ -374,7 +396,7 @@ public class InodeTable extends ZKFile {
 								Util.formatRevisionTag(inode.changedFrom)));
 						inode.nlink = nlink;
 					}
-				} else if(nlink == 0) {
+				} else if(nlink == 0 && (inode.flags & Inode.FLAG_RETAIN) == 0) {
 					/* we cleared the free list, so add the inode ID back in
 					 * (freelist is a LIFO, so we want lowest inode IDs on top of the stack, hence why we
 					 * traverse the inode table from end to start) */
@@ -384,7 +406,10 @@ public class InodeTable extends ZKFile {
 							inode.nlink,
 							inode.getStat().getType(),
 							Util.formatRevisionTag(inode.changedFrom)));
-					freelist.freeInodeId(inodeId);
+					inode.markDeleted();
+					if(inodeId >= USER_INODE_ID_START) {
+						freelist.freeInodeId(inodeId);
+					}
 				}
 			}
 			

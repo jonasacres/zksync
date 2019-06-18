@@ -144,7 +144,7 @@ public class DiffSetResolver {
 				// it was created before the fork and no one moved it, so did someone edit it?
 				for(RevisionTag tag : revsWithPath) {
 					try(ZKFS fs = tag.readOnlyFS()) {
-						long changeHeight = fs.inodeForPath(diff.path).getChangedFrom().getHeight() + 1;
+						long changeHeight = fs.inodeForPath(diff.path, false).getChangedFrom().getHeight() + 1;
 						if(changeHeight > ancestor.getHeight()) return inodeId; // edited; keep the file.
 					}
 				}

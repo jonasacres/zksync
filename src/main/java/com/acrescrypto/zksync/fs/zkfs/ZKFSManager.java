@@ -141,6 +141,11 @@ public class ZKFSManager implements AutoCloseable {
 							Util.formatArchiveId(fs.archive.config.archiveId),
 							Util.formatRevisionTag(fs.baseRevision),
 							Util.formatRevisionTag(latest));
+					Util.debugLog(String.format("ZKFSManager %s: IS rebasing to new revtag %s from %s, latest is %s\n",
+							fs.archive.master.getName(),
+							Util.formatRevisionTag(revtag),
+							Util.formatRevisionTag(fs.baseRevision),
+							Util.formatRevisionTag(latest)));
 					fs.rebase(latest);
 					if(mirror != null) {
 						mirror.syncArchiveToTarget();
@@ -152,6 +157,17 @@ public class ZKFSManager implements AutoCloseable {
 							Util.formatArchiveId(fs.archive.config.archiveId),
 							exc);
 				}
+		} else {
+			Util.debugLog(String.format("ZKFSManager %s: NOT rebasing to new revtag %s from %s, latest is %s (autofollow=%s, !dirty=%s, !alreadyOnLatest=%s, isDescendent=%s)\n",
+					fs.archive.master.getName(),
+					Util.formatRevisionTag(revtag),
+					Util.formatRevisionTag(fs.baseRevision),
+					Util.formatRevisionTag(latest),
+					autofollow ? "true" : "false",
+					!fs.isDirty() ? "true" : "false",
+					!fs.baseRevision.equals(latest) ? "true" : "false",
+					isDescendent ? "true" : "false"
+					));
 		}
 	}
 	
@@ -233,6 +249,10 @@ public class ZKFSManager implements AutoCloseable {
 				
 				setupAutocommitTimer();
 			} catch (IOException exc) {
+				Util.debugLog(String.format("ZKFS %s %s: IOException performing autocommit on revision %s\n",
+						Util.formatArchiveId(fs.archive.config.archiveId),
+						fs.archive.master.getName(),
+						fs.getBaseRevision()));
 				exc.printStackTrace();
 				logger.error("ZKFS {} {}: IOException performing autocommit",
 						Util.formatArchiveId(fs.archive.config.archiveId),
