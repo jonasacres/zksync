@@ -384,7 +384,12 @@ public class InodeTable extends ZKFile {
 									inode.nlink,
 									inode.getStat().getType(),
 									Util.formatRevisionTag(inode.changedFrom)));
-							unlink(inodeId); // found an orphaned inode, free it up
+							try {
+								unlink(inodeId); // found an orphaned inode, free it up
+							} catch(ENOENTException exc) {
+								/* we might have found an inode that wasn't OK to unlink
+								 * but that means the inode isn't linked anyway, so ignore it */
+							}
 						}
 					} else {
 						sb.append(String.format("\tupdate nlink for inodeId %3d, identity %16x, previous nlink %02d, new nlink %02d, type %02x, changedfrom %s\n",

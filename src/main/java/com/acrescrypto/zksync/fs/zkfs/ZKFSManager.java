@@ -24,6 +24,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class ZKFSManager implements AutoCloseable {
 	protected int autocommitIntervalMs;
+	protected int maxAutocommitIntervalMs = -1;
 	protected boolean autocommit;
 	protected boolean autofollow;
 	protected boolean automirror;
@@ -178,13 +179,23 @@ public class ZKFSManager implements AutoCloseable {
 	public int getAutocommitIntervalMs() {
 		return autocommitIntervalMs;
 	}
+	
+	public int getMaxAutocommitIntervalMs() {
+		return maxAutocommitIntervalMs;
+	}
 
 	public void setAutocommitIntervalMs(int autocommitIntervalMs) {
 		if(this.autocommitIntervalMs == autocommitIntervalMs) return;
 		this.autocommitIntervalMs = autocommitIntervalMs;
 		setupAutocommitTimer();
 		autosaveIfDesired();
-		
+	}
+	
+	public void setMaxAutocommitIntervalMs(int maxAutocommitIntervalMs) {
+		if(this.maxAutocommitIntervalMs == maxAutocommitIntervalMs) return;
+		this.maxAutocommitIntervalMs = maxAutocommitIntervalMs;
+		setupAutocommitTimer();
+		autosaveIfDesired();
 	}
 
 	public boolean isAutocommiting() {
@@ -236,7 +247,7 @@ public class ZKFSManager implements AutoCloseable {
 				autocommitIntervalMs,
 				System.identityHashCode(this)
 				);
-		autocommitTimer = new SnoozeThread(autocommitIntervalMs, false, ()->{
+		autocommitTimer = new SnoozeThread(autocommitIntervalMs, maxAutocommitIntervalMs, false, ()->{
 			try {
 				if(fs.isDirty()) {
 					logger.info("ZKFS {} {}: ZKFSManager triggering autocommit (id={})",

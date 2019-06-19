@@ -32,6 +32,12 @@ public class LocalFS extends FS {
 		Stat stat = new Stat();
 		Path path = qualifiedPath(pathStr);
 		
+		/* TODO: Profiler shows that in a test like indefiniteTestComplexManyPeerEquivalent, we
+		 * burn most of our time on checking user and group names (string, not ID). In practice, most
+		 * use cases will never care. Consider having the ability to ignore uid/gid/username/group name
+		 * and force them to always be "easysafe" or something. 
+		 */
+		
 		try {
 			stat.setAtime(decodeTime(Files.getAttribute(path, "lastAccessTime", linkOpt)));
 			stat.setMtime(decodeTime(Files.getAttribute(path, "lastModifiedTime", linkOpt)));

@@ -457,13 +457,6 @@ public class FSMirror {
 
 	protected Stat copy(FS src, FS dest, String path) throws IOException {
 		Stat srcStat = null, destStat = null;
-		RevisionTag tag;
-		if(src instanceof ZKFS) {
-			tag = ((ZKFS) src).baseRevision;
-		} else {
-			tag = ((ZKFS) dest).baseRevision;
-		}
-
 		copyParentDirectories(src, dest, path);
 		try {
 			srcStat = src.lstat(path);
@@ -471,7 +464,37 @@ public class FSMirror {
 				destStat = dest.lstat(path);
 			} catch(ENOENTException exc) {}
 			
-			System.out.println("FSMirror " + zkfs.getArchive().getMaster().getName() + ": precopy " + Util.formatRevisionTag(tag) + " " + src.getClass().getSimpleName() + " -> " + dest.getClass().getSimpleName() + " " + path + " size " + srcStat.getSize());
+			applyStat(srcStat, dest, path);
+			Stat zkstat = getLstat(zkfs, path);
+			Stat tstat = getLstat(target, path);
+			StringBuilder sb = new StringBuilder();
+			RevisionTag tag = src instanceof ZKFS ? ((ZKFS) src).baseRevision : ((ZKFS) dest).baseRevision;
+
+			sb.append(String.format("FSMirror %s: precopy %s %s -> %s %s\n",
+					zkfs.getArchive().getMaster().getName(),
+					Util.formatRevisionTag(tag),
+					src.getClass().getSimpleName(),
+					dest.getClass().getSimpleName(),
+					path));
+			if(tstat != null) {
+				sb.append(String.format("\tLocalFS stat: size %d, mtime %d, type %02x\n",
+						tstat.getSize(),
+						tstat.getMtime(),
+						tstat.getType()));
+			}
+			if(zkstat != null) {
+				Inode inode = zkfs.inodeForPath(path, false);
+				sb.append(String.format("\t   ZKFS stat: size %d, mtime %d, type %02x, inodeId %d, nlink %d, identity %16x, %s\n",
+						zkstat.getSize(),
+						zkstat.getMtime(),
+						zkstat.getType(),
+						zkstat.getInodeId(),
+						inode.nlink,
+						inode.identity,
+						Util.formatRefTag(inode.getRefTag())));
+			}
+			Util.debugLog(sb.toString());
+
 			if(srcStat.isRegularFile()) {
 				copyFile(src, dest, path, srcStat, destStat);
 			} else if(srcStat.isFifo()) {
@@ -485,21 +508,30 @@ public class FSMirror {
 			}
 
 			applyStat(srcStat, dest, path);
-			Stat zkstat = zkfs.lstat(path);
-			Stat tstat = target.lstat(path);
-			StringBuilder sb = new StringBuilder();
-			sb.append("FSMirror " + zkfs.getArchive().getMaster().getName() + ": postcopy " + Util.formatRevisionTag(tag) + " " + src.getClass().getSimpleName() + " -> " + dest.getClass().getSimpleName() + " " + path + "\n");
+			zkstat = zkfs.lstat(path);
+			tstat = target.lstat(path);
+			sb = new StringBuilder();
+			tag = src instanceof ZKFS ? ((ZKFS) src).baseRevision : ((ZKFS) dest).baseRevision;
+			Inode inode = zkfs.inodeForPath(path, false);
+
+			sb.append(String.format("FSMirror %s: postcopy %s %s -> %s %s\n",
+					zkfs.getArchive().getMaster().getName(),
+					Util.formatRevisionTag(tag),
+					src.getClass().getSimpleName(),
+					dest.getClass().getSimpleName(),
+					path));
 			sb.append(String.format("\tLocalFS stat: size %d, mtime %d, type %02x\n",
 					tstat.getSize(),
 					tstat.getMtime(),
 					tstat.getType()));
-			sb.append(String.format("\t   ZKFS stat: size %d, mtime %d, type %02x, inodeId %d, nlink %d, identity %16x\n",
+			sb.append(String.format("\t   ZKFS stat: size %d, mtime %d, type %02x, inodeId %d, nlink %d, identity %16x, %s\n",
 					zkstat.getSize(),
 					zkstat.getMtime(),
 					zkstat.getType(),
 					zkstat.getInodeId(),
-					zkfs.inodeForPath(path, false).nlink,
-					zkfs.inodeForPath(path, false).identity));
+					inode.nlink,
+					inode.identity,
+					Util.formatRefTag(inode.getRefTag())));
 			Util.debugLog(sb.toString());
 		} catch(ENOENTException exc) {
 			try {
@@ -541,29 +573,9 @@ public class FSMirror {
 						srcFile.seek(0, File.SEEK_CUR),
 						srcFile.getStat().getSize(),
 						chunk.length);
-				if(chunk.length == 0) {
-					ZKFile zk = (ZKFile) srcFile;
-					logger.error("FS {}: FSMirror DANGER ZONE -- {} reftag {}/{}, {} chunks, {} pages, revtag {}\n{}",
-							Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
-							path,
-							Util.formatRefTag(zk.getInode().getRefTag()),
-							Util.hexdumpStr("hextag", zk.getInode().getRefTag().getBytes()),
-							zk.tree.numChunks,
-							zk.tree.numPages,
-							Util.formatRevisionTag(zk.zkfs.baseRevision),
-							zk.inode.dump());
-					InodeTable table = zk.getFS().getInodeTable();
-					for(int i = 0; i < zk.getFS().getInodeTable().nextInodeId(); i++) {
-						logger.info("FS {}: FSMirror Inode Dump {}\n{}",
-								Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
-								i,
-								table.inodeWithId(i).dump());
-					}
-					throw new RuntimeException("FSMirror sync failed");
-				}
 				destFile.write(chunk);
 			}
-
+			
 			destFile.close();
 			destFile = null;
 		} catch(FileNotFoundException exc) {

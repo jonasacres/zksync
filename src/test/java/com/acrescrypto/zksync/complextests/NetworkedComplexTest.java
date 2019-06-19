@@ -64,11 +64,18 @@ public class NetworkedComplexTest {
 	@After
 	public void afterEach() throws IOException {
 		dhtRoot.close();
-		alice.getFs().getArchive().getConfig().getRevisionList().dumpDot();
-		bob.getFs().getArchive().getConfig().getRevisionList().dumpDot();
-		alice.close();
-		bob.close();
+		if(alice != null) {
+			alice.getFs().getArchive().getConfig().getRevisionList().dumpDot();
+			alice.close();
+		}
+		
+		if(bob != null) {
+			bob.getFs().getArchive().getConfig().getRevisionList().dumpDot();
+			bob.close();
+		}
+		
 		if(charlie != null) {
+			charlie.getFs().getArchive().getConfig().getRevisionList().dumpDot();
 			charlie.close();
 		}
 		// scrub();
@@ -158,6 +165,7 @@ public class NetworkedComplexTest {
 		manager.setAutofollow(true);
 		manager.setAutocommit(true);
 		manager.setAutocommitIntervalMs(1000);
+		manager.setMaxAutocommitIntervalMs(3000);
 		manager.setAutomirrorPath(automirrorPath(peerName));
 		manager.setAutomirror(true);
 		manager.setAutomerge(true);
@@ -188,7 +196,7 @@ public class NetworkedComplexTest {
 		return manager.getFs().getArchive().getConfig().getSwarm().numConnections();
 	}
 	
-	public boolean fsMatch(FS ref, FS comp, boolean dump) throws IOException {
+	public boolean fsMatch(FS ref, FS comp, String refName, String compName, boolean dump) throws IOException {
 		MutableBoolean matches = new MutableBoolean();
 		matches.setTrue();
 		
@@ -210,22 +218,28 @@ public class NetworkedComplexTest {
 					}
 				} catch(PathMismatchException exc) {
 					// TODO: ditch this and matches when done
-					Stat bobStat = null, aliceStat = null;
+					Stat compStat = null, refStat = null;
 					String out = "";
 					out += "Path mismatch: " + exc.path + " " + exc.reason + "\n";
 
 					try {
-						bobStat = bob.getFs().lstat(exc.path);
-						out += "  Bob's copy: " + bobStat.getSize() + " bytes, inode " + bobStat.getInodeId() + "\n";
+						compStat = comp.lstat(exc.path);
+						out += String.format("  Comparison copy (%12s): %d bytes, inode %d\n",
+								compName,
+								compStat.getSize(),
+								compStat.getInodeId());
 					} catch(ENOENTException exc2) {
-						out += "  Bob's copy: ENOENT\n";
+						out += "  Comparison copy: ENOENT\n";
 					}
 					
 					try {
-						aliceStat = alice.getFs().lstat(exc.path);
-						out += "Alice's copy: " + aliceStat.getSize() + " bytes, inode " + aliceStat.getInodeId() + "\n";
+						refStat = ref.lstat(exc.path);
+						out += String.format("   Reference copy (%12s): %d bytes, inode %d\n",
+								refName,
+								refStat.getSize(),
+								refStat.getInodeId());
 					} catch(ENOENTException exc2) {
-						out += "Alice's copy: ENOENT\n";
+						out += "   Reference copy: ENOENT\n";
 					}
 					
 					if(dump) log(out);
@@ -253,17 +267,55 @@ public class NetworkedComplexTest {
 				return false;
 			}
 			
-			if(!fsMatch(alice.getMirror().getTarget(), manager.getMirror().getTarget(), dump)) return false;
-			if(!fsMatch(manager.getMirror().getTarget(), alice.getMirror().getTarget(), dump)) return false;
+			if(!fsMatch(alice.getMirror().getTarget(), manager.getMirror().getTarget(), "Alice", "Bob", dump)) return false;
+			if(!fsMatch(manager.getMirror().getTarget(), alice.getMirror().getTarget(), "Bob", "Alice", dump)) return false;
 		}
 		
 		return true;
 	}
 	
+	public boolean multiPeersMatch(ZKFSManager[] managers, boolean dump) throws IOException {
+		for(ZKFSManager manager : managers) {
+			if(manager == managers[0]) continue;
+			if(!managers[0].getFs().getBaseRevision().equals(manager.getFs().getBaseRevision())) {
+				if(dump) {
+					log("Mismatched revision: "
+						+ Util.formatRevisionTag(managers[0].getFs().getBaseRevision())
+						+ " vs "
+						+ Util.formatRevisionTag(manager.getFs().getBaseRevision()));
+				}
+				return false;
+			}
+			
+			String refName = managers[0].getFs().getArchive().getMaster().getName();
+			String compName = manager.getFs().getArchive().getMaster().getName();
+			
+			if(!fsMatch(managers[0].getMirror().getTarget(), manager.getMirror().getTarget(), refName, compName, dump)) return false;
+			if(!fsMatch(manager.getMirror().getTarget(), managers[0].getMirror().getTarget(), compName, refName, dump)) return false;
+		}
+		
+		return true;
+	}
+	
+	public String multiPeersReport(ZKFSManager[] peers) {
+		StringBuilder sb = new StringBuilder();
+		for(int i = 0; i < peers.length; i++) {
+			ZKArchive archive = peers[i].getFs().getArchive();
+			sb.append(String.format("\t%20s: Revision %16s | TX %8d KiB, %4d KiB/s | RX %8d KiB, %4d KiB/s\n",
+				archive.getMaster().getName(),
+				Util.formatRevisionTag(peers[i].getFs().getBaseRevision()),
+				archive.getConfig().getSwarm().getBandwidthMonitorTx().getLifetimeBytes()/1024,
+				archive.getConfig().getSwarm().getBandwidthMonitorTx().getBytesPerSecond()/1024,
+				archive.getConfig().getSwarm().getBandwidthMonitorRx().getLifetimeBytes()/1024,
+				archive.getConfig().getSwarm().getBandwidthMonitorRx().getBytesPerSecond()/1024));
+		}
+		return sb.toString();
+	}
+	
 	public void assertPeersMatch() {
 		log("Testing match...");
 		long startTime = System.currentTimeMillis();
-		if(!Util.waitUntil(60000, ()->{
+		if(!Util.waitUntil(10000, ()->{
 			try {
 				return peersMatch(false);
 			} catch(ENOENTException exc) {
@@ -277,6 +329,34 @@ public class NetworkedComplexTest {
 			log("!!! PEERS FAILED TO MATCH\n\n\n\n\n");
 			try {
 				peersMatch(true);
+			} catch(ENOENTException exc) {
+				log("ENOENT: " + exc.getMessage());
+			} catch(IOException exc) {
+				exc.printStackTrace();
+			}
+			
+			fail("Peers did not match");
+		}
+		log("Match found in " + (System.currentTimeMillis() - startTime));
+	}
+	
+	public void assertMultiPeersMatch(ZKFSManager[] peers) {
+		log("Testing match in " + peers.length + " peers...");
+		long startTime = System.currentTimeMillis();
+		if(!Util.waitUntil(60000, ()->{
+			try {
+				return multiPeersMatch(peers, false);
+			} catch(ENOENTException exc) {
+				return false;
+			} catch (IOException exc) {
+				exc.printStackTrace();
+				fail();
+				return false;
+			}
+		})) {
+			log("!!! PEERS FAILED TO MATCH\n\n\n\n\n");
+			try {
+				multiPeersMatch(peers, true);
 			} catch(ENOENTException exc) {
 				log("ENOENT: " + exc.getMessage());
 			} catch(IOException exc) {
@@ -454,7 +534,7 @@ public class NetworkedComplexTest {
 	public void indefiniteTestComplexTwoPeerEquivalent() throws IOException {
 		FSTestWriter aliceWriter = new FSTestWriter(alice.getMirror().getTarget(), 2, "alice");
 		FSTestWriter bobWriter = new FSTestWriter(bob.getMirror().getTarget(), 3, "bob");
-		long writeIntervalMs = 1500;
+		long writeIntervalMs = 100;
 		
 		assertTrue(Util.waitUntil(1000, ()->numConnections(alice) > 0));
 		assertTrue(Util.waitUntil(1000, ()->numConnections(bob) > 0));
@@ -462,9 +542,10 @@ public class NetworkedComplexTest {
 		log("Test ready.");
 		long startTime = System.currentTimeMillis();
 		long operations = 0;
+		long lastCheck = System.currentTimeMillis();
 		
 		while(true) {
-			if(operations++ % 10 == 0) {
+			if(System.currentTimeMillis() - lastCheck > 30000) {
 				long elapsed = (System.currentTimeMillis() - startTime)/1000;
 				log("Time: " + new java.util.Date());
 				log("Alice revision: " + Util.formatRevisionTag(alice.getFs().getBaseRevision()));
@@ -504,10 +585,78 @@ public class NetworkedComplexTest {
 				}
 				log("Peers match: " + Util.formatRevisionTag(alice.getFs().getBaseRevision()));
 				log("\n");
+				lastCheck = System.currentTimeMillis();
 			}
 			
 			aliceWriter.act();
 			bobWriter.act();
+			Util.sleep(writeIntervalMs);
+		}
+	}
+	
+	/* N peers simultaneously make changes. Exercises data flow in many directions with complex merges.
+	 */
+	@Test
+	public void indefiniteTestComplexManyPeerEquivalent() throws IOException {
+		int numPeers = 10;
+		FSTestWriter[] writers = new FSTestWriter[numPeers];
+		ZKFSManager[] peers = new ZKFSManager[numPeers];
+		
+		// close up the default peers
+		alice.close();
+		alice = null;
+		
+		bob.close();
+		bob = null;
+		
+		for(int i = 0; i < numPeers; i++) {
+			String name = String.format("peer-%02d", i);
+			peers[i] = initPeer(name);
+			writers[i] = new FSTestWriter(peers[i].getMirror().getTarget(), i, name);
+		}
+		
+		long writeIntervalMs = 100;
+		
+		for(ZKFSManager peer : peers) {
+			assertTrue(Util.waitUntil(1000, ()->numConnections(peer) > 0));
+		}
+		
+		log("Test ready. " + numPeers + " peers.");
+		long startTime = System.currentTimeMillis();
+		long operations = 0;
+		long lastCheck = System.currentTimeMillis();
+		
+		while(true) {
+			if(System.currentTimeMillis() - lastCheck > 30000) {
+				long elapsed = (System.currentTimeMillis() - startTime)/1000;
+				log(String.format("Pre-merge report at %ds, %d operations\n%s",
+						elapsed,
+						operations,
+						multiPeersReport(peers)));
+				
+				try {
+					assertMultiPeersMatch(peers);
+				} catch(Throwable exc) {
+					log("Peers do not match");
+					
+					exc.printStackTrace();
+					throw exc;
+				}
+				log("Peers match: " + Util.formatRevisionTag(peers[0].getFs().getBaseRevision()));
+				log("\n");
+				log(String.format("Post-merge report at %ds, %d operations\n%s\n",
+						elapsed,
+						operations,
+						multiPeersReport(peers)));
+				
+				lastCheck = System.currentTimeMillis();
+			}
+			
+			for(FSTestWriter writer : writers) {
+				writer.act();
+			}
+			
+			operations++;
 			Util.sleep(writeIntervalMs);
 		}
 	}

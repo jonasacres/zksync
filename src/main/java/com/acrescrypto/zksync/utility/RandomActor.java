@@ -8,6 +8,7 @@ import org.apache.commons.lang3.mutable.MutableLong;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.ActUnavailableException;
+import com.acrescrypto.zksync.exceptions.ENOENTException;
 
 public class RandomActor {
 	public interface RandomActionCallback {
@@ -61,8 +62,10 @@ public class RandomActor {
 			try {
 				attemptSingleAct();
 				return;
-			} catch(ActUnavailableException exc) {}
-		}
+			}
+			catch(ActUnavailableException exc) {}
+			catch(ENOENTException exc) {} // sometimes files can get changed underneath us from merges
+		}	
 	}
 	
 	public void attemptSingleAct() throws IOException {
