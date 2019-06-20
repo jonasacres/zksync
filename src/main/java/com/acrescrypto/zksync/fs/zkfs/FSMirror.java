@@ -260,7 +260,6 @@ public class FSMirror {
 			Util.debugLog(String.format("FSMirror %s: %s Caught exception processing path: %s (%d bytes)",
 					zkfs.getArchive().getMaster().getName(),
 					Util.formatRevisionTag(zkfs.baseRevision),
-					exc.getClass().getSimpleName(),
 					path,
 					path.length()));
 			throw exc;

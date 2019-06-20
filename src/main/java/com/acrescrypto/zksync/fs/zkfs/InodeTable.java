@@ -233,12 +233,12 @@ public class InodeTable extends ZKFile {
 	 * @throws EMLINKException inode nlink > 0
 	 */
 	public void unlink(long inodeId) throws IOException {
-		if(inodeId == nextInodeId()-1) {
-			nextInodeId = -1; // force rescan of nextInodeId if we delete last inode
-		}
-		
 		if(!hasInodeWithId(inodeId)) throw new ENOENTException(String.format("inode %d", inodeId));
 		if(inodeId <= 1) throw new IllegalArgumentException();
+
+		if(inodeId == nextInodeId-1) {
+			nextInodeId = inodeId;
+		}
 		
 		Inode inode = inodeWithId(inodeId);
 		if(inode.nlink > 0) {
@@ -512,8 +512,9 @@ public class InodeTable extends ZKFile {
 			return;
 		}
 		
-		if(pageNumForInodeId(nextInodeId()-1) < pageNum) {
+		if(nextInodeId >= 0 && pageNumForInodeId(nextInodeId()-1) < pageNum) {
 			// don't commit pages if they are not needed in this revision
+			// (and also don't try to rescan the nextInodeId if we don't have it already to avoid eviction recursion...)
 			return;
 		}
 		
