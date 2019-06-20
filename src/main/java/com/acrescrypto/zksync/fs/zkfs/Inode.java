@@ -172,7 +172,7 @@ public class Inode implements Comparable<Inode> {
 	}
 	
 	/**
-	 * return true if equal to other inode (matches identity, refTag, changedFrom, falgs, stat).
+	 * return true if equal to other inode (matches identity, refTag, changedFrom, flags, stat).
 	 * WARNING: equals == true NOT the same as compareTo == 0 for Inode!
 	 * @see compareTo
 	 */

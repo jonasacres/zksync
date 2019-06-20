@@ -115,20 +115,25 @@ public class InodeTable extends ZKFile {
 	
 	/** calculate the next inode ID to be issued (by scanning for the largest issued inode ID) */
 	protected synchronized long lookupNextInodeId() throws IOException {
-		long pageNum = inode.refTag.numPages-1;
-		Inode[] inodes = inodesByPage.get(pageNum);
-		
+		long pageNum = inode.refTag.numPages;
 		long maxInodeId = USER_INODE_ID_START-1;
-		for(Inode inode : inodes) {
-			if(inode.isDeleted()) continue;
-			maxInodeId = Math.max(maxInodeId, inode.stat.getInodeId());
+		
+		while(pageNum > 0 && maxInodeId < USER_INODE_ID_START) {
+			pageNum--;
+			Inode[] inodes = inodesByPage.get(pageNum);
+			
+			for(Inode inode : inodes) {
+				if(inode.isDeleted()) continue;
+				maxInodeId = Math.max(maxInodeId, inode.stat.getInodeId());
+			}
 		}
 		
-		Util.debugLog(String.format("InodeTable %s: %s, dirty=%s last page is %d, scanned max inodeId %d (next inodeId %d)",
+		Util.debugLog(String.format("InodeTable %s: %s, dirty=%s last page is %d of %d, scanned max inodeId %d (next inodeId %d)",
 				zkfs.archive.master.getName(),
 				Util.formatRevisionTag(zkfs.baseRevision),
 				zkfs.dirty ? "true" : "false",
 				pageNum,
+				inode.refTag.numPages,
 				maxInodeId,
 				maxInodeId + 1));
 		return maxInodeId+1;

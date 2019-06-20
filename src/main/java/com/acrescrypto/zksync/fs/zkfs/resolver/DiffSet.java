@@ -71,6 +71,14 @@ public class DiffSet {
 			}
 		}
 		
+		StringBuilder sb = new StringBuilder(String.format("DiffSet %s: listed %d inodes.",
+				revisions[0].getArchive().getMaster().getName(),
+				allInodes.size()));
+		for(Long inodeId : allInodes) {
+			sb.append(" " + inodeId);
+		}
+		Util.debugLog(sb.toString());
+		
 		return allInodes;
 	}
 	
@@ -100,6 +108,11 @@ public class DiffSet {
 		Map<Long,Map<RevisionTag,Long>> idMap = new HashMap<Long,Map<RevisionTag,Long>>();
 		for(long inodeId : allInodes()) {
 			InodeDiff diff = new InodeDiff(inodeId, revisions);
+			Util.debugLog(String.format("DiffSet %s: inode %d has %d candidates, isConflict=%s",
+					revisions[0].getArchive().getMaster().getName(),
+					inodeId,
+					diff.resolutions.size(),
+					diff.isConflict() ? "true" : "false"));
 			if(!diff.isConflict()) continue;
 			renumberInodeDiff(mergeFs, diff, idMap);
 		}

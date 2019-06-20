@@ -65,17 +65,14 @@ public class NetworkedComplexTest {
 	public void afterEach() throws IOException {
 		dhtRoot.close();
 		if(alice != null) {
-			alice.getFs().getArchive().getConfig().getRevisionList().dumpDot();
 			alice.close();
 		}
 		
 		if(bob != null) {
-			bob.getFs().getArchive().getConfig().getRevisionList().dumpDot();
 			bob.close();
 		}
 		
 		if(charlie != null) {
-			charlie.getFs().getArchive().getConfig().getRevisionList().dumpDot();
 			charlie.close();
 		}
 		// scrub();
@@ -148,7 +145,7 @@ public class NetworkedComplexTest {
 		master.setName(peerName);
 		master.getGlobalConfig().set("net.swarm.enabled", true);
 		master.activateDHT("127.0.0.1", 0, dhtRoot.getDHTClient().getLocalPeer());
-		ZKArchive archive = master.createDefaultArchive("TwoPeersOneWay".getBytes());
+		ZKArchive archive = master.createDefaultArchive("NetworkedComplexTest".getBytes());
 		archive.getConfig().advertise();
 		return archive.getConfig();
 	}
@@ -175,6 +172,12 @@ public class NetworkedComplexTest {
 		config.getMaster().getGlobalConfig().set("fs.settings.readOnlyFilesystemCacheSize", 512);
 		
 		return manager;
+	}
+	
+	public void closePeer(ZKFSManager peer) throws IOException {
+		peer.close();
+		peer.getFs().getArchive().close();
+		// peer.getFs().getArchive().getMaster().close();
 	}
 
 	public ZKFSManager initAlice() throws IOException {
@@ -357,6 +360,9 @@ public class NetworkedComplexTest {
 			log("!!! PEERS FAILED TO MATCH\n\n\n\n\n");
 			try {
 				multiPeersMatch(peers, true);
+				for(ZKFSManager peer : peers) {
+					peer.getFs().getArchive().getConfig().getRevisionList().dumpDot();
+				}
 			} catch(ENOENTException exc) {
 				log("ENOENT: " + exc.getMessage());
 			} catch(IOException exc) {
@@ -598,15 +604,15 @@ public class NetworkedComplexTest {
 	 */
 	@Test
 	public void indefiniteTestComplexManyPeerEquivalent() throws IOException {
-		int numPeers = 10;
+		int numPeers = 3;
 		FSTestWriter[] writers = new FSTestWriter[numPeers];
 		ZKFSManager[] peers = new ZKFSManager[numPeers];
 		
 		// close up the default peers
-		alice.close();
+		closePeer(alice);
 		alice = null;
 		
-		bob.close();
+		closePeer(bob);
 		bob = null;
 		
 		for(int i = 0; i < numPeers; i++) {
