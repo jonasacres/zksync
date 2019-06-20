@@ -47,6 +47,7 @@ public class FreeListTest {
 	@Test
 	public void testUnlinkedInodeIdsAddToFreelist() throws IOException {
 		fs.write("test", "foo".getBytes());
+		fs.write("placeholder", "bar".getBytes()); // need an inode ID bigger than the one we unlink
 		long inodeId = fs.stat("test").getInodeId();
 		fs.unlink("test");
 		assertEquals((Long) inodeId, fs.inodeTable.freelist.available.pop());
@@ -70,9 +71,11 @@ public class FreeListTest {
 	@Test
 	public void testFreelistDeserialized() throws IOException {
 		Stack<Long> witnessedIds = new Stack<Long>();
-		int size = 10000; // force a multipage freelist
-		for(int i = 0; i < size; i++) fs.write("file"+i, (""+i).getBytes());
-		for(int i = 0; i < size; i++) {
+		int numFiles = 10000; // force a multipage freelist
+		for(int i = 0; i < numFiles; i++) fs.write("file"+i, (""+i).getBytes());
+		fs.write("placeholder", "placeholder".getBytes()); // ensure the last inode ID is not unlinked
+		
+		for(int i = 0; i < numFiles; i++) {
 			if(i % 2 == 0) continue;
 			witnessedIds.push(fs.stat("file"+i).getInodeId());
 			fs.unlink("file"+i);
@@ -81,7 +84,7 @@ public class FreeListTest {
 		RevisionTag tag = fs.commitAndClose();
 		
 		fs = tag.getFS();
-		for(int i = size-1; i >= 0; i--) {
+		for(int i = numFiles-1; i >= 0; i--) {
 			if(i % 2 == 0) continue;
 			assertEquals(witnessedIds.pop(), (Long) fs.inodeTable.freelist.issueInodeId());
 		}

@@ -74,6 +74,7 @@ public class InodeTable extends ZKFile {
 						Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
 						Util.formatRevisionTag(fs.baseRevision),
 						pageNum);
+				
 				commitInodePage(pageNum, inodes);
 			});
 			
@@ -199,6 +200,10 @@ public class InodeTable extends ZKFile {
 		for(Long pageNum : inodesByPage.cachedKeys()) {
 			commitInodePage(pageNum, inodesByPage.get(pageNum));
 		}
+		
+		// don't let the last page of the table consist of empty inodes
+		long maxPageNum = pageNumForInodeId(nextInodeId()-1); 
+		truncate((maxPageNum+1)*zkfs.archive.config.getPageSize());
 		flush();
 	}
 		
@@ -228,6 +233,10 @@ public class InodeTable extends ZKFile {
 	 * @throws EMLINKException inode nlink > 0
 	 */
 	public void unlink(long inodeId) throws IOException {
+		if(inodeId == nextInodeId()-1) {
+			nextInodeId = -1; // force rescan of nextInodeId if we delete last inode
+		}
+		
 		if(!hasInodeWithId(inodeId)) throw new ENOENTException(String.format("inode %d", inodeId));
 		if(inodeId <= 1) throw new IllegalArgumentException();
 		
@@ -503,6 +512,11 @@ public class InodeTable extends ZKFile {
 			return;
 		}
 		
+		if(pageNumForInodeId(nextInodeId()-1) < pageNum) {
+			// don't commit pages if they are not needed in this revision
+			return;
+		}
+		
 		seek(pageNum*zkfs.archive.config.pageSize, SEEK_SET);
 		for(Inode inode : inodes) write(inode.serialize());
 		if(offset % zkfs.archive.config.pageSize != 0) {
@@ -524,6 +538,10 @@ public class InodeTable extends ZKFile {
 					this.pos());
 			write(inode.serialize());
 		}
+		
+		/* There might be some bytes leftover at the end of the page, too small to fit an inode into.
+		 * Pad them with zeroes. (We don't want inodes to spill over multiple pages.)
+		 */
 		if(offset < zkfs.archive.config.pageSize) {
 			write(new byte[(int) (zkfs.archive.config.pageSize - (offset % zkfs.archive.config.pageSize))]);
 		}

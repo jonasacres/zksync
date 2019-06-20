@@ -748,6 +748,35 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	@Test
+	public void testInodeTableTruncation() throws IOException {
+		zkscratch.purge();
+		int numInodesFirstPage = zkscratch.getInodeTable().numInodesForPage(0) - (int) InodeTable.USER_INODE_ID_START;
+		int numInodesPerPage = zkscratch.getInodeTable().numInodesForPage(1);
+		int numPages = 3;
+		long inodeId = InodeTable.USER_INODE_ID_START;
+		long targetId = numInodesFirstPage + numInodesPerPage*(numPages-1);
+		
+		while(inodeId < targetId) {
+			zkscratch.write("inode-" + inodeId, (""+inodeId).getBytes());
+			inodeId++;
+		}
+		
+		zkscratch.commit();
+		assertEquals(numPages, zkscratch.baseRevision.getRefTag().getNumPages());
+		
+		while(numPages > 1) {
+			for(int i = 0; i < numInodesPerPage; i++) {
+				inodeId--;
+				zkscratch.unlink("inode-" + inodeId);
+			}
+			
+			numPages--;
+			zkscratch.commit();
+			assertEquals(numPages, zkscratch.inodeTable.getInode().getRefTag().getNumPages());
+		}
+	}
+	
+	@Test
 	public void testMultithreadedFileExtensions() throws IOException {
 		// spin up some write threads to put random data to separate files.
 		// another thread commits while this is happening.

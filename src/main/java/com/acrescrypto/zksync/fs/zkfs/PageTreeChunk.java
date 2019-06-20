@@ -99,15 +99,10 @@ public class PageTreeChunk {
 	
 	protected void read(boolean verify) throws IOException {
 		tree.getArchive().getConfig().waitForPageReady(chunkTag);
-		try {
-			byte[] serialized = SignedSecureFile
-					  .withTag(chunkTag, tree.archive.storage, textKey(), saltKey(), authKey(), tree.archive.config.pubKey)
-					  .read(verify);
-			deserialize(ByteBuffer.wrap(serialized));
-		} catch(SecurityException exc) {
-			exc.printStackTrace();
-			throw exc;
-		}
+		byte[] serialized = SignedSecureFile
+				  .withTag(chunkTag, tree.archive.storage, textKey(), saltKey(), authKey(), tree.archive.config.pubKey)
+				  .read(verify);
+		deserialize(ByteBuffer.wrap(serialized));
 	}
 	
 	protected byte[] serialize() {

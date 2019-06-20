@@ -205,7 +205,7 @@ public class DiffSet {
 			
 			inodeDiffs.put(newId, renumberInodeWithIdentity(fs, diff, newId, identity));
 		}
-		System.out.println(sb.toString());
+		Util.debugLog(sb.toString());
 	}
 	
 	/** assign a new inode ID to a given identity constant in an inode diffset */

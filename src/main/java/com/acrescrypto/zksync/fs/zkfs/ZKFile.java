@@ -188,9 +188,11 @@ public class ZKFile extends File {
 			inode.getStat().setSize(size);
 			if(offset >= size) offset = size;
 			
-			int lastPage = (int) (size/zkfs.archive.config.pageSize);
-			bufferPage(lastPage);
-			bufferedPage.truncate((int) (size % zkfs.archive.config.pageSize));
+			if(size % zkfs.archive.config.pageSize > 0) {
+				int lastPage = (int) (size/zkfs.archive.config.pageSize);
+				bufferPage(lastPage);
+				bufferedPage.truncate((int) (size % zkfs.archive.config.pageSize));
+			}
 		}
 		
 		dirty = true;

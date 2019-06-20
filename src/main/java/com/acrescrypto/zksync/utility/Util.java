@@ -366,7 +366,7 @@ public class Util {
 	}
 	
 	public static String formatRevisionTag(RevisionTag rev) {
-		if(rev == null) return "rev-?-?-null";
+		if(rev == null || rev.getBytes() == null) return "rev-?-?-null";
 		if(rev.isUnpacked()) {
 			return "rev-" + rev.getHeight() + "-" + formatLongIdB64(rev.getBytes());
 		} else {
