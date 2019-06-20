@@ -22,7 +22,30 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class LocalFS extends FS {
 	protected String root;
+	protected HashMap<Integer,CachedName> cachedUserNames = new HashMap<>();
+	protected HashMap<Integer,CachedName> cachedGroupNames = new HashMap<>();
 	private Logger logger = LoggerFactory.getLogger(LocalFS.class);
+	
+	protected class CachedName {
+		String name;
+		long id;
+		long timestamp;
+		public final static long EXPIRATION_INTERVAL_MS = 10000;
+		
+		public CachedName(String name, long id) {
+			this.name = name;
+			this.id = id;
+			this.timestamp = Util.currentTimeMillis();
+		}
+		
+		public boolean isExpired() {
+			return Util.currentTimeMillis() > timestamp + EXPIRATION_INTERVAL_MS;
+		}
+		
+		public long getId() {
+			return id;
+		}
+	}
 	
 	public LocalFS(String root) {
 		this.root = root;
@@ -43,13 +66,12 @@ public class LocalFS extends FS {
 			stat.setMtime(decodeTime(Files.getAttribute(path, "lastModifiedTime", linkOpt)));
 			stat.setCtime(decodeTime(Files.getAttribute(path, "creationTime", linkOpt)));
 			stat.setMode(getFilePermissions(path, linkOpt));
-			stat.setUser(Files.getOwner(path, linkOpt).getName());
 			if(!isWindows()) {
 				stat.setUid((Integer) Files.getAttribute(path, "unix:uid", linkOpt));
 				stat.setGid((Integer) Files.getAttribute(path, "unix:gid", linkOpt));
-				GroupPrincipal group = Files.readAttributes(path, PosixFileAttributes.class, LinkOption.NOFOLLOW_LINKS).group();
-				stat.setGroup(group.getName());
+				stat.setGroup(cachedGroupName(stat.getGid(), path, linkOpt));
 			}
+			stat.setUser(cachedUserName(stat.getUid(), path, linkOpt));
 			int type = getStatType(path, linkOpt);
 			if(type >= 0) {
 				stat.setType(type);
@@ -437,6 +459,27 @@ public class LocalFS extends FS {
 	
 	public String getRoot() {
 		return root;
+	}
+	
+	protected String cachedUserName(int uid, Path path, LinkOption[] linkOpt) throws IOException {
+		CachedName cached = cachedUserNames.get(uid);
+		if(cached == null || cached.isExpired()) {
+			cached = new CachedName(Files.getOwner(path, linkOpt).getName(), uid);
+			cachedGroupNames.put(uid, cached);
+		}
+		
+		return cached.name;
+	}
+	
+	protected String cachedGroupName(int gid, Path path, LinkOption[] linkOpt) throws IOException {
+		CachedName cached = cachedGroupNames.get(gid);
+		if(cached == null || cached.isExpired()) {
+			GroupPrincipal group = Files.readAttributes(path, PosixFileAttributes.class, linkOpt).group();
+			cached = new CachedName(group.getName(), gid);
+			cachedGroupNames.put(gid, cached);
+		}
+		
+		return cached.name;
 	}
 	
 	protected String expandPath(String path) throws ENOENTException {
