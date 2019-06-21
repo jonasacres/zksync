@@ -4,6 +4,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.FileSystemException;
 import java.util.Arrays;
 import java.util.Date;
 
@@ -343,13 +345,13 @@ public class NetworkedComplexTest {
 		log("Match found in " + (System.currentTimeMillis() - startTime));
 	}
 	
-	public void assertMultiPeersMatch(ZKFSManager[] peers) {
+	public void assertMultiPeersMatch(ZKFSManager[] peers, int interval) {
 		log("Testing match in " + peers.length + " peers...");
 		long startTime = System.currentTimeMillis();
-		if(!Util.waitUntil(60000, ()->{
+		if(!Util.waitUntil(interval, ()->{
 			try {
 				return multiPeersMatch(peers, false);
-			} catch(ENOENTException exc) {
+			} catch(ENOENTException|FileSystemException exc) {
 				return false;
 			} catch (IOException exc) {
 				exc.printStackTrace();
@@ -604,7 +606,7 @@ public class NetworkedComplexTest {
 	 */
 	@Test
 	public void indefiniteTestComplexManyPeerEquivalent() throws IOException {
-		int numPeers = 3;
+		int numPeers = 5;
 		FSTestWriter[] writers = new FSTestWriter[numPeers];
 		ZKFSManager[] peers = new ZKFSManager[numPeers];
 		
@@ -641,7 +643,7 @@ public class NetworkedComplexTest {
 						multiPeersReport(peers)));
 				
 				try {
-					assertMultiPeersMatch(peers);
+					assertMultiPeersMatch(peers, 30000);
 				} catch(Throwable exc) {
 					log("Peers do not match");
 					

@@ -141,6 +141,17 @@ public class FSMirror {
 				suspectedTargetPathChange(realPath);
 				return FileVisitResult.CONTINUE;
 			}
+			
+			@Override
+			public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+				logger.error("FS {}: Caught exception attempting to visit {} in watchDirectory of {}",
+						Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
+						file.toString(),
+						dir.toString(),
+						exc);
+				// we can have bad stuff like mode changes and unlinks happen underneath us, so just carry on
+				return FileVisitResult.CONTINUE;
+			}
 		});
 	}
 
