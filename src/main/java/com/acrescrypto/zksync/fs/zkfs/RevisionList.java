@@ -18,6 +18,7 @@ import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.exceptions.SearchFailedException;
+import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
@@ -71,8 +72,67 @@ public class RevisionList implements AutoCloseable {
 		}
 	}
 
+	/** All revisions we know of that are not yet merged into other revisions. */
 	public synchronized ArrayList<RevisionTag> branchTips() {
 		return new ArrayList<>(branchTips);
+	}
+	
+	/** Branch tips (as from branchTips()) that we presently have inode and directory
+	 * information for, e.g. we can perform diff merges and show directory listings.
+	 * Waits up to timeoutMs for ALL tags to arrive. Set timeoutMs=0 for no waiting, or
+	 * timeoutMs=-1 for indefinite waiting. If timeoutMs != 0, then requests are automatically
+	 * made to the swarm for pages related to tags not cached locally.
+	 * 
+	 * @throws IOException 
+	 */
+	public synchronized ArrayList<RevisionTag> availableBranchTips(long timeoutMs) throws IOException {
+		ArrayList<RevisionTag>
+			tags = branchTips(),
+			available = new ArrayList<>(tags.size());
+		
+		for(RevisionTag tag : tags) {
+			if(tag.hasStructureLocally()) {
+				logger.debug("RevisionList {} {}: Revision {} is available",
+						config.getArchive().getMaster().getName(),
+						Util.formatArchiveId(config.archiveId),
+						Util.formatRevisionTag(tag));
+				available.add(tag);
+			}
+		}
+		
+		if(timeoutMs == 0) {
+			// we will not be requesting or waiting for anything we don't already have
+			return available;
+		}
+		
+		long deadline = System.currentTimeMillis() + timeoutMs;
+		 
+		for(RevisionTag tag : tags) {
+			// send swarm requests for any tags we don't have structure data for yet
+			if(available.contains(tag)) continue;
+			config.getSwarm().requestRevisionStructure(SwarmFS.REQUEST_TAG_STRUCTURE_PRIORITY, tag);
+		}
+
+		for(RevisionTag tag : tags) {
+			// wait for everything to come in
+			if(available.contains(tag)) continue;
+			long timeRemaining = timeoutMs < 0 ? Long.MAX_VALUE : deadline - System.currentTimeMillis();
+			if(timeRemaining < 0) break;
+			logger.debug("RevisionList {} {}: Waiting up to %dms to acquire revision {}",
+					config.getArchive().getMaster().getName(),
+					Util.formatArchiveId(config.archiveId),
+					timeRemaining,
+					Util.formatRevisionTag(tag));
+			if(tag.waitForStructure(timeRemaining)) {
+				logger.debug("RevisionList {} {}: Revision {} now available after acquisition",
+						config.getArchive().getMaster().getName(),
+						Util.formatArchiveId(config.archiveId),
+						Util.formatRevisionTag(tag));
+				available.add(tag);
+			}
+		}
+
+		return available;
 	}
 
 	public void addMonitor(RevisionMonitor monitor) {

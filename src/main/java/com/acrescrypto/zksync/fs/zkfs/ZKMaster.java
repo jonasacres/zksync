@@ -437,6 +437,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		globalConfig.setDefault("fs.settings.inodeTablePageCacheSize", 16);
 		globalConfig.setDefault("fs.settings.revisionTreeCacheSize", 256);
 		globalConfig.setDefault("fs.settings.readOnlyFilesystemCacheSize", 64);
+		globalConfig.setDefault("fs.settings.mergeRevisionAcquisitionMaxWaitMs", 30000);
 		globalConfig.setDefault("fs.settings.automergeDelayMs", 10000);
 		globalConfig.setDefault("fs.settings.maxAutomergeDelayMs", 60000);
 		globalConfig.setDefault("fs.settings.maxAutomergeAcquireWaitTimeMs", 60000);

@@ -170,6 +170,42 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		}
 	}
 	
+	/** Returns true if we've got all the pages for the inode table and directories cached
+	 * locally. */
+	public boolean hasStructureLocally() throws IOException {
+		PageTree tree = new PageTree(getRefTag());
+		if(!tree.exists()) return false;
+		
+		try(ZKFS fs = readOnlyFS()) {
+			for(Inode inode : fs.getInodeTable().values()) {
+				if(inode.isDeleted()) continue;
+				if(!inode.getStat().isDirectory()) continue;
+				
+				PageTree dirTree = new PageTree(inode);
+				if(!dirTree.exists()) return false;
+			}
+		}
+		
+		return true;
+	}
+	
+	public boolean waitForStructure(long timeoutMs) throws IOException {
+		long deadline;
+		if(timeoutMs < 0) {
+			deadline = Long.MAX_VALUE;
+		} else {
+			deadline = System.currentTimeMillis() + timeoutMs;
+		}
+		
+		while(!hasStructureLocally()) {
+			if(System.currentTimeMillis() >= deadline) return false;
+			long waitIntervalMs = timeoutMs < 0 ? timeoutMs : deadline - System.currentTimeMillis();
+			config.getSwarm().waitForPage(waitIntervalMs);
+		}
+		
+		return true;
+	}
+	
 	public boolean isValid() {
 		try {
 			return verificationCache.get(this);

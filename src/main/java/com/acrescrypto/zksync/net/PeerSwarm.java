@@ -59,6 +59,7 @@ public class PeerSwarm implements BlacklistCallback {
 	protected Lock pageWaitLock = new ReentrantLock();
 	protected Lock connectionWaitLock = new ReentrantLock();
 	protected Condition connectionWaitCondition = connectionWaitLock.newCondition();
+	protected Object pageNotifier = new Object();
 	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
 	
 	protected boolean closed;
@@ -490,6 +491,7 @@ public class PeerSwarm implements BlacklistCallback {
 			pageWaitLock.unlock();
 		}
 		
+		pageNotifier.notifyAll();
 		announceTag(tag);
 	}
 	
@@ -554,6 +556,10 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	public void requestRevision(int priority, RevisionTag revTag) {
 		pool.addRevision(priority, revTag);
+	}
+	
+	public void requestRevisionStructure(int priority, RevisionTag revTag) {
+		pool.addRevisionStructure(priority, revTag);
 	}
 	
 	public void cancelRevision(RevisionTag revTag) {
@@ -687,5 +693,15 @@ public class PeerSwarm implements BlacklistCallback {
 
 	public RequestPool getRequestPool() {
 		return pool;
+	}
+	
+	public void waitForPage(long timeoutMs) {
+		try {
+			if(timeoutMs >= 0) {
+				pageNotifier.wait(timeoutMs);
+			} else {
+				pageNotifier.wait();
+			}
+		} catch(InterruptedException exc) {}
 	}
 }

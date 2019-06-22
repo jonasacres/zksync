@@ -40,9 +40,12 @@ public class DiffSetResolver {
 	Logger logger = LoggerFactory.getLogger(DiffSetResolver.class);
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
+		long timeoutMs = archive.getMaster().getGlobalConfig().getLong("fs.settings.mergeRevisionAcquisitionMaxWaitMs");
 		StringBuilder sb = new StringBuilder();
-		sb.append(String.format("DiffSetResolver %s: Assembling branch tips.\nBranch tips:\n", archive.getMaster().getName()));
-		Collection<RevisionTag> tips = archive.getConfig().getRevisionList().branchTips();
+		sb.append(String.format("DiffSetResolver %s: Assembling branch tips (availability timeout=%dms).\nBranch tips:\n",
+				archive.getMaster().getName(),
+				timeoutMs));
+		Collection<RevisionTag> tips = archive.getConfig().getRevisionList().availableBranchTips(timeoutMs);
 		for(RevisionTag tag : tips) {
 			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
 		}

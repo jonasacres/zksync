@@ -369,6 +369,9 @@ public class RevisionTree implements AutoCloseable {
 		return new TreeSearchItem(tag).hasAncestor(possibleAncestor);
 	}
 	
+	/** Given a revision set, eliminate any revisions that are ancestral to other revisions in
+	 * the set.
+	 */
 	public Collection<RevisionTag> minimalSet(Collection<RevisionTag> revTags) throws SearchFailedException {
 		LinkedList<RevisionTag> minimal = new LinkedList<>();
 		for(RevisionTag tag : revTags) {
@@ -390,6 +393,10 @@ public class RevisionTree implements AutoCloseable {
 		return minimal;
 	}
 	
+	/** Take a set of revtags and transform it to the most recent set of ancestors of each
+	 * revtag containing only one parent. (In other words, because we don't merge merges
+	 * directly, we want to find the last "real" content-bearing revtags underpinning
+	 * each revtag in a revision set.) */
 	public Collection<RevisionTag> canonicalBases(Collection<RevisionTag> revTags) throws SearchFailedException {
 		/* Common ancestry is expensive to find and calculated twice right now: once when determining the revisions
 		 * to merge, and again when doing the merge. It'd be good to refactor to avoid sometime.

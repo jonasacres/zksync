@@ -124,6 +124,9 @@ public class PageTree {
 		}
 	}
 	
+	/** Returns true if we have everything for this page tree (chunks AND pages).
+	 * In other words, given the reftag for this file, could we read the whole file
+	 * without needing to download any pages from the network? */
 	public boolean exists() throws IOException {
 		if(numPages < 0) return false;
 		

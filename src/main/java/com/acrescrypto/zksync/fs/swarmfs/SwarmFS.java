@@ -13,6 +13,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class SwarmFS extends FS {
 	public final static int REQUEST_PRIORITY = 100;
+	public final static int REQUEST_TAG_STRUCTURE_PRIORITY = 200;
 	PeerSwarm swarm;
 
 	public SwarmFS(PeerSwarm swarm) {

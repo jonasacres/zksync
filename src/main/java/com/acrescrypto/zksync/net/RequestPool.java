@@ -286,6 +286,19 @@ public class RequestPool {
 		}
 	}
 	
+	public synchronized void addRevisionStructure(int priority, RevisionTag revTag) {
+		requestedRevisions.add(priority,  revTag);
+		dirty = true;
+		
+		for(PeerConnection connection : config.getSwarm().getConnections()) {
+			ArrayList<RevisionTag> list = new ArrayList<>(1);
+			list.add(revTag);
+			try {
+				connection.requestRevisionStructure(priority, list);
+			} catch(PeerCapabilityException exc) {}
+		}
+	}
+	
 	public synchronized void cancelRevision(RevisionTag revTag) {
 		requestedRevisions.remove(revTag);
 		dirty = true;

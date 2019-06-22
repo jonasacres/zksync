@@ -1,10 +1,8 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.PriorityQueue;
 
@@ -279,47 +277,6 @@ public class PageQueue {
 		@Override long getHash() { return Util.shortTag(revTag.getBytes()); }
 	}
 	
-	/* send RevisionStructureQueueItem for every revision we have */
-	class EveryRevisionStructureQueueItem extends QueueItem {
-		Shuffler shuffler;
-		ArrayList<RevisionTag> tags;
-		boolean done;
-		
-		EveryRevisionStructureQueueItem(int priority) {
-			super(priority);
-			HashSet<RevisionTag> allTags = new HashSet<>();
-			for(RevisionTag tip : config.getRevisionList().branchTips()) {
-				addRevTag(allTags, tip);
-			}
-			
-			tags = new ArrayList<>(allTags);
-			shuffler = Shuffler.fixedShuffler(tags.size());
-		}
-		
-		protected void addRevTag(HashSet<RevisionTag> allTags, RevisionTag tag) {
-			if(allTags.contains(tag)) return;
-			allTags.add(tag);
-			for(RevisionTag parent : config.getRevisionTree().parentsForTag(tag)) {
-				addRevTag(allTags, parent);
-			}
-		}
-		
-		@Override
-		QueueItem nextChildActual() {
-			while(shuffler.hasNext()) {
-				int index = shuffler.next();
-				RevisionTag tag = tags.get(index);
-				return new RevisionStructureQueueItem(priority, tag);
-			}
-			
-			done = true;
-			return null;
-		}
-		
-		@Override int classPriority() { return -90; }
-		@Override long getHash() { return 1; }
-	}
-	
 	class EverythingQueueItem extends QueueItem {
 		DirectoryTraverser traverser;
 		ZKArchive archive;
@@ -372,7 +329,6 @@ public class PageQueue {
 	protected Map<Long,QueueItem> itemsByHash = new HashMap<>();
 	protected ZKArchiveConfig config;
 	protected EverythingQueueItem everythingItem;
-	protected EveryRevisionStructureQueueItem everyRevStructItem;
 	protected boolean closed;
 	
 	public PageQueue(ZKArchiveConfig config) {
@@ -412,6 +368,11 @@ public class PageQueue {
 		addItem(new RevisionQueueItem(priority, revTag));
 	}
 	
+	public void addRevisionTagForStructure(int priority, RevisionTag revTag) {
+		logger.debug("Enqueuing {} (structure only)", Util.formatRevisionTag(revTag));
+		addItem(new RevisionStructureQueueItem(priority, revTag));
+	}
+	
 	public void startSendingEverything() {
 		if(everythingItem != null && !everythingItem.done) return;
 		everythingItem = new EverythingQueueItem(DEFAULT_EVERYTHING_PRIORITY, config.getArchive());
@@ -421,17 +382,6 @@ public class PageQueue {
 	public void stopSendingEverything() {
 		if(everythingItem == null) return;
 		everythingItem.cancel();
-	}
-	
-	public void startSendingEveryRevisionStructure() {
-		if(everyRevStructItem != null && !everyRevStructItem.done) return;
-		everyRevStructItem = new EveryRevisionStructureQueueItem(DEFAULT_EVERY_REVISION_STRUCTURE_PRIORITY);
-		addItem(everyRevStructItem);
-	}
-	
-	public void stopSendingEveryRevisionStructure() {
-		if(everyRevStructItem == null) return;
-		everyRevStructItem.cancel();
 	}
 	
 	public synchronized void stopAll() {

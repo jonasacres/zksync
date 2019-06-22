@@ -42,10 +42,11 @@ public class PeerConnection {
 	public final static byte CMD_REQUEST_ALL_CANCEL = 0x07;
 	public final static byte CMD_REQUEST_INODES = 0x08;
 	public final static byte CMD_REQUEST_REVISION_CONTENTS = 0x09;
-	public final static byte CMD_REQUEST_REVISION_DETAILS = 0x0a;
-	public final static byte CMD_REQUEST_PAGE_TAGS = 0x0b;
-	public final static byte CMD_SEND_PAGE = 0x0c;
-	public final static byte CMD_SET_PAUSED = 0x0d;
+	public final static byte CMD_REQUEST_REVISION_STRUCTURE = 0x0a;
+	public final static byte CMD_REQUEST_REVISION_DETAILS = 0x0b;
+	public final static byte CMD_REQUEST_PAGE_TAGS = 0x0c;
+	public final static byte CMD_SEND_PAGE = 0x0d;
+	public final static byte CMD_SET_PAUSED = 0x0e;
 	
 	public final static int MAX_SUPPORTED_CMD = CMD_SET_PAUSED; // update to largest acceptable command code
 	
@@ -380,7 +381,17 @@ public class PeerConnection {
 		assertPeerCapability(PEER_TYPE_FULL);
 		send(CMD_REQUEST_REVISION_CONTENTS, serializeRevTags(priority, tips));
 	}
-	
+
+	public void requestRevisionStructure(int priority, Collection<RevisionTag> tips) throws PeerCapabilityException {
+		logger.trace("Swarm {} {}:{}: PeerConnection send requestRevisionStructure",
+				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
+				socket.getAddress(),
+				socket.getPort());
+		if(tips.isEmpty()) return;
+		assertPeerCapability(PEER_TYPE_FULL);
+		send(CMD_REQUEST_REVISION_STRUCTURE, serializeRevTags(priority, tips));
+	}
+
 	public void requestRevisionDetails(int priority, RevisionTag revTag) throws PeerCapabilityException {
 		ArrayList<RevisionTag> list = new ArrayList<>();
 		list.add(revTag);
@@ -480,6 +491,9 @@ public class PeerConnection {
 				break;
 			case CMD_REQUEST_REVISION_CONTENTS:
 				handleRequestRevisionContents(msg);
+				break;
+			case CMD_REQUEST_REVISION_STRUCTURE:
+				handleRequestRevisionStructure(msg);
 				break;
 			case CMD_REQUEST_REVISION_DETAILS:
 				handleRequestRevisionDetails(msg);
@@ -724,6 +738,25 @@ public class PeerConnection {
 		}
 	}
 	
+	protected void handleRequestRevisionStructure(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
+		logger.trace("Swarm {} {}:{}: PeerConnection recv requestRevisionStructure",
+				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
+				socket.getAddress(),
+				socket.getPort());
+		waitForFullInit();
+		ZKArchive archive = socket.swarm.config.getArchive();
+
+		assertPeerCapability(PEER_TYPE_FULL);
+		int priority = msg.rxBuf.getInt();
+		
+		while(msg.rxBuf.hasRemaining()) {
+			byte[] revTagBytes = new byte[RevisionTag.sizeForConfig(archive.getConfig())];
+			msg.rxBuf.read(revTagBytes);
+			RevisionTag tag = new RevisionTag(archive.getConfig(), revTagBytes, false);
+			sendRevisionStructure(priority, tag);
+		}
+	}
+	
 	protected void handleRequestRevisionDetails(PeerMessageIncoming msg) throws PeerCapabilityException, IOException {
 		logger.trace("Swarm {} {}:{}: PeerConnection recv requestRevisionDetails",
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
@@ -848,6 +881,10 @@ public class PeerConnection {
 
 	protected void sendRevisionContents(int priority, RevisionTag revTag) throws IOException {
 		queue.addRevisionTag(priority, revTag);
+	}
+	
+	protected void sendRevisionStructure(int priority, RevisionTag revTag) throws IOException {
+		queue.addRevisionTagForStructure(priority, revTag);
 	}
 	
 	protected void sendInodeContents(int priority, RevisionTag revTag, long inodeId) throws IOException {
