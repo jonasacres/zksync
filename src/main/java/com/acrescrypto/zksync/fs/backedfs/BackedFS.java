@@ -108,7 +108,7 @@ public class BackedFS extends FS {
 
 	@Override
 	public void link(String target, String link) throws IOException {
-		ensurePresent(target);
+		ensurePresent(target, -1);
 		ensureParentPresent(link);
 		cacheFS.link(target, link);
 	}
@@ -127,13 +127,13 @@ public class BackedFS extends FS {
 
 	@Override
 	public String readlink(String link) throws IOException {
-		ensurePresent(link);
+		ensurePresent(link, -1);
 		return cacheFS.readlink(link);
 	}
 	
 	@Override
 	public String readlink_unsafe(String link) throws IOException {
-		ensurePresent(link);
+		ensurePresent(link, -1);
 		return cacheFS.readlink_unsafe(link);
 	}
 
@@ -151,49 +151,49 @@ public class BackedFS extends FS {
 
 	@Override
 	public void chmod(String path, int mode) throws IOException {
-		ensurePresent(path);
+		ensurePresent(path, -1);
 		cacheFS.chmod(path, mode);
 	}
 
 	@Override
 	public void chown(String path, int uid) throws IOException {
-		ensurePresent(path);
+		ensurePresent(path, -1);
 		cacheFS.chown(path, uid);
 	}
 
 	@Override
 	public void chown(String path, String user) throws IOException {
-		ensurePresent(path);
+		ensurePresent(path, -1);
 		cacheFS.chown(path, user);
 	}
 
 	@Override
 	public void chgrp(String path, int gid) throws IOException {
-		ensurePresent(path);
+		ensurePresent(path, -1);
 		cacheFS.chgrp(path, gid);
 	}
 
 	@Override
 	public void chgrp(String path, String group) throws IOException {
-		ensurePresent(path);
+		ensurePresent(path, -1);
 		cacheFS.chgrp(path, group);
 	}
 
 	@Override
 	public void setMtime(String path, long mtime) throws IOException {
-		ensurePresent(path);
+		ensurePresent(path, -1);
 		cacheFS.setMtime(path, mtime);
 	}
 
 	@Override
 	public void setCtime(String path, long ctime) throws IOException {
-		ensurePresent(path);
+		ensurePresent(path, -1);
 		cacheFS.setCtime(path, ctime);
 	}
 
 	@Override
 	public void setAtime(String path, long atime) throws IOException {
-		ensurePresent(path);
+		ensurePresent(path, -1);
 		cacheFS.setAtime(path, atime);
 	}
 
@@ -205,7 +205,7 @@ public class BackedFS extends FS {
 
 	@Override
 	public byte[] read(String path) throws IOException {
-		ensurePresent(path);
+		ensurePresent(path, -1);
 		return cacheFS.read(path);
 	}
 
@@ -213,7 +213,7 @@ public class BackedFS extends FS {
 	public File open(String path, int mode) throws IOException {
 		if((mode & File.O_TRUNC) == 0) {
 			try {			
-				ensurePresent(path);
+				ensurePresent(path, -1);
 			} catch(ENOENTException exc) {
 				if((mode & File.O_CREAT) == 0) throw exc;
 			}
@@ -229,7 +229,7 @@ public class BackedFS extends FS {
 	@Override
 	public void truncate(String path, long size) throws IOException {
 		if(size != 0) {
-			ensurePresent(path);
+			ensurePresent(path, -1);
 		} else {
 			cacheFS.write(path, new byte[0]);
 			return;
@@ -244,12 +244,13 @@ public class BackedFS extends FS {
 	 * @param path
 	 * @throws IOException
 	 */
-	public void ensurePresent(String path) throws IOException {
+	public void ensurePresent(String path, int timeoutMs) throws IOException {
 		if(!pendingPaths.contains(path) && cacheFS.exists(path, false)) return;
+		long deadline = System.currentTimeMillis() + timeoutMs;
 		synchronized(this) {
 			while(pendingPaths.contains(path)) {
 				try {
-					this.wait();
+					this.wait(timeoutMs);
 				} catch (InterruptedException e) {}
 			}
 			
@@ -259,7 +260,15 @@ public class BackedFS extends FS {
 		try {
 			if(!cacheFS.exists(path)) {
 				Stat stat = backupFS.stat(path);
-				byte[] data = backupFS.read(path);
+				int timeoutRemainingMs = (int) (System.currentTimeMillis() - deadline);
+				byte[] data;
+				
+				if(backupFS instanceof SwarmFS) {
+					data = ((SwarmFS) backupFS).read(path, timeoutRemainingMs);
+				} else {
+					data = backupFS.read(path);
+				}
+				
 				if(!cacheFS.exists(path) || cacheFS.stat(path).getSize() != stat.getSize()) {
 					if(!(backupFS instanceof SwarmFS)) {
 						// hacky, but SwarmFS already writes our data, and this becomes redundant, and potentially race-inducing

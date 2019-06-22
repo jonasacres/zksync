@@ -22,6 +22,7 @@ public class PageTree {
 	protected Queue<PageTreeChunk> dirtyChunks;
 	protected long inodeId, inodeIdentity;
 	protected long numChunks, maxNumPages, numPages;
+	protected int readTimeoutMs;
 	protected boolean trusted; // if true, do not validate public key signature on each page chunk
 	protected Logger logger = LoggerFactory.getLogger(PageTree.class);
 	
@@ -35,11 +36,13 @@ public class PageTree {
 		this.refTag = revTag;
 		this.inodeId = InodeTable.INODE_ID_INODE_TABLE;
 		this.inodeIdentity = 0;
+		this.readTimeoutMs = -1;
 		initWithSize(refTag.getNumPages());
 	}
 	
 	public PageTree(Inode inode) {
 		this.archive = inode.fs.archive;
+		this.readTimeoutMs = inode.fs.getReadTimeoutMs();
 		assert(0 < tagsPerChunk() && tagsPerChunk() <= Integer.MAX_VALUE);
 		this.refTag = inode.refTag;
 		this.inodeId = inode.stat.getInodeId();
@@ -58,6 +61,7 @@ public class PageTree {
 		this.refTag = original.refTag;
 		this.inodeId = original.inodeId;
 		this.inodeIdentity = original.inodeIdentity;
+		this.readTimeoutMs = original.readTimeoutMs;
 		
 		this.numChunks = original.numChunks;
 		this.numPages = original.numPages;
@@ -72,7 +76,9 @@ public class PageTree {
 		setupChunkCache(original.chunkCache);
 	}
 	
-	protected PageTree() {} // used for testing
+	protected PageTree() {
+		this.readTimeoutMs = -1;
+	} // used for testing
 	
 	protected void initWithSize(long size) {
 		int numLeafChunks = (int) Math.ceil((double) size / tagsPerChunk());
@@ -489,5 +495,13 @@ public class PageTree {
 		for(long chunkId : chunkCache.cachedKeys()) {
 			chunkCache.get(chunkId).dump();
 		}
+	}
+
+	public int getReadTimeoutMs() {
+		return readTimeoutMs;
+	}
+
+	public void setReadTimeoutMs(int readTimeoutMs) {
+		this.readTimeoutMs = readTimeoutMs;
 	}
 }

@@ -1,8 +1,10 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.PriorityQueue;
 
@@ -26,7 +28,8 @@ import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PageQueue {
-	public final static int DEFAULT_EVERYTHING_PRIORITY = -10;
+	public final static int DEFAULT_EVERYTHING_PRIORITY = -20;
+	public final static int DEFAULT_EVERY_REVISION_STRUCTURE_PRIORITY = -10;
 	public final static int CANCEL_PRIORITY = Integer.MIN_VALUE;
 	
 	public class ChunkReference {
@@ -43,7 +46,8 @@ public class PageQueue {
 		public byte[] getData() throws IOException {
 			int offset = index * PeerMessage.FILE_CHUNK_SIZE;
 			int len = Math.min((int) (config.getSerializedPageSize() - offset), PeerMessage.FILE_CHUNK_SIZE);
-			return config.readPageData(tag, offset, len);
+			int timeoutMs = config.getMaster().getGlobalConfig().getInt("net.swarm.pageSendAvailabilityTimeoutMs");
+			return config.readPageData(tag, offset, len, timeoutMs);
 		}
 	}
 	
@@ -221,8 +225,99 @@ public class PageQueue {
 			}
 		}
 		
+		@Override int classPriority() { return -40; }
+		@Override long getHash() { return Util.shortTag(revTag.getBytes()); }
+	}
+	
+	/* send pages for the inode table and each directory in a revision */
+	class RevisionStructureQueueItem extends QueueItem {
+		InodeTable inodeTable;
+		Shuffler shuffler;
+		RevisionTag revTag;
+		
+		RevisionStructureQueueItem(int priority, RevisionTag revTag) {
+			super(priority);
+			this.revTag = revTag;
+			if(revTag.getRefTag().getRefType() == RefTag.REF_TYPE_IMMEDIATE) {
+				this.shuffler = Shuffler.fixedShuffler(0);
+				return;
+			}
+			
+			try(ZKFS fs = revTag.makeCacheOnly().readOnlyFS()) {
+				this.inodeTable = fs.getInodeTable();
+				assert(inodeTable.nextInodeId() <= Integer.MAX_VALUE);
+				this.shuffler = Shuffler.fixedShuffler((int) inodeTable.nextInodeId());
+			} catch(IOException|SecurityException exc) {
+				this.shuffler = Shuffler.fixedShuffler(0);
+			}
+		}
+		
+		@Override
+		QueueItem nextChildActual() {
+			try {
+				while(inodeTable != null && shuffler.hasNext()) {
+					int inodeId = shuffler.next();
+					Inode inode = inodeTable.inodeWithId(inodeId);
+					if(inodeId != InodeTable.INODE_ID_INODE_TABLE && !inode.getStat().isDirectory()) {
+						continue;
+					}
+					
+					RefTag refTag = inodeTable.inodeWithId(inodeId).getRefTag();
+					if(refTag.getRefType() != RefTag.REF_TYPE_IMMEDIATE) {
+						return new InodeContentsQueueItem(priority, revTag, inodeId);
+					}
+				}
+				
+				return null;
+			} catch (IOException exc) {
+				logger.error("Caught exception queuing revision tag {}", revTag, exc);
+				return null;
+			}
+		}
+		
 		@Override int classPriority() { return -30; }
 		@Override long getHash() { return Util.shortTag(revTag.getBytes()); }
+	}
+	
+	/* send RevisionStructureQueueItem for every revision we have */
+	class EveryRevisionStructureQueueItem extends QueueItem {
+		Shuffler shuffler;
+		ArrayList<RevisionTag> tags;
+		boolean done;
+		
+		EveryRevisionStructureQueueItem(int priority) {
+			super(priority);
+			HashSet<RevisionTag> allTags = new HashSet<>();
+			for(RevisionTag tip : config.getRevisionList().branchTips()) {
+				addRevTag(allTags, tip);
+			}
+			
+			tags = new ArrayList<>(allTags);
+			shuffler = Shuffler.fixedShuffler(tags.size());
+		}
+		
+		protected void addRevTag(HashSet<RevisionTag> allTags, RevisionTag tag) {
+			if(allTags.contains(tag)) return;
+			allTags.add(tag);
+			for(RevisionTag parent : config.getRevisionTree().parentsForTag(tag)) {
+				addRevTag(allTags, parent);
+			}
+		}
+		
+		@Override
+		QueueItem nextChildActual() {
+			while(shuffler.hasNext()) {
+				int index = shuffler.next();
+				RevisionTag tag = tags.get(index);
+				return new RevisionStructureQueueItem(priority, tag);
+			}
+			
+			done = true;
+			return null;
+		}
+		
+		@Override int classPriority() { return -90; }
+		@Override long getHash() { return 1; }
 	}
 	
 	class EverythingQueueItem extends QueueItem {
@@ -268,7 +363,7 @@ public class PageQueue {
 			}
 		}
 		
-		@Override int classPriority() { return -40; }
+		@Override int classPriority() { return -100; }
 		@Override long getHash() { return 0; }
 	}
 	
@@ -277,6 +372,7 @@ public class PageQueue {
 	protected Map<Long,QueueItem> itemsByHash = new HashMap<>();
 	protected ZKArchiveConfig config;
 	protected EverythingQueueItem everythingItem;
+	protected EveryRevisionStructureQueueItem everyRevStructItem;
 	protected boolean closed;
 	
 	public PageQueue(ZKArchiveConfig config) {
@@ -325,6 +421,17 @@ public class PageQueue {
 	public void stopSendingEverything() {
 		if(everythingItem == null) return;
 		everythingItem.cancel();
+	}
+	
+	public void startSendingEveryRevisionStructure() {
+		if(everyRevStructItem != null && !everyRevStructItem.done) return;
+		everyRevStructItem = new EveryRevisionStructureQueueItem(DEFAULT_EVERY_REVISION_STRUCTURE_PRIORITY);
+		addItem(everyRevStructItem);
+	}
+	
+	public void stopSendingEveryRevisionStructure() {
+		if(everyRevStructItem == null) return;
+		everyRevStructItem.cancel();
 	}
 	
 	public synchronized void stopAll() {

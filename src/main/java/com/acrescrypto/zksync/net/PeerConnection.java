@@ -18,6 +18,7 @@ import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
+import com.acrescrypto.zksync.exceptions.SwarmTimeoutException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.zkfs.Page;
@@ -923,6 +924,12 @@ public class PeerConnection {
 					lastStream.eof();
 					lastStream = null;
 				}
+			} catch(SwarmTimeoutException exc) {
+				logger.info("Swarm {} {}:{}: PeerConnection page queue thread skipping chunk {} since it is not available locally",
+						Util.formatArchiveId(socket.swarm.config.getArchiveId()),
+						socket.getAddress(),
+						socket.getPort(),
+						Util.bytesToHex(lastTag, 8));
 			} catch(SocketClosedException exc) {
 			} catch(Exception exc) {
 				logger.error("Swarm {} {}:{}: PeerConnection page queue thread caught exception in PeerConnection",

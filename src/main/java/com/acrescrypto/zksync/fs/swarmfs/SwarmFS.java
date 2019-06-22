@@ -156,15 +156,13 @@ public class SwarmFS extends FS {
 
 	@Override
 	public byte[] read(String path) throws IOException {
-		byte[] pageTag = Page.tagForPath(path);
-		swarm.waitForPage(REQUEST_PRIORITY, pageTag);
-		return swarm.getConfig().getCacheStorage().read(path);
+		return read(path, -1);
 	}
 
 	@Override
 	public File open(String path, int mode) throws IOException {
 		byte[] pageTag = Page.tagForPath(path);
-		swarm.waitForPage(REQUEST_PRIORITY, pageTag);
+		swarm.waitForPage(REQUEST_PRIORITY, pageTag, -1);
 		return swarm.getConfig().getCacheStorage().open(path, mode);
 	}
 
@@ -189,5 +187,11 @@ public class SwarmFS extends FS {
 	
 	public String toString() {
 		return this.getClass().getSimpleName() + " " + Util.formatArchiveId(swarm.getConfig().getArchiveId());
+	}
+
+	public byte[] read(String path, int timeoutRemainingMs) throws IOException {
+		byte[] pageTag = Page.tagForPath(path);
+		swarm.waitForPage(REQUEST_PRIORITY, pageTag, timeoutRemainingMs);
+		return swarm.getConfig().getCacheStorage().read(path);
 	}
 }

@@ -24,6 +24,7 @@ import com.acrescrypto.zksync.exceptions.BlacklistedException;
 import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SocketClosedException;
+import com.acrescrypto.zksync.exceptions.SwarmTimeoutException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
@@ -401,10 +402,35 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public void waitForPage(int priority, byte[] tag) {
+		try {
+			waitForPage(priority, tag, -1);
+		} catch(SwarmTimeoutException exc) {
+			// shouldn't be possible
+			throw new RuntimeException("Caught unexpected SwarmTimeoutException waiting for page with tag " + Util.bytesToHex(tag));
+		}
+	}
+	
+	public void waitForPage(int priority, byte[] tag, int timeoutMs) throws SwarmTimeoutException {
 		long shortTag = Util.shortTag(tag);
+		long deadline = System.currentTimeMillis() + (timeoutMs >= 0 ? timeoutMs : Integer.MAX_VALUE);
+		int remainingTimeoutMs;
+		
 		while(waitingForPage(tag)) {
+			remainingTimeoutMs = (int) (deadline - System.currentTimeMillis());
+			if(remainingTimeoutMs <= 0) {
+				throw new SwarmTimeoutException("page " + Util.bytesToHex(tag));
+			}
+			
 			requestTag(priority, tag);
-			pageWaitLock.lock();
+			try {
+				if(!pageWaitLock.tryLock(remainingTimeoutMs, TimeUnit.MILLISECONDS)) {
+					throw new SwarmTimeoutException("page " + Util.bytesToHex(tag));
+				}
+			} catch (InterruptedException e1) {
+				throw new SwarmTimeoutException("page " + Util.bytesToHex(tag));
+			}
+			
+			remainingTimeoutMs = (int) (deadline - System.currentTimeMillis());
 			try {
 				if(!pageWaits.containsKey(shortTag)) {
 					pageWaits.put(shortTag, pageWaitLock.newCondition());
@@ -412,7 +438,8 @@ public class PeerSwarm implements BlacklistCallback {
 				
 				try {
 					if(waitingForPage(tag)) {
-						pageWaits.get(shortTag).await(waitPageRetryTimeMs, TimeUnit.MILLISECONDS);
+						int maxWaitMs = Math.min(waitPageRetryTimeMs, remainingTimeoutMs);
+						pageWaits.get(shortTag).await(maxWaitMs, TimeUnit.MILLISECONDS);
 					}
 				} catch (InterruptedException e) {}
 			} finally {		

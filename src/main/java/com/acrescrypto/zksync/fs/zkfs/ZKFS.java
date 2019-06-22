@@ -56,6 +56,7 @@ public class ZKFS extends FS {
 	protected ConcurrentHashMap<ZKFile,Object> openFiles = new ConcurrentHashMap<>();
 	protected ConcurrentLinkedQueue<Throwable> retentions = new ConcurrentLinkedQueue<>();
 	protected ConcurrentLinkedQueue<Throwable> closures = new ConcurrentLinkedQueue<>();
+	protected int readTimeoutMs = -1;
 	
 	public final static int MAX_PATH_LEN = 65535;
 	
@@ -820,5 +821,13 @@ public class ZKFS extends FS {
 
 	public int getDirectoryCacheSize() {
 		return directoriesByPath.cachedSize();
+	}
+	
+	public int getReadTimeoutMs() {
+		return readTimeoutMs;
+	}
+	
+	public void setReadTimeoutMs(int readTimeoutMs) {
+		this.readTimeoutMs = readTimeoutMs;
 	}
 }

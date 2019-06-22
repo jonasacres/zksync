@@ -295,7 +295,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 	
 	public void read() throws IOException {
 		// TODO EasySafe: (implement) config read
-		waitForPageReady(tag());
+		waitForPageReady(tag(), -1);
 		try(File configFile = storage.open(Page.pathForTag(tag()), File.O_RDONLY)) {
 			// TODO EasySafe: (refactor) read the file exactly once
 			byte[] prefix = calculatePrefix(configFile.read());
@@ -657,13 +657,13 @@ public class ZKArchiveConfig implements AutoCloseable {
 		return false;
 	}
 	
-	public void waitForPageReady(byte[] tag) throws IOException {
+	public void waitForPageReady(byte[] tag, int timeoutMs) throws IOException {
 		String path = Page.pathForTag(tag);
 		Stat stat = null;
 		int attempts = 0;
 		int maxAttempts = getMaster().getGlobalConfig().getInt("fs.settings.pageReadyMaxRetries");
 		int delay = getMaster().getGlobalConfig().getInt("fs.settings.pageReadyRetryDelayMs");
-		storage.ensurePresent(path);
+		storage.ensurePresent(path, timeoutMs);
 		
 		while(stat == null || stat.getSize() != this.getSerializedPageSize()) {
 			if(++attempts > maxAttempts) {
@@ -690,13 +690,9 @@ public class ZKArchiveConfig implements AutoCloseable {
 		}
 	}
 
-	public byte[] readPageData(byte[] tag) throws IOException {
-		return readPageData(tag, 0, this.getSerializedPageSize());
-	}
-	
-	public byte[] readPageData(byte[] tag, int offset, int length) throws IOException {
+	public byte[] readPageData(byte[] tag, int offset, int length, int timeoutMs) throws IOException {
 		// ensure that a page is fully written to disk before reading it
-		waitForPageReady(tag);
+		waitForPageReady(tag, timeoutMs);
 		
 		try(File page = storage.open(Page.pathForTag(tag), File.O_RDONLY)) {
 			page.seek(offset, File.SEEK_SET);

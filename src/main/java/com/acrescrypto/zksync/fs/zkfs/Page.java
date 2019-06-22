@@ -229,7 +229,8 @@ public class Page {
 		} else {
 			if(file.getFS().getArchive().getStorage() instanceof BackedFS) {
 				// make sure the page is ready if this is a non-cached filesystem
-				file.getFS().getArchive().getConfig().waitForPageReady(pageTag);
+				file.getFS().getArchive().getConfig().waitForPageReady(pageTag,
+						file.getFS().getReadTimeoutMs());
 			}
 			
 			try {
