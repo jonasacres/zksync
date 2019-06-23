@@ -41,7 +41,7 @@ public class SwarmFSTest {
 			requestedTag = tag;
 		}
 		
-		@Override public synchronized void waitForPage(int priority, byte[] tag, int timeoutMs) {
+		@Override public synchronized void waitForPage(int priority, byte[] tag, long timeoutMs) {
 			requestTag(priority, tag);
 			if(!blocking) return;
 			try { this.wait(); } catch(InterruptedException exc) {}

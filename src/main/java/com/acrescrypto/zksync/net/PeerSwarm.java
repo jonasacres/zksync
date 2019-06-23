@@ -411,13 +411,19 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void waitForPage(int priority, byte[] tag, int timeoutMs) throws SwarmTimeoutException {
+	public void waitForPage(int priority, byte[] tag, long timeoutMs) throws SwarmTimeoutException {
 		long shortTag = Util.shortTag(tag);
-		long deadline = System.currentTimeMillis() + (timeoutMs >= 0 ? timeoutMs : Integer.MAX_VALUE);
-		int remainingTimeoutMs;
+		long deadline;
+		if(timeoutMs >= 0) {
+			deadline = System.currentTimeMillis() + timeoutMs;
+		} else {
+			deadline = Long.MAX_VALUE;
+		}
+		
+		long remainingTimeoutMs;
 		
 		while(waitingForPage(tag)) {
-			remainingTimeoutMs = (int) (deadline - System.currentTimeMillis());
+			remainingTimeoutMs = deadline - System.currentTimeMillis();
 			if(remainingTimeoutMs <= 0) {
 				throw new SwarmTimeoutException("page " + Util.bytesToHex(tag));
 			}
@@ -439,7 +445,7 @@ public class PeerSwarm implements BlacklistCallback {
 				
 				try {
 					if(waitingForPage(tag)) {
-						int maxWaitMs = Math.min(waitPageRetryTimeMs, remainingTimeoutMs);
+						long maxWaitMs = Math.min(waitPageRetryTimeMs, remainingTimeoutMs);
 						pageWaits.get(shortTag).await(maxWaitMs, TimeUnit.MILLISECONDS);
 					}
 				} catch (InterruptedException e) {}
@@ -491,7 +497,10 @@ public class PeerSwarm implements BlacklistCallback {
 			pageWaitLock.unlock();
 		}
 		
-		pageNotifier.notifyAll();
+		synchronized(pageNotifier) {
+			pageNotifier.notifyAll();
+		}
+		
 		announceTag(tag);
 	}
 	
@@ -567,9 +576,19 @@ public class PeerSwarm implements BlacklistCallback {
 		pool.cancelRevision(revTag);
 	}
 	
+	public void cancelRevisionStructure(RevisionTag revTag) {
+		// TODO API: (test) cover cancelRevisionStructure
+		pool.cancelRevisionStructure(revTag);
+	}
+	
 	public int priorityForRevision(RevisionTag revTag) {
 		// TODO API: (test) cover priorityForRevision
 		return pool.priorityForRevision(revTag);
+	}
+	
+	public int priorityForRevisionStructure(RevisionTag revTag) {
+		// TODO API: (test) cover priorityForRevisionStructure
+		return pool.priorityForRevisionStructure(revTag);
 	}
 	
 	public void requestRevisionDetails(int priority, RevisionTag revTag) {
@@ -697,11 +716,20 @@ public class PeerSwarm implements BlacklistCallback {
 	
 	public void waitForPage(long timeoutMs) {
 		try {
-			if(timeoutMs >= 0) {
-				pageNotifier.wait(timeoutMs);
-			} else {
-				pageNotifier.wait();
+			synchronized(pageNotifier) {
+				if(timeoutMs >= 0) {
+					pageNotifier.wait(timeoutMs);
+				} else {
+					pageNotifier.wait();
+				}
 			}
 		} catch(InterruptedException exc) {}
+	}
+	
+	/** Trigger a signal on waiting pages. */
+	public void notifyPageUpdate() {
+		synchronized(pageNotifier) {
+			pageNotifier.notifyAll();
+		}
 	}
 }

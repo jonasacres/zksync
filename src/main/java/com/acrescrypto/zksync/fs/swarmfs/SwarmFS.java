@@ -7,11 +7,12 @@ import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.fs.TimedReader;
 import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.utility.Util;
 
-public class SwarmFS extends FS {
+public class SwarmFS extends FS implements TimedReader {
 	public final static int REQUEST_PRIORITY = 100;
 	public final static int REQUEST_TAG_STRUCTURE_PRIORITY = 200;
 	PeerSwarm swarm;
@@ -190,7 +191,7 @@ public class SwarmFS extends FS {
 		return this.getClass().getSimpleName() + " " + Util.formatArchiveId(swarm.getConfig().getArchiveId());
 	}
 
-	public byte[] read(String path, int timeoutRemainingMs) throws IOException {
+	public byte[] read(String path, long timeoutRemainingMs) throws IOException {
 		byte[] pageTag = Page.tagForPath(path);
 		swarm.waitForPage(REQUEST_PRIORITY, pageTag, timeoutRemainingMs);
 		return swarm.getConfig().getCacheStorage().read(path);

@@ -99,7 +99,7 @@ public class PeerSwarmTest {
 		int requestedPriority;
 		boolean requestedAll, requestedAllCancel, requestedPause, requestedPauseValue;
 		long requestedTag, requestedInodeId;
-		RevisionTag requestedRefTag, requestedRevTag, requestedDetailsTag;
+		RevisionTag requestedRefTag, requestedRevTag, requestedDetailsTag, requestedRevTagStructure;
 		
 		public DummyConnection(DummySocket socket) throws IOException {
 			super(socket);
@@ -147,6 +147,14 @@ public class PeerSwarmTest {
 			requestedPriority = priority;
 			for(RevisionTag tag : tags) {
 				this.requestedDetailsTag = tag;
+				break;
+			}
+		}
+		
+		@Override public void requestRevisionStructure(int priority, Collection<RevisionTag> tags) {
+			requestedPriority = priority;
+			for(RevisionTag tag : tags) {
+				this.requestedRevTagStructure = tag;
 				break;
 			}
 		}
@@ -741,6 +749,37 @@ public class PeerSwarmTest {
 		assertEquals(revTag, conn.requestedRevTag);
 		assertEquals(11235813, conn.requestedPriority);
 	}
+	
+	@Test
+	public void testRequestRevisionStructureSendsRequestRevisionStructureToAllCurrentPeers() throws IOException {
+		DummyConnection[] conns = new DummyConnection[16];
+		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		
+		for(int i = 0; i < conns.length; i++) {
+			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
+			swarm.openedConnection(conns[i]);
+			assertFalse(conns[i].requestedAll);
+		}
+		
+		swarm.requestRevisionStructure(Integer.MIN_VALUE, revTag);
+		for(DummyConnection conn : conns) {
+			assertEquals(revTag, conn.requestedRevTagStructure);
+			assertEquals(Integer.MIN_VALUE, conn.requestedPriority);
+		}
+	}
+
+	@Test
+	public void testRequestRevisionStructureSendsRequestRevisionStructureToAllNewPeers() throws IOException {
+		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
+		swarm.requestRevisionStructure(11235813, revTag);
+		swarm.openedConnection(conn);
+		assertEquals(revTag, conn.requestedRevTagStructure);
+		assertEquals(11235813, conn.requestedPriority);
+	}
+
 	
 	@Test
 	public void testRequestRevisionDetailsSendsRequestRevisionDetailsToAllCurrentPeers() throws IOException {

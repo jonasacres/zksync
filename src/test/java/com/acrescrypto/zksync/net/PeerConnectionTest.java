@@ -51,6 +51,7 @@ import com.acrescrypto.zksync.net.PageQueue.PageQueueItem;
 import com.acrescrypto.zksync.net.PageQueue.QueueItem;
 import com.acrescrypto.zksync.net.PageQueue.InodeContentsQueueItem;
 import com.acrescrypto.zksync.net.PageQueue.RevisionQueueItem;
+import com.acrescrypto.zksync.net.PageQueue.RevisionStructureQueueItem;
 import com.acrescrypto.zksync.net.PeerConnection.PeerCapabilityException;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -688,6 +689,34 @@ public class PeerConnectionTest {
 			assertNoMessage();
 		}
 	}
+	
+	@Test
+	public void testRequestRevisionStructureMultiple() throws PeerCapabilityException, IOException {
+		ArrayList<RevisionTag> tags = new ArrayList<>();
+		for(int i = 0; i < 16; i++) {
+			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			tags.add(new RevisionTag(refTag, 0, 0));
+		}
+		conn.requestRevisionStructure(20, tags);
+		assertReceivedCmd(PeerConnection.CMD_REQUEST_REVISION_STRUCTURE);
+		assertReceivedBytes(Util.serializeInt(20));
+		for(RevisionTag tag : tags) {
+			assertReceivedBytes(tag.getBytes());
+		}
+	}
+
+	@Test
+	public void testRequestRevisionStructureMultipleThrowsExceptionIfNotFullPeer() throws PeerCapabilityException {
+		blindPeer();
+		ArrayList<RevisionTag> list = new ArrayList<>();
+		list.add(RevisionTag.blank(archive.getConfig()));
+		
+		try {
+			conn.requestRevisionStructure(10, list);
+		} catch(PeerCapabilityException exc) {
+			assertNoMessage();
+		}
+	}
 
 	@Test
 	public void testSetPausedEnabled() throws IOException {
@@ -1253,6 +1282,73 @@ public class PeerConnectionTest {
 		}
 	}
 	
+	@Test
+	public void testHandleRequestRevisionStructureAddsRequestedRevTagToPageQueue() throws IOException, ProtocolViolationException {
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REVISION_STRUCTURE);
+		RevisionTag[] tags = new RevisionTag[16];
+		
+		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
+		for(int i = 0; i < tags.length; i++) {
+			try(ZKFS fs = archive.openBlank()) {
+				fs.write("file"+i, "content".getBytes());
+				tags[i] = fs.commit();
+				msg.receivedData((byte) 0, tags[i].getBytes());
+			}
+		}
+		
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		conn.handle(msg);
+		
+		for(RevisionTag tag : tags) {
+			assertQueuedItemLike((_item) -> {
+				if(!(_item instanceof RevisionStructureQueueItem)) return false;
+				RevisionStructureQueueItem item = (RevisionStructureQueueItem) _item;
+				return tag.equals(item.revTag);
+			});
+		}
+	}
+	
+	@Test(expected=ProtocolViolationException.class)
+	public void testHandleRequestRevisionStructureTriggersViolationIfNotFullPeer() throws IOException, ProtocolViolationException {
+		blindPeer();
+		testHandleRequestRevisionStructureAddsRequestedRevTagToPageQueue();
+	}
+	
+	@Test
+	public void testHandleRequestRevisionStructureToleratesNonexistentRevTags() throws IOException, ProtocolViolationException {
+		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_REVISION_STRUCTURE);
+		RevisionTag[] tags = new RevisionTag[16];
+		
+		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array()); // priority 0
+		for(int i = 0; i < tags.length; i++) {
+			try(ZKFS fs = archive.openBlank()) {
+				fs.write("file"+i, "content".getBytes());
+				tags[i] = fs.commit();
+				msg.receivedData((byte) 0, tags[i].getBytes());
+				if(i == tags.length/2) {
+					byte[] refTagBytes = crypto.prng(crypto.symNonce(i+3)).getBytes(archive.getConfig().refTagSize());
+					RefTag refTag = new RefTag(archive, refTagBytes);
+					RevisionTag fakeRevTag = new RevisionTag(refTag, 0, 0);
+					
+					// making this non-immediate gives us more interesting branches
+					assertFalse(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);
+					msg.receivedData((byte) 0, fakeRevTag.getBytes());
+				}
+			}
+		}
+		
+		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
+		conn.handle(msg);
+		
+		for(RevisionTag tag : tags) {
+			assertQueuedItemLike((_item) -> {
+				if(!(_item instanceof RevisionStructureQueueItem)) return false;
+				RevisionStructureQueueItem item = (RevisionStructureQueueItem) _item;
+				return tag.equals(item.revTag);
+			});
+		}
+	}
+
 	@Test
 	public void testHandleRequestPageTagsAddsRequestedShortTagsToPageQueue() throws ProtocolViolationException, IOException {
 		byte[][] tags = new byte[16][];

@@ -46,6 +46,7 @@ public class ArchiveNetPoolResourceTest {
 					this.requestedInodes.add(i, new InodeRef(revTag, 100l*i));
 					this.requestedRevisions.add(i, revTag);
 					this.requestedRevisionDetails.add(i, revTag);
+					this.requestedRevisionStructures.add(i, revTag);
 	
 					for(int j = 0; j < 10; j++) {
 						this.requestedPageTags.add(i, 10l*i + j);
@@ -58,6 +59,7 @@ public class ArchiveNetPoolResourceTest {
 		@Override public int numInodesRequested() { return 20; }
 		@Override public int numRevisionsRequested() { return 30; }
 		@Override public int numRevisionDetailsRequested() { return 40; }
+		@Override public int numRevisionStructuresRequested() { return 50; }
 		@Override public boolean isRequestingEverything() { return true; }
 		@Override public boolean isPaused() { return true; }
 	}
@@ -131,6 +133,12 @@ public class ArchiveNetPoolResourceTest {
 	public void testGetShowsNumberOfRevisionsInPool() {
 		JsonNode resp = WebTestUtils.requestGet(target, basepath);
 		assertEquals(pool.numRevisionsRequested(), resp.get("numRevisions").intValue());
+	}
+	
+	@Test
+	public void testGetShowsNumberOfRevisionStructuresInPool() {
+		JsonNode resp = WebTestUtils.requestGet(target, basepath);
+		assertEquals(pool.numRevisionStructuresRequested(), resp.get("numRevisionStructures").intValue());
 	}
 
 	@Test
@@ -212,6 +220,35 @@ public class ArchiveNetPoolResourceTest {
 	public void testGetRevisionsShowsQueuedRevisions() {
 		JsonNode resp = WebTestUtils.requestGet(target, basepath + "revisions");
 		JsonNode revisions = resp.get("revisions");
+		HashSet<Integer> seenPriorities = new HashSet<>();
+
+		revisions.fieldNames().forEachRemaining((name)->{
+			assertTrue(name.matches("^[0-9]+$"));
+			int priority = Integer.parseInt(name);
+			assertTrue(0 <= priority && priority < 10);
+			seenPriorities.add(priority);
+
+			assertEquals(1, revisions.get(name).size());
+			JsonNode element = revisions.get(name).get(0);
+
+			byte[] revTag = null;
+			try {
+				revTag = element.binaryValue();
+			} catch (IOException e) {
+				fail();
+			}
+
+			assertArrayEquals(pool.revTags.get(priority).getBytes(), revTag);
+
+		});
+
+		assertEquals(10, seenPriorities.size());
+	}
+	
+	@Test
+	public void testGetRevisionsShowsQueuedRevisionStructures() {
+		JsonNode resp = WebTestUtils.requestGet(target, basepath + "revisionstructures");
+		JsonNode revisions = resp.get("revisionStructures");
 		HashSet<Integer> seenPriorities = new HashSet<>();
 
 		revisions.fieldNames().forEachRemaining((name)->{

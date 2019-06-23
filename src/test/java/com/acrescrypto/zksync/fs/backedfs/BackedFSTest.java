@@ -11,6 +11,7 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -20,20 +21,24 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.SwarmTimeoutException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.fs.TimedReader;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.utility.Util;
 
 public class BackedFSTest extends FSTestBase {
-	class DummyFS extends FS {
+	class DummyFS extends FS implements TimedReader {
 		HashMap<String,Integer> stattedPaths = new HashMap<String,Integer>();
 		HashMap<String,Integer> lstattedPaths = new HashMap<String,Integer>();
 		HashMap<String,Integer> readPaths = new HashMap<String,Integer>();
 		String scope;
 		int delay;
+		Long requestedTimeout = null;
 		
 		boolean accessed;
 		
@@ -122,6 +127,12 @@ public class BackedFSTest extends FSTestBase {
 			}
 			
 			throw new ENOENTException(path);
+		}
+		
+		@Override
+		public byte[] read(String path, long timeoutMs) throws IOException {
+			requestedTimeout = timeoutMs;
+			return read(path);
 		}
 
 		public Directory opendir(String path) throws IOException { throw new RuntimeException("attempted to opendir on backup"); }
@@ -731,5 +742,156 @@ public class BackedFSTest extends FSTestBase {
 	@Test @Ignore @Override
 	public void testChgrp() {
 		// can't chgrp on a localfs without superuser
+	}
+	
+	@Test
+	public void testEnsurePresentDoesNotReadFromBackingFSUnlessFileAbsentFromCache() throws IOException {
+		backedFS.ensurePresent(CACHED_FILE, 0);
+		assertFalse(backupFS.accessed);
+	}
+	
+	@Test
+	public void testEnsurePresentPassesNegativeTimeoutAsMaxLong() throws IOException {
+		backedFS.ensurePresent(UNCACHED_FILE, -1);
+		assertEquals(Long.MAX_VALUE, backupFS.requestedTimeout.longValue());
+	}
+	
+	@Test
+	public void testEnsurePresentPassesZeroTimeoutAsZero() throws IOException {
+		backedFS.ensurePresent(UNCACHED_FILE, 0);
+		assertEquals(0, backupFS.requestedTimeout.longValue());
+	}
+	
+	@Test
+	public void testEnsurePresentPassesPositiveTimeoutAsPositive() throws IOException {
+		backedFS.ensurePresent(UNCACHED_FILE, 20);
+		assertEquals(20, backupFS.requestedTimeout.longValue(), 2);
+	}
+	
+	@Test
+	public void testEnsurePresentBlocksOnPendingPathsIndefinitelyForNegativeTimeout() {
+		backedFS.pendingPaths.add(UNCACHED_FILE);
+		MutableBoolean finished = new MutableBoolean();
+		
+		new Thread(()->{
+			try {
+				backedFS.ensurePresent(UNCACHED_FILE, -1);
+			} catch (IOException e) {
+				e.printStackTrace();
+				fail();
+			}
+			finished.setTrue();
+		}).start();
+		
+		assertFalse(Util.waitUntil(500, ()->finished.booleanValue()));
+		backedFS.pendingPaths.remove(UNCACHED_FILE);
+		synchronized(backedFS) {
+			backedFS.notifyAll();
+		}
+		
+		assertTrue(Util.waitUntil(50, ()->finished.booleanValue()));
+	}
+	
+	@Test
+	public void testEnsurePresentThrowsExceptionImmediatelyIfPathPendingAndZeroTimeout() {
+		backedFS.pendingPaths.add(UNCACHED_FILE);
+		MutableBoolean finished = new MutableBoolean();
+		
+		new Thread(()->{
+			try {
+				backedFS.ensurePresent(UNCACHED_FILE, 0);
+				fail();
+			} catch(SwarmTimeoutException exc) {
+				finished.setTrue();
+			} catch(IOException exc) {
+				exc.printStackTrace();
+				fail();
+			}
+		}).start();
+		
+		assertTrue(Util.waitUntil(50, ()->finished.booleanValue()));
+	}
+	
+	@Test
+	public void testEnsurePresentThrowsExceptionAfterTimeoutIfPathPendingAndTimeoutPositive() {
+		backedFS.pendingPaths.add(UNCACHED_FILE);
+		MutableBoolean finished = new MutableBoolean();
+		long startTime = System.currentTimeMillis();
+		int timeoutMs = 50;
+		
+		new Thread(()->{
+			try {
+				backedFS.ensurePresent(UNCACHED_FILE, timeoutMs);
+				fail();
+			} catch(SwarmTimeoutException exc) {
+				finished.setTrue();
+			} catch(IOException exc) {
+				exc.printStackTrace();
+				fail();
+			}
+		}).start();
+		
+		assertTrue(Util.waitUntil(timeoutMs + 25, ()->finished.booleanValue()));
+		long elapsed = System.currentTimeMillis() - startTime;
+		
+		assertTrue(elapsed >= timeoutMs);
+	}
+	
+	@Test
+	public void testEnsurePresentDeductsPendingPathWaitTimeFromReadTimeout() {
+		backedFS.pendingPaths.add(UNCACHED_FILE);
+		MutableBoolean finished = new MutableBoolean();
+		int timeoutMs = 100;
+		
+		new Thread(()->{
+			try {
+				backedFS.ensurePresent(UNCACHED_FILE, timeoutMs);
+			} catch(IOException exc) {
+				exc.printStackTrace();
+				fail();
+			}
+			
+			finished.setTrue();
+		}).start();
+		
+		int delay = 25;
+		Util.sleep(delay);
+		assertFalse(finished.booleanValue());
+		synchronized(backedFS) {
+			backedFS.pendingPaths.remove(UNCACHED_FILE);
+			backedFS.notifyAll();
+		}
+		
+		assertTrue(Util.waitUntil(timeoutMs + 25, ()->finished.booleanValue()));
+		assertTrue(backupFS.requestedTimeout <= timeoutMs - delay);
+		assertTrue(backupFS.requestedTimeout > timeoutMs - 2*delay);
+	}
+
+	@Test
+	public void testEnsurePresentPassesMaxLongToFilesystemReadIfTimeoutNegativeAndWaitedOnPendingPath() {
+		backedFS.pendingPaths.add(UNCACHED_FILE);
+		MutableBoolean finished = new MutableBoolean();
+		
+		new Thread(()->{
+			try {
+				backedFS.ensurePresent(UNCACHED_FILE, -1);
+			} catch(IOException exc) {
+				exc.printStackTrace();
+				fail();
+			}
+			
+			finished.setTrue();
+		}).start();
+		
+		int delay = 25;
+		Util.sleep(delay);
+		assertFalse(finished.booleanValue());
+		synchronized(backedFS) {
+			backedFS.pendingPaths.remove(UNCACHED_FILE);
+			backedFS.notifyAll();
+		}
+		
+		assertTrue(Util.waitUntil(25, ()->finished.booleanValue()));
+		assertEquals(Long.MAX_VALUE, backupFS.requestedTimeout.longValue());
 	}
 }

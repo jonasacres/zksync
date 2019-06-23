@@ -6,6 +6,7 @@ public class XNetPoolStats {
 	private Integer numPages;
 	private Integer numInodes;
 	private Integer numRevisions;
+	private Integer numRevisionStructures;
 	private Integer numRevisionDetails;
 	private Boolean isRequestingEverything;
 	private Boolean paused;
@@ -16,6 +17,7 @@ public class XNetPoolStats {
 		this.numPages = pool.numPagesRequested();
 		this.numInodes = pool.numInodesRequested();
 		this.numRevisions = pool.numRevisionsRequested();
+		this.numRevisionStructures = pool.numRevisionStructuresRequested();
 		this.numRevisionDetails = pool.numRevisionDetailsRequested();
 		this.isRequestingEverything = pool.isRequestingEverything();
 		this.paused = pool.isPaused();
@@ -67,5 +69,13 @@ public class XNetPoolStats {
 
 	public void setIsRequestingEverything(Boolean isRequestingEverything) {
 		this.isRequestingEverything = isRequestingEverything;
+	}
+
+	public Integer getNumRevisionStructures() {
+		return numRevisionStructures;
+	}
+
+	public void setNumRevisionStructures(Integer numRevisionStructures) {
+		this.numRevisionStructures = numRevisionStructures;
 	}
 }

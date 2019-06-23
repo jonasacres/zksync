@@ -53,6 +53,16 @@ public class ArchiveNetPoolResource {
 		
 		throw XAPIResponse.withWrappedPayload("revisions", config.getSwarm().getRequestPool().requestedRevisions());
 	}
+	
+	@GET
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("revisionstructures")
+	public XAPIResponse getRevisionStructures(@PathParam("archiveid") String archiveId) throws IOException {
+		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
+		if(config == null) throw XAPIResponse.notFoundErrorResponse();
+		
+		throw XAPIResponse.withWrappedPayload("revisionStructures", config.getSwarm().getRequestPool().requestedRevisionStructures());
+	}
 
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)

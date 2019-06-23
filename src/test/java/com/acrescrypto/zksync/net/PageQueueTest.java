@@ -67,6 +67,9 @@ public class PageQueueTest {
 		inodeImmediate = addFile(fs, inodesInRevision, "immediate", new byte[archive.getCrypto().hashLength()-1]);
 		inodeIndirect = addFile(fs, inodesInRevision, "indirect", new byte[archive.getConfig().getPageSize()]);
 		inode2Indirect = addFile(fs, inodesInRevision, "2indirect", new byte[10*archive.getConfig().getPageSize()]);
+		fs.mkdir("dir1");
+		fs.mkdir("dir2");
+		fs.mkdir("dir2/subdir");
 		revTag = fs.commit();
 		
 		Inode inode = addFile(fs, null, "sample", new byte[10*archive.getConfig().getPageSize()]);
@@ -137,6 +140,20 @@ public class PageQueueTest {
 			expectedTags.add(Util.shortTag(fs.getInodeTable().getInode().getRefTag().getHash()));
 			for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
 				expectedTags.addAll(expectedPageTagsForInode(fs.getInodeTable().inodeWithId(i)));
+			}
+		}
+		
+		return expectedTags;
+	}
+	
+	public HashSet<Long> expectedStructuralPageTagsForRevTag(RevisionTag revTag) throws IOException {
+		HashSet<Long> expectedTags = new HashSet<Long>();
+		try(ZKFS fs = revTag.readOnlyFS()) {
+			expectedTags.add(Util.shortTag(fs.getInodeTable().getInode().getRefTag().getHash()));
+			for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
+				Inode inode = fs.getInodeTable().inodeWithId(i);
+				if(!inode.getStat().isDirectory()) continue;
+				expectedTags.addAll(expectedPageTagsForInode(inode));
 			}
 		}
 		
@@ -815,6 +832,134 @@ public class PageQueueTest {
 			queue.addRevisionTag(0, revTag);
 			queue.addRevisionTag(0, pageRevTag);
 			expectTagsFromQueue(expectedPageTagsForRevTag(revTag));
+		}
+	}
+	
+	///////////
+	
+	@Test
+	public void testAddRevisionTagForStructureEnqueuesAllStructuralRefTagsInRevision() throws IOException {
+		queue.addRevisionTagForStructure(0, revTag);
+		expectTagsFromQueue(expectedStructuralPageTagsForRevTag(revTag));
+		
+		queue.addRevisionTagForStructure(0, secondRevTag);
+		expectTagsFromQueue(expectedStructuralPageTagsForRevTag(secondRevTag));
+	}
+	
+	@Test
+	public void testAddRevisionTagForStructureHonorsPriority() throws IOException {
+		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
+		queue.addRevisionTagForStructure(0, secondRevTag);
+		queue.addPageTag(1, pageTag);
+		assertTrue(Arrays.equals(pageTag, queue.nextChunk().tag));
+		
+		queue.stopAll();
+		queue.addRevisionTagForStructure(1, secondRevTag);
+		queue.addPageTag(0, pageTag);
+		
+		byte[] nextTag = queue.nextChunk().tag;
+		assertFalse(Arrays.equals(pageTag, nextTag));
+	}
+	
+	@Test
+	public void testAddRevisionTagForStructureAllowsReprioritization() throws IOException {
+		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
+		queue.addRevisionTagForStructure(0, secondRevTag);
+		queue.addPageTag(1, pageTag);
+		queue.addRevisionTagForStructure(2, secondRevTag);
+		assertFalse(Arrays.equals(pageTag, queue.nextChunk().tag));
+		
+		queue.stopAll();
+		queue.addRevisionTagForStructure(2, secondRevTag);
+		queue.addPageTag(1, pageTag);
+		queue.addRevisionTagForStructure(0, secondRevTag);
+		
+		byte[] nextTag = queue.nextChunk().tag;
+		assertTrue(Arrays.equals(pageTag, nextTag));
+	}
+	
+	@Test
+	public void testAddRevisionTagForStructureAllowsCancellation() throws IOException {
+		assertFalse(expectedStructuralPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
+		queue.addRevisionTagForStructure(0, secondRevTag);
+		queue.nextChunk();
+		queue.addRevisionTagForStructure(Integer.MIN_VALUE, secondRevTag);
+		assertFalse(queue.hasNextChunk());
+	}
+	
+	@Test
+	public void testAddRevisionTagForStructureSendsInodesInShuffledOrder() throws IOException {
+		LinkedList<Long> seenInodes = new LinkedList<Long>();
+
+		queue.addRevisionTagForStructure(0, secondRevTag);
+		while(queue.hasNextChunk()) {
+			Inode inode = inodeForPageTag(secondRevTag, queue.nextChunk().tag);
+			if(seenInodes.isEmpty() || !seenInodes.getLast().equals(inode.getStat().getInodeId())) {
+				seenInodes.add(inode.getStat().getInodeId());
+			}
+		}
+		
+		Shuffler.purgeFixedOrderings();
+		long lastId = -1;
+		int matches = 0, numTagsSeen = 0;
+		queue.addRevisionTagForStructure(0, secondRevTag);
+		while(queue.hasNextChunk()) {
+			Inode inode = inodeForPageTag(secondRevTag, queue.nextChunk().tag);
+			if(lastId < 0 || lastId != inode.getStat().getInodeId()) {
+				if(seenInodes.get(numTagsSeen).equals(inode.getStat().getInodeId())) {
+					matches++;
+				}
+				
+				numTagsSeen++;
+				lastId = inode.getStat().getInodeId();
+			}
+		}
+		
+		assertEquals(seenInodes.size(), numTagsSeen);
+		assertTrue(matches <= numTagsSeen/2);
+	}
+	
+	@Test
+	public void testAddRevisionTagForStructureToleratesNonexistentRevisionTags() throws IOException {
+		// make a revtag that isn't read
+		byte[] corruptRaw = revTag.getRefTag().getBytes().clone();
+		corruptRaw[2] ^= 0x20;
+		RefTag corruptRef = new RefTag(archive, corruptRaw);
+		RevisionTag corrupt = new RevisionTag(corruptRef, 0, 0);
+		
+		// queue it up; shouldn't generate any chunks, or problems
+		queue.addRevisionTagForStructure(0, corrupt);
+		assertFalse(queue.hasNextChunk());
+
+		// try again, except add a real one after and make sure we still get data
+		queue.addRevisionTagForStructure(0, corrupt);
+		queue.addRevisionTagForStructure(0, revTag);
+		expectTagsFromQueue(expectedStructuralPageTagsForRevTag(revTag));
+
+		// and again, except the legal one goes first
+		queue.addRevisionTag(0, revTag);
+		queue.addRevisionTag(0, corrupt);
+		expectTagsFromQueue(expectedPageTagsForRevTag(revTag));
+	}
+	
+	@Test
+	public void testAddRevisionTagForStructureToleratesFileRefTags() throws IOException {
+		RefTag[] tags = { inodeImmediate.getRefTag(), inodeIndirect.getRefTag(), inode2Indirect.getRefTag() };
+		for(RefTag tag : tags) {
+			RevisionTag pageRevTag = new RevisionTag(tag, 0, 0);
+			// queue it up with a file reftag; shouldn't generate any chunks, or problems
+			queue.addRevisionTagForStructure(0, pageRevTag);
+			assertFalse(queue.hasNextChunk());
+			
+			// try again, except add a real one after and make sure we still get data
+			queue.addRevisionTagForStructure(0, pageRevTag);
+			queue.addRevisionTagForStructure(0, revTag);
+			expectTagsFromQueue(expectedStructuralPageTagsForRevTag(revTag));
+			
+			// and again, except the legal one goes first
+			queue.addRevisionTagForStructure(0, revTag);
+			queue.addRevisionTagForStructure(0, pageRevTag);
+			expectTagsFromQueue(expectedStructuralPageTagsForRevTag(revTag));
 		}
 	}
 	

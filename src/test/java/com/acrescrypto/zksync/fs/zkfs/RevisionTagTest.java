@@ -11,6 +11,7 @@ import static org.junit.Assert.fail;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -225,5 +226,157 @@ public class RevisionTagTest {
 		assertFalse(packed.isUnpacked());
 		assertArrayEquals(revTag.getRefTag().getBytes(), packed.getRefTag().getBytes());
 		assertTrue(packed.isUnpacked());
+	}
+	
+	@Test
+	public void testHasStructureLocallyReturnsTrueIfInodeTableCachedForEmptyFS() throws IOException {
+		assertTrue(revTag.hasStructureLocally());
+	}
+
+	@Test
+	public void testHasStructureLocallyReturnsTrueIfInodeAndDirectoriesCached() throws IOException {
+		fs.mkdir("dir");
+		for(int i = 0; i < fs.inodeTable.numInodesForPage(1) + 1; i++) { // force the inode table and directory to each be multipage
+			fs.write("dir/heresapathnamesamiam" + i, "foo".getBytes());
+		}
+		
+		revTag = fs.commit();
+		assertTrue(revTag.hasStructureLocally());
+	}
+
+	@Test
+	public void testHasStructureLocallyReturnsFalseIfInodePageMissing() throws IOException {
+		PageTree tree = new PageTree(revTag.getRefTag());
+		String pagePath = Page.pathForTag(tree.getPageTag(0));
+		fs.getArchive().getStorage().unlink(pagePath);
+		assertFalse(revTag.hasStructureLocally());
+	}
+	
+	@Test
+	public void testHasStructureLocallyReturnsFalseIfDirectoryPageMissing() throws IOException {
+		fs.mkdir("dir");
+		for(int i = 0; i < fs.inodeTable.numInodesForPage(1) + 1; i++) { // force the inode table and directory to each be multipage
+			fs.write("dir/heresapathnamesamiam" + i, "foo".getBytes());
+		}
+		
+		revTag = fs.commit();
+		try(ZKDirectory dir = fs.opendir("dir")) {
+			String path = Page.pathForTag(dir.tree.getPageTag(0));
+			fs.archive.getStorage().unlink(path);
+		}
+		
+		assertFalse(revTag.hasStructureLocally());
+	}
+	
+	@Test
+	public void testWaitForStructureDoesNotBlockIfTimeoutIsZero() throws IOException {
+		fs.mkdir("dir");
+		for(int i = 0; i < fs.inodeTable.numInodesForPage(1) + 1; i++) { // force the inode table and directory to each be multipage
+			fs.write("dir/heresapathnamesamiam" + i, "foo".getBytes());
+		}
+		
+		revTag = fs.commit();
+		try(ZKDirectory dir = fs.opendir("dir")) {
+			String path = Page.pathForTag(dir.tree.getPageTag(0));
+			fs.archive.getStorage().unlink(path);
+		}
+		
+		long now = System.currentTimeMillis();
+		assertFalse(revTag.waitForStructure(0));
+		
+		// time shouldn't have moved more than 3ms (which could be a lot closer to 1ms depending on timing)
+		assertEquals(now, System.currentTimeMillis(), 3);
+	}
+	
+	@Test
+	public void testWaitForStructureBlocksIfTimeoutIsNegative() throws IOException {
+		fs.mkdir("dir");
+		for(int i = 0; i < fs.inodeTable.numInodesForPage(1) + 1; i++) { // force the inode table and directory to each be multipage
+			fs.write("dir/heresapathnamesamiam" + i, "foo".getBytes());
+		}
+		
+		String path;
+		revTag = fs.commit();
+		try(ZKDirectory dir = fs.opendir("dir")) {
+			path = Page.pathForTag(dir.tree.getPageTag(0));
+			fs.archive.getStorage().mv(path, path + ".moved");
+		}
+		
+		MutableBoolean returned = new MutableBoolean();
+		new Thread(()->{
+			try {
+				assertTrue(revTag.waitForStructure(-1));
+			} catch (IOException e) {
+				e.printStackTrace();
+				fail();
+			}
+			returned.setTrue();
+		}).start();
+		
+		Util.sleep(500);
+		assertFalse(returned.booleanValue());
+		
+		fs.archive.getStorage().mv(path + ".moved", path);
+		fs.archive.getConfig().getSwarm().notifyPageUpdate();
+		assertTrue(Util.waitUntil(1000, ()->returned.booleanValue()));
+	}
+	
+	@Test
+	public void testWaitForStructureTimesOutAfterRequestedPositiveInterval() throws IOException {
+		int delayMs = 100;
+		fs.mkdir("dir");
+		for(int i = 0; i < fs.inodeTable.numInodesForPage(1) + 1; i++) { // force the inode table and directory to each be multipage
+			fs.write("dir/heresapathnamesamiam" + i, "foo".getBytes());
+		}
+		
+		String path;
+		revTag = fs.commit();
+		try(ZKDirectory dir = fs.opendir("dir")) {
+			path = Page.pathForTag(dir.tree.getPageTag(0));
+			fs.archive.getStorage().mv(path, path + ".moved");
+		}
+		
+		MutableBoolean returned = new MutableBoolean();
+		new Thread(()->{
+			try {
+				assertFalse(revTag.waitForStructure(delayMs));
+			} catch (IOException e) {
+				e.printStackTrace();
+				fail();
+			}
+			returned.setTrue();
+		}).start();
+		
+		long startTime = System.currentTimeMillis();
+		assertTrue(Util.waitUntil(delayMs + 50, ()->returned.booleanValue()));
+		assertTrue(System.currentTimeMillis() - startTime >= delayMs);
+	}
+	
+	@Test
+	public void testWaitForStructureReturnsFalseIfNotCached() throws IOException {
+		fs.mkdir("dir");
+		for(int i = 0; i < fs.inodeTable.numInodesForPage(1) + 1; i++) { // force the inode table and directory to each be multipage
+			fs.write("dir/heresapathnamesamiam" + i, "foo".getBytes());
+		}
+		
+		String path;
+		revTag = fs.commit();
+		try(ZKDirectory dir = fs.opendir("dir")) {
+			path = Page.pathForTag(dir.tree.getPageTag(0));
+			fs.archive.getStorage().mv(path, path + ".moved");
+		}
+		
+		assertFalse(revTag.waitForStructure(0));
+	}
+	
+	@Test
+	public void testWaitForStructureReturnsTrueIfPrecached() throws IOException {
+		fs.mkdir("dir");
+		for(int i = 0; i < fs.inodeTable.numInodesForPage(1) + 1; i++) { // force the inode table and directory to each be multipage
+			fs.write("dir/heresapathnamesamiam" + i, "foo".getBytes());
+		}
+		
+		revTag = fs.commit();
+		assertTrue(revTag.waitForStructure(0));
 	}
 }

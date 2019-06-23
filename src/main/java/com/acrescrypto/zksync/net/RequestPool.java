@@ -46,6 +46,10 @@ public class RequestPool {
 			(t)->Util.shortTag(t.getBytes()),
 			(t)->t.getBytes(),
 			(buf)->new RevisionTag(config, buf, false));
+	protected HashList<RevisionTag> requestedRevisionStructures = new HashList<RevisionTag>(
+			(t)->Util.shortTag(t.getBytes()),
+			(t)->t.getBytes(),
+			(buf)->new RevisionTag(config, buf, false));
 	protected HashList<Long> requestedPageTags = new HashList<Long>(
 			(t)->t.longValue(),
 			(t)->Util.serializeLong(t.longValue()),
@@ -287,7 +291,7 @@ public class RequestPool {
 	}
 	
 	public synchronized void addRevisionStructure(int priority, RevisionTag revTag) {
-		requestedRevisions.add(priority,  revTag);
+		requestedRevisionStructures.add(priority,  revTag);
 		dirty = true;
 		
 		for(PeerConnection connection : config.getSwarm().getConnections()) {
@@ -312,9 +316,30 @@ public class RequestPool {
 		}
 	}
 	
+	public synchronized void cancelRevisionStructure(RevisionTag revTag) {
+		requestedRevisionStructures.remove(revTag);
+		dirty = true;
+		
+		for(PeerConnection connection : config.getSwarm().getConnections()) {
+			ArrayList<RevisionTag> list = new ArrayList<>(1);
+			list.add(revTag);
+			try {
+				connection.requestRevisionStructure(PageQueue.CANCEL_PRIORITY, list);
+			} catch(PeerCapabilityException exc) {}
+		}
+	}
+	
 	public int priorityForRevision(RevisionTag revTag) {
 		try {
 			return requestedRevisions.lookup(revTag).priority;
+		} catch(NullPointerException exc) {
+			return PageQueue.CANCEL_PRIORITY;
+		}
+	}
+	
+	public int priorityForRevisionStructure(RevisionTag revTag) {
+		try {
+			return requestedRevisionStructures.lookup(revTag).priority;
 		} catch(NullPointerException exc) {
 			return PageQueue.CANCEL_PRIORITY;
 		}
@@ -392,6 +417,10 @@ public class RequestPool {
 		return requestedRevisions.contains(priority, revTag);
 	}
 	
+	public boolean hasRevisionStructure(int priority, RevisionTag revTag) {
+		return requestedRevisionStructures.contains(priority, revTag);
+	}
+	
 	public boolean hasRevisionDetails(int priority, RevisionTag revTag) {
 		return requestedRevisionDetails.contains(priority, revTag);
 	}
@@ -403,6 +432,7 @@ public class RequestPool {
 			prunePageTags();
 			pruneRefTags();
 			pruneRevisionTags();
+			pruneRevisionStructures();
 			pruneRevisionDetails();
 		} catch(IOException exc) {
 			logger.error("Caught exception pruning request pool", exc);
@@ -444,6 +474,11 @@ public class RequestPool {
 			map = requestedRevisionDetails.priorityMap();
 			for(int priority : map.keySet()) {
 				conn.requestRevisionDetails(priority, map.get(priority));
+			}
+			
+			map = requestedRevisionStructures.priorityMap();
+			for(int priority : map.keySet()) {
+				conn.requestRevisionStructure(priority, map.get(priority));
 			}
 		} catch(PeerCapabilityException exc) {}
 	}
@@ -512,6 +547,16 @@ public class RequestPool {
 		});
 	}
 	
+	protected void pruneRevisionStructures() throws IOException {
+		requestedRevisionStructures.removeIf((revTag)->{
+			try {
+				return revTag.hasStructureLocally();
+			} catch(IOException exc) {
+				return false;
+			}
+		});
+	}
+	
 	protected void pruneRevisionDetails() throws IOException {
 		requestedRevisionDetails.removeIf((revTag)->config.getRevisionTree().hasParentsForTag(revTag));
 	}
@@ -548,6 +593,7 @@ public class RequestPool {
 		pieces.add(requestedPageTags.serialize());
 		pieces.add(requestedInodes.serialize());
 		pieces.add(requestedRevisions.serialize());
+		pieces.add(requestedRevisionStructures.serialize());
 		pieces.add(requestedRevisionDetails.serialize());
 		
 		int totalBytes = 0;
@@ -562,6 +608,7 @@ public class RequestPool {
 		requestedPageTags.deserialize(buf);
 		requestedInodes.deserialize(buf);
 		requestedRevisions.deserialize(buf);
+		requestedRevisionStructures.deserialize(buf);
 		requestedRevisionDetails.deserialize(buf);
 		addDataRequests();
 	}
@@ -576,6 +623,10 @@ public class RequestPool {
 	
 	public HashMap<Integer,LinkedList<RevisionTag>> requestedRevisions() {
 		return requestedRevisions.priorityMap();
+	}
+	
+	public HashMap<Integer,LinkedList<RevisionTag>> requestedRevisionStructures() {
+		return requestedRevisionStructures.priorityMap();
 	}
 
 	public HashMap<Integer,LinkedList<RevisionTag>> requestedRevisionDetails() {
@@ -592,6 +643,10 @@ public class RequestPool {
 	
 	public int numRevisionsRequested() {
 		return requestedRevisions.size();
+	}
+	
+	public int numRevisionStructuresRequested() {
+		return requestedRevisionStructures.size();
 	}
 	
 	public int numRevisionDetailsRequested() {

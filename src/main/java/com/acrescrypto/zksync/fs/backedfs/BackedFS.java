@@ -8,10 +8,12 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.SwarmTimeoutException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.fs.TimedReader;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -239,18 +241,28 @@ public class BackedFS extends FS {
 	}
 	
 	/** Acquire a page from our supplementary sources and write to our backing FS, blocking until we've done so.
+	 * Wait up to timeoutMs milliseconds. 
 	 * Throw an ENOENTException if no one has the file.
 	 * 
 	 * @param path
 	 * @throws IOException
 	 */
-	public void ensurePresent(String path, int timeoutMs) throws IOException {
+	public void ensurePresent(String path, long timeoutMs) throws IOException {
 		if(!pendingPaths.contains(path) && cacheFS.exists(path, false)) return;
 		long deadline = System.currentTimeMillis() + timeoutMs;
 		synchronized(this) {
 			while(pendingPaths.contains(path)) {
 				try {
-					this.wait(timeoutMs);
+					if(timeoutMs > 0) {
+						this.wait(timeoutMs);
+						if(pendingPaths.contains(path)) {
+							throw new SwarmTimeoutException(path);
+						}
+					} else if(timeoutMs == 0) {
+						throw new SwarmTimeoutException(path);
+					} else {
+						this.wait();
+					}
 				} catch (InterruptedException e) {}
 			}
 			
@@ -260,11 +272,16 @@ public class BackedFS extends FS {
 		try {
 			if(!cacheFS.exists(path)) {
 				Stat stat = backupFS.stat(path);
-				int timeoutRemainingMs = (int) (System.currentTimeMillis() - deadline);
+				long timeoutRemainingMs;
+				if(timeoutMs >= 0) {
+					timeoutRemainingMs = Math.max(deadline - System.currentTimeMillis(), 0);
+				} else {
+					timeoutRemainingMs = Long.MAX_VALUE;
+				}
 				byte[] data;
 				
-				if(backupFS instanceof SwarmFS) {
-					data = ((SwarmFS) backupFS).read(path, timeoutRemainingMs);
+				if(backupFS instanceof TimedReader) {
+					data = ((TimedReader) backupFS).read(path, timeoutRemainingMs);
 				} else {
 					data = backupFS.read(path);
 				}

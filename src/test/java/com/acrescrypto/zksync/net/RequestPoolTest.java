@@ -46,6 +46,7 @@ public class RequestPoolTest {
 		LinkedList<RevisionTag> requestedRefTags = new LinkedList<>();
 		LinkedList<RevisionTag> requestedRevisions = new LinkedList<>();
 		LinkedList<RevisionTag> requestedRevisionDetails = new LinkedList<>();
+		LinkedList<RevisionTag> requestedRevisionStructures = new LinkedList<>();
 		LinkedList<Long> requestedPageTags = new LinkedList<>();
 		LinkedList<Long> requestedInodeIds = new LinkedList<>();
 		
@@ -76,6 +77,12 @@ public class RequestPoolTest {
 			if(mockSeedOnly) throw new PeerCapabilityException();
 			requestedPriority = priority;
 			requestedRevisions.addAll(refTags);
+		}
+		
+		@Override public void requestRevisionStructure(int priority, Collection<RevisionTag> refTags) throws PeerCapabilityException {
+			if(mockSeedOnly) throw new PeerCapabilityException();
+			requestedPriority = priority;
+			requestedRevisionStructures.addAll(refTags);
 		}
 		
 		@Override public void requestRevisionDetails(int priority, Collection<RevisionTag> refTags) throws PeerCapabilityException {
@@ -308,6 +315,51 @@ public class RequestPoolTest {
 		RevisionTag refTag = archive.openBlank().commitAndClose();
 		pool.addRevision(1234, refTag);
 		assertEquals(1234, pool.priorityForRevision(refTag));
+	}
+
+	@Test
+	public void testAddRevisionStructure() throws IOException {
+		RevisionTag revTag = archive.openBlank().commitAndClose();
+		assertFalse(pool.hasRevisionStructure(-123456, revTag));
+		pool.addRevisionStructure(-123456, revTag);
+		assertTrue(pool.hasRevisionStructure(-123456, revTag));
+		assertEquals(-123456, defaultConn.requestedPriority);
+		assertTrue(defaultConn.requestedRevisionStructures.contains(revTag));
+	}
+	
+	@Test
+	public void testAddRevisionStructureAllowsReprioritization() throws IOException {
+		RevisionTag revTag = archive.openBlank().commitAndClose();
+		pool.addRevisionStructure(-123456, revTag);
+		pool.addRevisionStructure(-654321, revTag);
+		assertFalse(pool.hasRevisionStructure(-123456, revTag));
+		assertTrue(pool.hasRevisionStructure(-654321, revTag));
+		assertEquals(-654321, defaultConn.requestedPriority);
+	}
+	
+	@Test
+	public void testCancelRevisionStructure() throws IOException {
+		RevisionTag revTag = archive.openBlank().commitAndClose();
+		pool.addRevisionStructure(-123456, revTag);
+		defaultConn.requestedRevisionStructures.clear();
+		pool.cancelRevisionStructure(revTag);
+		
+		assertFalse(pool.hasRevisionStructure(-123456, revTag));
+		assertTrue(defaultConn.requestedRevisionStructures.contains(revTag));
+		assertEquals(PageQueue.CANCEL_PRIORITY, defaultConn.requestedPriority);
+	}
+	
+	@Test
+	public void testPriorityForRevisionStructureReturnsCancelPriorityIfNoSuchRequest() throws IOException {
+		RevisionTag revTag = archive.openBlank().commitAndClose();
+		assertEquals(PageQueue.CANCEL_PRIORITY, pool.priorityForRevisionStructure(revTag));
+	}
+	
+	@Test
+	public void testPriorityForRevisionStructureReturnsAppropriatePriority() throws IOException {
+		RevisionTag refTag = archive.openBlank().commitAndClose();
+		pool.addRevisionStructure(1234, refTag);
+		assertEquals(1234, pool.priorityForRevisionStructure(refTag));
 	}
 	
 	@Test
