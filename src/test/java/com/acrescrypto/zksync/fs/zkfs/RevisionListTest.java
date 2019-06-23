@@ -4,6 +4,7 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.security.Security;
+import java.util.Collection;
 import java.util.LinkedList;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
@@ -15,6 +16,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.fs.zkfs.RevisionList.RevisionMonitor;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
+import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.utility.Util;
 
 public class RevisionListTest {
@@ -24,6 +26,7 @@ public class RevisionListTest {
 	RevisionList list;
 	DummyRevisionTree tree;
 	CryptoSupport crypto;
+	DummySwarm swarm;
 	
 	class DummyRevisionTree extends RevisionTree {
 		public DummyRevisionTree(ZKArchiveConfig config) {
@@ -38,12 +41,25 @@ public class RevisionListTest {
 		}
 	}
 	
+	class DummySwarm extends PeerSwarm {
+		RevisionTag requestedStructure;
+		public DummySwarm(ZKArchiveConfig config) {
+			this.config = config;
+		}
+		
+		@Override
+		public void requestRevisionStructure(int priority, RevisionTag revTag) {
+			this.requestedStructure = revTag;
+		}
+	}
+	
 	@BeforeClass	
 	public static void beforeClass() throws IOException {
 		TestUtils.startDebugMode();
 		Security.addProvider(new BouncyCastleProvider());
 	}
 	
+	@SuppressWarnings("deprecation")
 	@Before
 	public void beforeEach() throws IOException {
 		master = ZKMaster.openBlankTestVolume();
@@ -51,6 +67,8 @@ public class RevisionListTest {
 		archive = master.createDefaultArchive();
 		config = archive.getConfig();
 		config.revisionTree = tree = new DummyRevisionTree(config);
+		swarm = new DummySwarm(config);
+		config.setSwarm(swarm);
 		list = config.getRevisionList();
 	}
 	
@@ -269,5 +287,207 @@ public class RevisionListTest {
 		list.removeMonitor(monitor);
 		list.addBranchTip(expectedTag);
 		assertFalse(receivedTag.booleanValue());
+	}
+	
+	private RevisionTag makeRevisionTag() throws IOException {
+		try(ZKFS fs = archive.openBlank()) {
+			long id = CryptoSupport.defaultCrypto().defaultPrng().getLong();
+			for(int i = 0; i <= fs.inodeTable.numInodesForPage(0); i++) {
+				fs.write("item-" + id + "-" + i, ("foo"+i).getBytes());
+			}
+			
+			return fs.commit();
+		}
+	}
+	
+	private String moveInodeTablePage(RevisionTag tag) throws IOException {
+		PageTree tree = new PageTree(tag.getRefTag());
+		String path = Page.pathForTag(tree.getPageTag(0));
+		tag.getArchive().getStorage().mv(path, path + ".moved");
+		return path;
+	}
+	
+	private String moveDirectoryPage(RevisionTag tag) throws IOException {
+		try(ZKFS fs = tag.readOnlyFS()) {
+			Inode rootDirInode = fs.inodeForPath("/");
+			PageTree tree = new PageTree(rootDirInode);
+			String path = Page.pathForTag(tree.getPageTag(0));
+			tag.getArchive().getStorage().mv(path, path + ".moved");
+			return path;
+		}
+	}
+	
+	private void restorePage(String path) throws IOException {
+		archive.getStorage().mv(path + ".moved", path);
+	}
+	
+	@Test
+	public void testAvailableBranchTipsReturnsTipsWithCachedInodeTableAndDirectories() throws IOException {
+		LinkedList<RevisionTag> expected = new LinkedList<>();
+		for(int i = 0; i < 10; i++) {
+			expected.add(makeRevisionTag());
+		}
+		
+		Collection<RevisionTag> available = list.availableBranchTips(0);
+		assertEquals(expected.size(), available.size());
+		assertTrue(expected.containsAll(available));
+		assertTrue(available.containsAll(expected));
+	}
+	
+	@Test
+	public void testAvailableBranchTipsDoesNotReturnRevTagsWithMissingInodeTablePages() throws IOException {
+		LinkedList<RevisionTag> expected = new LinkedList<>();
+		for(int i = 0; i < 10; i++) {
+			RevisionTag tag = makeRevisionTag();
+			if(i % 2 == 0) {
+				expected.add(tag);
+			} else {
+				moveInodeTablePage(tag);
+			}
+		}
+		
+		Collection<RevisionTag> available = list.availableBranchTips(0);
+		assertEquals(expected.size(), available.size());
+		assertTrue(expected.containsAll(available));
+		assertTrue(available.containsAll(expected));
+	}
+	
+	@Test
+	public void testAvailableBranchTipsDoesNotReturnRevTagsWithMissingDirectoryPages() throws IOException {
+		LinkedList<RevisionTag> expected = new LinkedList<>();
+		for(int i = 0; i < 10; i++) {
+			RevisionTag tag = makeRevisionTag();
+			if(i % 2 == 0) {
+				expected.add(tag);
+			} else {
+				moveDirectoryPage(tag);
+			}
+		}
+		
+		Collection<RevisionTag> available = list.availableBranchTips(0);
+		assertEquals(expected.size(), available.size());
+		assertTrue(expected.containsAll(available));
+		assertTrue(available.containsAll(expected));
+	}
+	
+	@Test
+	public void testAvailableBranchTipsReturnsImmediatelyIfTimeoutIsZero() throws IOException {
+		moveDirectoryPage(makeRevisionTag());
+		
+		long startTime = System.currentTimeMillis();
+		list.availableBranchTips(0);
+		long elapsed = System.currentTimeMillis() - startTime;
+		
+		assertTrue(elapsed <= 100); // leave plenty of room here for availableBranchTips to do its job
+	}
+	
+	@Test
+	public void testAvailableBranchTipsBlocksIndefinitelyIfTimeoutIsNegative() throws IOException {
+		MutableBoolean finished = new MutableBoolean();
+		String path = moveDirectoryPage(makeRevisionTag());
+		
+		new Thread(()->{
+			try {
+				list.availableBranchTips(-1);
+			} catch (IOException exc) {
+				exc.printStackTrace();
+				fail();
+			}
+			finished.setTrue();
+		}).start();
+		
+		Util.sleep(100);
+		assertFalse(finished.booleanValue());
+		restorePage(path);
+		config.swarm.notifyPageUpdate();
+		assertTrue(Util.waitUntil(100, ()->finished.booleanValue()));
+	}
+	
+	@Test
+	public void testAvailableBranchTipsBlocksForIntervalIfTimeoutIsPositive() throws IOException {
+		long timeoutMs = 100;
+		moveDirectoryPage(makeRevisionTag());
+		
+		long startTime = System.currentTimeMillis();
+		list.availableBranchTips(timeoutMs);
+		long elapsed = System.currentTimeMillis() - startTime;
+		
+		assertTrue(elapsed >= timeoutMs);
+		assertTrue(elapsed < timeoutMs + 100);
+	}
+	
+	@Test
+	public void testAvailableBranchTipsReturnsImmediatelyIfAllTipsAreAvailable() throws IOException {
+		long timeoutMs = 100;
+		makeRevisionTag();
+		
+		long startTime = System.currentTimeMillis();
+		list.availableBranchTips(timeoutMs);
+		long elapsed = System.currentTimeMillis() - startTime;
+		
+		assertTrue(elapsed < timeoutMs);
+	}
+	
+	@Test
+	public void testAvailableBranchTipsRequestsMissingTipStructureIfTimeoutIsNegative() throws IOException {
+		MutableBoolean finished = new MutableBoolean();
+		RevisionTag tag = makeRevisionTag();
+		String path = moveDirectoryPage(tag);
+		
+		new Thread(()->{
+			try {
+				list.availableBranchTips(-1);
+			} catch (IOException exc) {
+				exc.printStackTrace();
+				fail();
+			}
+			finished.setTrue();
+		}).start();
+		
+		Util.sleep(100);
+		restorePage(path);
+		config.swarm.notifyPageUpdate();
+		assertTrue(Util.waitUntil(100, ()->finished.booleanValue()));
+		assertEquals(tag, swarm.requestedStructure);
+	}
+
+	@Test
+	public void testAvailableBranchTipsDoesNotRequestMissingTipStructureIfTimeoutIsZero() throws IOException {
+		moveDirectoryPage(makeRevisionTag());
+		list.availableBranchTips(0);
+		assertNull(swarm.requestedStructure);
+	}
+
+	@Test
+	public void testAvailableBranchTipsRequestsMissingTipStructureIfTimeoutIsPositive() throws IOException {
+		RevisionTag tag = makeRevisionTag();
+		moveDirectoryPage(tag);
+		list.availableBranchTips(1);
+		assertEquals(tag, swarm.requestedStructure);
+	}
+	
+	@Test
+	public void testAvailableBranchTipsIncludesTipsMadeAvailableDuringBlock() throws IOException {
+		MutableBoolean finished = new MutableBoolean();
+		RevisionTag tag = makeRevisionTag();
+		String path = moveDirectoryPage(tag);
+		
+		new Thread(()->{
+			try {
+				Collection<RevisionTag> tips = list.availableBranchTips(-1);
+				assertTrue(tips.contains(tag));
+			} catch (IOException exc) {
+				exc.printStackTrace();
+				fail();
+			}
+			finished.setTrue();
+		}).start();
+		
+		Util.sleep(100);
+		restorePage(path);
+		config.swarm.notifyPageUpdate();
+		assertTrue(Util.waitUntil(100, ()->finished.booleanValue()));
+		assertEquals(tag, swarm.requestedStructure);
+
 	}
 }

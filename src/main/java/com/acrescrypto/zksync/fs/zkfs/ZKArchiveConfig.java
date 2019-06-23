@@ -637,7 +637,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 	@Deprecated
 	public void setSwarm(PeerSwarm swarm) {
 		// test use only
-		swarm.close();
+		this.swarm.close();
 		this.swarm = swarm;
 	}
 	

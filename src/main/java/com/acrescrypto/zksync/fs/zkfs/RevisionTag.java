@@ -207,6 +207,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 			deadline = Long.MAX_VALUE;
 		} else {
 			deadline = System.currentTimeMillis() + timeoutMs;
+			if(deadline < 0) deadline = Long.MAX_VALUE;
 		}
 		
 		while(!hasStructureLocally()) {
