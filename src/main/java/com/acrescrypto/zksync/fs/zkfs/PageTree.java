@@ -398,7 +398,7 @@ public class PageTree {
 	protected void setTag(byte[] tag) {
 		int refType;
 		if(numPages <= 1) {
-			if(tag.length < archive.crypto.hashLength()) {
+			if(numPages == 0 || tag.length < archive.crypto.hashLength()) {
 				refType = RefTag.REF_TYPE_IMMEDIATE;
 			} else {
 				refType = RefTag.REF_TYPE_INDIRECT;

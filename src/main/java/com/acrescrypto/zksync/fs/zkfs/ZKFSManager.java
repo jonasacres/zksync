@@ -15,7 +15,9 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.EINVALException;
+import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.RevisionList.RevisionMonitor;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS.ZKFSDirtyMonitor;
@@ -282,8 +284,12 @@ public class ZKFSManager implements AutoCloseable {
 		if(automirrorPath == null) {
 			throw new EINVALException("No automirror path set");
 		}
-
+		
 		if(automirror && this.automirrorPath != null) {
+			Stat stat = mirror.getTarget().stat("/");
+			if(!stat.isDirectory()) {
+				throw new EISNOTDIRException(this.automirrorPath);
+			}
 			mirror.startWatch();
 		} else {
 			mirror.stopWatch();
