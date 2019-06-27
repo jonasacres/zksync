@@ -143,7 +143,7 @@ public class DirectoryTestBase {
 		}
 		
 		try(Directory dir = scratch.opendir("listr")) {
-			dir.walk((path, stat, isBrokenSymlink)->{
+			dir.walk((path, stat, isBrokenSymlink, parent)->{
 				assertTrue(expected.contains(path));
 				assertFalse(isBrokenSymlink);
 				assertEquals(stat, scratch.stat("listr/" + path));
@@ -169,7 +169,7 @@ public class DirectoryTestBase {
 		}
 		
 		try(Directory dir = scratch.opendir("listr")) {
-			dir.walk(Directory.LIST_OPT_OMIT_DIRECTORIES, (path, stat, isBrokenSymlink)->{
+			dir.walk(Directory.LIST_OPT_OMIT_DIRECTORIES, (path, stat, isBrokenSymlink, parent)->{
 				assertTrue(expected.contains(path));
 				assertFalse(isBrokenSymlink);
 				assertEquals(stat, scratch.stat("listr/" + path));
@@ -195,7 +195,7 @@ public class DirectoryTestBase {
 		}
 		
 		try(Directory dir = scratch.opendir("listr")) {
-			dir.walk(Directory.LIST_OPT_INCLUDE_DOT_DOTDOT, (path, stat, isBrokenSymlink)->{
+			dir.walk(Directory.LIST_OPT_INCLUDE_DOT_DOTDOT, (path, stat, isBrokenSymlink, parent)->{
 				assertTrue(expected.contains(path));
 				assertFalse(isBrokenSymlink);
 				assertEquals(stat, scratch.stat("listr/" + path));
@@ -213,7 +213,7 @@ public class DirectoryTestBase {
 		scratch.symlink("bar", "invalid");
 		
 		try(Directory dir = scratch.opendir("/")) {
-			dir.walk(0, (path, stat, isBrokenSymlink)->{
+			dir.walk(0, (path, stat, isBrokenSymlink, parent)->{
 				assertEquals(path.equals("invalid"), isBrokenSymlink);
 			});
 		}
@@ -227,7 +227,7 @@ public class DirectoryTestBase {
 		HashSet<String> seen = new HashSet<>();
 		
 		try(Directory dir = scratch.opendir("/")) {
-			dir.walk(0, (path, stat, isBrokenSymlink)->{
+			dir.walk(0, (path, stat, isBrokenSymlink, parent)->{
 				assertFalse(isBrokenSymlink);
 				seen.add(path);
 			});
@@ -247,7 +247,7 @@ public class DirectoryTestBase {
 		HashSet<String> seen = new HashSet<>();
 		
 		try(Directory dir = scratch.opendir("/")) {
-			dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink)->{
+			dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink, parent)->{
 				assertFalse(isBrokenSymlink);
 				seen.add(path);
 			});
@@ -257,6 +257,21 @@ public class DirectoryTestBase {
 		assertTrue(seen.contains("b"));
 		assertTrue(seen.contains("a/1"));
 		assertFalse(seen.contains("b/1"));
+	}
+	
+	@Test
+	public void testWalkIncludesParentDirectory() throws IOException {
+		scratch.write("a/1", "yadda".getBytes());
+		
+		try(Directory dir = scratch.opendir("/")) {
+			dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink, parent)->{
+				String normPath = scratch.dirname(path), normParentPath = parent.getPath();
+				if(!normPath.startsWith("/")) normPath = "/" + normPath;
+				if(!normParentPath.startsWith("/")) normParentPath = "/" + normParentPath;
+				
+				assertEquals(normPath, normParentPath);
+			});
+		}
 	}
 
 	@Test

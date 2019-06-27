@@ -92,7 +92,7 @@ public class DiffSet {
 				ZKFS fs = rev.readOnlyFS();
 				ZKDirectory dir = fs.opendir("/")
 			) {
-				dir.walk(ZKDirectory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink)->{
+				dir.walk(ZKDirectory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink, parent)->{
 					allPaths.add(path);
 				});
 			}

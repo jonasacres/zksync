@@ -102,22 +102,22 @@ public class RAMDirectory implements Directory {
 				if(stat.isDirectory()) {
 					boolean isDotDir = entry.equals(".") || entry.equals("..");
 					if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
-						cb.foundPath(subpath, stat, isBrokenSymlink);
+						cb.foundPath(subpath, stat, isBrokenSymlink, this);
 					}
 					
 					if(!isDotDir) {
 						fs.opendir(realSubpath).walkRecursiveIterate(opts, subpath, cb);
 					}
 				} else {
-					cb.foundPath(subpath, stat, isBrokenSymlink);
+					cb.foundPath(subpath, stat, isBrokenSymlink, this);
 				}
 			} catch(ENOENTException exc) {
 				// busted symlink
 				Stat lstat = fs.lstat(realSubpath);
-				cb.foundPath(subpath, lstat, true);
+				cb.foundPath(subpath, lstat, true, this);
 			} catch(EACCESException exc) {
 				// directory with bad permissions
-				cb.foundPath(subpath, null, false);
+				cb.foundPath(subpath, null, false, this);
 			}
 		}
 	}
@@ -131,7 +131,7 @@ public class RAMDirectory implements Directory {
 	public Collection<String> listRecursive(int opts) throws IOException {
 		LinkedList<String> matches = new LinkedList<String>();
 		
-		walk(opts, (path, stat, isBrokenSymlink)->{
+		walk(opts, (path, stat, isBrokenSymlink, parent)->{
 			matches.add(path);
 		});
 		return matches;

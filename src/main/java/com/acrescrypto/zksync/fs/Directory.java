@@ -5,7 +5,7 @@ import java.util.Collection;
 
 public interface Directory extends AutoCloseable {
 	public interface DirectoryWalkCallback {
-		void foundPath(String path, Stat stat, boolean isBrokenSymlink) throws IOException;
+		void foundPath(String path, Stat stat, boolean isBrokenSymlink, Directory dir) throws IOException;
 	}
 
 	public final static int LIST_OPT_OMIT_DIRECTORIES = 1 << 0;

@@ -225,7 +225,7 @@ public class NetworkedComplexTest {
 		matches.setTrue();
 		
 		try(Directory dir = ref.opendir("/")) {
-			dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBroken)->{
+			dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBroken, parent)->{
 				try {
 					Stat otherStat = comp.lstat(path);
 					if(otherStat.getSize() != stat.getSize()) throw new PathMismatchException(path, "Mismatched size " + stat.getSize() + " vs " + otherStat.getSize());

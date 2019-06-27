@@ -395,7 +395,7 @@ public class FSMirror {
 			ZKFS oldFs = lastRev != null ? lastRev.readOnlyFS() : null;
 			try {
 				try(ZKDirectory dir = zkfs.opendir("/")) {
-					dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink)->{
+					dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink, parent)->{
 						if(!isChanged(oldFs, path)) return;
 						syncPathArchiveToTarget(oldFs, path);
 					});
@@ -419,7 +419,7 @@ public class FSMirror {
 	public synchronized void syncTargetToArchive() throws IOException {
 		Directory dir = null;
 		try {
-			target.opendir("/").walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, brokenSymlink)->{
+			target.opendir("/").walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, brokenSymlink, parent)->{
 				copy(target, zkfs, path);
 			});
 
@@ -433,7 +433,7 @@ public class FSMirror {
 		LinkedList<String> toPrune = new LinkedList<>();
 		
 		try(Directory dir = pruned.opendir("/")) {
-			dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink)->{
+			dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink, parent)->{
 				if(reference.exists(path, false)) return;
 				toPrune.add(path);
 			});

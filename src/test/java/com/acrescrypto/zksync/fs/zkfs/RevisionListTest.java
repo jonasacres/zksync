@@ -39,6 +39,11 @@ public class RevisionListTest {
 		public boolean isSuperceded(RevisionTag tag) {
 			return supercede;
 		}
+		
+		@Override
+		public boolean supercededBy(RevisionTag newTag, RevisionTag existing) throws IOException {
+			return supercede;
+		}
 	}
 	
 	class DummySwarm extends PeerSwarm {
@@ -63,6 +68,7 @@ public class RevisionListTest {
 	@Before
 	public void beforeEach() throws IOException {
 		master = ZKMaster.openBlankTestVolume();
+		master.getGlobalConfig().set("fs.settings.revtagHasLocalCacheTimeout", 0);
 		crypto = master.getCrypto();
 		archive = master.createDefaultArchive();
 		config = archive.getConfig();

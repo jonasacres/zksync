@@ -178,7 +178,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		/* Caching this could be dangerous if someone deletes pages underneath us. */
 		
 		long localCacheRecheckTime = config.getMaster().getGlobalConfig().getLong("fs.settings.revtagHasLocalCacheTimeout");
-		if(Util.currentTimeMillis() - hasStructureCheckTime < localCacheRecheckTime) {
+		if(Util.currentTimeMillis() - hasStructureCheckTime <= localCacheRecheckTime) {
 			return true;
 		}
 		

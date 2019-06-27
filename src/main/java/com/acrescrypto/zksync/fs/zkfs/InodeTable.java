@@ -367,7 +367,7 @@ public class InodeTable extends ZKFile {
 					nextInodeId()));
 			
 			try(ZKDirectory dir = zkfs.opendir("/")) {
-				dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS|Directory.LIST_OPT_INCLUDE_DOT_DOTDOT, (path, stat, isBroken)->{
+				dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS|Directory.LIST_OPT_INCLUDE_DOT_DOTDOT, (path, stat, isBroken, parent)->{
 					long inodeId = stat.getInodeId();
 					Inode inode = inodeWithId(inodeId);
 					int nlinkCount = inodeCounts.getOrDefault(inodeId, 0) + 1;
@@ -438,6 +438,51 @@ public class InodeTable extends ZKFile {
 			
 			return null;
 		});
+	}
+	
+	/** Renumber inodes so that we have no unassigned inodes until after the last allocated inode. 
+	 * @throws IOException */
+	public synchronized void defragment() throws IOException {
+		HashMap<Long, Long> remappedIds = new HashMap<>(); 
+		long nextIssuedId = InodeTable.USER_INODE_ID_START;
+		long existingMaxId = nextInodeId()-1;
+		
+		/* reassign inodes from the end of the table to inodes in the freelist until the freelist is empty */
+		try {
+			for(long inodeId = existingMaxId; inodeId >= USER_INODE_ID_START; inodeId--) {
+				Inode inode = inodeWithId(inodeId);
+				if(inode.isDeleted()) continue;
+				remappedIds.put(inodeId, freelist.issueInodeId());
+			}
+		} catch(FreeListExhaustedException exc) {}
+
+		/* renumber them in the table */
+		for(long oldId = InodeTable.USER_INODE_ID_START; oldId < nextIssuedId; oldId++) {
+			long newId = nextIssuedId++;
+			if(oldId == newId) continue;
+			
+			Inode existingLocation = inodeWithId(oldId);
+			Inode newLocation = inodeWithId(newId);
+			newLocation.deserialize(existingLocation.serialize());
+			newLocation.getStat().setInodeId(newId);
+			
+			existingLocation.markDeleted();
+		}
+		
+		/* update links in the directories */
+		try(ZKFS tempFs = zkfs.baseRevision.readOnlyFS()) {
+			try(ZKDirectory dir = zkfs.opendir("/")) {
+				dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS | Directory.LIST_OPT_INCLUDE_DOT_DOTDOT,
+						(path, stat, isBroken, parent)->{
+					long newId = remappedIds.getOrDefault(stat.getInodeId(), stat.getInodeId());
+					if(newId == stat.getInodeId()) return;
+					((ZKDirectory) parent).updateLink(newId, path);
+				});
+			}
+		}
+		
+		/* force rescan of next inode ID */
+		this.nextInodeId = -1;
 	}
 	
 	/** array of all inodes stored at a given page number of the inode table */

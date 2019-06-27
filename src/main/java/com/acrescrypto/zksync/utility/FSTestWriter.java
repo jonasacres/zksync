@@ -127,7 +127,7 @@ public class FSTestWriter {
 		try(Directory dir = fs.opendir("/")) {
 			int opts = Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS | Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS;
 			LinkedList<String> files = new LinkedList<>();
-			dir.walk(opts, (path, stat, isBrokenSymlink)->{
+			dir.walk(opts, (path, stat, isBrokenSymlink, parent)->{
 				if(!stat.isRegularFile()) return;
 				files.add(path);
 			});
@@ -141,7 +141,7 @@ public class FSTestWriter {
 			LinkedList<String> symlinks = new LinkedList<>();
 			int opts = Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS | Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS;
 			dir.walk(opts,
-				(path, stat, isBrokenSymlink)->{
+				(path, stat, isBrokenSymlink, parent)->{
 					if(stat.isSymlink()) {
 						symlinks.add(path);
 					}
@@ -155,7 +155,7 @@ public class FSTestWriter {
 			LinkedList<String> directories = new LinkedList<>();
 			int opts = Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS;
 			dir.walk(opts,
-				(path, stat, isBrokenSymlink)->{
+				(path, stat, isBrokenSymlink, parent)->{
 					if(stat.isDirectory()) {
 						directories.add(path);
 					}

@@ -81,7 +81,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	@Override
 	public LinkedList<String> listRecursive(int opts) throws IOException {
 		LinkedList<String> results = new LinkedList<String>();
-		walk(opts, (subpath, stat, broken)->{
+		walk(opts, (subpath, stat, broken, parent)->{
 			results.add(subpath);
 		});
 		return results;
@@ -129,7 +129,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 				if(stat.isDirectory()) {
 					boolean isDotDir = entry.equals(".") || entry.equals("..");
 					if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
-						cb.foundPath(subpath, stat, isInvalidSymlink);
+						cb.foundPath(subpath, stat, isInvalidSymlink, this);
 					}
 					
 					if(!isDotDir) {
@@ -138,13 +138,13 @@ public class ZKDirectory extends ZKFile implements Directory {
 						}
 					}
 				} else {
-					cb.foundPath(subpath, stat, isInvalidSymlink);
+					cb.foundPath(subpath, stat, isInvalidSymlink, this);
 				}
 			} catch(ENOENTException exc) {
 				try {
 					Stat lstat = fs.lstat(realSubpath);
 					if(lstat.isSymlink()) {
-						cb.foundPath(subpath, lstat, true);
+						cb.foundPath(subpath, lstat, true, this);
 					}
 				} catch(ENOENTException exc2) {
 					// ignore ENOENTs that are not just broken symlinks since someone may have deleted the path as we traversed
@@ -161,7 +161,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 			paths.add(path);
 		}
 		
-		walk(LIST_OPT_DONT_FOLLOW_SYMLINKS, (subpath, stat, isInvalidSymlink)->{
+		walk(LIST_OPT_DONT_FOLLOW_SYMLINKS, (subpath, stat, isInvalidSymlink, parent)->{
 			if(stat.getInodeId() == inodeId) {
 				paths.add(Paths.get(this.path, subpath).toString());
 			}
