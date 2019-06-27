@@ -256,7 +256,7 @@ public class BackedFS extends FS {
 					long timeoutRemainingMs;
 					if(timeoutMs >= 0) {
 						timeoutRemainingMs = Math.max(deadline - System.currentTimeMillis(), 0);
-						if(timeoutRemainingMs < 0) {
+						if(timeoutRemainingMs <= 0) {
 							Util.debugLog(String.format("BackedFS: Timed out waiting for %s", path));
 							throw new SwarmTimeoutException(path);
 						}
@@ -264,8 +264,8 @@ public class BackedFS extends FS {
 						timeoutRemainingMs = Long.MAX_VALUE;
 					}
 					
-					if(timeoutMs > 0) {
-						Util.debugLog(String.format("BackedFS: Waiting %dms indefinitely for %s", timeoutRemainingMs, path));
+					if(timeoutRemainingMs > 0) {
+						Util.debugLog(String.format("BackedFS: Waiting %dms for %s", timeoutRemainingMs, path));
 						this.wait(timeoutRemainingMs);
 					} else if(timeoutMs == 0) {
 						Util.debugLog(String.format("BackedFS: Unavailable %s", path));

@@ -47,7 +47,8 @@ public class RevisionListTest {
 	}
 	
 	class DummySwarm extends PeerSwarm {
-		RevisionTag requestedStructure;
+		RevisionTag requestedStructure, requestedDetails;
+		
 		public DummySwarm(ZKArchiveConfig config) {
 			this.config = config;
 		}
@@ -55,6 +56,11 @@ public class RevisionListTest {
 		@Override
 		public void requestRevisionStructure(int priority, RevisionTag revTag) {
 			this.requestedStructure = revTag;
+		}
+		
+		@Override
+		public void requestRevisionDetails(int priority, RevisionTag revTag) {
+			this.requestedDetails = revTag;
 		}
 	}
 	

@@ -384,11 +384,12 @@ public class RevisionTree implements AutoCloseable {
 			return true;
 		}
 		
-		if(existing.getInfo().getNumParents() <= 1) {
+		Collection<RevisionTag> parents = parentsForTag(existing);
+		if(parents.size() <= 1) {
 			return false;
 		}
 		
-		for(RevisionTag parent : existing.getInfo().getParents()) {
+		for(RevisionTag parent : parents) {
 			if(!descendentOf(newTag, parent)) {
 				return false;
 			}
