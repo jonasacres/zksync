@@ -317,6 +317,7 @@ public class DiffSetResolver {
 			}
 			
 			fs.getInodeTable().rebuildLinkCounts();
+			fs.getInodeTable().defragment();
 		}
 	}
 	

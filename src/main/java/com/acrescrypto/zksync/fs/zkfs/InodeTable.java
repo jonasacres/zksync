@@ -15,6 +15,7 @@ import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 import com.acrescrypto.zksync.fs.Directory;
+import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.FreeList.FreeListExhaustedException;
 import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
@@ -443,46 +444,62 @@ public class InodeTable extends ZKFile {
 	/** Renumber inodes so that we have no unassigned inodes until after the last allocated inode. 
 	 * @throws IOException */
 	public synchronized void defragment() throws IOException {
-		HashMap<Long, Long> remappedIds = new HashMap<>(); 
-		long nextIssuedId = InodeTable.USER_INODE_ID_START;
+		HashMap<Long, Long> remappedIds = new HashMap<>();
 		long existingMaxId = nextInodeId()-1;
+		StringBuilder sb = new StringBuilder(String.format("InodeTable %s: Defragmented from base revision %s\n",
+				zkfs.getArchive().getMaster().getName(),
+				Util.formatRevisionTag(zkfs.baseRevision)));
 		
 		/* reassign inodes from the end of the table to inodes in the freelist until the freelist is empty */
 		try {
-			for(long inodeId = existingMaxId; inodeId >= USER_INODE_ID_START; inodeId--) {
-				Inode inode = inodeWithId(inodeId);
-				if(inode.isDeleted()) continue;
-				remappedIds.put(inodeId, freelist.issueInodeId());
+			for(long newInodeId = USER_INODE_ID_START; newInodeId < existingMaxId; newInodeId++) {
+				Inode inode = inodeWithId(newInodeId);
+				if(!inode.isDeleted()) continue;
+				
+				for(long oldInodeId = existingMaxId; oldInodeId > newInodeId; oldInodeId--) {
+					Inode existing = inodeWithId(oldInodeId);
+					if(existing.isDeleted()) continue;
+					existingMaxId = oldInodeId - 1;
+					remappedIds.put(oldInodeId, newInodeId);
+
+					sb.append(String.format("\tremap %d -> %d\n",
+							oldInodeId,
+							newInodeId));
+					break;
+				}
 			}
 		} catch(FreeListExhaustedException exc) {}
 
 		/* renumber them in the table */
-		for(long oldId = InodeTable.USER_INODE_ID_START; oldId < nextIssuedId; oldId++) {
-			long newId = nextIssuedId++;
-			if(oldId == newId) continue;
-			
+		for(long oldId : remappedIds.keySet()) {
+			long newId = remappedIds.get(oldId);
 			Inode existingLocation = inodeWithId(oldId);
 			Inode newLocation = inodeWithId(newId);
+			
 			newLocation.deserialize(existingLocation.serialize());
 			newLocation.getStat().setInodeId(newId);
-			
 			existingLocation.markDeleted();
 		}
 		
 		/* update links in the directories */
-		try(ZKFS tempFs = zkfs.baseRevision.readOnlyFS()) {
-			try(ZKDirectory dir = zkfs.opendir("/")) {
-				dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS | Directory.LIST_OPT_INCLUDE_DOT_DOTDOT,
-						(path, stat, isBroken, parent)->{
-					long newId = remappedIds.getOrDefault(stat.getInodeId(), stat.getInodeId());
-					if(newId == stat.getInodeId()) return;
-					((ZKDirectory) parent).updateLink(newId, path);
-				});
+		for(long inodeId = 0; inodeId < existingMaxId; inodeId++) {
+			Inode inode = inodeWithId(inodeId);
+			if(inode.isDeleted()) continue;
+			if(!inode.getStat().isDirectory()) continue;
+			
+			try(ZKDirectory dir = new ZKDirectory(zkfs, inode)) {
+				dir.remap(remappedIds);
 			}
 		}
 		
 		/* force rescan of next inode ID */
+		freelist.clearList();
 		this.nextInodeId = -1;
+		
+		sb.append(String.format("\tTotal inodes remapped: %d\n", remappedIds.size()));
+		sb.append(dumpInodes());
+		
+		Util.debugLog(sb.toString());
 	}
 	
 	/** array of all inodes stored at a given page number of the inode table */

@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Set;
@@ -26,6 +27,15 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	public ZKDirectory(ZKFS fs, String path) throws IOException {
 		super(fs, path, fs.archive.config.isReadOnly() || fs.isReadOnly ? O_RDONLY : O_RDWR, true);
+		init();
+	}
+	
+	public ZKDirectory(ZKFS fs, Inode inode) throws IOException {
+		super(fs, inode, fs.archive.config.isReadOnly() || fs.isReadOnly ? O_RDONLY : O_RDWR, true);
+		init();
+	}
+	
+	protected void init() throws IOException {
 		try {
 			entries = new ConcurrentHashMap<String,Long>();
 			byte[] contents = read((int) inode.getStat().getSize());
@@ -427,5 +437,16 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	protected void assertWritable() throws EACCESException {
 		if(zkfs.archive.config.isReadOnly()) throw new EACCESException("cannot modify directories when archive is opened read-only");
+	}
+
+	public synchronized void remap(HashMap<Long, Long> remappedIds) {
+		ConcurrentHashMap<String, Long> remappedEntries = new ConcurrentHashMap<>();
+		entries.forEach((name, inodeId)->{
+			long newId = remappedIds.getOrDefault(inodeId, inodeId);
+			dirty |= newId != inodeId;
+			remappedEntries.put(name, newId);
+		});
+		
+		entries = remappedEntries;
 	}
 }
