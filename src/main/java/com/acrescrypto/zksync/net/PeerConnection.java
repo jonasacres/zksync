@@ -332,6 +332,9 @@ public class PeerConnection {
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
 				socket.getPort());
+		Util.debugLog(String.format("PeerConnection %s: Requesting page tag %016x",
+				socket.getSwarm().getConfig().getMaster().getName(),
+				shortTag));
 		ByteBuffer buf = ByteBuffer.allocate(4+RefTag.REFTAG_SHORT_SIZE);
 		buf.putInt(priority);
 		buf.putLong(shortTag);

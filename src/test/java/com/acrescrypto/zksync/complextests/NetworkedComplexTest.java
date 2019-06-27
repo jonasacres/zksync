@@ -3,10 +3,13 @@ package com.acrescrypto.zksync.complextests;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.FileSystemException;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedList;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.junit.After;
@@ -16,11 +19,13 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
+import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFSManager;
@@ -133,6 +138,10 @@ public class NetworkedComplexTest {
 		return basePath + peerName + "/data";
 	}
 	
+	public boolean randomChance(double p) {
+		return Math.random() <= p;
+	}
+	
 	public ZKMaster initDHTRoot() throws IOException {
 		ZKMaster root = ZKMaster.openBlankTestVolume("dht");
 		root.getDHTClient().listen("127.0.0.1", 0);
@@ -154,6 +163,17 @@ public class NetworkedComplexTest {
 	public ZKFSManager initPeer(String peerName) throws IOException {
 		try(LocalFS fs = new LocalFS("/")) {
 			fs.mkdirp(automirrorPath(peerName));
+		}
+
+		ZKFSManager manager = initPeerZKFSOnly(peerName);
+		manager.setAutomirrorPath(automirrorPath(peerName));
+		manager.setAutomirror(true);
+		
+		return manager;
+	}
+	
+	public ZKFSManager initPeerZKFSOnly(String peerName) throws IOException {
+		try(LocalFS fs = new LocalFS("/")) {
 			fs.mkdirp(encryptedDataPath(peerName));
 		}
 
@@ -164,12 +184,12 @@ public class NetworkedComplexTest {
 		manager.setAutocommit(true);
 		manager.setAutocommitIntervalMs(1000);
 		manager.setMaxAutocommitIntervalMs(3000);
-		manager.setAutomirrorPath(automirrorPath(peerName));
-		manager.setAutomirror(true);
+		manager.setAutomirror(false);
 		manager.setAutomerge(true);
 		config.getMaster().getGlobalConfig().set("fs.settings.automergeDelayMs", 1750);
 		config.getMaster().getGlobalConfig().set("fs.settings.maxAutomergeDelayMs", 5000);
-		config.getMaster().getGlobalConfig().set("fs.settings.maxAutomergeAcquireWaitTimeMs", 1000);
+		config.getMaster().getGlobalConfig().set("fs.settings.mergeRevisionAcquisitionMaxWaitMs", 5000);
+		config.getMaster().getGlobalConfig().set("fs.settings.maxAutomergeAcquireWaitTimeMs", 5000);
 		config.getMaster().getGlobalConfig().set("fs.settings.readOnlyFilesystemCacheSize", 512);
 		
 		return manager;
@@ -350,7 +370,7 @@ public class NetworkedComplexTest {
 		if(!Util.waitUntil(interval, ()->{
 			try {
 				return multiPeersMatch(peers, false);
-			} catch(ENOENTException|FileSystemException exc) {
+			} catch(ENOENTException|FileSystemException|FileNotFoundException exc) {
 				return false;
 			} catch (IOException exc) {
 				exc.printStackTrace();
@@ -604,7 +624,7 @@ public class NetworkedComplexTest {
 	/* N peers simultaneously make changes. Exercises data flow in many directions with complex merges.
 	 */
 	@Test
-	public void indefiniteTestComplexManyPeerEquivalent() throws IOException {
+	public void indefiniteTestComplexManyPeerConstantMembershipEquivalent() throws IOException {
 		int numPeers = 5;
 		FSTestWriter[] writers = new FSTestWriter[numPeers];
 		ZKFSManager[] peers = new ZKFSManager[numPeers];
@@ -622,7 +642,7 @@ public class NetworkedComplexTest {
 			writers[i] = new FSTestWriter(peers[i].getMirror().getTarget(), i, name);
 		}
 		
-		long writeIntervalMs = 100;
+		long writeIntervalMs = 500;
 		
 		for(ZKFSManager peer : peers) {
 			assertTrue(Util.waitUntil(1000, ()->numConnections(peer) > 0));
@@ -665,6 +685,109 @@ public class NetworkedComplexTest {
 			
 			operations++;
 			Util.sleep(writeIntervalMs);
+		}
+	}
+	
+	@Test
+	public void indefiniteTestComplexZKFSOnlyManyPeerVariableMembershipEquivalent() throws IOException {
+		int checkIntervalMs = 30000;
+		int numPeersInit = 5;
+
+		int peerNum = 0;
+		CryptoSupport crypto = CryptoSupport.defaultCrypto();
+		LinkedList<ZKFSManager> peers = new LinkedList<>();
+		HashMap<ZKFSManager,FSTestWriter> writers = new HashMap<>();
+		// close up the default peers
+		closePeer(alice);
+		alice = null;
+		
+		closePeer(bob);
+		bob = null;
+		
+		for(int i = 0; i < numPeersInit; i++) {
+			ZKFSManager peer = initPeerZKFSOnly("peer-" + (peerNum));
+			peers.add(peer);
+			writers.put(peer, new FSTestWriter(peer.getFs(),
+					peerNum,
+					peer.getFs().getArchive().getMaster().getName()));
+			peerNum++;
+		}
+		
+		int checkNum = 0;
+		long lastCheck = System.currentTimeMillis();
+		
+		while(true) {
+			if(randomChance(0.00) || peers.isEmpty()) {
+				if(peers.isEmpty() || randomChance(0.5)) {
+					// start a new peer
+					String name = "peer-" + peerNum;
+					Util.debugLog("Starting peer " + name);
+					ZKFSManager peer = initPeerZKFSOnly(name);
+					peers.add(peer);
+					writers.put(peer, new FSTestWriter(peer.getFs(),
+							peerNum,
+							peer.getFs().getArchive().getMaster().getName()));
+					peerNum++;
+				} else {
+					// stop a random peer
+					int index = crypto.defaultPrng().getInt(peers.size());
+					ZKFSManager peer = peers.remove(index);
+					writers.remove(peer);
+					Util.debugLog("Stopped peer " + peer.getFs().getArchive().getMaster().getName());
+					closePeer(peer);
+				}
+			}
+			
+			if(!peers.isEmpty() && randomChance(0.01)) {
+				int index = crypto.defaultPrng().getInt(peers.size());
+				ZKFSManager peer = peers.get(index);
+				writers.get(peer).act();
+			}
+			
+			if(System.currentTimeMillis() >= lastCheck + checkIntervalMs) {
+				++checkNum;
+				Util.debugLog(String.format("Starting check %d",
+						checkNum));
+				boolean passed = Util.waitProgressively(30000, peers.size(), ()->{
+					if(peers.isEmpty()) return 0;
+					HashMap<RevisionTag,Integer> counts = new HashMap<>();
+					
+					for(ZKFSManager peer : peers) {
+						RevisionTag revtag = peer.getFs().getBaseRevision();
+						counts.put(revtag, counts.getOrDefault(revtag, 0) + 1);
+					}
+					
+					int max = 0;
+					for(Integer count : counts.values()) {
+						if(count > max) max = count;
+					}
+					
+					return max;
+				});
+				
+				if(!passed) {
+					Util.debugLog(String.format("Check %d failed. %d peers",
+							checkNum,
+							peers.size()));
+					for(ZKFSManager peer : peers) {
+						Util.debugLog(String.format("\tPeer %s: %s",
+								peer.getFs().getArchive().getMaster().getName(),
+								Util.formatRevisionTag(peer.getFs().getBaseRevision())));
+						// peer.getFs().getArchive().getConfig().getRevisionList().dumpDot();
+					}
+					fail();
+				}
+				
+				Util.debugLog(String.format("Check %d passed. %d peers, revtag %s",
+						checkNum,
+						peers.size(),
+						peers.isEmpty()
+								? "N/A"
+								: Util.formatRevisionTag(peers.getFirst().getFs().getBaseRevision())));
+				lastCheck = System.currentTimeMillis();
+			}
+			
+			Util.sleep(1);
 		}
 	}
 }

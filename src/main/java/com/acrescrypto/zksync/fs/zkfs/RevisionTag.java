@@ -18,6 +18,8 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	private RefTag refTag;
 	private long height = -1;
 	private long parentHash = -1;
+	private long hasStructureCheckTime;
+	
 	byte[] serialized;
 	int hashCode;
 	RevisionInfo info;
@@ -173,6 +175,13 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	/** Returns true if we've got all the pages for the inode table and directories cached
 	 * locally. */
 	public boolean hasStructureLocally() throws IOException {
+		/* Caching this could be dangerous if someone deletes pages underneath us. */
+		
+		long localCacheRecheckTime = config.getMaster().getGlobalConfig().getLong("fs.settings.revtagHasLocalCacheTimeout");
+		if(Util.currentTimeMillis() - hasStructureCheckTime < localCacheRecheckTime) {
+			return true;
+		}
+		
 		PageTree tree = new PageTree(getRefTag());
 		if(!tree.exists()) {
 			Util.debugLog(String.format("RevisionTag %s: hasStructureLocally=false, does not have inode 0",
@@ -180,7 +189,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 			return false;
 		}
 		
-		try(ZKFS fs = readOnlyFS()) {
+		try(ZKFS fs = config.getArchive().openRevisionReadOnlyOpportunistic(this)) {
 			for(Inode inode : fs.getInodeTable().values()) {
 				if(inode.isDeleted()) continue;
 				if(!inode.getStat().isDirectory()) continue;
@@ -198,6 +207,8 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		
 		Util.debugLog(String.format("RevisionTag %s: hasStructureLocally=true",
 				Util.formatRevisionTag(this)));
+		
+		hasStructureCheckTime = Util.currentTimeMillis();
 		return true;
 	}
 	

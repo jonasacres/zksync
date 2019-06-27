@@ -147,9 +147,29 @@ public class ZKArchive implements AutoCloseable {
 		return new ZKFS(revision);
 	}
 	
+	/** Returns a cached RO FS if we have only, else returns a newly-allocated FS. */
+	public ZKFS openRevisionReadOnlyOpportunistic(RevisionTag revision) throws IOException {
+		synchronized(readOnlyFilesystems) {
+			if(readOnlyFilesystems.hasCached(revision)) {
+				return readOnlyFilesystems.get(revision).retain();
+			}
+		}
+		
+		return openRevision(revision);
+	}
+	
 	public ZKFS openRevisionReadOnly(RevisionTag revision) throws IOException {
 		if(isClosed()) {
 			throw new ClosedException();
+		}
+		
+		if(!revision.hasStructureLocally()) {
+			try(ZKFS tempFs = revision.getFS()) {
+				/* force acquisition of missing pages without locking readOnlyFilesystems.
+				 * slightly inefficient since we'll just close and reopen, but this prevents us
+				 * from holding the monitor while we wait for pages to come in over the network.
+				 */
+			}
 		}
 		
 		ZKFS fs;

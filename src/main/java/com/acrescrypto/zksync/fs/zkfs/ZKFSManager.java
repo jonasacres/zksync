@@ -113,6 +113,7 @@ public class ZKFSManager implements AutoCloseable {
 	public synchronized void notifyNewRevtag(RevisionTag revtag) {
 		RevisionTag latest = fs.archive.config.revisionList.latest();
 		boolean isDescendent = false;
+		
 		try {
 			isDescendent = fs.archive.config.revisionTree.descendentOf(latest, fs.baseRevision);
 			if(!isDescendent) {

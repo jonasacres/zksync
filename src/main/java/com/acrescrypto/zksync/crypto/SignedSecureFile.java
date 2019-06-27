@@ -100,7 +100,7 @@ public class SignedSecureFile {
 					fs.getClass().getSimpleName(),
 					exc);
 			if(exc instanceof IOException) {
-				throw new InaccessibleStorageException();
+				throw new InaccessibleStorageException(exc);
 			} else {
 				throw exc;
 			}

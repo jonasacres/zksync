@@ -322,20 +322,20 @@ public class RevisionListTest {
 	}
 	
 	@Test
-	public void testAvailableBranchTipsReturnsTipsWithCachedInodeTableAndDirectories() throws IOException {
+	public void testAvailableTagsReturnsTipsWithCachedInodeTableAndDirectories() throws IOException {
 		LinkedList<RevisionTag> expected = new LinkedList<>();
 		for(int i = 0; i < 10; i++) {
 			expected.add(makeRevisionTag());
 		}
 		
-		Collection<RevisionTag> available = list.availableBranchTips(0);
+		Collection<RevisionTag> available = list.availableTags(list.branchTips(), 0);
 		assertEquals(expected.size(), available.size());
 		assertTrue(expected.containsAll(available));
 		assertTrue(available.containsAll(expected));
 	}
 	
 	@Test
-	public void testAvailableBranchTipsDoesNotReturnRevTagsWithMissingInodeTablePages() throws IOException {
+	public void testAvailableTagsDoesNotReturnRevTagsWithMissingInodeTablePages() throws IOException {
 		LinkedList<RevisionTag> expected = new LinkedList<>();
 		for(int i = 0; i < 10; i++) {
 			RevisionTag tag = makeRevisionTag();
@@ -346,14 +346,14 @@ public class RevisionListTest {
 			}
 		}
 		
-		Collection<RevisionTag> available = list.availableBranchTips(0);
+		Collection<RevisionTag> available = list.availableTags(list.branchTips(), 0);
 		assertEquals(expected.size(), available.size());
 		assertTrue(expected.containsAll(available));
 		assertTrue(available.containsAll(expected));
 	}
 	
 	@Test
-	public void testAvailableBranchTipsDoesNotReturnRevTagsWithMissingDirectoryPages() throws IOException {
+	public void testAvailableTagsDoesNotReturnRevTagsWithMissingDirectoryPages() throws IOException {
 		LinkedList<RevisionTag> expected = new LinkedList<>();
 		for(int i = 0; i < 10; i++) {
 			RevisionTag tag = makeRevisionTag();
@@ -364,31 +364,31 @@ public class RevisionListTest {
 			}
 		}
 		
-		Collection<RevisionTag> available = list.availableBranchTips(0);
+		Collection<RevisionTag> available = list.availableTags(list.branchTips(), 0);
 		assertEquals(expected.size(), available.size());
 		assertTrue(expected.containsAll(available));
 		assertTrue(available.containsAll(expected));
 	}
 	
 	@Test
-	public void testAvailableBranchTipsReturnsImmediatelyIfTimeoutIsZero() throws IOException {
+	public void testAvailableTagsReturnsImmediatelyIfTimeoutIsZero() throws IOException {
 		moveDirectoryPage(makeRevisionTag());
 		
 		long startTime = System.currentTimeMillis();
-		list.availableBranchTips(0);
+		list.availableTags(list.branchTips(), 0);
 		long elapsed = System.currentTimeMillis() - startTime;
 		
-		assertTrue(elapsed <= 100); // leave plenty of room here for availableBranchTips to do its job
+		assertTrue(elapsed <= 100); // leave plenty of room here for AvailableTags to do its job
 	}
 	
 	@Test
-	public void testAvailableBranchTipsBlocksIndefinitelyIfTimeoutIsNegative() throws IOException {
+	public void testAvailableTagsBlocksIndefinitelyIfTimeoutIsNegative() throws IOException {
 		MutableBoolean finished = new MutableBoolean();
 		String path = moveDirectoryPage(makeRevisionTag());
 		
 		new Thread(()->{
 			try {
-				list.availableBranchTips(-1);
+				list.availableTags(list.branchTips(), -1);
 			} catch (IOException exc) {
 				exc.printStackTrace();
 				fail();
@@ -404,12 +404,12 @@ public class RevisionListTest {
 	}
 	
 	@Test
-	public void testAvailableBranchTipsBlocksForIntervalIfTimeoutIsPositive() throws IOException {
+	public void testAvailableTagsBlocksForIntervalIfTimeoutIsPositive() throws IOException {
 		long timeoutMs = 100;
 		moveDirectoryPage(makeRevisionTag());
 		
 		long startTime = System.currentTimeMillis();
-		list.availableBranchTips(timeoutMs);
+		list.availableTags(list.branchTips(), timeoutMs);
 		long elapsed = System.currentTimeMillis() - startTime;
 		
 		assertTrue(elapsed >= timeoutMs);
@@ -417,26 +417,26 @@ public class RevisionListTest {
 	}
 	
 	@Test
-	public void testAvailableBranchTipsReturnsImmediatelyIfAllTipsAreAvailable() throws IOException {
+	public void testAvailableTagsReturnsImmediatelyIfAllTipsAreAvailable() throws IOException {
 		long timeoutMs = 100;
 		makeRevisionTag();
 		
 		long startTime = System.currentTimeMillis();
-		list.availableBranchTips(timeoutMs);
+		list.availableTags(list.branchTips(), timeoutMs);
 		long elapsed = System.currentTimeMillis() - startTime;
 		
 		assertTrue(elapsed < timeoutMs);
 	}
 	
 	@Test
-	public void testAvailableBranchTipsRequestsMissingTipStructureIfTimeoutIsNegative() throws IOException {
+	public void testAvailableTagsRequestsMissingTipStructureIfTimeoutIsNegative() throws IOException {
 		MutableBoolean finished = new MutableBoolean();
 		RevisionTag tag = makeRevisionTag();
 		String path = moveDirectoryPage(tag);
 		
 		new Thread(()->{
 			try {
-				list.availableBranchTips(-1);
+				list.availableTags(list.branchTips(), -1);
 			} catch (IOException exc) {
 				exc.printStackTrace();
 				fail();
@@ -452,29 +452,29 @@ public class RevisionListTest {
 	}
 
 	@Test
-	public void testAvailableBranchTipsDoesNotRequestMissingTipStructureIfTimeoutIsZero() throws IOException {
+	public void testAvailableTagsDoesNotRequestMissingTipStructureIfTimeoutIsZero() throws IOException {
 		moveDirectoryPage(makeRevisionTag());
-		list.availableBranchTips(0);
+		list.availableTags(list.branchTips(), 0);
 		assertNull(swarm.requestedStructure);
 	}
 
 	@Test
-	public void testAvailableBranchTipsRequestsMissingTipStructureIfTimeoutIsPositive() throws IOException {
+	public void testAvailableTagsRequestsMissingTipStructureIfTimeoutIsPositive() throws IOException {
 		RevisionTag tag = makeRevisionTag();
 		moveDirectoryPage(tag);
-		list.availableBranchTips(1);
+		list.availableTags(list.branchTips(), 1);
 		assertEquals(tag, swarm.requestedStructure);
 	}
 	
 	@Test
-	public void testAvailableBranchTipsIncludesTipsMadeAvailableDuringBlock() throws IOException {
+	public void testAvailableTagsIncludesTipsMadeAvailableDuringBlock() throws IOException {
 		MutableBoolean finished = new MutableBoolean();
 		RevisionTag tag = makeRevisionTag();
 		String path = moveDirectoryPage(tag);
 		
 		new Thread(()->{
 			try {
-				Collection<RevisionTag> tips = list.availableBranchTips(-1);
+				Collection<RevisionTag> tips = list.availableTags(list.branchTips(), -1);
 				assertTrue(tips.contains(tag));
 			} catch (IOException exc) {
 				exc.printStackTrace();

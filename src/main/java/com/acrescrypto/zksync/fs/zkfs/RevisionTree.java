@@ -369,6 +369,36 @@ public class RevisionTree implements AutoCloseable {
 		return new TreeSearchItem(tag).hasAncestor(possibleAncestor);
 	}
 	
+	/** Is an existing tag superceded by a new tag? (ie. the new one is descendent from the existing,
+	 * or is a merge containing the same ancestors)
+	 * @throws IOException 
+	 */
+	public boolean supercededBy(RevisionTag newTag, RevisionTag existing) throws IOException {
+		if(newTag.equals(existing)) return false;
+		
+		if(newTag.getHeight() < existing.getHeight()) {
+			return false;
+		}
+		
+		if(descendentOf(newTag, existing)) {
+			return true;
+		}
+		
+		if(existing.getInfo().getNumParents() <= 1) {
+			return false;
+		}
+		
+		for(RevisionTag parent : existing.getInfo().getParents()) {
+			if(!descendentOf(newTag, parent)) {
+				return false;
+			}
+		}
+		
+		if(existing.compareTo(newTag) < 0) return false;
+		
+		return true;
+	}
+	
 	/** Given a revision set, eliminate any revisions that are ancestral to other revisions in
 	 * the set.
 	 */

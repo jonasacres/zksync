@@ -40,30 +40,50 @@ public class DiffSetResolver {
 	Logger logger = LoggerFactory.getLogger(DiffSetResolver.class);
 	
 	public static DiffSetResolver canonicalMergeResolver(ZKArchive archive) throws IOException {
+		return canonicalMergeResolver(archive.getConfig().getRevisionList().branchTips());
+	}
+	
+	public static DiffSetResolver canonicalMergeResolver(Collection<RevisionTag> tags) throws IOException {
+		ZKArchive archive = null;
+		
+		if(tags.isEmpty()) return latestVersionResolver(DiffSet.withCollection(tags));
+		
+		for(RevisionTag tag : tags) {
+			archive = tag.getArchive();
+			break;
+		}
+		
 		long timeoutMs = archive.getMaster().getGlobalConfig().getLong("fs.settings.mergeRevisionAcquisitionMaxWaitMs");
 		StringBuilder sb = new StringBuilder();
 		sb.append(String.format("DiffSetResolver %s: Assembling branch tips (availability timeout=%dms).\nBranch tips:\n",
 				archive.getMaster().getName(),
 				timeoutMs));
-		Collection<RevisionTag> tips = archive.getConfig().getRevisionList().availableBranchTips(timeoutMs);
-		for(RevisionTag tag : tips) {
+
+		sb.append("Branch tips:\n");
+		for(RevisionTag tag : tags) {
 			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
 		}
-		
+
+		Collection<RevisionTag> minimalTips = archive.getConfig().getRevisionTree().minimalSet(tags);
 		sb.append("Minimal tips:\n");
-		Collection<RevisionTag> minimalTips = archive.getConfig().getRevisionTree().minimalSet(tips);
 		for(RevisionTag tag : minimalTips) {
 			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
 		}
 		
-		sb.append("Base tips:\n");
 		Collection<RevisionTag> baseTips = archive.getConfig().getRevisionTree().canonicalBases(minimalTips);
+		sb.append("Base tips:\n");
 		for(RevisionTag tag : baseTips) {
 			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
 		}
 		
+		Collection<RevisionTag> availableBaseTips = archive.getConfig().getRevisionList().availableTags(baseTips, timeoutMs);
+		sb.append("Available tips:\n");
+		for(RevisionTag tag : availableBaseTips) {
+			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
+		}
+		
 		Util.debugLog(sb.toString());
-		DiffSet diffSet = DiffSet.withCollection(baseTips);
+		DiffSet diffSet = DiffSet.withCollection(availableBaseTips);
 		return latestVersionResolver(diffSet);
 	}
 	

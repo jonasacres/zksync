@@ -219,6 +219,9 @@ public class PageQueue {
 				return null;
 			} catch (IOException exc) {
 				logger.error("Caught exception queuing revision tag {}", revTag, exc);
+				if(exc.getCause() != null) {
+					exc.getCause().printStackTrace();
+				}
 				return null;
 			}
 		}

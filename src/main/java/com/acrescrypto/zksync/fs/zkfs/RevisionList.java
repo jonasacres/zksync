@@ -85,11 +85,9 @@ public class RevisionList implements AutoCloseable {
 	 * 
 	 * @throws IOException 
 	 */
-	public synchronized ArrayList<RevisionTag> availableBranchTips(long timeoutMs) throws IOException {
-		ArrayList<RevisionTag>
-			tags = branchTips(),
-			available = new ArrayList<>(tags.size());
-		
+	public ArrayList<RevisionTag> availableTags(Collection<RevisionTag> tags, long timeoutMs) throws IOException {
+		long deadline = System.currentTimeMillis() + timeoutMs;
+		ArrayList<RevisionTag> available = new ArrayList<>(tags.size());
 		for(RevisionTag tag : tags) {
 			if(tag.hasStructureLocally()) {
 				logger.debug("RevisionList {} {}: Revision {} is available",
@@ -105,8 +103,6 @@ public class RevisionList implements AutoCloseable {
 			return available;
 		}
 		
-		long deadline = System.currentTimeMillis() + timeoutMs;
-		 
 		for(RevisionTag tag : tags) {
 			// send swarm requests for any tags we don't have structure data for yet
 			if(available.contains(tag)) continue;
@@ -131,7 +127,7 @@ public class RevisionList implements AutoCloseable {
 				available.add(tag);
 			}
 		}
-
+		
 		return available;
 	}
 
@@ -148,7 +144,7 @@ public class RevisionList implements AutoCloseable {
 	}
 
 	public boolean addBranchTip(RevisionTag newBranch, boolean verify) throws IOException {
-		if (config.revisionTree.isSuperceded(newBranch)) {
+		if(config.revisionTree.isSuperceded(newBranch)) {
 			return false;
 		}
 		
@@ -164,7 +160,7 @@ public class RevisionList implements AutoCloseable {
 		}
 
 		synchronized (this) {
-			/* if check superceded if we didn't do that last time, or if we added another branch tip before
+			/* check superceded if we didn't do that last time, or if we added another branch tip before
 			 * we got into the synchronized block 
 			 */
 			boolean lastCheckStillGood = verify && totalAdds == totalAddsPrevious;
@@ -303,7 +299,7 @@ public class RevisionList implements AutoCloseable {
 		deserialize(MutableSecureFile.atPath(config.localStorage, getPath(), branchTipKey()).read());
 	}
 
-	protected synchronized void deserialize(byte[] serialized) {
+	protected synchronized void deserialize(byte[] serialized) throws IOException {
 		branchTips.clear();
 		latest = null;
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
@@ -367,7 +363,7 @@ public class RevisionList implements AutoCloseable {
 	public synchronized void dumpDot() throws IOException {
 		String path = "revision-graph.dot";
 		StringBuilder sb = new StringBuilder();
-		sb.append("digraph " + config.getMaster().getName() + " {\n");
+		sb.append("digraph \"" + config.getMaster().getName() + "\" {\n");
 		HashSet<RevisionTag> seen = new HashSet<>();
 		LinkedList<RevisionTag> toProcess = new LinkedList<>(branchTips);
 		while (!toProcess.isEmpty()) {
@@ -436,8 +432,8 @@ public class RevisionList implements AutoCloseable {
 		return latest == null && !config.isReadOnly() ? RevisionTag.blank(config) : latest;
 	}
 
-	protected void updateLatest(RevisionTag newTip) {
-		if (latest == null || newTip.compareTo(latest) > 0) {
+	protected void updateLatest(RevisionTag newTip) throws IOException {
+		if(latest == null || newTip.compareTo(latest) > 0 || config.getRevisionTree().supercededBy(newTip, latest)) {
 			try {
 				logger.info("RevisionList {} {}: New latest revtag {}, was {}",
 						config.getArchive().getMaster().getName(),
@@ -461,7 +457,7 @@ public class RevisionList implements AutoCloseable {
 		}
 	}
 
-	public synchronized void executeAutomerge() {
+	public void executeAutomerge() {
 		if (config.getArchive().isClosed()) {
 			logger.debug("RevisionList {} {}: Skipping automerge of closed archive",
 					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()));
@@ -480,8 +476,14 @@ public class RevisionList implements AutoCloseable {
 			} else {
 				logger.info("RevisionList {} {}: Automerge started", config.getArchive().getMaster().getName(),
 						Util.formatArchiveId(config.getArchiveId()));
-				consolidate();
-				DiffSetResolver.canonicalMergeResolver(config.getArchive()).resolve();
+				Collection<RevisionTag> tips;
+				
+				synchronized(this) {
+					consolidate();
+					tips = branchTips();
+				}
+				
+				DiffSetResolver.canonicalMergeResolver(tips).resolve();
 			}
 		} catch (ClosedException exc) {
 			logger.debug("RevisionList {} {}: Automerge aborted since archive closed",

@@ -253,14 +253,25 @@ public class BackedFS extends FS {
 		synchronized(this) {
 			while(pendingPaths.contains(path)) {
 				try {
-					if(timeoutMs > 0) {
-						this.wait(timeoutMs);
-						if(pendingPaths.contains(path)) {
+					long timeoutRemainingMs;
+					if(timeoutMs >= 0) {
+						timeoutRemainingMs = Math.max(deadline - System.currentTimeMillis(), 0);
+						if(timeoutRemainingMs < 0) {
+							Util.debugLog(String.format("BackedFS: Timed out waiting for %s", path));
 							throw new SwarmTimeoutException(path);
 						}
+					} else {
+						timeoutRemainingMs = Long.MAX_VALUE;
+					}
+					
+					if(timeoutMs > 0) {
+						Util.debugLog(String.format("BackedFS: Waiting %dms indefinitely for %s", timeoutRemainingMs, path));
+						this.wait(timeoutRemainingMs);
 					} else if(timeoutMs == 0) {
+						Util.debugLog(String.format("BackedFS: Unavailable %s", path));
 						throw new SwarmTimeoutException(path);
 					} else {
+						Util.debugLog(String.format("BackedFS: Waiting indefinitely for %s", path));
 						this.wait();
 					}
 				} catch (InterruptedException e) {}
@@ -281,10 +292,13 @@ public class BackedFS extends FS {
 				byte[] data;
 				
 				if(backupFS instanceof TimedReader) {
+					Util.debugLog(String.format("BackedFS: Reading %s with timeout %d", path, timeoutRemainingMs));
 					data = ((TimedReader) backupFS).read(path, timeoutRemainingMs);
 				} else {
+					Util.debugLog(String.format("BackedFS: Reading %s from %s, timeout not supported", path, backupFS.getClass().getSimpleName()));
 					data = backupFS.read(path);
 				}
+				Util.debugLog(String.format("BackedFS: Read %s, %d bytes", path, data.length));
 				
 				if(!cacheFS.exists(path) || cacheFS.stat(path).getSize() != stat.getSize()) {
 					if(!(backupFS instanceof SwarmFS)) {

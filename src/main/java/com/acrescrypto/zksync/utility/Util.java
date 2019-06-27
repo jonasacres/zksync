@@ -31,6 +31,10 @@ public class Util {
 		boolean test();
 	}
 	
+	public interface ProgressiveWaitTest {
+		int test();
+	}
+	
 	public interface AnonymousCallback {
 		void cb() throws Exception;
 	}
@@ -164,8 +168,8 @@ public class Util {
 		}
 	}
 	
-	public static boolean waitUntil(int maxDelay, WaitTest test) {
-		long endTime = maxDelay <= 0 ? Long.MAX_VALUE : System.currentTimeMillis() + maxDelay;
+	public static boolean waitUntil(int maxDelayMs, WaitTest test) {
+		long endTime = maxDelayMs <= 0 ? Long.MAX_VALUE : System.currentTimeMillis() + maxDelayMs;
 		boolean passed = false;
 		while(System.currentTimeMillis() < endTime && !passed) {
 			passed = test.test();
@@ -175,6 +179,22 @@ public class Util {
 		}
 		
 		return passed || System.currentTimeMillis() < endTime;
+	}
+	
+	public static boolean waitProgressively(int maxDelayMs, int targetValue, ProgressiveWaitTest test) {
+		Integer value = null;
+		long expireTime = System.currentTimeMillis() + maxDelayMs;
+		
+		while(value == null || value.intValue() < targetValue) {
+			if(System.currentTimeMillis() > expireTime) return false;
+			int newValue = test.test();
+			if(value == null || newValue > value.intValue()) {
+				expireTime = System.currentTimeMillis() + maxDelayMs;
+				value = newValue;
+			}
+		}
+		
+		return true;
 	}
 	
 	public static void blockOn(WaitTest test) {

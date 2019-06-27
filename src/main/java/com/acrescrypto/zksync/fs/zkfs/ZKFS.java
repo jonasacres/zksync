@@ -483,6 +483,12 @@ public class ZKFS extends FS {
 			uncache(path);
 		}
 	}
+	
+	@Override
+	public synchronized void rmrf(String path) throws IOException {
+		// grab the lock for this to prevent someone from adding to a directory in another thread
+		super.rmrf(path);
+	}
 
 	@Override
 	public void unlink(String path) throws IOException {

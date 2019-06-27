@@ -441,6 +441,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 		globalConfig.setDefault("fs.settings.automergeDelayMs", 10000);
 		globalConfig.setDefault("fs.settings.maxAutomergeDelayMs", 60000);
 		globalConfig.setDefault("fs.settings.maxAutomergeAcquireWaitTimeMs", 60000);
+		globalConfig.setDefault("fs.settings.revtagHasLocalCacheTimeout", 60000);
 		
 		globalConfig.setDefault("fs.fileHandleTelemetry", FS.fileHandleTelemetryEnabled);
 		

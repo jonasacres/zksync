@@ -416,6 +416,7 @@ public class PeerSwarm implements BlacklistCallback {
 		long deadline;
 		if(timeoutMs >= 0) {
 			deadline = System.currentTimeMillis() + timeoutMs;
+			if(deadline < 0) deadline = Long.MAX_VALUE;
 		} else {
 			deadline = Long.MAX_VALUE;
 		}
@@ -437,7 +438,7 @@ public class PeerSwarm implements BlacklistCallback {
 				throw new SwarmTimeoutException("page " + Util.bytesToHex(tag));
 			}
 			
-			remainingTimeoutMs = (int) (deadline - System.currentTimeMillis());
+			remainingTimeoutMs = deadline - System.currentTimeMillis();
 			try {
 				if(!pageWaits.containsKey(shortTag)) {
 					pageWaits.put(shortTag, pageWaitLock.newCondition());
