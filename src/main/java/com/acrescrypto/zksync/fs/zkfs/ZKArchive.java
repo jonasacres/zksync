@@ -103,7 +103,10 @@ public class ZKArchive implements AutoCloseable {
 	
 	public void close() {
 		if(closed) return;
-		closed = true;
+		synchronized(this) {
+			if(closed) return;
+			closed = true;
+		}
 		
 		if(tok != null) tok.close();
 		try {
@@ -134,13 +137,18 @@ public class ZKArchive implements AutoCloseable {
 	}
 	
 	public ZKArchive cacheOnlyArchive() throws IOException {
+		assertOpen();
 		if(isCacheOnly()) return this;
 		if(cacheOnlyArchive != null) return cacheOnlyArchive;
 		
-		assertOpen();
-		cacheOnlyArchive = new ZKArchive(config);
-		cacheOnlyArchive.storage = config.getCacheStorage();
-		return cacheOnlyArchive;
+		synchronized(this) {
+			assertOpen();
+			if(cacheOnlyArchive != null) return cacheOnlyArchive;
+
+			cacheOnlyArchive = new ZKArchive(config);
+			cacheOnlyArchive.storage = config.getCacheStorage();
+			return cacheOnlyArchive;
+		}
 	}
 	
 	public ZKFS openRevision(RevisionTag revision) throws IOException {

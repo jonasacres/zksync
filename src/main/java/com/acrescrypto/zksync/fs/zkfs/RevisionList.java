@@ -433,7 +433,10 @@ public class RevisionList implements AutoCloseable {
 	}
 
 	protected void updateLatest(RevisionTag newTip) throws IOException {
-		if(latest == null || newTip.compareTo(latest) > 0 || config.getRevisionTree().supercededBy(newTip, latest)) {
+		if(latest == null
+			|| newTip.compareTo(latest) > 0
+			|| config.getRevisionTree().supercededBy(newTip, latest))
+		{
 			try {
 				logger.info("RevisionList {} {}: New latest revtag {}, was {}",
 						config.getArchive().getMaster().getName(),

@@ -954,6 +954,10 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleAnnounceTipsAddsBranchTipsToRevisionTree() throws ProtocolViolationException, IOException {
+		/* TODO: This is going to need to wait until the protocol revisit. Branch tip announcements need to
+		 * include parent data in the message so that we're not waiting on responses to the inevitable followup
+		 * request to figure out if the new branch tip supercedes our previous latest. */
+		fail("this needs a rewrite");
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TIPS);
 		RevisionTag[] tags = new RevisionTag[16];
 

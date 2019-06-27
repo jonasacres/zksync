@@ -385,6 +385,7 @@ public class RevisionTree implements AutoCloseable {
 		}
 		
 		Collection<RevisionTag> parents = parentsForTag(existing);
+		
 		if(parents.size() <= 1) {
 			return false;
 		}

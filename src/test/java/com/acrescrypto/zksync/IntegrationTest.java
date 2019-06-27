@@ -393,18 +393,18 @@ public class IntegrationTest {
 			return sepLatest.equals(firstLatest);
 		}));
 		
-		ZKFS mergedFs = separateArch.openLatest();
-		for(int i = 0; i <= masters.length; i++) {
-			expectCommitData(mergedFs, i);
-		}
-		mergedFs.close();
-		
-		separateArch.close();
-		separate.close();
-		
-		for(int i = 0; i < masters.length; i++) {
-			archives[i].close();
-			masters[i].close();
+		try(ZKFS mergedFs = separateArch.openLatest()) {
+			for(int i = 0; i <= masters.length; i++) {
+				expectCommitData(mergedFs, i);
+			}
+		} finally {
+			separateArch.close();
+			separate.close();
+			
+			for(int i = 0; i < masters.length; i++) {
+				archives[i].close();
+				masters[i].close();
+			}
 		}
 	}
 	
