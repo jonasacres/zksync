@@ -313,6 +313,7 @@ public class DiffSetResolver {
 				try(ZKDirectory dir = fs.opendir(fs.dirname(diff.path))) {
 					dir.setOverrideMtime(fs.getInodeTable().getStat().getMtime());
 					dir.updateLink(diff.resolution, fs.basename(diff.path));
+					dir.commit();
 				}
 			}
 			

@@ -450,6 +450,14 @@ public class InodeTable extends ZKFile {
 				zkfs.getArchive().getMaster().getName(),
 				Util.formatRevisionTag(zkfs.baseRevision)));
 		
+		if(hasLinkedEmptyInode()) {
+			Util.debugLog(String.format("InodeTable %s: Has linked empty inode (pre), base revision %s\n%s",
+					zkfs.archive.getMaster().getName(),
+					Util.formatRevisionTag(zkfs.baseRevision),
+					dumpInodes()));
+			Util.debugLog("");
+		}
+		
 		/* reassign inodes from the end of the table to inodes in the freelist until the freelist is empty */
 		try {
 			for(long newInodeId = USER_INODE_ID_START; newInodeId < existingMaxId; newInodeId++) {
@@ -489,17 +497,49 @@ public class InodeTable extends ZKFile {
 			
 			try(ZKDirectory dir = new ZKDirectory(zkfs, inode)) {
 				dir.remap(remappedIds);
+				dir.setOverrideMtime(this.getStat().getMtime());
+				dir.commit();
 			}
 		}
 		
 		/* force rescan of next inode ID */
 		freelist.clearList();
 		this.nextInodeId = -1;
+		zkfs.markDirty();
 		
 		sb.append(String.format("\tTotal inodes remapped: %d\n", remappedIds.size()));
 		sb.append(dumpInodes());
-		
 		Util.debugLog(sb.toString());
+		
+		if(hasLinkedEmptyInode()) {
+			Util.debugLog("Has linked empty inode");
+		}
+		
+		if(hasInternalDeletedInode()) {
+			Util.debugLog("Has internal deleted inode");
+		}
+	}
+	
+	public boolean hasInternalDeletedInode() throws IOException {
+		for(long inodeId = USER_INODE_ID_START; inodeId < nextInodeId(); inodeId++) {
+			Inode inode = inodeWithId(inodeId);
+			if(inode.isDeleted()) {
+				return true;
+			}
+		}
+		
+		return false;
+	}
+
+	public boolean hasLinkedEmptyInode() throws IOException {
+		for(long inodeId = 0; inodeId < nextInodeId(); inodeId++) {
+			Inode inode = inodeWithId(inodeId);
+			if(inode.getRefTag().isBlank() && inode.nlink != 0) {
+				return true;
+			}
+		}
+		
+		return false;
 	}
 	
 	/** array of all inodes stored at a given page number of the inode table */

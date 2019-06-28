@@ -440,13 +440,23 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 
 	public synchronized void remap(HashMap<Long, Long> remappedIds) {
+		StringBuilder sb = new StringBuilder(String.format("ZKDirectory %s: (directory inodeId %d) remapping from base revision %s",
+				zkfs.archive.master.getName(),
+				inode.getStat().getInodeId(),
+				Util.formatRevisionTag(zkfs.baseRevision)));
 		ConcurrentHashMap<String, Long> remappedEntries = new ConcurrentHashMap<>();
 		entries.forEach((name, inodeId)->{
 			long newId = remappedIds.getOrDefault(inodeId, inodeId);
 			dirty |= newId != inodeId;
 			remappedEntries.put(name, newId);
+			sb.append(String.format("\n\t%30s %d -> %d %s",
+					name,
+					inodeId,
+					newId,
+					newId != inodeId ? "CHANGED" : ""));
 		});
 		
+		Util.debugLog(sb.toString());
 		entries = remappedEntries;
 	}
 }
