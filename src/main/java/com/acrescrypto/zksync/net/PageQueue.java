@@ -352,7 +352,7 @@ public class PageQueue {
 			
 			addPageTag(priority, tag);
 		} catch (Exception exc) {
-			logger.warn("Caught exception queuing short tag {}", String.format("%16x", shortTag), exc);
+			logger.warn("Caught exception queuing short tag {}", String.format("%016x", shortTag), exc);
 		}
 	}
 	

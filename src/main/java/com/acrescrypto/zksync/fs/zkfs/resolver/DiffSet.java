@@ -173,7 +173,7 @@ public class DiffSet {
 		sortedIdentities.sort(null);
 		
 		StringBuilder sb = new StringBuilder();
-		sb.append(String.format("DiffSet %s: Renumbering %d candidates of inodeId %d, minIdent %16x\n",
+		sb.append(String.format("DiffSet %s: Renumbering %d candidates of inodeId %d, minIdent %016x\n",
 				revisions[0].getArchive().getMaster().getName(),
 				sortedIdentities.size(),
 				diff.inodeId,

@@ -15,7 +15,6 @@ import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.NonexistentPageException;
 import com.acrescrypto.zksync.fs.Directory;
-import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.FreeList.FreeListExhaustedException;
 import com.acrescrypto.zksync.fs.zkfs.resolver.InodeDiff;
@@ -92,7 +91,9 @@ public class InodeTable extends ZKFile {
 				}
 			});
 			
-			if(tag.getRefTag().isBlank()) initialize();
+			if(tag.getRefTag().isBlank()) {
+				initialize();
+			}
 			else readExisting(tag);
 		} catch(Throwable exc) {
 			this.close();
@@ -117,8 +118,18 @@ public class InodeTable extends ZKFile {
 	
 	/** calculate the next inode ID to be issued (by scanning for the largest issued inode ID) */
 	protected synchronized long lookupNextInodeId() throws IOException {
-		long pageNum = inode.refTag.numPages;
+		long maxPageNum;
+		if(dirty) {
+			maxPageNum = tree.numPages;
+			for(Long pageNum : inodesByPage.cachedKeys()) {
+				if(maxPageNum < pageNum) maxPageNum = pageNum;
+			}
+		} else {
+			maxPageNum = tree.numPages;
+		}
+		
 		long maxInodeId = USER_INODE_ID_START-1;
+		long pageNum = maxPageNum;
 		
 		while(pageNum > 0 && maxInodeId < USER_INODE_ID_START) {
 			pageNum--;
@@ -372,7 +383,7 @@ public class InodeTable extends ZKFile {
 					long inodeId = stat.getInodeId();
 					Inode inode = inodeWithId(inodeId);
 					int nlinkCount = inodeCounts.getOrDefault(inodeId, 0) + 1;
-					sb.append(String.format("\t%-50s, inodeId %4d, identity %16x, counted nlink %2d, existing nlink %2d\n",
+					sb.append(String.format("\t%-50s, inodeId %4d, identity %016x, counted nlink %2d, existing nlink %2d\n",
 							path,
 							inodeId,
 							inode.identity,
@@ -393,7 +404,7 @@ public class InodeTable extends ZKFile {
 					if(nlink == 0) {
 						inode.nlink = 0;
 						if((inode.flags & Inode.FLAG_RETAIN) == 0) {
-							sb.append(String.format("\tfree orphaned inodeId %3d, identity %16x, previous nlink %02d, type %02x, changedfrom %s\n",
+							sb.append(String.format("\tfree orphaned inodeId %3d, identity %016x, previous nlink %02d, type %02x, changedfrom %s\n",
 									inode.getStat().getInodeId(),
 									inode.identity,
 									inode.nlink,
@@ -407,7 +418,7 @@ public class InodeTable extends ZKFile {
 							}
 						}
 					} else {
-						sb.append(String.format("\tupdate nlink for inodeId %3d, identity %16x, previous nlink %02d, new nlink %02d, type %02x, changedfrom %s\n",
+						sb.append(String.format("\tupdate nlink for inodeId %3d, identity %016x, previous nlink %02d, new nlink %02d, type %02x, changedfrom %s\n",
 								inode.getStat().getInodeId(),
 								inode.identity,
 								inode.nlink,
@@ -420,7 +431,7 @@ public class InodeTable extends ZKFile {
 					/* we cleared the free list, so add the inode ID back in
 					 * (freelist is a LIFO, so we want lowest inode IDs on top of the stack, hence why we
 					 * traverse the inode table from end to start) */
-					sb.append(String.format("\tadd to freelist previously freed inode inodeId %3d, identity %16x, previous nlink %02d, type %02x, changedfrom %s\n",
+					sb.append(String.format("\tadd to freelist previously freed inode inodeId %3d, identity %016x, previous nlink %02d, type %02x, changedfrom %s\n",
 							inode.getStat().getInodeId(),
 							inode.identity,
 							inode.nlink,
@@ -446,17 +457,10 @@ public class InodeTable extends ZKFile {
 	public synchronized void defragment() throws IOException {
 		HashMap<Long, Long> remappedIds = new HashMap<>();
 		long existingMaxId = nextInodeId()-1;
-		StringBuilder sb = new StringBuilder(String.format("InodeTable %s: Defragmented from base revision %s\n",
+		StringBuilder sb = new StringBuilder(String.format("InodeTable %s: Defragmented from base revision %s, max inodeId %d\n",
 				zkfs.getArchive().getMaster().getName(),
-				Util.formatRevisionTag(zkfs.baseRevision)));
-		
-		if(hasLinkedEmptyInode()) {
-			Util.debugLog(String.format("InodeTable %s: Has linked empty inode (pre), base revision %s\n%s",
-					zkfs.archive.getMaster().getName(),
-					Util.formatRevisionTag(zkfs.baseRevision),
-					dumpInodes()));
-			Util.debugLog("");
-		}
+				Util.formatRevisionTag(zkfs.baseRevision),
+				existingMaxId));
 		
 		/* reassign inodes from the end of the table to inodes in the freelist until the freelist is empty */
 		try {
@@ -490,15 +494,21 @@ public class InodeTable extends ZKFile {
 		}
 		
 		/* update links in the directories */
-		for(long inodeId = 0; inodeId < existingMaxId; inodeId++) {
+		for(long inodeId = 0; inodeId <= existingMaxId; inodeId++) {
 			Inode inode = inodeWithId(inodeId);
 			if(inode.isDeleted()) continue;
 			if(!inode.getStat().isDirectory()) continue;
 			
-			try(ZKDirectory dir = new ZKDirectory(zkfs, inode)) {
+			try(ZKDirectory dir = zkfs.opendirSemicache(inode)) {
+				RefTag oldRefTag = dir.tree.getRefTag();
 				dir.remap(remappedIds);
 				dir.setOverrideMtime(this.getStat().getMtime());
-				dir.commit();
+				RefTag newRefTag = dir.commit();
+				sb.append(String.format("\n\tDirectory %3d %016x: reftag is now %s, was %s",
+						inode.getStat().getInodeId(),
+						inode.getIdentity(),
+						Util.formatRefTag(newRefTag),
+						Util.formatRefTag(oldRefTag)));
 			}
 		}
 		
@@ -510,36 +520,6 @@ public class InodeTable extends ZKFile {
 		sb.append(String.format("\tTotal inodes remapped: %d\n", remappedIds.size()));
 		sb.append(dumpInodes());
 		Util.debugLog(sb.toString());
-		
-		if(hasLinkedEmptyInode()) {
-			Util.debugLog("Has linked empty inode");
-		}
-		
-		if(hasInternalDeletedInode()) {
-			Util.debugLog("Has internal deleted inode");
-		}
-	}
-	
-	public boolean hasInternalDeletedInode() throws IOException {
-		for(long inodeId = USER_INODE_ID_START; inodeId < nextInodeId(); inodeId++) {
-			Inode inode = inodeWithId(inodeId);
-			if(inode.isDeleted()) {
-				return true;
-			}
-		}
-		
-		return false;
-	}
-
-	public boolean hasLinkedEmptyInode() throws IOException {
-		for(long inodeId = 0; inodeId < nextInodeId(); inodeId++) {
-			Inode inode = inodeWithId(inodeId);
-			if(inode.getRefTag().isBlank() && inode.nlink != 0) {
-				return true;
-			}
-		}
-		
-		return false;
 	}
 	
 	/** array of all inodes stored at a given page number of the inode table */
@@ -708,7 +688,6 @@ public class InodeTable extends ZKFile {
 	private void makeRootDir() throws IOException {
 		Inode rootDir = new Inode(zkfs);
 		long now = Util.currentTimeNanos();
-		rootDir.setIdentity(0);
 		rootDir.getStat().setCtime(now);
 		rootDir.getStat().setAtime(now);
 		rootDir.getStat().setMtime(now);
@@ -732,11 +711,12 @@ public class InodeTable extends ZKFile {
 	private void makeEmptyFreelist() throws IOException {
 		Inode freelistInode = issueInode(INODE_ID_FREELIST);
 		freelistInode.setFlags(Inode.FLAG_RETAIN);
+		freelistInode.setIdentity(0);
 		this.freelist = new FreeList(freelistInode);
 		setInode(freelistInode);
 	}
 	
-	/** initialize a blank inode table, including references to blank root directroy, revision info and freelist */
+	/** initialize a blank inode table, including references to blank root directory, revision info and freelist */
 	private void initialize() throws IOException {
 		this.inode = Inode.defaultRootInode(zkfs);
 		this.setInode(this.inode);
@@ -803,7 +783,7 @@ public class InodeTable extends ZKFile {
 		s += "Inode table dump for " + Util.formatRevisionTag(zkfs.baseRevision) + ", nextInodeId=" + nextInodeId() + ", dirty=" + dirty + "\n";
 		for(int i = 0; i < nextInodeId(); i++) {
 			Inode inode = inodeWithId(i);
-			s += String.format("\tinodeId %4d: identity %16x, %s, size %7d, nlink %02d, type %02x, changedfrom %s\n",
+			s += String.format("\tinodeId %4d: identity %016x, %s, size %7d, nlink %02d, type %02x, changedfrom %s\n",
 					inode.stat.getInodeId(),
 					inode.identity,
 					Util.formatRefTag(inode.refTag),

@@ -215,6 +215,7 @@ public class ZKFS extends FS {
 					dump(),
 					inodeTable.dumpInodes()));
 			archive.getConfig().getRevisionList().dump();
+			IntegrityChecker.assertValidFilesystem(baseRevision); // TODO: Delete me after testing
 		}
 		
 		return baseRevision;
@@ -356,7 +357,17 @@ public class ZKFS extends FS {
 				path,
 				inode.getStat().getInodeId(),
 				inode.getStat().isDirectory());
-		if(!inode.getStat().isDirectory()) throw new EISNOTDIRException(path);
+		if(!inode.getStat().isDirectory()) {
+			Util.debugLog(String.format("ZKFS %s: %s EISNOTDIR %s, inodeId %d, identity %016x, type %02x\n%s",
+					archive.master.getName(),
+					Util.formatRevisionTag(baseRevision),
+					path,
+					inode.getStat().getInodeId(),
+					inode.getIdentity(),
+					inode.getStat().getType(),
+					inodeTable.dumpInodes()));
+			throw new EISNOTDIRException(path);
+		}
 	}
 	
 	public void assertPathIsNotDirectory(String path) throws IOException {
@@ -373,7 +384,23 @@ public class ZKFS extends FS {
 	
 	public void assertDirectoryIsEmpty(String path) throws IOException {
 		try(ZKDirectory dir = opendir(path)) {
-			if(dir.list().size() > 0) throw new ENOTEMPTYException(path);
+			if(dir.list().size() > 0) {
+				StringBuilder sb = new StringBuilder(String.format("ZKFS %s: %s ENOTEMPTY on directory %s, inodeId %d, identity %016x, %d entries",
+						archive.getMaster().getName(),
+						Util.formatRevisionTag(baseRevision),
+						path,
+						dir.getStat().getInodeId(),
+						dir.inode.identity,
+						dir.list().size()));
+				for(String subpath : dir.list()) {
+					sb.append(String.format("\n\t%16s", subpath));
+				}
+				sb.append("\n" + this.dump());
+				sb.append("\n" + inodeTable.dumpInodes());
+				Util.debugLog(sb.toString());
+				
+				throw new ENOTEMPTYException(path);
+			}
 		}
 	}
 
@@ -445,6 +472,24 @@ public class ZKFS extends FS {
 			return directoriesByPath.get(canonPath).retain();
 		}
 	}
+	
+	/** Return a directory by inode from the cache if we have it; otherwise, open it. Caller
+	 * should already be in a lockedOperation(). */ 
+	public ZKDirectory opendirSemicache(Inode inode) throws IOException {
+		/* The motive for doing this is to prevent cache conflicts in diff merges. The DiffSetResolver
+		 * accesses directories by path, hitting the cache in the process. Then the InodeTable accesses
+		 * them by inodeId when defragmenting. We don't want to commit in between, because then we'd end
+		 * up with orphaned pages in storage. So we want to grab any cached pages we can. Needless to say,
+		 * this is highly sensitive to races, so own the lock first!
+		 */
+		for(ZKDirectory dir : directoriesByPath.values()) {
+			if(dir.getInode().getStat().getInodeId() == inode.getStat().getInodeId()) {
+				return dir.retain();
+			}
+		}
+		
+		return new ZKDirectory(this, inode);
+	}
 
 	@Override
 	public void mkdir(String path) throws IOException {
@@ -480,6 +525,7 @@ public class ZKFS extends FS {
 			try(ZKDirectory dir = opendir(path)) {
 				dir.rmdir();
 			}
+			
 			uncache(path);
 		}
 	}
@@ -720,7 +766,7 @@ public class ZKFS extends FS {
 			for(String subpath : sorted) {
 				String fqSubpath = Paths.get(path, subpath).toString();
 				Inode inode = inodeForPath(fqSubpath, false);
-				builder.append(String.format("%-30s inodeId %4d, size %8d, identity %16x, type %02x, nlink %02d, %s\n",
+				builder.append(String.format("%-30s inodeId %4d, size %8d, identity %016x, type %02x, nlink %02d, %s\n",
 						padding + subpath,
 						inode.stat.getInodeId(),
 						inode.stat.getSize(),
@@ -729,7 +775,14 @@ public class ZKFS extends FS {
 						inode.nlink,
 						Util.formatRefTag(inode.getRefTag())));
 				if(inode.stat.isDirectory()) {
-					dump(fqSubpath, depth+1, builder);
+					try {
+						dump(fqSubpath, depth+1, builder);
+					} catch(Exception exc) {
+						builder.append(String.format("\t%s: %s %s\n",
+								fqSubpath,
+								exc.getClass().getSimpleName(),
+								exc.getMessage()));
+					}
 				}
 			}
 		}

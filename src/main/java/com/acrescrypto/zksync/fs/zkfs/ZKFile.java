@@ -203,7 +203,8 @@ public class ZKFile extends File {
 		assertReadable();
 		if(bufOffset < 0 || maxLength > buf.length - bufOffset) throw new IndexOutOfBoundsException();
 		
-		int numToRead = (int) Math.min(maxLength, getStat().getSize()-offset), readLen = Math.max(0, numToRead);
+		int numToRead = (int) Math.min(maxLength, getStat().getSize()-offset),
+			readLen = Math.max(0, numToRead);
 		logger.trace("ZKFS {}: (ZKFile READ 1) {}, numToRead={}, readLen={}, offset={}, |buf|={}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 				path,
@@ -274,6 +275,7 @@ public class ZKFile extends File {
 	@Override
 	public synchronized void write(byte[] data, int bufOffset, int length) throws IOException {
 		assertWritable();
+		
 		dirty = true;
 		int leftToWrite = length;
 		int pageSize = zkfs.archive.config.pageSize;
@@ -281,6 +283,16 @@ public class ZKFile extends File {
 		while(leftToWrite > 0) {
 			int neededPageNum = (int) (this.offset/pageSize);
 			bufferPage(neededPageNum);
+			Util.debugLog(String.format("ZKFS %s: Write %d bytes (left: %d) to page %d of path %s, inodeId %d, identity %016x, base revision %s\n",
+					zkfs.getArchive().getMaster().getName(),
+					length,
+					leftToWrite,
+					bufferedPage.pageNum,
+					path,
+					inode.getStat().getInodeId(),
+					inode.getIdentity(),
+					Util.formatRevisionTag(zkfs.baseRevision)
+					));
 			int offsetInPage = (int) (offset % zkfs.archive.config.pageSize), pageCapacity = (int) (pageSize-offsetInPage);
 			bufferedPage.seek(offsetInPage);
 			int numWritten = bufferedPage.write(data, bufOffset + length - leftToWrite, Math.min(leftToWrite, pageCapacity));
@@ -340,6 +352,17 @@ public class ZKFile extends File {
 				dirty,
 				closed);
 		if(!dirty || closed) return;
+		
+		Util.debugLog(String.format("ZKFS %s: Flush page %d of file %s, dirty=%s, inodeId %d, identity %016x, size %d, base revision %s\n",
+				zkfs.getArchive().getMaster().getName(),
+				bufferedPage != null ? bufferedPage.pageNum : -1,
+				path,
+				dirty ? "true" : "false",
+				inode.getStat().getInodeId(),
+				inode.getIdentity(),
+				inode.getStat().getSize(),
+				Util.formatRevisionTag(zkfs.baseRevision)
+				));
 		
 		zkfs.lockedOperation(()->{
 			synchronized(this) {

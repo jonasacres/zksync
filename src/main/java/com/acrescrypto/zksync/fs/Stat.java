@@ -187,12 +187,21 @@ public class Stat {
 		
 		byte[] userBuf = new byte[MAX_USER_LEN];
 		buf.get(userBuf);
-		this.user = new String(userBuf);
+		this.user = unpad(userBuf);
 		
 		byte[] groupBuf = new byte[MAX_GROUP_LEN];
 		buf.get(groupBuf);
-		this.group = new String(groupBuf);
+		this.group = unpad(groupBuf);
 		assert(!buf.hasRemaining());
+	}
+	
+	protected String unpad(byte[] buf) {
+		int length = 0;
+		while(length < buf.length && buf[length] != 0) {
+			length++;
+		}
+		
+		return new String(buf, 0, length);
 	}
 	
 	public Stat clone() {

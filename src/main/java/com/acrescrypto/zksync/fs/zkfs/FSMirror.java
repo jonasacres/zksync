@@ -504,7 +504,7 @@ public class FSMirror {
 			}
 			if(zkstat != null) {
 				Inode inode = zkfs.inodeForPath(path, false);
-				sb.append(String.format("\t   ZKFS stat: size %d, mtime %d, type %02x, inodeId %d, nlink %d, identity %16x, %s\n",
+				sb.append(String.format("\t   ZKFS stat: size %d, mtime %d, type %02x, inodeId %d, nlink %d, identity %016x, %s\n",
 						zkstat.getSize(),
 						zkstat.getMtime(),
 						zkstat.getType(),
@@ -544,7 +544,7 @@ public class FSMirror {
 					tstat.getSize(),
 					tstat.getMtime(),
 					tstat.getType()));
-			sb.append(String.format("\t   ZKFS stat: size %d, mtime %d, type %02x, inodeId %d, nlink %d, identity %16x, %s\n",
+			sb.append(String.format("\t   ZKFS stat: size %d, mtime %d, type %02x, inodeId %d, nlink %d, identity %016x, %s\n",
 					zkstat.getSize(),
 					zkstat.getMtime(),
 					zkstat.getType(),

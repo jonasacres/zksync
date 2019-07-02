@@ -327,7 +327,14 @@ public class ZKDirectory extends ZKFile implements Directory {
 					}
 				}
 				
+				if(entries.containsKey(".")) {
+					/* hard to imagine a directory that doesn't have . but let's avoid the possibility of
+					 * creating a negative link count here */
+					inode.removeLink();
+				}
+				
 				entries.clear();
+				this.bufferedPage = null;
 				return null;
 			}
 		});
@@ -351,8 +358,8 @@ public class ZKDirectory extends ZKFile implements Directory {
 		});
 	}
 	
-	public void commit() throws IOException {
-		if(!dirty) return;
+	public RefTag commit() throws IOException {
+		if(!dirty) return tree.getRefTag();
 		assertWritable();
 		
 		zkfs.lockedOperation(()->{
@@ -370,6 +377,8 @@ public class ZKDirectory extends ZKFile implements Directory {
 				return null;
 			}
 		});
+		
+		return tree.getRefTag();
 	}
 	
 	private void deserialize(byte[] serialized) {
@@ -449,7 +458,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 			long newId = remappedIds.getOrDefault(inodeId, inodeId);
 			dirty |= newId != inodeId;
 			remappedEntries.put(name, newId);
-			sb.append(String.format("\n\t%30s %d -> %d %s",
+			sb.append(String.format("\n\t%30s %3d -> %3d %s",
 					name,
 					inodeId,
 					newId,

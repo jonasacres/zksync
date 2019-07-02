@@ -272,7 +272,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
 	
 	public FS localStorageFsForArchiveId(byte[] archiveId) throws IOException {
 		long tag = Util.shortTag(localKey.authenticate(archiveId));
-		return storage.scopedFS("local/" + String.format("%16x", tag));
+		return storage.scopedFS("local/" + String.format("%016x", tag));
 	}
 
 	@Override

@@ -242,8 +242,11 @@ public class DiffSetResolver {
 			}
 			
 			selectResolutions();
-			applyResolutions();
-			RevisionTag revTag = fs.commitWithTimestamp(diffset.revisions, 0);
+			RevisionTag revTag = (RevisionTag) fs.lockedOperation(()->{
+				applyResolutions();
+				return fs.commitWithTimestamp(diffset.revisions, 0);
+			});
+			
 			fs.getArchive().getConfig().getRevisionList().consolidate(revTag);
 			Util.debugLog("Diff " + fs.getArchive().getMaster().getName() + ": Produced merged revision " + Util.formatRevisionTag(revTag) + " from " + revList);
 			return revTag;
@@ -300,26 +303,23 @@ public class DiffSetResolver {
 	}
 	
 	protected void applyResolutions() throws IOException {
-		try(ZKFS originalFs = fs.getBaseRevision().readOnlyFS()) {
-			dump();
-			for(InodeDiff diff : diffset.inodeDiffs.values()) {
-				fs.getInodeTable().replaceInode(diff);
-			}
-			
-			List<PathDiff> sortedDiffs = sortedPathDiffs();
-			for(PathDiff diff : sortedDiffs) { // need to sort so we do parent directories before children
-				assert(diff.isResolved());
-				if(!parentExists(diff.path)) continue;
-				try(ZKDirectory dir = fs.opendir(fs.dirname(diff.path))) {
-					dir.setOverrideMtime(fs.getInodeTable().getStat().getMtime());
-					dir.updateLink(diff.resolution, fs.basename(diff.path));
-					dir.commit();
-				}
-			}
-			
-			fs.getInodeTable().rebuildLinkCounts();
-			fs.getInodeTable().defragment();
+		dump();
+		for(InodeDiff diff : diffset.inodeDiffs.values()) {
+			fs.getInodeTable().replaceInode(diff);
 		}
+		
+		List<PathDiff> sortedDiffs = sortedPathDiffs();
+		for(PathDiff diff : sortedDiffs) { // need to sort so we do parent directories before children
+			assert(diff.isResolved());
+			if(!parentExists(diff.path)) continue;
+			try(ZKDirectory dir = fs.opendir(fs.dirname(diff.path))) {
+				dir.setOverrideMtime(fs.getInodeTable().getStat().getMtime());
+				dir.updateLink(diff.resolution, fs.basename(diff.path));
+			}
+		}
+		
+		fs.getInodeTable().rebuildLinkCounts();
+		fs.getInodeTable().defragment();
 	}
 	
 	public void dump() {
