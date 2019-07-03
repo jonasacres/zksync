@@ -93,8 +93,9 @@ public class InodeTable extends ZKFile {
 			
 			if(tag.getRefTag().isBlank()) {
 				initialize();
+			} else {
+				readExisting(tag);
 			}
-			else readExisting(tag);
 		} catch(Throwable exc) {
 			this.close();
 			throw exc;
@@ -218,7 +219,7 @@ public class InodeTable extends ZKFile {
 		truncate((maxPageNum+1)*zkfs.archive.config.getPageSize());
 		flush();
 	}
-		
+	
 	protected ArrayList<RevisionTag> makeParentList(RevisionTag[] additionalParents) {
 		ArrayList<RevisionTag> parents = new ArrayList<>(1+additionalParents.length);
 		parents.add(zkfs.baseRevision);
@@ -542,7 +543,11 @@ public class InodeTable extends ZKFile {
 			list[i++] = new Inode(zkfs, serialized);
 		}
 		
-		while(i < list.length) list[i++] = new Inode(zkfs);
+		while(i < list.length) {
+			list[i] = new Inode(zkfs);
+			list[i].markDeleted(); // anything beyond the end of the file is a blank
+			i++;
+		}
 		
 		return list;
 	}

@@ -154,15 +154,15 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		}
 		buf.get(serialized);
 		
+		this.serialized = serialized;
+		hashCode = ByteBuffer.wrap(serialized).getInt();
+		
 		if(Arrays.equals(new byte[serialized.length], serialized)) {
 			this.refTag = RefTag.blank(config);
 			this.height = 0;
 			this.parentHash = 0;
 			return;
 		}
-		
-		hashCode = ByteBuffer.wrap(serialized).getInt();
-		this.serialized = serialized;
 		
 		// we can move unpack after verification, but then we don't have height info available in debug logs
 		unpack();

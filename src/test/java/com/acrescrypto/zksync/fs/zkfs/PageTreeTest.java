@@ -637,13 +637,14 @@ public class PageTreeTest {
 	
 	@Test
 	public void testHasTagReturnsTrueIfTagNotBlank() throws IOException {
-		assertTrue(tree.hasTag(0));
+		tree.setPageTag(1, crypto.defaultPrng().getBytes(crypto.hashLength()));
+		assertTrue(tree.hasTag(1));
 	}
 	
 	@Test
 	public void testHasTagReturnsTrueIfTagIsBlank() throws IOException {
-		tree.setPageTag(0, new byte[crypto.hashLength()]);
-		assertFalse(tree.hasTag(0));
+		tree.setPageTag(1, new byte[crypto.hashLength()]);
+		assertFalse(tree.hasTag(1));
 	}
 	
 	@Test

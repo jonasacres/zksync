@@ -29,6 +29,7 @@ public class IntegrityChecker {
 					checker.dumpIssues(issues),
 					fs.dump(),
 					fs.inodeTable.dumpInodes()));
+			(new Throwable()).printStackTrace();
 			System.exit(1);
 		} catch(Exception exc) {
 			exc.printStackTrace();
@@ -225,7 +226,7 @@ public class IntegrityChecker {
 		}
 		
 		RevisionTag blank = RevisionTag.blank(fs.getArchive().getConfig());
-		if(!inode.getChangedFrom().equals(blank)) {
+		if(!inode.getChangedFrom().equals(blank) && !Arrays.equals(inode.getChangedFrom().getBytes(), new byte[blank.getBytes().length])) {
 			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have blank changedFrom; got %s",
 							Util.formatRevisionTag(inode.getChangedFrom()))));

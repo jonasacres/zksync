@@ -317,6 +317,7 @@ public class PageTree {
 
 	public boolean hasTag(long pageNum) throws IOException {
 		if(pageNum < 0 || pageNum >= numPages) return false;
+		if(pageNum == 0) return true; // need this, or otherwise an immediate of all zeroes is unreadable
 		return chunkForPageNum(pageNum).hasTag(pageNum % tagsPerChunk());
 	}
 	

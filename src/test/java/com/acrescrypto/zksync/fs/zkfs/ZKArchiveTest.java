@@ -175,9 +175,13 @@ public class ZKArchiveTest {
 	@Test
 	public void testHasRevisionReturnsFalseIfPageTreeChunksMissingFromInodeTable() throws IOException {
 		try(ZKFS fs = addMockData(archive)) {
-			for(int i = 0; i < 1024; i++) fs.write(""+i, "".getBytes());
+			for(int i = 0; i < 1024; i++) {
+				fs.write(""+i, "".getBytes());
+			}
+			
 			RevisionTag revTag = fs.commit();
 			assertTrue(revTag.getRefTag().numPages > 1);
+			
 			PageTree tree = new PageTree(revTag.getRefTag());
 			archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
 			assertFalse(archive.hasRevision(revTag));
