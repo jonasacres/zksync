@@ -616,7 +616,7 @@ public class InodeTable extends ZKFile {
 					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 					Util.formatRevisionTag(zkfs.getBaseRevision()),
 					inode.stat.getInodeId(),
-					inode.stat.getSize(),
+					getSize(),
 					Util.formatRefTag(inode.getRefTag()),
 					this.pos());
 			write(inode.serialize());
@@ -738,7 +738,8 @@ public class InodeTable extends ZKFile {
 		this.inode = new Inode(zkfs);
 		this.inode.setRefTag(tag.getRefTag());
 		this.inode.setFlags(Inode.FLAG_RETAIN);
-		this.inode.stat.setSize(zkfs.archive.config.pageSize * tag.getRefTag().numPages);
+		this.pendingSize = zkfs.archive.config.pageSize * tag.getRefTag().numPages;
+		this.inode.stat.setSize(this.pendingSize);
 		this.revision = readRevisionInfo();
 		this.freelist = new FreeList(inodeWithId(INODE_ID_FREELIST)); // doesn't actually read anything yet
 		nextInodeId = -1; // causes nextInodeId() to read from table on next invocation
@@ -780,7 +781,11 @@ public class InodeTable extends ZKFile {
 	
 	public String dumpInodes() throws IOException {
 		String s = "";
-		s += "Inode table dump for " + Util.formatRevisionTag(zkfs.baseRevision) + ", nextInodeId=" + nextInodeId() + ", dirty=" + dirty + "\n";
+		s += String.format("Inode table dump for %s, nextInodeId=%d, dirty=%s, size=%d\n",
+				Util.formatRevisionTag(zkfs.baseRevision),
+				nextInodeId,
+				dirty ? "true" : "false",
+				getSize());
 		for(int i = 0; i < nextInodeId(); i++) {
 			Inode inode = inodeWithId(i);
 			s += String.format("\tinodeId %4d: identity %016x, %s, size %7d, nlink %02d, type %02x, changedfrom %s\n",

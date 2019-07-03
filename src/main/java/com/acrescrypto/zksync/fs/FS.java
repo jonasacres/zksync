@@ -143,7 +143,7 @@ public abstract class FS implements AutoCloseable {
 		File in = open(oldPath, File.O_RDONLY);
 		File out = open(newPath, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
 		
-		byte[] buf = new byte[(int) Math.min(64*1024, in.getStat().getSize())];
+		byte[] buf = new byte[(int) Math.min(64*1024, in.getSize())];
 		while(in.hasData()) {
 			int readLen = in.read(buf, 0, buf.length);
 			out.write(buf, 0, readLen);

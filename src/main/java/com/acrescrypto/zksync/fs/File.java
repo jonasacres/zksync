@@ -22,6 +22,10 @@ public abstract class File implements Closeable {
 	public abstract String getPath();
 	public abstract Stat getStat() throws IOException;
 	
+	public long getSize() throws IOException {
+		return getStat().getSize();
+	}
+
 	protected FS fs;
 	protected File(FS fs) {
 		this.fs = fs;
@@ -34,8 +38,8 @@ public abstract class File implements Closeable {
 	public abstract int read(byte[] buf, int offset, int maxLength) throws IOException;
 
 	public final byte[] read(int maxLength) throws IOException {
-		if(maxLength <= 0) maxLength = (int) getStat().getSize();
-		maxLength = (int) Math.max(0, Math.min(maxLength, getStat().getSize()));
+		if(maxLength <= 0) maxLength = (int) getSize();
+		maxLength = (int) Math.max(0, Math.min(maxLength, getSize()));
 		byte[] buf = new byte[(int) maxLength];
 		int readBytes = read(buf, 0, (int) maxLength);
 		if(readBytes < buf.length && readBytes >= 0) {
@@ -54,7 +58,7 @@ public abstract class File implements Closeable {
 	}
 		
 	public byte[] read() throws IOException {
-		long sizeNeeded = getStat().getSize() - pos();
+		long sizeNeeded = getSize() - pos();
 		if(sizeNeeded > Integer.MAX_VALUE) throw new IndexOutOfBoundsException();
 		return read((int) sizeNeeded);
 	}

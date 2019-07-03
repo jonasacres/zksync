@@ -122,7 +122,7 @@ public class LocalFile extends File {
 			newOffset = channel.position() + pos;
 			break;
 		case SEEK_END:
-			newOffset = getStat().getSize();
+			newOffset = getSize();
 			break;
 		}
 

@@ -187,15 +187,15 @@ public class ZKFS extends FS {
 	}
 	
 	public RevisionTag commitWithTimestamp(RevisionTag[] additionalParents, long timestamp) throws IOException {
-		for(ZKDirectory dir : directoriesByPath.values()) {
-			dir.commit();
-		}
-		
-		for(ZKFile file : openFiles.keySet()) {
-			file.flush();
-		}
-		
 		synchronized(this) {
+			for(ZKFile file : openFiles.keySet()) {
+				file.flush();
+			}
+			
+			for(ZKDirectory dir : directoriesByPath.values()) {
+				dir.commit();
+			}
+			
 			String parentStr = Util.formatRevisionTag(baseRevision);
 			for(RevisionTag parent : additionalParents) {
 				if(parent.equals(baseRevision)) continue;
@@ -316,13 +316,13 @@ public class ZKFS extends FS {
 		return inode;
 	}
 	
-	protected Inode create(String path) throws IOException {
+	protected synchronized Inode create(String path) throws IOException {
 		try(ZKDirectory dir = opendir(dirname(path))) {
 			return create(path, dir);
 		}
 	}
 	
-	protected Inode create(String path, ZKDirectory parent) throws IOException {
+	protected synchronized Inode create(String path, ZKDirectory parent) throws IOException {
 		assertPathLegal(path);
 		Inode inode = inodeTable.issueInode();
 		parent.link(inode, basename(path));

@@ -135,9 +135,9 @@ public class FileTestBase {
 	public void testTruncateShortensFiles() throws IOException {
 		scratch.write("truncate-shortens-files", "123456789".getBytes());
 		try(File file = scratch.open("truncate-shortens-files", File.O_RDWR)) {
-			assertEquals(9, file.getStat().getSize());
+			assertEquals(9, file.getSize());
 			file.truncate(5);
-			assertEquals(5, file.getStat().getSize());
+			assertEquals(5, file.getSize());
 			assertTrue(Arrays.equals("12345".getBytes(), file.read()));
 		}
 	}
@@ -149,7 +149,7 @@ public class FileTestBase {
 		try(File file = scratch.open("truncate-lengthens-files", File.O_RDWR)) {
 			assertEquals(text.length, file.getStat().getSize());
 			file.truncate(2*text.length);
-			assertEquals(2*text.length, file.getStat().getSize());
+			assertEquals(2*text.length, file.getSize());
 			
 			ByteBuffer buf = ByteBuffer.allocate(2*text.length);
 			buf.put(text);

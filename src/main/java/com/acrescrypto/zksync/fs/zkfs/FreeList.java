@@ -26,6 +26,7 @@ public class FreeList extends ZKFile {
 		this.mode = O_RDWR;
 		this.inode = inode;
 		this.tree = new PageTree(this.inode);
+		this.pendingSize = inode.getStat().getSize();
 		lastReadPage = this.inode.refTag.numPages;
 	}
 	

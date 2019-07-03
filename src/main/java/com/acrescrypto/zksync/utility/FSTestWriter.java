@@ -221,7 +221,7 @@ public class FSTestWriter {
 		String path = pickExistingFile();
 		needsNotNull(path);
 		try(File file = fs.open(path, File.O_WRONLY)) {
-			long offset = prng.getLong(file.getStat().getSize() + 1);
+			long offset = prng.getLong(file.getSize() + 1);
 			int maxLength = Math.max(1, (int) (file.getStat().getSize() - offset));
 			int length = prng.getInt(maxLength);
 			

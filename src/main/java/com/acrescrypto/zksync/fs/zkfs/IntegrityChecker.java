@@ -55,7 +55,7 @@ public class IntegrityChecker {
 		public Inode getInode() { return inode; }
 		public String getDescription() { return description; }
 		public String toString() { 
-			return String.format("Inode %d %016x: %s",
+			return String.format("inodeId %d identity %016x: %s",
 				inode.getStat().getInodeId(),
 				inode.getIdentity(),
 				description);
@@ -125,7 +125,7 @@ public class IntegrityChecker {
 	}
 	
 	protected long calculateNumSerializedInodes() {
-		long size = fs.getInodeTable().getStat().getSize();
+		long size = fs.getInodeTable().getSize();
 		long pageSize = fs.getArchive().getConfig().getPageSize();
 		int numPages = (int) Math.ceil(((double) size) / pageSize);
 		

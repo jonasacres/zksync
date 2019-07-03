@@ -129,7 +129,7 @@ public class ZKFileTest extends FileTestBase {
 		assertEquals("bar", new String(file.read(3)));
 		file.seek(4*pageSize-1, ZKFile.SEEK_SET);
 		assertEquals("split", new String(file.read(5)));
-		assertEquals(5*pageSize, file.getStat().getSize());
+		assertEquals(5*pageSize, file.getSize());
 		file.close();
 		
 		ByteBuffer wholeThing = ByteBuffer.allocate(5*pageSize);
@@ -163,5 +163,129 @@ public class ZKFileTest extends FileTestBase {
 			file.write(onePage);
 		}
 		file.close();
+	}
+	
+	@Test
+	public void testRefTagChangeFromImmediateToIndirect() throws IOException {
+		String path = "foo";
+		int hashLen = master.getCrypto().hashLength();
+		int pageSize = zkscratch.getArchive().getConfig().getPageSize();
+		byte[] data = master.getCrypto().defaultPrng().getBytes(pageSize);
+		
+		try(ZKFile file = zkscratch.open(path, ZKFile.O_CREAT|ZKFile.O_WRONLY|ZKFile.O_TRUNC)) {
+			file.write(data, 0, hashLen-1);
+			file.flush();
+			assertEquals(hashLen-1, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_IMMEDIATE, file.getInode().getRefTag().getRefType());
+			
+			file.write(data, hashLen-1, data.length - hashLen + 1);
+			file.flush();
+			assertEquals(data.length, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_INDIRECT, file.getInode().getRefTag().getRefType());
+		}
+	}
+
+	@Test
+	public void testRefTagChangeFromImmediateTo2Indirect() throws IOException {
+		String path = "foo";
+		int hashLen = master.getCrypto().hashLength();
+		int pageSize = zkscratch.getArchive().getConfig().getPageSize();
+		byte[] data = master.getCrypto().defaultPrng().getBytes(2 * pageSize);
+		
+		try(ZKFile file = zkscratch.open(path, ZKFile.O_CREAT|ZKFile.O_WRONLY|ZKFile.O_TRUNC)) {
+			file.write(data, 0, hashLen-1);
+			file.flush();
+			assertEquals(hashLen-1, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_IMMEDIATE, file.getInode().getRefTag().getRefType());
+			
+			file.write(data, hashLen-1, data.length - hashLen + 1);
+			file.flush();
+			assertEquals(data.length, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_2INDIRECT, file.getInode().getRefTag().getRefType());
+		}
+	}
+
+	@Test
+	public void testRefTagChangeFromIndirectToImmediate() throws IOException {
+		String path = "foo";
+		int hashLen = master.getCrypto().hashLength();
+		int pageSize = zkscratch.getArchive().getConfig().getPageSize();
+		byte[] data = master.getCrypto().defaultPrng().getBytes(pageSize - 1);
+		
+		try(ZKFile file = zkscratch.open(path, ZKFile.O_CREAT|ZKFile.O_WRONLY|ZKFile.O_TRUNC)) {
+			file.write(data);
+			file.flush();
+			assertEquals(data.length, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_INDIRECT, file.getInode().getRefTag().getRefType());
+			
+			/* we could do a truncate(hashLen-1) here, but doing it this way triggered the bug that caused
+			 * this set of tests to be written...
+			 */
+			file.truncate(0);
+			file.write(data, 0, hashLen-1);
+			file.flush();
+			assertEquals(hashLen-1, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_IMMEDIATE, file.getInode().getRefTag().getRefType());
+		}
+	}
+	
+	@Test
+	public void testRefTagChangeFromIndirectTo2Indirect() throws IOException {
+		String path = "foo";
+		int pageSize = zkscratch.getArchive().getConfig().getPageSize();
+		byte[] data = master.getCrypto().defaultPrng().getBytes(2 * pageSize);
+		
+		try(ZKFile file = zkscratch.open(path, ZKFile.O_CREAT|ZKFile.O_WRONLY|ZKFile.O_TRUNC)) {
+			file.write(data, 0, pageSize-1);
+			file.flush();
+			assertEquals(pageSize-1, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_INDIRECT, file.getInode().getRefTag().getRefType());
+			
+			file.write(data, pageSize-1, data.length - pageSize + 1);
+			file.flush();
+			assertEquals(data.length, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_2INDIRECT, file.getInode().getRefTag().getRefType());
+		}
+	}
+
+	@Test
+	public void testRefTagChangeFrom2IndirectToImmediate() throws IOException {
+		String path = "foo";
+		int hashLen = master.getCrypto().hashLength();
+		int pageSize = zkscratch.getArchive().getConfig().getPageSize();
+		byte[] data = master.getCrypto().defaultPrng().getBytes(2*pageSize - 1);
+		
+		try(ZKFile file = zkscratch.open(path, ZKFile.O_CREAT|ZKFile.O_WRONLY|ZKFile.O_TRUNC)) {
+			file.write(data);
+			file.flush();
+			assertEquals(data.length, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_2INDIRECT, file.getInode().getRefTag().getRefType());
+			
+			file.truncate(0);
+			file.write(data, 0, hashLen-1);
+			file.flush();
+			assertEquals(hashLen-1, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_IMMEDIATE, file.getInode().getRefTag().getRefType());
+		}
+	}
+	
+	@Test
+	public void testRefTagChangeFrom2IndirectToIndirect() throws IOException {
+		String path = "foo";
+		int pageSize = zkscratch.getArchive().getConfig().getPageSize();
+		byte[] data = master.getCrypto().defaultPrng().getBytes(2*pageSize - 1);
+		
+		try(ZKFile file = zkscratch.open(path, ZKFile.O_CREAT|ZKFile.O_WRONLY|ZKFile.O_TRUNC)) {
+			file.write(data);
+			file.flush();
+			assertEquals(data.length, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_2INDIRECT, file.getInode().getRefTag().getRefType());
+			
+			// try this one as a straight truncation just to mix things up
+			file.truncate(pageSize-1);
+			file.flush();
+			assertEquals(pageSize-1, zkscratch.stat(path).getSize());
+			assertEquals(RefTag.REF_TYPE_INDIRECT, file.getInode().getRefTag().getRefType());
+		}
 	}
 }

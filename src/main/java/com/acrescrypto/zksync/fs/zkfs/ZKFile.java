@@ -27,6 +27,7 @@ public class ZKFile extends File {
 	protected boolean dirty; /** true if file has been modified since last flush */
 	protected boolean trusted; /** verify page signatures when reading <=> !trusted */
 	protected boolean closed, closing; /** is this file closed? */
+	protected long pendingSize; /** size to be set on next commit */
 	protected int retainCount = 0;
 	
 	public final static int O_LINK_LITERAL = 1 << 16; /** treat symlinks as literal files, needed for lowlevel symlink operations */
@@ -100,6 +101,7 @@ public class ZKFile extends File {
 			this.mode = mode;
 			this.trusted = trusted;
 			this.inode = inode;
+			this.pendingSize = inode.getStat().getSize();
 			
 			if((mode & (O_NOFOLLOW | O_LINK_LITERAL)) == O_LINK_LITERAL) {
 				throw new EINVALException("O_LINK_LITERAL not valid without O_NOFOLLOW");
@@ -122,7 +124,7 @@ public class ZKFile extends File {
 				if(zkfs.archive.config.isReadOnly()) throw new EACCESException("cannot open files with write access when archive is opened read-only");
 			}
 			if((mode & O_TRUNC) != 0) truncate(0);
-			if((mode & O_APPEND) != 0) offset = this.inode.getStat().getSize();
+			if((mode & O_APPEND) != 0) offset = pendingSize;
 			
 			zkfs.addOpenFile(this);
 		} catch(Throwable exc) {
@@ -162,17 +164,22 @@ public class ZKFile extends File {
 	public Stat getStat() {
 		return inode.getStat();
 	}
+	
+	@Override
+	public long getSize() {
+		return pendingSize;
+	}
 
 	@Override
 	public synchronized void truncate(long size) throws IOException {
 		assertWritable();
-		if(size == inode.getStat().getSize()) return;
+		if(size == pendingSize) return;
 		
-		if(size > inode.getStat().getSize()) {
+		if(size > pendingSize) {
 			long oldOffset = offset;
 			seek(0, SEEK_END);
-			while(size > inode.getStat().getSize()) {
-				byte[] zeros = new byte[(int) Math.min(zkfs.archive.config.pageSize, size - inode.getStat().getSize())];
+			while(size > pendingSize) {
+				byte[] zeros = new byte[(int) Math.min(zkfs.archive.config.pageSize, size - pendingSize)];
 				write(zeros);
 			}
 			seek(oldOffset, SEEK_SET);
@@ -185,10 +192,12 @@ public class ZKFile extends File {
 			}
 			
 			tree.setNumPages(newPageCount);
-			inode.getStat().setSize(size);
-			if(offset >= size) offset = size;
+			pendingSize = size;
+			if(offset >= size) {
+				offset = size;
+			}
 			
-			if(size % zkfs.archive.config.pageSize > 0) {
+			if(size % zkfs.archive.config.pageSize > 0 || size == 0) {
 				int lastPage = (int) (size/zkfs.archive.config.pageSize);
 				bufferPage(lastPage);
 				bufferedPage.truncate((int) (size % zkfs.archive.config.pageSize));
@@ -203,7 +212,7 @@ public class ZKFile extends File {
 		assertReadable();
 		if(bufOffset < 0 || maxLength > buf.length - bufOffset) throw new IndexOutOfBoundsException();
 		
-		int numToRead = (int) Math.min(maxLength, getStat().getSize()-offset),
+		int numToRead = (int) Math.min(maxLength, pendingSize-offset),
 			readLen = Math.max(0, numToRead);
 		logger.trace("ZKFS {}: (ZKFile READ 1) {}, numToRead={}, readLen={}, offset={}, |buf|={}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
@@ -283,30 +292,22 @@ public class ZKFile extends File {
 		while(leftToWrite > 0) {
 			int neededPageNum = (int) (this.offset/pageSize);
 			bufferPage(neededPageNum);
-			Util.debugLog(String.format("ZKFS %s: Write %d bytes (left: %d) to page %d of path %s, inodeId %d, identity %016x, base revision %s\n",
-					zkfs.getArchive().getMaster().getName(),
-					length,
-					leftToWrite,
-					bufferedPage.pageNum,
-					path,
-					inode.getStat().getInodeId(),
-					inode.getIdentity(),
-					Util.formatRevisionTag(zkfs.baseRevision)
-					));
 			int offsetInPage = (int) (offset % zkfs.archive.config.pageSize), pageCapacity = (int) (pageSize-offsetInPage);
 			bufferedPage.seek(offsetInPage);
 			int numWritten = bufferedPage.write(data, bufOffset + length - leftToWrite, Math.min(leftToWrite, pageCapacity));
 			
 			leftToWrite -= numWritten;
 			this.offset += numWritten;
-			if(this.offset > getStat().getSize()) getStat().setSize(this.offset);
+			if(this.offset > pendingSize) {
+				pendingSize = this.offset;
+			}
 		}
 	}
 	
 	@Override
 	public boolean hasData() throws IOException {
 		assertReadable();
-		return offset < inode.getStat().getSize();
+		return offset < pendingSize;
 	}
 	
 	@Override
@@ -326,7 +327,7 @@ public class ZKFile extends File {
 			newOffset = offset + pos;
 			break;
 		case SEEK_END:
-			newOffset = inode.getStat().getSize();
+			newOffset = pendingSize;
 			break;
 		}
 		
@@ -353,17 +354,6 @@ public class ZKFile extends File {
 				closed);
 		if(!dirty || closed) return;
 		
-		Util.debugLog(String.format("ZKFS %s: Flush page %d of file %s, dirty=%s, inodeId %d, identity %016x, size %d, base revision %s\n",
-				zkfs.getArchive().getMaster().getName(),
-				bufferedPage != null ? bufferedPage.pageNum : -1,
-				path,
-				dirty ? "true" : "false",
-				inode.getStat().getInodeId(),
-				inode.getIdentity(),
-				inode.getStat().getSize(),
-				Util.formatRevisionTag(zkfs.baseRevision)
-				));
-		
 		zkfs.lockedOperation(()->{
 			synchronized(this) {
 				if(!dirty || closed) return null;
@@ -372,12 +362,28 @@ public class ZKFile extends File {
 				inode.getStat().setMtime(mtime);
 				inode.setChangedFrom(zkfs.baseRevision);
 				inode.setModifiedTime(mtime);
-				if(bufferedPage != null) bufferedPage.flush();
+				if(bufferedPage != null) {
+					bufferedPage.flush();
+				}
 				inode.setRefTag(tree.commit());
+				inode.getStat().setSize(pendingSize);
 				dirty = false;
 				zkfs.inodeTable.setInode(inode);
 				zkfs.markDirty();
 				setOverrideMtime(null);
+				
+				Util.debugLog(String.format("ZKFile %s: Flush page %d of file %s, inodeId %d, identity %016x, size %d, reftag %s, %d pages, base revision %s\n",
+						zkfs.getArchive().getMaster().getName(),
+						bufferedPage != null ? bufferedPage.pageNum : -1,
+						path,
+						inode.getStat().getInodeId(),
+						inode.getIdentity(),
+						pendingSize,
+						Util.formatRefTag(inode.getRefTag()),
+						tree.numPages,
+						Util.formatRevisionTag(zkfs.baseRevision)
+						));
+				
 				return null;
 			}
 		});

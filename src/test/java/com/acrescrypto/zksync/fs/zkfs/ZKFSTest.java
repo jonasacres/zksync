@@ -218,7 +218,7 @@ public class ZKFSTest extends FSTestBase {
 					byte[] expectedData = new byte[size];
 					System.arraycopy(testData, 0, expectedData, 0, size);
 					testFile.truncate(size);
-					assertEquals(size, testFile.getInode().getStat().getSize());
+					assertEquals(size, testFile.getSize());
 					testFile.seek(0, File.SEEK_SET);
 					assertArrayEquals(expectedData, testFile.read());
 				}
@@ -782,7 +782,7 @@ public class ZKFSTest extends FSTestBase {
 		// another thread commits while this is happening.
 		// in the end, all the files should have all the data.
 		
-		int numDemons = 1; // number of simultaneous writers
+		int numDemons = 8; // number of simultaneous writers
 		int durationMs = 1000; // how long should demon threads run for
 		long deadline = System.currentTimeMillis() + durationMs;
 		LinkedList<Thread> threads = new LinkedList<>();

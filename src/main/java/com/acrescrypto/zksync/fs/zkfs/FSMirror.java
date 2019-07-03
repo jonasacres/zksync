@@ -591,7 +591,7 @@ public class FSMirror {
 						Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 						path,
 						srcFile.seek(0, File.SEEK_CUR),
-						srcFile.getStat().getSize(),
+						srcFile.getSize(),
 						chunk.length);
 				destFile.write(chunk);
 			}
