@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
@@ -12,7 +11,7 @@ import com.acrescrypto.zksync.utility.Util;
 public class PageTreeChunk {
 	protected PageTree tree;
 	byte[] chunkTag;
-	ArrayList<byte[]> tags;
+	byte[][] tags;
 	long index;
 	protected boolean dirty;
 	
@@ -20,7 +19,7 @@ public class PageTreeChunk {
 		this.index = index;
 		this.chunkTag = chunkTag;
 		this.tree = tree;
-		this.tags = new ArrayList<>(tree.tagsPerChunk());
+		this.tags = new byte[tree.tagsPerChunk()][];
 		
 		if(isZero(chunkTag)) {
 			initBlank();
@@ -34,7 +33,7 @@ public class PageTreeChunk {
 	}
 	
 	public void setTag(long offset, byte[] tag) {
-		if(Arrays.equals(tag, tags.get((int) offset))) return;
+		if(Arrays.equals(tag, tags[(int) offset])) return;
 		
 		loadTag(offset, tag);
 		if(tag.length >= tree.archive.getCrypto().hashLength() && !isZero(tag)) {
@@ -45,11 +44,11 @@ public class PageTreeChunk {
 	}
 	
 	public void loadTag(long offset, byte[] tag) {
-		tags.set((int) offset, tag);
+		tags[(int) offset] = tag;
 	}
 	
 	public byte[] getTag(long offset) {
-		return tags.get((int) offset);
+		return tags[(int) offset];
 	}
 	
 	public void markDirty() {
@@ -66,7 +65,7 @@ public class PageTreeChunk {
 		for(int i = 0; i < tree.tagsPerChunk(); i++) {
 			int childOffset = (int) (tree.tagsPerChunk()*tree.offsetOfChunkId(index) + i);
 			long childId = tree.chunkIdAtPosition(tree.levelOfChunkId(index)+1, childOffset);
-			System.out.println("\t" + i + " ("+ childId +"): " + Util.bytesToHex(tags.get(i)));
+			System.out.println("\t" + i + " ("+ childId +"): " + Util.bytesToHex(tags[i]));
 		}
 	}
 	
@@ -75,7 +74,7 @@ public class PageTreeChunk {
 		int tagsPerChunk = tree.tagsPerChunk(), hashLen = tree.archive.crypto.hashLength();
 		byte[] blankTag = new byte[hashLen];
 		for(int i = 0; i < tagsPerChunk; i++) {
-			tags.add(blankTag);
+			tags[i] = blankTag;
 		}
 	}
 	
@@ -116,12 +115,13 @@ public class PageTreeChunk {
 	}
 	
 	protected void deserialize(ByteBuffer serialized) {
-		tags.clear();
+		tags = new byte[tree.tagsPerChunk()][];
 		int hashLength = tree.archive.crypto.hashLength();
+		int i = 0;
 		while(serialized.remaining() >= hashLength) {
 			byte[] tag = new byte[tree.archive.crypto.hashLength()];
 			serialized.get(tag);
-			tags.add(tag);
+			tags[i++] = tag;
 		}
 	}
 	

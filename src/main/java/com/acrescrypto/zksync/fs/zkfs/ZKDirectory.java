@@ -468,4 +468,34 @@ public class ZKDirectory extends ZKFile implements Directory {
 		Util.debugLog(sb.toString());
 		entries = remappedEntries;
 	}
+
+	/** Test purposes only. Attempt to determine fully-qualified path for this directory. Useful if we opened
+	 * from an inode.
+	 * 
+	 *  @throws IOException
+	 **/
+	@Deprecated
+	public String calculatePath() throws IOException {
+		Long parentInodeId = entries.get("..");
+		if(parentInodeId == null) {
+			// only root lacks a parent directory
+			return "/";
+		}
+		
+		Inode parentInode = zkfs.inodeTable.inodeWithId(parentInodeId);
+		if(parentInode.isDeleted()) throw new ENOENTException("Unable to locate parent inodeId " + parentInodeId + " to directory with inodeId " + inode.getStat().getInodeId());
+		if(!parentInode.stat.isDirectory()) throw new EISNOTDIRException("Parent inodeId " + parentInodeId + " to directory with inodeId " + inode.getStat().getInodeId() + " is not a directory");
+		
+		try(ZKDirectory parentDir = zkfs.opendirSemicache(parentInode)) {
+			String[] name = new String[1];
+			parentDir.entries.forEach((entryName, entryInodeId)->{
+				if(entryInodeId == getStat().getInodeId()) {
+					name[0] = entryName;
+				}
+			});
+			
+			if(name[0] == null) throw new ENOENTException("Unable to locate directory with inodeId " + getStat().getInodeId() + " in parent directory with inodeId " + parentInodeId);
+			return Paths.get(parentDir.calculatePath(), name[0]).toString();
+		}
+	}
 }
