@@ -781,11 +781,13 @@ public class InodeTable extends ZKFile {
 	
 	public String dumpInodes() throws IOException {
 		String s = "";
-		s += String.format("Inode table dump for %s, nextInodeId=%d, dirty=%s, size=%d\n",
+		s += String.format("Inode table dump for %s, nextInodeId=%d, dirty=%s, size=%d, inodesPerPage %d/%d\n",
 				Util.formatRevisionTag(zkfs.baseRevision),
 				nextInodeId,
 				dirty ? "true" : "false",
-				getSize());
+				getSize(),
+				numInodesForPage(0),
+				numInodesForPage(1));
 		for(int i = 0; i < nextInodeId(); i++) {
 			Inode inode = inodeWithId(i);
 			s += String.format("\tinodeId %4d: identity %016x, %s, size %7d, nlink %02d, type %02x, changedfrom %s\n",

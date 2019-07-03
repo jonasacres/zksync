@@ -826,7 +826,7 @@ public class ZKFSTest extends FSTestBase {
 		commitThread.start();
 		
 		Util.sleep(deadline - System.currentTimeMillis());
-		assertTrue(Util.waitUntil(2000, ()->{
+		assertTrue(Util.waitUntil(5000, ()->{
 			if(commitThread.isAlive()) return false;
 			for(Thread t : threads) {
 				if(t.isAlive()) return false;
@@ -929,9 +929,8 @@ public class ZKFSTest extends FSTestBase {
 		// another thread commits while this is happening.
 		// in the end, all the files should have all the data.
 		
-		// TODO: change this back to 16 when this passes with integrity check
-		int numDemons = 1; // number of simultaneous writers
-		int durationMs = 3000; // how long should demon threads run for
+		int numDemons = 16; // number of simultaneous writers
+		int durationMs = 30000; // how long should demon threads run for
 		long deadline = System.currentTimeMillis() + durationMs;
 		ConcurrentHashMap<Thread,Object> threads = new ConcurrentHashMap<>();
 		final CryptoSupport crypto = zkscratch.getArchive().getMaster().getCrypto();

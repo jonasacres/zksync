@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -46,17 +47,20 @@ public class IntegrityChecker {
 	
 	public class IntegrityIssueInode extends IntegrityIssue {
 		Inode inode;
+		long expectedId;
 		
-		public IntegrityIssueInode(Inode inode, String description) {
+		public IntegrityIssueInode(Inode inode, long expectedId, String description) {
 			super(description);
 			this.inode = inode;
+			this.expectedId = expectedId;
 		}
 		
 		public Inode getInode() { return inode; }
 		public String getDescription() { return description; }
 		public String toString() { 
-			return String.format("inodeId %d identity %016x: %s",
+			return String.format("inodeId %d (%d) identity %016x: %s",
 				inode.getStat().getInodeId(),
+				expectedId,
 				inode.getIdentity(),
 				description);
 		}
@@ -155,7 +159,8 @@ public class IntegrityChecker {
 		passed &= validateReservedInode(issues, inode, InodeTable.INODE_ID_ROOT_DIRECTORY);
 		if(!inode.getStat().isDirectory()) {
 			passed = false;
-			issues.add(new IntegrityIssueInode(inode, String.format("Expected root directory to have type %02x; has %02x",
+			issues.add(new IntegrityIssueInode(inode, InodeTable.INODE_ID_ROOT_DIRECTORY,
+					String.format("Expected root directory to have type %02x; has %02x",
 					Stat.TYPE_DIRECTORY,
 					inode.getStat().getType())));
 		}
@@ -171,7 +176,7 @@ public class IntegrityChecker {
 		boolean passed = true;
 		
 		if(inode.getIdentity() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected identity %016x; got %016x",
 							0,
 							inode.getIdentity())));
@@ -180,7 +185,7 @@ public class IntegrityChecker {
 		
 		int expectedLinks = linkCounts.getOrDefault(inode.getStat().getInodeId(), 0);
 		if(inode.nlink != expectedLinks) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected nlink %d; got %d",
 							expectedLinks,
 							inode.nlink)));
@@ -188,7 +193,7 @@ public class IntegrityChecker {
 		}
 		
 		if(inode.getStat().getInodeId() != expectedId) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected inodeId %d; got %d", expectedId, inode.nlink)));
 			passed = false;
 		}
@@ -204,13 +209,16 @@ public class IntegrityChecker {
 		}
 		
 		if(inode.nlink != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have nlink 0; got %d", inode.nlink)));
 			passed = false;
 		}
 		
-		if(!inode.getRefTag().isBlank()) {
-			issues.add(new IntegrityIssueInode(inode,
+		/* accept a formal blank or all zeroes. technically, we should only see all zeroes at the end of
+		 * the last page of an inode, for the unused portion of the inode table, but it's not a huge deal. 
+		 */
+		if(!inode.getRefTag().isBlank() && !Arrays.equals(inode.getRefTag().getBytes(), new byte[inode.getRefTag().getBytes().length])) {
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have blank reftag; got %s",
 							Util.formatRefTag(inode.getRefTag()))));
 			passed = false;
@@ -218,70 +226,70 @@ public class IntegrityChecker {
 		
 		RevisionTag blank = RevisionTag.blank(fs.getArchive().getConfig());
 		if(!inode.getChangedFrom().equals(blank)) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have blank changedFrom; got %s",
 							Util.formatRevisionTag(inode.getChangedFrom()))));
 			passed = false;
 		}
 		
 		if(inode.flags != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have flags 0x00; got 0x%02x",
 							inode.flags)));
 			passed = false;
 		}
 
 		if(inode.identity != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have identity 0; got %016x",
 							inode.identity)));
 			passed = false;
 		}
 		
 		if(inode.getStat().getGid() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have GID 0; had %d",
 							inode.getStat().getGid())));
 			passed = false;
 		}
 		
 		if(inode.getStat().getUid() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have UID 0; had %d",
 							inode.getStat().getUid())));
 			passed = false;
 		}
 		
 		if(inode.getStat().getMode() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have mode 0; had %d",
 							inode.getStat().getMode())));
 			passed = false;
 		}
 		
 		if(inode.getStat().getType() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have type 0x00; had 0x%02x",
 							inode.getStat().getType())));
 			passed = false;
 		}
 		
 		if(inode.getStat().getDevMajor()!= 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have devMajor 0; had %d",
 							inode.getStat().getDevMajor())));
 			passed = false;
 		}
 		
 		if(inode.getStat().getDevMinor() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have devMinor 0; had %d",
 							inode.getStat().getDevMinor())));
 			passed = false;
 		}
 		
 		if(inode.getStat().getGroup().length() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have blank group; had %d bytes '%s'",
 							inode.getStat().getGroup() == null ? -1 : inode.getStat().getGroup().length(),
 							inode.getStat().getGroup() == null ? "(null)" : inode.getStat().getGroup()
@@ -290,7 +298,7 @@ public class IntegrityChecker {
 		}
 		
 		if(inode.getStat().getUser().length() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have blank user; had %d bytes '%s'",
 							inode.getStat().getUser() == null ? -1 : inode.getStat().getUser().length(),
 							inode.getStat().getUser() == null ? "(null)" : inode.getStat().getUser()
@@ -299,28 +307,28 @@ public class IntegrityChecker {
 		}
 
 		if(inode.getStat().getAtime() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have atime 0; had %d",
 							inode.getStat().getAtime())));
 			passed = false;
 		}
 		
 		if(inode.getStat().getCtime() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have ctime 0; had %d",
 							inode.getStat().getCtime())));
 			passed = false;
 		}
 		
 		if(inode.getStat().getMtime() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have mtime 0; had %d",
 							inode.getStat().getMtime())));
 			passed = false;
 		}
 		
 		if(inode.getStat().getSize() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have size 0; had %d",
 							inode.getStat().getSize())));
 			passed = false;
@@ -328,7 +336,7 @@ public class IntegrityChecker {
 		
 		if(inode.getStat().getInodeId() != 0 && expectedId < fs.getInodeTable().nextInodeId()) {
 			if(inode.getStat().getInodeId() != expectedId) {
-				issues.add(new IntegrityIssueInode(inode,
+				issues.add(new IntegrityIssueInode(inode, expectedId,
 						String.format("Expected deleted inode to have inodeId %d; got %d",
 								expectedId,
 								inode.getStat().getInodeId())));
@@ -343,7 +351,7 @@ public class IntegrityChecker {
 		boolean passed = true;
 		
 		if(inode.getStat().getInodeId() != expectedId) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected inode to have ID %d; had %d",
 							expectedId,
 							inode.getStat().getInodeId())));
@@ -370,7 +378,7 @@ public class IntegrityChecker {
 		
 		int expectedNlink = linkCounts.getOrDefault(inode.getStat().getInodeId(), 0);
 		if(inode.getNlink() != expectedNlink) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 					String.format("Expected nlink %d, got %d",
 							expectedNlink,
 							inode.getNlink())));
@@ -396,7 +404,7 @@ public class IntegrityChecker {
 		}
 		
 		if(inode.getRefTag().getRefType() != expectedRefType) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 					String.format("Expected inode reftag %s, size %d to have type %d; had %d",
 							Util.formatRefTag(inode.getRefTag()),
 							inode.getStat().getSize(),
@@ -407,7 +415,7 @@ public class IntegrityChecker {
 		
 		if(inode.getRefTag().getNumPages() != expectedNumPages) {
 			if(!(inode.getRefTag().getNumPages() == 0 && inode.getStat().getSize() == 0)) {
-				issues.add(new IntegrityIssueInode(inode,
+				issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 						String.format("Expected inode reftag %s, size %d to have %d pages; had %d",
 								Util.formatRefTag(inode.getRefTag()),
 								inode.getStat().getSize(),
@@ -428,7 +436,7 @@ public class IntegrityChecker {
 					totalLength += Math.max(readLen, 0);
 				} while(readLen > 0);
 			} catch (IOException exc) {
-				issues.add(new IntegrityIssueInode(inode,
+				issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 						String.format("Caught exception %s reading inode contents: %s",
 								exc.getClass().getSimpleName(),
 								exc.getMessage())));
@@ -436,7 +444,7 @@ public class IntegrityChecker {
 			}
 
 			if(totalLength != inode.getStat().getSize()) {
-				issues.add(new IntegrityIssueInode(inode,
+				issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 						String.format("Expected %d bytes in file, read %d",
 								inode.getStat().getSize(),
 								totalLength)));
@@ -456,7 +464,7 @@ public class IntegrityChecker {
 		boolean passed = true;
 		
 		if(inode.getFlags() != 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 					String.format("Expected flags 0x00, got 0x%02x", inode.getFlags())));
 			passed = false;
 		}
@@ -468,14 +476,14 @@ public class IntegrityChecker {
 		boolean passed = true;
 		
 		if(inode.getIdentity() == 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 					String.format("Expected non-zero identity, got 0x%02x", inode.getIdentity())));
 			passed = false;
 		}
 
 		int numReferences = identityCounts.getOrDefault(inode.getIdentity(), 0);
 		if(numReferences != 1) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 					String.format("Expected exactly 1 reference to identity %016x in table, got %d",
 							inode.getIdentity(),
 							numReferences)));
@@ -490,7 +498,7 @@ public class IntegrityChecker {
 		Stat stat = inode.getStat();
 		
 		if(stat.getSize() < 0) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 					String.format("Expected positive size, got %d",
 							stat.getSize())));
 			passed = false;
@@ -498,7 +506,7 @@ public class IntegrityChecker {
 		
 		if(stat.isFifo() || stat.isDevice()) {
 			if(stat.getSize() != 0) {
-				issues.add(new IntegrityIssueInode(inode,
+				issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 						String.format("Expected size 0 for inode of type %d, got %d",
 								stat.getType(),
 								stat.getSize())));
@@ -513,7 +521,7 @@ public class IntegrityChecker {
 		boolean passed = true;
 		
 		if(freelistContents.contains(inode.getStat().getInodeId())) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 					String.format("Listed in freelist, nlink = %d", inode.getNlink())));
 			passed = false;
 		}
@@ -525,7 +533,7 @@ public class IntegrityChecker {
 		boolean passed = true;
 		
 		if(!freelistContents.contains(inode.getStat().getInodeId())) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 					String.format("Not listed in freelist, nlink = %d", inode.getNlink())));
 			passed = false;
 		}
@@ -542,7 +550,7 @@ public class IntegrityChecker {
 			for(String path : dir.entries.keySet()) {
 				Long inodeId = dir.entries.get(path);
 				if(inodeId == null) {
-					issues.add(new IntegrityIssueInode(inode,
+					issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 							String.format("Directory %d %016x had path %s with null inodeId",
 								inode.getStat().getInodeId(),
 								inode.getIdentity(),
@@ -550,16 +558,16 @@ public class IntegrityChecker {
 							)));
 					passed = false;
 				} else if(inodeId < 0) {
-					issues.add(new IntegrityIssueInode(inode,
+					issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 							String.format("Directory %d %016x had path %s with negative inodeId %d",
-								inode.getStat().getInodeId(),
+								inode.getStat().getInodeId(), inode.getStat().getInodeId(),
 								inode.getIdentity(),
 								path,
 								inodeId
 							)));
 					passed = false;
 				} else if(inodeId < InodeTable.USER_INODE_ID_START && inodeId != InodeTable.INODE_ID_ROOT_DIRECTORY) {
-					issues.add(new IntegrityIssueInode(inode,
+					issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 							String.format("Directory %d %016x had path %s with reserved inodeId %d",
 								inode.getStat().getInodeId(),
 								inode.getIdentity(),
@@ -568,7 +576,7 @@ public class IntegrityChecker {
 							)));
 					passed = false;
 				} else if(inodeId >= fs.getInodeTable().nextInodeId()) {
-					issues.add(new IntegrityIssueInode(inode,
+					issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 							String.format("Directory %d %016x had path %s with inodeId %d; exceeds expected nextInodeId %d",
 								inode.getStat().getInodeId(),
 								inode.getIdentity(),
@@ -580,7 +588,7 @@ public class IntegrityChecker {
 				}
 			}
 		} catch (Exception exc) {
-			issues.add(new IntegrityIssueInode(inode,
+			issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 					String.format("Caught exception %s opening directory: %s",
 							exc.getClass().getSimpleName(),
 							exc.getMessage())
