@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.security.Security;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
@@ -927,7 +928,7 @@ public class ZKFSTest extends FSTestBase {
 		// in the end, all the files should have all the data.
 		
 		int numDemons = 8; // number of simultaneous writers
-		int durationMs = 300000; // how long should demon threads run for
+		int durationMs = 3000; // how long should demon threads run for
 		long deadline = System.currentTimeMillis() + durationMs;
 		ConcurrentHashMap<Thread,Object> threads = new ConcurrentHashMap<>();
 		final CryptoSupport crypto = zkscratch.getArchive().getMaster().getCrypto();
@@ -1006,42 +1007,49 @@ public class ZKFSTest extends FSTestBase {
 		});
 	}
 	
-	@SuppressWarnings("deprecation")
 	public String pickRandomFile(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		/* pick a random existing file. to protect against multiple threads claiming the same file,
 		 * require the file to be listed in 'tags', then remove it from the list. all callers must then
 		 * return the file to the 'tags' list when done with file operation.
 		 */
-		
-		Shuffler shuffler = Shuffler.fixedShuffler((int) fs.inodeTable.nextInodeId());
-		while(shuffler.hasNext()) {
-			Inode inode = fs.inodeTable.inodeWithId(shuffler.next());
-			if(inode.isDeleted()) continue;
-			if(!inode.getStat().isRegularFile()) continue;
-			
-			for(Inode dirInode : fs.inodeTable.values()) {
-				if(dirInode.isDeleted()) continue;
-				if(!dirInode.stat.isDirectory()) continue;
-				try(ZKDirectory dir = fs.opendirSemicache(dirInode)) {
-					String[] name = new String[1];
-					dir.entries.forEach((entryName, entryId)->{
-						if(entryId != inode.getStat().getInodeId()) return;
-						name[0] = entryName;
-					});
+		try(ZKDirectory dir = fs.opendir("/")) {
+			ArrayList<String> files = new ArrayList<>(tags.keySet());
+			if(files.size() == 0) throw new CantDoThatRightNowException();
+			Shuffler shuffler = new Shuffler(files.size());
+			while(shuffler.hasNext()) {
+				String path = fs.absolutePath(files.get(shuffler.next()));
+				if(!tags.containsKey(path)) continue;
+				String target = null;
+				if(fs.lstat(path).isSymlink()) {
+					target = fs.absolutePath(fs.readlink(path));
+				}
+				
+				synchronized(tags) {
+					if(!tags.containsKey(path)) continue;
+					if(target != null && !tags.containsKey(path)) continue;
+					tags.remove(path);
 					
-					if(name[0] == null) continue;					
-					String path = Paths.get(dir.calculatePath(), name[0]).toString();
-					synchronized(tags) {
-						if(!tags.containsKey(path)) continue;
-						tags.remove(path);
+					while(target != null) {
+						tags.remove(target);
+						try {
+							if(fs.lstat(target).isSymlink()) {
+								target = fs.readlink(target);
+							} else {
+								target = null;
+							}
+						} catch(ENOENTException exc) {
+							target = null;
+						}
 					}
 					
 					return path;
 				}
 			}
+			
+			throw new CantDoThatRightNowException();
+		} catch(ENOENTException exc) {
+			throw new CantDoThatRightNowException();
 		}
-		
-		throw new CantDoThatRightNowException(); // no directories in FS (how odd)
 	}
 	
 	@SuppressWarnings("deprecation")
@@ -1343,16 +1351,16 @@ public class ZKFSTest extends FSTestBase {
 		LinkedList<String> allowablePaths = new LinkedList<>();
 		
 		for(String path : tags.keySet()) {
-			if(!pathHasRefTag(path, fs, tags)) {
-				String text = String.format("Path %s -- expected reftag %s, have %s",
-						path,
-						Util.formatRefTag(tags.get(path)),
-						Util.formatRefTag(fs.inodeForPath(path, false).getRefTag()));
-//				System.out.println(text);
-				fail(text);
-			}
-			
 			try {
+				if(!pathHasRefTag(path, fs, tags)) {
+					String text = String.format("Path %s -- expected reftag %s, have %s",
+							path,
+							Util.formatRefTag(tags.get(path)),
+							Util.formatRefTag(fs.inodeForPath(path, false).getRefTag()));
+//					System.out.println(text);
+					fail(text);
+				}
+				
 				allowablePaths.add(fs.canonicalPath(path));
 			} catch(ENOENTException exc) {
 				// ignore broken symlinks

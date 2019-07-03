@@ -300,7 +300,7 @@ public class DiffSetTest {
 		trivialInodeDiffTest( (ZKFS fs, RevisionTag[] revs, String filename) -> {
 			fs.write(filename, "blah".getBytes());
 			revs[0] = fs.commit();
-			fs.inodeForPath(filename).getStat().setType(Stat.TYPE_BLOCK_DEVICE);
+			fs.inodeForPath(filename).getStat().setType(Stat.TYPE_SYMLINK);
 			return 1;
 		});
 	}

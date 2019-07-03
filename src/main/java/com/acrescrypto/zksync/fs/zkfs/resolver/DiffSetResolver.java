@@ -319,6 +319,18 @@ public class DiffSetResolver {
 		}
 		
 		fs.getInodeTable().rebuildLinkCounts();
+		for(InodeDiff diff : diffset.inodeDiffs.values()) {
+			Inode inode = fs.getInodeTable().inodeWithId(diff.getInodeId());
+			if(inode.isDeleted()) {
+				/* When renumbering inodes, the newly issued inodes exist with nlink 0 until the path merge.
+				 * If the path merge completes without linking to the renumbered inode, then the inode is
+				 * left with nlink=0. This is sufficient to identify the inode as 0, but we'd like all
+				 * deleted inodes to be blanked out entirely.
+				 */
+				inode.markDeleted();
+			}
+		}
+		
 		fs.getInodeTable().defragment();
 	}
 	

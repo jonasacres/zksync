@@ -61,6 +61,8 @@ public class ZKFS extends FS {
 	public final static int MAX_PATH_LEN = 65535;
 	
 	Logger logger = LoggerFactory.getLogger(ZKFS.class);
+
+	protected boolean skipIntegrity; // TODO: Delete me when automatic integrity checking is removed
 	
 	public ZKFS(RevisionTag revision, String root) throws IOException {
 		if(FS.fileHandleTelemetryEnabled) {
@@ -215,7 +217,9 @@ public class ZKFS extends FS {
 					dump(),
 					inodeTable.dumpInodes()));
 			archive.getConfig().getRevisionList().dump();
-			IntegrityChecker.assertValidFilesystem(baseRevision); // TODO: Delete me after testing
+			if(!skipIntegrity) {
+				IntegrityChecker.assertValidFilesystem(baseRevision); // TODO: Delete me after testing
+			}
 		}
 		
 		return baseRevision;

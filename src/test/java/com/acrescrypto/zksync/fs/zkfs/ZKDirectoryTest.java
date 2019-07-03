@@ -69,6 +69,7 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 		evilDirectory.dirty = true;
 		evilDirectory.commit();
 		evilDirectory.close();
+		zkscratch.skipIntegrity = true;
 		zkscratch.commit();
 		
 		assertTrue(scratch.exists("evil"));
@@ -96,6 +97,7 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 		evilDirectory.dirty = true;
 		evilDirectory.commit();
 		evilDirectory.close();
+		zkscratch.skipIntegrity = true;
 		zkscratch.commit();
 		
 		assertTrue(scratch.exists("evil"));
@@ -123,6 +125,7 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 		evilDirectory.dirty = true;
 		evilDirectory.commit();
 		evilDirectory.close();
+		zkscratch.skipIntegrity = true;
 		zkscratch.commit();
 		
 		assertTrue(scratch.exists("evil"));
@@ -152,6 +155,7 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 		evilDirectory.dirty = true;
 		evilDirectory.commit();
 		evilDirectory.close();
+		zkscratch.skipIntegrity = true;
 		zkscratch.commit();
 		
 		assertTrue(scratch.exists("evil"));
