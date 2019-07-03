@@ -7,7 +7,6 @@ import java.util.Stack;
 /** Lists inode IDs that are "free" (available for allocation). */
 public class FreeList extends ZKFile {
 	Stack<Long> available = new Stack<Long>();
-	boolean dirty; /** freelist has been modified and needs to be flushed */
 	long lastReadPage; /** most recent page we read (this is a fifo so we work from high pages to low) */
 	public static String FREE_LIST_PATH = "(free list)";
 	

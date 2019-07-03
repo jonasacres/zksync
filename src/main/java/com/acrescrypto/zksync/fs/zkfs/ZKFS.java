@@ -494,6 +494,21 @@ public class ZKFS extends FS {
 		
 		return new ZKDirectory(this, inode);
 	}
+	
+	/** During renumbering we could change a cached directory's inode. We have to update the reference in
+	 * the cached ZKDirectory object, if we have one. Caller should already be in a lockedOperation().
+	 * Returns true if a cached directory was updated.
+	 */
+	protected boolean updateCachedDirectoryInode(long oldId, Inode newInode) {
+		boolean updated = false;
+		for(ZKDirectory dir : directoriesByPath.values()) {
+			if(dir.getInode().getStat().getInodeId() != oldId) continue;
+			dir.inode = newInode;
+			updated = true;
+		}
+		
+		return updated;
+	}
 
 	@Override
 	public void mkdir(String path) throws IOException {

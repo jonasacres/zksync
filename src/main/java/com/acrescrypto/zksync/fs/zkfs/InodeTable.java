@@ -491,6 +491,7 @@ public class InodeTable extends ZKFile {
 			
 			newLocation.deserialize(existingLocation.serialize());
 			newLocation.getStat().setInodeId(newId);
+			zkfs.updateCachedDirectoryInode(oldId, newLocation);
 			existingLocation.markDeleted();
 		}
 		
