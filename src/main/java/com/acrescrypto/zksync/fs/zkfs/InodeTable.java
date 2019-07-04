@@ -123,7 +123,7 @@ public class InodeTable extends ZKFile {
 		if(dirty) {
 			maxPageNum = tree.numPages;
 			for(Long pageNum : inodesByPage.cachedKeys()) {
-				if(maxPageNum < pageNum) maxPageNum = pageNum;
+				if(maxPageNum <= pageNum) maxPageNum = pageNum + 1;
 			}
 		} else {
 			maxPageNum = tree.numPages;
@@ -210,14 +210,25 @@ public class InodeTable extends ZKFile {
 	
 	/** write out all cached inodes */
 	protected synchronized void syncInodes() throws IOException {
+		StringBuilder sb = new StringBuilder(String.format("InodeTable %s: Committing inode table from base revision %s",
+				zkfs.getArchive().getMaster().getName(),
+				Util.formatRevisionTag(zkfs.baseRevision)));
 		for(Long pageNum : inodesByPage.cachedKeys()) {
+			sb.append(String.format("\tCommitting inode table page %d\n", pageNum));
 			commitInodePage(pageNum, inodesByPage.get(pageNum));
 		}
 		
 		// don't let the last page of the table consist of empty inodes
-		long maxPageNum = pageNumForInodeId(nextInodeId()-1); 
-		truncate((maxPageNum+1)*zkfs.archive.config.getPageSize());
+		long maxPageNum = pageNumForInodeId(nextInodeId()-1);
+		long newSize = (maxPageNum+1)*zkfs.archive.config.getPageSize();
+		sb.append(String.format("\tnextInodeId = %d, maxPageNum=%d, newSize=%d\n",
+				nextInodeId(),
+				maxPageNum,
+				newSize));
+		truncate(newSize);
 		flush();
+		sb.append(String.format("\tNew reftag: %s\n", Util.formatRefTag(inode.refTag)));
+		Util.debugLog(sb.toString());
 	}
 	
 	protected ArrayList<RevisionTag> makeParentList(RevisionTag[] additionalParents) {
@@ -374,6 +385,10 @@ public class InodeTable extends ZKFile {
 			freelist.clearList();
 			MutableLong maxInodeId = new MutableLong(nextInodeId()-1);
 			HashMap<Long,Integer> inodeCounts = new HashMap<>();
+			Util.debugLog(String.format("InodeTable %s: starting rebuild, base revision %s, nextInodeId %d\n",
+					zkfs.archive.master.getName(),
+					Util.formatRevisionTag(zkfs.baseRevision),
+					nextInodeId()));
 			StringBuffer sb = new StringBuffer(String.format("InodeTable %s: rebuilding, base revision %s, nextInodeId %d\n",
 					zkfs.archive.master.getName(),
 					Util.formatRevisionTag(zkfs.baseRevision),
@@ -782,6 +797,20 @@ public class InodeTable extends ZKFile {
 			
 			// make sure we retain existing instances, to keep caches square
 			setInode(duplicated);
+			if(duplicated.getStat().getInodeId() >= nextInodeId()) {
+				nextInodeId = duplicated.getStat().getInodeId() + 1;
+			}
+			
+			Util.debugLog(String.format("InodeTable %s: replaced inodeId %d to identity %016x, nlink %d (was %016x, nlink %d), base revision %s, cached pages %d, nextInodeId %d",
+					zkfs.getArchive().getMaster().getName(),
+					duplicated.getStat().getInodeId(),
+					duplicated.getIdentity(),
+					duplicated.getNlink(),
+					existing.identity,
+					existing.nlink,
+					Util.formatRevisionTag(zkfs.getBaseRevision()),
+					inodesByPage.cachedSize(),
+					nextInodeId));
 		}
 	}
 	

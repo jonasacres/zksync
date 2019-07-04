@@ -103,6 +103,9 @@ public class DiffSetResolver {
 	}
 	
 	public static PathDiffResolver latestPathResolver() {
+		/* TODO: If there's a conflict between whether a path is a directory, it is possible to decide it is a
+		 * either non-existent or some non-directory, but then also favor diffs keeping subpaths.
+		 */
 		return (DiffSetResolver setResolver, PathDiff diff) -> {
 			if(diff.getResolutions().size() == 2 && diff.getResolutions().containsKey(null)) {
 				/* In this case, the only disagreement is whether the path exists or not -- everyone who
@@ -390,7 +393,10 @@ public class DiffSetResolver {
 		
 		sb.append("Affected paths: " + diffset.pathDiffs.size() + "\n");
 		for(PathDiff diff : diffset.pathDiffs.values()) {
-			sb.append("\t" + diff.path + " (" + diff.resolutions.size() + " versions)\n");
+			sb.append(String.format("\t%s (%d versions, resolution %s)\n",
+					diff.path,
+					diff.resolutions.size(),
+					diff.resolution));
 			diff.resolutions.forEach((inodeId, tags)->{
 				String tagStr = "";
 				for(RevisionTag tag : tags) {
@@ -398,8 +404,14 @@ public class DiffSetResolver {
 					tagStr += Util.formatRevisionTag(tag);
 				}
 				
+				boolean isResolution;
+				if(diff.resolution == null) {
+					isResolution = diff.resolution == inodeId;
+				} else {
+					isResolution = diff.resolution.equals(inodeId);
+				}
 				sb.append(String.format("\t\t%sinodeId %d [%s]\n",
-						diff.resolution == inodeId ? "* " : "  ",
+						isResolution ? "* " : "  ",
 						inodeId,
 						tagStr));
 			});

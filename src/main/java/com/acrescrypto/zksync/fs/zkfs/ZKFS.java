@@ -210,12 +210,13 @@ public class ZKFS extends FS {
 					Util.formatRevisionTag(baseRevision),
 					parentStr);
 
-			Util.debugLog(String.format("ZKFS %s: created revtag %s from %s\n%s\n%s\n",
+			Util.debugLog(String.format("ZKFS %s: created revtag %s from %s\n%s\n%s\n%s\n",
 					archive.getMaster().getName(),
 					Util.formatRevisionTag(baseRevision),
 					parentStr,
 					dump(),
-					inodeTable.dumpInodes()));
+					inodeTable.dumpInodes(),
+					inodeTable.freelist.dump()));
 			archive.getConfig().getRevisionList().dump();
 			if(!skipIntegrity) {
 				IntegrityChecker.assertValidFilesystem(baseRevision); // TODO: Delete me after testing

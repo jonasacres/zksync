@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Stack;
 
+import com.acrescrypto.zksync.utility.Util;
+
 /** Lists inode IDs that are "free" (available for allocation). */
 public class FreeList extends ZKFile {
 	Stack<Long> available = new Stack<Long>();
@@ -84,5 +86,34 @@ public class FreeList extends ZKFile {
 
 	public synchronized boolean contains(long inodeId) {
 		return available.contains(inodeId);
+	}
+	
+	public String dump() throws IOException {
+		StringBuilder sb = new StringBuilder(String.format("FreeList %s, base revision %s, dirty=%s\n",
+				zkfs.archive.master.getName(),
+				Util.formatRevisionTag(zkfs.baseRevision),
+				dirty ? "true" : "false"
+				));
+		
+		// we're not dumping a long-sized freelist...
+		int offset = (int) Math.max(0, (lastReadPage-1)*zkfs.archive.config.pageSize);
+		byte[] buf = new byte[offset];
+		this.read(buf, 0, offset);
+		
+		ByteBuffer bytes = ByteBuffer.wrap(buf);
+		int index = 0;
+		while(bytes.hasRemaining()) {
+			sb.append(String.format("\t#%4d: inodeId %4d\n",
+					++index,
+					bytes.getLong()));
+		}
+		
+		for(long inodeId : available) {
+			sb.append(String.format("\t#%4d: inodeId %4d\n",
+					++index,
+					inodeId));
+		}
+		
+		return sb.toString();
 	}
 }
