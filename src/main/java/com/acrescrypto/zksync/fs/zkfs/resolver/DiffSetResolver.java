@@ -303,6 +303,69 @@ public class DiffSetResolver {
 		for(PathDiff diff : diffset.pathDiffs.values()) {
 			diff.setResolution(pathResolver.resolve(this, diff));
 		}
+		
+		/* if the resolver said to delete /foo but keep /foo/bar, we have an inconsistency and /foo must be
+		 * preserved. */
+		Collection<PathDiff> diffsToRecalculate = detectInconsistencies();
+		while(!diffsToRecalculate.isEmpty()) {
+			for(PathDiff diff : diffsToRecalculate) {
+				Util.debugLog(String.format("DiffSetResolver %s: reprocessing diff for path %s",
+						fs.getArchive().getMaster().getName(),
+						diff.path));
+				Long resolution = null;
+				diff.clearResolution();
+				diff.resolutions.remove(null);
+				if(diff.resolutions.size() > 1) {
+					resolution = pathResolver.resolve(this, diff);
+				} else if(diff.resolutions.size() == 1) {
+					for(Long r : diff.resolutions.keySet()) {
+						resolution = r;
+						break;
+					}
+				} else {
+					throw new DiffResolutionException(diff.path + ": unable to resolve path diff, no resolutions other than deletion, but subpaths of path are to be maintained");
+				}
+				
+				logger.info("Overriding resolution for path " + diff.path + " to inodeId " + resolution + " due to detected inconsistency");
+				diff.setResolution(resolution);
+			}
+			
+			diffsToRecalculate = detectInconsistencies();
+		}
+	}
+	
+	/* Give a list of directories in the diffset that were marked for deletion, but have subpaths in the diffset
+	 * that were marked to keep.
+	 */
+	protected Collection<PathDiff> detectInconsistencies() {
+		HashSet<String> unlinkedPaths = new HashSet<>();
+		HashSet<String> mandatoryParents = new HashSet<>();
+		
+		for(PathDiff diff : diffset.pathDiffs.values()) {
+			if(diff.resolution == null) {
+				unlinkedPaths.add(diff.path);
+				continue;
+			}
+			
+			String parent = fs.dirname(diff.path);
+			while(!parent.equals("/")) {
+				if(unlinkedPaths.contains(parent)) {
+					mandatoryParents.add(parent);
+				}
+				
+				parent = fs.dirname(parent);
+			}
+		}
+		
+		LinkedList<PathDiff> diffsToRecalculate = new LinkedList<>();
+		if(mandatoryParents.isEmpty()) return diffsToRecalculate;
+		
+		for(PathDiff diff : diffset.pathDiffs.values()) {
+			if(!mandatoryParents.contains(diff.path)) continue;
+			diffsToRecalculate.add(diff);
+		}
+		
+		return diffsToRecalculate;
 	}
 	
 	protected void applyResolutions() throws IOException {

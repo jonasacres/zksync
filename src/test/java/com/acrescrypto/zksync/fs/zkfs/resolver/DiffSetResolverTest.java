@@ -315,21 +315,26 @@ public class DiffSetResolverTest {
 	}
 	
 	@Test
-	public void testParentDeletionPreemptsChildren() throws IOException, DiffResolutionException {
-		// if a merge deletes a directory, it should also delete the children of that directory
-		fs.mkdir("dir");
+	public void testChildPreservationPreemptsParentDeletion() throws IOException, DiffResolutionException {
+		// a merge should contain parents of kept children, even if the parents would otherwise be deleted
+		String dirName = "dir", fileName = dirName + "/file";
+		byte[] content = "keep me".getBytes();
+		
+		fs.mkdir(dirName);
 		base = fs.commit();
 		
-		fs.write("dir/file", "should get deleted".getBytes());
+		fs.write(fileName, content);
+		long inodeId = fs.stat(fileName).getInodeId();
 		fs.commitAndClose();
 		
 		fs = base.getFS();
-		fs.rmdir("dir");
+		fs.rmdir(dirName);
 		fs.commitAndClose();
 		
 		PathDiffResolver pathResolver = (DiffSetResolver setResolver, PathDiff diff) -> {
-			if(diff.path.equals("dir")) return null;
-			return DiffSetResolver.latestPathResolver().resolve(setResolver, diff);
+			if(diff.path.equals(dirName)) return null;
+			if(diff.path.equals(fileName)) return inodeId;
+			throw new RuntimeException("shouldn't get here");
 		};
 		
 		DiffSetResolver resolver = new DiffSetResolver(DiffSet.withCollection(archive.getConfig().getRevisionList().branchTips()),
@@ -337,8 +342,9 @@ public class DiffSetResolverTest {
 				pathResolver);
 		
 		try(ZKFS mergeFs = resolver.resolve().readOnlyFS()) {
-			assertFalse(mergeFs.exists("dir"));
-			assertFalse(mergeFs.exists("dir/file"));
+			assertTrue(mergeFs.exists(dirName));
+			assertTrue(mergeFs.exists(fileName));
+			assertArrayEquals(content, mergeFs.read(fileName));
 		}
 	}
 	

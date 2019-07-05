@@ -51,6 +51,11 @@ public class PathDiff implements Comparable<PathDiff> {
 		return resolved;
 	}
 	
+	public void clearResolution() {
+		this.resolved = false;
+		this.resolution = null;
+	}
+	
 	public void setResolution(Long resolution) {
 		this.resolution = resolution;
 		this.resolved = true;
