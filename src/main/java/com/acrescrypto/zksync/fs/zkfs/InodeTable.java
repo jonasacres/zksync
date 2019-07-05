@@ -326,20 +326,9 @@ public class InodeTable extends ZKFile {
 				inodeId = freelist.issueInodeId(); 
 			}
 
-			Util.debugLog(String.format("InodeTable %s: %s, dirty=%s issuing inodeId %d from freelist",
-					zkfs.archive.master.getName(),
-					Util.formatRevisionTag(zkfs.baseRevision),
-					zkfs.dirty ? "true" : "false",
-					inodeId));
-			
 			return inodeId;
 		} catch(FreeListExhaustedException exc) {
 			nextInodeId(); // ensure we have nextInodeId loaded
-			Util.debugLog(String.format("InodeTable %s: %s, dirty=%s issuing inodeId %d from sequence",
-					zkfs.archive.master.getName(),
-					Util.formatRevisionTag(zkfs.baseRevision),
-					zkfs.dirty ? "true" : "false",
-					nextInodeId));
 			return nextInodeId++;
 		}
 	}

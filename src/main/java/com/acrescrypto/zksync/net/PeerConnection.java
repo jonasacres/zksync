@@ -977,6 +977,13 @@ public class PeerConnection {
 						socket.getAddress(),
 						socket.getPort(),
 						exc);
+				if(exc.getCause() != null) {
+					logger.error("Swarm {} {}:{}: PeerConnection page queue thread caught exception in PeerConnection with underlying cause",
+							Util.formatArchiveId(socket.swarm.config.getArchiveId()),
+							socket.getAddress(),
+							socket.getPort(),
+							exc.getCause());
+				}
 				try { Thread.sleep(500); } catch(InterruptedException exc2) {}
 			}
 		}

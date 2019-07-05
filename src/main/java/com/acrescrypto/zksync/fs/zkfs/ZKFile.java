@@ -372,18 +372,6 @@ public class ZKFile extends File {
 				zkfs.markDirty();
 				setOverrideMtime(null);
 				
-				Util.debugLog(String.format("ZKFile %s: Flush page %d of file %s, inodeId %d, identity %016x, size %d, reftag %s, %d pages, base revision %s\n",
-						zkfs.getArchive().getMaster().getName(),
-						bufferedPage != null ? bufferedPage.pageNum : -1,
-						path,
-						inode.getStat().getInodeId(),
-						inode.getIdentity(),
-						pendingSize,
-						Util.formatRefTag(inode.getRefTag()),
-						tree.numPages,
-						Util.formatRevisionTag(zkfs.baseRevision)
-						));
-				
 				return null;
 			}
 		});

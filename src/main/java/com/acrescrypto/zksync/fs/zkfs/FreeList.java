@@ -30,21 +30,11 @@ public class FreeList extends ZKFile {
 		this.tree = new PageTree(this.inode);
 		this.pendingSize = inode.getStat().getSize();
 		lastReadPage = this.inode.refTag.numPages;
-		Util.debugLog(String.format("FreeList %s: %s initialized, num pages %d",
-				zkfs.archive.master.getName(),
-				Util.formatRevisionTag(zkfs.baseRevision),
-				lastReadPage));
 	}
 	
 	/** Empty the freelist completely. Intended for use in rebuilding freelist manually. 
 	 * @throws IOException */
 	public synchronized void clearList() throws IOException {
-		Util.debugLog(String.format("FreeList %s: %s cleared list, had size %d, cache had %d elements, lastReadPage %d",
-				zkfs.archive.master.getName(),
-				Util.formatRevisionTag(zkfs.baseRevision),
-				getSize(),
-				available.size(),
-				lastReadPage));
 		truncate(0l);
 		available.clear();
 	}
@@ -57,12 +47,6 @@ public class FreeList extends ZKFile {
 		if(available.isEmpty()) throw new FreeListExhaustedException();
 
 		long inodeId = available.pop();
-		Util.debugLog(String.format("FreeList %s: %s issued inodeId %d, %d elements in cached list, lastReadPage %d",
-				zkfs.archive.master.getName(),
-				Util.formatRevisionTag(zkfs.baseRevision),
-				inodeId,
-				available.size(),
-				lastReadPage));
 		return inodeId;
 	}
 	
@@ -70,12 +54,6 @@ public class FreeList extends ZKFile {
 	public synchronized void freeInodeId(long inodeId) {
 		dirty = true;
 		available.push(inodeId);
-		Util.debugLog(String.format("FreeList %s: %s free inodeId %d, %d elements in cached list after insert, last read page %d",
-				zkfs.archive.master.getName(),
-				Util.formatRevisionTag(zkfs.baseRevision),
-				inodeId,
-				available.size(),
-				lastReadPage));
 	}
 	
 	/** serialize freelist and write into zkfs */ 
@@ -84,13 +62,6 @@ public class FreeList extends ZKFile {
 		long truncateLen = Math.max(0, lastReadPage*zkfs.archive.config.pageSize);
 		truncateLen = Math.min(getSize(), truncateLen);
 
-		Util.debugLog(String.format("FreeList %s: %s commit. lastReadPage %d, truncateLen %d, available.size() %d",
-				zkfs.archive.master.getName(),
-				Util.formatRevisionTag(zkfs.baseRevision),
-				lastReadPage,
-				truncateLen,
-				available.size()));
-		
 		truncate(truncateLen);
 		ByteBuffer buf = ByteBuffer.allocate(8*available.size());
 		while(!available.isEmpty()) {
@@ -116,11 +87,6 @@ public class FreeList extends ZKFile {
 		seek(pageNum*zkfs.archive.config.pageSize, SEEK_SET);
 		ByteBuffer buf = ByteBuffer.wrap(read((int) zkfs.archive.config.pageSize));
 		while(buf.remaining() >= 8) available.push(buf.getLong()); // 8 == sizeof inodeId 
-		Util.debugLog(String.format("FreeList %s: %s read page %d, %d elements in cached list",
-				zkfs.archive.master.getName(),
-				Util.formatRevisionTag(zkfs.baseRevision),
-				pageNum,
-				available.size()));
 	}
 
 	/** warning: only checks cached inode IDs, might return false even if inodeId is in uncached portion
