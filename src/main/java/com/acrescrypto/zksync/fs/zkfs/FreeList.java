@@ -83,6 +83,14 @@ public class FreeList extends ZKFile {
 		if(!dirty) return;
 		long truncateLen = Math.max(0, lastReadPage*zkfs.archive.config.pageSize);
 		truncateLen = Math.min(getSize(), truncateLen);
+
+		Util.debugLog(String.format("FreeList %s: %s commit. lastReadPage %d, truncateLen %d, available.size() %d",
+				zkfs.archive.master.getName(),
+				Util.formatRevisionTag(zkfs.baseRevision),
+				lastReadPage,
+				truncateLen,
+				available.size()));
+		
 		truncate(truncateLen);
 		ByteBuffer buf = ByteBuffer.allocate(8*available.size());
 		while(!available.isEmpty()) {
@@ -93,9 +101,7 @@ public class FreeList extends ZKFile {
 		write(buf.array());
 		flush();
 		
-		lastReadPage = inode.refTag.numPages-1;
-		buf.position(buf.capacity() - (int) (buf.capacity() % zkfs.archive.config.pageSize)); // last page
-		while(buf.remaining() >= 8) available.push(buf.getLong());
+		lastReadPage = inode.refTag.numPages;
 		dirty = false;
 	}
 	
