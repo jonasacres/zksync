@@ -19,6 +19,11 @@ import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ZKDirectory extends ZKFile implements Directory {
+	public final static byte SERIALIZATION_TYPE_BYTE = 0;
+	public final static byte SERIALIZATION_TYPE_SHORT = 1;
+	public final static byte SERIALIZATION_TYPE_INT = 2;
+	public final static byte SERIALIZATION_TYPE_LONG = 3;
+	
 	// TODO Someday: (redesign) Allow partial reads of directories
 	ConcurrentHashMap<String,Long> entries;
 	boolean dirty;
@@ -348,7 +353,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 				zkfs.create(fullPath, this).getStat().makeDirectory();
 	
 				ZKDirectory dir = zkfs.opendir(fullPath);
-				dir.link(dir, ".");
+				dir.inode.addLink(); // .
 				dir.link(inode, "..");
 				dir.flush();
 				fs.chmod(fullPath, zkfs.archive.master.getGlobalConfig().getInt("fs.default.directoryMode"));
@@ -383,13 +388,19 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	private void deserialize(byte[] serialized) {
 		entries.clear();
+		entries.put(".", this.getInode().getStat().getInodeId());
+		if(serialized.length == 0) return; // empty directory
+		
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
+		byte inodeIdType = buf.get();
+		int inodeIdSize = entrySizeForType(inodeIdType);
+		
 		try {
 			while(buf.hasRemaining()) {
-				assertIntegrity(buf.remaining() >= 8, "Directory seems truncated; does not contain enough bytes for next inodeId (expected 8, have " + buf.remaining() + ")");
-				long inodeId = buf.getLong();
-				assertIntegrity(buf.remaining() >= 2, "Directory seems truncated; does not contain enough bytes for next path length (expected 2, have " + buf.remaining() + ")");
-				int pathLen = Util.unsignShort(buf.getShort());
+				assertIntegrity(buf.remaining() >= inodeIdSize, "Directory seems truncated; does not contain enough bytes for next inodeId (expected " + inodeIdSize + ", have " + buf.remaining() + ")");
+				long inodeId = deserializeValueWithType(buf, inodeIdType);
+				assertIntegrity(buf.remaining() >= 1, "Directory seems truncated; does not contain enough bytes for next path length (expected 1, have " + buf.remaining() + ")");
+				int pathLen = Util.unsignByte(buf.get());
 	
 				// Don't check existence of inodes; it will trip up merges
 				assertIntegrity(inodeId >= 0, String.format("Directory references invalid inodeId %d", inodeId));
@@ -428,20 +439,95 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	protected byte[] serialize() throws IOException {
-		int size = 0;
+		byte[] types = new byte[1]; // entry 0 is inode type
+		entries.forEach((name, inodeId)->{
+			types[0] = (byte) Math.max(types[0], serializationType(inodeId));
+		});
+		
+		int inodeIdSize = entrySizeForType(types[0]);
+		int size = 1; // 1 byte for inode type
+		
 		for(String path : entries.keySet()) {
-			size += 8 + 2 + path.getBytes().length; // inode number + path_len + path 
+			if(path.equals(".")) continue;
+			size += inodeIdSize + 1 + path.getBytes().length; // inode number + path_len + path 
 		}
 		
 		ByteBuffer buf = ByteBuffer.allocate(size);
-		
-		for(String path : list(LIST_OPT_INCLUDE_DOT_DOTDOT)) {
-			buf.putLong(entries.get(path));
-			buf.putShort((short) path.getBytes().length);
-			buf.put(path.getBytes());
-		}
+		buf.put(types);
+		entries.forEach((name, inodeId)->{
+			if(name.equals(".")) return; // . directory is implicit
+			if(!isValidName(name)) {
+				logger.error("Refusing to serialize illegal path: " + Paths.get(path, name).toString());
+				return; 
+			}
+			serializeValueWithType(buf, types[0], inodeId);
+			buf.put((byte) name.getBytes().length);
+			buf.put(name.getBytes());
+		});
 		
 		return buf.array();
+	}
+	
+	protected void serializeValueWithType(ByteBuffer buf, byte type, long value) {
+		switch(type) {
+		case SERIALIZATION_TYPE_BYTE:
+			buf.put((byte) value);
+			break;
+		case SERIALIZATION_TYPE_SHORT:
+			buf.putShort((short) value);
+			break;
+		case SERIALIZATION_TYPE_INT:
+			buf.putInt((int) value);
+			break;
+		case SERIALIZATION_TYPE_LONG:
+			buf.putLong((long) value);
+			break;
+		default:
+			assertIntegrity(false, "Unexpected field datatype " + type);
+		}
+	}
+	
+	protected long deserializeValueWithType(ByteBuffer buf, byte type) {
+		switch(type) {
+		case SERIALIZATION_TYPE_BYTE:
+			return Util.unsignByte(buf.get());
+		case SERIALIZATION_TYPE_SHORT:
+			return Util.unsignShort(buf.getShort());
+		case SERIALIZATION_TYPE_INT:
+			return Util.unsignInt(buf.getInt());
+		case SERIALIZATION_TYPE_LONG:
+			return buf.getLong();
+		default:
+			assertIntegrity(false, "Unexpected field datatype " + type);
+			return Long.MIN_VALUE; // can't get here, but have to keep compiler happy
+		}
+	}
+	
+	protected byte serializationType(long inodeId) {
+		if(inodeId < 1 << 8) {
+			return SERIALIZATION_TYPE_BYTE;
+		} else if(inodeId < 1 << 16) {
+			return SERIALIZATION_TYPE_SHORT;
+		} else if(inodeId < 1 << 32) {
+			return SERIALIZATION_TYPE_INT;
+		} else {
+			return SERIALIZATION_TYPE_LONG;
+		}
+	}
+	
+	protected int entrySizeForType(byte type) {
+		switch(type) {
+		case SERIALIZATION_TYPE_BYTE:
+			return 1;
+		case SERIALIZATION_TYPE_SHORT:
+			return 2;
+		case SERIALIZATION_TYPE_INT:
+			return 4;
+		case SERIALIZATION_TYPE_LONG:
+			return 8;
+		default:
+			throw new InvalidArchiveException("Unexpected ZKDirectory serialzation type " + type);
+		}
 	}
 	
 	protected void assertWritable() throws EACCESException {

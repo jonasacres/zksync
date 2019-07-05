@@ -97,6 +97,7 @@ public class InodeTable extends ZKFile {
 				readExisting(tag);
 			}
 		} catch(Throwable exc) {
+			exc.printStackTrace();
 			this.close();
 			throw exc;
 		}
@@ -707,19 +708,21 @@ public class InodeTable extends ZKFile {
 	
 	/** initialize an empty root directory */
 	private void makeRootDir() throws IOException {
-		Inode rootDir = new Inode(zkfs);
+		Inode rootInode = new Inode(zkfs);
 		long now = Util.currentTimeNanos();
-		rootDir.getStat().setCtime(now);
-		rootDir.getStat().setAtime(now);
-		rootDir.getStat().setMtime(now);
-		rootDir.getStat().setInodeId(INODE_ID_ROOT_DIRECTORY);
-		rootDir.getStat().makeDirectory();
-		rootDir.getStat().setMode(0777);
-		rootDir.getStat().setUid(0);
-		rootDir.getStat().setGid(0);
-		rootDir.setRefTag(RefTag.blank(zkfs.archive));
-		rootDir.setFlags(Inode.FLAG_RETAIN);
-		setInode(rootDir);
+		rootInode.getStat().setCtime(now);
+		rootInode.getStat().setAtime(now);
+		rootInode.getStat().setMtime(now);
+		rootInode.getStat().setInodeId(INODE_ID_ROOT_DIRECTORY);
+		rootInode.getStat().makeDirectory();
+		rootInode.getStat().setMode(0777);
+		rootInode.getStat().setUid(0);
+		rootInode.getStat().setGid(0);
+		rootInode.setRefTag(RefTag.blank(zkfs.archive));
+		rootInode.setFlags(Inode.FLAG_RETAIN);
+		rootInode.setNlink(1); // .
+		
+		setInode(rootInode);
 	}
 	
 	/** initialize a blank top-level revision (i.e. one that has no ancestors) */
