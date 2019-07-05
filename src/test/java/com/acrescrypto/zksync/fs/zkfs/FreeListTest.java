@@ -65,7 +65,7 @@ public class FreeListTest {
 	@Test
 	public void testFreelistEmptyAtInit() throws IOException {
 		assertEquals(0, fs.inodeTable.freelist.getStat().getSize());
-		assertTrue(fs.inodeTable.freelist.available.empty());
+		assertTrue(fs.inodeTable.freelist.available.isEmpty());
 	}
 	
 	@Test
@@ -86,7 +86,8 @@ public class FreeListTest {
 		fs = tag.getFS();
 		for(int i = numFiles-1; i >= 0; i--) {
 			if(i % 2 == 0) continue;
-			assertEquals(witnessedIds.pop(), (Long) fs.inodeTable.freelist.issueInodeId());
+			assertEquals(witnessedIds.pop(),
+					(Long) fs.inodeTable.freelist.issueInodeId());
 		}
 		
 		try {

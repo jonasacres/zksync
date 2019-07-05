@@ -97,7 +97,6 @@ public class InodeTable extends ZKFile {
 				readExisting(tag);
 			}
 		} catch(Throwable exc) {
-			exc.printStackTrace();
 			this.close();
 			throw exc;
 		}

@@ -2,13 +2,14 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Stack;
+import java.util.Collection;
+import java.util.LinkedList;
 
 import com.acrescrypto.zksync.utility.Util;
 
 /** Lists inode IDs that are "free" (available for allocation). */
 public class FreeList extends ZKFile {
-	Stack<Long> available = new Stack<Long>();
+	LinkedList<Long> available = new LinkedList<Long>();
 	long lastReadPage; /** most recent page we read (this is a fifo so we work from high pages to low) */
 	public static String FREE_LIST_PATH = "(free list)";
 	
@@ -59,13 +60,15 @@ public class FreeList extends ZKFile {
 		long offset = Math.max(0, (lastReadPage-1)*zkfs.archive.config.pageSize);
 		truncate(offset);
 		ByteBuffer buf = ByteBuffer.allocate(8*available.size());
-		for(Long inodeId : available) buf.putLong(inodeId);
+		while(!available.isEmpty()) {
+			buf.putLong(available.pollLast());
+		}
+	
 		seek(offset, SEEK_SET);
 		write(buf.array());
 		flush();
 		
 		lastReadPage = inode.refTag.numPages-1;
-		available.clear();
 		buf.position(buf.capacity() - (int) (buf.capacity() % zkfs.archive.config.pageSize)); // last page
 		while(buf.remaining() >= 8) available.push(buf.getLong());
 		dirty = false;
@@ -84,31 +87,42 @@ public class FreeList extends ZKFile {
 		while(buf.remaining() >= 8) available.push(buf.getLong()); // 8 == sizeof inodeId 
 	}
 
+	/** warning: only checks cached inode IDs, might return false even if inodeId is in uncached portion
+	 * of list
+	 */
 	public synchronized boolean contains(long inodeId) {
 		return available.contains(inodeId);
 	}
 	
-	public String dump() throws IOException {
-		StringBuilder sb = new StringBuilder(String.format("FreeList %s, base revision %s, dirty=%s\n",
+	public synchronized Collection<Long> allEntries() throws IOException {
+		LinkedList<Long> entries = new LinkedList<>();
+		long maxOffset = Math.min(this.getSize(), zkfs.getArchive().getConfig().getPageSize() * lastReadPage);
+		long oldPos = pos();
+		seek(0, SEEK_SET);
+		
+		while(this.offset < maxOffset) {
+			byte[] pageData = read((int) zkfs.archive.config.pageSize);
+			ByteBuffer buf = ByteBuffer.wrap(pageData);
+			while(buf.remaining() >= 8) {
+				entries.push(buf.getLong()); 
+			}
+		}
+		seek(oldPos, SEEK_SET);
+		
+		entries.addAll(0, available);
+		return entries;
+	}
+	
+	public synchronized String dump() throws IOException {
+		StringBuilder sb = new StringBuilder(String.format("FreeList %s, base revision %s, size %d, dirty=%s\n",
 				zkfs.archive.master.getName(),
 				Util.formatRevisionTag(zkfs.baseRevision),
+				pendingSize,
 				dirty ? "true" : "false"
 				));
 		
-		// we're not dumping a long-sized freelist...
-		int offset = (int) Math.max(0, (lastReadPage-1)*zkfs.archive.config.pageSize);
-		byte[] buf = new byte[offset];
-		this.read(buf, 0, offset);
-		
-		ByteBuffer bytes = ByteBuffer.wrap(buf);
 		int index = 0;
-		while(bytes.hasRemaining()) {
-			sb.append(String.format("\t#%4d: inodeId %4d\n",
-					++index,
-					bytes.getLong()));
-		}
-		
-		for(long inodeId : available) {
+		for(long inodeId : allEntries()) {
 			sb.append(String.format("\t#%4d: inodeId %4d\n",
 					++index,
 					inodeId));

@@ -9,7 +9,6 @@ import java.util.LinkedList;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
-import com.acrescrypto.zksync.fs.zkfs.FreeList.FreeListExhaustedException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class IntegrityChecker {
@@ -24,11 +23,12 @@ public class IntegrityChecker {
 			Collection<IntegrityIssue> issues = checker.findIssues();
 			if(issues.size() == 0) return;
 			
-			Util.debugLog(String.format("IntegrityChecker %s:\n%s\n%s\n%s\nDead.",
+			Util.debugLog(String.format("IntegrityChecker %s:\n%s\n%s\n%s\n%s\nDead.",
 					fs.getArchive().getMaster().getName(),
 					checker.dumpIssues(issues),
 					fs.dump(),
-					fs.inodeTable.dumpInodes()));
+					fs.inodeTable.dumpInodes(),
+					fs.inodeTable.freelist.dump()));
 			(new Throwable()).printStackTrace();
 			System.exit(1);
 		} catch(Exception exc) {
@@ -625,12 +625,6 @@ public class IntegrityChecker {
 	}
 	
 	protected void scanFreelist() throws IOException {
-		try(FreeList dupeList = new FreeList(fs.getInodeTable().freelist.inode)) {
-			try {
-				while(true) dupeList.loadNextPage();
-			} catch(FreeListExhaustedException exc) {}
-			
-			freelistContents = new LinkedList<>(dupeList.available);
-		}
+		freelistContents = new LinkedList<>(fs.getInodeTable().freelist.allEntries());
 	}
 }
