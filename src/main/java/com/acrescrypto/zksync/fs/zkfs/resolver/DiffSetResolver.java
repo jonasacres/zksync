@@ -357,7 +357,17 @@ public class DiffSetResolver {
 			}
 		}
 		
+		/* make sure that if we said to delete .., we also said to delete the parent
+		 * (otherwise force retention of ..) */
 		LinkedList<PathDiff> diffsToRecalculate = new LinkedList<>();
+		for(String unlinkedPath : unlinkedPaths) {
+			if(!fs.basename(unlinkedPath).equals("..")) continue;
+			String dirname = fs.dirname(unlinkedPath);
+			if(!unlinkedPaths.contains(dirname)) {
+				mandatoryParents.add(unlinkedPath);
+			}
+		}
+		
 		if(mandatoryParents.isEmpty()) return diffsToRecalculate;
 		
 		for(PathDiff diff : diffset.pathDiffs.values()) {
@@ -378,9 +388,10 @@ public class DiffSetResolver {
 		for(PathDiff diff : sortedDiffs) { // need to sort so we do parent directories before children
 			assert(diff.isResolved());
 			if(!parentExists(diff.path)) continue;
-			try(ZKDirectory dir = fs.opendir(fs.dirname(diff.path))) {
-				dir.setOverrideMtime(fs.getInodeTable().getStat().getMtime());
-				dir.updateLink(diff.resolution, fs.basename(diff.path));
+			if(fs.basename(diff.path).equals(".")) continue; // . has special handling in ZKDirectory
+			try(ZKDirectory parentDir = fs.opendir(fs.dirname(diff.path))) {
+				parentDir.setOverrideMtime(fs.getInodeTable().getStat().getMtime());
+				parentDir.updateLink(diff.resolution, fs.basename(diff.path));
 			}
 		}
 		

@@ -98,7 +98,7 @@ public class ZKFS extends FS {
 			ZKDirectory dir = new ZKDirectory(this, path);
 			return dir;
 		}, (String path, ZKDirectory dir) -> {
-			logger.trace("ZKFS {} {}: Evicting directory {} from cache",
+			logger.trace("ZKFS {} {}: Evicting directory {} hash=%d from cache",
 					Util.formatArchiveId(revision.getConfig().getArchiveId()),
 					Util.formatRevisionTag(baseRevision),
 					path);
@@ -474,7 +474,8 @@ public class ZKFS extends FS {
 	public ZKDirectory opendir(String path) throws IOException {
 		String canonPath = canonicalPath(path);
 		synchronized(this) {
-			return directoriesByPath.get(canonPath).retain();
+			ZKDirectory dir = directoriesByPath.get(canonPath).retain();
+			return dir;
 		}
 	}
 	
@@ -780,7 +781,7 @@ public class ZKFS extends FS {
 	public synchronized void dump(String path, int depth, StringBuilder builder) throws IOException {
 		String padding = new String(new char[depth]).replace("\0", "  ");
 		try(ZKDirectory dir = opendir(path)) {
-			LinkedList<String> sorted = new LinkedList<>(dir.list());
+			LinkedList<String> sorted = new LinkedList<>(dir.list(Directory.LIST_OPT_INCLUDE_DOT_DOTDOT));
 			sorted.sort(null);
 			
 			for(String subpath : sorted) {
@@ -794,7 +795,8 @@ public class ZKFS extends FS {
 						inode.getStat().getType(),
 						inode.nlink,
 						Util.formatRefTag(inode.getRefTag())));
-				if(inode.stat.isDirectory()) {
+				boolean isDotDir = subpath.equals(".") || subpath.equals("..");
+				if(inode.stat.isDirectory() && !isDotDir) {
 					try {
 						dump(fqSubpath, depth+1, builder);
 					} catch(Exception exc) {

@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -111,7 +112,11 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public boolean walk(int opts, DirectoryWalkCallback cb) throws IOException {
 		HashSet<Long> inodeHistory = new HashSet<>();
 		try {
-			walkRecursiveIterate(opts, inodeHistory, "", cb);
+			zkfs.lockedOperation(()->{
+				// lock the FS while we do this to keep the directory tree from changing underneath us
+				walkRecursiveIterate(opts, inodeHistory, "", cb);
+				return null;
+			});
 			return true;
 		} catch(WalkAbortException exc) {
 			return false;
@@ -120,6 +125,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	protected void walkRecursiveIterate(int opts, HashSet<Long> inodeHistory, String prefix, DirectoryWalkCallback cb) throws IOException {
 		long inodeId = inode.stat.getInodeId();
+		boolean followSymlinks = (opts & Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS) == 0;
 		if(inodeHistory.contains(inodeId)) return;
 		inodeHistory.add(inodeId);
 		
@@ -127,33 +133,25 @@ public class ZKDirectory extends ZKFile implements Directory {
 			String subpath = Paths.get(prefix, entry).toString(); // what we return in our results
 			String realSubpath = Paths.get(path, entry).toString(); // what we can look up directly in fs
 			try {
-				Stat stat;
-				boolean isInvalidSymlink = false;
-				
-				if((opts & Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS) == 0) {
-					// DO follow symlinks
-					stat = fs.stat(realSubpath);
-				} else {
-					// DONT follow symlinks
-					stat = fs.lstat(realSubpath);
-					if(stat.isSymlink() && !fs.exists(realSubpath)) {
-						isInvalidSymlink = true;
-					}
+				long entryInodeId = entries.get(entry);
+				Inode entryInode = zkfs.inodeTable.inodeWithId(entryInodeId);
+				if(followSymlinks && entryInode.stat.isSymlink()) {
+					entryInode = zkfs.inodeForPath(realSubpath);
 				}
 				
-				if(stat.isDirectory()) {
+				if(entryInode.stat.isDirectory()) {
 					boolean isDotDir = entry.equals(".") || entry.equals("..");
 					if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
-						cb.foundPath(subpath, stat, isInvalidSymlink, this);
+						cb.foundPath(subpath, entryInode.stat, false, this);
 					}
 					
 					if(!isDotDir) {
-						try(ZKDirectory dir = zkfs.opendir(realSubpath)) {
+						try(ZKDirectory dir = zkfs.opendirSemicache(entryInode)) {
 							dir.walkRecursiveIterate(opts, inodeHistory, subpath, cb);
 						}
 					}
 				} else {
-					cb.foundPath(subpath, stat, isInvalidSymlink, this);
+					cb.foundPath(subpath, entryInode.stat, false, this);
 				}
 			} catch(ENOENTException exc) {
 				try {
@@ -222,6 +220,16 @@ public class ZKDirectory extends ZKFile implements Directory {
 					if(existing.equals(inodeId)) {
 						return null;
 					}
+					
+					Util.debugLog(String.format("ZKDirectory %s: %s In directory %d %016x %s, renumbering %s %s -> %s",
+							zkfs.getArchive().getMaster().getName(),
+							Util.formatRevisionTag(zkfs.baseRevision),
+							inode.getStat().getInodeId(),
+							inode.identity,
+							getPath(),
+							link,
+							existing,
+							inodeId));
 					
 					entries.remove(link);
 					zkfs.uncache(fullPath);
@@ -583,5 +591,9 @@ public class ZKDirectory extends ZKFile implements Directory {
 			if(name[0] == null) throw new ENOENTException("Unable to locate directory with inodeId " + getStat().getInodeId() + " in parent directory with inodeId " + parentInodeId);
 			return Paths.get(parentDir.calculatePath(), name[0]).toString();
 		}
+	}
+
+	public ConcurrentHashMap<String,Long> getEntries() {
+		return entries;
 	}
 }

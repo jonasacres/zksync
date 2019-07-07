@@ -8,6 +8,7 @@ import java.util.Map;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
+import com.acrescrypto.zksync.utility.Util;
 
 public class PathDiff implements Comparable<PathDiff> {
 	protected HashMap<Long,ArrayList<RevisionTag>> resolutions = new HashMap<Long,ArrayList<RevisionTag>>();
@@ -26,7 +27,16 @@ public class PathDiff implements Comparable<PathDiff> {
 			try(ZKFS fs = candidate.readOnlyFS()) {
 				inodeId = fs.inodeForPath(path, false).getStat().getInodeId();
 				if(idMap != null && idMap.containsKey(inodeId)) {
-					inodeId = idMap.get(inodeId).getOrDefault(candidate, inodeId);
+					long newInodeId = idMap.get(inodeId).getOrDefault(candidate, inodeId);
+					if(inodeId != newInodeId) {
+						Util.debugLog(String.format("PathDiff %s: candidate %s, remapping inodeId for path %s %d -> %d due to diff renumbering",
+								fs.getArchive().getMaster().getName(),
+								Util.formatRevisionTag(candidate),
+								path,
+								inodeId,
+								newInodeId));
+						inodeId = newInodeId;
+					}
 				}
 			} catch (ENOENTException e) {}
 			

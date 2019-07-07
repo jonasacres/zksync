@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ClosedException;
-import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.exceptions.SearchFailedException;
@@ -464,6 +463,8 @@ public class RevisionList implements AutoCloseable {
 		if (config.getArchive().isClosed()) {
 			logger.debug("RevisionList {} {}: Skipping automerge of closed archive",
 					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()));
+			Util.debugLog(String.format("RevisionList %s: Skipping automerge of closed archive",
+					config.getMaster().getName()));
 			return;
 		}
 		try {
@@ -479,6 +480,8 @@ public class RevisionList implements AutoCloseable {
 			} else {
 				logger.info("RevisionList {} {}: Automerge started", config.getArchive().getMaster().getName(),
 						Util.formatArchiveId(config.getArchiveId()));
+				Util.debugLog(String.format("RevisionList %s: Starting automerge",
+						config.getMaster().getName()));
 				Collection<RevisionTag> tips;
 				
 				synchronized(this) {
@@ -491,7 +494,7 @@ public class RevisionList implements AutoCloseable {
 		} catch (ClosedException exc) {
 			logger.debug("RevisionList {} {}: Automerge aborted since archive closed",
 					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()));
-		} catch (IOException | DiffResolutionException exc) {
+		} catch (Throwable exc) {
 			logger.error("RevisionList {} {}: Error performing automerge", config.getArchive().getMaster().getName(),
 					Util.formatArchiveId(config.archiveId), exc);
 		}

@@ -92,7 +92,7 @@ public class DiffSet {
 				ZKFS fs = rev.readOnlyFS();
 				ZKDirectory dir = fs.opendir("/")
 			) {
-				dir.walk(ZKDirectory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink, parent)->{
+				dir.walk(ZKDirectory.LIST_OPT_DONT_FOLLOW_SYMLINKS|ZKDirectory.LIST_OPT_INCLUDE_DOT_DOTDOT, (path, stat, isBrokenSymlink, parent)->{
 					allPaths.add(path);
 				});
 			}
@@ -154,11 +154,14 @@ public class DiffSet {
 	 */
 	protected void renumberInodeDiff(ZKFS fs, InodeDiff diff, Map<Long,Map<RevisionTag,Long>> idMap) throws IOException {
 		Map<Long,ArrayList<RevisionTag>> byIdentity = new HashMap<>();
-		long minIdent = Long.MAX_VALUE;
+		long minIdent = -1; // we're comparing unsigned, so -1 is actually ffff..., which is maximum 
 
 		for(Inode inode : diff.resolutions.keySet()) {
 			if(inode == null) continue;
-			if(inode.getIdentity() < minIdent) minIdent = inode.getIdentity();
+			if(Long.compareUnsigned(minIdent, inode.getIdentity()) > 0) {
+				minIdent = inode.getIdentity();
+			}
+			
 			ArrayList<RevisionTag> tags = byIdentity.getOrDefault(inode.getIdentity(), null);
 			if(tags == null) {
 				tags = new ArrayList<RevisionTag>();

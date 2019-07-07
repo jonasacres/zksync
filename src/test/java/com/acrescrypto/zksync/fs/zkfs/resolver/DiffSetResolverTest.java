@@ -317,7 +317,7 @@ public class DiffSetResolverTest {
 	@Test
 	public void testChildPreservationPreemptsParentDeletion() throws IOException, DiffResolutionException {
 		// a merge should contain parents of kept children, even if the parents would otherwise be deleted
-		String dirName = "dir", fileName = dirName + "/file";
+		String dirName = "dir", fileName = dirName + "/file", dotdot = dirName + "/..";
 		byte[] content = "keep me".getBytes();
 		
 		fs.mkdir(dirName);
@@ -333,6 +333,8 @@ public class DiffSetResolverTest {
 		
 		PathDiffResolver pathResolver = (DiffSetResolver setResolver, PathDiff diff) -> {
 			if(diff.path.equals(dirName)) return null;
+			if(diff.path.equals(dirName + "/.")) return null;
+			if(diff.path.equals(dotdot)) return null;
 			if(diff.path.equals(fileName)) return inodeId;
 			throw new RuntimeException("shouldn't get here");
 		};
@@ -344,7 +346,13 @@ public class DiffSetResolverTest {
 		try(ZKFS mergeFs = resolver.resolve().readOnlyFS()) {
 			assertTrue(mergeFs.exists(dirName));
 			assertTrue(mergeFs.exists(fileName));
+			assertTrue(mergeFs.exists(dotdot));
 			assertArrayEquals(content, mergeFs.read(fileName));
+			
+			try(ZKDirectory dir = mergeFs.opendir(dirName)) {
+				long dotDotInodeId = dir.getEntries().get("..");
+				assertEquals(InodeTable.INODE_ID_ROOT_DIRECTORY, dotDotInodeId);
+			}
 		}
 	}
 	
@@ -726,5 +734,59 @@ public class DiffSetResolverTest {
 			assertTrue(archive.getConfig().getRevisionTree().descendentOf(merge, tag));
 		}
 		archive.close();
+	}
+	
+	@Test
+	public void testInodeDiffRenumberingCausesRemapOfDotDotReferences() throws IOException, DiffResolutionException {
+		fs.write("a", "".getBytes());
+		fs.inodeForPath("a").setIdentity(1); // guarantee that this version gets inode 16 in the resolution
+		assertEquals(InodeTable.USER_INODE_ID_START, fs.inodeForPath("a").getStat().getInodeId());
+		RevisionTag revWithFile = fs.commitAndClose();
+		
+		fs = base.getFS();
+		fs.mkdir("b");
+		assertEquals(InodeTable.USER_INODE_ID_START, fs.inodeForPath("b").getStat().getInodeId());
+		fs.mkdir("b/c");
+		RevisionTag revWithDir = fs.commit();
+		
+		ArrayList<RevisionTag> tags = new ArrayList<>();
+		tags.add(revWithFile);
+		tags.add(revWithDir);
+		DiffSetResolver resolver = DiffSetResolver.canonicalMergeResolver(tags);
+		RevisionTag merge = resolver.resolve();
+		
+		try(ZKFS mergedFs = merge.getFS()) {
+			assertEquals(InodeTable.USER_INODE_ID_START, mergedFs.inodeForPath("a").getStat().getInodeId());
+			long bInodeId = mergedFs.inodeForPath("b").getStat().getInodeId();
+			try(ZKDirectory dir = mergedFs.opendir("b/c")) {
+				assertEquals(bInodeId, dir.getEntries().get("..").longValue());
+			}
+		}
+	}
+	
+	@Test
+	public void testDotDotExistsIfParentDoes() throws IOException, DiffResolutionException {
+		/* a merge should not delete .. from a directory if it would otherwise NOT delete the directory
+		 * (test design comes from observed issue)
+		 */
+		fs.mkdirp("a/b");
+		base = fs.commit();
+		
+		fs.write("a/b/c", new byte[0]);
+		fs.commitAndClose();
+		
+		fs = base.getFS();
+		fs.rmrf("a");
+		fs.commitAndClose();
+		
+		DiffSetResolver resolver = DiffSetResolver.canonicalMergeResolver(archive);
+		RevisionTag merge = resolver.resolve();
+		
+		try(ZKFS fs = merge.getFS()) {
+			long parentInodeId = fs.stat("a").getInodeId();
+			try(ZKDirectory dir = fs.opendir("a/b")) {
+				assertEquals(parentInodeId, dir.getEntries().get("..").longValue());
+			}
+		}
 	}
 }

@@ -547,6 +547,64 @@ public class IntegrityChecker {
 		
 		try(ZKDirectory dir = new ZKDirectory(fs, inode)) {
 			// ensure we can open and list the directory
+			if(dir.entries.containsKey("..")) {
+				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_ROOT_DIRECTORY) {
+					issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
+							String.format("Directory %d %016x is root directory but contained .. entry to %d",
+								inode.getStat().getInodeId(),
+								inode.getIdentity(),
+								dir.entries.get("..")
+							)));
+					passed = false;
+				}
+				
+				Inode parentInode = fs.inodeTable.inodeWithId(dir.entries.get(".."));
+				if(parentInode.isDeleted()) {
+					issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
+							String.format("Directory %d %016x lists parent directory inodeId %d, which is deleted",
+								inode.getStat().getInodeId(),
+								inode.getIdentity(),
+								dir.entries.get("..")
+							)));
+					passed = false;
+				} else if(!parentInode.getStat().isDirectory()) {
+					issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
+							String.format("Directory %d %016x lists parent directory inodeId %d, which is non-directory type %d",
+								inode.getStat().getInodeId(),
+								inode.getIdentity(),
+								dir.entries.get(".."),
+								parentInode.getStat().getType()
+							)));
+					passed = false;
+				} else {
+					try(ZKDirectory parent = fs.opendirSemicache(parentInode)) {
+						int numFound = 0;
+						for(long entryInodeId : parent.entries.values()) {
+							if(entryInodeId == parentInode.getStat().getInodeId()) {
+								numFound++;
+							}
+						}
+						if(numFound != 1) {
+							issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
+									String.format("Directory %d %016x had %d entries in parent directory %d %016x; expected 1",
+										inode.getStat().getInodeId(),
+										inode.getIdentity(),
+										numFound,
+										parentInode.getStat().getInodeId(),
+										parentInode.getIdentity()
+									)));
+							passed = false;
+						}
+					}
+				}
+			} else if(inode.getStat().getInodeId() != InodeTable.INODE_ID_ROOT_DIRECTORY) {
+				issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
+						String.format("Directory %d %016x did not contain .. entry",
+							inode.getStat().getInodeId(),
+							inode.getIdentity()
+						)));
+				passed = false;
+			}
 			dir.list();
 			for(String path : dir.entries.keySet()) {
 				Long inodeId = dir.entries.get(path);
@@ -590,11 +648,14 @@ public class IntegrityChecker {
 			}
 		} catch (Exception exc) {
 			issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
-					String.format("Caught exception %s opening directory: %s",
+					String.format("Caught exception %s opening directory %d %016x: %s",
 							exc.getClass().getSimpleName(),
+							inode.getStat().getInodeId(),
+							inode.identity,
 							exc.getMessage())
 					));
 			passed = false;
+			exc.printStackTrace();
 		}
 		
 		return passed;
