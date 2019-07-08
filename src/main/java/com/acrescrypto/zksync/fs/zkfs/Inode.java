@@ -160,6 +160,13 @@ public class Inode implements Comparable<Inode> {
 	/** decrement link count. automatically unlink if nlink becomes == 0 and FLAG_RETAIN not set. 
 	 * @throws IOException */ 
 	public void removeLink() throws IOException {
+		/* InodeTable needs to have the next inode ID cached BEFORE we unlink. Otherwise, if it needs to
+		 * scan when we unlink and if the unlinked inode is at the end of the table, it will see our inode
+		 * has nlink 0 and consider it already deleted, and throw an error since we're attempting to unlink
+		 * an inode presumed to be beyond the end of the table. Triggering the scan here is a bit ugly,
+		 * but provides the necessary guarantee that the scan happens before nlink is decremented.
+		 */
+		fs.getInodeTable().nextInodeId();
 		nlink--;
 		if(isDeleted()) {
 			fs.getInodeTable().unlink(stat.getInodeId());

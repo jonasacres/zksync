@@ -273,10 +273,6 @@ public class InodeTable extends ZKFile {
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(zkfs.baseRevision),
 				inodeId);
-		Util.debugLog(String.format("InodeTable %s: unlinking inode %d %016x",
-				zkfs.getArchive().getMaster().getName(),
-				inode.getStat().getInodeId(),
-				inode.identity));
 		
 		// don't need to clear the inode if it's already clear
 		if(inode.identity != 0 || !inode.refTag.isBlank() || inode.flags != 0) {

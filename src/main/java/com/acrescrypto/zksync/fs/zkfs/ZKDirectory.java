@@ -320,15 +320,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 				}
 				
 				Inode inode = zkfs.getInodeTable().inodeWithId(inodeId);
-				Util.debugLog(String.format("ZKDirectory %s: removing entry %s from directory %s %d %016x, target inode %d %016x, pre nlink=%d",
-						zkfs.getArchive().getMaster().getName(),
-						name,
-						path,
-						this.inode.getStat().getInodeId(),
-						this.inode.identity,
-						inode.getStat().getInodeId(),
-						inode.identity,
-						inode.nlink));
 				inode.removeLink();
 				entries.remove(name);
 				
