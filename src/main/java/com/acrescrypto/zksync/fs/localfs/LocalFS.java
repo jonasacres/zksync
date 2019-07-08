@@ -465,7 +465,7 @@ public class LocalFS extends FS {
 		CachedName cached = cachedUserNames.get(uid);
 		if(cached == null || cached.isExpired()) {
 			cached = new CachedName(Files.getOwner(path, linkOpt).getName(), uid);
-			cachedGroupNames.put(uid, cached);
+			cachedUserNames.put(uid, cached);
 		}
 		
 		return cached.name;
