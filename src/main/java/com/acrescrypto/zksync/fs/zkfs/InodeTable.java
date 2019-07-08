@@ -708,8 +708,13 @@ public class InodeTable extends ZKFile {
 		rootInode.getStat().setGid(0);
 		rootInode.setRefTag(RefTag.blank(zkfs.archive));
 		rootInode.setFlags(Inode.FLAG_RETAIN);
-		rootInode.setNlink(1); // .
+		rootInode.setNlink(2); // . and ..
 		
+		// manually serialized root directory; 0x00 (SERIALIZATION_TYPE_BYTE), followed by .. inodeId
+		// note that this means /.. goes to / 
+		byte[] rootContents = new byte[] { 0x00, 0x01 };
+		rootInode.setRefTag(new RefTag(zkfs.archive, rootContents, RefTag.REF_TYPE_IMMEDIATE, 1));
+		rootInode.getStat().setSize(rootContents.length);
 		setInode(rootInode);
 	}
 	

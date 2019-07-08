@@ -548,16 +548,6 @@ public class IntegrityChecker {
 		try(ZKDirectory dir = new ZKDirectory(fs, inode)) {
 			// ensure we can open and list the directory
 			if(dir.entries.containsKey("..")) {
-				if(inode.getStat().getInodeId() == InodeTable.INODE_ID_ROOT_DIRECTORY) {
-					issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
-							String.format("Directory %d %016x is root directory but contained .. entry to %d",
-								inode.getStat().getInodeId(),
-								inode.getIdentity(),
-								dir.entries.get("..")
-							)));
-					passed = false;
-				}
-				
 				Inode parentInode = fs.inodeTable.inodeWithId(dir.entries.get(".."));
 				if(parentInode.isDeleted()) {
 					issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
@@ -576,11 +566,22 @@ public class IntegrityChecker {
 								parentInode.getStat().getType()
 							)));
 					passed = false;
+				} else if(inode.getStat().getInodeId() == InodeTable.INODE_ID_ROOT_DIRECTORY) {
+					if(parentInode.getStat().getInodeId() != InodeTable.INODE_ID_ROOT_DIRECTORY) {
+						issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
+								String.format("Root directory parent directory (/..) pointed to inodeId %d %016x; expected %d %016x",
+									parentInode.getStat().getInodeId(),
+									parentInode.getIdentity(),
+									inode.getStat().getInodeId(),
+									inode.identity
+								)));
+						passed = false;
+					}
 				} else {
 					try(ZKDirectory parent = fs.opendirSemicache(parentInode)) {
 						int numFound = 0;
 						for(long entryInodeId : parent.entries.values()) {
-							if(entryInodeId == parentInode.getStat().getInodeId()) {
+							if(entryInodeId == inode.getStat().getInodeId()) {
 								numFound++;
 							}
 						}
@@ -597,7 +598,7 @@ public class IntegrityChecker {
 						}
 					}
 				}
-			} else if(inode.getStat().getInodeId() != InodeTable.INODE_ID_ROOT_DIRECTORY) {
+			} else {
 				issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 						String.format("Directory %d %016x did not contain .. entry",
 							inode.getStat().getInodeId(),

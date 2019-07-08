@@ -403,6 +403,11 @@ public class ZKDirectory extends ZKFile implements Directory {
 		byte inodeIdType = buf.get();
 		int inodeIdSize = entrySizeForType(inodeIdType);
 		
+		// serializing .. with an implicit name lets us save 3 bytes per directory
+		assertIntegrity(buf.remaining() >= inodeIdSize, "Directory seems truncated; does not contain enough bytes for .. inode (expected " + inodeIdSize + ", have " + buf.remaining());
+		long dotDotInodeId = deserializeValueWithType(buf, inodeIdType);
+		entries.put("..", dotDotInodeId);
+		
 		try {
 			while(buf.hasRemaining()) {
 				assertIntegrity(buf.remaining() >= inodeIdSize, "Directory seems truncated; does not contain enough bytes for next inodeId (expected " + inodeIdSize + ", have " + buf.remaining() + ")");
@@ -453,17 +458,23 @@ public class ZKDirectory extends ZKFile implements Directory {
 		});
 		
 		int inodeIdSize = entrySizeForType(types[0]);
-		int size = 1; // 1 byte for inode type
+		int size = 1 + inodeIdSize; // 1 byte for inode type, plus .. entry
 		
 		for(String path : entries.keySet()) {
-			if(path.equals(".")) continue;
+			if(path.equals(".") || path.equals("..")) {
+				continue;
+			}
+			
 			size += inodeIdSize + 1 + path.getBytes().length; // inode number + path_len + path 
 		}
 		
 		ByteBuffer buf = ByteBuffer.allocate(size);
 		buf.put(types);
+		serializeValueWithType(buf, types[0], entries.get(".."));
 		entries.forEach((name, inodeId)->{
-			if(name.equals(".")) return; // . directory is implicit
+			if(name.equals(".") || name.equals("..")) {
+				return; // . is implicit, .. is serialized with implicit path name to save bytes
+			}
 			if(!isValidName(name)) {
 				logger.error("Refusing to serialize illegal path: " + Paths.get(path, name).toString());
 				return; 
@@ -570,12 +581,9 @@ public class ZKDirectory extends ZKFile implements Directory {
 	 **/
 	@Deprecated
 	public String calculatePath() throws IOException {
-		Long parentInodeId = entries.get("..");
-		if(parentInodeId == null) {
-			// only root lacks a parent directory
-			return "/";
-		}
+		if(getStat().getInodeId() == InodeTable.INODE_ID_ROOT_DIRECTORY) return "/";
 		
+		Long parentInodeId = entries.get("..");		
 		Inode parentInode = zkfs.inodeTable.inodeWithId(parentInodeId);
 		if(parentInode.isDeleted()) throw new ENOENTException("Unable to locate parent inodeId " + parentInodeId + " to directory with inodeId " + inode.getStat().getInodeId());
 		if(!parentInode.stat.isDirectory()) throw new EISNOTDIRException("Parent inodeId " + parentInodeId + " to directory with inodeId " + inode.getStat().getInodeId() + " is not a directory");

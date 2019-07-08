@@ -88,7 +88,7 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 			protected byte[] serialize() throws IOException {
 				byte[] serialization = super.serialize();
 				ByteBuffer buf = ByteBuffer.wrap(serialization);
-				buf.position(1 + 1); // inode type, inode id
+				buf.position(1 + 1 + 1); // inode type, .. inode id, first entry inode id
 				buf.put((byte) 100); // tell reader to expect 100 character path, much longer than reality
 				return serialization;
 			}
