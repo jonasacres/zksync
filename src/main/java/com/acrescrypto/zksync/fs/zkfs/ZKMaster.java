@@ -28,7 +28,7 @@ import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.MemLogAppender;
 import com.acrescrypto.zksync.utility.Util;
 
-public class ZKMaster implements ArchiveAccessorDiscoveryCallback {
+public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable {
 	public final static String TEST_VOLUME = "test";
 	public final static String KEYFILE = "keyfile";
 	

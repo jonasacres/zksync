@@ -57,6 +57,7 @@ public class NetworkedComplexTest {
 	@BeforeClass
 	public static void beforeAll() {
 		TestUtils.startDebugMode();
+		FS.fileHandleTelemetryEnabled = false;
 	}
 	
 	@Before

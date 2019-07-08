@@ -124,6 +124,8 @@ public class ZKFS extends FS {
 			assert(retainCount == 0);
 
 			cacheToken.close();
+			cacheToken = null;
+			
 			for(String path : this.directoriesByPath.cachedKeys()) {
 				this.directoriesByPath.get(path).forceClose();
 			}

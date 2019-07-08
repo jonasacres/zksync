@@ -4,7 +4,6 @@ import java.io.IOException;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -309,17 +308,30 @@ public class ZKDirectory extends ZKFile implements Directory {
 				assertWritable();
 				if(name.equals(".") || name.equals("..")) throw new EINVALException("cannot unlink " + name);
 				
-				String fullPath = Paths.get(path, name).toString();
-				
-				try {
-					Inode inode = zkfs.inodeForPath(fullPath, false);
-					inode.removeLink();
-				} catch(ENOENTException exc) {
-					// if we have a dead reference, we should be able to unlink it no questions asked
+				Long inodeId = entries.get(name);
+				if(inodeId == null) {
+					Util.debugLog(String.format("ZKDirectory %s: removing entry %s, but entry is not in directory %s %d %016x; ignoring",
+							zkfs.getArchive().getMaster().getName(),
+							name,
+							path,
+							this.inode.getStat().getInodeId(),
+							this.inode.identity));
+					return null; // allow quiet unlinking of "ghost entries" (those not linked by their alleged parent)
 				}
 				
+				Inode inode = zkfs.getInodeTable().inodeWithId(inodeId);
+				Util.debugLog(String.format("ZKDirectory %s: removing entry %s from directory %s %d %016x, target inode %d %016x, pre nlink=%d",
+						zkfs.getArchive().getMaster().getName(),
+						name,
+						path,
+						this.inode.getStat().getInodeId(),
+						this.inode.identity,
+						inode.getStat().getInodeId(),
+						inode.identity,
+						inode.nlink));
+				inode.removeLink();
 				entries.remove(name);
-				zkfs.uncache(fullPath);
+				
 				dirty = true;
 				zkfs.markDirty();
 				return null;
@@ -332,21 +344,19 @@ public class ZKDirectory extends ZKFile implements Directory {
 		zkfs.lockedOperation(()->{
 			synchronized(this) {
 				assertWritable();
-				Long parentInodeId = entries.get("..");
-				if(parentInodeId != null && !parentInodeId.equals(this.getStat().getInodeId())) {
-					try(ZKDirectory parent = zkfs.opendir(fs.dirname(this.path))) {
-						parent.getInode().removeLink();
+				long parentInodeId = entries.get("..");
+				if(parentInodeId != this.getStat().getInodeId()) {
+					Inode parentInode = zkfs.getInodeTable().inodeWithId(parentInodeId);
+					try(ZKDirectory parent = zkfs.opendirSemicache(parentInode)) {
 						parent.unlink(fs.basename(this.path));
+						parent.getInode().removeLink(); // parent loses reference from this dir's .. entry
 					}
 				}
 				
-				if(entries.containsKey(".")) {
-					/* hard to imagine a directory that doesn't have . but let's avoid the possibility of
-					 * creating a negative link count here */
-					inode.removeLink();
-				}
+				inode.removeLink();
 				
 				entries.clear();
+				zkfs.uncache(path);
 				this.bufferedPage = null;
 				return null;
 			}
@@ -372,6 +382,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	public RefTag commit() throws IOException {
+		if(inode.isDeleted()) return null;
 		if(!dirty) return tree.getRefTag();
 		assertWritable();
 		
