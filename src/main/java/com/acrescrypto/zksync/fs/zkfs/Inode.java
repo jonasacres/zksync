@@ -240,6 +240,11 @@ public class Inode implements Comparable<Inode> {
 	}
 	
 	/** deep copy of this inode */
+	public Inode clone() {
+		return clone(fs);
+	}
+	
+	/** deep copy of this inode with new fs field */
 	public Inode clone(ZKFS fs) {
 		return new Inode(fs, serialize());
 	}

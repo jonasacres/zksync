@@ -14,6 +14,7 @@ import org.bouncycastle.util.Arrays;
 import org.junit.*;
 
 import com.acrescrypto.zksync.TestUtils;
+import com.acrescrypto.zksync.crypto.PRNG;
 import com.acrescrypto.zksync.exceptions.DiffResolutionException;
 import com.acrescrypto.zksync.fs.zkfs.*;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;
@@ -792,42 +793,58 @@ public class DiffSetResolverTest {
 	
 	@Test
 	public void testResolvesForkedInodes() throws IOException, DiffResolutionException {
-		/* we want:
-		 * 	 2 revisions that have never had a file
-		 *   2 that have the file at inode 16, its original inode
-		 *   1 that has the file at inode 22, renumbered from 16
+		/* Check that we handle a case where an inode gets "forked" in a diff -- that is,
+		 * the same identity gets directed to multiple inodes in a diffset. This is a pretty confusing
+		 * setup based on an issue observed in testing.
 		 */
-		
-		// 2 without the file
-		LinkedList<RevisionTag> bigMergeTags = new LinkedList<>();
-		bigMergeTags.add(base.getFS().commitAndClose());
-		bigMergeTags.add(base.getFS().commitAndClose());
-		
-		// 2 that have the file at inode 16
-		fs.write("foo", new byte[0]);
-		RevisionTag fooTag = fs.commitAndClose();
-		
-		for(byte i = 0; i < 2; i++) {
-			try(ZKFS fooFs = fooTag.getFS()) {
-				fooFs.write("foo", new byte[] { i });
-				fooFs.link("foo", "foo-" + i);
-				bigMergeTags.add(fooFs.commit());
+		for(int i = 0; i < 3; i++) {
+			PRNG prng = master.getCrypto().prng(Util.serializeInt(7));
+			long lowIdentity = 0x10, highIdentity = 0x20;
+			LinkedList<RevisionTag> aTags = new LinkedList<>(),
+			                        bTags = new LinkedList<>(),
+			                        cTags = new LinkedList<>(),
+			                        mergeTags = new LinkedList<>();
+			
+			// rev A0 <- 00: write high identity
+			// rev A1 <- A0: no changes
+			try(ZKFS aFs = archive.openBlank()) {
+				aFs.write("highid", prng.getBytes(8));
+				aFs.inodeForPath("highid").setIdentity(highIdentity);
+				aTags.add(aFs.commit());
+				aTags.add(aFs.commit());
 			}
+	
+			// rev B0 <- 00: write low identity
+			try(ZKFS bFs = archive.openBlank()) {
+				bFs.write("lowid", prng.getBytes(8));
+				bFs.inodeForPath("lowid").setIdentity(lowIdentity);
+				bTags.add(bFs.commit());
+			}
+			
+			// rev C0 <- 00: no changes
+			// rev C1 <- A0, B0, C0: merge
+			// rev C2 <- C1: link high identity
+			try(ZKFS cFs = archive.openBlank()) {
+				cTags.add(cFs.commit());
+				
+				LinkedList<RevisionTag> firstMergeTags = new LinkedList<>();
+				firstMergeTags.add(aTags.getFirst());
+				firstMergeTags.add(bTags.getFirst());
+				firstMergeTags.add(cTags.getFirst());
+				cTags.add(DiffSetResolver.canonicalMergeResolver(firstMergeTags).resolve());
+				
+				try(ZKFS ccFs = cTags.getLast().getFS()) {
+					ccFs.link("highid", "highid-link-1-0");
+					cTags.add(ccFs.commit());
+				}
+			}
+			
+			// rev M <- A1, C2
+			mergeTags.add(aTags.getLast());
+			mergeTags.add(cTags.getLast());
+			DiffSetResolver resolver = DiffSetResolver.canonicalMergeResolver(mergeTags);
+			RevisionTag merge = resolver.resolve();
+			IntegrityChecker.assertValidFilesystem(merge);
 		}
-		
-		// 1 that has renumbered the file AND changed its contents
-		LinkedList<RevisionTag> littleMergeTags = new LinkedList<>();
-		fs = fooTag.getFS();
-		fs.write("foo", new byte[] { 1, 2, 3, 4 });
-		RevisionTag fooRewriteTag = fs.commitAndClose();		
-		littleMergeTags.add(fooRewriteTag);
-		
-		fs = base.getFS();
-		fs.write("bar", new byte[0]);
-		fs.inodeForPath("bar").setIdentity(1);
-		littleMergeTags.add(fs.commit());
-		bigMergeTags.add(DiffSetResolver.canonicalMergeResolver(littleMergeTags).resolve());
-		
-		DiffSetResolver.canonicalMergeResolver(bigMergeTags).resolve();
 	}
 }

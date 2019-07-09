@@ -27,6 +27,9 @@ public class DiffSet {
 	/** differences in inode listings */
 	HashMap<Long,InodeDiff> inodeDiffs = new HashMap<Long,InodeDiff>(); // differences in inode table entries
 	
+	/** different versions of inode by identity */
+	Map<Long,ArrayList<InodeDiff>> identityVersions = new HashMap<>(); 
+
 	HashSet<Long> issuedInodeIds = new HashSet<Long>();
 	
 	/** build a DiffSet from a collection of RefTags */
@@ -129,6 +132,43 @@ public class DiffSet {
 			renumberInodeDiff(mergeFs, diff, idMap);
 		}
 		
+		/* If we have an identity that's getting assigned to multiple inodeIds, we need to settle on a
+		 * single inodeId.
+		 */
+		for(long identity : identityVersions.keySet()) {
+			ArrayList<InodeDiff> diffs = identityVersions.get(identity);
+			if(diffs.size() <= 1) continue;
+			
+			long minId = Long.MAX_VALUE, minIdOriginal = Long.MAX_VALUE;
+			for(InodeDiff diff : diffs) {
+				if(minId > diff.inodeId) {
+					minId = diff.inodeId;
+					minIdOriginal = diff.originalInodeId;
+				}
+			}
+			
+			final long fMinId = minId;
+			InodeDiff megadiff = new InodeDiff(minId, minIdOriginal);
+			for(InodeDiff diff : diffs) {
+				diff.resolutions.forEach((inode, tags)->{
+					Inode rebuiltInode = null;
+					if(inode != null) {
+						rebuiltInode = inode.clone();
+						rebuiltInode.getStat().setInodeId(fMinId);
+					}
+					
+					megadiff.add(rebuiltInode, tags);
+					for(RevisionTag tag : tags) {
+						idMap.get(diff.originalInodeId).put(tag, fMinId);
+					}
+				});
+				
+				inodeDiffs.remove(diff.inodeId);
+			}
+			
+			inodeDiffs.put(minId, megadiff);
+		}
+		
 		Util.debugLog(sb.toString());
 		
 		return idMap;
@@ -220,7 +260,10 @@ public class DiffSet {
 				idMap.get(diff.inodeId).put(tag, newId);
 			}
 			
-			inodeDiffs.put(newId, renumberInodeWithIdentity(fs, diff, newId, identity));
+			InodeDiff renumberedDiff = renumberInodeWithIdentity(fs, diff, newId, identity);
+			inodeDiffs.put(newId, renumberedDiff);
+			identityVersions.putIfAbsent(identity, new ArrayList<InodeDiff>());
+			identityVersions.get(identity).add(renumberedDiff);
 		}
 		Util.debugLog(sb.toString());
 	}
