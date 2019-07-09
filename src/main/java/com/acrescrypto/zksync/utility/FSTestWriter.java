@@ -52,6 +52,11 @@ public class FSTestWriter {
 		actor.addAction(20, ()->truncateFile());
 		actor.addAction(20, ()->extendFile());
 		actor.addAction(20, ()->deleteFile());
+		
+		if(fs instanceof ZKFS) {
+			// FSMirror doesn't do hardlinks, so let's only add hardlinks into the mix if we're on ZKFS.
+			actor.addAction(100, ()->hardLinkFile());
+		}
 	}
 	
 	public void act() throws IOException {
@@ -260,5 +265,16 @@ public class FSTestWriter {
 		
 		log("rm " + path);
 		fs.unlink(path);
+	}
+	
+	protected void hardLinkFile() throws IOException {
+		String path = pickExistingFile();
+		String linkPathDir = pickExistingDirectory();
+		needsNotNull(path);
+		needsNotNull(linkPathDir);
+		String linkPathBase = fs.basename(path).replaceAll("-link-[0-9a-f]+", "") + "-link-" + Util.bytesToHex(prng.getBytes(4));
+		String linkPath = Paths.get(linkPathDir, linkPathBase).toString();
+		log("ln " + path + " " + linkPath);
+		fs.link(path, linkPath);
 	}
 }

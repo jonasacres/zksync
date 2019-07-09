@@ -789,4 +789,45 @@ public class DiffSetResolverTest {
 			}
 		}
 	}
+	
+	@Test
+	public void testResolvesForkedInodes() throws IOException, DiffResolutionException {
+		/* we want:
+		 * 	 2 revisions that have never had a file
+		 *   2 that have the file at inode 16, its original inode
+		 *   1 that has the file at inode 22, renumbered from 16
+		 */
+		
+		// 2 without the file
+		LinkedList<RevisionTag> bigMergeTags = new LinkedList<>();
+		bigMergeTags.add(base.getFS().commitAndClose());
+		bigMergeTags.add(base.getFS().commitAndClose());
+		
+		// 2 that have the file at inode 16
+		fs.write("foo", new byte[0]);
+		RevisionTag fooTag = fs.commitAndClose();
+		
+		for(byte i = 0; i < 2; i++) {
+			try(ZKFS fooFs = fooTag.getFS()) {
+				fooFs.write("foo", new byte[] { i });
+				fooFs.link("foo", "foo-" + i);
+				bigMergeTags.add(fooFs.commit());
+			}
+		}
+		
+		// 1 that has renumbered the file AND changed its contents
+		LinkedList<RevisionTag> littleMergeTags = new LinkedList<>();
+		fs = fooTag.getFS();
+		fs.write("foo", new byte[] { 1, 2, 3, 4 });
+		RevisionTag fooRewriteTag = fs.commitAndClose();		
+		littleMergeTags.add(fooRewriteTag);
+		
+		fs = base.getFS();
+		fs.write("bar", new byte[0]);
+		fs.inodeForPath("bar").setIdentity(1);
+		littleMergeTags.add(fs.commit());
+		bigMergeTags.add(DiffSetResolver.canonicalMergeResolver(littleMergeTags).resolve());
+		
+		DiffSetResolver.canonicalMergeResolver(bigMergeTags).resolve();
+	}
 }

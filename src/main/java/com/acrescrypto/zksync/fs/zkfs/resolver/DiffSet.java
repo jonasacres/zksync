@@ -105,17 +105,31 @@ public class DiffSet {
 	 * inode IDs.
 	 *  */
 	protected Map<Long,Map<RevisionTag,Long>> findInodeDiffs(ZKFS mergeFs) throws IOException {
+		StringBuilder sb = new StringBuilder(String.format("DiffSet %s: finding inode diffs",
+				revisions[0].getArchive().getMaster().getName()));
 		Map<Long,Map<RevisionTag,Long>> idMap = new HashMap<Long,Map<RevisionTag,Long>>();
 		for(long inodeId : allInodes()) {
 			InodeDiff diff = new InodeDiff(inodeId, revisions);
-			Util.debugLog(String.format("DiffSet %s: inode %d has %d candidates, isConflict=%s",
-					revisions[0].getArchive().getMaster().getName(),
+			sb.append(String.format("\n\tinodeId %d has %d candidates, isConflict=%s",
 					inodeId,
 					diff.resolutions.size(),
 					diff.isConflict() ? "true" : "false"));
+			for(Inode inode : diff.resolutions.keySet()) {
+				sb.append(String.format("\n\t\tIdentity %16s, size %7s, reftag %15s, changedfrom %15s [",
+						inode == null ? "null" : String.format("%016x", inode.getIdentity()),
+						inode == null ? "null" : String.format("%7d", inode.getStat().getSize()),
+						inode == null ? "null" : Util.formatRefTag(inode.getRefTag()),
+						inode == null ? "null" : Util.formatRevisionTag(inode.getChangedFrom())));
+				for(RevisionTag rev : diff.resolutions.get(inode)) {
+					sb.append(" " + Util.formatRevisionTag(rev));
+				}
+				sb.append(" ]");
+			}
 			if(!diff.isConflict()) continue;
 			renumberInodeDiff(mergeFs, diff, idMap);
 		}
+		
+		Util.debugLog(sb.toString());
 		
 		return idMap;
 	}

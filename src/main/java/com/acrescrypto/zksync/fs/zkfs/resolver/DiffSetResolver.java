@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -306,7 +307,7 @@ public class DiffSetResolver {
 		
 		/* if the resolver said to delete /foo but keep /foo/bar, we have an inconsistency and /foo must be
 		 * preserved. */
-		Collection<PathDiff> diffsToRecalculate = detectInconsistencies();
+		Collection<PathDiff> diffsToRecalculate = detectPathInconsistencies();
 		while(!diffsToRecalculate.isEmpty()) {
 			for(PathDiff diff : diffsToRecalculate) {
 				Util.debugLog(String.format("DiffSetResolver %s: reprocessing diff for path %s",
@@ -330,14 +331,14 @@ public class DiffSetResolver {
 				diff.setResolution(resolution);
 			}
 			
-			diffsToRecalculate = detectInconsistencies();
+			diffsToRecalculate = detectPathInconsistencies();
 		}
 	}
 	
 	/* Give a list of directories in the diffset that were marked for deletion, but have subpaths in the diffset
 	 * that were marked to keep.
 	 */
-	protected Collection<PathDiff> detectInconsistencies() {
+	protected Collection<PathDiff> detectPathInconsistencies() {
 		HashSet<String> unlinkedPaths = new HashSet<>();
 		HashSet<String> mandatoryParents = new HashSet<>();
 		
