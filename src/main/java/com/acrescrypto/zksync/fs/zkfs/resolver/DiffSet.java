@@ -147,6 +147,10 @@ public class DiffSet {
 				}
 			}
 			
+			sb.append(String.format("\n\tStandardizing identity %016x to inodeId %d / original inodeId %d",
+					identity,
+					minId,
+					minIdOriginal));
 			final long fMinId = minId;
 			InodeDiff megadiff = new InodeDiff(minId, minIdOriginal);
 			for(InodeDiff diff : diffs) {
@@ -159,6 +163,11 @@ public class DiffSet {
 					
 					megadiff.add(rebuiltInode, tags);
 					for(RevisionTag tag : tags) {
+						sb.append(String.format("\n\tRemapping %s inodeId %d to inodeId %d (was: inodeId %s)",
+								Util.formatRevisionTag(tag),
+								diff.originalInodeId,
+								fMinId,
+								idMap.get(diff.originalInodeId).get(tag)));
 						idMap.get(diff.originalInodeId).put(tag, fMinId);
 					}
 				});
