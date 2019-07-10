@@ -156,7 +156,7 @@ public class DiffSetResolver {
 								
 				// if the inode was renumbered, get the original inodeId so we can find look it up
 				InodeDiff inodeDiff = setResolver.diffset.inodeDiffs.get(inodeId);
-				originalInodeId = inodeDiff != null ? inodeDiff.originalInodeId : inodeId;
+				originalInodeId = inodeDiff != null ? inodeDiff.canonicalOriginalInodeId : inodeId;
 				
 				for(RevisionTag tag : revsWithoutPath) {
 					// if one of the revisions without this path has the same inode, then it must have moved
@@ -423,7 +423,7 @@ public class DiffSetResolver {
 		sb.append("Common ancestor: " + Util.formatRevisionTag(commonAncestor) + "\n");
 		sb.append("Affected inodes: " + diffset.inodeDiffs.size() + "\n");
 		for(InodeDiff diff : diffset.inodeDiffs.values()) {
-			sb.append("Inode diff: inodeId " + diff.inodeId + " (" + diff.resolutions.size() + " versions, original inodeId " + diff.originalInodeId + ")\n");
+			sb.append("Inode diff: inodeId " + diff.inodeId + " (" + diff.resolutions.size() + " versions, original inodeId " + diff.canonicalOriginalInodeId + ")\n");
 			diff.resolutions.forEach((inode, tags)->{
 				String tagStr = "";
 				for(RevisionTag tag : tags) {

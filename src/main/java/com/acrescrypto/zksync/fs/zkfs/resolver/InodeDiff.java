@@ -10,23 +10,26 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
 public class InodeDiff {
 	protected HashMap<Inode,ArrayList<RevisionTag>> resolutions = new HashMap<Inode,ArrayList<RevisionTag>>();
-	protected long inodeId, originalInodeId;
+	protected long inodeId;
 	protected boolean resolved;
 	protected Inode resolution;
+	protected HashMap<RevisionTag,Long> originalInodeIds = new HashMap<>();
+	protected RevisionTag canonicalSourceRevision;
+	protected long canonicalOriginalInodeId;
 	
-	public InodeDiff(long inodeId, long originalInodeId) {
+	public InodeDiff(long inodeId) {
 		this.inodeId = inodeId;
-		this.originalInodeId = originalInodeId;
 	}
 	
 	public InodeDiff(long inodeId, RevisionTag[] candidates) throws IOException {
-		this.inodeId = this.originalInodeId = inodeId;
+		this.inodeId = inodeId;
 		for(RevisionTag candidate : candidates) {
 			try(ZKFS fs = candidate.readOnlyFS()) {
 				Inode inode = fs.getInodeTable().inodeWithId(inodeId);
 				if(inode.isDeleted()) inode = null;
 				getResolutions().putIfAbsent(inode, new ArrayList<>());
 				getResolutions().get(inode).add(candidate);
+				originalInodeIds.put(candidate, inodeId);
 			}
 		}
 	}
@@ -50,6 +53,8 @@ public class InodeDiff {
 	public void setResolution(Inode resolution) {
 		this.resolution = resolution;
 		this.resolved = true;
+		canonicalSourceRevision = resolutions.get(resolution).get(0);
+		canonicalOriginalInodeId = originalInodeIdForTag(canonicalSourceRevision);
 	}
 	
 	public Inode getResolution() {
@@ -62,6 +67,13 @@ public class InodeDiff {
 
 	public void add(Inode newInode, ArrayList<RevisionTag> tags) {
 		resolutions.put(newInode, tags);
+		for(RevisionTag tag : tags) {
+			if(newInode == null) {
+				originalInodeIds.put(tag, (long) -1);
+			} else {
+				originalInodeIds.put(tag, newInode.getStat().getInodeId());
+			}
+		}
 	}
 	
 	public String dump() {
@@ -76,7 +88,15 @@ public class InodeDiff {
 		return s;
 	}
 
-	public long getOriginalInodeId() {
-		return originalInodeId;
+	public long originalInodeIdForTag(RevisionTag tag) {
+		return originalInodeIds.get(tag);
+	}
+
+	public long getCanonicalOriginalInodeId() {
+		return canonicalOriginalInodeId;
+	}
+
+	public RevisionTag getCanonicalSourceRevision() {
+		return canonicalSourceRevision;
 	}
 }

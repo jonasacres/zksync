@@ -143,7 +143,6 @@ public class DiffSet {
 			for(InodeDiff diff : diffs) {
 				if(minId > diff.inodeId) {
 					minId = diff.inodeId;
-					minIdOriginal = diff.originalInodeId;
 				}
 			}
 			
@@ -152,23 +151,26 @@ public class DiffSet {
 					minId,
 					minIdOriginal));
 			final long fMinId = minId;
-			InodeDiff megadiff = new InodeDiff(minId, minIdOriginal);
+			InodeDiff megadiff = new InodeDiff(minId);
 			for(InodeDiff diff : diffs) {
 				diff.resolutions.forEach((inode, tags)->{
-					Inode rebuiltInode = null;
 					if(inode != null) {
+						Inode rebuiltInode = null;
 						rebuiltInode = inode.clone();
+						megadiff.add(rebuiltInode, tags);
 						rebuiltInode.getStat().setInodeId(fMinId);
+					} else {
+						megadiff.add(null, tags);
 					}
 					
-					megadiff.add(rebuiltInode, tags);
 					for(RevisionTag tag : tags) {
+						idMap.putIfAbsent(diff.originalInodeIdForTag(tag), new HashMap<>());
 						sb.append(String.format("\n\t\tRemapping %s inodeId %d to inodeId %d (was: inodeId %s)",
 								Util.formatRevisionTag(tag),
-								diff.originalInodeId,
+								diff.originalInodeIdForTag(tag),
 								fMinId,
-								idMap.get(diff.originalInodeId).get(tag)));
-						idMap.get(diff.originalInodeId).put(tag, fMinId);
+								idMap.get(diff.originalInodeIdForTag(tag)).get(tag)));
+						idMap.get(diff.originalInodeIdForTag(tag)).put(tag, fMinId);
 					}
 				});
 				
@@ -279,13 +281,13 @@ public class DiffSet {
 	
 	/** assign a new inode ID to a given identity constant in an inode diffset */
 	protected InodeDiff renumberInodeWithIdentity(ZKFS fs, InodeDiff diff, long newId, long identity) {
-		InodeDiff newDiff = new InodeDiff(newId, diff.inodeId);
+		InodeDiff newDiff = new InodeDiff(newId);
 		
 		for(Inode inode : diff.resolutions.keySet()) {
 			if(inode != null && inode.getIdentity() == identity) {
 				Inode newInode = inode.clone(fs);
-				newInode.getStat().setInodeId(newId);
 				newDiff.add(newInode, diff.resolutions.get(inode));
+				newInode.getStat().setInodeId(newId);
 			} else if(inode == null) {
 				newDiff.add(null, diff.resolutions.get(inode));
 			}

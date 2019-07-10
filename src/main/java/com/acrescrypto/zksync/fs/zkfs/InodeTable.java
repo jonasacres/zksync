@@ -812,9 +812,11 @@ public class InodeTable extends ZKFile {
 		Inode existing = inodeWithId(inodeDiff.getInodeId());
 		Inode duplicated = inodeDiff.getResolution().clone(zkfs);
 		
-		RevisionTag properChangedFrom = inodeDiff.getResolutions().get(inodeDiff.getResolution()).get(0);
 		changedFromOverrides.put(inodeDiff.getInodeId(),
-				new ChangedFromOverrideReference(inodeDiff.getOriginalInodeId(), properChangedFrom));
+				new ChangedFromOverrideReference(
+						inodeDiff.getCanonicalOriginalInodeId(),
+						inodeDiff.getCanonicalSourceRevision()
+						));
 		
 		/* anything to do with path structure, we can ignore. that means: nlink for all inodes, and refTag/size
 		 * for directories. Directory structure is recalculated during merge, altering directory contents and
