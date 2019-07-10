@@ -55,7 +55,7 @@ public class FSTestWriter {
 		
 		if(fs instanceof ZKFS) {
 			// FSMirror doesn't do hardlinks, so let's only add hardlinks into the mix if we're on ZKFS.
-			actor.addAction(100, ()->hardLinkFile());
+			actor.addAction(5, ()->hardLinkFile());
 		}
 	}
 	

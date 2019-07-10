@@ -163,7 +163,7 @@ public class DiffSet {
 					
 					megadiff.add(rebuiltInode, tags);
 					for(RevisionTag tag : tags) {
-						sb.append(String.format("\n\tRemapping %s inodeId %d to inodeId %d (was: inodeId %s)",
+						sb.append(String.format("\n\t\tRemapping %s inodeId %d to inodeId %d (was: inodeId %s)",
 								Util.formatRevisionTag(tag),
 								diff.originalInodeId,
 								fMinId,

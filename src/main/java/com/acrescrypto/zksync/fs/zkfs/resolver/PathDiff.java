@@ -15,6 +15,7 @@ public class PathDiff implements Comparable<PathDiff> {
 	protected String path;
 	protected boolean resolved;
 	protected Long resolution;
+	protected boolean forceConflict;
 	
 	public PathDiff(String path) {
 		this.path = path;
@@ -36,6 +37,9 @@ public class PathDiff implements Comparable<PathDiff> {
 								inodeId,
 								newInodeId));
 						inodeId = newInodeId;
+						
+						// need this to appear as a path diff to guarantee renumbering is executed, so set forceConflict
+						forceConflict = true;
 					}
 				}
 			} catch (ENOENTException e) {}
@@ -46,7 +50,7 @@ public class PathDiff implements Comparable<PathDiff> {
 	}
 
 	public boolean isConflict() {
-		return getResolutions().size() > 1;
+		return forceConflict || getResolutions().size() > 1;
 	}
 	
 	public String getPath() {
