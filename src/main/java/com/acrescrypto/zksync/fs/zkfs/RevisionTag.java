@@ -140,7 +140,9 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		
 		ByteBuffer signedCiphertext = ByteBuffer.allocate(sizeForConfig(refTag.getConfig()));
 		signedCiphertext.put(ciphertext);
-		signedCiphertext.put(refTag.config.privKey.sign(signedCiphertext.array(), 0, signedCiphertext.position()));
+		signedCiphertext.put(refTag.config.privKey.sign(signedCiphertext.array(),
+				0,
+				signedCiphertext.position()));
 		
 		serialized = signedCiphertext.array();
 		hashCode = ByteBuffer.wrap(serialized).getInt();

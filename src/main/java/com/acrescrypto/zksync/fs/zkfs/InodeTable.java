@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
 
 import org.apache.commons.lang3.mutable.MutableLong;
 
@@ -45,9 +46,18 @@ public class InodeTable extends ZKFile {
 	
 	protected HashCache<Long,Inode[]> inodesByPage; /** in-memory cache of inode data */
 	
+	/** List of inodeIds allocated in this revision. Cleared on each commit. */
+	protected LinkedList<Long> allocatedInodeIds;
+	
 	/** serialized size of an inode for a given archive, in bytes */
 	public static int inodeSize(ZKArchive archive) {
-		return Stat.STAT_SIZE + 2*8 + 1*4 + 1 + archive.config.refTagSize() + RevisionTag.sizeForConfig(archive.config);		
+		return Stat.STAT_SIZE
+				+ 2*8
+				+ 1*4
+				+ 1
+				+ archive.config.refTagSize()
+				+ RevisionTag.sizeForConfig(archive.config)
+				+ 8;		
 	}
 	
 	/** initialize inode table for FS.
@@ -62,6 +72,7 @@ public class InodeTable extends ZKFile {
 			this.trusted = false;
 			this.path = INODE_TABLE_PATH;
 			this.mode = O_RDWR;
+			this.allocatedInodeIds = new LinkedList<>();
 			int cacheSize = fs.getArchive().getMaster().getGlobalConfig().getInt("fs.settings.inodeTablePageCacheSize");
 			this.inodesByPage = new HashCache<Long,Inode[]>(cacheSize, (Long pageNum) -> {
 				logger.trace("ZKFS {} {}: Caching inode table page {}",
@@ -177,8 +188,9 @@ public class InodeTable extends ZKFile {
 				fixedInode.getStat().setAtime(timestamp);
 			}
 		}
-
+		
 		syncInodes();
+		allocatedInodeIds.clear();
 		return parents;
 	}
 	
@@ -363,7 +375,14 @@ public class InodeTable extends ZKFile {
 		inode.getStat().setUid  (zkfs.archive.master.getGlobalConfig().getInt   ("fs.default.uid"));
 		inode.getStat().setGroup(zkfs.archive.master.getGlobalConfig().getString("fs.default.groupname"));
 		inode.getStat().setGid  (zkfs.archive.master.getGlobalConfig().getInt   ("fs.default.gid"));
+		
 		inode.setRefTag(RefTag.blank(zkfs.archive));
+		inode.setNlink(0);
+		inode.setPreviousInodeId(-1);
+		inode.setChangedFrom(RevisionTag.blank(zkfs.archive.getConfig()));
+		
+		allocatedInodeIds.add(inodeId);
+		
 		return inode;
 	}
 	
@@ -729,6 +748,8 @@ public class InodeTable extends ZKFile {
 		Inode freelistInode = issueInode(INODE_ID_FREELIST);
 		freelistInode.setFlags(Inode.FLAG_RETAIN);
 		freelistInode.setIdentity(0);
+		freelistInode.setStat(new Stat());
+		freelistInode.getStat().setInodeId(INODE_ID_FREELIST);
 		this.freelist = new FreeList(freelistInode);
 		setInode(freelistInode);
 	}
@@ -768,46 +789,50 @@ public class InodeTable extends ZKFile {
 		assert(inodeDiff.isResolved());
 		if(inodeDiff.getResolution() == null) {
 			inodeWithId(inodeDiff.getInodeId()).markDeleted();
-		} else {
-			Inode existing = inodeWithId(inodeDiff.getInodeId());
-			Inode duplicated = inodeDiff.getResolution().clone(zkfs);
-			
-			/* anything to do with path structure, we can ignore. that means: nlink for all inodes, and refTag/size
-			 * for directories. Directory structure is recalculated during merge, altering directory contents and
-			 * inode nlinks.
-			 */
-			if(existing != null) {
-				duplicated.nlink = existing.nlink;
-				if(duplicated.stat.isDirectory() && existing.identity == inodeDiff.getResolution().identity) {
-					duplicated.refTag = existing.refTag;
-					duplicated.stat.setSize(existing.stat.getSize());
-				}
-			} else {
-				// TODO API: (coverage) branch
-				duplicated.nlink = 0;
-				if(duplicated.stat.isDirectory()) {
-					duplicated.refTag = RefTag.blank(zkfs.archive);
-					duplicated.stat.setSize(0);
-				}
-			}
-			
-			// make sure we retain existing instances, to keep caches square
-			setInode(duplicated);
-			if(duplicated.getStat().getInodeId() >= nextInodeId()) {
-				nextInodeId = duplicated.getStat().getInodeId() + 1;
-			}
-			
-			Util.debugLog(String.format("InodeTable %s: replaced inodeId %d to identity %016x, nlink %d (was %016x, nlink %d), base revision %s, cached pages %d, nextInodeId %d",
-					zkfs.getArchive().getMaster().getName(),
-					duplicated.getStat().getInodeId(),
-					duplicated.getIdentity(),
-					duplicated.getNlink(),
-					existing.identity,
-					existing.nlink,
-					Util.formatRevisionTag(zkfs.getBaseRevision()),
-					inodesByPage.cachedSize(),
-					nextInodeId));
+			return;
 		}
+		
+		Inode existing = inodeWithId(inodeDiff.getInodeId());
+		Inode duplicated = inodeDiff.getResolution().clone(zkfs);
+		
+		RevisionTag properChangedFrom = inodeDiff.getResolutions().get(inodeDiff.getResolution()).get(0);
+		zkfs.overrideChangedFrom(inodeDiff.getInodeId(), properChangedFrom);
+		
+		/* anything to do with path structure, we can ignore. that means: nlink for all inodes, and refTag/size
+		 * for directories. Directory structure is recalculated during merge, altering directory contents and
+		 * inode nlinks.
+		 */
+		if(existing != null) {
+			duplicated.nlink = existing.nlink;
+			if(duplicated.stat.isDirectory() && existing.identity == inodeDiff.getResolution().identity) {
+				duplicated.refTag = existing.refTag;
+				duplicated.stat.setSize(existing.stat.getSize());
+			}
+		} else {
+			// TODO API: (coverage) branch
+			duplicated.nlink = 0;
+			if(duplicated.stat.isDirectory()) {
+				duplicated.refTag = RefTag.blank(zkfs.archive);
+				duplicated.stat.setSize(0);
+			}
+		}
+		
+		// make sure we retain existing instances, to keep caches square
+		setInode(duplicated);
+		if(duplicated.getStat().getInodeId() >= nextInodeId()) {
+			nextInodeId = duplicated.getStat().getInodeId() + 1;
+		}
+		
+		Util.debugLog(String.format("InodeTable %s: replaced inodeId %d to identity %016x, nlink %d (was %016x, nlink %d), base revision %s, cached pages %d, nextInodeId %d",
+				zkfs.getArchive().getMaster().getName(),
+				duplicated.getStat().getInodeId(),
+				duplicated.getIdentity(),
+				duplicated.getNlink(),
+				existing.identity,
+				existing.nlink,
+				Util.formatRevisionTag(zkfs.getBaseRevision()),
+				inodesByPage.cachedSize(),
+				nextInodeId));
 	}
 	
 	public String dumpInodes() throws IOException {
@@ -821,17 +846,23 @@ public class InodeTable extends ZKFile {
 				numInodesForPage(1));
 		for(int i = 0; i < nextInodeId(); i++) {
 			Inode inode = inodeWithId(i);
-			s += String.format("\tinodeId %4d: identity %016x, %s, size %7d, nlink %02d, type %02x, changedfrom %s\n",
+			s += String.format("\tinodeId %4d: identity %016x, %s, size %7d, nlink %02d, type %02x, changedfrom %s, prevInodeId %4d\n",
 					inode.stat.getInodeId(),
 					inode.identity,
 					Util.formatRefTag(inode.refTag),
 					inode.getStat().getSize(),
 					inode.nlink,
 					inode.getStat().getType(),
-					Util.formatRevisionTag(inode.changedFrom));
+					Util.formatRevisionTag(inode.changedFrom),
+					inode.previousInodeId);
 		}
 		
 		return s;
+	}
+	
+	/** Did we allocate a given inodeId in this revision? */
+	public boolean allocatedInRevision(long inodeId) {
+		return allocatedInodeIds.contains(inodeId);
 	}
 	
 	/** Iteraable for all inodes in the table */

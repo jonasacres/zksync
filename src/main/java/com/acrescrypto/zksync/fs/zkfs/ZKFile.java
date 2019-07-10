@@ -16,37 +16,53 @@ import com.acrescrypto.zksync.utility.Util;
 
 /** Represents a file handle within a zkfs. */
 public class ZKFile extends File {
-	protected ZKFS zkfs;
 	/** filesystem to which this file belongs */
-	protected Inode inode;
+	protected ZKFS zkfs;
+	
 	/** inode describing metadata of this file */
-	protected long offset;
+	protected Inode inode;
+	
 	/** current location of file pointer (offset in bytes into file) */
-	protected Long overrideMtime;
+	protected long offset;
+	
 	/**
 	 * Time to set as mtime on next flush (set to null to use current time). Reset
 	 * to null after flush().
 	 */
-	protected String path;
+	protected Long overrideMtime;
+	
 	/** path from which the file was opened */
-	protected PageTree tree;
+	protected String path;
+	
 	/** Tree of page hashes, used to locate/validate page contents. */
-	protected int mode;
+	protected PageTree tree;
+	
 	/** file access mode bitmask */
-	protected Page bufferedPage;
+	protected int mode;
+	
 	/** buffered page contents (page for current file pointer offset) */
-	protected boolean dirty;
+	protected Page bufferedPage;
+	
 	/** true if file has been modified since last flush */
-	protected boolean trusted;
+	protected boolean dirty;
+	
 	/** verify page signatures when reading <=> !trusted */
-	protected boolean closed, closing;
+	protected boolean trusted;
+	
 	/** is this file closed? */
-	protected long pendingSize;
+	protected boolean closed;
+	
+	/** are we in the process of closing this file? */
+	protected boolean closing;
+	
 	/** size to be set on next commit */
+	protected long pendingSize;
+	
+	/** how many open references to this file exist? */
 	protected int retainCount = 0;
-
-	public final static int O_LINK_LITERAL = 1 << 16;
+	
 	/** treat symlinks as literal files, needed for lowlevel symlink operations */
+	public final static int O_LINK_LITERAL = 1 << 16;
 
 	protected Logger logger = LoggerFactory.getLogger(ZKFile.class);
 
@@ -371,7 +387,15 @@ public class ZKFile extends File {
 				long now = Util.currentTimeNanos();
 				long mtime = overrideMtime == null ? now : overrideMtime;
 				inode.getStat().setMtime(mtime);
-				inode.setChangedFrom(zkfs.baseRevision);
+				
+				boolean isNew = zkfs.getInodeTable().allocatedInRevision(inode.getStat().getInodeId());
+				if(isNew) {
+					inode.setPreviousInodeId(-1);
+				} else {
+					inode.setPreviousInodeId(inode.getStat().getInodeId());
+				}
+				
+				inode.setChangedFrom(zkfs.getChangedFrom(inode.getStat().getInodeId()));
 				inode.setModifiedTime(mtime);
 				if (bufferedPage != null) {
 					bufferedPage.flush();

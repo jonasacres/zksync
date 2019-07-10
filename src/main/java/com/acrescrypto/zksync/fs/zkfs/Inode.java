@@ -19,6 +19,7 @@ public class Inode implements Comparable<Inode> {
 	protected long identity; /** assigned on inode creation, remains constant, used to distinguish new files vs. modified files on merge */
 	protected RefTag refTag; /** reference to file contents */
 	protected RevisionTag changedFrom; /** latest revision tag containing previous version */
+	protected long previousInodeId; /** inodeId in revision indicated in changedFrom; -1 if inode did not exist in that revision */
 	
 	// for use in flags field
 	public static final byte FLAG_RETAIN = 1 << 0;
@@ -46,7 +47,9 @@ public class Inode implements Comparable<Inode> {
 	public Inode(ZKFS fs) {
 		this.fs = fs;
 		this.stat = new Stat();
-		this.changedFrom = fs.baseRevision;
+		if(!fs.archive.config.isReadOnly()) {
+			this.changedFrom = RevisionTag.blank(fs.archive.config);
+		}
 		this.refTag = RefTag.blank(fs.archive);
 	}
 	
@@ -96,6 +99,14 @@ public class Inode implements Comparable<Inode> {
 		this.changedFrom = changedFrom;
 	}
 	
+	public long getPreviousInodeId() {
+		return previousInodeId;
+	}
+	
+	public void setPreviousInodeId(long previousInodeId) {
+		this.previousInodeId = previousInodeId;
+	}
+	
 	public long getModifiedTime() {
 		return modifiedTime;
 	}
@@ -125,6 +136,7 @@ public class Inode implements Comparable<Inode> {
 		buf.put(flags);
 		buf.put(refTag.getBytes());
 		buf.put(changedFrom.getBytes());
+		buf.putLong(previousInodeId);
 		
 		return buf.array();
 	}
@@ -149,11 +161,12 @@ public class Inode implements Comparable<Inode> {
 		byte[] revisionTagBytes = new byte[RevisionTag.sizeForConfig(fs.archive.config)];
 		buf.get(revisionTagBytes);
 		this.changedFrom = new RevisionTag(fs.archive.config, revisionTagBytes, false);
+		
+		this.previousInodeId = buf.getLong();
 	}
 	
 	/** increment link count */
 	public void addLink() {
-		this.changedFrom = fs.baseRevision;
 		nlink++;
 	}
 	
@@ -233,6 +246,7 @@ public class Inode implements Comparable<Inode> {
 		stat.setInodeId(oldId);
 		refTag = RefTag.blank(fs.archive);
 		changedFrom = RevisionTag.blank(fs.archive.config);
+		previousInodeId = 0;
 		nlink = 0;
 		modifiedTime = 0;
 		flags = 0;
@@ -261,6 +275,7 @@ public class Inode implements Comparable<Inode> {
 		s += "\tIdentity: " + identity + "\n";
 		s += "\trefTag: " + Util.formatRefTag(refTag) + "\n";
 		s += "\tchangedFrom: " + Util.formatRevisionTag(changedFrom) + "\n";
+		s += "\tpreviousInodeId: " + previousInodeId + "\n";
 		return s;
 	}
 }

@@ -63,7 +63,6 @@ public class FSMirrorTest {
 		target.close();
 		archive.close();
 		master.close();
-		TestUtils.assertTidy();
 	}
 	
 	@AfterClass

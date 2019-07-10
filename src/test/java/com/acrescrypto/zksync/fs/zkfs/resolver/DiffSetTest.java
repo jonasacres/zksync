@@ -307,25 +307,24 @@ public class DiffSetTest {
 	
 	@Test
 	public void testDirectoryEntriesAreADifference() throws IOException {
-		ZKFS fs = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").openBlank();
-		
-		RevisionTag[] revs = new RevisionTag[2];
-		
-		fs.write("file0", "blah".getBytes());
-		fs.write("file1", "blah".getBytes());
-		revs[0] = fs.commit();
-		
-		fs.unlink("file1");
-		fs.link("file0", "file1"); // 1 path diff and 2 inode diff (file1 and /)
-		revs[1] = fs.commit();
-
-		DiffSet diffset = new DiffSet(revs);
-		assertEquals(3, diffset.inodeDiffs.size()); // file0, file1, /
-		assertEquals(1, diffset.pathDiffs.size()); // file1
-		assertTrue(diffset.pathDiffs.containsKey("file1"));
-		
-		fs.close();
-		fs.getArchive().close();
+		try(ZKArchive archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
+		    ZKFS fs = archive.openBlank()
+		) {
+			RevisionTag[] revs = new RevisionTag[2];
+			
+			fs.write("file0", "blah".getBytes());
+			fs.write("file1", "blah".getBytes());
+			revs[0] = fs.commit();
+			
+			fs.unlink("file1");
+			fs.link("file0", "file1"); // 1 path diff and 2 inode diff (file1 and /)
+			revs[1] = fs.commit();
+	
+			DiffSet diffset = new DiffSet(revs);
+			assertEquals(2, diffset.inodeDiffs.size()); // file1, /
+			assertEquals(1, diffset.pathDiffs.size()); // file1
+			assertTrue(diffset.pathDiffs.containsKey("file1"));
+		}
 	}
 	
 	protected void trivialInodeDiffTest(DiffExampleLambda meat) throws IOException {
