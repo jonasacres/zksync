@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.lang3.mutable.MutableLong;
 
@@ -49,6 +50,9 @@ public class InodeTable extends ZKFile {
 	/** List of inodeIds allocated in this revision. Cleared on each commit. */
 	protected LinkedList<Long> allocatedInodeIds;
 	
+	/** Map of inode IDs that we will force to have a specific changedFrom field in a diff merge */
+	protected ConcurrentHashMap<Long,ChangedFromOverrideReference> changedFromOverrides = new ConcurrentHashMap<>();
+	
 	/** serialized size of an inode for a given archive, in bytes */
 	public static int inodeSize(ZKArchive archive) {
 		return Stat.STAT_SIZE
@@ -58,6 +62,16 @@ public class InodeTable extends ZKFile {
 				+ archive.config.refTagSize()
 				+ RevisionTag.sizeForConfig(archive.config)
 				+ 8;		
+	}
+	
+	protected class ChangedFromOverrideReference {
+		long previousInodeId;
+		RevisionTag tag;
+		
+		public ChangedFromOverrideReference(long previousInodeId, RevisionTag tag) {
+			this.tag = tag;
+			this.previousInodeId = previousInodeId;
+		}
 	}
 	
 	/** initialize inode table for FS.
@@ -191,6 +205,7 @@ public class InodeTable extends ZKFile {
 		
 		syncInodes();
 		allocatedInodeIds.clear();
+		changedFromOverrides.clear();
 		return parents;
 	}
 	
@@ -516,6 +531,8 @@ public class InodeTable extends ZKFile {
 			newLocation.getStat().setInodeId(newId);
 			zkfs.updateCachedDirectoryInode(oldId, newLocation);
 			existingLocation.markDeleted();
+			
+			changedFromOverrides.put(newId, getChangedFromInfo(oldId));
 		}
 		
 		/* update links in the directories */
@@ -796,7 +813,8 @@ public class InodeTable extends ZKFile {
 		Inode duplicated = inodeDiff.getResolution().clone(zkfs);
 		
 		RevisionTag properChangedFrom = inodeDiff.getResolutions().get(inodeDiff.getResolution()).get(0);
-		zkfs.overrideChangedFrom(inodeDiff.getInodeId(), properChangedFrom);
+		changedFromOverrides.put(inodeDiff.getInodeId(),
+				new ChangedFromOverrideReference(inodeDiff.getOriginalInodeId(), properChangedFrom));
 		
 		/* anything to do with path structure, we can ignore. that means: nlink for all inodes, and refTag/size
 		 * for directories. Directory structure is recalculated during merge, altering directory contents and
@@ -910,5 +928,13 @@ public class InodeTable extends ZKFile {
 				Util.formatRevisionTag(zkfs.getBaseRevision()),
 				inodesByPage.cachedSize());
 		inodesByPage.removeAll();
+	}
+	
+	public ChangedFromOverrideReference getChangedFromInfo(long inodeId) {
+		ChangedFromOverrideReference ref = changedFromOverrides.getOrDefault(inodeId, null);
+		if(ref != null) return ref;
+		
+		long prevInodeId = allocatedInRevision(inodeId) ? -1 : inodeId;
+		return new ChangedFromOverrideReference(prevInodeId, zkfs.baseRevision);
 	}
 }

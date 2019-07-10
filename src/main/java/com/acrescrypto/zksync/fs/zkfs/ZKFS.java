@@ -54,7 +54,6 @@ public class ZKFS extends FS {
 	protected boolean isReadOnly; // was this specific ZKFS opened RO? (not the whole archive)
 	protected int retainCount;
 	protected ConcurrentHashMap<ZKFile,Object> openFiles = new ConcurrentHashMap<>();
-	protected ConcurrentHashMap<Long,RevisionTag> changedFromOverrides = new ConcurrentHashMap<>();
 	protected ConcurrentLinkedQueue<Throwable> retentions = new ConcurrentLinkedQueue<>();
 	protected ConcurrentLinkedQueue<Throwable> closures = new ConcurrentLinkedQueue<>();
 	protected int readTimeoutMs = -1;
@@ -207,7 +206,6 @@ public class ZKFS extends FS {
 				parentStr += ", " + Util.formatRevisionTag(parent);
 			}
 			Collection<RevisionTag> parents = inodeTable.commitWithTimestamp(additionalParents, timestamp);
-			changedFromOverrides.clear();
 			finalizeCommit(parents);
 			logger.info("ZKFS {}: Created revtag {} from {}",
 					Util.formatArchiveId(archive.getConfig().getArchiveId()),
@@ -914,14 +912,5 @@ public class ZKFS extends FS {
 	
 	public void setReadTimeoutMs(int readTimeoutMs) {
 		this.readTimeoutMs = readTimeoutMs;
-	}
-
-	public void overrideChangedFrom(long inodeId, RevisionTag properChangedFrom) {
-		// TODO Auto-generated method stub
-		changedFromOverrides.put(inodeId, properChangedFrom);
-	}
-	
-	public RevisionTag getChangedFrom(long inodeId) {
-		return changedFromOverrides.getOrDefault(inodeId, baseRevision);
 	}
 }

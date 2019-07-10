@@ -12,6 +12,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
+import com.acrescrypto.zksync.fs.zkfs.InodeTable.ChangedFromOverrideReference;
 import com.acrescrypto.zksync.utility.Util;
 
 /** Represents a file handle within a zkfs. */
@@ -388,14 +389,10 @@ public class ZKFile extends File {
 				long mtime = overrideMtime == null ? now : overrideMtime;
 				inode.getStat().setMtime(mtime);
 				
-				boolean isNew = zkfs.getInodeTable().allocatedInRevision(inode.getStat().getInodeId());
-				if(isNew) {
-					inode.setPreviousInodeId(-1);
-				} else {
-					inode.setPreviousInodeId(inode.getStat().getInodeId());
-				}
+				ChangedFromOverrideReference ref = zkfs.getInodeTable().getChangedFromInfo(inode.getStat().getInodeId());
+				inode.setPreviousInodeId(ref.previousInodeId);
+				inode.setChangedFrom(ref.tag);
 				
-				inode.setChangedFrom(zkfs.getChangedFrom(inode.getStat().getInodeId()));
 				inode.setModifiedTime(mtime);
 				if (bufferedPage != null) {
 					bufferedPage.flush();

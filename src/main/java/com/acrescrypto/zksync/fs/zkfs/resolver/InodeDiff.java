@@ -75,4 +75,8 @@ public class InodeDiff {
 		}
 		return s;
 	}
+
+	public long getOriginalInodeId() {
+		return originalInodeId;
+	}
 }
