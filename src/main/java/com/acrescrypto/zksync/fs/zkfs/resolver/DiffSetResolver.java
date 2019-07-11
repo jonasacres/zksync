@@ -447,13 +447,6 @@ public class DiffSetResolver {
 							tagStr));
 				}
 				
-				sb.append("\tOriginal inode IDs\n");
-				for(RevisionTag tag : diff.originalInodeIds.keySet()) {
-					sb.append(String.format("\t%s -> inodeId %d\n",
-							Util.formatRevisionTag(tag),
-							diff.originalInodeIds.get(tag)));
-				}
-				
 				HashSet<String> inodePaths = new HashSet<>();
 				for(RevisionTag tag : tags) {
 					try(
@@ -471,6 +464,13 @@ public class DiffSetResolver {
 					sb.append("\t\t" + path + "\n");
 				}
 			});
+			
+			sb.append("\tOriginal inode IDs\n");
+			for(RevisionTag tag : diff.originalInodeIds.keySet()) {
+				sb.append(String.format("\t\t%s -> inodeId %d\n",
+						Util.formatRevisionTag(tag),
+						diff.originalInodeIds.get(tag)));
+			}
 		}
 		
 		sb.append("Affected paths: " + diffset.pathDiffs.size() + "\n");

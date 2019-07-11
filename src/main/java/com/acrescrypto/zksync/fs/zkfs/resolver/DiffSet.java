@@ -157,10 +157,10 @@ public class DiffSet {
 					if(inode != null) {
 						Inode rebuiltInode = null;
 						rebuiltInode = inode.clone();
-						megadiff.add(rebuiltInode, tags);
+						megadiff.add(rebuiltInode, diff.originalInodeIdForTag(tags.get(0)), tags);
 						rebuiltInode.getStat().setInodeId(fMinId);
 					} else {
-						megadiff.add(null, tags);
+						megadiff.add(null, -1, tags);
 					}
 					
 					for(RevisionTag tag : tags) {
@@ -284,12 +284,13 @@ public class DiffSet {
 		InodeDiff newDiff = new InodeDiff(newId);
 		
 		for(Inode inode : diff.resolutions.keySet()) {
+			long inodeId = diff.originalInodeIdForTag(diff.resolutions.get(inode).get(0));
 			if(inode != null && inode.getIdentity() == identity) {
 				Inode newInode = inode.clone(fs);
-				newDiff.add(newInode, diff.resolutions.get(inode));
+				newDiff.add(newInode, inodeId, diff.resolutions.get(inode));
 				newInode.getStat().setInodeId(newId);
 			} else if(inode == null) {
-				newDiff.add(null, diff.resolutions.get(inode));
+				newDiff.add(null, inodeId, diff.resolutions.get(inode));
 			}
 		}
 		

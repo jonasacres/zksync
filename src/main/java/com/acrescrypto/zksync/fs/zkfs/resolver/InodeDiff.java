@@ -65,7 +65,7 @@ public class InodeDiff {
 		return "InodeDiff " + inodeId + " (" + resolutions.size() + " versions)";
 	}
 
-	public void add(Inode newInode, ArrayList<RevisionTag> tags) {
+	public void add(Inode newInode, long inodeId, ArrayList<RevisionTag> tags) {
 		ArrayList<RevisionTag> prunedTags = new ArrayList<>(tags);
 		if(newInode == null) {
 			// don't let nulls override non-null values in standardization
@@ -77,7 +77,7 @@ public class InodeDiff {
 			if(newInode == null) {
 				originalInodeIds.put(tag, (long) -1);
 			} else {
-				originalInodeIds.put(tag, newInode.getStat().getInodeId());
+				originalInodeIds.put(tag, inodeId);
 			}
 		}
 		
