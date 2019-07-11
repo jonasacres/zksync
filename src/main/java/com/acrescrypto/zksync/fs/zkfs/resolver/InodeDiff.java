@@ -66,12 +66,38 @@ public class InodeDiff {
 	}
 
 	public void add(Inode newInode, ArrayList<RevisionTag> tags) {
-		resolutions.put(newInode, tags);
-		for(RevisionTag tag : tags) {
+		ArrayList<RevisionTag> prunedTags = new ArrayList<>(tags);
+		if(newInode == null) {
+			// don't let nulls override non-null values in standardization
+			prunedTags.removeIf((tag)->originalInodeIds.containsKey(tag));
+		}
+		
+		resolutions.put(newInode, prunedTags);
+		for(RevisionTag tag : prunedTags) {
 			if(newInode == null) {
 				originalInodeIds.put(tag, (long) -1);
 			} else {
 				originalInodeIds.put(tag, newInode.getStat().getInodeId());
+			}
+		}
+		
+		/* when we standardize on one inodeId for an identity, we can wind up with the same tag
+		 * appearing with a null solution and a non-null solution. Call pruneAlternatives to remove
+		 * everything except the version we just added of each tag if we are non-null. (Don't prune to
+		 * null so that the non-null versions override the nulls.)
+		 */
+		if(newInode != null) {
+			pruneAlternatives(newInode, prunedTags);
+		}
+	}
+	
+	public void pruneAlternatives(Inode newInode, ArrayList<RevisionTag> tags) {
+		for(Inode inode : resolutions.keySet()) {
+			boolean match = inode == null ? inode == newInode : inode.equals(newInode);
+			if(match) continue;
+			ArrayList<RevisionTag> inodeTags = resolutions.get(inode);
+			for(RevisionTag tag : tags) {
+				while(inodeTags.remove(tag));
 			}
 		}
 	}

@@ -497,6 +497,7 @@ public class RevisionList implements AutoCloseable {
 		} catch (Throwable exc) {
 			logger.error("RevisionList {} {}: Error performing automerge", config.getArchive().getMaster().getName(),
 					Util.formatArchiveId(config.archiveId), exc);
+			exc.printStackTrace();
 		}
 	}
 
