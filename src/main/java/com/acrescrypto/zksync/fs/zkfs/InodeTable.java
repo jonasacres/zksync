@@ -241,7 +241,6 @@ public class InodeTable extends ZKFile {
 				zkfs.getArchive().getMaster().getName(),
 				Util.formatRevisionTag(zkfs.baseRevision)));
 		for(Long pageNum : inodesByPage.cachedKeys()) {
-			sb.append(String.format("\tCommitting inode table page %d\n", pageNum));
 			commitInodePage(pageNum, inodesByPage.get(pageNum));
 		}
 		
@@ -254,7 +253,6 @@ public class InodeTable extends ZKFile {
 				newSize));
 		truncate(newSize);
 		flush();
-		inodesByPage.removeAll();
 		sb.append(String.format("\tNew reftag: %s\n", Util.formatRefTag(inode.getRefTag())));
 		Util.debugLog(sb.toString());
 	}
@@ -680,6 +678,7 @@ public class InodeTable extends ZKFile {
 					Util.formatRefTag(inode.getRefTag()),
 					this.pos());
 			write(inode.serialize());
+			inode.setDirty(false);
 		}
 		
 		/* There might be some bytes leftover at the end of the page, too small to fit an inode into.

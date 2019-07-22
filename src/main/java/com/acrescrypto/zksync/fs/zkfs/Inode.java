@@ -60,14 +60,14 @@ public class Inode implements Comparable<Inode> {
 		deserialize(serialized);
 	}
 	
+	public Stat getStat() {
+		return stat;
+	}
+	
 	public void setStat(Stat stat) {
 		if(this.stat == stat) return;
 		setDirty(true);
 		this.stat = stat;
-	}
-	
-	public Stat getStat() {
-		return stat;
 	}
 	
 	public int getNlink() {
@@ -126,6 +126,7 @@ public class Inode implements Comparable<Inode> {
 	
 	public void setModifiedTime(long modifiedTime) {
 		if(modifiedTime == this.modifiedTime) return;
+		setDirty(true);
 		this.modifiedTime = modifiedTime;
 	}
 	
