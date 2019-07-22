@@ -277,4 +277,8 @@ public class ConfigFile {
 		
 		return r;
 	}
+	
+	public SubscriptionService getSubsciptionService() {
+		return sub;
+	}
 }

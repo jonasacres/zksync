@@ -103,7 +103,7 @@ public class InodeTable extends ZKFile {
 				commitInodePage(pageNum, inodes);
 			});
 			
-			fs.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.inodeTablePageCacheSize").asInt((s)->{
+			tokens.add(fs.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.inodeTablePageCacheSize").asInt((s)->{
 				try {
 					logger.info("ZKFS {} {}: Setting InodeTable page cache size to {}; was {}",
 							Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
@@ -114,7 +114,7 @@ public class InodeTable extends ZKFile {
 				} catch(IOException exc) {
 					logger.error("Unable to set inode table page cache size", exc);
 				}
-			});
+			}));
 			
 			if(tag.getRefTag().isBlank()) {
 				initialize();

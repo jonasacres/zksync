@@ -50,7 +50,7 @@ public class ZKFS extends FS {
 	protected String root;
 	protected boolean dirty;
 	protected LinkedList<ZKFSDirtyMonitor> dirtyMonitors = new LinkedList<>();
-	protected SubscriptionToken<?> cacheToken; 
+	protected LinkedList<SubscriptionToken<?>> tokens = new LinkedList<>();
 	protected boolean isReadOnly; // was this specific ZKFS opened RO? (not the whole archive)
 	protected int retainCount;
 	protected ConcurrentHashMap<ZKFile,Object> openFiles = new ConcurrentHashMap<>();
@@ -62,7 +62,7 @@ public class ZKFS extends FS {
 	
 	Logger logger = LoggerFactory.getLogger(ZKFS.class);
 
-	protected boolean skipIntegrity; // TODO: Delete me when automatic integrity checking is removed
+	public boolean skipIntegrity; // TODO: Delete me when automatic integrity checking is removed
 	
 	public ZKFS(RevisionTag revision, String root) throws IOException {
 		if(FS.fileHandleTelemetryEnabled) {
@@ -71,7 +71,7 @@ public class ZKFS extends FS {
 		
 		retain();
 		this.root = root;
-		cacheToken = revision.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.directoryCacheSize").asInt((s)->{
+		tokens.add(revision.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.directoryCacheSize").asInt((s)->{
 			if(this.directoriesByPath == null) return;
 			try {
 				logger.info("ZKFS {} {}: Setting directory cache size to {}; was {}",
@@ -86,7 +86,7 @@ public class ZKFS extends FS {
 						baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
 						s);
 			}
-		});
+		}));
 		
 		int cacheSize = revision.getArchive().getMaster().getGlobalConfig().getInt("fs.settings.directoryCacheSize");
 		this.directoriesByPath = new HashCache<String,ZKDirectory>(cacheSize, (String path) -> {
@@ -123,8 +123,10 @@ public class ZKFS extends FS {
 			if(--retainCount > 0) return;
 			assert(retainCount == 0);
 
-			cacheToken.close();
-			cacheToken = null;
+			for(SubscriptionToken<?> token : tokens) {
+				token.close();
+			}
+			tokens.clear();
 			
 			for(String path : this.directoriesByPath.cachedKeys()) {
 				this.directoriesByPath.get(path).forceClose();
@@ -222,6 +224,7 @@ public class ZKFS extends FS {
 			archive.getConfig().getRevisionList().dump();
 			if(!skipIntegrity) {
 				IntegrityChecker.assertValidFilesystem(baseRevision); // TODO: Delete me after testing
+				System.gc();
 			}
 		}
 		

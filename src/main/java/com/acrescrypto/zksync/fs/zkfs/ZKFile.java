@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
+import java.util.LinkedList;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,7 @@ import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable.ChangedFromOverrideReference;
+import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.utility.Util;
 
 /** Represents a file handle within a zkfs. */
@@ -66,6 +68,8 @@ public class ZKFile extends File {
 	public final static int O_LINK_LITERAL = 1 << 16;
 
 	protected Logger logger = LoggerFactory.getLogger(ZKFile.class);
+	
+	protected LinkedList<SubscriptionToken<?>> tokens = new LinkedList<>();
 
 	protected ZKFile(ZKFS fs) {
 		super(fs);
@@ -450,6 +454,12 @@ public class ZKFile extends File {
 				return null;
 			}
 		});
+		
+		for(SubscriptionToken<?> token : tokens) {
+			token.close();
+		}
+		
+		tokens.clear();
 	}
 
 	@Override

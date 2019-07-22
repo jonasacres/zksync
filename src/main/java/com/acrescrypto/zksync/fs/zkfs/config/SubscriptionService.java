@@ -144,16 +144,19 @@ public class SubscriptionService {
 	
 	protected synchronized void removeToken(SubscriptionToken<?> token) {
 		HashMap<Class<?>, LinkedList<SubscriptionToken<?>>> keyMap = subscriptions.get(token.key);
-		if(keyMap == null) return;
-		
-		LinkedList<SubscriptionToken<?>> tokens = keyMap.get(token.type);
-		if(tokens == null) return;
-		
-		tokens.remove(token);
-		if(!tokens.isEmpty()) return;
-		
-		keyMap.remove(token.type);
-		if(!keyMap.isEmpty()) return;
+		if(keyMap != null) {
+			LinkedList<SubscriptionToken<?>> tokens = keyMap.get(token.type);
+			if(tokens != null) {
+				tokens.remove(token);
+				if(!tokens.isEmpty()) return;
+			}
+
+			keyMap.remove(token.type);
+			
+			if(!keyMap.isEmpty()) {
+				return;
+			}
+		}
 		
 		subscriptions.remove(token.key);
 	}
@@ -172,5 +175,20 @@ public class SubscriptionService {
 		}
 		
 		tokens.add(token);
+	}
+	
+	public String dumpSubscriptions() {
+		StringBuilder sb = new StringBuilder(String.format("%5d Subscriptions\n", subscriptions.size()));
+		subscriptions.forEach((key, submap)->{
+			sb.append(String.format("\t%5d %-30s\n", submap.size(), key));
+			submap.forEach((cls, subs)->{
+				sb.append(String.format("\t\t%5d %-30s\n", subs.size(), cls.getSimpleName()));
+				subs.forEach((token)->{
+					sb.append(String.format("\t\t\t%s\n", token.callback));
+				});
+			});
+		});
+		
+		return sb.toString();
 	}
 }
