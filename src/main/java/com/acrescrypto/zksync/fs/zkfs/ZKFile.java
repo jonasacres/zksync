@@ -324,7 +324,7 @@ public class ZKFile extends File {
 		int leftToWrite = length;
 		int pageSize = zkfs.archive.config.pageSize;
 
-		while (leftToWrite > 0) {
+		while(leftToWrite > 0) {
 			int neededPageNum = (int) (this.offset / pageSize);
 			bufferPage(neededPageNum);
 			int offsetInPage = (int) (offset % zkfs.archive.config.pageSize),
@@ -401,7 +401,9 @@ public class ZKFile extends File {
 				if (bufferedPage != null) {
 					bufferedPage.flush();
 				}
-				inode.setRefTag(tree.commit());
+				
+				RefTag newRefTag = tree.commit();
+				inode.setRefTag(newRefTag);
 				inode.getStat().setSize(pendingSize);
 				dirty = false;
 				zkfs.inodeTable.setInode(inode);

@@ -185,17 +185,17 @@ public class IntegrityChecker {
 		}
 		
 		int expectedLinks = linkCounts.getOrDefault(inode.getStat().getInodeId(), 0);
-		if(inode.nlink != expectedLinks) {
+		if(inode.getNlink() != expectedLinks) {
 			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected nlink %d; got %d",
 							expectedLinks,
-							inode.nlink)));
+							inode.getNlink())));
 			passed = false;
 		}
 		
 		if(inode.getStat().getInodeId() != expectedId) {
 			issues.add(new IntegrityIssueInode(inode, expectedId,
-					String.format("Expected inodeId %d; got %d", expectedId, inode.nlink)));
+					String.format("Expected inodeId %d; got %d", expectedId, inode.getNlink())));
 			passed = false;
 		}
 		
@@ -209,9 +209,9 @@ public class IntegrityChecker {
 			passed &= validateInFreelist(issues, inode);
 		}
 		
-		if(inode.nlink != 0) {
+		if(inode.getNlink() != 0) {
 			issues.add(new IntegrityIssueInode(inode, expectedId,
-					String.format("Expected deleted inode to have nlink 0; got %d", inode.nlink)));
+					String.format("Expected deleted inode to have nlink 0; got %d", inode.getNlink())));
 			passed = false;
 		}
 		
@@ -233,23 +233,23 @@ public class IntegrityChecker {
 			passed = false;
 		}
 		
-		if(inode.previousInodeId != 0) {
+		if(inode.getPreviousInodeId() != 0) {
 			issues.add(new IntegrityIssueInode(inode, expectedId,
-					String.format("Expected deleted inode to have previousInodeId 0; got %d", inode.previousInodeId)));
+					String.format("Expected deleted inode to have previousInodeId 0; got %d", inode.getPreviousInodeId())));
 			passed = false;
 		}
 		
-		if(inode.flags != 0) {
+		if(inode.getFlags() != 0) {
 			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have flags 0x00; got 0x%02x",
-							inode.flags)));
+							inode.getFlags())));
 			passed = false;
 		}
 
-		if(inode.identity != 0) {
+		if(inode.getIdentity() != 0) {
 			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected deleted inode to have identity 0; got %016x",
-							inode.identity)));
+							inode.getIdentity())));
 			passed = false;
 		}
 		
@@ -485,10 +485,10 @@ public class IntegrityChecker {
 					
 					try(ZKFS fs = inode.getChangedFrom().getFS()) {
 						for(Inode existingInode : fs.getInodeTable().values()) {
-							if(existingInode.identity == inode.identity) {
+							if(existingInode.getIdentity() == inode.getIdentity()) {
 								issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 										String.format("Expected identity %016x not to exist in %s",
-												inode.identity,
+												inode.getIdentity(),
 												Util.formatRevisionTag(fs.baseRevision))));
 								passed = false;
 							}
@@ -497,13 +497,13 @@ public class IntegrityChecker {
 				} else {
 					try(ZKFS prevFs = inode.getChangedFrom().getFS()) {
 						Inode prevInode = prevFs.getInodeTable().inodeWithId(inode.getPreviousInodeId());
-						if(prevInode.identity != inode.identity) {
+						if(prevInode.getIdentity() != inode.getIdentity()) {
 							issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 									String.format("Expected previousInodeId %d in %s to have identity %016x, got %016x",
 											inode.getPreviousInodeId(),
 											Util.formatRevisionTag(inode.getChangedFrom()),
-											inode.identity,
-											prevInode.identity)));
+											inode.getIdentity(),
+											prevInode.getIdentity())));
 							passed = false;
 						}
 						
@@ -520,7 +520,7 @@ public class IntegrityChecker {
 							if(!hasMatch) {
 								issues.add(new IntegrityIssueInode(inode, inode.getStat().getInodeId(),
 										String.format("Expected at least one parent of revision to have same identity %016x at inodeId %d",
-												inode.identity,
+												inode.getIdentity(),
 												inode.getStat().getInodeId())));
 								passed = false;
 							}
@@ -651,7 +651,7 @@ public class IntegrityChecker {
 									parentInode.getStat().getInodeId(),
 									parentInode.getIdentity(),
 									inode.getStat().getInodeId(),
-									inode.identity
+									inode.getIdentity()
 								)));
 						passed = false;
 					}
@@ -730,7 +730,7 @@ public class IntegrityChecker {
 					String.format("Caught exception %s opening directory %d %016x: %s",
 							exc.getClass().getSimpleName(),
 							inode.getStat().getInodeId(),
-							inode.identity,
+							inode.getIdentity(),
 							exc.getMessage())
 					));
 			passed = false;
@@ -771,7 +771,7 @@ public class IntegrityChecker {
 	protected boolean revHasIdentityAtId(RevisionTag parent, long identity, long inodeId) throws IOException {
 		try(ZKFS fs = parent.readOnlyFS()) {
 			return fs.getInodeTable().hasInodeWithId(inodeId)
-				&& fs.getInodeTable().inodeWithId(inodeId).identity == identity;
+				&& fs.getInodeTable().inodeWithId(inodeId).getIdentity() == identity;
 		}
 	}
 }

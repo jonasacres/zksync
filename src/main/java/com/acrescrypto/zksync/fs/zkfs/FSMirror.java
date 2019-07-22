@@ -286,7 +286,7 @@ public class FSMirror {
 		boolean changed = false;
 		if(path.equals("") || path.equals("/")) return false;
 		Inode inode = getInode(zkfs, path), oldInode = null;
-		Stat tstat = getLstat(target, path), zstat = inode == null ? null : inode.stat;
+		Stat tstat = getLstat(target, path), zstat = inode == null ? null : inode.getStat();
 		if(oldFs != null) {
 			oldInode = getInode(oldFs, path);
 		}
@@ -509,8 +509,8 @@ public class FSMirror {
 						zkstat.getMtime(),
 						zkstat.getType(),
 						zkstat.getInodeId(),
-						inode.nlink,
-						inode.identity,
+						inode.getNlink(),
+						inode.getIdentity(),
 						Util.formatRefTag(inode.getRefTag())));
 			}
 			Util.debugLog(sb.toString());
@@ -549,8 +549,8 @@ public class FSMirror {
 					zkstat.getMtime(),
 					zkstat.getType(),
 					zkstat.getInodeId(),
-					inode.nlink,
-					inode.identity,
+					inode.getNlink(),
+					inode.getIdentity(),
 					Util.formatRefTag(inode.getRefTag())));
 			Util.debugLog(sb.toString());
 		} catch(ENOENTException exc) {

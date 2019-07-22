@@ -29,7 +29,7 @@ public class FreeList extends ZKFile {
 		this.inode = inode;
 		this.tree = new PageTree(this.inode);
 		this.pendingSize = inode.getStat().getSize();
-		lastReadPage = this.inode.refTag.numPages;
+		lastReadPage = this.inode.getRefTag().numPages;
 	}
 	
 	/** Empty the freelist completely. Intended for use in rebuilding freelist manually. 
@@ -72,7 +72,7 @@ public class FreeList extends ZKFile {
 		write(buf.array());
 		flush();
 		
-		lastReadPage = inode.refTag.numPages;
+		lastReadPage = inode.getRefTag().numPages;
 		dirty = false;
 	}
 	

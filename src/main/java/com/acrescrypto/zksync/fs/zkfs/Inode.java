@@ -12,14 +12,15 @@ public class Inode implements Comparable<Inode> {
 	protected ZKFS fs; /** filesystem containing this inode */
 
 	// the following fields are serialized:
-	protected Stat stat; /** stat object, similar to POSIX struct stat */
-	protected int nlink; /** number of references (eg paths) to this inode */
-	protected byte flags; /** bitmask flag field */
-	protected long modifiedTime; /** last time we modified inode or file data. can't use stat.ctime, since users own that. */
-	protected long identity; /** assigned on inode creation, remains constant, used to distinguish new files vs. modified files on merge */
-	protected RefTag refTag; /** reference to file contents */
-	protected RevisionTag changedFrom; /** latest revision tag containing previous version */
-	protected long previousInodeId; /** inodeId in revision indicated in changedFrom; -1 if inode did not exist in that revision */
+	private Stat stat; /** stat object, similar to POSIX struct stat */
+	private int nlink; /** number of references (eg paths) to this inode */
+	private byte flags; /** bitmask flag field */
+	private long modifiedTime; /** last time we modified inode or file data. can't use stat.ctime, since users own that. */
+	private long identity; /** assigned on inode creation, remains constant, used to distinguish new files vs. modified files on merge */
+	private RefTag refTag; /** reference to file contents */
+	private RevisionTag changedFrom; /** latest revision tag containing previous version */
+	private long previousInodeId; /** inodeId in revision indicated in changedFrom; -1 if inode did not exist in that revision */
+	private boolean dirty;
 	
 	// for use in flags field
 	public static final byte FLAG_RETAIN = 1 << 0;
@@ -60,6 +61,8 @@ public class Inode implements Comparable<Inode> {
 	}
 	
 	public void setStat(Stat stat) {
+		if(this.stat == stat) return;
+		setDirty(true);
 		this.stat = stat;
 	}
 	
@@ -72,14 +75,18 @@ public class Inode implements Comparable<Inode> {
 	}
 	
 	public void setNlink(int nlink) {
+		if(nlink == this.nlink) return;
+		setDirty(true);
 		this.nlink = nlink;
 	}
 	
-	public int getFlags() {
+	public byte getFlags() {
 		return flags;
 	}
 	
 	public void setFlags(byte flags) {
+		if(flags == this.flags) return;
+		setDirty(true);
 		this.flags = flags;
 	}
 
@@ -88,6 +95,8 @@ public class Inode implements Comparable<Inode> {
 	}
 
 	public void setRefTag(RefTag refTag) {
+		if(refTag == this.refTag) return;
+		setDirty(true);
 		this.refTag = refTag;
 	}
 	
@@ -96,6 +105,8 @@ public class Inode implements Comparable<Inode> {
 	}
 
 	public void setChangedFrom(RevisionTag changedFrom) {
+		if(changedFrom == this.changedFrom) return;
+		setDirty(true);
 		this.changedFrom = changedFrom;
 	}
 	
@@ -104,6 +115,8 @@ public class Inode implements Comparable<Inode> {
 	}
 	
 	public void setPreviousInodeId(long previousInodeId) {
+		if(previousInodeId == this.previousInodeId) return;
+		setDirty(true);
 		this.previousInodeId = previousInodeId;
 	}
 	
@@ -112,6 +125,7 @@ public class Inode implements Comparable<Inode> {
 	}
 	
 	public void setModifiedTime(long modifiedTime) {
+		if(modifiedTime == this.modifiedTime) return;
 		this.modifiedTime = modifiedTime;
 	}
 	
@@ -119,8 +133,10 @@ public class Inode implements Comparable<Inode> {
 		return identity;
 	}
 	
-	public void setIdentity(long newIdentity) {
-		this.identity = newIdentity;
+	public void setIdentity(long identity) {
+		if(identity == this.identity) return;
+		setDirty(true);
+		this.identity = identity;
 	}
 	
 	/** serialize to plaintext byte array */
@@ -152,7 +168,7 @@ public class Inode implements Comparable<Inode> {
 		this.modifiedTime = buf.getLong();
 		this.identity = buf.getLong();
 		this.nlink = buf.getInt();
-		this.flags = buf.get();
+		this.setFlags(buf.get());
 		
 		byte[] refTagBytes = new byte[fs.archive.config.refTagSize()];
 		buf.get(refTagBytes);
@@ -167,6 +183,7 @@ public class Inode implements Comparable<Inode> {
 	
 	/** increment link count */
 	public void addLink() {
+		setDirty(true);
 		nlink++;
 	}
 	
@@ -180,6 +197,7 @@ public class Inode implements Comparable<Inode> {
 		 * but provides the necessary guarantee that the scan happens before nlink is decremented.
 		 */
 		fs.getInodeTable().nextInodeId();
+		setDirty(true);
 		nlink--;
 		if(isDeleted()) {
 			fs.getInodeTable().unlink(stat.getInodeId());
@@ -204,7 +222,7 @@ public class Inode implements Comparable<Inode> {
 		if(identity != __other.identity) return false;
 		if(!refTag.equals(__other.refTag)) return false;
 		if(!changedFrom.equals(__other.changedFrom)) return false;
-		if(flags != __other.flags) return false;
+		if(getFlags() != __other.getFlags()) return false;
 		if(!stat.equals(__other.stat)) return false;
 		// intentionally exclude modifiedTime, since otherwise we won't notice when two revisions are the same in a merge
 		// also skip nlink, since that confuses diffs involving hardlinks
@@ -231,7 +249,7 @@ public class Inode implements Comparable<Inode> {
 	
 	/** is this inode in a deleted state? true <=> nlink == 0 and FLAG_RETAIN not set */
 	public boolean isDeleted() {
-		return nlink == 0 && (flags & FLAG_RETAIN) == 0;
+		return nlink == 0 && (getFlags() & FLAG_RETAIN) == 0;
 	}
 	
 	/** has the deletion of this inode been processed? (ie. its contents are cleared) */
@@ -242,6 +260,7 @@ public class Inode implements Comparable<Inode> {
 	/** clear inode contents. */
 	public void markDeleted() {
 		long oldId = stat.getInodeId();
+		setDirty(true);
 		stat = new Stat();
 		stat.setInodeId(oldId);
 		refTag = RefTag.blank(fs.archive);
@@ -270,12 +289,20 @@ public class Inode implements Comparable<Inode> {
 		s += "\tGID: " + stat.getGid() + " " + stat.getGroup() + "\n";
 		s += "\tType: " + stat.getType() + " major: " + stat.getDevMajor() + " minor: " + stat.getDevMinor() + "\n";
 		s += "\tMtime: " + stat.getMtime() + " Ctime: " + stat.getCtime() + " Atime: " + stat.getAtime() + "\n";
-		s += "\tNlink: " + nlink + " Flags: " + String.format("0x%02x", flags) + "\n";
+		s += "\tNlink: " + nlink + " Flags: " + String.format("0x%02x", getFlags()) + "\n";
 		s += "\tModTime: " + modifiedTime + "\n";
 		s += "\tIdentity: " + identity + "\n";
 		s += "\trefTag: " + Util.formatRefTag(refTag) + "\n";
 		s += "\tchangedFrom: " + Util.formatRevisionTag(changedFrom) + "\n";
 		s += "\tpreviousInodeId: " + previousInodeId + "\n";
 		return s;
+	}
+
+	public boolean isDirty() {
+		return dirty;
+	}
+
+	public void setDirty(boolean dirty) {
+		this.dirty = dirty;
 	}
 }

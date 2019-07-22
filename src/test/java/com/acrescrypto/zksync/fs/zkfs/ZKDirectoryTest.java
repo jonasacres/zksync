@@ -183,20 +183,20 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 	@Test
 	public void testSetsPreviousInodeIdPositiveOnCommitsAfterFirst() throws IOException {
 		zkscratch.mkdir("dir");
-		assertEquals(-1, zkscratch.inodeForPath("dir").previousInodeId);
+		assertEquals(-1, zkscratch.inodeForPath("dir").getPreviousInodeId());
 		zkscratch.commit();
 		
 		long inodeId = zkscratch.inodeForPath("dir").getStat().getInodeId();
-		assertEquals(-1, zkscratch.inodeForPath("dir").previousInodeId);
+		assertEquals(-1, zkscratch.inodeForPath("dir").getPreviousInodeId());
 		try(ZKFS fs = zkscratch.baseRevision.getFS()) {
-			assertEquals(-1, zkscratch.inodeForPath("dir").previousInodeId);
+			assertEquals(-1, zkscratch.inodeForPath("dir").getPreviousInodeId());
 		}
 		
 		zkscratch.write("dir/file", new byte[0]);
 		zkscratch.commit();
-		assertEquals(inodeId, zkscratch.inodeForPath("dir").previousInodeId);
+		assertEquals(inodeId, zkscratch.inodeForPath("dir").getPreviousInodeId());
 		try(ZKFS fs = zkscratch.baseRevision.getFS()) {
-			assertEquals(inodeId, zkscratch.inodeForPath("dir").previousInodeId);
+			assertEquals(inodeId, zkscratch.inodeForPath("dir").getPreviousInodeId());
 		}
 	}
 }

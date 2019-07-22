@@ -161,4 +161,12 @@ public class PageTreeChunk {
 		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
 				"easysafe-page-auth-key");
 	}
+	
+	public String toString() {
+		return String.format("PageTreeChunk %d (%d) %s%s",
+				index,
+				tree.inodeId,
+				chunkTag == null ? "null" : Util.bytesToHex(chunkTag, 6),
+				dirty ? "*" : "");
+	}
 }

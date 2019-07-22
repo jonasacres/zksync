@@ -20,6 +20,7 @@ import com.acrescrypto.zksync.utility.Util;
 // A ZKSync archive.
 public class ZKFS extends FS {
 	public final static int MAX_SYMLINK_DEPTH = 32;
+	public static boolean defaultSkipIntegrity = false; // remove me when done debugging
 	
 	protected static ConcurrentHashMap<ZKFS, Throwable> openInstances = new ConcurrentHashMap<>();
 	
@@ -62,7 +63,7 @@ public class ZKFS extends FS {
 	
 	Logger logger = LoggerFactory.getLogger(ZKFS.class);
 
-	public boolean skipIntegrity; // TODO: Delete me when automatic integrity checking is removed
+	public boolean skipIntegrity = ZKFS.defaultSkipIntegrity; // TODO: Delete me when automatic integrity checking is removed
 	
 	public ZKFS(RevisionTag revision, String root) throws IOException {
 		if(FS.fileHandleTelemetryEnabled) {
@@ -214,14 +215,14 @@ public class ZKFS extends FS {
 					Util.formatRevisionTag(baseRevision),
 					parentStr);
 
-			Util.debugLog(String.format("ZKFS %s: created revtag %s from %s\n%s\n%s\n%s\n",
-					archive.getMaster().getName(),
-					Util.formatRevisionTag(baseRevision),
-					parentStr,
-					dump(),
-					inodeTable.dumpInodes(),
-					inodeTable.freelist.dump()));
-			archive.getConfig().getRevisionList().dump();
+//			Util.debugLog(String.format("ZKFS %s: created revtag %s from %s\n%s\n%s\n%s\n",
+//					archive.getMaster().getName(),
+//					Util.formatRevisionTag(baseRevision),
+//					parentStr,
+//					dump(),
+//					inodeTable.dumpInodes(),
+//					inodeTable.freelist.dump()));
+			// archive.getConfig().getRevisionList().dump();
 			if(!skipIntegrity) {
 				IntegrityChecker.assertValidFilesystem(baseRevision); // TODO: Delete me after testing
 				System.gc();
@@ -400,7 +401,7 @@ public class ZKFS extends FS {
 						Util.formatRevisionTag(baseRevision),
 						path,
 						dir.getStat().getInodeId(),
-						dir.inode.identity,
+						dir.inode.getIdentity(),
 						dir.list().size()));
 				for(String subpath : dir.list()) {
 					sb.append(String.format("\n\t%16s", subpath));
@@ -793,15 +794,15 @@ public class ZKFS extends FS {
 				String fqSubpath = Paths.get(path, subpath).toString();
 				Inode inode = inodeForPath(fqSubpath, false);
 				builder.append(String.format("inodeId %4d, size %8d, identity %016x, type %02x, nlink %02d, %s %s\n",
-						inode.stat.getInodeId(),
-						inode.stat.getSize(),
-						inode.identity,
+						inode.getStat().getInodeId(),
+						inode.getStat().getSize(),
+						inode.getIdentity(),
 						inode.getStat().getType(),
-						inode.nlink,
+						inode.getNlink(),
 						Util.formatRefTag(inode.getRefTag()),
 						padding + subpath));
 				boolean isDotDir = subpath.equals(".") || subpath.equals("..");
-				if(inode.stat.isDirectory() && !isDotDir) {
+				if(inode.getStat().isDirectory() && !isDotDir) {
 					try {
 						dump(fqSubpath, depth+1, builder);
 					} catch(Exception exc) {

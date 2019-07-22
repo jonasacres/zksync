@@ -227,7 +227,7 @@ public class Page {
 		
 		byte[] pageTag = file.getPageTag(pageNum);
 		if(pageNum == 0 && file.tree.numPages == 1 && pageTag.length < file.getFS().getArchive().getCrypto().hashLength()) {
-			contents.put(file.inode.refTag.getLiteral());
+			contents.put(file.inode.getRefTag().getLiteral());
 		} else {
 			if(file.getFS().getArchive().getStorage() instanceof BackedFS) {
 				// make sure the page is ready if this is a non-cached filesystem

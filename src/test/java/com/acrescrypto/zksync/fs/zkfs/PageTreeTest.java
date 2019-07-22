@@ -95,8 +95,8 @@ public class PageTreeTest {
 		
 		assertEquals(archive, fromInode.archive);
 		assertEquals(inode.getRefTag(), fromInode.refTag);
-		assertEquals(inode.stat.getInodeId(), fromInode.inodeId);
-		assertEquals(inode.identity, fromInode.inodeIdentity);
+		assertEquals(inode.getStat().getInodeId(), fromInode.inodeId);
+		assertEquals(inode.getIdentity(), fromInode.inodeIdentity);
 		
 		assertEquals(1, fromInode.numChunks);
 		assertEquals(fromInode.tagsPerChunk(), fromInode.maxNumPages);

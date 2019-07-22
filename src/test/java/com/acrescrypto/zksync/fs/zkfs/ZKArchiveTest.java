@@ -81,7 +81,7 @@ public class ZKArchiveTest {
 		for(int i = 0; i <= 2; i++) {
 			ZKFS fs = addMockData(archive);
 			Inode inode = fs.inodeForPath("file"+i);
-			assertTrue(archive.hasInode(fs.baseRevision, inode.stat.getInodeId()));
+			assertTrue(archive.hasInode(fs.baseRevision, inode.getStat().getInodeId()));
 			fs.close();
 		}
 	}
@@ -93,7 +93,7 @@ public class ZKArchiveTest {
 			Inode inode = fs.inodeForPath("file"+i);
 			PageTree tree = new PageTree(inode);
 			archive.storage.unlink(Page.pathForTag(tree.getPageTag(0)));
-			assertFalse(archive.hasInode(fs.baseRevision, inode.stat.getInodeId()));
+			assertFalse(archive.hasInode(fs.baseRevision, inode.getStat().getInodeId()));
 		}
 		fs.close();
 	}
@@ -130,7 +130,7 @@ public class ZKArchiveTest {
 			Inode inode = fs.inodeForPath("file2");
 			fs.unlink("file2");
 			fs.commit();
-			assertFalse(archive.hasInode(fs.baseRevision, inode.stat.getInodeId()));
+			assertFalse(archive.hasInode(fs.baseRevision, inode.getStat().getInodeId()));
 		}
 	}
 	

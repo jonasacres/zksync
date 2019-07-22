@@ -123,7 +123,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	protected void walkRecursiveIterate(int opts, HashSet<Long> inodeHistory, String prefix, DirectoryWalkCallback cb) throws IOException {
-		long inodeId = inode.stat.getInodeId();
+		long inodeId = inode.getStat().getInodeId();
 		boolean followSymlinks = (opts & Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS) == 0;
 		if(inodeHistory.contains(inodeId)) return;
 		inodeHistory.add(inodeId);
@@ -134,14 +134,14 @@ public class ZKDirectory extends ZKFile implements Directory {
 			try {
 				long entryInodeId = entries.get(entry);
 				Inode entryInode = zkfs.inodeTable.inodeWithId(entryInodeId);
-				if(followSymlinks && entryInode.stat.isSymlink()) {
+				if(followSymlinks && entryInode.getStat().isSymlink()) {
 					entryInode = zkfs.inodeForPath(realSubpath);
 				}
 				
-				if(entryInode.stat.isDirectory()) {
+				if(entryInode.getStat().isDirectory()) {
 					boolean isDotDir = entry.equals(".") || entry.equals("..");
 					if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
-						cb.foundPath(subpath, entryInode.stat, false, this);
+						cb.foundPath(subpath, entryInode.getStat(), false, this);
 					}
 					
 					if(!isDotDir) {
@@ -150,7 +150,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 						}
 					}
 				} else {
-					cb.foundPath(subpath, entryInode.stat, false, this);
+					cb.foundPath(subpath, entryInode.getStat(), false, this);
 				}
 			} catch(ENOENTException exc) {
 				try {
@@ -224,7 +224,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 							zkfs.getArchive().getMaster().getName(),
 							Util.formatRevisionTag(zkfs.baseRevision),
 							inode.getStat().getInodeId(),
-							inode.identity,
+							inode.getIdentity(),
 							getPath(),
 							link,
 							existing,
@@ -315,7 +315,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 							name,
 							path,
 							this.inode.getStat().getInodeId(),
-							this.inode.identity));
+							this.inode.getIdentity()));
 					return null; // allow quiet unlinking of "ghost entries" (those not linked by their alleged parent)
 				}
 				
@@ -588,7 +588,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		Long parentInodeId = entries.get("..");		
 		Inode parentInode = zkfs.inodeTable.inodeWithId(parentInodeId);
 		if(parentInode.isDeleted()) throw new ENOENTException("Unable to locate parent inodeId " + parentInodeId + " to directory with inodeId " + inode.getStat().getInodeId());
-		if(!parentInode.stat.isDirectory()) throw new EISNOTDIRException("Parent inodeId " + parentInodeId + " to directory with inodeId " + inode.getStat().getInodeId() + " is not a directory");
+		if(!parentInode.getStat().isDirectory()) throw new EISNOTDIRException("Parent inodeId " + parentInodeId + " to directory with inodeId " + inode.getStat().getInodeId() + " is not a directory");
 		
 		try(ZKDirectory parentDir = zkfs.opendirSemicache(parentInode)) {
 			String[] name = new String[1];

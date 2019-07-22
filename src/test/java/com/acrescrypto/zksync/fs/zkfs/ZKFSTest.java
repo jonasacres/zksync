@@ -296,7 +296,7 @@ public class ZKFSTest extends FSTestBase {
 		RevisionTag rev = zkscratch.commit();
 		assertTrue(zkscratch.inodeTable.getStat().getSize() >= zkscratch.archive.crypto.hashLength());
 		assertTrue(zkscratch.inodeTable.getStat().getSize() <= zkscratch.archive.config.pageSize);
-		assertEquals(1, zkscratch.inodeTable.inode.refTag.numPages);
+		assertEquals(1, zkscratch.inodeTable.inode.getRefTag().numPages);
 		try(ZKFS revFs = rev.getFS()) {
 			assertTrue(Arrays.equals(revFs.inodeTable.tree.getRefTag().getBytes(), zkscratch.inodeTable.tree.getRefTag().getBytes()));
 			assertTrue(revFs.inodeTable.tree.maxNumPages <= revFs.inodeTable.tree.tagsPerChunk());
@@ -995,12 +995,12 @@ public class ZKFSTest extends FSTestBase {
 		tags.put(path, tag);
 
 		Inode inode = fs.inodeForPath(path, false);
-		if(inode.nlink <= 1) return;
+		if(inode.getNlink() <= 1) return;
 		
 		tags.forEach((otherPath, otherTag)->{
 			try {
 				Inode otherStat = fs.inodeForPath(otherPath, false);
-				if(otherStat.stat.getInodeId() == inode.stat.getInodeId()) {
+				if(otherStat.getStat().getInodeId() == inode.getStat().getInodeId()) {
 					tags.put(otherPath, tag);
 				}
 			} catch(IOException exc) {}
@@ -1324,7 +1324,7 @@ public class ZKFSTest extends FSTestBase {
 		Inode inode = fs.inodeForPath(path, false);
 		RefTag expectedRefTag = tags.get(path), actualRefTag = inode.getRefTag();
 		if(expectedRefTag.equals(actualRefTag)) return true;
-		if(inode.nlink <= 1) return false;
+		if(inode.getNlink() <= 1) return false;
 		
 		// if we wrote to a hardlink, we might have an outdated reftag for this path.
 		MutableBoolean found = new MutableBoolean();

@@ -44,9 +44,9 @@ public class PageTree {
 		this.archive = inode.fs.archive;
 		this.readTimeoutMs = inode.fs.getReadTimeoutMs();
 		assert(0 < tagsPerChunk() && tagsPerChunk() <= Integer.MAX_VALUE);
-		this.refTag = inode.refTag;
-		this.inodeId = inode.stat.getInodeId();
-		this.inodeIdentity = inode.identity;
+		this.refTag = inode.getRefTag();
+		this.inodeId = inode.getStat().getInodeId();
+		this.inodeIdentity = inode.getIdentity();
 		this.trusted = true; // if we validated the inode table, we know the page chunks are legit too
 		initWithSize(refTag.getNumPages());
 	}
@@ -434,6 +434,7 @@ public class PageTree {
 	}
 	
 	protected void markDirty(PageTreeChunk chunk) {
+		if(dirtyChunks.contains(chunk)) return;
 		logger.trace("PageTree {} {} {}: Marking chunk {} as dirty",
 				Util.formatArchiveId(archive.getConfig().getArchiveId()),
 				inodeId,
