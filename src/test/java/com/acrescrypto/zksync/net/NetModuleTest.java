@@ -272,7 +272,7 @@ public class NetModuleTest {
 		
 		fsa.write("path", crypto.rng(5*aConfig.getPageSize()));
 		fsa.commit();
-		byte[] requestedTag = new PageTree(fsa.inodeForPath("path")).getPageTag(0);
+		byte[] requestedTag = new PageTree(fsa.inodeForPath("path")).getPageTag(0).getBytes();
 		
 		aMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());

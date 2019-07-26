@@ -157,7 +157,7 @@ public class PeerConnectionTest {
 	}
 	
 	interface QueueItemTest {
-		boolean test(QueueItem item);
+		boolean test(QueueItem item) throws IOException;
 	}
 	
 	CryptoSupport crypto;
@@ -211,7 +211,7 @@ public class PeerConnectionTest {
 		assertFalse(Util.waitUntil(100, ()->!socket.messages.isEmpty()));
 	}
 	
-	void assertNoQueuedItemLike(QueueItemTest test) {
+	void assertNoQueuedItemLike(QueueItemTest test) throws IOException {
 		synchronized(conn.queue) {
 			Iterator<QueueItem> itr = conn.queue.itemsByPriority.iterator();
 			boolean found = false;
@@ -223,7 +223,7 @@ public class PeerConnectionTest {
 		}
 	}
 	
-	void assertQueuedItemLike(QueueItemTest test) {
+	void assertQueuedItemLike(QueueItemTest test) throws IOException {
 		synchronized(conn.queue) {
 			Iterator<QueueItem> itr = conn.queue.itemsByPriority.iterator();
 			boolean found = false;
@@ -370,28 +370,32 @@ public class PeerConnectionTest {
 		conn.queue.itemsByPriority.clear();
 		conn.announceTag(Util.shortTag(archive.getConfig().tag()));
 		
-		conn.queue.itemsByPriority.forEach((item)->{
-			if(!(item instanceof PageQueueItem)) return;
+		for(QueueItem item : conn.queue.itemsByPriority) {
+			if(!(item instanceof PageQueueItem)) continue;
 			PageQueueItem pqItem = (PageQueueItem) item;
-			if(Arrays.equals(archive.getConfig().tag(), pqItem.tag)) passed.setTrue();
-		});
+			if(Arrays.equals(archive.getConfig().tag(), pqItem.tag.getBytes())) {
+				passed.setTrue();
+			}
+		}
 		
 		assertTrue(passed.booleanValue());
 	}
 	
 	@Test
-	public void testAnnounceTagDoesNotAddToQueueIfEverythingNotRequested() {
+	public void testAnnounceTagDoesNotAddToQueueIfEverythingNotRequested() throws IOException {
 		MutableBoolean passed = new MutableBoolean();
 		
 		conn.setLocalPaused(true);
 		conn.queue.itemsByPriority.clear();
 		conn.announceTag(Util.shortTag(archive.getConfig().tag()));
 		
-		conn.queue.itemsByPriority.forEach((item)->{
-			if(!(item instanceof PageQueueItem)) return;
+		for(QueueItem item : conn.queue.itemsByPriority) {
+			if(!(item instanceof PageQueueItem)) continue;
 			PageQueueItem pqItem = (PageQueueItem) item;
-			if(Arrays.equals(archive.getConfig().tag(), pqItem.tag)) passed.setTrue();
-		});
+			if(Arrays.equals(archive.getConfig().tag(), pqItem.tag.getBytes())) {
+				passed.setTrue();
+			}
+		}
 		
 		assertFalse(passed.booleanValue());
 	}
@@ -1040,7 +1044,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testHandleRequestAllCausesPageQueueToSendEverything() throws ProtocolViolationException {
+	public void testHandleRequestAllCausesPageQueueToSendEverything() throws ProtocolViolationException, IOException {
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_ALL);
 		assertNoQueuedItemLike((item) -> (item instanceof EverythingQueueItem));
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
@@ -1364,7 +1368,7 @@ public class PeerConnectionTest {
 			
 			msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 			for(int i = 0; i < tags.length; i++) {
-				tags[i] = treee.getPageTag(i);
+				tags[i] = treee.getPageTag(i).getBytes();
 				msg.receivedData((byte) 0, ByteBuffer.allocate(8).putLong(Util.shortTag(tags[i])).array());
 			}
 			
@@ -1375,7 +1379,7 @@ public class PeerConnectionTest {
 				assertQueuedItemLike((_item) -> {
 					if(!(_item instanceof PageQueueItem)) return false;
 					PageQueueItem item = (PageQueueItem) _item;
-					return Arrays.equals(tag, item.tag);
+					return Arrays.equals(tag, item.tag.getBytes());
 				});
 			}
 		}
@@ -1392,7 +1396,7 @@ public class PeerConnectionTest {
 			
 			msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 			for(int i = 0; i < tags.length; i++) {
-				tags[i] = tree.getPageTag(i);
+				tags[i] = tree.getPageTag(i).getBytes();
 				msg.receivedData((byte) 0, ByteBuffer.allocate(8).putLong(Util.shortTag(tags[i])).array());
 				if(i == tags.length/2) msg.receivedData((byte) 0, ByteBuffer.allocate(8).put(crypto.rng(8)).array());
 			}
@@ -1404,7 +1408,7 @@ public class PeerConnectionTest {
 				assertQueuedItemLike((_item) -> {
 					if(!(_item instanceof PageQueueItem)) return false;
 					PageQueueItem item = (PageQueueItem) _item;
-					return Arrays.equals(tag, item.tag);
+					return Arrays.equals(tag, item.tag.getBytes());
 				});
 			}
 		}
@@ -1461,7 +1465,7 @@ public class PeerConnectionTest {
 		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0).getBytes();
 		fs.close();
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
@@ -1504,7 +1508,7 @@ public class PeerConnectionTest {
 		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0).getBytes();
 		fs.close();
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
@@ -1523,7 +1527,7 @@ public class PeerConnectionTest {
 		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0).getBytes();
 		fs.close();
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
@@ -1542,7 +1546,7 @@ public class PeerConnectionTest {
 	public void testHandleSendPageCountersExistingPagesWithAnnounce() throws IOException, ProtocolViolationException {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0).getBytes();
 		fs.close();
 		
 		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));

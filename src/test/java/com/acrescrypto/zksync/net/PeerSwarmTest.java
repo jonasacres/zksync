@@ -192,7 +192,7 @@ public class PeerSwarmTest {
 		try(ZKFS fs = archive.openBlank()) {
 			fs.write("file", new byte[archive.getConfig().getPageSize()]);
 			PageTree tree = new PageTree(fs.inodeForPath("file"));
-			pageTag = tree.getPageTag(0);
+			pageTag = tree.getPageTag(0).getBytes();
 	
 			swarm = archive.getConfig().getSwarm();
 			exploded = false;

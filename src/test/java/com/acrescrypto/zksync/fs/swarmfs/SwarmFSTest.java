@@ -18,7 +18,7 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
-import com.acrescrypto.zksync.fs.zkfs.Page;
+import com.acrescrypto.zksync.fs.zkfs.DeferrableTag;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
@@ -56,7 +56,7 @@ public class SwarmFSTest {
 	ZKArchive archive;
 	SwarmFS swarmFs;
 	DummyPeerSwarm swarm;
-	byte[] tag;
+	DeferrableTag tag;
 	
 	@BeforeClass
 	public static void beforeAll() throws IOException {
@@ -98,8 +98,8 @@ public class SwarmFSTest {
 	
 	@Test
 	public void testReadRequestsTagFromSwarm() throws IOException {
-		swarmFs.read(Page.pathForTag(tag));
-		assertTrue(Arrays.equals(tag, swarm.requestedTag));
+		swarmFs.read(tag.path());
+		assertTrue(Arrays.equals(tag.getBytes(), swarm.requestedTag));
 		assertEquals(SwarmFS.REQUEST_PRIORITY, swarm.requestedPriority);
 	}
 	
@@ -110,7 +110,7 @@ public class SwarmFSTest {
 		
 		Thread thread = new Thread(()-> {
 			try {
-				swarmFs.read(Page.pathForTag(tag));
+				swarmFs.read(tag.path());
 				holder.waited = true;
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -131,16 +131,16 @@ public class SwarmFSTest {
 	
 	@Test
 	public void testReadReturnsCopyFromCachedStorage() throws IOException {
-		byte[] expectedData = archive.getConfig().getCacheStorage().read(Page.pathForTag(tag));
-		byte[] data = swarmFs.read(Page.pathForTag(tag));
+		byte[] expectedData = archive.getConfig().getCacheStorage().read(tag.path());
+		byte[] data = swarmFs.read(tag.path());
 		
 		assertTrue(Arrays.equals(expectedData, data));
 	}
 	
 	@Test
 	public void testOpenRequestsTagFromSwarm() throws IOException {
-		swarmFs.open(Page.pathForTag(tag), File.O_RDONLY).close();
-		assertTrue(Arrays.equals(tag, swarm.requestedTag));
+		swarmFs.open(tag.path(), File.O_RDONLY).close();
+		assertTrue(Arrays.equals(tag.getBytes(), swarm.requestedTag));
 		assertEquals(SwarmFS.REQUEST_PRIORITY, swarm.requestedPriority);
 	}
 
@@ -151,7 +151,7 @@ public class SwarmFSTest {
 		
 		Thread thread = new Thread(()-> {
 			try {
-				swarmFs.open(Page.pathForTag(tag), File.O_RDONLY).close();
+				swarmFs.open(tag.path(), File.O_RDONLY).close();
 				holder.waited = true;
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -171,8 +171,8 @@ public class SwarmFSTest {
 	@Test
 	public void testOpenReturnsFileHandleFromCachedStorage() throws IOException {
 		try(
-			File expected = archive.getConfig().getCacheStorage().open(Page.pathForTag(tag), File.O_RDONLY);
-			File actual = swarmFs.open(Page.pathForTag(tag), File.O_RDONLY)
+			File expected = archive.getConfig().getCacheStorage().open(tag.path(), File.O_RDONLY);
+			File actual = swarmFs.open(tag.path(), File.O_RDONLY)
 		) {
 				assertEquals(expected.getClass(), actual.getClass());
 		}
@@ -180,7 +180,7 @@ public class SwarmFSTest {
 	
 	@Test
 	public void testStatDoesNotRequestPage() throws IOException {
-		swarmFs.stat(Page.pathForTag(tag));
+		swarmFs.stat(tag.path());
 		assertNull(swarm.requestedTag);
 	}
 	
@@ -191,11 +191,11 @@ public class SwarmFSTest {
 	
 	@Test
 	public void testStatSetsSizeToPageSize() throws IOException {
-		assertEquals(swarm.getConfig().getSerializedPageSize(), swarmFs.stat(Page.pathForTag(tag)).getSize());
+		assertEquals(swarm.getConfig().getSerializedPageSize(), swarmFs.stat(tag.path()).getSize());
 	}
 	
 	@Test
 	public void testStatSetsTypeToRegularFile() throws IOException {
-		assertEquals(Stat.TYPE_REGULAR_FILE, swarmFs.stat(Page.pathForTag(tag)).getType());
+		assertEquals(Stat.TYPE_REGULAR_FILE, swarmFs.stat(tag.path()).getType());
 	}
 }

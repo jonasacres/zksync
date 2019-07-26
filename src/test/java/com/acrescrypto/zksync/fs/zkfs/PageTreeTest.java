@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -74,7 +75,7 @@ public class PageTreeTest {
 	
 	@Test
 	public void testConstructFromRevTagSetsFields() throws IOException {
-		PageTree fromRevTag = new PageTree(revTag.getRefTag());
+		PageTree fromRevTag = new PageTree(fs, revTag.getRefTag());
 		
 		assertEquals(archive, fromRevTag.archive);
 		assertEquals(revTag.getRefTag(), fromRevTag.refTag);
@@ -122,18 +123,18 @@ public class PageTreeTest {
 
 	@Test
 	public void testExistsReturnsTrueIfRefTagIsImmediate() throws IOException {
-		assertTrue(new PageTree(immediateTag).exists());
+		assertTrue(new PageTree(fs, immediateTag).exists());
 	}
 	
 	@Test
 	public void testExistsReturnsTrueIfRefTagIsIndirectAndPageExists() throws IOException {
-		assertTrue(new PageTree(indirectTag).exists());
+		assertTrue(new PageTree(fs, indirectTag).exists());
 	}
 	
 	@Test
 	public void testExistsReturnsFalseIfRefTagIsIndirectAndPageDoesNotExist() throws IOException {
 		archive.storage.unlink(Page.pathForTag(indirectTag.getHash()));
-		assertFalse(new PageTree(indirectTag).exists());
+		assertFalse(new PageTree(fs, indirectTag).exists());
 	}
 	
 	@Test
@@ -143,19 +144,19 @@ public class PageTreeTest {
 	
 	@Test
 	public void testExistsReturnsFalseIfRefTagIs2IndirectAndChunksExistButPageMissing() throws IOException {
-		archive.storage.unlink(Page.pathForTag(tree.getPageTag(1)));
+		archive.storage.unlink(tree.getPageTag(1).path());
 		assertFalse(tree.exists());
 	}
 	
 	@Test
 	public void testExistsReturnsFalseIfRefTagIs2IndirectAndsPagesExistButChunkMissing() throws IOException {
-		archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
+		archive.storage.unlink(tree.chunkAtIndex(0).chunkTag.path());
 		assertFalse(tree.exists());
 	}
 	
 	@Test(expected=ENOENTException.class)
 	public void testAssertExistsThrowsExceptionIfExistsReturnsFalse() throws IOException {
-		archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
+		archive.storage.unlink(tree.chunkAtIndex(0).chunkTag.path());
 		tree.assertExists();
 	}
 	
@@ -182,13 +183,13 @@ public class PageTreeTest {
 	@Test
 	public void testPageExistsReturnsFalseIfIndirectAndPageNotPresent() throws IOException {
 		PageTree tree = new PageTree(fs.inodeForPath("indirect"));
-		archive.getStorage().unlink(Page.pathForTag(tree.getPageTag(0)));
+		archive.getStorage().unlink(tree.getPageTag(0).path());
 		assertFalse(tree.pageExists(0));
 	}
 	
 	@Test
 	public void testPageExistsReturnsFalseIfDoubleIndirectAndChunkNotPresent() throws IOException {
-		archive.storage.unlink(Page.pathForTag(tree.chunkForPageNum(0).chunkTag));
+		archive.storage.unlink(tree.chunkForPageNum(0).chunkTag.path());
 		for(int i = 0; i < tree.numPages; i++) {
 			assertFalse(tree.pageExists(i));
 		}
@@ -198,7 +199,7 @@ public class PageTreeTest {
 	public void testPageExistsReturnsFalseIfDoubleIndirectAndPageNotPresent() throws IOException {
 		for(int i = 0; i < tree.numPages; i++) {
 			assertTrue(tree.pageExists(i));
-			archive.storage.unlink(Page.pathForTag(tree.getPageTag(i)));
+			archive.storage.unlink(tree.getPageTag(i).path());
 			assertFalse(tree.pageExists(i));
 		}
 	}
@@ -232,70 +233,70 @@ public class PageTreeTest {
 	
 	@Test
 	public void testSetPageTagReplacesExistingPageTags() throws IOException {
-		byte[] randomTag = crypto.hash(Util.serializeInt(1234));
+		DeferrableTag randomTag = DeferrableTag.withBytes(archive, crypto.hash(Util.serializeInt(1234)));
 		tree.setPageTag(1, randomTag);
-		assertArrayEquals(randomTag, tree.getPageTag(1));
+		assertEquals(randomTag, tree.getPageTag(1));
 	}
 	
 	@Test
 	public void testSetPageTagReplacesBlankPageTags() throws IOException {
-		byte[] randomTag = crypto.hash(Util.serializeInt(1234));
+		DeferrableTag randomTag = DeferrableTag.withBytes(archive, crypto.hash(Util.serializeInt(1234)));
 		tree.setPageTag(tree.numPages, randomTag);
-		assertArrayEquals(randomTag, tree.getPageTag(tree.numPages-1));
+		assertEquals(randomTag, tree.getPageTag(tree.numPages-1));
 	}
 	
 	@Test
 	public void testSetPageTagAutomaticallyResizesTreeIfNeeded() throws IOException {
+		DeferrableTag tag = DeferrableTag.withBytes(archive, crypto.hash(Util.serializeInt(1)));
 		assertEquals(1, tree.numChunks());
-		tree.setPageTag(tree.tagsPerChunk(), crypto.hash(Util.serializeInt(1)));
+		tree.setPageTag(tree.tagsPerChunk(), tag);
 		assertEquals(3, tree.numChunks());
 		assertEquals(tree.tagsPerChunk()*tree.tagsPerChunk(), tree.maxNumPages);
 	}
 
 	@Test
 	public void testGetPageTagReturnsTag() throws IOException {
-		byte[] tag = crypto.rng(crypto.hashLength());
+		DeferrableTag tag = DeferrableTag.withBytes(archive, crypto.rng(crypto.hashLength()));
 		tree.setPageTag((int) (tree.tagsPerChunk()*0.5), tag);
 		assertEquals(tag, tree.getPageTag((int) (tree.tagsPerChunk()*0.5)));
 	}
 	
 	@Test
 	public void testGetPageTagReturnsBlankTagIfTagHasNotBeenSet() throws IOException {
-		byte[] nullTag = new byte[crypto.hashLength()];
-		assertArrayEquals(nullTag, tree.getPageTag(2));
+		assertTrue(tree.getPageTag(2).isBlank());
 	}
 	
 	@Test
 	public void testGetNumChunksReturnsNumberOfChunks() throws IOException {
 		assertEquals(tree.numChunks, tree.numChunks());
-		tree.setPageTag(tree.tagsPerChunk(), new byte[crypto.hashLength()]);
+		tree.setPageTag(tree.tagsPerChunk(), DeferrableTag.blank(archive));
 		assertEquals(tree.numChunks, tree.numChunks());
 	}
 	
 	@Test
 	public void testGetStatsReturnsNumChunksCachedForImmediates() throws IOException {
-		PageTree immTree = new PageTree(immediateTag);
+		PageTree immTree = new PageTree(fs, immediateTag);
 		assertEquals(1, immTree.getStats().numCachedChunks);
 	}
 	
 	@Test
 	public void testGetStatsReturnsNumPagesCachedForImmediates() throws IOException {
-		PageTree immTree = new PageTree(immediateTag);
+		PageTree immTree = new PageTree(fs, immediateTag);
 		assertEquals(1, immTree.getStats().numCachedPages);
 	}
 	
 	@Test
 	public void testGetStatsReturnsNumChunksCachedForIndirects() throws IOException {
-		PageTree indTree = new PageTree(indirectTag);
+		PageTree indTree = new PageTree(fs, indirectTag);
 		assertEquals(1, indTree.getStats().numCachedPages);
 	}
 	
 	@Test
 	public void testGetStatsReturnsNumPagesCachedForIndirects() throws IOException {
-		PageTree indTree = new PageTree(indirectTag);
+		PageTree indTree = new PageTree(fs, indirectTag);
 		assertEquals(1, indTree.getStats().numCachedPages);
 		
-		indirectTag.getConfig().getCacheStorage().unlink(Page.pathForTag(indTree.getPageTag(0)));
+		indirectTag.getConfig().getCacheStorage().unlink(indTree.getPageTag(0).path());
 		assertEquals(0, indTree.getStats().numCachedPages);
 	}
 	
@@ -317,7 +318,7 @@ public class PageTreeTest {
 		for(long i = 0; i < diTree.numPages; i++) {
 			if(i % 2 == 0) continue;
 			try {
-				String path = Page.pathForTag(diTree.getPageTag(i));
+				String path = diTree.getPageTag(i).path();
 				smallPageArchive.getConfig().getCacheStorage().unlink(path);
 				expected--;
 			} catch(ENOENTException exc) {
@@ -352,7 +353,7 @@ public class PageTreeTest {
 			for(long i = diTree.numChunks - levelSize + 1; i < diTree.numChunks; i++) {
 				if(i % 2 == 0) continue;
 				try {
-					String path = Page.pathForTag(diTree.tagForChunk(i));
+					String path = diTree.tagForChunk(i).path();
 					smallPageArchive.getConfig().getCacheStorage().unlink(path);
 					expected--;
 				} catch(ENOENTException exc) {
@@ -370,11 +371,11 @@ public class PageTreeTest {
 	
 	@Test
 	public void testCommitWritesDirtyChunksIfDoublyIndirect() throws IOException {
-		ArrayList<byte[]> oldTags = new ArrayList<>();
+		ArrayList<DeferrableTag> oldTags = new ArrayList<>();
 		
 		for(int pageNum = 0; pageNum < tree.numPages(); pageNum++) {
 			oldTags.add(tree.getPageTag(pageNum));
-			assertTrue(archive.config.getCacheStorage().exists(Page.pathForTag(tree.getPageTag(pageNum))));
+			assertTrue(archive.config.getCacheStorage().exists(tree.getPageTag(pageNum).path()));
 		}
 		
 		ZKFile file = fs.open("2indirect", File.O_WRONLY);
@@ -385,26 +386,26 @@ public class PageTreeTest {
 		
 		for(int pageNum = 0; pageNum < tree.numPages(); pageNum++) {
 			if(pageNum == 1) {
-				assertFalse(Arrays.equals(oldTags.get(pageNum), tree.getPageTag(pageNum)));
+				assertEquals(oldTags.get(pageNum), tree.getPageTag(pageNum).getBytes());
 			} else {
-				assertTrue(Arrays.equals(oldTags.get(pageNum), tree.getPageTag(pageNum)));
+				assertNotEquals(oldTags.get(pageNum), tree.getPageTag(pageNum).getBytes());
 			}
 			
 			oldTags.add(tree.getPageTag(pageNum));
-			assertTrue(archive.config.getCacheStorage().exists(Page.pathForTag(oldTags.get(pageNum))));
-			assertTrue(archive.config.getCacheStorage().exists(Page.pathForTag(tree.getPageTag(pageNum))));
+			assertTrue(archive.config.getCacheStorage().exists(oldTags.get(pageNum).path()));
+			assertTrue(archive.config.getCacheStorage().exists(tree.getPageTag(pageNum).path()));
 		}
 	}
 	
 	@Test
 	public void testCommitDoesNotWriteChunksIfIndirect() throws IOException {
 		PageTree indirectTree = new PageTree(fs.inodeForPath("indirect"));
-		byte[] oldTag = indirectTree.getPageTag(0);
+		DeferrableTag oldTag = indirectTree.getPageTag(0);
 		fs.write("indirect", crypto.rng(archive.config.pageSize));
 		
 		indirectTree = new PageTree(fs.inodeForPath("indirect"));
-		assertArrayEquals(indirectTree.getRefTag().getHash(), indirectTree.getPageTag(0));
-		assertFalse(Arrays.equals(oldTag, indirectTree.getPageTag(0)));
+		assertArrayEquals(indirectTree.getRefTag().getHash(), indirectTree.getPageTag(0).getBytes());
+		assertNotEquals(oldTag, indirectTree.getPageTag(0));
 		assertTrue(archive.config.getCacheStorage().exists(Page.pathForTag(indirectTag.getHash())));
 	}
 	
@@ -412,7 +413,7 @@ public class PageTreeTest {
 	public void testCommitDoesNotWriteChunksIfImmediate() throws IOException {
 		PageTree immediateTree = new PageTree(fs.inodeForPath("immediate"));
 		assertEquals(immediateTag, immediateTree.refTag);
-		assertArrayEquals(immediateTag.getLiteral(), immediateTree.getPageTag(0));
+		assertArrayEquals(immediateTag.getLiteral(), immediateTree.getPageTag(0).getBytes());
 		assertFalse(archive.config.getCacheStorage().exists(Page.pathForTag(immediateTag.getHash())));
 	}
 	
@@ -422,7 +423,7 @@ public class PageTreeTest {
 			boolean found = false;
 			
 			for(byte[] passed : archive.allPageTags()) {
-				if(Arrays.equals(passed, tree.tagForChunk(i))) {
+				if(Arrays.equals(passed, tree.tagForChunk(i).getBytes())) {
 					found = true;
 					break;
 				}
@@ -438,7 +439,7 @@ public class PageTreeTest {
 			boolean found = false;
 			
 			for(byte[] passed : archive.allPageTags()) {
-				if(Arrays.equals(passed, tree.getPageTag(i))) {
+				if(Arrays.equals(passed, tree.getPageTag(i).getBytes())) {
 					found = true;
 					break;
 				}
@@ -463,18 +464,19 @@ public class PageTreeTest {
 		byte[] nullTag = new byte[crypto.hashLength()];
 		
 		for(int i = 0; i < max; i++) {
-			tree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+			DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+			tree.setPageTag(i, tag);
 		}
 		
 		tree.resize(cutoff);
 		assertEquals(max, tree.numPages);
 		
 		for(int i = 0; i < cutoff; i++) {
-			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), tree.getPageTag(i));
+			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), tree.getPageTag(i).getBytes());
 		}
 		
 		for(int i = cutoff; i < max; i++) {
-			assertArrayEquals(nullTag, tree.getPageTag(i));
+			assertArrayEquals(nullTag, tree.getPageTag(i).getBytes());
 		}
 	}
 	
@@ -482,21 +484,22 @@ public class PageTreeTest {
 	public void testResizeUpwardToSameTreeHeight() throws IOException {
 		int max = (int) (1.5*tree.tagsPerChunk());
 		int cutoff = tree.tagsPerChunk() + 1;
-		byte[] nullTag = new byte[crypto.hashLength()];
 		
 		for(int i = 0; i < cutoff; i++) {
-			tree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+			DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+			tree.setPageTag(i, tag);
 		}
 		
 		tree.resize(max);
 		assertEquals(cutoff, tree.numPages);
 		
 		for(int i = 0; i < cutoff; i++) {
-			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), tree.getPageTag(i));
+			DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+			assertEquals(tag, tree.getPageTag(i));
 		}
 		
 		for(int i = cutoff; i < max; i++) {
-			assertArrayEquals(nullTag, tree.getPageTag(i));
+			assertTrue(tree.getPageTag(i).isBlank());
 		}
 	}
 	
@@ -504,14 +507,16 @@ public class PageTreeTest {
 	public void testResizeDownwardInHeightOneLevel() throws IOException {
 		int max = (int) (1.5*tree.tagsPerChunk()), contracted = tree.tagsPerChunk();
 		for(int i = 0; i < max; i++) {
-			tree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+			DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+			tree.setPageTag(i, tag);
 		}
 		
 		tree.resize(contracted);
 		assertEquals(contracted, tree.numPages);
 		
 		for(int i = 0; i < contracted; i++) {
-			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), tree.getPageTag(i));
+			DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+			assertEquals(tag, tree.getPageTag(i));
 		}
 	}
 	
@@ -526,14 +531,16 @@ public class PageTreeTest {
 			int max = (int) (smallPageTree.tagsPerChunk()*smallPageTree.tagsPerChunk()+1);
 			
 			for(int i = 0; i < max; i++) {
-				smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+				DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+				smallPageTree.setPageTag(i, tag);
 			}
 			
 			smallPageTree.resize(contracted);
 			assertEquals(contracted, smallPageTree.numPages);
 			
 			for(int i = 0; i < contracted; i++) {
-				assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+				DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+				assertEquals(tag, smallPageTree.getPageTag(i));
 			}
 		}
 	}
@@ -542,21 +549,22 @@ public class PageTreeTest {
 	public void testResizeUpwardInHeightOneLevel() throws IOException {
 		int original = tree.tagsPerChunk();
 		int max = (int) (1.5*tree.tagsPerChunk());
-		byte[] blank = new byte[crypto.hashLength()];
 		
 		for(int i = 0; i < original; i++) {
-			tree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+			DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+			tree.setPageTag(i, tag);
 		}
 		
 		tree.resize(max);
 		assertEquals(max, tree.numPages);
 		
 		for(int i = 0; i < original; i++) {
-			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), tree.getPageTag(i));
+			DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+			assertEquals(tag, tree.getPageTag(i));
 		}
 		
 		for(int i = original; i < max; i++) {
-			assertArrayEquals(blank, tree.getPageTag(i));
+			assertTrue(tree.getPageTag(i).isBlank());
 		}
 	}
 
@@ -569,21 +577,22 @@ public class PageTreeTest {
 			
 			int original = smallPageTree.tagsPerChunk();
 			int max = (int) (smallPageTree.tagsPerChunk()*smallPageTree.tagsPerChunk()+1);
-			byte[] blank = new byte[crypto.hashLength()];
 			
 			for(int i = 0; i < original; i++) {
-				smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+				DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+				smallPageTree.setPageTag(i, tag);
 			}
 			
 			smallPageTree.resize(max);
 			assertEquals(max, smallPageTree.numPages);
 			
 			for(int i = 0; i < original; i++) {
-				assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+				DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+				assertEquals(tag, smallPageTree.getPageTag(i));
 			}
 			
 			for(int i = original; i < max; i++) {
-				assertArrayEquals(blank, smallPageTree.getPageTag(i));
+				assertTrue(smallPageTree.getPageTag(i).isBlank());
 			}
 		}
 	}
@@ -612,11 +621,13 @@ public class PageTreeTest {
 			int max = (int) Math.pow(smallPageTree.tagsPerChunk(), 4); // exponent is tree depth
 			
 			for(int i = 0; i < max; i++) {
-				smallPageTree.setPageTag(i, archive.crypto.hash(Util.serializeInt(i)));
+				DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+				smallPageTree.setPageTag(i, tag);
 			}
 			
 			for(int i = 0; i < max; i++) {
-				assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), smallPageTree.getPageTag(i));
+				DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+				assertEquals(tag, smallPageTree.getPageTag(i));
 			}
 		}
 	}
@@ -627,23 +638,27 @@ public class PageTreeTest {
 		Shuffler shuffler = Shuffler.fixedShuffler(numPages);
 		while(shuffler.hasNext()) {
 			int pageNum = shuffler.next();
-			tree.setPageTag(pageNum, archive.crypto.hash(Util.serializeInt(pageNum)));
+			DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(pageNum)));
+			tree.setPageTag(pageNum, tag);
 		}
 		
 		for(int i = 0; i < numPages; i++) {
-			assertArrayEquals(archive.crypto.hash(Util.serializeInt(i)), tree.getPageTag(i));
+			DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+			assertEquals(tag, tree.getPageTag(i));
 		}
 	}
 	
 	@Test
 	public void testHasTagReturnsTrueIfTagNotBlank() throws IOException {
-		tree.setPageTag(1, crypto.defaultPrng().getBytes(crypto.hashLength()));
+		DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(1234)));
+		tree.setPageTag(1, tag);
 		assertTrue(tree.hasTag(1));
 	}
 	
 	@Test
 	public void testHasTagReturnsTrueIfTagIsBlank() throws IOException {
-		tree.setPageTag(1, new byte[crypto.hashLength()]);
+		DeferrableTag tag = DeferrableTag.blank(archive);
+		tree.setPageTag(1, tag);
 		assertFalse(tree.hasTag(1));
 	}
 	
@@ -662,15 +677,16 @@ public class PageTreeTest {
 	@Test
 	public void testTagForChunkReturnsTagForRequestedChunk() throws IOException {
 		// check root tag
-		assertArrayEquals(tree.getRefTag().getHash(), tree.tagForChunk(0));
+		assertArrayEquals(tree.getRefTag().getHash(), tree.tagForChunk(0).getBytes());
 		
 		// scale up to multiple chunks and check those
 		for(int i = 0; i <= 1 + tree.tagsPerChunk(); i++) {
-			tree.setPageTag(i, crypto.hash(Util.serializeInt(i)));
+			DeferrableTag tag = DeferrableTag.withBytes(archive, archive.crypto.hash(Util.serializeInt(i)));
+			tree.setPageTag(i, tag);
 		}
 		
-		assertArrayEquals(tree.chunkAtIndex(0).getTag(0), tree.tagForChunk(1));
-		assertArrayEquals(tree.chunkAtIndex(0).getTag(1), tree.tagForChunk(2));
+		assertEquals(tree.chunkAtIndex(0).getTag(0), tree.tagForChunk(1));
+		assertEquals(tree.chunkAtIndex(0).getTag(1), tree.tagForChunk(2));
 	}
 	
 	@Test
@@ -680,6 +696,6 @@ public class PageTreeTest {
 
 	@Test
 	public void testPageTreeChunkFilesHaveSquashedTimestamps() throws IOException {
-		assertEquals(0, archive.config.getCacheStorage().stat(Page.pathForTag(tree.tagForChunk(0))).getMtime());
+		assertEquals(0, archive.config.getCacheStorage().stat(tree.tagForChunk(0).path()).getMtime());
 	}
 }

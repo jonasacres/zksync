@@ -67,7 +67,7 @@ public class ZKArchiveTest {
 		Inode inode = fs.inodeForPath("file1");
 		PageTree tree = new PageTree(inode);
 		
-		assertTrue(archive.hasPageTag(tree.getPageTag(0)));
+		assertTrue(archive.hasPageTag(tree.getPageTag(0).getBytes()));
 		fs.close();
 	}
 	
@@ -92,7 +92,7 @@ public class ZKArchiveTest {
 		for(int i = 1; i <= 2; i++) {	
 			Inode inode = fs.inodeForPath("file"+i);
 			PageTree tree = new PageTree(inode);
-			archive.storage.unlink(Page.pathForTag(tree.getPageTag(0)));
+			archive.storage.unlink(tree.getPageTag(0).path());
 			assertFalse(archive.hasInode(fs.baseRevision, inode.getStat().getInodeId()));
 		}
 		fs.close();
@@ -104,7 +104,7 @@ public class ZKArchiveTest {
 		Inode inode = fs.inodeForPath("file2");
 		PageTree tree = new PageTree(inode);
 		
-		archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
+		archive.storage.unlink(tree.chunkAtIndex(0).chunkTag.path());
 		assertFalse(archive.hasInode(fs.baseRevision, inode.getStat().getInodeId()));
 		fs.close();
 	}
@@ -147,7 +147,7 @@ public class ZKArchiveTest {
 			ZKFS fs = addMockData(archive);
 			Inode inode = fs.inodeForPath("file"+i);
 			PageTree tree = new PageTree(inode);
-			archive.storage.unlink(Page.pathForTag(tree.getPageTag(0)));
+			archive.storage.unlink(tree.getPageTag(0).path());
 			assertFalse(archive.hasRevision(fs.baseRevision));
 			fs.close();
 		}
@@ -158,7 +158,7 @@ public class ZKArchiveTest {
 		try(ZKFS fs = addMockData(archive)) {
 			Inode inode = fs.inodeForPath("file2");
 			PageTree tree = new PageTree(inode);
-			archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
+			archive.storage.unlink(tree.chunkAtIndex(0).chunkTag.path());
 			assertFalse(archive.hasRevision(fs.baseRevision));
 		}
 	}
@@ -166,8 +166,8 @@ public class ZKArchiveTest {
 	@Test
 	public void testHasRevisionReturnsFalseIfPagesMissingFromInodeTable() throws IOException {
 		try(ZKFS fs = addMockData(archive)) {
-			PageTree tree = new PageTree(fs.baseRevision.getRefTag());
-			archive.storage.unlink(Page.pathForTag(tree.getPageTag(0)));
+			PageTree tree = new PageTree(fs, fs.baseRevision.getRefTag());
+			archive.storage.unlink(tree.getPageTag(0).path());
 			assertFalse(archive.hasRevision(fs.baseRevision));
 		}
 	}
@@ -182,8 +182,8 @@ public class ZKArchiveTest {
 			RevisionTag revTag = fs.commit();
 			assertTrue(revTag.getRefTag().numPages > 1);
 			
-			PageTree tree = new PageTree(revTag.getRefTag());
-			archive.storage.unlink(Page.pathForTag(tree.chunkAtIndex(0).chunkTag));
+			PageTree tree = new PageTree(fs, revTag.getRefTag());
+			archive.storage.unlink(tree.chunkAtIndex(0).chunkTag.path());
 			assertFalse(archive.hasRevision(revTag));
 		}
 	}

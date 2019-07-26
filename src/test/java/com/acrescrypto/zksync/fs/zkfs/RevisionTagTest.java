@@ -246,8 +246,8 @@ public class RevisionTagTest {
 
 	@Test
 	public void testHasStructureLocallyReturnsFalseIfInodePageMissing() throws IOException {
-		PageTree tree = new PageTree(revTag.getRefTag());
-		String pagePath = Page.pathForTag(tree.getPageTag(0));
+		PageTree tree = new PageTree(fs, revTag.getRefTag());
+		String pagePath = tree.getPageTag(0).path();
 		fs.getArchive().getStorage().unlink(pagePath);
 		assertFalse(revTag.hasStructureLocally());
 	}
@@ -261,7 +261,7 @@ public class RevisionTagTest {
 		
 		revTag = fs.commit();
 		try(ZKDirectory dir = fs.opendir("dir")) {
-			String path = Page.pathForTag(dir.tree.getPageTag(0));
+			String path = dir.tree.getPageTag(0).path();
 			fs.archive.getStorage().unlink(path);
 		}
 		
@@ -277,7 +277,7 @@ public class RevisionTagTest {
 		
 		revTag = fs.commit();
 		try(ZKDirectory dir = fs.opendir("dir")) {
-			String path = Page.pathForTag(dir.tree.getPageTag(0));
+			String path = dir.tree.getPageTag(0).path();
 			fs.archive.getStorage().unlink(path);
 		}
 		
@@ -298,7 +298,7 @@ public class RevisionTagTest {
 		String path;
 		revTag = fs.commit();
 		try(ZKDirectory dir = fs.opendir("dir")) {
-			path = Page.pathForTag(dir.tree.getPageTag(0));
+			path = dir.tree.getPageTag(0).path();
 			fs.archive.getStorage().mv(path, path + ".moved");
 		}
 		
@@ -332,7 +332,7 @@ public class RevisionTagTest {
 		String path;
 		revTag = fs.commit();
 		try(ZKDirectory dir = fs.opendir("dir")) {
-			path = Page.pathForTag(dir.tree.getPageTag(0));
+			path = dir.tree.getPageTag(0).path();
 			fs.archive.getStorage().mv(path, path + ".moved");
 		}
 		
@@ -362,7 +362,7 @@ public class RevisionTagTest {
 		String path;
 		revTag = fs.commit();
 		try(ZKDirectory dir = fs.opendir("dir")) {
-			path = Page.pathForTag(dir.tree.getPageTag(0));
+			path = dir.tree.getPageTag(0).path();
 			fs.archive.getStorage().mv(path, path + ".moved");
 		}
 		

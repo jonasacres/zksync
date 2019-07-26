@@ -78,7 +78,7 @@ public class ZKArchiveConfigTest {
 			fs.commit();
 			
 			PageTree tree = new PageTree(fs.inodeForPath("foo"));
-			info[0] = tree.getPageTag(0);
+			info[0] = tree.getPageTag(0).getBytes();
 			info[1] = fs.archive.storage.read(Page.pathForTag(info[0]));
 			return info;
 		}

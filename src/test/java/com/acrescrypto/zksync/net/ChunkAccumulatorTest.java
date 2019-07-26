@@ -134,7 +134,7 @@ public class ChunkAccumulatorTest {
 			fs.write("file", new byte[archive.getConfig().getPageSize()]);
 			fs.commit();
 			PageTree tree = new PageTree(fs.inodeForPath("file"));
-			tag = tree.getPageTag(0);
+			tag = tree.getPageTag(0).getBytes();
 			page = archive.getStorage().read(Page.pathForTag(tag));
 			
 			ByteBuffer buf = ByteBuffer.wrap(page);
