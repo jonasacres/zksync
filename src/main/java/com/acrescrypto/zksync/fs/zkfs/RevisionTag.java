@@ -184,7 +184,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 			return true;
 		}
 		
-		PageTree tree = new PageTree(getRefTag());
+		PageTree tree = new PageTree(null, getRefTag());
 		if(!tree.exists()) {
 			Util.debugLog(String.format("RevisionTag %s: hasStructureLocally=false, does not have inode 0",
 					Util.formatRevisionTag(this)));

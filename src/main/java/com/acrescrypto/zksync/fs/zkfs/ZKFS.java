@@ -57,6 +57,7 @@ public class ZKFS extends FS {
 	protected ConcurrentHashMap<ZKFile,Object> openFiles = new ConcurrentHashMap<>();
 	protected ConcurrentLinkedQueue<Throwable> retentions = new ConcurrentLinkedQueue<>();
 	protected ConcurrentLinkedQueue<Throwable> closures = new ConcurrentLinkedQueue<>();
+	protected BlockManager blockManager;
 	protected int readTimeoutMs = -1;
 	
 	public final static int MAX_PATH_LEN = 65535;
@@ -70,8 +71,11 @@ public class ZKFS extends FS {
 			addOpenInstance(this);
 		}
 		
+		int maxOpenBlocks = revision.getArchive().getMaster().getGlobalConfig().getInt("fs.settings.maxOpenBlockLimit");
 		retain();
 		this.root = root;
+		this.blockManager = new BlockManager(maxOpenBlocks);
+		
 		tokens.add(revision.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.directoryCacheSize").asInt((s)->{
 			if(this.directoriesByPath == null) return;
 			try {
@@ -85,7 +89,28 @@ public class ZKFS extends FS {
 				logger.error("ZKFS {} {}: Caught exception updating directory cache size to {}",
 						Util.formatArchiveId(revision.getConfig().getArchiveId()),
 						baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
+						s,
+						exc);
+			}
+		}));
+		
+		tokens.add(revision.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.maxOpenBlockLimit").asInt((s)->{
+			if(s <= 0) {
+				logger.warn("ZKFS {} {}: Ignoring request to set max open block limit to illegal value {}",
+						Util.formatArchiveId(revision.getConfig().getArchiveId()),
+						baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
 						s);
+				return;
+			}
+			
+			try {
+				blockManager.setMaxOpenBlocks(s);
+			} catch (IOException exc) {
+				logger.error("ZKFS {} {}: Caught exception updating max open block limit to {}",
+						Util.formatArchiveId(revision.getConfig().getArchiveId()),
+						baseRevision != null ? Util.formatRevisionTag(baseRevision) : "-",
+						s,
+						exc);
 			}
 		}));
 		
@@ -203,6 +228,8 @@ public class ZKFS extends FS {
 				dir.commit();
 			}
 			
+			blockManager.writeAll();
+			
 			String parentStr = Util.formatRevisionTag(baseRevision);
 			for(RevisionTag parent : additionalParents) {
 				if(parent.equals(baseRevision)) continue;
@@ -215,14 +242,6 @@ public class ZKFS extends FS {
 					Util.formatRevisionTag(baseRevision),
 					parentStr);
 
-//			Util.debugLog(String.format("ZKFS %s: created revtag %s from %s\n%s\n%s\n%s\n",
-//					archive.getMaster().getName(),
-//					Util.formatRevisionTag(baseRevision),
-//					parentStr,
-//					dump(),
-//					inodeTable.dumpInodes(),
-//					inodeTable.freelist.dump()));
-			// archive.getConfig().getRevisionList().dump();
 			if(!skipIntegrity) {
 				IntegrityChecker.assertValidFilesystem(baseRevision); // TODO: Delete me after testing
 				System.gc();
@@ -916,5 +935,9 @@ public class ZKFS extends FS {
 	
 	public void setReadTimeoutMs(int readTimeoutMs) {
 		this.readTimeoutMs = readTimeoutMs;
+	}
+	
+	public BlockManager getBlockManager() {
+		return blockManager;
 	}
 }

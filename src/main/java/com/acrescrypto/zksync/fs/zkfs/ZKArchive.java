@@ -247,7 +247,7 @@ public class ZKArchive implements AutoCloseable {
 	public boolean hasInode(RevisionTag revTag, long inodeId) throws IOException {
 		assertOpen();
 		if(inodeId < 0) return false;
-		PageTree inodeTableTree = new PageTree(revTag.getRefTag());
+		PageTree inodeTableTree = new PageTree(null, revTag.getRefTag());
 		if(!inodeTableTree.exists()) return false;
 
 		try(ZKFS fs = revTag.readOnlyFS()) {
@@ -265,14 +265,14 @@ public class ZKArchive implements AutoCloseable {
 	/** Test if we have every page of a given inode table cached locally. */
 	public boolean hasInodeTable(RevisionTag revTag) throws IOException {
 		assertOpen();
-		PageTree inodeTableTree = new PageTree(revTag.getRefTag());
+		PageTree inodeTableTree = new PageTree(null, revTag.getRefTag());
 		return inodeTableTree.exists();
 	}
 	
 	/** Test if we have the first page of a given revision inode table. */
 	public boolean hasInodeTableFirstPage(RevisionTag revTag) throws IOException {
 		assertOpen();
-		PageTree inodeTableTree = new PageTree(revTag.getRefTag());
+		PageTree inodeTableTree = new PageTree(null, revTag.getRefTag());
 		return inodeTableTree.pageExists(0);
 	}
 	
@@ -280,7 +280,7 @@ public class ZKArchive implements AutoCloseable {
 	 * @throws IOException */
 	public boolean hasRevision(RevisionTag revTag) throws IOException {
 		assertOpen();
-		PageTree inodeTableTree = new PageTree(revTag.getRefTag());
+		PageTree inodeTableTree = new PageTree(null, revTag.getRefTag());
 		if(!inodeTableTree.exists()) return false;
 
 		try(ZKFS fs = openRevision(revTag)) {

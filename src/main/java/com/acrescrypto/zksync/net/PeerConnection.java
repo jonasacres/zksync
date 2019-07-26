@@ -936,18 +936,18 @@ public class PeerConnection {
 		while(!socket.isClosed()) {
 			try {
 				ChunkReference chunk = queue.nextChunk();
-				if(chunk == null || !wantsFile(chunk.tag)) continue;
+				if(chunk == null || !wantsFile(chunk.tag.getBytes())) continue;
 				waitForUnpause();
 				
-				if(lastStream == null || !Arrays.equals(lastTag, chunk.tag)) {
+				if(lastStream == null || !Arrays.equals(lastTag, chunk.tag.getBytes())) {
 					if(lastStream != null) {
 						lastStream.eof();
 					}
 					
 					lastStream = new AppendableInputStream();
 					socket.makeOutgoingMessage(CMD_SEND_PAGE, lastStream);
-					lastStream.write(chunk.tag);
-					lastTag = chunk.tag;
+					lastStream.write(chunk.tag.getBytes());
+					lastTag = chunk.tag.getBytes();
 				}
 				
 				logger.trace("Swarm {} {}:{}: PeerConnection page queue thread sending chunk {} of tag {}",
@@ -955,11 +955,11 @@ public class PeerConnection {
 						socket.getAddress(),
 						socket.getPort(),
 						chunk.index,
-						Util.bytesToHex(chunk.tag, 8));
+						Util.bytesToHex(chunk.tag.getBytes(), 8));
 				lastStream.write(ByteBuffer.allocate(4).putInt(chunk.index).array());
 				lastStream.write(chunk.getData());
 				
-				boolean hasMore = queue.expectTagNext(chunk.tag);
+				boolean hasMore = queue.expectTagNext(chunk.tag.getBytes());
 				if(!hasMore) {
 					lastStream.eof();
 					lastStream = null;

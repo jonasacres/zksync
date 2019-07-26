@@ -178,9 +178,9 @@ public class ZKFile extends File {
 	 * Updates the page tree reference to a specific page number. Updates inode
 	 * reftag automatically.
 	 */
-	protected void setPageTag(int pageNum, byte[] hash) throws IOException {
+	protected void setPageTag(int pageNum, DeferrableTag tag) throws IOException {
 		assertWritable();
-		tree.setPageTag(pageNum, hash);
+		tree.setPageTag(pageNum, tag);
 	}
 
 	/**
@@ -188,7 +188,7 @@ public class ZKFile extends File {
 	 * 
 	 * @throws IOException
 	 */
-	protected byte[] getPageTag(int pageNum) throws IOException {
+	protected DeferrableTag getPageTag(int pageNum) throws IOException {
 		return tree.getPageTag(pageNum);
 	}
 
@@ -226,7 +226,8 @@ public class ZKFile extends File {
 			long oldPageCount = tree.numPages;
 			tree.resize(newPageCount);
 			for (long i = newPageCount; i < Math.min(oldPageCount, tree.maxNumPages); i++) {
-				tree.setPageTag(i, new byte[zkfs.archive.crypto.hashLength()]);
+				// mark truncated pages as blank
+				tree.setPageTag(i, DeferrableTag.blank(zkfs.archive));
 			}
 
 			tree.setNumPages(newPageCount);

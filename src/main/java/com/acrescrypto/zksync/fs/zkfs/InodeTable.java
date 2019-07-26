@@ -789,7 +789,7 @@ public class InodeTable extends ZKFile {
 	private void initialize() throws IOException {
 		this.inode = Inode.defaultRootInode(zkfs);
 		this.setInode(this.inode);
-		this.tree = new PageTree(RefTag.blank(zkfs.archive));
+		this.tree = new PageTree(zkfs, RefTag.blank(zkfs.archive));
 		this.nextInodeId = USER_INODE_ID_START;
 
 		makeRootDir();
@@ -803,7 +803,7 @@ public class InodeTable extends ZKFile {
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(tag),
 				Util.formatRefTag(tag.getRefTag()));
-		this.tree = new PageTree(tag.getRefTag());
+		this.tree = new PageTree(zkfs, tag.getRefTag());
 		this.inode = new Inode(zkfs);
 		this.inode.setRefTag(tag.getRefTag());
 		this.inode.setFlags(Inode.FLAG_RETAIN);

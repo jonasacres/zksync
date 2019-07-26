@@ -2,26 +2,23 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.SignedSecureFile;
-import com.acrescrypto.zksync.utility.Util;
 
 public class PageTreeChunk {
 	protected PageTree tree;
-	byte[] chunkTag;
-	byte[][] tags;
+	DeferrableTag chunkTag;
+	DeferrableTag[] tags;
 	long index;
 	protected boolean dirty;
 	
-	public PageTreeChunk(PageTree tree, byte[] chunkTag, long index, boolean verify) throws IOException {
+	public PageTreeChunk(PageTree tree, DeferrableTag chunkTag, long index, boolean verify) throws IOException {
 		this.index = index;
 		this.chunkTag = chunkTag;
 		this.tree = tree;
-		this.tags = new byte[tree.tagsPerChunk()][];
+		this.tags = new DeferrableTag[tree.tagsPerChunk()];
 		
-		if(isZero(chunkTag)) {
+		if(chunkTag.isBlank()) {
 			initBlank();
 		} else {
 			read(verify);
@@ -29,25 +26,25 @@ public class PageTreeChunk {
 	}
 	
 	public boolean hasTag(long offset) {
-		return !isZero(getTag(offset));
+		return !getTag(offset).isBlank();
 	}
 	
-	public void setTag(long offset, byte[] tag) {
-		if(Arrays.equals(tag, tags[(int) offset])) return;
+	public void setTag(long offset, DeferrableTag tag) throws IOException {
+		if(tag.equals(tags[(int) offset])) return;
 		
 		loadTag(offset, tag);
-		if(tag.length >= tree.archive.getCrypto().hashLength() && !isZero(tag)) {
-			tree.archive.addPageTag(tag);
+		if(!tag.isImmediate() && !tag.isPending()) {
+			tree.archive.addPageTag(tag.getBytes());
 		}
 		
 		markDirty();
 	}
 	
-	public void loadTag(long offset, byte[] tag) {
+	public void loadTag(long offset, DeferrableTag tag) {
 		tags[(int) offset] = tag;
 	}
 	
-	public byte[] getTag(long offset) {
+	public DeferrableTag getTag(long offset) {
 		return tags[(int) offset];
 	}
 	
@@ -65,31 +62,35 @@ public class PageTreeChunk {
 		for(int i = 0; i < tree.tagsPerChunk(); i++) {
 			int childOffset = (int) (tree.tagsPerChunk()*tree.offsetOfChunkId(index) + i);
 			long childId = tree.chunkIdAtPosition(tree.levelOfChunkId(index)+1, childOffset);
-			System.out.println("\t" + i + " ("+ childId +"): " + Util.bytesToHex(tags[i]));
+			System.out.println("\t" + i + " ("+ childId +"): " + tags[i]);
 		}
 	}
 	
 	protected void initBlank() {
 		// This is a hot spot. Anything we can do to speed this up will be a big help.
-		int tagsPerChunk = tree.tagsPerChunk(), hashLen = tree.archive.crypto.hashLength();
-		byte[] blankTag = new byte[hashLen];
+		int tagsPerChunk = tree.tagsPerChunk();
+		DeferrableTag blank = DeferrableTag.blank(tree.archive);
 		for(int i = 0; i < tagsPerChunk; i++) {
-			tags[i] = blankTag;
+			tags[i] = blank;
 		}
 	}
 	
 	protected void write() throws IOException {
+		// TODO: redo this; should live inside a Block
 		byte[] serialized = serialize();
-		chunkTag = SignedSecureFile
-				  .withParams(tree.archive.storage, textKey(), saltKey(), authKey(), tree.archive.config.privKey)
-				  .write(serialized, tree.archive.config.pageSize);
+		Block block = tree.fs.getBlockManager().addData(tree.inodeIdentity,
+				index,
+				Block.INDEX_TYPE_CHUNK,
+				serialized,
+				0,
+				serialized.length);
 		
 		if(index != 0) {
 			PageTreeChunk parent = parent();
 			long offset = (index-1) % tree.tagsPerChunk();
-			parent.setTag(offset, chunkTag);
+			parent.setTag(offset, block.getDeferrableTag());
 		} else {
-			tree.setTag(chunkTag);
+			tree.setTag(block.getDeferrableTag());
 		}
 		
 		dirty = false;
@@ -97,31 +98,32 @@ public class PageTreeChunk {
 	}
 	
 	protected void read(boolean verify) throws IOException {
-		tree.getArchive().getConfig().waitForPageReady(chunkTag,
+		// TODO: redo this; should live inside a Block
+		byte[] serialized = chunkTag.getBlock().readData(tree.inodeIdentity,
+				index,
+				Block.INDEX_TYPE_CHUNK);
+		tree.getArchive().getConfig().waitForPageReady(chunkTag.getBytes(),
 				tree.getReadTimeoutMs());
-		byte[] serialized = SignedSecureFile
-				  .withTag(chunkTag, tree.archive.storage, textKey(), saltKey(), authKey(), tree.archive.config.pubKey)
-				  .read(verify);
 		deserialize(ByteBuffer.wrap(serialized));
 	}
 	
-	protected byte[] serialize() {
+	protected byte[] serialize() throws IOException {
 		ByteBuffer buf = ByteBuffer.allocate(tree.tagsPerChunk() * tree.archive.crypto.hashLength());
-		for(byte[] tag : tags) {
-			buf.put(tag);
+		for(DeferrableTag tag : tags) {
+			buf.put(tag.getBytes());
 		}
 		
 		return buf.array();
 	}
 	
 	protected void deserialize(ByteBuffer serialized) {
-		tags = new byte[tree.tagsPerChunk()][];
+		tags = new DeferrableTag[tree.tagsPerChunk()];
 		int hashLength = tree.archive.crypto.hashLength();
 		int i = 0;
 		while(serialized.remaining() >= hashLength) {
-			byte[] tag = new byte[tree.archive.crypto.hashLength()];
-			serialized.get(tag);
-			tags[i++] = tag;
+			byte[] tagBytes = new byte[tree.archive.crypto.hashLength()];
+			serialized.get(tagBytes);
+			tags[i++] = DeferrableTag.withBytes(tree.getArchive(), tagBytes);
 		}
 	}
 	
@@ -166,7 +168,7 @@ public class PageTreeChunk {
 		return String.format("PageTreeChunk %d (%d) %s%s",
 				index,
 				tree.inodeId,
-				chunkTag == null ? "null" : Util.bytesToHex(chunkTag, 6),
+				chunkTag == null ? "null" : chunkTag,
 				dirty ? "*" : "");
 	}
 }

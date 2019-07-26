@@ -71,6 +71,9 @@ public class RefTag implements Comparable<RefTag> {
 		deserialize(tag);
 	}
 	
+	public RefTag() {
+	}
+
 	public byte[] padHash(byte[] hash) {
 		// this breaks if the hash length is > 255 bytes, but honestly, who needs a hash that long?
 		byte needed = (byte) (config.accessor.master.crypto.hashLength() - hash.length);

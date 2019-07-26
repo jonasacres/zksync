@@ -8,11 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.utility.Util;
 
 /** represents a fixed-size page of data from a file. handles encryption/decryption/storage of said page. */
@@ -127,17 +125,20 @@ public class Page {
 			
 			// don't write immediates to disk; the pageTag = refTag = file contents
 			if(pageNum == 0 && size < file.zkfs.archive.crypto.hashLength()) {
-				file.setPageTag(pageNum, plaintext.array());
+				file.setPageTag(pageNum, new DeferrableTag(file.getFS().getArchive(), plaintext.array()));
 				return;
 			}
 		} else {
 			plaintext = contents;
 		}
 		
-		byte[] pageTag = SignedSecureFile
-		  .withParams(file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.privKey)
-		  .write(plaintext.array(), file.zkfs.archive.config.pageSize);
-		this.file.setPageTag(pageNum, pageTag);
+		Block block = file.getFS().getBlockManager().addData(file.getInode().getIdentity(),
+				pageNum,
+				Block.INDEX_TYPE_PAGE,
+				contents.array(),
+				0,
+				size);
+		this.file.setPageTag(pageNum, block.getDeferrableTag());
 	}
 	
 	/** read data from page into a supplied buffer
@@ -225,24 +226,14 @@ public class Page {
 		int pageSize = file.zkfs.archive.config.pageSize;
 		contents = ByteBuffer.allocate(pageSize);
 		
-		byte[] pageTag = file.getPageTag(pageNum);
-		if(pageNum == 0 && file.tree.numPages == 1 && pageTag.length < file.getFS().getArchive().getCrypto().hashLength()) {
-			contents.put(file.inode.getRefTag().getLiteral());
+		DeferrableTag pageTag = file.getPageTag(pageNum);
+		if(pageTag.isImmediate()) {
+			contents.put(pageTag.getBytes());
 		} else {
-			if(file.getFS().getArchive().getStorage() instanceof BackedFS) {
-				// make sure the page is ready if this is a non-cached filesystem
-				file.getFS().getArchive().getConfig().waitForPageReady(pageTag,
-						file.getFS().getReadTimeoutMs());
-			}
-			
-			try {
-				byte[] plaintext = SignedSecureFile
-				  .withTag(pageTag, file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.pubKey)
-				  .read(!file.trusted);
-				contents.put(plaintext);
-			} catch(SecurityException exc) {
-				throw exc;
-			}
+			contents.put(pageTag.getBlock().readData(
+					file.getInode().getIdentity(),
+					pageNum,
+					Block.INDEX_TYPE_PAGE));
 		}
 		
 		size = contents.position();
@@ -250,7 +241,7 @@ public class Page {
 				Util.formatArchiveId(file.zkfs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(file.zkfs.getBaseRevision()),
 				pageNum,
-				Util.formatPageTag(pageTag),
+				pageTag,
 				file.getPath(),
 				size);
 		dirty = false;

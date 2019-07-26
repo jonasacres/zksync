@@ -17,6 +17,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class PageTree {
 	protected ZKArchive archive;
+	protected ZKFS fs;
 	protected RefTag refTag;
 	protected HashCache<Long,PageTreeChunk> chunkCache;
 	protected Queue<PageTreeChunk> dirtyChunks;
@@ -31,7 +32,8 @@ public class PageTree {
 	}
 	
 	/* Open a revtag, which is a reftag to an inode table */ 
-	public PageTree(RefTag revTag) throws IOException {
+	public PageTree(ZKFS fs, RefTag revTag) throws IOException {
+		this.fs = fs;
 		this.archive = revTag.getArchive();
 		this.refTag = revTag;
 		this.inodeId = InodeTable.INODE_ID_INODE_TABLE;
@@ -41,6 +43,7 @@ public class PageTree {
 	}
 	
 	public PageTree(Inode inode) {
+		this.fs = inode.fs;
 		this.archive = inode.fs.archive;
 		this.readTimeoutMs = inode.fs.getReadTimeoutMs();
 		assert(0 < tagsPerChunk() && tagsPerChunk() <= Integer.MAX_VALUE);
@@ -152,9 +155,12 @@ public class PageTree {
 			return archive.config.getCacheStorage().exists(Page.pathForTag(refTag.getHash()));
 		case RefTag.REF_TYPE_2INDIRECT:
 			if(numChunks <= 0 || numPages <= pageNum) return false;
-			if(!archive.config.getCacheStorage().exists(Page.pathForTag(tagForChunk(chunkIndexForPageNum(pageNum))))) return false;
-			byte[] tag = getPageTag(pageNum);
-			return archive.config.getCacheStorage().exists(Page.pathForTag(tag));
+			if(!archive.config.getCacheStorage().exists(tagForChunk(chunkIndexForPageNum(pageNum)).path())) {
+				return false;
+			}
+			
+			DeferrableTag tag = getPageTag(pageNum);
+			return archive.config.getCacheStorage().exists(tag.path());
 		default:
 			return false;
 		}
@@ -170,7 +176,7 @@ public class PageTree {
 		return refTag;
 	}
 	
-	public void setPageTag(long pageNum, byte[] pageTag) throws IOException {
+	public void setPageTag(long pageNum, DeferrableTag pageTag) throws IOException {
 		if(pageNum >= maxNumPages) {
 			resize(1+pageNum);
 		}
@@ -180,13 +186,13 @@ public class PageTree {
 				inodeId,
 				Util.formatRefTag(refTag),
 				pageNum,
-				Util.formatPageTag(pageTag));
+				pageTag);
 
 		chunkForPageNum(pageNum).setTag(pageNum % tagsPerChunk(), pageTag);
 		numPages = Math.max(numPages, 1+pageNum);
 	}
 	
-	public byte[] getPageTag(long pageNum) throws IOException {
+	public DeferrableTag getPageTag(long pageNum) throws IOException {
 		return chunkForPageNum(pageNum).getTag(pageNum % tagsPerChunk());
 	}
 	
@@ -230,7 +236,7 @@ public class PageTree {
 		
 		for(long i = 0; i < numPages; i++) {
 			if(!foundChunks.contains(chunkIndexForPageNum(i))) continue;
-			String path = Page.pathForTag(getPageTag(i));
+			String path = getPageTag(i).path();
 			if(archive.getConfig().getCacheStorage().exists(path)) {
 				stats.numCachedPages++;
 			}
@@ -297,7 +303,7 @@ public class PageTree {
 		numChunks = 1 + chunkIndexForPageNum(newMinPages-1);
 
 		if(numPages > newMinPages) {
-			byte[] blank = new byte[archive.crypto.hashLength()];
+			DeferrableTag blank = DeferrableTag.blank(archive);
 			for(long i = newMinPages; i < numPages; i++) {
 				chunkForPageNum(i).setTag(i % tagsPerChunk(), blank);
 			}
@@ -321,13 +327,13 @@ public class PageTree {
 		return chunkForPageNum(pageNum).hasTag(pageNum % tagsPerChunk());
 	}
 	
-	public byte[] tagForChunk(long index) throws IOException {
+	public DeferrableTag tagForChunk(long index) throws IOException {
 		if(index == 0) {
 			if(refTag.isBlank() || refTag.refType != RefTag.REF_TYPE_2INDIRECT) {
-				return new byte[archive.getCrypto().hashLength()];
+				return DeferrableTag.blank(archive);
 			}
 			
-			return refTag.getHash();
+			return DeferrableTag.withBytes(archive, refTag.getHash());
 		}
 		
 		long parentIndex = indexForParent(index);
@@ -359,7 +365,7 @@ public class PageTree {
 			PageTreeChunk chunk = new PageTreeChunk(this, tagForChunk(0), 0, !trusted);
 			
 			if(refTag.getRefType() != RefTag.REF_TYPE_2INDIRECT && !refTag.isBlank()) {
-				chunk.loadTag(0, refTag.getLiteral());
+				chunk.loadTag(0, DeferrableTag.withImmediate(archive, refTag.getLiteral()));
 			}
 			
 			return chunk;
@@ -376,7 +382,7 @@ public class PageTree {
 		long parentIndex = indexForParent(index);
 		long offsetInParent = (index - 1) % tagsPerChunk();
 		
-		byte[] chunkTag = chunkAtIndex(parentIndex).getTag(offsetInParent);
+		DeferrableTag chunkTag = chunkAtIndex(parentIndex).getTag(offsetInParent);
 		if(chunkCache.hasCached(index)) {
 			// it's possible that finding the parent triggered a separate search operation for this index, due to evictions
 			return chunkCache.get(index);
@@ -396,20 +402,9 @@ public class PageTree {
 		return parentIndex;
 	}
 	
-	protected void setTag(byte[] tag) {
-		int refType;
-		if(numPages <= 1) {
-			if(numPages == 0 || tag.length < archive.crypto.hashLength()) {
-				refType = RefTag.REF_TYPE_IMMEDIATE;
-			} else {
-				refType = RefTag.REF_TYPE_INDIRECT;
-			}
-		} else {
-			refType = RefTag.REF_TYPE_2INDIRECT;
-			archive.addPageTag(tag);
-		}
-		
-		refTag = new RefTag(archive, tag, refType, numPages);
+	protected void setTag(DeferrableTag tag) {
+		tag.setNumPages(numPages);
+		refTag = tag.getRefTag();
 	}
 	
 	protected boolean hasTreeContentsLocally() throws IOException {
@@ -422,12 +417,20 @@ public class PageTree {
 	}
 	
 	protected boolean hasChunkContentsLocally(long index) throws IOException {
-		if(!archive.config.getCacheStorage().exists(Page.pathForTag(tagForChunk(index)))) return false;
+		if(!archive.config.getCacheStorage().exists(tagForChunk(index).path())) {
+			return false;
+		}
+		
 		PageTreeChunk chunk = loadChunkAtIndex(index);
 		for(int i = 0; i < tagsPerChunk(); i++) {
-			byte[] tag = chunk.getTag(i);
-			if(chunk.isZero(tag)) continue;
-			if(!archive.config.getCacheStorage().exists(Page.pathForTag(tag))) return false;
+			DeferrableTag tag = chunk.getTag(i);
+			if(tag.isBlank()) {
+				continue;
+			}
+			
+			if(!archive.config.getCacheStorage().exists(tag.path())) {
+				return false;
+			}
 		}
 		
 		return true;
@@ -508,5 +511,13 @@ public class PageTree {
 
 	public void setReadTimeoutMs(int readTimeoutMs) {
 		this.readTimeoutMs = readTimeoutMs;
+	}
+	
+	public void setFs(ZKFS fs) {
+		this.fs = fs;
+	}
+	
+	public ZKFS getFs() {
+		return fs;
 	}
 }
