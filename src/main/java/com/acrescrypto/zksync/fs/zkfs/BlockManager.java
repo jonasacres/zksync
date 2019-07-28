@@ -6,14 +6,17 @@ import java.util.LinkedList;
 public class BlockManager {
 	protected LinkedList<Block> pendingBlocks;
 	protected int maxOpenBlocks;
-	protected ZKFS fs;
+	protected ZKArchive archive;
 	
-	public BlockManager(int maxOpenBlocks) {
+	public BlockManager(ZKArchive archive, int maxOpenBlocks) {
+		this.archive = archive;
+		this.maxOpenBlocks = maxOpenBlocks;
 		pendingBlocks = new LinkedList<>();
 	}
 	
 	public Block addData(long identity, long pageNum, byte type, byte[] contents, int offset, int length) throws IOException {
-		if(length == fs.getArchive().getConfig().getPageSize()) {
+		if(length >= archive.getConfig().getPageSize()) {
+			// don't even mess with the pendingBlock list if we know we need a whole block
 			return addDataSingle(identity, pageNum, type, contents, offset, length);
 		}
 
@@ -21,14 +24,14 @@ public class BlockManager {
 	}
 
 	protected Block addDataSingle(long identity, long pageNum, byte type, byte[] contents, int offset, int length) throws IOException {
-		Block block = new Block(fs.getArchive());
+		Block block = new Block(archive);
 		block.addData(identity, pageNum, type, contents, offset, length);
 		block.write();
 		return block;
 	}
 	
 	protected synchronized Block addDataMultitenanted(long identity, long pageNum, byte type, byte[] contents, int offset, int length) throws IOException {
-		Block block = blockForData(length);
+		Block block = blockForData(identity, pageNum, type, length);
 		for(Block existing : pendingBlocks) {
 			existing.removeData(identity, pageNum, type);
 		}
@@ -45,21 +48,25 @@ public class BlockManager {
 		pendingBlocks.clear();
 	}
 	
-	protected Block blockForData(int length) throws IOException {
-		Block existing = pendingBlockToFit(length);
+	protected Block blockForData(long identity, long pageNum, byte type, int length) throws IOException {
+		Block existing = pendingBlockToFit(identity, pageNum, type, length);
 		if(existing != null) {
 			return existing;
 		}
 		
-		Block newBlock = new Block(fs.getArchive());
+		Block newBlock = new Block(archive);
 		pendingBlocks.add(newBlock);
 		enforceOpenBlockLimit();
 		return newBlock;
 	}
 	
-	protected Block pendingBlockToFit(int length) {
+	protected Block pendingBlockToFit(long identity, long pageNum, byte type, int length) {
 		Block bestFit = null;
 		for(Block block : pendingBlocks) {
+			if(block.hasData(identity, pageNum, type)) {
+				block.removeData(identity, pageNum, type);
+			}
+			
 			if(!block.canFitData(length)) {
 				continue;
 			}

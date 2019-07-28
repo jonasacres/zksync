@@ -186,6 +186,11 @@ public class Block {
 		remainingCapacity -= length + indexEntryLength();
 	}
 	
+	public boolean hasData(long identity, long chunkNum, byte type) {
+		BlockEntryIndex index = new BlockEntryIndex(identity, chunkNum, type);
+		return entries.containsKey(index);
+	}
+	
 	public boolean removeData(long identity, long chunkNum, byte type) {
 		BlockEntryIndex index = new BlockEntryIndex(identity, chunkNum, type);
 		BlockEntry existing = entries.remove(index);

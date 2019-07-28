@@ -10,6 +10,7 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetTest;
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
 	BlockTest.class,
+	BlockManagerTest.class,
 	RevisionListTest.class,
 	ZKFSTest.class,
 	ZKDirectoryTest.class,

@@ -74,7 +74,7 @@ public class ZKFS extends FS {
 		int maxOpenBlocks = revision.getArchive().getMaster().getGlobalConfig().getInt("fs.settings.maxOpenBlockLimit");
 		retain();
 		this.root = root;
-		this.blockManager = new BlockManager(maxOpenBlocks);
+		this.blockManager = new BlockManager(revision.getArchive(), maxOpenBlocks);
 		
 		tokens.add(revision.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.directoryCacheSize").asInt((s)->{
 			if(this.directoriesByPath == null) return;
