@@ -8,12 +8,14 @@ import java.util.LinkedList;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.exceptions.BlockDoesNotContainPageException;
+import com.acrescrypto.zksync.exceptions.ClosedException;
+import com.acrescrypto.zksync.exceptions.InsufficientCapacityException;
 import com.acrescrypto.zksync.exceptions.InvalidBlockException;
 
 public class Block {
-	protected ZKFS fs;
+	protected ZKArchive archive;
 	protected int remainingCapacity;
-	protected byte[] contents;
+	protected byte[] blockContents;
 	protected boolean isWritable;
 	protected HashMap<BlockEntryIndex,BlockEntry> entries = new HashMap<>();
 	protected DeferrableTag deferrableTag;
@@ -43,22 +45,22 @@ public class Block {
 			}
 			
 			BlockEntryIndex o = (BlockEntryIndex) other;
-			return o.identity == identity && o.pageNum == pageNum;
+			return o.identity == identity && o.pageNum == pageNum && o.type == type;
 		}
 
 		@Override
 		public int compareTo(BlockEntryIndex o) {
-			int c = Long.valueOf(identity).compareTo(o.identity);
+			int c = Long.compareUnsigned(identity, o.identity);
 			if(c != 0) {
 				return c;
 			}
 			
-			c = Byte.valueOf(type).compareTo(o.type);
+			c = Byte.compareUnsigned(type, o.type);
 			if(c != 0) {
 				return c;
 			}
 			
-			return Long.valueOf(pageNum).compareTo(o.pageNum);
+			return Long.compareUnsigned(pageNum, o.pageNum);
 		}
 	}
 	
@@ -67,7 +69,6 @@ public class Block {
 		long pageNum;
 		byte type;
 		int offset;
-		int contentsOffset;
 		int length;
 		byte[] contents;
 		
@@ -79,12 +80,17 @@ public class Block {
 		
 		public BlockEntry(ByteBuffer buf) throws InvalidBlockException {
 			this.identity = buf.getLong();
+			this.type = buf.get();
 			this.pageNum = buf.getLong();
+			this.contents = blockContents;
+
 			long longOffset = buf.getLong();
 			
 			assertIntegrity(0 <= this.pageNum);
 			assertIntegrity(0 < longOffset);
-			assertIntegrity(longOffset < fs.getArchive().getConfig().getPageSize());
+			assertIntegrity(longOffset < archive.getConfig().getPageSize());
+			
+			this.offset = (int) longOffset;
 		}
 
 		public void serialize(ByteBuffer buf) {
@@ -115,7 +121,7 @@ public class Block {
 			if(o.pageNum != this.pageNum) return false;
 			if(o.length != this.length) return false;
 			for(int i = 0; i < length; i++) {
-				if(contents[contentsOffset+i] != o.contents[o.contentsOffset+i]) {
+				if(contents[offset+i] != o.contents[o.offset+i]) {
 					return false;
 				}
 			}
@@ -132,19 +138,26 @@ public class Block {
 		return 8 + 1 + 8 + 8; // identity, type, page, offset
 	}
 	
-	public Block(ZKFS fs) {
-		this.fs = fs;
+	public Block(ZKArchive archive) {
+		this.archive = archive;
+		this.remainingCapacity = archive.getConfig().getPageSize() - fixedHeaderLength();
+		this.deferrableTag = new DeferrableTag(this);
+		this.isWritable = true;
 	}
 	
 	public Block(DeferrableTag tag) throws IOException {
+		this.archive = tag.archive;
 		this.deferrableTag = tag;
-		isWritable = false;
 		load();
 	}
 	
-	public void addData(long identity, long pageNum, byte type, byte[] contents, int offset, int length) {
+	public void addData(long identity, long pageNum, byte type, byte[] contents, int offset, int length) throws IOException {
+		if(!isWritable()) {
+			throw new ClosedException();
+		}
+		
 		if(!canFitData(contents.length)) {
-			throw new RuntimeException("Cannot fit page data into block");
+			throw new InsufficientCapacityException();
 		}
 		
 		if(contents.length - length >= 1024) {
@@ -163,17 +176,24 @@ public class Block {
 		if(entry == null) {
 			entry = new BlockEntry(identity, pageNum, type);
 			entries.put(index, entry);
+		} else {
+			remainingCapacity += entry.length + indexEntryLength();
 		}
 		
 		entry.contents = contents;
-		entry.contentsOffset = offset;
+		entry.offset = offset;
 		entry.length = length;
-		remainingCapacity -= length - indexEntryLength();
+		remainingCapacity -= length + indexEntryLength();
 	}
 	
 	public boolean removeData(long identity, long chunkNum, byte type) {
 		BlockEntryIndex index = new BlockEntryIndex(identity, chunkNum, type);
-		return entries.remove(index) != null;
+		BlockEntry existing = entries.remove(index);
+		if(existing != null) {
+			remainingCapacity += existing.length + indexEntryLength();
+		}
+		
+		return existing != null;
 	}
 
 	public boolean canFitData(long length) {
@@ -190,14 +210,15 @@ public class Block {
 	}
 	
 	public byte[] write() throws IOException {
-		byte[] tagBytes = SignedSecureFile.withParams(fs.getArchive().getStorage(),
+		byte[] tagBytes = SignedSecureFile.withParams(archive.getStorage(),
 			textKey(),
 			saltKey(),
 			authKey(),
-			fs.getArchive().getConfig().getPrivKey())
-		.write(serialize(), fs.getArchive().getConfig().getPageSize());
+			archive.getConfig().getPrivKey())
+		.write(serialize(), archive.getConfig().getPageSize());
 		isWritable = false;
-		fs.archive.addPageTag(tagBytes);
+		archive.addPageTag(tagBytes);
+		deferrableTag.setBytes(tagBytes);
 		return tagBytes;
 	}
 	
@@ -210,43 +231,52 @@ public class Block {
 	}
 	
 	protected void load() throws IOException {
-		contents = SignedSecureFile.withTag(deferrableTag.getBytes(),
-				fs.getArchive().getStorage(),
+		blockContents = SignedSecureFile.withTag(deferrableTag.getBytes(),
+				archive.getStorage(),
 				textKey(),
 				saltKey(),
 				authKey(),
-				fs.getArchive().getConfig().getPubKey()).read();
-		deserialize(contents);
+				archive.getConfig().getPubKey()).read();
+		deserialize(blockContents);
 	}
 	
 	protected byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(fs.getArchive().getConfig().getPageSize());
+		int nextOffset = fixedHeaderLength() + indexEntryLength()*entries.size();
+		int neededSize = nextOffset;
+		for(BlockEntry entry : entries.values()) {
+			neededSize += entry.length;
+		}
+		
+		ByteBuffer buf = ByteBuffer.allocate(neededSize);
+		
 		buf.putLong(entries.size());
 		buf.putLong(0); // reserved
 		LinkedList<BlockEntryIndex> indices = new LinkedList<>(entries.keySet());
 		indices.sort(null);
-		int nextOffset = fixedHeaderLength() + indexEntryLength()*entries.size();
 		
 		for(BlockEntryIndex index : indices) {
 			BlockEntry entry = entries.get(index);
+			int srcOffset = entry.offset;
 			entry.offset = nextOffset;
 			entry.serialize(buf);
 			nextOffset += entry.contents.length;
 			
 			int pos = buf.position();
 			buf.position((int) entry.offset);
-			buf.put(entry.contents, entry.contentsOffset, entry.length);
+			buf.put(entry.contents, srcOffset, entry.length);
 			buf.position(pos);
+			
+			entry.contents = buf.array();
 		}
 		
-		return buf.array();
+		return blockContents = buf.array();
 	}
 	
 	protected void deserialize(byte[] data) throws InvalidBlockException {
 		ByteBuffer buf = ByteBuffer.wrap(data);
 		long numEntries = buf.getLong();
 		buf.position(fixedHeaderLength());
-		assertIntegrity(0 < numEntries && numEntries*indexEntryLength() <= Integer.MAX_VALUE);
+		assertIntegrity(0 <= numEntries && numEntries*indexEntryLength() <= Integer.MAX_VALUE);
 		
 		BlockEntry lastEntry = null;
 		for(long i = 0; i < numEntries; i++) {
@@ -257,27 +287,31 @@ public class Block {
 			}
 			
 			lastEntry = entry;
+			BlockEntryIndex index = new BlockEntryIndex(entry.identity, entry.pageNum, entry.type);
+			entries.put(index, entry);
 		}
 		
-		lastEntry.setLength(data.length - lastEntry.offset);
+		if(lastEntry != null) {
+			lastEntry.setLength(data.length - lastEntry.offset);
+		}
 	}
 	
 	protected Key textKey() {
-		return fs.getArchive().getConfig().deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
+		return archive.getConfig().deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
 				"easysafe-page-text-key",
-				fs.getArchive().getConfig().getArchiveId());
+				archive.getConfig().getArchiveId());
 	}
 	
 	protected Key saltKey() {
-		return fs.getArchive().getConfig().deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
+		return archive.getConfig().deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
 				"easysafe-page-salt-key",
-				fs.getArchive().getConfig().getArchiveId());
+				archive.getConfig().getArchiveId());
 	}
 	
 	protected Key authKey() {
-		return fs.getArchive().getConfig().deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
+		return archive.getConfig().deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
 				"easysafe-page-auth-key",
-				fs.getArchive().getConfig().getArchiveId());
+				archive.getConfig().getArchiveId());
 	}
 
 	private void assertIntegrity(boolean check) throws InvalidBlockException {
@@ -291,5 +325,9 @@ public class Block {
 		if(!(other instanceof Block)) return false;
 		if(other == this) return true;
 		return entries.equals(((Block) other).entries);
+	}
+
+	public int getRemainingCapacity() {
+		return remainingCapacity;
 	}
 }

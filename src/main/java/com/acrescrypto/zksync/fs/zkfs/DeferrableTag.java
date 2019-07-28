@@ -97,7 +97,7 @@ public class DeferrableTag {
 		}
 		
 		public void makeRefTag() {
-			this.config = block.fs.archive.config;
+			this.config = block.archive.config;
 			this.hash = padHash(getBytes());
 			this.numPages = numSerializablePages;
 			
@@ -128,7 +128,7 @@ public class DeferrableTag {
 	}
 	
 	public DeferrableTag(Block block) {
-		this.archive = block.fs.archive;
+		this.archive = block.archive;
 		this.block = block;
 		this.deferrableRefTag = new DeferrableRefTag();
 	}
@@ -159,7 +159,7 @@ public class DeferrableTag {
 		
 		synchronized(this) {
 			if(block.isWritable()) {
-				bytes = block.write();
+				block.write();
 			}
 		}
 		
@@ -219,5 +219,9 @@ public class DeferrableTag {
 		DeferrableTag o = (DeferrableTag) other;
 		
 		return block.equals(o.block);
+	}
+
+	protected void setBytes(byte[] bytes) {
+		this.bytes = bytes;
 	}
 }

@@ -9,6 +9,7 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetTest;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
+	BlockTest.class,
 	RevisionListTest.class,
 	ZKFSTest.class,
 	ZKDirectoryTest.class,
@@ -30,7 +31,7 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetTest;
 	RevisionTreeTest.class,
 	ZKFSManagerTest.class,
 	FSMirrorTest.class,
-	ConfigTests.class
+	ConfigTests.class,
 })
 
 public class ZKFSTests {

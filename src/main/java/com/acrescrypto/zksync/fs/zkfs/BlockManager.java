@@ -21,7 +21,7 @@ public class BlockManager {
 	}
 
 	protected Block addDataSingle(long identity, long pageNum, byte type, byte[] contents, int offset, int length) throws IOException {
-		Block block = new Block(fs);
+		Block block = new Block(fs.getArchive());
 		block.addData(identity, pageNum, type, contents, offset, length);
 		block.write();
 		return block;
@@ -51,7 +51,7 @@ public class BlockManager {
 			return existing;
 		}
 		
-		Block newBlock = new Block(fs);
+		Block newBlock = new Block(fs.getArchive());
 		pendingBlocks.add(newBlock);
 		enforceOpenBlockLimit();
 		return newBlock;
