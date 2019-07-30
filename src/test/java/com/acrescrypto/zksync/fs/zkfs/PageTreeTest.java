@@ -132,7 +132,7 @@ public class PageTreeTest {
 	
 	@Test
 	public void testExistsReturnsFalseIfRefTagIsIndirectAndPageDoesNotExist() throws IOException {
-		archive.storage.unlink(Page.pathForTag(indirectTag.getHash()));
+		archive.storage.unlink(Page.pathForTag(indirectTag.getStorageTag()));
 		assertFalse(new PageTree(indirectTag).exists());
 	}
 	
@@ -403,17 +403,17 @@ public class PageTreeTest {
 		fs.write("indirect", crypto.rng(archive.config.pageSize));
 		
 		indirectTree = new PageTree(fs.inodeForPath("indirect"));
-		assertArrayEquals(indirectTree.getRefTag().getHash(), indirectTree.getPageTag(0));
+		assertArrayEquals(indirectTree.getRefTag().getStorageTag(), indirectTree.getPageTag(0));
 		assertFalse(Arrays.equals(oldTag, indirectTree.getPageTag(0)));
-		assertTrue(archive.config.getCacheStorage().exists(Page.pathForTag(indirectTag.getHash())));
+		assertTrue(archive.config.getCacheStorage().exists(Page.pathForTag(indirectTag.getStorageTag())));
 	}
 	
 	@Test
 	public void testCommitDoesNotWriteChunksIfImmediate() throws IOException {
 		PageTree immediateTree = new PageTree(fs.inodeForPath("immediate"));
 		assertEquals(immediateTag, immediateTree.refTag);
-		assertArrayEquals(immediateTag.getLiteral(), immediateTree.getPageTag(0));
-		assertFalse(archive.config.getCacheStorage().exists(Page.pathForTag(immediateTag.getHash())));
+		assertArrayEquals(immediateTag.getStorageTag().getTagBytes(), immediateTree.getPageTag(0));
+		assertFalse(archive.config.getCacheStorage().exists(Page.pathForTag(immediateTag.getStorageTag())));
 	}
 	
 	@Test
@@ -451,8 +451,8 @@ public class PageTreeTest {
 	@Test
 	public void testImmediatesNotPassedToArchive() throws IOException {
 		for(byte[] passed : archive.allPageTags()) {
-			assertFalse(Arrays.equals(passed, immediateTag.getHash()));
-			assertFalse(Arrays.equals(passed, immediateTag.getLiteral()));
+			assertFalse(Arrays.equals(passed, immediateTag.getStorageTag()));
+			assertFalse(Arrays.equals(passed, immediateTag.getStorageTag().getTagBytes()));
 		}
 	}
 	
@@ -662,7 +662,7 @@ public class PageTreeTest {
 	@Test
 	public void testTagForChunkReturnsTagForRequestedChunk() throws IOException {
 		// check root tag
-		assertArrayEquals(tree.getRefTag().getHash(), tree.tagForChunk(0));
+		assertArrayEquals(tree.getRefTag().getStorageTag(), tree.tagForChunk(0));
 		
 		// scale up to multiple chunks and check those
 		for(int i = 0; i <= 1 + tree.tagsPerChunk(); i++) {

@@ -414,14 +414,6 @@ public class Util {
 		}
 	}
 
-	public static String formatPageTag(byte[] pageTag) {
-		return "page-" + Util.bytesToHex(pageTag, 8);
-	}
-
-	public static String formatChunkTag(byte[] chunkTag) {
-		return "chunk-" + Util.bytesToHex(chunkTag, 8);
-	}
-
 	public static String strhash(byte[] result) {
 		return Util.bytesToHex(CryptoSupport.defaultCrypto().hash(result), 8) + "-" + result.length;
 	}

@@ -256,7 +256,7 @@ public class RevisionTreeTest {
 		ArrayList<RevisionTag> parents = new ArrayList<>();
 		RevisionTag child = buildMultiparentRevision(2, parents);
 		tree.clear();
-		archive.config.getCacheStorage().unlink(Page.pathForTag(child.getRefTag().getHash()));
+		archive.config.getCacheStorage().unlink(Page.pathForTag(child.getRefTag().getStorageTag()));
 		assertFalse(tree.hasParentsForTag(child));
 		tree.addParentsForTag(child, parents);
 		assertTrue(tree.hasParentsForTag(child));
@@ -288,7 +288,7 @@ public class RevisionTreeTest {
 	public void testHasParentsForTagReturnsFalseIfParentsNotKnownForRevtag() throws IOException {
 		RevisionTag tag = buildMultiparentRevision(1, null);
 		tree.clear();
-		archive.config.getCacheStorage().unlink(Page.pathForTag(tag.getRefTag().getHash()));
+		archive.config.getCacheStorage().unlink(Page.pathForTag(tag.getRefTag().getStorageTag()));
 		assertFalse(tree.hasParentsForTag(tag));
 	}
 	

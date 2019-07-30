@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.crypto;
 
 import java.io.IOException;
-import java.util.Arrays;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,22 +9,21 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.Stat;
-import com.acrescrypto.zksync.fs.zkfs.Page;
-import com.acrescrypto.zksync.utility.Util;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 
 public class SignedSecureFile {
 	protected FS fs;
 	protected PrivateSigningKey privKey;
 	protected PublicSigningKey pubKey;
 	protected Key textKey, authKey, saltKey;
-	protected byte[] tag;
+	protected StorageTag tag;
 	protected final Logger logger = LoggerFactory.getLogger(SignedSecureFile.class);
 	
 	public static SignedSecureFile withParams(FS storage, Key textKey, Key saltKey, Key authKey, PrivateSigningKey privKey) {
 		return new SignedSecureFile(storage, textKey, saltKey, authKey, privKey);
 	}
 
-	public static SignedSecureFile withTag(byte[] pageTag, FS storage, Key textKey, Key saltKey, Key authKey, PublicSigningKey pubKey) {
+	public static SignedSecureFile withTag(StorageTag pageTag, FS storage, Key textKey, Key saltKey, Key authKey, PublicSigningKey pubKey) {
 		return new SignedSecureFile(pageTag, storage, textKey, saltKey, authKey, pubKey);
 	}
 	
@@ -42,7 +40,7 @@ public class SignedSecureFile {
 		this.pubKey = privKey.publicKey();
 	}
 	
-	public SignedSecureFile(byte[] tag, FS fs, Key textKey, Key saltKey, Key authKey, PublicSigningKey pubKey) {
+	public SignedSecureFile(StorageTag tag, FS fs, Key textKey, Key saltKey, Key authKey, PublicSigningKey pubKey) {
 		this.tag = tag;
 		this.fs = fs;
 		this.textKey = textKey;
@@ -56,12 +54,13 @@ public class SignedSecureFile {
 			CryptoSupport crypto = textKey.getCrypto();
 
 			byte[] contents = fs.read(path());
-			if(!Arrays.equals(authKey.authenticate(contents), tag)) {
-				logger.warn("SignedSecureFile {}: Unable to authenticate, |contents|={}, H(contents)={}, H(expected)={}",
+			StorageTag actualTag = new StorageTag(authKey, contents);
+			if(!tag.equals(actualTag)) {
+				logger.warn("SignedSecureFile {}: Unable to authenticate, |contents|={}, tag(contents)={}, tag(expected)={}",
 						path(),
 						contents.length,
-						Util.formatLongId(contents),
-						Util.formatLongId(tag));
+						actualTag,
+						tag);
 				throw new SecurityException();
 			}
 			
@@ -111,7 +110,7 @@ public class SignedSecureFile {
 		return read(true);
 	}
 	
-	public byte[] write(byte[] plaintext, int padSize) throws IOException {
+	public StorageTag write(byte[] plaintext, int padSize) throws IOException {
 		assert(privKey != null);
 		try {
 			// TODO Someday: (refactor) there are a lot of unnecessary buffer copies here...
@@ -126,12 +125,12 @@ public class SignedSecureFile {
 			byte[] signature = privKey.sign(result, 0, salt.length + ciphertext.length);
 			System.arraycopy(signature, 0, result, salt.length + ciphertext.length, signature.length);
 			
-			tag = authKey.authenticate(result);
+			tag = new StorageTag(authKey.getCrypto(), authKey.authenticate(result));
 			try {
 				Stat stat = fs.stat(path());
 				// SwarmFS will always say the file exists at the appropriate size, but it always shows mtime 0, and inode id equal to the short tag
 				// If we have the SwarmFS answer, we don't 'really' have this file and we have to write. Else, no need to write the same data twice.
-				if(stat.getMtime() != 0 || stat.getInodeId() != Util.shortTag(tag)) {
+				if(stat.getMtime() != 0 || stat.getInodeId() != tag.shortTag()) {
 					return tag;
 				}
 			} catch(ENOENTException exc) {}
@@ -146,7 +145,7 @@ public class SignedSecureFile {
 	}
 	
 	protected String path() {
-		return Page.pathForTag(tag);
+		return tag.path();
 	}
 	
 	protected byte[] fixedIV() {

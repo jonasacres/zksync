@@ -43,9 +43,10 @@ public class ZKArchive implements AutoCloseable {
 	protected ZKArchive cacheOnlyArchive;
 	protected ZKMaster master;
 	protected HashCache<RevisionTag,ZKFS> readOnlyFilesystems;
-	protected HashMap<Long,byte[]> allPageTags;
+	protected HashMap<Long,StorageTag> allPageTags;
 	protected SubscriptionToken<Integer> tok;
 	protected boolean closed;
+	private StorageTag blankStorageTag;
 	
 	public static void addActiveArchive(ZKArchive archive) {
 		activeArchives.put(archive, new Throwable());
@@ -236,11 +237,11 @@ public class ZKArchive implements AutoCloseable {
 	
 	/** Test if we have a given page cached locally. 
 	 * @throws ClosedException */
-	public boolean hasPageTag(byte[] pageTag) throws ClosedException {
+	public boolean hasPageTag(StorageTag pageTag) throws ClosedException {
 		assertOpen();
-		if(allPageTags.containsKey(Util.shortTag(pageTag))) return true;
+		if(allPageTags.containsKey(pageTag.shortTag())) return true;
 		
-		return config.getCacheStorage().exists(Page.pathForTag(pageTag));
+		return config.getCacheStorage().exists(pageTag.path());
 	}
 	
 	/** Test if we have every page of a given inode cached locally. */
@@ -300,8 +301,8 @@ public class ZKArchive implements AutoCloseable {
 		return ByteBuffer.wrap(config.archiveId).getInt();
 	}
 
-	public byte[] expandShortTag(long shortTag) throws IOException {
-		return Page.expandTag(storage, shortTag);
+	public StorageTag expandShortTag(long shortTag) throws IOException {
+		return Page.expandTag(crypto, storage, shortTag);
 	}
 	
 	public boolean equals(Object other) {
@@ -312,12 +313,12 @@ public class ZKArchive implements AutoCloseable {
 		return config.equals(((ZKArchive) other).config);
 	}
 
-	public synchronized Collection<byte[]> allPageTags() {
+	public synchronized Collection<StorageTag> allPageTags() {
 		return new ArrayList<>(allPageTags.values());
 	}
 	
-	public void addPageTag(byte[] tag) {
-		long shortTag = Util.shortTag(tag);
+	public void addPageTag(StorageTag tag) {
+		long shortTag = tag.shortTag();
 		if(allPageTags != null && !allPageTags.containsKey(shortTag)) {
 			synchronized(this) {
 				allPageTags.put(shortTag, tag);
@@ -334,13 +335,22 @@ public class ZKArchive implements AutoCloseable {
 			dir = storage.opendir("/");
 			DirectoryTraverser traverser = new DirectoryTraverser(storage, dir);
 			while(traverser.hasNext()) {
-				byte[] tag = Page.tagForPath(traverser.next());
-				allPageTags.put(Util.shortTag(tag), tag);
+				StorageTag tag = new StorageTag(crypto, traverser.next());
+				allPageTags.put(tag.shortTag(), tag);
 			}
 		} finally {
 			if(dir != null) {
 				dir.close();
 			}
 		}
+	}
+	
+	public StorageTag getBlankStorageTag() {
+		if(blankStorageTag == null) {
+			byte[] blankBytes = new byte[crypto.hashLength()];
+			blankStorageTag = new StorageTag(crypto, blankBytes);
+		}
+		
+		return blankStorageTag;
 	}
 }

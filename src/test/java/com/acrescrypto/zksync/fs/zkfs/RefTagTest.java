@@ -55,7 +55,7 @@ public class RefTagTest {
 		byte[] hash = crypto.hash("some data".getBytes());
 		RefTag newTag = new RefTag(archive, hash, RefTag.REF_TYPE_INDIRECT, 1234);
 		
-		assertArrayEquals(hash, newTag.getHash());
+		assertArrayEquals(hash, newTag.getStorageTag());
 		assertEquals(RefTag.REF_TYPE_INDIRECT, newTag.getRefType());
 		assertEquals(1234, newTag.getNumPages());
 		assertEquals(archive, newTag.getArchive());
@@ -67,7 +67,7 @@ public class RefTagTest {
 		byte[] hash = crypto.hash("some data".getBytes());
 		RefTag newTag = new RefTag(archive.config, hash, RefTag.REF_TYPE_2INDIRECT, Long.MAX_VALUE);
 		
-		assertArrayEquals(hash, newTag.getHash());
+		assertArrayEquals(hash, newTag.getStorageTag());
 		assertEquals(RefTag.REF_TYPE_2INDIRECT, newTag.getRefType());
 		assertEquals(Long.MAX_VALUE, newTag.getNumPages());
 		assertEquals(archive, newTag.getArchive());
@@ -95,7 +95,7 @@ public class RefTagTest {
 		byte[] serialized = tag.serialize();
 		RefTag tag2 = new RefTag(archive, serialized);
 		
-		assertArrayEquals(tag.hash, tag2.hash);
+		assertArrayEquals(tag.storageTag, tag2.storageTag);
 		assertEquals(tag.archiveType, tag2.archiveType);
 		assertEquals(tag.versionMajor, tag2.versionMajor);
 		assertEquals(tag.versionMinor, tag2.versionMinor);
@@ -125,13 +125,13 @@ public class RefTagTest {
 	
 	@Test
 	public void testEqualsRegistersDifferenceForRefType() {
-		RefTag clone = new RefTag(tag.config, tag.getHash(), 1 + tag.getRefType(), tag.getNumPages());
+		RefTag clone = new RefTag(tag.config, tag.getStorageTag(), 1 + tag.getRefType(), tag.getNumPages());
 		assertNotEquals(tag, clone);
 	}
 
 	@Test
 	public void testEqualsRegistersDifferenceForNumPages() {
-		RefTag clone = new RefTag(tag.config, tag.getHash(), tag.getRefType(), 1 + tag.getNumPages());
+		RefTag clone = new RefTag(tag.config, tag.getStorageTag(), tag.getRefType(), 1 + tag.getNumPages());
 		assertNotEquals(tag, clone);
 	}
 	
@@ -139,9 +139,9 @@ public class RefTagTest {
 	public void testCompareToReturnsNegativeIfLeftHasLowerTagThanRight() {
 		RefTag left = new RefTag(archive, tag.serialize());
 		
-		for(int i = 0; i < tag.hash.length; i++) {
-			if(tag.hash[i] == 0xff) continue;
-			tag.hash[i]++;
+		for(int i = 0; i < tag.storageTag.length; i++) {
+			if(tag.storageTag[i] == 0xff) continue;
+			tag.storageTag[i]++;
 			break;
 		}
 		
@@ -161,9 +161,9 @@ public class RefTagTest {
 	public void testCompareToReturnsPositiveIfRightHasLowerTagThanLeft() {
 		RefTag right = new RefTag(archive, tag.serialize());
 		
-		for(int i = 0; i < tag.hash.length; i++) {
-			if(tag.hash[i] == 0xff) continue;
-			tag.hash[i]++;
+		for(int i = 0; i < tag.storageTag.length; i++) {
+			if(tag.storageTag[i] == 0xff) continue;
+			tag.storageTag[i]++;
 			break;
 		}
 		

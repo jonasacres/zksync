@@ -28,8 +28,8 @@ import com.acrescrypto.zksync.exceptions.SwarmTimeoutException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
-import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
 import com.acrescrypto.zksync.utility.BandwidthAllocator;
@@ -402,17 +402,17 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void waitForPage(int priority, byte[] tag) {
+	public void waitForPage(int priority, StorageTag tag) {
 		try {
 			waitForPage(priority, tag, -1);
 		} catch(SwarmTimeoutException exc) {
 			// shouldn't be possible
-			throw new RuntimeException("Caught unexpected SwarmTimeoutException waiting for page with tag " + Util.bytesToHex(tag));
+			throw new RuntimeException("Caught unexpected SwarmTimeoutException waiting for page with tag " + tag);
 		}
 	}
 	
-	public void waitForPage(int priority, byte[] tag, long timeoutMs) throws SwarmTimeoutException {
-		long shortTag = Util.shortTag(tag);
+	public void waitForPage(int priority, StorageTag tag, long timeoutMs) throws SwarmTimeoutException {
+		long shortTag = tag.shortTag();
 		long deadline;
 		if(timeoutMs >= 0) {
 			deadline = System.currentTimeMillis() + timeoutMs;
@@ -426,16 +426,16 @@ public class PeerSwarm implements BlacklistCallback {
 		while(waitingForPage(tag)) {
 			remainingTimeoutMs = deadline - System.currentTimeMillis();
 			if(remainingTimeoutMs <= 0) {
-				throw new SwarmTimeoutException("page " + Util.bytesToHex(tag));
+				throw new SwarmTimeoutException("page " + tag);
 			}
 			
 			requestTag(priority, tag);
 			try {
 				if(!pageWaitLock.tryLock(remainingTimeoutMs, TimeUnit.MILLISECONDS)) {
-					throw new SwarmTimeoutException("page " + Util.bytesToHex(tag));
+					throw new SwarmTimeoutException("page " + tag);
 				}
 			} catch (InterruptedException e1) {
-				throw new SwarmTimeoutException("page " + Util.bytesToHex(tag));
+				throw new SwarmTimeoutException("page " + tag);
 			}
 			
 			remainingTimeoutMs = deadline - System.currentTimeMillis();
@@ -456,9 +456,9 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	protected boolean waitingForPage(byte[] tag) {
-		if(Arrays.equals(tag, config.tag())) {
-			return !config.getCacheStorage().exists(Page.pathForTag(tag));
+	protected boolean waitingForPage(StorageTag tag) {
+		if(tag.equals(config.tag())) {
+			return !config.getCacheStorage().exists(tag.path());
 		} else {
 			try {
 				return config.getArchive() == null || !config.getArchive().hasPageTag(tag);
@@ -468,8 +468,8 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public synchronized ChunkAccumulator accumulatorForTag(byte[] tag) throws IOException {
-		long shortTag = Util.shortTag(tag);
+	public synchronized ChunkAccumulator accumulatorForTag(StorageTag tag) throws IOException {
+		long shortTag = tag.shortTag();
 		if(!activeFiles.containsKey(shortTag)) {
 			int numChunksExpected = (int) Math.ceil((double) config.getPageSize() / PeerMessage.FILE_CHUNK_SIZE);
 			ChunkAccumulator fileHandle = new ChunkAccumulator(this, tag, numChunksExpected);
@@ -481,8 +481,8 @@ public class PeerSwarm implements BlacklistCallback {
 		return activeFiles.get(shortTag);
 	}
 
-	protected synchronized void receivedPage(byte[] tag) {
-		long shortTag = Util.shortTag(tag);
+	protected synchronized void receivedPage(StorageTag tag) {
+		long shortTag = tag.shortTag();
 		activeFiles.remove(shortTag);
 		
 		if(config.getArchive() != null) {
@@ -505,8 +505,8 @@ public class PeerSwarm implements BlacklistCallback {
 		announceTag(tag);
 	}
 	
-	public void announceTag(byte[] tag) {
-		long shortTag = Util.shortTag(tag);
+	public void announceTag(StorageTag tag) {
+		long shortTag = tag.shortTag();
 		for(PeerConnection connection : getConnections()) {
 			connection.announceTag(shortTag);
 		}
@@ -522,16 +522,16 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void requestTag(int priority, byte[] pageTag) {
-		requestTag(priority, Util.shortTag(pageTag));
+	public void requestTag(int priority, StorageTag pageTag) {
+		requestTag(priority, pageTag.shortTag());
 	}
 	
-	public void cancelTag(byte[] pageTag) {
+	public void cancelTag(StorageTag pageTag) {
 		// TODO API: (test) cover cancelTag bytes
-		cancelTag(Util.shortTag(pageTag));
+		cancelTag(pageTag.shortTag());
 	}
 	
-	public int priorityForTag(byte[] pageTag) {
+	public int priorityForTag(StorageTag pageTag) {
 		// TODO API: (test) cover priorityForTag
 		return pool.priorityForPageTag(pageTag);
 	}

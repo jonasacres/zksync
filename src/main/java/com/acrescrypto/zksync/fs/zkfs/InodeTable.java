@@ -763,7 +763,11 @@ public class InodeTable extends ZKFile {
 		// manually serialized root directory; 0x00 (SERIALIZATION_TYPE_BYTE), followed by .. inodeId
 		// note that this means /.. goes to / 
 		byte[] rootContents = new byte[] { 0x00, 0x01 };
-		rootInode.setRefTag(new RefTag(zkfs.archive, rootContents, RefTag.REF_TYPE_IMMEDIATE, 1));
+		StorageTag rootStorageTag = new StorageTag(zkfs.getArchive().getCrypto(), rootContents);
+		rootInode.setRefTag(new RefTag(zkfs.archive,
+				rootStorageTag,
+				RefTag.REF_TYPE_IMMEDIATE,
+				1));
 		rootInode.getStat().setSize(rootContents.length);
 		setInode(rootInode);
 	}

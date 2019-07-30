@@ -193,12 +193,13 @@ public class ZKArchiveConfig implements AutoCloseable {
 		pubKey = getCrypto().makePublicSigningKey(pubKeyBytes);
 	}
 	
-	public byte[] tag() {
-		return accessor.seedRoot.authenticate(archiveId);
+	public StorageTag tag() {
+		byte[] tagBytes = accessor.seedRoot.authenticate(archiveId);
+		return new StorageTag(getCrypto(), tagBytes);
 	}
 	
 	public boolean haveConfigLocally() {
-		return storage.getCacheFS().exists(Page.pathForTag(tag()));
+		return storage.getCacheFS().exists(tag().path());
 	}
 	
 	public void write() throws IOException {
@@ -290,13 +291,13 @@ public class ZKArchiveConfig implements AutoCloseable {
 			initStorage();
 		}
 		
-		storage.write(Page.pathForTag(tag()), configFile);
+		storage.write(tag().path(), configFile);
 	}
 	
 	public void read() throws IOException {
 		// TODO EasySafe: (implement) config read
 		waitForPageReady(tag(), -1);
-		try(File configFile = storage.open(Page.pathForTag(tag()), File.O_RDONLY)) {
+		try(File configFile = storage.open(tag().path(), File.O_RDONLY)) {
 			// TODO EasySafe: (refactor) read the file exactly once
 			byte[] prefix = calculatePrefix(configFile.read());
 			assertState(Util.safeEquals(prefix, archiveId, prefix.length));
@@ -459,14 +460,14 @@ public class ZKArchiveConfig implements AutoCloseable {
 		pubKey = privKey.publicKey();
 	}
 
-	public boolean validatePage(byte[] tag, byte[] allegedPage) {
-		if(Arrays.equals(tag, tag())) {
+	public boolean validatePage(StorageTag tag, byte[] allegedPage) {
+		if(tag.equals(tag())) {
 			return verify(allegedPage);
 		}
 		
 		Key authKey = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-page-auth-key");
 		int sigOffset = allegedPage.length - accessor.master.crypto.asymSignatureSize();
-		if(!Arrays.equals(tag, authKey.authenticate(allegedPage))) return false;
+		if(!tag.equals(authKey.authenticate(allegedPage))) return false;
 		if(!pubKey.verify(allegedPage, 0, sigOffset, allegedPage, sigOffset, pubKey.getCrypto().asymSignatureSize())) return false;
 		return true;
 	}
@@ -657,8 +658,8 @@ public class ZKArchiveConfig implements AutoCloseable {
 		return false;
 	}
 	
-	public void waitForPageReady(byte[] tag, int timeoutMs) throws IOException {
-		String path = Page.pathForTag(tag);
+	public void waitForPageReady(StorageTag tag, int timeoutMs) throws IOException {
+		String path = tag.path();
 		Stat stat = null;
 		int attempts = 0;
 		int maxAttempts = getMaster().getGlobalConfig().getInt("fs.settings.pageReadyMaxRetries");
@@ -670,13 +671,13 @@ public class ZKArchiveConfig implements AutoCloseable {
 				if(stat == null) {
 					logger.info("ZKFS {} -: Timed out waiting for page {}, page not received",
 							Util.formatArchiveId(archiveId),
-							Util.formatPageTag(tag));
+							tag);
 					throw new ENOENTException(path);
 				}
 				
 				logger.info("ZKFS {} -: Timed out waiting for page {}, page has size {}, expected {}",
 						Util.formatArchiveId(archiveId),
-						Util.formatPageTag(tag),
+						tag,
 						stat.getSize(),
 						this.getSerializedPageSize());
 				throw new InvalidPageException(path);
@@ -690,11 +691,11 @@ public class ZKArchiveConfig implements AutoCloseable {
 		}
 	}
 
-	public byte[] readPageData(byte[] tag, int offset, int length, int timeoutMs) throws IOException {
+	public byte[] readPageData(StorageTag tag, int offset, int length, int timeoutMs) throws IOException {
 		// ensure that a page is fully written to disk before reading it
 		waitForPageReady(tag, timeoutMs);
 		
-		try(File page = storage.open(Page.pathForTag(tag), File.O_RDONLY)) {
+		try(File page = storage.open(tag.path(), File.O_RDONLY)) {
 			page.seek(offset, File.SEEK_SET);
 			return page.read(length);
 		}

@@ -8,7 +8,7 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.TimedReader;
-import com.acrescrypto.zksync.fs.zkfs.Page;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -23,8 +23,8 @@ public class SwarmFS extends FS implements TimedReader {
 
 	@Override
 	public Stat stat(String path) throws IOException {
-		byte[] tag = Page.tagForPath(path);
-		if(tag.length != swarm.getConfig().getAccessor().getMaster().getCrypto().hashLength()) {
+		StorageTag tag = new StorageTag(swarm.getConfig().getCrypto(), path);
+		if(tag.isImmediate()) {
 			throw new ENOENTException(path);
 		}
 
@@ -41,7 +41,7 @@ public class SwarmFS extends FS implements TimedReader {
 		stat.setMtime(0);
 		stat.setCtime(0);
 		stat.setSize(swarm.getConfig().getSerializedPageSize());
-		stat.setInodeId(Util.shortTag(tag));
+		stat.setInodeId(tag.shortTag());
 		
 		return stat;
 	}
@@ -163,7 +163,7 @@ public class SwarmFS extends FS implements TimedReader {
 
 	@Override
 	public File open(String path, int mode) throws IOException {
-		byte[] pageTag = Page.tagForPath(path);
+		StorageTag pageTag = new StorageTag(swarm.getConfig().getCrypto(), path);
 		swarm.waitForPage(REQUEST_PRIORITY, pageTag, -1);
 		return swarm.getConfig().getCacheStorage().open(path, mode);
 	}
@@ -192,7 +192,7 @@ public class SwarmFS extends FS implements TimedReader {
 	}
 
 	public byte[] read(String path, long timeoutRemainingMs) throws IOException {
-		byte[] pageTag = Page.tagForPath(path);
+		StorageTag pageTag = new StorageTag(swarm.getConfig().getCrypto(), path);
 		swarm.waitForPage(REQUEST_PRIORITY, pageTag, timeoutRemainingMs);
 		return swarm.getConfig().getCacheStorage().read(path);
 	}

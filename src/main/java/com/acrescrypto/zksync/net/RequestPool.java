@@ -15,6 +15,7 @@ import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.net.PeerConnection.PeerCapabilityException;
 import com.acrescrypto.zksync.utility.Util;
@@ -371,17 +372,17 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void addPageTag(int priority, byte[] pageTag) {
-		addPageTag(priority, Util.shortTag(pageTag));
+	public synchronized void addPageTag(int priority, StorageTag pageTag) {
+		addPageTag(priority, pageTag.shortTag());
 	}
 	
-	public synchronized void cancelPageTag(byte[] pageTag) {
-		cancelPageTag(Util.shortTag(pageTag));
+	public synchronized void cancelPageTag(StorageTag pageTag) {
+		cancelPageTag(pageTag.shortTag());
 	}
 	
-	public int priorityForPageTag(byte[] pageTag) {
+	public int priorityForPageTag(StorageTag pageTag) {
 		try {
-			return requestedPageTags.lookup(Util.shortTag(pageTag)).priority;
+			return requestedPageTags.lookup(pageTag.shortTag()).priority;
 		} catch(NullPointerException exc) {
 			return PageQueue.CANCEL_PRIORITY;
 		}

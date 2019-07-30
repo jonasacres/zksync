@@ -9,9 +9,10 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.fs.FS;
-import com.acrescrypto.zksync.fs.zkfs.Page;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ChunkAccumulator {
@@ -52,7 +53,8 @@ public class ChunkAccumulator {
 		}
 		
 		protected byte[] hashForChunk(byte[] chunk) {
-			return swarm.config.getAccessor().getMaster().getCrypto().authenticate(tag, chunk);
+			CryptoSupport crypto = swarm.config.getAccessor().getMaster().getCrypto();
+			return crypto.authenticate(tag.getTagBytes(), chunk);
 		}
 		
 		protected void write(byte[] chunk) throws IOException {
@@ -60,7 +62,7 @@ public class ChunkAccumulator {
 		}
 	}
 	
-	protected byte[] tag;
+	protected StorageTag tag;
 	protected int numChunksExpected;
 	protected boolean finished;
 	protected ArrayList<LinkedList<ChunkVersion>> chunksByIndex = new ArrayList<LinkedList<ChunkVersion>>();
@@ -68,7 +70,7 @@ public class ChunkAccumulator {
 	protected PeerSwarm swarm;
 	protected final Logger logger = LoggerFactory.getLogger(ChunkAccumulator.class); 
 	
-	public ChunkAccumulator(PeerSwarm swarm, byte[] tag, int numChunksExpected) {
+	public ChunkAccumulator(PeerSwarm swarm, StorageTag tag, int numChunksExpected) {
 		this.swarm = swarm;
 		this.tag = tag;
 		this.numChunksExpected = numChunksExpected;
@@ -83,7 +85,7 @@ public class ChunkAccumulator {
 		if(finished) return true;
 		
 		boolean needsInsert = true;
-		if(index >= numChunksExpected || index < 0) throw new EINVALException(Util.bytesToHex(tag) + ":" + index);
+		if(index >= numChunksExpected || index < 0) throw new EINVALException(tag + ":" + index);
 		ChunkVersion version = new ChunkVersion(peer.socket.swarm.config.getAccessor().getMaster().scratchStorage(), chunk);
 		
 		for(ChunkVersion existing : chunksByIndex.get(index)) {
@@ -107,7 +109,7 @@ public class ChunkAccumulator {
 					break;
 				}
 				
-				logger.warn("Peer " + peerInfo.peer.socket.getAddress() + " sent multiple versions of chunk {} of tag {}; blacklisting.", index, Util.bytesToHex(tag));
+				logger.warn("Peer " + peerInfo.peer.socket.getAddress() + " sent multiple versions of chunk {} of tag {}; blacklisting.", index, tag);
 				peer.blacklist();
 			}
 		}
@@ -154,8 +156,8 @@ public class ChunkAccumulator {
 		finished = true;
 		logger.debug("Swarm {} -: Storing validated page {}",
 				Util.formatArchiveId(swarm.getConfig().getArchiveId()),
-				Util.formatPageTag(tag));
-		swarm.config.getStorage().write(Page.pathForTag(tag), allegedPage);
+				tag);
+		swarm.config.getStorage().write(tag.path(), allegedPage);
 		burnHeretics(chunks);
 		closeFiles();
 		swarm.receivedPage(tag);

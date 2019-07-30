@@ -31,7 +31,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public static RevisionTag blank(ZKArchiveConfig config) {
-		return new RevisionTag(RefTag.blank(config), 0, 0);
+		return new RevisionTag(RefTag.blank(config.getArchive()), 0, 0);
 	}
 	
 	public RevisionTag(RefTag refTag, long parentHash, long height) {
@@ -160,7 +160,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		hashCode = ByteBuffer.wrap(serialized).getInt();
 		
 		if(Arrays.equals(new byte[serialized.length], serialized)) {
-			this.refTag = RefTag.blank(config);
+			this.refTag = RefTag.blank(config.getArchive());
 			this.height = 0;
 			this.parentHash = 0;
 			return;

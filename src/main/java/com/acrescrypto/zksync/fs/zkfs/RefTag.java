@@ -13,7 +13,8 @@ import com.acrescrypto.zksync.utility.Util;
 public class RefTag implements Comparable<RefTag> {
 	protected ZKArchiveConfig config;
 	protected RevisionInfo info;
-	protected byte[] tag, hash;
+	protected byte[] refTagBytes;
+	protected StorageTag storageTag;
 	protected byte archiveType, versionMajor, versionMinor;
 	protected int refType;	
 	protected long numPages;
@@ -39,63 +40,43 @@ public class RefTag implements Comparable<RefTag> {
 	public static int REFTAG_SHORT_SIZE = 8;
 	
 	public static RefTag blank(ZKArchive archive) {
-		return new RefTag(archive, new byte[0], RefTag.REF_TYPE_IMMEDIATE, 0);
+		return new RefTag(archive,
+				new StorageTag(archive.getCrypto(), new byte[0]),
+				RefTag.REF_TYPE_IMMEDIATE,
+				0);
 	}
 	
-	public static RefTag blank(ZKArchiveConfig config) {
-		return new RefTag(config, new byte[0], RefTag.REF_TYPE_IMMEDIATE, 0);
-	}
-	
-	public RefTag(ZKArchive archive, byte[] tag) {
-		this(archive.config, tag);
+	public RefTag(ZKArchive archive, byte[] refTagBytes) {
+		this(archive.config, refTagBytes);
 		cacheOnly = archive.isCacheOnly();
 	}
 	
-	public RefTag(ZKArchive archive, byte[] hash, int refType, long numPages) {
-		this(archive.config, hash, refType, numPages);
+	public RefTag(ZKArchive archive, StorageTag storageTag, int refType, long numPages) {
+		this(archive.config, storageTag, refType, numPages);
 		cacheOnly = archive.isCacheOnly(); 
 	}
 	
-	public RefTag(ZKArchiveConfig config, byte[] hash, int refType, long numPages) {
+	public RefTag(ZKArchiveConfig config, StorageTag storageTag, int refType, long numPages) {
 		this.config = config;
-		this.hash = padHash(hash);
+		this.storageTag = storageTag;
 		this.refType = refType;
 		this.numPages = numPages;
-		this.tag = serialize();
+		this.refTagBytes = serialize();
 	}
 	
 	public RefTag(ZKArchiveConfig config, byte[] tag) {
-		if(tag == null) tag = blank(config).getBytes();
+		if(tag == null) tag = blank(config.getArchive()).getBytes();
 		
 		this.config = config;
 		deserialize(tag);
 	}
-	
-	public byte[] padHash(byte[] hash) {
-		// this breaks if the hash length is > 255 bytes, but honestly, who needs a hash that long?
-		byte needed = (byte) (config.accessor.master.crypto.hashLength() - hash.length);
-		if(needed == 0) return hash;
-		ByteBuffer buf = ByteBuffer.allocate(config.accessor.master.crypto.hashLength());
-		buf.put(hash);
-		while(buf.hasRemaining()) buf.put(needed);
-		return buf.array();
-	}
-	
-	public byte[] unpadHash(byte[] hash) {
-		if(refType != RefTag.REF_TYPE_IMMEDIATE) return hash;
-		int len = config.accessor.master.crypto.hashLength() - hash[hash.length-1];
-		if(len <= 0) return new byte[0];
-		ByteBuffer buf = ByteBuffer.allocate(len);
-		buf.put(hash, 0, Math.min(hash.length, len));
-		return buf.array();
-	}
-	
+
 	public byte[] getBytes() {
-		return tag;
+		return refTagBytes;
 	}
 	
-	public byte[] getHash() {
-		return hash;
+	public StorageTag getStorageTag() {
+		return storageTag;
 	}
 	
 	public int getRefType() {
@@ -109,17 +90,13 @@ public class RefTag implements Comparable<RefTag> {
 	public boolean isBlank() {
 		if(numPages != 0) return false;
 		if(refType != RefTag.REF_TYPE_IMMEDIATE) return false;
-		for(int i = 0; i < hash.length; i++) if(hash[i] != config.getCrypto().hashLength()) return false;
+		if(storageTag.getTagBytes().length > 0) return false;
 		return true;
-	}
-	
-	public byte[] getLiteral() {
-		return unpadHash(hash);
 	}
 	
 	protected byte[] serialize() {
 		ByteBuffer buf = ByteBuffer.allocate(config.refTagSize());
-		buf.put(hash);
+		buf.put(storageTag.getPaddedTagBytes());
 		buf.put(archiveType);
 		buf.put(versionMajor);
 		buf.put(versionMinor);
@@ -135,27 +112,33 @@ public class RefTag implements Comparable<RefTag> {
 		int expectedLen = config.accessor.master.crypto.hashLength() + REFTAG_EXTRA_DATA_SIZE;
 		assert(serialized.length == expectedLen);
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		this.hash = new byte[config.getCrypto().hashLength()];
-		buf.get(hash);
+		byte[] storageTagBytes = new byte[config.getCrypto().hashLength()];
+		buf.get(storageTagBytes);
 		this.archiveType = buf.get();
 		this.versionMajor = buf.get();
 		this.versionMinor = buf.get();
 		this.refType = buf.get() & 0x03;
 		this.numPages = buf.getLong();
-		this.tag = serialized.clone();
+		this.refTagBytes = serialized.clone();
+		
+		if(refType == REF_TYPE_IMMEDIATE) {
+			this.storageTag = StorageTag.fromPaddedBytes(config.getCrypto(), storageTagBytes);
+		} else {
+			this.storageTag = new StorageTag(config.getCrypto(), storageTagBytes);
+		}
 	}
 	
 	public int hashCode() {
-		return ByteBuffer.wrap(tag).getInt();
+		return ByteBuffer.wrap(refTagBytes).getInt();
 	}
 	
 	public boolean equals(Object other) {
 		if(other == null || !other.getClass().equals(this.getClass())) return false;
-		return Arrays.equals(((RefTag) other).tag, this.tag);
+		return Arrays.equals(((RefTag) other).refTagBytes, this.refTagBytes);
 	}
 	
 	public int compareTo(RefTag other) {
-		return Util.compareArrays(tag, other.tag);
+		return Util.compareArrays(refTagBytes, other.refTagBytes);
 	}
 	
 	public ZKArchiveConfig getConfig() {

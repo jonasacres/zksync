@@ -133,7 +133,7 @@ public class PageTree {
 		switch(refTag.getRefType()) {
 		case RefTag.REF_TYPE_IMMEDIATE: return numPages >= 0 && numPages <= 1;
 		case RefTag.REF_TYPE_INDIRECT:
-			return archive.config.getCacheStorage().exists(Page.pathForTag(refTag.getHash()));
+			return archive.config.getCacheStorage().exists(refTag.getStorageTag().path());
 		case RefTag.REF_TYPE_2INDIRECT:
 			return hasTreeContentsLocally();
 		default:
@@ -148,13 +148,22 @@ public class PageTree {
 		switch(refTag.getRefType()) {
 		case RefTag.REF_TYPE_IMMEDIATE: return pageNum == 0;
 		case RefTag.REF_TYPE_INDIRECT:
-			if(pageNum != 0) return false;
-			return archive.config.getCacheStorage().exists(Page.pathForTag(refTag.getHash()));
+			if(pageNum != 0) {
+				return false;
+			}
+			return archive.config.getCacheStorage().exists(refTag.getStorageTag().path());
 		case RefTag.REF_TYPE_2INDIRECT:
-			if(numChunks <= 0 || numPages <= pageNum) return false;
-			if(!archive.config.getCacheStorage().exists(Page.pathForTag(tagForChunk(chunkIndexForPageNum(pageNum))))) return false;
-			byte[] tag = getPageTag(pageNum);
-			return archive.config.getCacheStorage().exists(Page.pathForTag(tag));
+			if(numChunks <= 0 || numPages <= pageNum) {
+				return false;
+			}
+			
+			String path = tagForChunk(chunkIndexForPageNum(pageNum)).path();
+			if(!archive.config.getCacheStorage().exists(path)) {
+				return false;
+			}
+			
+			StorageTag tag = getPageTag(pageNum);
+			return archive.config.getCacheStorage().exists(tag.path());
 		default:
 			return false;
 		}
@@ -170,7 +179,7 @@ public class PageTree {
 		return refTag;
 	}
 	
-	public void setPageTag(long pageNum, byte[] pageTag) throws IOException {
+	public void setPageTag(long pageNum, StorageTag pageTag) throws IOException {
 		if(pageNum >= maxNumPages) {
 			resize(1+pageNum);
 		}
@@ -180,13 +189,13 @@ public class PageTree {
 				inodeId,
 				Util.formatRefTag(refTag),
 				pageNum,
-				Util.formatPageTag(pageTag));
+				pageTag);
 
 		chunkForPageNum(pageNum).setTag(pageNum % tagsPerChunk(), pageTag);
 		numPages = Math.max(numPages, 1+pageNum);
 	}
 	
-	public byte[] getPageTag(long pageNum) throws IOException {
+	public StorageTag getPageTag(long pageNum) throws IOException {
 		return chunkForPageNum(pageNum).getTag(pageNum % tagsPerChunk());
 	}
 	
@@ -230,7 +239,7 @@ public class PageTree {
 		
 		for(long i = 0; i < numPages; i++) {
 			if(!foundChunks.contains(chunkIndexForPageNum(i))) continue;
-			String path = Page.pathForTag(getPageTag(i));
+			String path = getPageTag(i).path();
 			if(archive.getConfig().getCacheStorage().exists(path)) {
 				stats.numCachedPages++;
 			}
@@ -297,9 +306,8 @@ public class PageTree {
 		numChunks = 1 + chunkIndexForPageNum(newMinPages-1);
 
 		if(numPages > newMinPages) {
-			byte[] blank = new byte[archive.crypto.hashLength()];
 			for(long i = newMinPages; i < numPages; i++) {
-				chunkForPageNum(i).setTag(i % tagsPerChunk(), blank);
+				chunkForPageNum(i).setTag(i % tagsPerChunk(), archive.getBlankStorageTag());
 			}
 		}
 	}
@@ -321,13 +329,13 @@ public class PageTree {
 		return chunkForPageNum(pageNum).hasTag(pageNum % tagsPerChunk());
 	}
 	
-	public byte[] tagForChunk(long index) throws IOException {
+	public StorageTag tagForChunk(long index) throws IOException {
 		if(index == 0) {
 			if(refTag.isBlank() || refTag.refType != RefTag.REF_TYPE_2INDIRECT) {
-				return new byte[archive.getCrypto().hashLength()];
+				return archive.getBlankStorageTag();
 			}
 			
-			return refTag.getHash();
+			return refTag.getStorageTag();
 		}
 		
 		long parentIndex = indexForParent(index);
@@ -359,7 +367,8 @@ public class PageTree {
 			PageTreeChunk chunk = new PageTreeChunk(this, tagForChunk(0), 0, !trusted);
 			
 			if(refTag.getRefType() != RefTag.REF_TYPE_2INDIRECT && !refTag.isBlank()) {
-				chunk.loadTag(0, refTag.getLiteral());
+				StorageTag tag = new StorageTag(archive.getCrypto(), refTag.getStorageTag().getTagBytes());
+				chunk.loadTag(0, tag);
 			}
 			
 			return chunk;
@@ -376,7 +385,7 @@ public class PageTree {
 		long parentIndex = indexForParent(index);
 		long offsetInParent = (index - 1) % tagsPerChunk();
 		
-		byte[] chunkTag = chunkAtIndex(parentIndex).getTag(offsetInParent);
+		StorageTag chunkTag = chunkAtIndex(parentIndex).getTag(offsetInParent);
 		if(chunkCache.hasCached(index)) {
 			// it's possible that finding the parent triggered a separate search operation for this index, due to evictions
 			return chunkCache.get(index);
@@ -396,10 +405,10 @@ public class PageTree {
 		return parentIndex;
 	}
 	
-	protected void setTag(byte[] tag) {
+	protected void setTag(StorageTag tag) {
 		int refType;
 		if(numPages <= 1) {
-			if(numPages == 0 || tag.length < archive.crypto.hashLength()) {
+			if(numPages == 0 || tag.isImmediate()) {
 				refType = RefTag.REF_TYPE_IMMEDIATE;
 			} else {
 				refType = RefTag.REF_TYPE_INDIRECT;
@@ -422,12 +431,17 @@ public class PageTree {
 	}
 	
 	protected boolean hasChunkContentsLocally(long index) throws IOException {
-		if(!archive.config.getCacheStorage().exists(Page.pathForTag(tagForChunk(index)))) return false;
+		if(!archive.config.getCacheStorage().exists(tagForChunk(index).path())) {
+			return false;
+		}
+		
 		PageTreeChunk chunk = loadChunkAtIndex(index);
 		for(int i = 0; i < tagsPerChunk(); i++) {
-			byte[] tag = chunk.getTag(i);
-			if(chunk.isZero(tag)) continue;
-			if(!archive.config.getCacheStorage().exists(Page.pathForTag(tag))) return false;
+			StorageTag tag = chunk.getTag(i);
+			if(tag.isBlank()) continue;
+			if(!archive.config.getCacheStorage().exists(tag.path())) {
+				return false;
+			}
 		}
 		
 		return true;
@@ -471,11 +485,6 @@ public class PageTree {
 		return (long) (1-Math.pow(tagsPerChunk(), level))/(1-tagsPerChunk()) + offset;
 	}
 	
-	protected boolean hasTagLocally(byte[] tag) {
-		String path = Page.pathForTag(tag);
-		return archive.getConfig().getCacheStorage().exists(path);
-	}
-
 	public long getInodeId() {
 		return inodeId;
 	}

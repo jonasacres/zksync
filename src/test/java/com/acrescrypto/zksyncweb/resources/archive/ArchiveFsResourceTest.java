@@ -81,7 +81,7 @@ public class ArchiveFsResourceTest {
 		fs.write("missing", new byte[archive.getConfig().getPageSize()]);
 		fs.commit();
 		PageTree tree = new PageTree(fs.inodeForPath("missing"));
-		fs.getArchive().getConfig().getCacheStorage().unlink(Page.pathForTag(tree.getRefTag().getHash()));
+		fs.getArchive().getConfig().getCacheStorage().unlink(Page.pathForTag(tree.getRefTag().getStorageTag()));
 		return tree.getInodeId();
 	}
 
@@ -93,7 +93,7 @@ public class ArchiveFsResourceTest {
 
 		fs.commit();
 		PageTree tree = new PageTree(fs.inodeForPath("missing"));
-		fs.getArchive().getConfig().getCacheStorage().unlink(Page.pathForTag(tree.getRefTag().getHash()));
+		fs.getArchive().getConfig().getCacheStorage().unlink(Page.pathForTag(tree.getRefTag().getStorageTag()));
 		fs.uncache("/missing");
 		return tree.getInodeId();
 	}

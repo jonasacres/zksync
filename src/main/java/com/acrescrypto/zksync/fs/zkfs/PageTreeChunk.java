@@ -2,26 +2,24 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SignedSecureFile;
-import com.acrescrypto.zksync.utility.Util;
 
 public class PageTreeChunk {
 	protected PageTree tree;
-	byte[] chunkTag;
-	byte[][] tags;
+	StorageTag chunkTag;
+	StorageTag[] tags;
 	long index;
 	protected boolean dirty;
 	
-	public PageTreeChunk(PageTree tree, byte[] chunkTag, long index, boolean verify) throws IOException {
+	public PageTreeChunk(PageTree tree, StorageTag chunkTag, long index, boolean verify) throws IOException {
 		this.index = index;
 		this.chunkTag = chunkTag;
 		this.tree = tree;
-		this.tags = new byte[tree.tagsPerChunk()][];
+		this.tags = new StorageTag[tree.tagsPerChunk()];
 		
-		if(isZero(chunkTag)) {
+		if(chunkTag.isBlank()) {
 			initBlank();
 		} else {
 			read(verify);
@@ -29,25 +27,25 @@ public class PageTreeChunk {
 	}
 	
 	public boolean hasTag(long offset) {
-		return !isZero(getTag(offset));
+		return !getTag(offset).isBlank();
 	}
 	
-	public void setTag(long offset, byte[] tag) {
-		if(Arrays.equals(tag, tags[(int) offset])) return;
+	public void setTag(long offset, StorageTag tag) {
+		if(tag.equals(tags[(int) offset])) return;
 		
 		loadTag(offset, tag);
-		if(tag.length >= tree.archive.getCrypto().hashLength() && !isZero(tag)) {
+		if(!tag.isStored()) {
 			tree.archive.addPageTag(tag);
 		}
 		
 		markDirty();
 	}
 	
-	public void loadTag(long offset, byte[] tag) {
+	public void loadTag(long offset, StorageTag tag) {
 		tags[(int) offset] = tag;
 	}
 	
-	public byte[] getTag(long offset) {
+	public StorageTag getTag(long offset) {
 		return tags[(int) offset];
 	}
 	
@@ -65,16 +63,14 @@ public class PageTreeChunk {
 		for(int i = 0; i < tree.tagsPerChunk(); i++) {
 			int childOffset = (int) (tree.tagsPerChunk()*tree.offsetOfChunkId(index) + i);
 			long childId = tree.chunkIdAtPosition(tree.levelOfChunkId(index)+1, childOffset);
-			System.out.println("\t" + i + " ("+ childId +"): " + Util.bytesToHex(tags[i]));
+			System.out.println("\t" + i + " ("+ childId +"): " + tags[i]);
 		}
 	}
 	
 	protected void initBlank() {
-		// This is a hot spot. Anything we can do to speed this up will be a big help.
-		int tagsPerChunk = tree.tagsPerChunk(), hashLen = tree.archive.crypto.hashLength();
-		byte[] blankTag = new byte[hashLen];
+		int tagsPerChunk = tree.tagsPerChunk();
 		for(int i = 0; i < tagsPerChunk; i++) {
-			tags[i] = blankTag;
+			tags[i] = tree.archive.getBlankStorageTag();
 		}
 	}
 	
@@ -107,30 +103,23 @@ public class PageTreeChunk {
 	
 	protected byte[] serialize() {
 		ByteBuffer buf = ByteBuffer.allocate(tree.tagsPerChunk() * tree.archive.crypto.hashLength());
-		for(byte[] tag : tags) {
-			buf.put(tag);
+		for(StorageTag tag : tags) {
+			buf.put(tag.getTagBytes());
 		}
 		
 		return buf.array();
 	}
 	
 	protected void deserialize(ByteBuffer serialized) {
-		tags = new byte[tree.tagsPerChunk()][];
+		tags = new StorageTag[tree.tagsPerChunk()];
 		int hashLength = tree.archive.crypto.hashLength();
 		int i = 0;
 		while(serialized.remaining() >= hashLength) {
-			byte[] tag = new byte[tree.archive.crypto.hashLength()];
-			serialized.get(tag);
+			byte[] tagBytes = new byte[tree.archive.crypto.hashLength()];
+			serialized.get(tagBytes);
+			StorageTag tag = new StorageTag(tree.getArchive().getCrypto(), tagBytes);
 			tags[i++] = tag;
 		}
-	}
-	
-	protected boolean isZero(byte[] tag) {
-		for(int i = 0; i < tag.length; i++) {
-			if(tag[i] != 0) return false;
-		}
-		
-		return true;
 	}
 	
 	protected Key textKey() {
@@ -166,7 +155,7 @@ public class PageTreeChunk {
 		return String.format("PageTreeChunk %d (%d) %s%s",
 				index,
 				tree.inodeId,
-				chunkTag == null ? "null" : Util.bytesToHex(chunkTag, 6),
+				chunkTag == null ? "null" : chunkTag,
 				dirty ? "*" : "");
 	}
 }

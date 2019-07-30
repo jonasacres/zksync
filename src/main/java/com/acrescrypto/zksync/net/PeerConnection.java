@@ -4,7 +4,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -21,9 +20,9 @@ import com.acrescrypto.zksync.exceptions.SocketClosedException;
 import com.acrescrypto.zksync.exceptions.SwarmTimeoutException;
 import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
-import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.net.PageQueue.ChunkReference;
 import com.acrescrypto.zksync.utility.AppendableInputStream;
@@ -241,16 +240,16 @@ public class PeerConnection {
 		send(CMD_ANNOUNCE_TAGS, serialized.array());
 	}
 	
-	public void announceTags(Collection<byte[]> tags) {
+	public void announceTags(Collection<StorageTag> tags) {
 		if(DISABLE_TAG_LIST) return;
 		logger.trace("Swarm {} {}:{}: PeerConnection send announceTags",
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
 				socket.getPort());
 		ByteBuffer serialized = ByteBuffer.allocate(tags.size() * RefTag.REFTAG_SHORT_SIZE);
-		for(byte[] tag : tags) {
+		for(StorageTag tag : tags) {
 			if(!serialized.hasRemaining()) break; // possible to add tags as we iterate
-			serialized.putLong(Util.shortTag(tag));
+			serialized.putLong(tag.shortTag());
 		}
 		send(CMD_ANNOUNCE_TAGS, serialized.array());
 	}
@@ -445,8 +444,8 @@ public class PeerConnection {
 		}
 	}
 
-	public boolean wantsFile(byte[] tag) {
-		return !announcedTags.contains(Util.shortTag(tag));
+	public boolean wantsFile(StorageTag tag) {
+		return !announcedTags.contains(tag.shortTag());
 	}
 
 	public boolean hasFile(long shortTag) {
@@ -799,20 +798,21 @@ public class PeerConnection {
 				socket.getAddress(),
 				socket.getPort(),
 				msg.msgId);
-		byte[] tag = msg.rxBuf.read(socket.swarm.config.getCrypto().hashLength());
-		if(!Arrays.equals(tag, socket.swarm.getConfig().tag())) {
+		byte[] tagBytes = msg.rxBuf.read(socket.swarm.config.getCrypto().hashLength());
+		StorageTag tag = new StorageTag(socket.swarm.config.getCrypto(), tagBytes);
+		if(!tag.equals(socket.swarm.getConfig().tag())) {
 			waitForFullInit();
 		}
 		
-		if(socket.swarm.getConfig().getCacheStorage().exists(Page.pathForTag(tag))) {
+		if(socket.swarm.getConfig().getCacheStorage().exists(tag.path())) {
 			logger.trace("Swarm {} {}:{}: PeerConnection handleSendPage {} ignoring offered page {} (already have it)",
 					Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 					socket.getAddress(),
 					socket.getPort(),
 					msg.msgId,
-					Util.bytesToHex(tag, 8));
+					tag);
 			if(!DISABLE_TAG_LIST) {
-				announceTag(Util.shortTag(tag));
+				announceTag(tag.shortTag());
 			}
 			return;
 		}
@@ -822,7 +822,7 @@ public class PeerConnection {
 				socket.getAddress(),
 				socket.getPort(),
 				msg.msgId,
-				Util.bytesToHex(tag, 8));
+				tag.shortTag());
 		ChunkAccumulator accumulator = socket.swarm.accumulatorForTag(tag);		
 		int actualPageSize = socket.swarm.config.getSerializedPageSize();
 		int expectedChunks = (int) Math.ceil(((double) actualPageSize)/PeerMessage.FILE_CHUNK_SIZE);
@@ -846,7 +846,7 @@ public class PeerConnection {
 					socket.getAddress(),
 					socket.getPort(),
 					msg.msgId,
-					Util.bytesToHex(tag, 8),
+					tag,
 					offset);
 			accumulator.addChunk((int) offset, chunkData, this);
 		}
@@ -930,7 +930,7 @@ public class PeerConnection {
 	
 	protected void pageQueueThread() {
 		Util.setThreadName("PeerConnection queue thread");
-		byte[] lastTag = new byte[0];
+		StorageTag lastTag = null;
 		AppendableInputStream lastStream = null;
 		
 		while(!socket.isClosed()) {
@@ -939,14 +939,14 @@ public class PeerConnection {
 				if(chunk == null || !wantsFile(chunk.tag)) continue;
 				waitForUnpause();
 				
-				if(lastStream == null || !Arrays.equals(lastTag, chunk.tag)) {
+				if(lastStream == null || !chunk.tag.equals(chunk.tag)) {
 					if(lastStream != null) {
 						lastStream.eof();
 					}
 					
 					lastStream = new AppendableInputStream();
 					socket.makeOutgoingMessage(CMD_SEND_PAGE, lastStream);
-					lastStream.write(chunk.tag);
+					lastStream.write(chunk.tag.getTagBytes());
 					lastTag = chunk.tag;
 				}
 				
@@ -955,7 +955,7 @@ public class PeerConnection {
 						socket.getAddress(),
 						socket.getPort(),
 						chunk.index,
-						Util.bytesToHex(chunk.tag, 8));
+						chunk.tag, 8);
 				lastStream.write(ByteBuffer.allocate(4).putInt(chunk.index).array());
 				lastStream.write(chunk.getData());
 				
@@ -969,7 +969,7 @@ public class PeerConnection {
 						Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 						socket.getAddress(),
 						socket.getPort(),
-						Util.bytesToHex(lastTag, 8));
+						lastTag);
 			} catch(SocketClosedException exc) {
 			} catch(Exception exc) {
 				logger.error("Swarm {} {}:{}: PeerConnection page queue thread caught exception in PeerConnection",

@@ -7,6 +7,7 @@ import java.nio.file.Paths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
@@ -24,31 +25,9 @@ public class Page {
 	boolean dirty; /** true if page has been written to since last read/flush */
 	protected Logger logger = LoggerFactory.getLogger(Page.class);
 	
-	private final static char[] hexArray = "0123456789abcdef".toCharArray();
-	public static String pathForTag(byte[] bytes) {
-		// credit: https://stackoverflow.com/questions/9655181/how-to-convert-a-byte-array-to-a-hex-string-in-java#9855338
-	    char[] hexChars = new char[2*bytes.length + 2];
-	    int ofs = 0;
-	    
-	    for (int j = 0; j < bytes.length; j++ ) {
-	        int v = bytes[j] & 0xFF;
-	        hexChars[ofs + 2*j] = hexArray[v >>> 4];
-	        hexChars[ofs + 2*j + 1] = hexArray[v & 0x0F];
-	        if(j < 2) {
-	        	hexChars[ofs + 2*j + 2] = '/';
-	        	ofs++;
-	        }
-	    }
-	    
-	    return new String(hexChars);
-	}
-	
-	public static byte[] tagForPath(String path) {
-		return Util.hexToBytes(path.replace("/", ""));
-	}
-	
-	public static byte[] expandTag(FS storage, long shortTag) throws IOException {
-		String path = pathForTag(ByteBuffer.allocate(8).putLong(shortTag).array());
+	public static StorageTag expandTag(CryptoSupport crypto, FS storage, long shortTag) throws IOException {
+		StorageTag sTag = new StorageTag(crypto, Util.serializeLong(shortTag));
+		String path = sTag.path();
 		String parent = storage.dirname(path);
 		String basename = storage.basename(path);
 		Directory dir = null;
@@ -57,7 +36,8 @@ public class Page {
 			dir = storage.opendir(parent);
 			for(String subpath : dir.list()) {
 				if(storage.basename(subpath).startsWith(basename)) {
-					return tagForPath(Paths.get(parent, subpath).toString());
+					String qualifiedSubpath = Paths.get(parent, subpath).toString();
+					return new StorageTag(crypto, qualifiedSubpath);
 				}
 			}
 		} catch(ENOENTException exc) {
@@ -127,14 +107,16 @@ public class Page {
 			
 			// don't write immediates to disk; the pageTag = refTag = file contents
 			if(pageNum == 0 && size < file.zkfs.archive.crypto.hashLength()) {
-				file.setPageTag(pageNum, plaintext.array());
+				StorageTag immediate = new StorageTag(file.getFS().getArchive().getCrypto(),
+						plaintext.array());
+				file.setPageTag(pageNum, immediate);
 				return;
 			}
 		} else {
 			plaintext = contents;
 		}
 		
-		byte[] pageTag = SignedSecureFile
+		StorageTag pageTag = SignedSecureFile
 		  .withParams(file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.privKey)
 		  .write(plaintext.array(), file.zkfs.archive.config.pageSize);
 		this.file.setPageTag(pageNum, pageTag);
@@ -225,9 +207,9 @@ public class Page {
 		int pageSize = file.zkfs.archive.config.pageSize;
 		contents = ByteBuffer.allocate(pageSize);
 		
-		byte[] pageTag = file.getPageTag(pageNum);
-		if(pageNum == 0 && file.tree.numPages == 1 && pageTag.length < file.getFS().getArchive().getCrypto().hashLength()) {
-			contents.put(file.inode.getRefTag().getLiteral());
+		StorageTag pageTag = file.getPageTag(pageNum);
+		if(pageNum == 0 && file.tree.numPages == 1 && pageTag.isImmediate()) {
+			contents.put(file.inode.getRefTag().getStorageTag().getTagBytes());
 		} else {
 			if(file.getFS().getArchive().getStorage() instanceof BackedFS) {
 				// make sure the page is ready if this is a non-cached filesystem
@@ -250,7 +232,7 @@ public class Page {
 				Util.formatArchiveId(file.zkfs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(file.zkfs.getBaseRevision()),
 				pageNum,
-				Util.formatPageTag(pageTag),
+				pageTag,
 				file.getPath(),
 				size);
 		dirty = false;

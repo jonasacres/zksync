@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
@@ -15,10 +14,10 @@ import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
-import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -32,10 +31,10 @@ public class PageQueue {
 	
 	public class ChunkReference {
 		FS fs;
-		byte[] tag;
+		StorageTag tag;
 		int index;
 		
-		protected ChunkReference(FS fs, byte[] tag, int index) {
+		protected ChunkReference(FS fs, StorageTag tag, int index) {
 			this.fs = fs;
 			this.tag = tag;
 			this.index = index;
@@ -102,20 +101,20 @@ public class PageQueue {
 		
 		@Override ChunkReference reference() { return reference; }
 		@Override int classPriority() { return 0; }
-		@Override long getHash() { return Util.shortTag(reference.tag) + reference.index + 1; } 
+		@Override long getHash() { return reference.tag.shortTag() + reference.index + 1; } 
 	}
 	
 	class PageQueueItem extends QueueItem {
 		ZKArchive archive;
-		byte[] tag;
+		StorageTag tag;
 		Shuffler shuffler;
 		
-		PageQueueItem(int priority, ZKArchive archive, byte[] tag) {
+		PageQueueItem(int priority, ZKArchive archive, StorageTag tag) {
 			super(priority);
 			this.archive = archive;
 			this.tag = tag;
 			
-			if(tag == null || !archive.getStorage().exists(Page.pathForTag(tag))) {
+			if(tag == null || !archive.getStorage().exists(tag.path())) {
 				shuffler = Shuffler.fixedShuffler(0);
 			} else {
 				int numChunks = (int) Math.ceil((double) archive.getConfig().getPageSize() / PeerMessage.FILE_CHUNK_SIZE);
@@ -130,7 +129,7 @@ public class PageQueue {
 		}
 		
 		@Override int classPriority() { return -10; }
-		@Override long getHash() { return tag != null ? Util.shortTag(tag) : -1; }
+		@Override long getHash() { return tag != null ? tag.shortTag() : -1; }
 	}
 	
 	class InodeContentsQueueItem extends QueueItem {
@@ -166,7 +165,7 @@ public class PageQueue {
 			if(!shuffler.hasNext()) return null;
 			try {
 				int next = shuffler.next();
-				byte[] tag;
+				StorageTag tag;
 				if(next < tree.numPages()) {
 					tag = tree.getPageTag(next);
 				} else {
@@ -180,7 +179,11 @@ public class PageQueue {
 		}
 		
 		@Override int classPriority() { return -20; }
-		@Override long getHash() { return tree != null ? Util.shortTag(tree.getRefTag().getHash()) : -1; }
+		@Override long getHash() {
+			return tree != null
+				? tree.getRefTag().getStorageTag().shortTag()
+				: -1;
+		}
 	}
 	
 	class RevisionQueueItem extends QueueItem {
@@ -316,7 +319,8 @@ public class PageQueue {
 				String path;
 				path = traverser.next();
 				logger.trace("Enqueuing path {}", path);
-				return new PageQueueItem(priority, archive, Page.tagForPath(path));
+				StorageTag tag = new StorageTag(archive.getCrypto(), path);
+				return new PageQueueItem(priority, archive, tag);
 			} catch (IOException exc) {
 				logger.error("Caught exception queuing next tag in EverythingQueueItem", exc);
 				return null;
@@ -344,7 +348,7 @@ public class PageQueue {
 	
 	public void addPageTag(int priority, long shortTag) {
 		try {
-			byte[] tag = config.getArchive().expandShortTag(shortTag);
+			StorageTag tag = config.getArchive().expandShortTag(shortTag);
 			if(tag == null) {
 				logger.warn("Cannot enqueue non-existent short tag {}", shortTag);
 				return;
@@ -356,8 +360,8 @@ public class PageQueue {
 		}
 	}
 	
-	public void addPageTag(int priority, byte[] pageTag) {
-		logger.debug("Enqueuing page tag {}", Util.bytesToHex(pageTag));
+	public void addPageTag(int priority, StorageTag pageTag) {
+		logger.debug("Enqueuing page tag {}", pageTag);
 		addItem(new PageQueueItem(priority, config.getArchive(), pageTag));
 	}
 	
@@ -402,11 +406,11 @@ public class PageQueue {
 		return !itemsByPriority.isEmpty();
 	}
 	
-	public boolean expectTagNext(byte[] tag) {
+	public boolean expectTagNext(StorageTag tag) {
 		unpackNextReference();
 		if(itemsByPriority.isEmpty()) return false;
 		QueueItem head = itemsByPriority.peek();
-		return head.reference() != null && Arrays.equals(tag, head.reference().tag);
+		return head.reference() != null & tag.equals(head.reference().tag);
 	}
 	
 	public synchronized ChunkReference nextChunk() {

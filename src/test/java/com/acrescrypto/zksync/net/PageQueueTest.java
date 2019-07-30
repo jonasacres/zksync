@@ -137,7 +137,7 @@ public class PageQueueTest {
 	public HashSet<Long> expectedPageTagsForRevTag(RevisionTag revTag) throws IOException {
 		HashSet<Long> expectedTags = new HashSet<Long>();
 		try(ZKFS fs = revTag.readOnlyFS()) {
-			expectedTags.add(Util.shortTag(fs.getInodeTable().getInode().getRefTag().getHash()));
+			expectedTags.add(Util.shortTag(fs.getInodeTable().getInode().getRefTag().getStorageTag()));
 			for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
 				expectedTags.addAll(expectedPageTagsForInode(fs.getInodeTable().inodeWithId(i)));
 			}
@@ -149,7 +149,7 @@ public class PageQueueTest {
 	public HashSet<Long> expectedStructuralPageTagsForRevTag(RevisionTag revTag) throws IOException {
 		HashSet<Long> expectedTags = new HashSet<Long>();
 		try(ZKFS fs = revTag.readOnlyFS()) {
-			expectedTags.add(Util.shortTag(fs.getInodeTable().getInode().getRefTag().getHash()));
+			expectedTags.add(Util.shortTag(fs.getInodeTable().getInode().getRefTag().getStorageTag()));
 			for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
 				Inode inode = fs.getInodeTable().inodeWithId(i);
 				if(!inode.getStat().isDirectory()) continue;
@@ -418,34 +418,34 @@ public class PageQueueTest {
 	
 	@Test
 	public void testAddPageTagHonorsPrioritySettingBeforeChunking() {
-		assertFalse(Arrays.equals(pageTag, inodeIndirect.getRefTag().getHash())); // nothing up my sleeves...
+		assertFalse(Arrays.equals(pageTag, inodeIndirect.getRefTag().getStorageTag())); // nothing up my sleeves...
 		// add a low-priority tag, then a high-priority one
 		queue.addPageTag(0, pageTag);
-		queue.addPageTag(1, inodeIndirect.getRefTag().getHash());
+		queue.addPageTag(1, inodeIndirect.getRefTag().getStorageTag());
 		
 		// get the next chunk -- should be for the high-priority request
 		assertTrue(queue.hasNextChunk());
-		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getHash(), queue.nextChunk().tag));
+		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag));
 		
 		// wipe the slate and start over, this time with high-priority first
 		queue.stopAll();
 		queue.addPageTag(1, pageTag);
-		queue.addPageTag(0, inodeIndirect.getRefTag().getHash());
+		queue.addPageTag(0, inodeIndirect.getRefTag().getStorageTag());
 		assertTrue(queue.hasNextChunk());
 		assertTrue(Arrays.equals(pageTag, queue.nextChunk().tag));
 	}
 	
 	@Test
 	public void testAddPageTagHonorsPrioritySettingAfterChunking() {
-		assertFalse(Arrays.equals(pageTag, inodeIndirect.getRefTag().getHash()));
+		assertFalse(Arrays.equals(pageTag, inodeIndirect.getRefTag().getStorageTag()));
 		// add a low-priority tag, then ask for a chunk to get its chunks queued up
 		queue.addPageTag(0, pageTag);
 		queue.nextChunk();
 		
 		// now add a high-priority request. the next chunk should be for that request.
-		queue.addPageTag(1, inodeIndirect.getRefTag().getHash());
+		queue.addPageTag(1, inodeIndirect.getRefTag().getStorageTag());
 		assertTrue(queue.hasNextChunk());
-		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getHash(), queue.nextChunk().tag));
+		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag));
 	}
 	
 	@Test
@@ -502,7 +502,7 @@ public class PageQueueTest {
 		queue.addPageTag(0, pageTag);
 		
 		// now add a high-priority request and grab a chunk
-		queue.addPageTag(1, inodeIndirect.getRefTag().getHash());
+		queue.addPageTag(1, inodeIndirect.getRefTag().getStorageTag());
 		queue.nextChunk();
 		
 		// now reprioritize; our formerly low-priority tag should bump up to the head of the queue
@@ -564,14 +564,14 @@ public class PageQueueTest {
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 		queue.addInodeContents(1, revTag, inodeIndirect.getStat().getInodeId());
 		assertTrue(queue.hasNextChunk());
-		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getHash(), queue.nextChunk().tag));
+		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag));
 		
 		// try again, except go high-priority first then low-priority
 		queue.stopAll();
 		queue.addInodeContents(1, revTag, inodeIndirect.getStat().getInodeId());
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 		assertTrue(queue.hasNextChunk());
-		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getHash(), queue.nextChunk().tag));
+		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag));
 	}
 	
 	@Test
@@ -583,7 +583,7 @@ public class PageQueueTest {
 		
 		// now make the low priority higher
 		queue.addInodeContents(2, revTag, inodeIndirect.getStat().getInodeId());
-		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getHash(), queue.nextChunk().tag));
+		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag));
 	}
 	
 	@Test
