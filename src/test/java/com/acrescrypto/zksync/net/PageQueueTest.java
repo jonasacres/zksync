@@ -719,7 +719,7 @@ public class PageQueueTest {
 		queue.addRevisionTag(0, secondRevTag);
 		queue.addPageTag(1, pageTag);
 		queue.addRevisionTag(2, secondRevTag);
-		assertEquals(pageTag, queue.nextChunk().tag);
+		assertNotEquals(pageTag, queue.nextChunk().tag);
 		
 		queue.stopAll();
 		queue.addRevisionTag(2, secondRevTag);
@@ -870,7 +870,7 @@ public class PageQueueTest {
 		queue.addRevisionTagForStructure(0, secondRevTag);
 		queue.addPageTag(1, pageTag);
 		queue.addRevisionTagForStructure(2, secondRevTag);
-		assertEquals(pageTag, queue.nextChunk().tag);
+		assertNotEquals(pageTag, queue.nextChunk().tag);
 		
 		queue.stopAll();
 		queue.addRevisionTagForStructure(2, secondRevTag);

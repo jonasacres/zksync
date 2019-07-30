@@ -121,7 +121,7 @@ public class StorageTag implements Comparable<StorageTag> {
 		
 		if(tagBytes.length == crypto.hashLength()) {
 			for(byte b : tagBytes) {
-				if(tagBytes[b] != 0) {
+				if(b != 0) {
 					isBlank = false;
 					return;
 				}

@@ -16,6 +16,7 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.EACCESException;
+import com.acrescrypto.zksync.utility.Util;
 
 public class ZKArchiveTest {
 	CryptoSupport crypto;
@@ -113,7 +114,10 @@ public class ZKArchiveTest {
 	@Test
 	public void testHasInodeReturnsFalseIfRevTagIsNonsense() throws IOException {
 		try(ZKFS fs = addMockData(archive)) {
-			RevisionTag revTag = new RevisionTag(new RefTag(archive, crypto.rng(archive.getConfig().refTagSize())), 0, 0);
+			byte[] storageTagBytes = crypto.hash(Util.serializeInt(0));
+			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+			RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
+			RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 			assertFalse(archive.hasInode(revTag, fs.stat("file2").getInodeId()));
 		}
 	}

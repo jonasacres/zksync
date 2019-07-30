@@ -139,6 +139,14 @@ public class RequestPoolTest {
 		TestUtils.assertTidy();
 	}
 	
+	public StorageTag makeRandomStorageTag(int i) {
+		return new StorageTag(crypto, crypto.hash(Util.serializeInt(i)));
+	}
+	
+	public RefTag makeRandomRefTag(int i) {
+		return new RefTag(archive, makeRandomStorageTag(i), RefTag.REF_TYPE_INDIRECT, 1);
+	}
+	
 	@Test
 	public void testBlank() {}
 	
@@ -444,7 +452,7 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testAddRequestsToPeerCallsRequestInodes() {
-		RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+		RefTag refTag = makeRandomRefTag(0);
 		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		LinkedList<Long> inodeIds = new LinkedList<>();
 		
@@ -463,7 +471,7 @@ public class RequestPoolTest {
 	public void testAddRequestsToPeerCallsRequestRevisionContents() {
 		LinkedList<RevisionTag> tags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
-			RefTag tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+			RefTag tag = makeRandomRefTag(i);
 			RevisionTag revTag = new RevisionTag(tag, 0, 0);
 			tags.add(revTag);
 			pool.addRevision(-123, revTag);
@@ -478,7 +486,7 @@ public class RequestPoolTest {
 	public void testAddRequestsToPeerCallsRequestRevisionDetails() {
 		LinkedList<RevisionTag> tags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
-			RefTag tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+			RefTag tag = makeRandomRefTag(i);
 			RevisionTag revTag = new RevisionTag(tag, 0, 0);
 			tags.add(revTag);
 			pool.addRevisionDetails(-123, revTag);
@@ -492,7 +500,7 @@ public class RequestPoolTest {
 	@Test
 	public void testAddRequestsToPeerToleratesSeedOnly() {
 		conn.mockSeedOnly = true;
-		RefTag tag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+		RefTag tag = makeRandomRefTag(0);
 		RevisionTag revTag = new RevisionTag(tag, 0, 0);
 		pool.addRevision(0, revTag);		
 		pool.addRequestsToConnection(conn);
@@ -555,7 +563,7 @@ public class RequestPoolTest {
 		for(int i = 0; i < 16; i++) {
 			RevisionTag tag;
 			do {
-				RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+				RefTag refTag = makeRandomRefTag(i);
 				tag = new RevisionTag(refTag, 0, 0);
 			} while(tag.getRefTag().getRefType() == RefTag.REF_TYPE_IMMEDIATE);
 			tags.add(tag);
@@ -580,7 +588,7 @@ public class RequestPoolTest {
 		for(int i = 0; i < 16; i++) {
 			RevisionTag tag;
 			do {
-				RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+				RefTag refTag = makeRandomRefTag(i);
 				tag = new RevisionTag(refTag, 0, 0);
 			} while(tag.getRefTag().getRefType() == RefTag.REF_TYPE_IMMEDIATE);
 			tags.add(tag);
@@ -624,7 +632,7 @@ public class RequestPoolTest {
 	public void testSerialization() throws IOException {
 		LinkedList<RevisionTag> tags = new LinkedList<>();
 		for(int i = 0; i < 64; i++) {
-			RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+			RefTag refTag = makeRandomRefTag(i);
 			RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 			tags.add(revTag);
 			

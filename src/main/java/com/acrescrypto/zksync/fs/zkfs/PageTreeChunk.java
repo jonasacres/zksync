@@ -34,7 +34,7 @@ public class PageTreeChunk {
 		if(tag.equals(tags[(int) offset])) return;
 		
 		loadTag(offset, tag);
-		if(!tag.isStored()) {
+		if(tag.isStored()) {
 			tree.archive.addPageTag(tag);
 		}
 		

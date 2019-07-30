@@ -217,6 +217,14 @@ public class PeerSwarmTest {
 		TestUtils.assertTidy();
 	}
 	
+	public StorageTag makeRandomStorageTag(int i) {
+		return new StorageTag(archive.getCrypto(), archive.getCrypto().hash(Util.serializeInt(i)));
+	}
+	
+	public RefTag makeRandomRefTag(int i) {
+		return new RefTag(archive, makeRandomStorageTag(i), RefTag.REF_TYPE_INDIRECT, 1);
+	}
+	
 	@Test
 	public void testOpenedConnectionAddsOpenConnection() {
 		swarm.openedConnection(connection);
@@ -697,7 +705,7 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestInodeSendsRequestInodeToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
-		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = makeRandomRefTag(0);
 		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		long inodeId = archive.getCrypto().defaultPrng().getLong();
 		
@@ -717,7 +725,7 @@ public class PeerSwarmTest {
 	
 	@Test
 	public void testRequestInodeSendsRequestInodeToAllNewPeers() throws IOException {
-		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = makeRandomRefTag(0);
 		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		long inodeId = archive.getCrypto().defaultPrng().getLong();
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
@@ -731,7 +739,7 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestRevisionSendsRequestRevisionContentsToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
-		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = makeRandomRefTag(0);
 		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		
 		for(int i = 0; i < conns.length; i++) {
@@ -749,7 +757,7 @@ public class PeerSwarmTest {
 
 	@Test
 	public void testRequestRevisionSendsRequestRevisionContentsToAllNewPeers() throws IOException {
-		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = makeRandomRefTag(0);
 		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestRevision(11235813, revTag);
@@ -761,7 +769,7 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestRevisionStructureSendsRequestRevisionStructureToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
-		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = makeRandomRefTag(0);
 		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		
 		for(int i = 0; i < conns.length; i++) {
@@ -779,7 +787,7 @@ public class PeerSwarmTest {
 
 	@Test
 	public void testRequestRevisionStructureSendsRequestRevisionStructureToAllNewPeers() throws IOException {
-		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = makeRandomRefTag(0);
 		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestRevisionStructure(11235813, revTag);
@@ -792,7 +800,7 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestRevisionDetailsSendsRequestRevisionDetailsToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
-		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = makeRandomRefTag(0);
 		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 
 		for(int i = 0; i < conns.length; i++) {
@@ -810,7 +818,7 @@ public class PeerSwarmTest {
 	
 	@Test
 	public void testRequestRevisionDetailsSendsRequestRevisionDetailsToAllNewPeers() throws IOException {
-		RefTag refTag = new RefTag(archive, archive.getCrypto().rng(archive.getConfig().refTagSize()));
+		RefTag refTag = makeRandomRefTag(0);
 		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestRevisionDetails(-48151623, revTag);

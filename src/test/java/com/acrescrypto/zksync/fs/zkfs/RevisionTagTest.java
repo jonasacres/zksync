@@ -83,7 +83,9 @@ public class RevisionTagTest {
 	
 	@Test
 	public void testConstructFromRefTag() {
-		RefTag tag = new RefTag(archive, crypto.rng(config.refTagSize()));
+		byte[] storageTagBytes = crypto.hash(Util.serializeInt(0));
+		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+		RefTag tag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
 		RevisionTag revTag = new RevisionTag(tag, 1, 2);
 		assertEquals(tag, revTag.getRefTag());
 		assertEquals(1, revTag.getParentHash());

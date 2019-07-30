@@ -416,7 +416,7 @@ public class PageTreeTest {
 	public void testCommitDoesNotWriteChunksIfImmediate() throws IOException {
 		PageTree immediateTree = new PageTree(fs.inodeForPath("immediate"));
 		assertEquals(immediateTag, immediateTree.refTag);
-		assertEquals(immediateTag.getStorageTag().getTagBytes(), immediateTree.getPageTag(0));
+		assertEquals(immediateTag.getStorageTag(), immediateTree.getPageTag(0));
 		assertFalse(archive.config.getCacheStorage().exists(immediateTag.getStorageTag().path()));
 	}
 	

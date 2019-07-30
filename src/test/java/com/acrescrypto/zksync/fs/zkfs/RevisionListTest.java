@@ -99,7 +99,11 @@ public class RevisionListTest {
 	public LinkedList<RevisionTag> setupFakeRevisions(int count) throws IOException {
 		LinkedList<RevisionTag> revTags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
-			RefTag refTag = new RefTag(archive, crypto.rng(config.refTagSize()));
+			byte[] storageTagBytes = crypto.hash(Util.serializeInt(i));
+			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+			byte refType = i % 2 == 0 ? RefTag.REF_TYPE_INDIRECT : RefTag.REF_TYPE_2INDIRECT;
+			int numPages = refType == RefTag.REF_TYPE_INDIRECT ? 1 : 2 + i;
+			RefTag refTag = new RefTag(archive, storageTag, refType, numPages);
 			RevisionTag tag = new RevisionTag(refTag, i, 1);
 			revTags.add(tag);
 			list.addBranchTip(tag);
@@ -124,7 +128,9 @@ public class RevisionListTest {
 	@Test
 	public void testAddBranchTipUpdatesLatestBranchWhenAddingNewerTip() throws IOException {
 		// latest is understood to mean greatest height.
-		RefTag refTag = new RefTag(archive, crypto.rng(config.refTagSize()));
+		byte[] storageTagBytes = crypto.hash(Util.serializeInt(0));
+		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+		RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
 		RevisionTag shallow = new RevisionTag(refTag, 0, 1);
 		RevisionTag deep = new RevisionTag(refTag, 1, 2);
 		RevisionTag shallowAgain = new RevisionTag(refTag, 3, 1);
@@ -256,7 +262,11 @@ public class RevisionListTest {
 	public void testSerialization() throws IOException {
 		LinkedList<RevisionTag> revTags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
-			RefTag refTag = new RefTag(archive, crypto.rng(config.refTagSize()));
+			byte[] storageTagBytes = crypto.hash(Util.serializeInt(1000 + i));
+			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+			byte refType = i % 2 == 0 ? RefTag.REF_TYPE_INDIRECT : RefTag.REF_TYPE_2INDIRECT;
+			int numPages = refType == RefTag.REF_TYPE_INDIRECT ? 1 : 2 + i;
+			RefTag refTag = new RefTag(archive, storageTag, refType, numPages);
 			RevisionTag tag = new RevisionTag(refTag, i, 1);
 			revTags.add(tag);
 			list.addBranchTip(tag);
@@ -272,8 +282,11 @@ public class RevisionListTest {
 	
 	@Test
 	public void testMonitorsReceiveNotificationForNewRevtags() throws IOException {
+		byte[] storageTagBytes = crypto.hash(Util.serializeInt(0));
+		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+		
 		MutableBoolean receivedTag = new MutableBoolean();
-		RefTag refTag = new RefTag(archive, crypto.rng(config.refTagSize()));
+		RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
 		RevisionTag expectedTag = new RevisionTag(refTag, 0, 1);
 		list.addMonitor((revTag)->receivedTag.setValue(revTag.equals(expectedTag)));
 		list.addBranchTip(expectedTag);
@@ -291,8 +304,11 @@ public class RevisionListTest {
 	
 	@Test
 	public void testRemovedMonitorsDoNotReceiveNotificationForNewRevtags() throws IOException {
+		byte[] storageTagBytes = crypto.hash(Util.serializeInt(0));
+		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+
 		MutableBoolean receivedTag = new MutableBoolean();
-		RefTag refTag = new RefTag(archive, crypto.rng(config.refTagSize()));
+		RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
 		RevisionTag expectedTag = new RevisionTag(refTag, 0, 1);
 		RevisionMonitor monitor = (revTag)->receivedTag.setValue(revTag.equals(expectedTag));
 		list.addMonitor(monitor);
