@@ -155,12 +155,14 @@ public class RevisionTagTest {
 	
 	@Test
 	public void testCompareToComparesHashes() {
-		byte[] rawTagA = new byte[crypto.hashLength()];
-		byte[] rawTagB = rawTagA.clone();
-		rawTagB[0]++;
+		byte[] tagBytesA = new byte[crypto.hashLength()];
+		byte[] tagBytesB = tagBytesA.clone();
+		tagBytesB[0]++;
+		StorageTag storageTagA = new StorageTag(crypto, tagBytesA);
+		StorageTag storageTagB = new StorageTag(crypto, tagBytesB);
 		
-		RefTag aTag = new RefTag(config, rawTagA, RefTag.REF_TYPE_INDIRECT, 1);
-		RefTag bTag = new RefTag(config, rawTagB, RefTag.REF_TYPE_INDIRECT, 1);
+		RefTag aTag = new RefTag(config, storageTagA, RefTag.REF_TYPE_INDIRECT, 1);
+		RefTag bTag = new RefTag(config, storageTagB, RefTag.REF_TYPE_INDIRECT, 1);
 		RevisionTag a = new RevisionTag(aTag, 1, 1);
 		RevisionTag b = new RevisionTag(bTag, 1, 1);
 		
@@ -247,7 +249,7 @@ public class RevisionTagTest {
 	@Test
 	public void testHasStructureLocallyReturnsFalseIfInodePageMissing() throws IOException {
 		PageTree tree = new PageTree(revTag.getRefTag());
-		String pagePath = Page.pathForTag(tree.getPageTag(0));
+		String pagePath = tree.getPageTag(0).path();
 		fs.getArchive().getStorage().unlink(pagePath);
 		assertFalse(revTag.hasStructureLocally());
 	}
@@ -261,7 +263,7 @@ public class RevisionTagTest {
 		
 		revTag = fs.commit();
 		try(ZKDirectory dir = fs.opendir("dir")) {
-			String path = Page.pathForTag(dir.tree.getPageTag(0));
+			String path = dir.tree.getPageTag(0).path();
 			fs.archive.getStorage().unlink(path);
 		}
 		
@@ -277,7 +279,7 @@ public class RevisionTagTest {
 		
 		revTag = fs.commit();
 		try(ZKDirectory dir = fs.opendir("dir")) {
-			String path = Page.pathForTag(dir.tree.getPageTag(0));
+			String path = dir.tree.getPageTag(0).path();
 			fs.archive.getStorage().unlink(path);
 		}
 		
@@ -298,7 +300,7 @@ public class RevisionTagTest {
 		String path;
 		revTag = fs.commit();
 		try(ZKDirectory dir = fs.opendir("dir")) {
-			path = Page.pathForTag(dir.tree.getPageTag(0));
+			path = dir.tree.getPageTag(0).path();
 			fs.archive.getStorage().mv(path, path + ".moved");
 		}
 		
@@ -332,7 +334,7 @@ public class RevisionTagTest {
 		String path;
 		revTag = fs.commit();
 		try(ZKDirectory dir = fs.opendir("dir")) {
-			path = Page.pathForTag(dir.tree.getPageTag(0));
+			path = dir.tree.getPageTag(0).path();
 			fs.archive.getStorage().mv(path, path + ".moved");
 		}
 		
@@ -362,7 +364,7 @@ public class RevisionTagTest {
 		String path;
 		revTag = fs.commit();
 		try(ZKDirectory dir = fs.opendir("dir")) {
-			path = Page.pathForTag(dir.tree.getPageTag(0));
+			path = dir.tree.getPageTag(0).path();
 			fs.archive.getStorage().mv(path, path + ".moved");
 		}
 		

@@ -314,7 +314,7 @@ public class RevisionListTest {
 	
 	private String moveInodeTablePage(RevisionTag tag) throws IOException {
 		PageTree tree = new PageTree(tag.getRefTag());
-		String path = Page.pathForTag(tree.getPageTag(0));
+		String path = tree.getPageTag(0).path();
 		tag.getArchive().getStorage().mv(path, path + ".moved");
 		return path;
 	}
@@ -323,7 +323,7 @@ public class RevisionListTest {
 		try(ZKFS fs = tag.readOnlyFS()) {
 			Inode rootDirInode = fs.inodeForPath("/");
 			PageTree tree = new PageTree(rootDirInode);
-			String path = Page.pathForTag(tree.getPageTag(0));
+			String path = tree.getPageTag(0).path();
 			tag.getArchive().getStorage().mv(path, path + ".moved");
 			return path;
 		}

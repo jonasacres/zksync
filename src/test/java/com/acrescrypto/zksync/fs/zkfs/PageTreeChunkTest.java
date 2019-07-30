@@ -64,6 +64,7 @@ public class PageTreeChunkTest {
 	DummyPageTree tree;
 	PageTreeChunk chunk;
 	PageTreeChunk parent;
+	StorageTag blank;
 	
 	@BeforeClass
 	public static void beforeAll() {
@@ -76,8 +77,9 @@ public class PageTreeChunkTest {
 		master = ZKMaster.openBlankTestVolume();
 		tree = new DummyPageTree();
 		
-		parent = new PageTreeChunk(tree, new byte[crypto.hashLength()], 1234, false);
-		chunk = new PageTreeChunk(tree, new byte[crypto.hashLength()], 1, false);
+		blank = new StorageTag(crypto, new byte[crypto.hashLength()]);
+		parent = new PageTreeChunk(tree, blank, 1234, false);
+		chunk = new PageTreeChunk(tree, blank, 1, false);
 	}
 	
 	@After
@@ -92,32 +94,35 @@ public class PageTreeChunkTest {
 		TestUtils.stopDebugMode();
 	}
 	
+	StorageTag makeTag(int i) {
+		return new StorageTag(crypto, crypto.hash(Util.serializeInt(i)));
+	}
+	
 	@Test
 	public void testConstructorInitializesFields() {
 		assertEquals(tree, chunk.tree);
 		assertEquals(1, chunk.index);
-		assertArrayEquals(new byte[crypto.hashLength()], chunk.chunkTag);
+		assertTrue(chunk.chunkTag.isBlank());
 		assertNotNull(chunk.tags);
 	}
 	
 	@Test
 	public void testInitializesBlankIfBlankTagProvided() {
-		byte[] blank = new byte[crypto.hashLength()];
 		for(int i = 0; i < tree.tagsPerChunk(); i++) {
-			assertArrayEquals(blank, chunk.getTag(i));
+			assertTrue(chunk.getTag(i).isBlank());
 		}
 	}
 	
 	@Test
 	public void testInitializesWithExistingContentsIfNonBlankTagProvided() throws IOException {
 		for(int i = 0; i < tree.tagsPerChunk(); i++) {
-			chunk.setTag(i, crypto.hash(Util.serializeInt(i)));
+			chunk.setTag(i, makeTag(i));
 		}
 		chunk.write();
 		
 		PageTreeChunk chunk2 = new PageTreeChunk(tree, chunk.chunkTag, chunk.index, false);
 		for(int i = 0; i < tree.tagsPerChunk(); i++) {
-			assertArrayEquals(crypto.hash(Util.serializeInt(i)), chunk2.getTag(i));
+			assertArrayEquals(crypto.hash(Util.serializeInt(i)), chunk2.getTag(i).getPaddedTagBytes());
 		}
 	}
 	
@@ -128,24 +133,24 @@ public class PageTreeChunkTest {
 	
 	@Test
 	public void testHasTagReturnsTrueIfTagForOffsetIsNonBlank() {
-		chunk.setTag(0, crypto.hash(Util.serializeInt(0)));
+		chunk.setTag(0, makeTag(0));
 		assertTrue(chunk.hasTag(0));
 	}
 	
 	@Test
 	public void testSetTagUpdatesTag() { // also tests getTag
 		for(int i = 0; i < tree.tagsPerChunk(); i++) {
-			chunk.setTag(i, crypto.hash(Util.serializeInt(i)));
+			chunk.setTag(i, makeTag(i));
 		}
 
 		for(int i = 0; i < tree.tagsPerChunk(); i++) {
-			assertArrayEquals(crypto.hash(Util.serializeInt(i)), chunk.getTag(i));
+			assertEquals(makeTag(i), chunk.getTag(i));
 		}
 	}
 	
 	@Test
 	public void testSetTagMarksPageDirtyIfTagDiffersFromPreviousValue() {
-		chunk.setTag(0, crypto.hash(Util.serializeInt(0)));
+		chunk.setTag(0, makeTag(0));
 		assertTrue(chunk.dirty);
 		assertEquals(chunk, tree.dirtyChunk);
 	}
@@ -173,7 +178,7 @@ public class PageTreeChunkTest {
 	
 	@Test
 	public void testParentReturnsNullIfChunkIsRoot() throws IOException {
-		PageTreeChunk root = new PageTreeChunk(tree, new byte[crypto.hashLength()], 0, false);
+		PageTreeChunk root = new PageTreeChunk(tree, blank, 0, false);
 		assertNull(root.parent());
 	}
 	
@@ -186,7 +191,7 @@ public class PageTreeChunkTest {
 	
 	@Test
 	public void testWriteClearsDirtyFlag() throws IOException {
-		chunk.setTag(0, crypto.hash(Util.serializeInt(0)));
+		chunk.setTag(0, makeTag(0));
 		assertTrue(chunk.dirty);
 		chunk.write();
 		assertFalse(chunk.dirty);
@@ -194,32 +199,32 @@ public class PageTreeChunkTest {
 	
 	@Test
 	public void testContentsCanBeVerifiedAsSignedSecureFile() throws IOException {
-		chunk.setTag(0, crypto.hash(Util.serializeInt(0)));
+		chunk.setTag(0, makeTag(0));
 		chunk.write();
-		byte[] chunkData = tree.archive.storage.read(Page.pathForTag(chunk.chunkTag));
+		byte[] chunkData = tree.archive.storage.read(chunk.chunkTag.path());
 		assertTrue(tree.archive.config.validatePage(chunk.chunkTag, chunkData));
 	}
 	
 	@Test
 	public void testTamperedContentsDoNotValidate() throws IOException {
-		chunk.setTag(0, crypto.hash(Util.serializeInt(0)));
+		chunk.setTag(0, makeTag(0));
 		chunk.write();
-		byte[] chunkData = tree.archive.storage.read(Page.pathForTag(chunk.chunkTag));
+		byte[] chunkData = tree.archive.storage.read(chunk.chunkTag.path());
 		chunkData[1923] ^= 0x04;
 		assertFalse(tree.archive.config.validatePage(chunk.chunkTag, chunkData));
 	}
 	
 	@Test
 	public void testMismatchedTagsDoNotValidate() throws IOException {
-		chunk.setTag(0, crypto.hash(Util.serializeInt(0)));
+		chunk.setTag(0, makeTag(0));
 		chunk.write();
-		byte[] oldData = tree.archive.storage.read(Page.pathForTag(chunk.chunkTag));
-		byte[] oldTag = chunk.chunkTag;
+		byte[] oldData = tree.archive.storage.read(chunk.chunkTag.path());
+		StorageTag oldTag = chunk.chunkTag;
 		
-		chunk.setTag(1, crypto.hash(Util.serializeInt(1)));
+		chunk.setTag(1, makeTag(0));
 		chunk.write();
-		byte[] newData = tree.archive.storage.read(Page.pathForTag(chunk.chunkTag));
-		byte[] newTag = chunk.chunkTag;
+		byte[] newData = tree.archive.storage.read(chunk.chunkTag.path());
+		StorageTag newTag = chunk.chunkTag;
 		
 		assertFalse(tree.archive.config.validatePage(newTag, oldData));
 		assertFalse(tree.archive.config.validatePage(oldTag, newData));
@@ -227,11 +232,11 @@ public class PageTreeChunkTest {
 	
 	@Test(expected=SecurityException.class)
 	public void testInitializeWithTamperedFileThrowsException() throws IOException {
-		chunk.setTag(0, crypto.hash(Util.serializeInt(0)));
+		chunk.setTag(0, makeTag(0));
 		chunk.write();
-		byte[] chunkData = tree.archive.storage.read(Page.pathForTag(chunk.chunkTag));
+		byte[] chunkData = tree.archive.storage.read(chunk.chunkTag.path());
 		chunkData[23219] ^= 0x08;
-		tree.archive.storage.write(Page.pathForTag(chunk.chunkTag), chunkData);
+		tree.archive.storage.write(chunk.chunkTag.path(), chunkData);
 		
 		new PageTreeChunk(tree, chunk.chunkTag, chunk.index, false);
 	}
@@ -259,7 +264,7 @@ public class PageTreeChunkTest {
 	public void validatesChunkSignatureIfInitializedWithVerifyTrue() throws IOException {
 		byte[] data = chunk.serialize();
 		PrivateSigningKey fakeKey = crypto.makePrivateSigningKey();
-		byte[] tag = SignedSecureFile
+		StorageTag tag = SignedSecureFile
 				  .withParams(tree.archive.storage, chunk.textKey(), chunk.saltKey(), chunk.authKey(), fakeKey)
 				  .write(data, tree.archive.config.pageSize);
 
@@ -273,7 +278,7 @@ public class PageTreeChunkTest {
 	public void doesNotValidateChunkSignatureIfInitializedWithVerifyFalse() throws IOException {
 		byte[] data = chunk.serialize();
 		PrivateSigningKey fakeKey = crypto.makePrivateSigningKey();
-		byte[] tag = SignedSecureFile
+		StorageTag tag = SignedSecureFile
 				  .withParams(tree.archive.storage, chunk.textKey(), chunk.saltKey(), chunk.authKey(), fakeKey)
 				  .write(data, tree.archive.config.pageSize);
 

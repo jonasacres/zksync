@@ -160,4 +160,9 @@ public class StorageTag implements Comparable<StorageTag> {
 		
 		return "tag-s-" + Util.bytesToHex(tagBytes, maxLen);
 	}
+	
+	@Override
+	public StorageTag clone() {
+		return new StorageTag(crypto, getTagBytes());
+	}
 }

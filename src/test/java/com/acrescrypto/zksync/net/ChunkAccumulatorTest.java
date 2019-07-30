@@ -20,8 +20,8 @@ import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
-import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -32,17 +32,17 @@ import com.acrescrypto.zksync.utility.Shuffler;
 public class ChunkAccumulatorTest {
 	public class DummySwarm extends PeerSwarm {
 		boolean receivedPage;
-		byte[] expectedTag;
+		StorageTag expectedTag;
 		
-		public DummySwarm(byte[] expectedTag, ZKArchiveConfig config) throws IOException {
+		public DummySwarm(StorageTag expectedTag, ZKArchiveConfig config) throws IOException {
 			super(config);
 			this.expectedTag = expectedTag;
 		}
 		
 		@Override
-		public synchronized void receivedPage(byte[] tag) {
+		public synchronized void receivedPage(StorageTag tag) {
 			if(receivedPage) throw new RuntimeException("duplicate call to receivedPage");
-			assertTrue(Arrays.equals(expectedTag, tag));
+			assertEquals(expectedTag, tag);
 			receivedPage = true;
 		}
 	}
@@ -101,14 +101,14 @@ public class ChunkAccumulatorTest {
 	}
 	
 	public void assertReceived() throws IOException {
-		String path = Page.pathForTag(tag);
+		String path = tag.path();
 		assertTrue(swarm.receivedPage);
 		assertTrue(Arrays.equals(page, localStorage.read(path)));
 		assertTrue(Arrays.equals(page, archive.getStorage().read(path)));
 	}
 	
 	public void assertNotReceived() throws IOException {
-		String path = Page.pathForTag(tag);
+		String path = tag.path();
 		assertFalse(swarm.receivedPage);
 		assertFalse(localStorage.exists(path));
 	}
@@ -116,7 +116,8 @@ public class ChunkAccumulatorTest {
 	static ZKMaster master;	
 	static ZKArchive archive;
 	static FS localStorage;
-	static byte[] tag, page;
+	static StorageTag tag;
+	static byte[] page;
 	static byte[][] chunks;
 	
 	static int numConnections = 16;
@@ -135,7 +136,7 @@ public class ChunkAccumulatorTest {
 			fs.commit();
 			PageTree tree = new PageTree(fs.inodeForPath("file"));
 			tag = tree.getPageTag(0);
-			page = archive.getStorage().read(Page.pathForTag(tag));
+			page = archive.getStorage().read(tag.path());
 			
 			ByteBuffer buf = ByteBuffer.wrap(page);
 			int i = 0;
@@ -221,7 +222,7 @@ public class ChunkAccumulatorTest {
 	
 	@Test
 	public void testAddChunkWritesCompletedFile() throws IOException {
-		String path = Page.pathForTag(tag);
+		String path = tag.path();
 		assertFalse(localStorage.exists(path));
 		
 		for(int i = 0; i < chunks.length; i++) {
@@ -334,7 +335,10 @@ public class ChunkAccumulatorTest {
 	
 	@Test
 	public void testValidatesTag() throws IOException {
-		accumulator.tag[0] ^= 0x01;
+		byte[] corruptBytes = accumulator.tag.getTagBytes().clone();
+		corruptBytes[0] ^= 0x01;
+		StorageTag corruptTag = new StorageTag(archive.getCrypto(), corruptBytes);
+		accumulator.tag = corruptTag;
 
 		for(int i = 0; i < chunks.length; i++) {
 			accumulator.addChunk(i, chunks[i], connections[i % connections.length]);

@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.net;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -23,10 +24,10 @@ import org.junit.Test;
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
-import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
@@ -41,7 +42,7 @@ public class PageQueueTest {
 	static Inode inodeImmediate, inodeIndirect, inode2Indirect;
 	static RevisionTag revTag, secondRevTag;
 	static LinkedList<Inode> inodesInRevision, inodesInSecondRevision;
-	static byte[] pageTag;
+	static StorageTag pageTag;
 	static int numChunks;
 	
 	PageQueue queue;
@@ -122,12 +123,12 @@ public class PageQueueTest {
 		
 		PageTree tree = new PageTree(inode);
 		for(int i = 0; i < tree.numPages(); i++) {
-			expectedTags.add(Util.shortTag(tree.getPageTag(i)));
+			expectedTags.add(tree.getPageTag(i).shortTag());
 		}
 		
 		if(inode.getRefTag().getRefType() == RefTag.REF_TYPE_2INDIRECT) {
 			for(int i = 0; i < tree.numChunks(); i++) {
-				expectedTags.add(Util.shortTag(tree.tagForChunk(i)));
+				expectedTags.add(tree.tagForChunk(i).shortTag());
 			}
 		}
 		
@@ -137,7 +138,7 @@ public class PageQueueTest {
 	public HashSet<Long> expectedPageTagsForRevTag(RevisionTag revTag) throws IOException {
 		HashSet<Long> expectedTags = new HashSet<Long>();
 		try(ZKFS fs = revTag.readOnlyFS()) {
-			expectedTags.add(Util.shortTag(fs.getInodeTable().getInode().getRefTag().getStorageTag()));
+			expectedTags.add(fs.getInodeTable().getInode().getRefTag().getStorageTag().shortTag());
 			for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
 				expectedTags.addAll(expectedPageTagsForInode(fs.getInodeTable().inodeWithId(i)));
 			}
@@ -149,7 +150,7 @@ public class PageQueueTest {
 	public HashSet<Long> expectedStructuralPageTagsForRevTag(RevisionTag revTag) throws IOException {
 		HashSet<Long> expectedTags = new HashSet<Long>();
 		try(ZKFS fs = revTag.readOnlyFS()) {
-			expectedTags.add(Util.shortTag(fs.getInodeTable().getInode().getRefTag().getStorageTag()));
+			expectedTags.add(fs.getInodeTable().getInode().getRefTag().getStorageTag().shortTag());
 			for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
 				Inode inode = fs.getInodeTable().inodeWithId(i);
 				if(!inode.getStat().isDirectory()) continue;
@@ -167,7 +168,7 @@ public class PageQueueTest {
 		
 		while(queue.hasNextChunk()) {
 			ChunkReference ref = queue.nextChunk();
-			long shortTag = Util.shortTag(ref.tag);
+			long shortTag = ref.tag.shortTag();
 			assertTrue(expected.contains(shortTag));
 			assertFalse(seenTags.contains(shortTag));
 			
@@ -272,7 +273,9 @@ public class PageQueueTest {
 		// insert priorities base, base+1, ..., size-1 in random order...
 		while(shuffler.hasNext()) {
 			int priority = shuffler.next() + base;
-			ChunkReference ref = queue.new ChunkReference(archive.getStorage(), pageTag, priority);
+			ChunkReference ref = queue.new ChunkReference(archive.getStorage(),
+					pageTag,
+					priority);
 			queue.addChunkReference(priority, ref);
 		}
 		
@@ -302,7 +305,7 @@ public class PageQueueTest {
 		queue.startSendingEverything();		
 		while(queue.hasNextChunk()) {
 			ChunkReference ref = queue.nextChunk();
-			String path = Page.pathForTag(ref.tag); // use paths since Strings fit nicely in the HashMap
+			String path = ref.tag.path(); // use paths since Strings fit nicely in the HashMap
 			assertTrue(tags.contains(path)); // it's an error if we send something that's not a real tag
 			seenCount.put(path, seenCount.getOrDefault(path, 0)+1);
 		}
@@ -325,7 +328,7 @@ public class PageQueueTest {
 			// send everything, note the order we get tags in
 			queue.startSendingEverything();
 			while(queue.hasNextChunk()) {
-				long shortTag = Util.shortTag(queue.nextChunk().tag);
+				long shortTag = queue.nextChunk().tag.shortTag();
 				if(seenTags.isEmpty() || seenTags.peekLast() != shortTag) {
 					seenTags.add(shortTag);
 				}
@@ -336,7 +339,7 @@ public class PageQueueTest {
 			int pagesSeen = 0, matches = 0;
 			long lastTag = -1;
 			while(queue.hasNextChunk()) {
-				long shortTag = Util.shortTag(queue.nextChunk().tag);
+				long shortTag = queue.nextChunk().tag.shortTag();
 				if(lastTag == -1 || lastTag != shortTag) {
 					lastTag = shortTag;
 					if(seenTags.get(pagesSeen++) == shortTag) matches++;
@@ -369,7 +372,7 @@ public class PageQueueTest {
 	public void testStopSendingEverythingDoesntStopOtherRequests() {
 		// ask for everything, read a chunk, ask to stop
 		queue.startSendingEverything();
-		do {} while(Arrays.equals(pageTag, queue.nextChunk().tag));
+		do {} while(pageTag.equals(queue.nextChunk().tag));
 		queue.addPageTag(PageQueue.DEFAULT_EVERYTHING_PRIORITY-1, pageTag);
 		queue.stopSendingEverything();
 		
@@ -380,7 +383,7 @@ public class PageQueueTest {
 		
 		// but we have more data, and it's our requested page tag
 		assertTrue(queue.hasNextChunk());
-		assertTrue(Arrays.equals(pageTag, queue.nextChunk().tag));
+		assertTrue(pageTag.equals(queue.nextChunk().tag));
 	}
 	
 	@Test
@@ -388,13 +391,13 @@ public class PageQueueTest {
 		// ask for everything, and get a chunk so the queue has a bunch of chunks at the front at everything's priority
 		// (also make sure that the chunk isn't for the page we're about to ask for)
 		queue.startSendingEverything();
-		do {} while(Arrays.equals(pageTag, queue.nextChunk().tag));
+		do {} while(pageTag.equals(queue.nextChunk().tag));
 		
 		// ask for a page at a priority slightly higher than everything
 		queue.addPageTag(PageQueue.DEFAULT_EVERYTHING_PRIORITY+1, pageTag);
 		
 		// the next chunk should be from that page
-		assertTrue(Arrays.equals(pageTag, queue.nextChunk().tag));
+		assertTrue(pageTag.equals(queue.nextChunk().tag));
 	}
 	
 	@Test
@@ -405,7 +408,7 @@ public class PageQueueTest {
 		// now make sure every chunk we get has the requested tag and a sensible index that we've not seen before
 		while(queue.hasNextChunk()) {
 			ChunkReference ref = queue.nextChunk();
-			assertTrue(Arrays.equals(pageTag, ref.tag));
+			assertTrue(pageTag.equals(ref.tag));
 			assertTrue(0 <= ref.index);
 			assertTrue(ref.index < numChunks);
 			assertFalse(seenIndexes.contains(ref.index));
@@ -418,26 +421,26 @@ public class PageQueueTest {
 	
 	@Test
 	public void testAddPageTagHonorsPrioritySettingBeforeChunking() {
-		assertFalse(Arrays.equals(pageTag, inodeIndirect.getRefTag().getStorageTag())); // nothing up my sleeves...
+		assertFalse(pageTag.equals(inodeIndirect.getRefTag().getStorageTag())); // nothing up my sleeves...
 		// add a low-priority tag, then a high-priority one
 		queue.addPageTag(0, pageTag);
 		queue.addPageTag(1, inodeIndirect.getRefTag().getStorageTag());
 		
 		// get the next chunk -- should be for the high-priority request
 		assertTrue(queue.hasNextChunk());
-		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag));
+		assertTrue(inodeIndirect.getRefTag().getStorageTag().equals(queue.nextChunk().tag));
 		
 		// wipe the slate and start over, this time with high-priority first
 		queue.stopAll();
 		queue.addPageTag(1, pageTag);
 		queue.addPageTag(0, inodeIndirect.getRefTag().getStorageTag());
 		assertTrue(queue.hasNextChunk());
-		assertTrue(Arrays.equals(pageTag, queue.nextChunk().tag));
+		assertTrue(pageTag.equals(queue.nextChunk().tag));
 	}
 	
 	@Test
 	public void testAddPageTagHonorsPrioritySettingAfterChunking() {
-		assertFalse(Arrays.equals(pageTag, inodeIndirect.getRefTag().getStorageTag()));
+		assertFalse(pageTag.equals(inodeIndirect.getRefTag().getStorageTag()));
 		// add a low-priority tag, then ask for a chunk to get its chunks queued up
 		queue.addPageTag(0, pageTag);
 		queue.nextChunk();
@@ -445,7 +448,7 @@ public class PageQueueTest {
 		// now add a high-priority request. the next chunk should be for that request.
 		queue.addPageTag(1, inodeIndirect.getRefTag().getStorageTag());
 		assertTrue(queue.hasNextChunk());
-		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag));
+		assertTrue(inodeIndirect.getRefTag().getStorageTag().equals(queue.nextChunk().tag));
 	}
 	
 	@Test
@@ -507,7 +510,7 @@ public class PageQueueTest {
 		
 		// now reprioritize; our formerly low-priority tag should bump up to the head of the queue
 		queue.addPageTag(2, pageTag);
-		assertTrue(Arrays.equals(pageTag, queue.nextChunk().tag));
+		assertTrue(pageTag.equals(queue.nextChunk().tag));
 	}
 	
 	@Test
@@ -531,7 +534,7 @@ public class PageQueueTest {
 		// go through each chunk, ensuring we get every chunk of each page
 		while(queue.hasNextChunk()) {
 			ChunkReference ref = queue.nextChunk();
-			long shortTag = Util.shortTag(ref.tag);
+			long shortTag = ref.tag.shortTag();
 			if(shortTag != currentTag) {
 				// if we moved to a new page, and we had a previous page, we should have seen all its chunks
 				if(seenChunks != null) assertEquals(numChunks, seenChunks.size());
@@ -554,7 +557,7 @@ public class PageQueueTest {
 		// every page should actually be a part of the requested reftag
 		PageTree tree = new PageTree(inode2Indirect);
 		for(int i = 0; i < tree.numPages(); i++) {
-			assertTrue(seenPageTags.contains(Util.shortTag(tree.getPageTag(i))));
+			assertTrue(seenPageTags.contains(tree.getPageTag(i).shortTag()));
 		}
 	}
 	
@@ -564,14 +567,14 @@ public class PageQueueTest {
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 		queue.addInodeContents(1, revTag, inodeIndirect.getStat().getInodeId());
 		assertTrue(queue.hasNextChunk());
-		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag));
+		assertEquals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag);
 		
 		// try again, except go high-priority first then low-priority
 		queue.stopAll();
 		queue.addInodeContents(1, revTag, inodeIndirect.getStat().getInodeId());
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 		assertTrue(queue.hasNextChunk());
-		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag));
+		assertEquals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag);
 	}
 	
 	@Test
@@ -583,7 +586,7 @@ public class PageQueueTest {
 		
 		// now make the low priority higher
 		queue.addInodeContents(2, revTag, inodeIndirect.getStat().getInodeId());
-		assertTrue(Arrays.equals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag));
+		assertEquals(inodeIndirect.getRefTag().getStorageTag(), queue.nextChunk().tag);
 	}
 	
 	@Test
@@ -606,7 +609,7 @@ public class PageQueueTest {
 			LinkedList<Long> seenPageTags = new LinkedList<Long>();
 			queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 			while(queue.hasNextChunk()) {
-				long shortTag = Util.shortTag(queue.nextChunk().tag);
+				long shortTag = queue.nextChunk().tag.shortTag();
 				if(seenPageTags.isEmpty() || seenPageTags.getLast() != shortTag) {
 					seenPageTags.add(shortTag);
 				}
@@ -618,7 +621,7 @@ public class PageQueueTest {
 			int pagesSeen = 0, matches = 0;
 			long lastShortTag = 0;
 			while(queue.hasNextChunk()) {
-				long shortTag = Util.shortTag(queue.nextChunk().tag);
+				long shortTag = queue.nextChunk().tag.shortTag();
 				if(lastShortTag != shortTag) {
 					lastShortTag = shortTag;
 					if(seenPageTags.get(pagesSeen) == shortTag) {
@@ -697,58 +700,58 @@ public class PageQueueTest {
 	
 	@Test
 	public void testAddRevisionTagHonorsPriority() throws IOException {
-		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
+		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(pageTag.shortTag()));
 		queue.addRevisionTag(0, secondRevTag);
 		queue.addPageTag(1, pageTag);
-		assertTrue(Arrays.equals(pageTag, queue.nextChunk().tag));
+		assertEquals(pageTag, queue.nextChunk().tag);
 		
 		queue.stopAll();
 		queue.addRevisionTag(1, secondRevTag);
 		queue.addPageTag(0, pageTag);
 		
-		byte[] nextTag = queue.nextChunk().tag;
-		assertFalse(Arrays.equals(pageTag, nextTag));
+		StorageTag nextTag = queue.nextChunk().tag;
+		assertNotEquals(pageTag, nextTag);
 	}
 	
 	@Test
 	public void testAddRevisionTagAllowsReprioritization() throws IOException {
-		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
+		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(pageTag.shortTag()));
 		queue.addRevisionTag(0, secondRevTag);
 		queue.addPageTag(1, pageTag);
 		queue.addRevisionTag(2, secondRevTag);
-		assertFalse(Arrays.equals(pageTag, queue.nextChunk().tag));
+		assertEquals(pageTag, queue.nextChunk().tag);
 		
 		queue.stopAll();
 		queue.addRevisionTag(2, secondRevTag);
 		queue.addPageTag(1, pageTag);
 		queue.addRevisionTag(0, secondRevTag);
 		
-		byte[] nextTag = queue.nextChunk().tag;
-		assertTrue(Arrays.equals(pageTag, nextTag));
+		StorageTag nextTag = queue.nextChunk().tag;
+		assertEquals(pageTag, nextTag);
 	}
 	
 	@Test
 	public void testAddRevisionTagAllowsCancellation() throws IOException {
-		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
+		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(pageTag.shortTag()));
 		queue.addRevisionTag(0, secondRevTag);
 		queue.nextChunk();
 		queue.addRevisionTag(Integer.MIN_VALUE, secondRevTag);
 		assertFalse(queue.hasNextChunk());
 	}
 	
-	public Inode inodeForPageTag(RevisionTag revTag, byte[] pageTag) throws IOException {
+	public Inode inodeForPageTag(RevisionTag revTag, StorageTag pageTag) throws IOException {
 		try(ZKFS fs = revTag.readOnlyFS()) {
 			for(int i = 0; i < fs.getInodeTable().nextInodeId(); i++) {
 				Inode inode = fs.getInodeTable().inodeWithId(i);
 				PageTree tree = new PageTree(inode);
 				for(int j = 0; j < tree.numPages(); j++) {
-					if(Arrays.equals(pageTag, tree.getPageTag(j))) {
+					if(pageTag.equals(tree.getPageTag(j))) {
 						return inode;
 					}
 				}
 	
 				for(int j = 0; j < tree.numChunks(); j++) {
-					if(Arrays.equals(pageTag, tree.tagForChunk(j))) {
+					if(pageTag.equals(tree.tagForChunk(j))) {
 						return inode;
 					}
 				}
@@ -848,39 +851,39 @@ public class PageQueueTest {
 	
 	@Test
 	public void testAddRevisionTagForStructureHonorsPriority() throws IOException {
-		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
+		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(pageTag.shortTag()));
 		queue.addRevisionTagForStructure(0, secondRevTag);
 		queue.addPageTag(1, pageTag);
-		assertTrue(Arrays.equals(pageTag, queue.nextChunk().tag));
+		assertTrue(pageTag.equals(queue.nextChunk().tag));
 		
 		queue.stopAll();
 		queue.addRevisionTagForStructure(1, secondRevTag);
 		queue.addPageTag(0, pageTag);
 		
-		byte[] nextTag = queue.nextChunk().tag;
-		assertFalse(Arrays.equals(pageTag, nextTag));
+		StorageTag nextTag = queue.nextChunk().tag;
+		assertNotEquals(pageTag, nextTag);
 	}
 	
 	@Test
 	public void testAddRevisionTagForStructureAllowsReprioritization() throws IOException {
-		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
+		assertFalse(expectedPageTagsForRevTag(secondRevTag).contains(pageTag.shortTag()));
 		queue.addRevisionTagForStructure(0, secondRevTag);
 		queue.addPageTag(1, pageTag);
 		queue.addRevisionTagForStructure(2, secondRevTag);
-		assertFalse(Arrays.equals(pageTag, queue.nextChunk().tag));
+		assertEquals(pageTag, queue.nextChunk().tag);
 		
 		queue.stopAll();
 		queue.addRevisionTagForStructure(2, secondRevTag);
 		queue.addPageTag(1, pageTag);
 		queue.addRevisionTagForStructure(0, secondRevTag);
 		
-		byte[] nextTag = queue.nextChunk().tag;
-		assertTrue(Arrays.equals(pageTag, nextTag));
+		StorageTag nextTag = queue.nextChunk().tag;
+		assertEquals(pageTag, nextTag);
 	}
 	
 	@Test
 	public void testAddRevisionTagForStructureAllowsCancellation() throws IOException {
-		assertFalse(expectedStructuralPageTagsForRevTag(secondRevTag).contains(Util.shortTag(pageTag)));
+		assertFalse(expectedStructuralPageTagsForRevTag(secondRevTag).contains(pageTag.shortTag()));
 		queue.addRevisionTagForStructure(0, secondRevTag);
 		queue.nextChunk();
 		queue.addRevisionTagForStructure(Integer.MIN_VALUE, secondRevTag);
@@ -1013,13 +1016,13 @@ public class PageQueueTest {
 	@Test
 	public void testExpectChunksIncludeCorrectData() throws IOException {
 		queue.addPageTag(0, pageTag);
-		byte[] pageData = archive.getStorage().read(Page.pathForTag(pageTag));
+		byte[] pageData = archive.getStorage().read(pageTag.path());
 		int numChunks = (int) Math.ceil(((double) pageData.length)/PeerMessage.FILE_CHUNK_SIZE);
 		int lastPageSize = pageData.length % PeerMessage.FILE_CHUNK_SIZE;
 		
 		while(queue.hasNextChunk()) {
 			ChunkReference chunk = queue.nextChunk();
-			assertTrue(Arrays.equals(pageTag, chunk.tag));
+			assertEquals(pageTag, chunk.tag);
 			
 			int len = chunk.index == (numChunks - 1) ? lastPageSize : PeerMessage.FILE_CHUNK_SIZE; 
 			byte[] expectedData = new byte[len];

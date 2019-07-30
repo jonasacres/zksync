@@ -3,7 +3,6 @@ package com.acrescrypto.zksync.net;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
-import java.util.Arrays;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -18,6 +17,7 @@ import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -272,7 +272,7 @@ public class NetModuleTest {
 		
 		fsa.write("path", crypto.rng(5*aConfig.getPageSize()));
 		fsa.commit();
-		byte[] requestedTag = new PageTree(fsa.inodeForPath("path")).getPageTag(0);
+		StorageTag requestedTag = new PageTree(fsa.inodeForPath("path")).getPageTag(0);
 		
 		aMaster.getGlobalConfig().set("net.swarm.enabled", true);
 		aMaster.getTCPListener().advertise(aConfig.getSwarm());
@@ -291,9 +291,9 @@ public class NetModuleTest {
 		Util.waitUntil(2000, ()->bConfig.getArchive().allPageTags().size() == 2);
 		assertEquals(2, bConfig.getArchive().allPageTags().size());
 		
-		for(byte[] pageTag : bConfig.getArchive().allPageTags()) {
-			if(Arrays.equals(bConfig.tag(), pageTag)) continue;
-			if(Arrays.equals(requestedTag, pageTag)) continue;
+		for(StorageTag pageTag : bConfig.getArchive().allPageTags()) {
+			if(bConfig.tag().equals(pageTag)) continue;
+			if(requestedTag.equals(pageTag)) continue;
 			fail();
 		}
 				

@@ -9,7 +9,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 
 import org.junit.After;
@@ -23,6 +22,7 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
@@ -170,7 +170,7 @@ public class PeerSwarmTest {
 	
 	static ZKMaster master;
 	ZKArchive archive;
-	byte[] pageTag;
+	StorageTag pageTag;
 	
 	PeerSwarm swarm;
 	DummyConnection connection;
@@ -482,7 +482,8 @@ public class PeerSwarmTest {
 		class Holder { boolean waited; }
 		Holder holder = new Holder();
 		
-		byte[] tag = archive.getCrypto().rng(archive.getCrypto().hashLength());
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag tag = new StorageTag(archive.getCrypto(), tagBytes);
 		
 		Thread thread = new Thread(()->{
 			swarm.waitForPage(0, tag);
@@ -502,10 +503,11 @@ public class PeerSwarmTest {
 	
 	@Test
 	public void testWaitForPageAutomaticallyMakesRequest() throws IOException {
-		byte[] tag = master.getCrypto().rng(master.getCrypto().hashLength());
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag tag = new StorageTag(archive.getCrypto(), tagBytes);
 		
 		DummyConnection[] conns = new DummyConnection[16];
-		long shortTag = Util.shortTag(tag);
+		long shortTag = tag.shortTag();
 		
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
@@ -526,10 +528,11 @@ public class PeerSwarmTest {
 	@Test
 	public void testWaitForPageRepeatsRequest() throws IOException {
 		swarm.waitPageRetryTimeMs = 50;
-		byte[] tag = master.getCrypto().rng(master.getCrypto().hashLength());
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag tag = new StorageTag(archive.getCrypto(), tagBytes);
 		
 		DummyConnection[] conns = new DummyConnection[16];
-		long shortTag = Util.shortTag(tag);
+		long shortTag = tag.shortTag();
 		
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
@@ -557,15 +560,17 @@ public class PeerSwarmTest {
 	
 	@Test
 	public void testAccumulatorForTagCreatesAnAccumulatorForNewTags() throws IOException {
-		byte[] tag = master.getCrypto().rng(master.getCrypto().hashLength());
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag tag = new StorageTag(archive.getCrypto(), tagBytes);
 		ChunkAccumulator accumulator = swarm.accumulatorForTag(tag);
 		assertNotNull(accumulator);
-		assertTrue(Arrays.equals(tag, accumulator.tag));
+		assertEquals(tag, accumulator.tag);
 	}
 	
 	@Test
 	public void testAccumulatorForTagReturnsExistingAccumulatorForNewTags() throws IOException {
-		byte[] tag = master.getCrypto().rng(master.getCrypto().hashLength());
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag tag = new StorageTag(archive.getCrypto(), tagBytes);
 		ChunkAccumulator accumulator1 = swarm.accumulatorForTag(tag);
 		ChunkAccumulator accumulator2 = swarm.accumulatorForTag(tag);
 		assertTrue(accumulator1 == accumulator2);
@@ -573,12 +578,13 @@ public class PeerSwarmTest {
 	
 	@Test
 	public void testAccumulatorForTagResetsWhenReceivePageCalled() throws IOException {
-		byte[] tag = master.getCrypto().rng(master.getCrypto().hashLength());
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag tag = new StorageTag(archive.getCrypto(), tagBytes);
 		ChunkAccumulator accumulator1 = swarm.accumulatorForTag(tag);
 		swarm.receivedPage(tag);
 		ChunkAccumulator accumulator2 = swarm.accumulatorForTag(tag);
 		assertTrue(accumulator1 != accumulator2);
-		assertTrue(Arrays.equals(tag, accumulator2.tag));
+		assertEquals(tag, accumulator2.tag);
 	}
 	
 	@Test
@@ -611,8 +617,9 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestTagLongSendsRequestToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
-		byte[] tag = archive.getCrypto().rng(archive.getCrypto().hashLength());
-		long shortTag = Util.shortTag(tag);
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag tag = new StorageTag(archive.getCrypto(), tagBytes);
+		long shortTag = tag.shortTag();
 		
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
@@ -629,8 +636,9 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestTagLongSendsRequestToAllNewPeers() throws IOException {
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
-		byte[] tag = archive.getCrypto().rng(archive.getCrypto().hashLength());
-		long shortTag = Util.shortTag(tag);
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag tag = new StorageTag(archive.getCrypto(), tagBytes);
+		long shortTag = tag.shortTag();
 		swarm.requestTag(0, tag);
 		swarm.openedConnection(conn);
 		assertEquals(shortTag, conn.requestedTag);

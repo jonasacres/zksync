@@ -53,8 +53,8 @@ public class PageTest {
 	@Test
 	public void testSerializationLength() throws IOException {
 		page.flush();
-		byte[] tag = file.getPageTag(0);
+		StorageTag tag = file.getPageTag(0);
 		assertEquals(archive.config.getSerializedPageSize(),
-				archive.storage.stat(Page.pathForTag(tag)).getSize());
+				archive.storage.stat(tag.path()).getSize());
 	}
 }

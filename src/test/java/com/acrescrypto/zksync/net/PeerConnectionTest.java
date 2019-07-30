@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.net;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -38,10 +39,10 @@ import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
-import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -59,14 +60,14 @@ public class PeerConnectionTest {
 	class DummySwarm extends PeerSwarm {
 		LinkedList<PeerAdvertisement> receivedAds = new LinkedList<PeerAdvertisement>();
 		PeerConnection closedConnection;
-		byte[] announcedTag;
+		StorageTag announcedTag;
 		
 		public DummySwarm(ZKArchiveConfig config) throws IOException {
 			super(config);
 		}
 		
 		@Override
-		public void announceTag(byte[] tag) {
+		public void announceTag(StorageTag tag) {
 			announcedTag = tag;
 		}
 		
@@ -368,12 +369,14 @@ public class PeerConnectionTest {
 		conn.sendEverything();
 		conn.setLocalPaused(true);
 		conn.queue.itemsByPriority.clear();
-		conn.announceTag(Util.shortTag(archive.getConfig().tag()));
+		conn.announceTag(archive.getConfig().tag().shortTag());
 		
 		conn.queue.itemsByPriority.forEach((item)->{
 			if(!(item instanceof PageQueueItem)) return;
 			PageQueueItem pqItem = (PageQueueItem) item;
-			if(Arrays.equals(archive.getConfig().tag(), pqItem.tag)) passed.setTrue();
+			if(archive.getConfig().tag().equals(pqItem.tag)) {
+				passed.setTrue();
+			}
 		});
 		
 		assertTrue(passed.booleanValue());
@@ -385,12 +388,14 @@ public class PeerConnectionTest {
 		
 		conn.setLocalPaused(true);
 		conn.queue.itemsByPriority.clear();
-		conn.announceTag(Util.shortTag(archive.getConfig().tag()));
+		conn.announceTag(archive.getConfig().tag().shortTag());
 		
 		conn.queue.itemsByPriority.forEach((item)->{
 			if(!(item instanceof PageQueueItem)) return;
 			PageQueueItem pqItem = (PageQueueItem) item;
-			if(Arrays.equals(archive.getConfig().tag(), pqItem.tag)) passed.setTrue();
+			if(archive.getConfig().tag().equals(pqItem.tag)) {
+				passed.setTrue();
+			}
 		});
 		
 		assertFalse(passed.booleanValue());
@@ -418,13 +423,14 @@ public class PeerConnectionTest {
 	@Test
 	public void testAnnounceTags() throws IOException {
 		int numTags = 16;
-		LinkedList<byte[]> tags = new LinkedList<byte[]>();
+		LinkedList<StorageTag> tags = new LinkedList<StorageTag>();
 		ByteBuffer payload = ByteBuffer.allocate(numTags * 8);
 		
 		for(int i = 0; i < numTags; i++) {
-			byte[] tag = crypto.rng(crypto.hashLength());
+			byte[] tagBytes = crypto.hash(Util.serializeInt(i));
+			StorageTag tag = new StorageTag(crypto, tagBytes);
 			tags.add(tag);
-			payload.putLong(Util.shortTag(tag));
+			payload.putLong(tag.shortTag());
 		}
 		
 		assertFalse(payload.hasRemaining());
@@ -578,7 +584,9 @@ public class PeerConnectionTest {
 	@Test
 	public void testRequestInodes() throws PeerCapabilityException, IOException {
 		int numInodes = 16;
-		RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+		byte[] storageTagBytes = crypto.hash(Util.serializeInt(1234));
+		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+		RefTag refTag = new RefTag(archive, storageTag, 1, 1);
 		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		ArrayList<Long> inodeIds = new ArrayList<>(numInodes);
 		
@@ -597,8 +605,10 @@ public class PeerConnectionTest {
 	@Test
 	public void testRequestInodesThrowsExceptionIfNotFullPeer() throws PeerCapabilityException {
 		blindPeer();
+		byte[] storageTagBytes = crypto.hash(Util.serializeInt(1234));
+		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 		try {
-			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			RefTag refTag = new RefTag(archive, storageTag, 1, 1);
 			RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 			ArrayList<Long> inodeIds = new ArrayList<>(1);
 			inodeIds.add(crypto.defaultPrng().getLong());
@@ -615,7 +625,9 @@ public class PeerConnectionTest {
 		ArrayList<RevisionTag> tags = new ArrayList<>(numTags);
 		
 		for(int i = 0; i < numTags; i++) {
-			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			byte[] storageTagBytes = crypto.hash(Util.serializeInt(i));
+			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+			RefTag refTag = new RefTag(archive, storageTag, 1, 1);
 			RevisionTag revTag = new RevisionTag(refTag, 0, 0); 
 			tags.add(revTag);
 		}
@@ -631,8 +643,10 @@ public class PeerConnectionTest {
 	public void testRequestRevisionContentsThrowsExceptionIfNotFullPeer() {
 		blindPeer();
 		try {
+			byte[] storageTagBytes = crypto.hash(Util.serializeInt(1234));
+			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 			ArrayList<RevisionTag> tags = new ArrayList<>(1);
-			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			RefTag refTag = new RefTag(archive, storageTag, 1, 1);
 			RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 			tags.add(revTag);
 			conn.requestRevisionContents(0, tags);
@@ -644,7 +658,9 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testRequestRevisionDetailsSingle() throws PeerCapabilityException, IOException {
-		RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+		byte[] storageTagBytes = crypto.hash(Util.serializeInt(1234));
+		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+		RefTag refTag = new RefTag(archive, storageTag, 1, 1);
 		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
 		conn.requestRevisionDetails(10, revTag);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_REVISION_DETAILS);
@@ -666,7 +682,9 @@ public class PeerConnectionTest {
 	public void testRequestRevisionDetailsMultiple() throws PeerCapabilityException, IOException {
 		ArrayList<RevisionTag> tags = new ArrayList<>();
 		for(int i = 0; i < 16; i++) {
-			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			byte[] storageTagBytes = crypto.hash(Util.serializeInt(i));
+			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+			RefTag refTag = new RefTag(archive, storageTag, 1, 1);
 			tags.add(new RevisionTag(refTag, 0, 0));
 		}
 		conn.requestRevisionDetails(20, tags);
@@ -694,7 +712,9 @@ public class PeerConnectionTest {
 	public void testRequestRevisionStructureMultiple() throws PeerCapabilityException, IOException {
 		ArrayList<RevisionTag> tags = new ArrayList<>();
 		for(int i = 0; i < 16; i++) {
-			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), 1, 1);
+			byte[] storageTagBytes = crypto.hash(Util.serializeInt(i));
+			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+			RefTag refTag = new RefTag(archive, storageTag, 1, 1);
 			tags.add(new RevisionTag(refTag, 0, 0));
 		}
 		conn.requestRevisionStructure(20, tags);
@@ -962,7 +982,9 @@ public class PeerConnectionTest {
 		RevisionTag[] tags = new RevisionTag[16];
 
 		for(int i = 0; i < tags.length; i++) {
-			RefTag refTag = new RefTag(archive, crypto.rng(crypto.hashLength()), RefTag.REF_TYPE_2INDIRECT, 2);
+			byte[] storageTagBytes = crypto.hash(Util.serializeInt(i));
+			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+			RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_2INDIRECT, 2);
 			tags[i] = new RevisionTag(refTag, 0, 0);
 			msg.receivedData((byte) 0, tags[i].serialize());
 			assertFalse(archive.getConfig().getRevisionList().branchTips().contains(tags[i]));
@@ -978,7 +1000,9 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleAnnounceTipsTriggersViolationWhenForgedRefTagSent() throws ProtocolViolationException, IOException {
-		RefTag refTag = new RefTag(archive.getConfig(), crypto.rng(crypto.hashLength()), RefTag.REF_TYPE_2INDIRECT, 2);
+		byte[] storageTagBytes = crypto.hash(Util.serializeInt(1234));
+		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+		RefTag refTag = new RefTag(archive.getConfig(), storageTag, RefTag.REF_TYPE_2INDIRECT, 2);
 		RevisionTag fakeTag = new RevisionTag(refTag, 0, 0);
 		fakeTag.getBytes()[8] ^= 0x40;
 		
@@ -1355,7 +1379,7 @@ public class PeerConnectionTest {
 
 	@Test
 	public void testHandleRequestPageTagsAddsRequestedShortTagsToPageQueue() throws ProtocolViolationException, IOException {
-		byte[][] tags = new byte[16][];
+		StorageTag[] tags = new StorageTag[16];
 		try(ZKFS fs = archive.openBlank()) {
 			DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_PAGE_TAGS);
 			fs.write("file", new byte[tags.length*archive.getConfig().getPageSize()]);
@@ -1365,17 +1389,18 @@ public class PeerConnectionTest {
 			msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 			for(int i = 0; i < tags.length; i++) {
 				tags[i] = treee.getPageTag(i);
-				msg.receivedData((byte) 0, ByteBuffer.allocate(8).putLong(Util.shortTag(tags[i])).array());
+				byte[] data = ByteBuffer.allocate(8).putLong(tags[i].shortTag()).array();
+				msg.receivedData((byte) 0, data);
 			}
 			
 			msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 			conn.handle(msg);
 			
-			for(byte[] tag : tags) {
+			for(StorageTag tag : tags) {
 				assertQueuedItemLike((_item) -> {
 					if(!(_item instanceof PageQueueItem)) return false;
 					PageQueueItem item = (PageQueueItem) _item;
-					return Arrays.equals(tag, item.tag);
+					return tag.equals(item.tag);
 				});
 			}
 		}
@@ -1383,7 +1408,7 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleRequestPageTagsToleratesNonexistentTags() throws ProtocolViolationException, IOException {
-		byte[][] tags = new byte[16][];
+		StorageTag[] tags = new StorageTag[16];
 		try(ZKFS fs = archive.openBlank()) {
 			DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_PAGE_TAGS);
 			fs.write("file", new byte[tags.length*archive.getConfig().getPageSize()]);
@@ -1393,18 +1418,18 @@ public class PeerConnectionTest {
 			msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 			for(int i = 0; i < tags.length; i++) {
 				tags[i] = tree.getPageTag(i);
-				msg.receivedData((byte) 0, ByteBuffer.allocate(8).putLong(Util.shortTag(tags[i])).array());
+				msg.receivedData((byte) 0, ByteBuffer.allocate(8).putLong(tags[i].shortTag()).array());
 				if(i == tags.length/2) msg.receivedData((byte) 0, ByteBuffer.allocate(8).put(crypto.rng(8)).array());
 			}
 			
 			msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 			conn.handle(msg);
 			
-			for(byte[] tag : tags) {
+			for(StorageTag tag : tags) {
 				assertQueuedItemLike((_item) -> {
 					if(!(_item instanceof PageQueueItem)) return false;
 					PageQueueItem item = (PageQueueItem) _item;
-					return Arrays.equals(tag, item.tag);
+					return tag.equals(item.tag);
 				});
 			}
 		}
@@ -1461,10 +1486,10 @@ public class PeerConnectionTest {
 		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		StorageTag tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
 		fs.close();
 		
-		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
+		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(tag.path()));
 		int numChunks = (int) Math.ceil(((double) buf.limit())/PeerMessage.FILE_CHUNK_SIZE);
 		ChunkAccumulator accumulator = socket.swarm.accumulatorForTag(tag);
 		DummyPeerMessageIncoming msg;
@@ -1472,7 +1497,7 @@ public class PeerConnectionTest {
 		assertFalse(accumulator.finished);
 		
 		msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_SEND_PAGE);
-		msg.receivedData((byte) 0, tag);
+		msg.receivedData((byte) 0, tag.getTagBytes());
 		for(int i = 0; i < numChunks/2; i++) {
 			byte[] chunk = new byte[Math.min(buf.remaining(), PeerMessage.FILE_CHUNK_SIZE)];
 			buf.get(chunk);
@@ -1485,7 +1510,7 @@ public class PeerConnectionTest {
 		assertFalse(accumulator.finished);
 
 		msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_SEND_PAGE, 1);
-		msg.receivedData((byte) 0, tag);
+		msg.receivedData((byte) 0, tag.getTagBytes());
 		for(int i = numChunks/2; i < numChunks; i++) {
 			byte[] chunk = new byte[Math.min(buf.remaining(), PeerMessage.FILE_CHUNK_SIZE)];
 			buf.get(chunk);
@@ -1496,7 +1521,7 @@ public class PeerConnectionTest {
 		
 		conn.handle(msg);
 		assertTrue(accumulator.isFinished());
-		assertTrue(Arrays.equals(tag, swarm.announcedTag));
+		assertEquals(tag, swarm.announcedTag);
 	}
 	
 	@Test(expected=ProtocolViolationException.class)
@@ -1504,15 +1529,15 @@ public class PeerConnectionTest {
 		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		StorageTag tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
 		fs.close();
 		
-		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
+		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(tag.path()));
 		byte[] chunk = new byte[PeerMessage.MESSAGE_SIZE];
 		buf.get(chunk);
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_SEND_PAGE);
 		
-		msg.receivedData((byte) 0, tag);
+		msg.receivedData((byte) 0, tag.getTagBytes());
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(-1).array());
 		msg.receivedData(PeerMessage.FLAG_FINAL, chunk);
 		conn.handle(msg);
@@ -1523,16 +1548,16 @@ public class PeerConnectionTest {
 		blindSwarmCache();
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		StorageTag tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
 		fs.close();
 		
-		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
+		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(tag.path()));
 		int numChunks = (int) Math.ceil(((double) buf.limit())/PeerMessage.FILE_CHUNK_SIZE);
 		byte[] chunk = new byte[PeerMessage.MESSAGE_SIZE];
 		buf.get(chunk);
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_SEND_PAGE);
 		
-		msg.receivedData((byte) 0, tag);
+		msg.receivedData((byte) 0, tag.getTagBytes());
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(numChunks).array());
 		msg.receivedData(PeerMessage.FLAG_FINAL, chunk);
 		conn.handle(msg);
@@ -1542,21 +1567,21 @@ public class PeerConnectionTest {
 	public void testHandleSendPageCountersExistingPagesWithAnnounce() throws IOException, ProtocolViolationException {
 		ZKFS fs = archive.openBlank();
 		fs.write("file", new byte[archive.getConfig().getPageSize()]);
-		byte[] tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
+		StorageTag tag = new PageTree(fs.inodeForPath("file")).getPageTag(0);
 		fs.close();
 		
-		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(Page.pathForTag(tag)));
+		ByteBuffer buf = ByteBuffer.wrap(archive.getStorage().read(tag.path()));
 		byte[] chunk = new byte[PeerMessage.MESSAGE_SIZE];
 		buf.get(chunk);
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_SEND_PAGE);
 		
-		msg.receivedData((byte) 0, tag);
+		msg.receivedData((byte) 0, tag.getTagBytes());
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
 		msg.receivedData(PeerMessage.FLAG_FINAL, chunk);
 		conn.handle(msg);
 		
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TAGS);
-		assertReceivedPayload(ByteBuffer.allocate(8).putLong(Util.shortTag(tag)).array());
+		assertReceivedPayload(ByteBuffer.allocate(8).putLong(tag.shortTag()).array());
 		assertFinished();
 	}
 	
@@ -1676,16 +1701,19 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testWantsFileReturnsTrueIfRemotePeerHasNotAnnouncedTag() {
-		assertTrue(conn.wantsFile(crypto.rng(crypto.hashLength())));
+		byte[] storageTagBytes = crypto.hash(Util.serializeInt(1));
+		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+		assertTrue(conn.wantsFile(storageTag));
 	}
 	
 	@Test
 	public void testWantsFileReturnsFalseIfRemotePeerHasNotAnnouncedTag() throws ProtocolViolationException {
-		byte[] hash = crypto.rng(crypto.hashLength());
+		byte[] storageTagBytes = crypto.hash(Util.serializeInt(1));
+		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TAGS);
-		msg.receivedData(PeerMessage.FLAG_FINAL, hash); // extra bytes are harmless
+		msg.receivedData(PeerMessage.FLAG_FINAL, storageTagBytes); // extra bytes are harmless
 		conn.handle(msg);
-		assertFalse(conn.wantsFile(hash));
+		assertFalse(conn.wantsFile(storageTag));
 	}
 	
 	@Test
@@ -1804,11 +1832,12 @@ public class PeerConnectionTest {
 		while(pagesReceived < pagesExpected) {
 			byte[] pageData = new byte[pageSize];
 			DummyPeerMessageOutgoing out = socket.popMessage();
-			byte[] tag = new byte[crypto.hashLength()];
-			IOUtils.read(out.txPayload, tag);
+			byte[] tagBytes = new byte[crypto.hashLength()];
+			IOUtils.read(out.txPayload, tagBytes);
+			StorageTag tag = new StorageTag(crypto, tagBytes);
 			
-			assertFalse(pagesSeen.contains(Util.shortTag(tag)));
-			pagesSeen.add(Util.shortTag(tag));
+			assertFalse(pagesSeen.contains(tag.shortTag()));
+			pagesSeen.add(tag.shortTag());
 			
 			while(out.txPayload.available() >= 0) {
 				byte[] indexRaw = new byte[4];
@@ -1826,7 +1855,7 @@ public class PeerConnectionTest {
 				assertEquals(readLen, length);
 			}
 			
-			byte[] expectedPageData = archive.getStorage().read(Page.pathForTag(tag));
+			byte[] expectedPageData = archive.getStorage().read(tag.path());
 			assertTrue(Arrays.equals(expectedPageData, pageData));
 			pagesReceived++;
 		}
@@ -1874,7 +1903,7 @@ public class PeerConnectionTest {
 		
 		conn.setLocalPaused(false);
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_ANNOUNCE_TAGS);
-		msg.receivedData(PeerMessage.FLAG_FINAL, archive.getConfig().tag()); // extra tag bytes are harmless here
+		msg.receivedData(PeerMessage.FLAG_FINAL, archive.getConfig().tag().getTagBytes()); // extra tag bytes are harmless here
 		conn.handle(msg);
 		
 		msg = new DummyPeerMessageIncoming(PeerConnection.CMD_REQUEST_ALL);
@@ -1885,7 +1914,7 @@ public class PeerConnectionTest {
 			DummyPeerMessageOutgoing out = socket.popMessage();
 			byte[] tag = new byte[crypto.hashLength()];
 			IOUtils.read(out.txPayload, tag);
-			assertFalse(Arrays.equals(archive.getConfig().tag(), tag));
+			assertNotEquals(archive.getConfig().tag(), tag);
 			while(out.txPayload.available() >= 0) {
 				byte[] skipBuf = new byte[4 + PeerMessage.FILE_CHUNK_SIZE];
 				if(IOUtils.read(out.txPayload, skipBuf) == 0) {

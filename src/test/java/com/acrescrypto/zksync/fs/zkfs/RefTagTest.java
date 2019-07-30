@@ -34,7 +34,8 @@ public class RefTagTest {
 		master = ZKMaster.openBlankTestVolume();
 		archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
 		byte[] hash = crypto.hash("some data".getBytes());
-		tag = new RefTag(archive, hash, RefTag.REF_TYPE_2INDIRECT, Long.MAX_VALUE);
+		StorageTag storageTag = new StorageTag(crypto, hash);
+		tag = new RefTag(archive, storageTag, RefTag.REF_TYPE_2INDIRECT, Long.MAX_VALUE);
 	}
 	
 	@After
@@ -53,23 +54,12 @@ public class RefTagTest {
 	@Test
 	public void testConstructFromArchiveAndHash() throws IOException {
 		byte[] hash = crypto.hash("some data".getBytes());
-		RefTag newTag = new RefTag(archive, hash, RefTag.REF_TYPE_INDIRECT, 1234);
+		StorageTag storageTag = new StorageTag(crypto, hash);
+		RefTag newTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1234);
 		
-		assertArrayEquals(hash, newTag.getStorageTag());
+		assertEquals(storageTag, newTag.getStorageTag());
 		assertEquals(RefTag.REF_TYPE_INDIRECT, newTag.getRefType());
 		assertEquals(1234, newTag.getNumPages());
-		assertEquals(archive, newTag.getArchive());
-		assertEquals(archive.config, newTag.getConfig());
-	}
-	
-	@Test
-	public void testConstructFromConfigAndHash() throws IOException {
-		byte[] hash = crypto.hash("some data".getBytes());
-		RefTag newTag = new RefTag(archive.config, hash, RefTag.REF_TYPE_2INDIRECT, Long.MAX_VALUE);
-		
-		assertArrayEquals(hash, newTag.getStorageTag());
-		assertEquals(RefTag.REF_TYPE_2INDIRECT, newTag.getRefType());
-		assertEquals(Long.MAX_VALUE, newTag.getNumPages());
 		assertEquals(archive, newTag.getArchive());
 		assertEquals(archive.config, newTag.getConfig());
 	}
@@ -83,19 +73,11 @@ public class RefTagTest {
 	}
 	
 	@Test
-	public void testConstructBlankFromConfig() throws IOException {
-		RefTag tag = RefTag.blank(archive.config);
-		assertTrue(tag.isBlank());
-		assertEquals(archive, tag.getArchive());
-		assertEquals(archive.config, tag.getConfig());
-	}
-	
-	@Test
 	public void testSerialization() {
 		byte[] serialized = tag.serialize();
 		RefTag tag2 = new RefTag(archive, serialized);
 		
-		assertArrayEquals(tag.storageTag, tag2.storageTag);
+		assertEquals(tag.storageTag, tag2.storageTag);
 		assertEquals(tag.archiveType, tag2.archiveType);
 		assertEquals(tag.versionMajor, tag2.versionMajor);
 		assertEquals(tag.versionMinor, tag2.versionMinor);
@@ -119,7 +101,12 @@ public class RefTagTest {
 	
 	@Test
 	public void testEqualsRegistersDifferenceForHash() {
-		RefTag clone = new RefTag(tag.config, crypto.hash("other data".getBytes()), tag.getRefType(), tag.getNumPages());
+		byte[] hash = crypto.hash("other data".getBytes());
+		StorageTag otherStorageTag = new StorageTag(crypto, hash);
+		RefTag clone = new RefTag(tag.config,
+				otherStorageTag,
+				tag.getRefType(),
+				tag.getNumPages());
 		assertNotEquals(tag, clone);
 	}
 	
@@ -138,14 +125,17 @@ public class RefTagTest {
 	@Test
 	public void testCompareToReturnsNegativeIfLeftHasLowerTagThanRight() {
 		RefTag left = new RefTag(archive, tag.serialize());
+		byte[] rightBytes = new byte[crypto.hashLength()];
+		System.arraycopy(tag.getStorageTag().getTagBytes(), 0, rightBytes, 0, rightBytes.length);
 		
-		for(int i = 0; i < tag.storageTag.length; i++) {
-			if(tag.storageTag[i] == 0xff) continue;
-			tag.storageTag[i]++;
+		for(int i = 0; i < rightBytes.length; i++) {
+			if(rightBytes[i] == 0xff) continue;
+			rightBytes[i]++;
 			break;
 		}
 		
-		RefTag right = new RefTag(archive, tag.serialize());
+		StorageTag rightStorageTag = new StorageTag(crypto, rightBytes);
+		RefTag right = new RefTag(archive, rightStorageTag, tag.getRefType(), tag.getNumPages());
 		assertTrue(left.compareTo(right) < 0);
 	}
 	
@@ -160,14 +150,17 @@ public class RefTagTest {
 	@Test
 	public void testCompareToReturnsPositiveIfRightHasLowerTagThanLeft() {
 		RefTag right = new RefTag(archive, tag.serialize());
+		byte[] leftBytes = new byte[crypto.hashLength()];
+		System.arraycopy(tag.getStorageTag().getTagBytes(), 0, leftBytes, 0, leftBytes.length);
 		
-		for(int i = 0; i < tag.storageTag.length; i++) {
-			if(tag.storageTag[i] == 0xff) continue;
-			tag.storageTag[i]++;
+		for(int i = 0; i < leftBytes.length; i++) {
+			if(leftBytes[i] == 0xff) continue;
+			leftBytes[i]++;
 			break;
 		}
 		
-		RefTag left = new RefTag(archive, tag.serialize());
+		StorageTag leftStorageTag = new StorageTag(crypto, leftBytes);
+		RefTag left = new RefTag(archive, leftStorageTag, tag.getRefType(), tag.getNumPages());
 		assertTrue(left.compareTo(right) > 0);
 	}
 }

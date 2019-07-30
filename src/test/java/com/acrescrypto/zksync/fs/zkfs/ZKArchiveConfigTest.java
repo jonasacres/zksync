@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -35,6 +36,16 @@ public class ZKArchiveConfigTest {
 	static ArchiveAccessor accessor, seedAccessor;
 	static Key key, storedPassphraseRoot, storedSeedRoot, storedLocalRoot;
 	ZKArchiveConfig config, seedConfig;
+	
+	class TestPageInfo {
+		StorageTag storageTag;
+		byte[] data;
+		
+		public TestPageInfo(StorageTag storageTag, byte[] data) {
+			this.storageTag = storageTag;
+			this.data = data;
+		}
+	}
 	
 	public void assertReadable(ZKArchiveConfig config) throws IOException {
 		ZKArchiveConfig clone = ZKArchiveConfig.openExisting(accessor, config.getArchiveId());
@@ -71,16 +82,15 @@ public class ZKArchiveConfigTest {
 		}
 	}
 	
-	public byte[][] makeValidPageInfo() throws IOException {
-		byte[][] info = new byte[2][];
+	public TestPageInfo makeValidPageInfo() throws IOException {
 		try(ZKFS fs = config.archive.openBlank()) {
 			fs.write("foo", new byte[config.pageSize]);
 			fs.commit();
 			
 			PageTree tree = new PageTree(fs.inodeForPath("foo"));
-			info[0] = tree.getPageTag(0);
-			info[1] = fs.archive.storage.read(Page.pathForTag(info[0]));
-			return info;
+			StorageTag tag = tree.getPageTag(0);
+			byte[] data = fs.archive.storage.read(tag.path());
+			return new TestPageInfo(tag, data);
 		}
 	}
 	
@@ -138,7 +148,7 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testVerifyReturnsFalseIfSignatureTampered() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		byte[] configData = config.storage.read(config.tag().path());
 		int offset = configData.length-1;
 		configData[offset] ^= 0x01;
 		assertFalse(config.verify(configData));
@@ -147,17 +157,17 @@ public class ZKArchiveConfigTest {
 	// TODO verification tests
 	@Test
 	public void testVerifyReturnsFalseIfDataTampered() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		byte[] configData = config.storage.read(config.tag().path());
 		configData[0] ^= 0x01;
 		assertFalse(config.verify(configData));
 	}
 	
 	@Test
 	public void testReadThrowsExceptionIfTampered() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		byte[] configData = config.storage.read(config.tag().path());
 		for(int i = 0; i < configData.length; i += configData.length/512) {
 			configData[i] ^= 0x01;
-			config.storage.write(Page.pathForTag(config.tag()), configData);
+			config.storage.write(config.tag().path(), configData);
 			assertUnreadable(config);
 			configData[i] ^= 0x01;
 		}
@@ -372,39 +382,42 @@ public class ZKArchiveConfigTest {
 
 	@Test
 	public void testValidatePageReturnsTrueOnValidPages() throws IOException {
-		byte[][] info = makeValidPageInfo();
-		assertTrue(config.validatePage(info[0], info[1]));
-		assertTrue(seedConfig.validatePage(info[0], info[1]));
+		TestPageInfo info = makeValidPageInfo();
+		assertTrue(config.validatePage(info.storageTag, info.data));
+		assertTrue(seedConfig.validatePage(info.storageTag, info.data));
 	}
 	
 	@Test
 	public void testValidatePageReturnsFalseForTamperedConfigPage() throws IOException {
-		byte[] serialized = config.storage.read(Page.pathForTag(config.tag()));
+		byte[] serialized = config.storage.read(config.tag().path());
 		serialized[19] ^= 0x04;
 		assertFalse(config.validatePage(config.tag(), serialized));
 	}
 	
 	@Test
 	public void testValidatePageReturnsFalseOnTamperedPages() throws IOException {
-		byte[][] info = makeValidPageInfo();
-		info[1][2] ^= 0x40;
-		assertFalse(config.validatePage(info[0], info[1]));
-		assertFalse(seedConfig.validatePage(info[0], info[1]));
+		TestPageInfo info = makeValidPageInfo();
+		info.data[2] ^= 0x40;
+		assertFalse(config.validatePage(info.storageTag, info.data));
+		assertFalse(seedConfig.validatePage(info.storageTag, info.data));
 	}
 	
 	@Test
 	public void testValidatePageReturnsFalseOnTamperedTags() throws IOException {
-		byte[][] info = makeValidPageInfo();
-		info[0][1] ^= 0x08;
-		assertFalse(config.validatePage(info[0], info[1]));
-		assertFalse(seedConfig.validatePage(info[0], info[1]));
+		TestPageInfo info = makeValidPageInfo();
+		byte[] tamperedTag = info.storageTag.getTagBytes().clone();
+		tamperedTag[2] ^= 0x08;
+		info.storageTag = new StorageTag(config.getCrypto(), tamperedTag);
+		assertFalse(config.validatePage(info.storageTag, info.data));
+		assertFalse(seedConfig.validatePage(info.storageTag, info.data));
 	}
 	
 	@Test
 	public void testValidatePageReturnsFalseOnForgedTag() throws IOException {
 		Key authKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-page-auth-key");
 		byte[] fakePage = new byte[config.pageSize];
-		byte[] tag = authKey.authenticate(fakePage);
+		byte[] tagBytes = authKey.authenticate(fakePage);
+		StorageTag tag = new StorageTag(config.getCrypto(), tagBytes);
 		assertFalse(config.validatePage(tag, fakePage));
 		assertFalse(seedConfig.validatePage(tag, fakePage));
 	}
@@ -414,7 +427,8 @@ public class ZKArchiveConfigTest {
 		ByteBuffer fakePage = ByteBuffer.allocate(PAGE_SIZE+master.crypto.asymSignatureSize());
 		fakePage.position(fakePage.capacity()-master.crypto.asymSignatureSize());
 		fakePage.put(config.privKey.sign(fakePage.array(), 0, fakePage.position()));
-		byte[] tag = new byte[master.crypto.hashLength()];
+		byte[] tagBytes = new byte[master.crypto.hashLength()];
+		StorageTag tag = new StorageTag(config.getCrypto(), tagBytes);
 		assertFalse(config.validatePage(tag, fakePage.array()));
 		assertFalse(seedConfig.validatePage(tag, fakePage.array()));
 	}
@@ -425,20 +439,21 @@ public class ZKArchiveConfigTest {
 		ByteBuffer fakePage = ByteBuffer.allocate(PAGE_SIZE+master.crypto.asymSignatureSize());
 		fakePage.position(fakePage.capacity()-master.crypto.asymSignatureSize());
 		fakePage.put(config.privKey.sign(fakePage.array(), 0, fakePage.position()));
-		byte[] tag = authKey.authenticate(fakePage.array());
+		byte[] tagBytes = authKey.authenticate(fakePage.array());
+		StorageTag tag = new StorageTag(config.getCrypto(), tagBytes);
 		assertTrue(config.validatePage(tag, fakePage.array()));
 		assertTrue(seedConfig.validatePage(tag, fakePage.array()));
 	}
 	
 	@Test
 	public void testValidatePageReturnsTrueForValidConfigFile() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		byte[] configData = config.storage.read(config.tag().path());
 		assertTrue(config.validatePage(config.tag(), configData));
 	}
 	
 	@Test
 	public void testValidatePageReturnsFalseForTamperedConfigFile() throws IOException {
-		byte[] configData = config.storage.read(Page.pathForTag(config.tag()));
+		byte[] configData = config.storage.read(config.tag().path());
 		configData[1209] ^= 0x40;
 		assertFalse(config.validatePage(config.tag(), configData));
 	}
@@ -447,14 +462,14 @@ public class ZKArchiveConfigTest {
 	public void testSerializedPageMatchesExpectedLength() throws IOException {
 		config.write();
 		long expectedSize = config.getSerializedPageSize();
-		long actualSize = config.getCacheStorage().stat(Page.pathForTag(config.tag())).getSize();
+		long actualSize = config.getCacheStorage().stat(config.tag().path()).getSize();
 		assertEquals(expectedSize, actualSize);
 	}
 	
 	@Test
 	public void testArchivesHaveUniqueConfigFilePathTags() throws IOException {
 		ZKArchiveConfig config2 = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE);
-		assertFalse(Arrays.equals(config.tag(), config2.tag()));
+		assertNotEquals(config.tag(), config2.tag());
 		config2.close();
 	}
 	

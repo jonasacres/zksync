@@ -22,9 +22,9 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
-import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
@@ -182,8 +182,10 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testAddPageTagBytes() {
-		byte[] pageTag = crypto.rng(crypto.hashLength());
-		long shortTag = Util.shortTag(pageTag);
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag pageTag = new StorageTag(archive.getCrypto(), tagBytes);
+		long shortTag = pageTag.shortTag();
+		
 		assertFalse(pool.hasPageTag(19, shortTag));
 		pool.addPageTag(19, pageTag);
 		assertTrue(pool.hasPageTag(19, shortTag));
@@ -193,8 +195,10 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testAddPageTagBytesAllowsReprioritization() {
-		byte[] pageTag = crypto.rng(crypto.hashLength());
-		long shortTag = Util.shortTag(pageTag);
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag pageTag = new StorageTag(archive.getCrypto(), tagBytes);
+		long shortTag = pageTag.shortTag();
+
 		pool.addPageTag(19, pageTag);
 		pool.addPageTag(18, pageTag);
 		assertTrue(pool.hasPageTag(18, shortTag));
@@ -204,8 +208,10 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testCancelPageTagBytes() {
-		byte[] pageTag = crypto.rng(crypto.hashLength());
-		long shortTag = Util.shortTag(pageTag);
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag pageTag = new StorageTag(archive.getCrypto(), tagBytes);
+		long shortTag = pageTag.shortTag();
+		
 		pool.addPageTag(19, pageTag);
 		defaultConn.requestedPageTags.clear();
 		pool.cancelPageTag(pageTag);
@@ -217,14 +223,18 @@ public class RequestPoolTest {
 	
 	@Test
 	public void testPriorityForPageTagBytesReturnsAppropriatePriority() {
-		byte[] pageTag = crypto.rng(crypto.hashLength());
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag pageTag = new StorageTag(archive.getCrypto(), tagBytes);
+		
 		pool.addPageTag(12, pageTag);
 		assertEquals(12, pool.priorityForPageTag(pageTag));
 	}
 	
 	@Test
 	public void testPriorityForPageTagBytesReturnsCancelPriorityIfNoSuchRequest() {
-		assertEquals(PageQueue.CANCEL_PRIORITY, pool.priorityForPageTag(crypto.rng(crypto.hashLength())));
+		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
+		StorageTag pageTag = new StorageTag(archive.getCrypto(), tagBytes);
+		assertEquals(PageQueue.CANCEL_PRIORITY, pool.priorityForPageTag(pageTag));
 	}
 	
 	@Test
@@ -502,8 +512,9 @@ public class RequestPoolTest {
 		ByteBuffer fullTag = ByteBuffer.allocate(crypto.hashLength());
 		fullTag.putLong(tags.get(3));
 		fullTag.put(crypto.rng(fullTag.remaining()));
+		StorageTag storageTag = new StorageTag(crypto, fullTag.array());
 		
-		archive.getStorage().write(Page.pathForTag(fullTag.array()), new byte[0]);
+		archive.getStorage().write(storageTag.path(), new byte[0]);
 		pool.prune();
 		for(int i = 0; i < tags.size(); i++) {
 			assertEquals(i != 3, pool.hasPageTag(i, tags.get(i)));

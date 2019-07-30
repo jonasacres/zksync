@@ -22,7 +22,6 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.fs.Stat;
-import com.acrescrypto.zksync.fs.zkfs.Page;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.StoredAccess;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
@@ -81,7 +80,7 @@ public class ArchiveFsResourceTest {
 		fs.write("missing", new byte[archive.getConfig().getPageSize()]);
 		fs.commit();
 		PageTree tree = new PageTree(fs.inodeForPath("missing"));
-		fs.getArchive().getConfig().getCacheStorage().unlink(Page.pathForTag(tree.getRefTag().getStorageTag()));
+		fs.getArchive().getConfig().getCacheStorage().unlink(tree.getRefTag().getStorageTag().path());
 		return tree.getInodeId();
 	}
 
@@ -93,7 +92,7 @@ public class ArchiveFsResourceTest {
 
 		fs.commit();
 		PageTree tree = new PageTree(fs.inodeForPath("missing"));
-		fs.getArchive().getConfig().getCacheStorage().unlink(Page.pathForTag(tree.getRefTag().getStorageTag()));
+		fs.getArchive().getConfig().getCacheStorage().unlink(tree.getRefTag().getStorageTag().path());
 		fs.uncache("/missing");
 		return tree.getInodeId();
 	}
