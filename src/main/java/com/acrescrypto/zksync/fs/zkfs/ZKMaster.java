@@ -429,6 +429,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 		globalConfig.setDefault("fs.default.groupname", "root");
 		globalConfig.setDefault("fs.default.gid", 0);
 		globalConfig.setDefault("fs.default.directoryMode", 0755);
+		globalConfig.setDefault("fs.settings.maxOpenBlocks", 4);
 		
 		globalConfig.setDefault("fs.settings.pageReadyMaxRetries", 50);
 		globalConfig.setDefault("fs.settings.pageReadyRetryDelayMs", 10);

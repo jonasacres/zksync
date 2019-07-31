@@ -8,7 +8,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
-import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
@@ -140,52 +139,6 @@ public class Page {
 	/** number of bytes between current read/write pointer offset and end of page contents */
 	public int remaining() {
 		return size - contents.position();
-	}
-	
-	/** key used for encrypting page contents */
-	protected Key textKey() {
-		// this is designed to intentionally prevent data deduplication
-		// rationale: deduplication creates a chosen plaintext attack revealing whether data was previously stored
-		// attacker must have access to archive size and ability to get keyholder to inject arbitrary data
-		// e.g. victim backs up home directory with zksync automatically, including e-mail folder
-		//   attacker can view encrypted backups, and also knows victim's e-mail address
-		//   attacker believes victim may be participant of intercepted plan described in PlanToKillTheEvilKing.pdf
-		//   attacker notes archive size = X
-		//   attacker e-mails PlanToKillTheEvilKing.pdf to victim
-		//   victim receives PlanToKillTheEvilKing.pdf e-mail, stored on hard disk, added to zksync without any operator input
-		//   attacker notes archive size did not increase by size of PlanToKillTheEvilKing.pdf
-		//   victim does not pass go, does not collect $200
-		
-		// without further ado, let's go about the nasty business of killing the feature other content-addressable
-		// encrypted file storage systems like to brag about.
-		byte[] archiveId = file.getFS().getArchive().getConfig().getArchiveId();
-		ByteBuffer buf = ByteBuffer.allocate(8 + 4 + archiveId.length);
-		buf.putLong(file.getInode().getIdentity()); // no dedupe between files (do not use inode id, breaks diff merges)
-		buf.putInt(pageNum); // no dedupe within file
-		buf.put(file.getFS().getArchive().getConfig().getArchiveId());
-		
-		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
-				"easysafe-page-text-key",
-				buf.array());
-	}
-	
-	/** used with text key to encrypt page contents */
-	protected Key saltKey() {
-		byte[] archiveId = file.getFS().getArchive().getConfig().getArchiveId();
-		ByteBuffer buf = ByteBuffer.allocate(8 + 4 + archiveId.length);
-		buf.putLong(file.getInode().getIdentity()); // no dedupe between files (do not use inode id, breaks diff merges)
-		buf.putInt(pageNum); // no dedupe within file
-		buf.put(file.getFS().getArchive().getConfig().getArchiveId());
-		
-		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
-				"easysafe-page-salt-key",
-				buf.array());
-	}
-	
-	/** key used to produce page tag (provides authentication of page contents) */
-	protected Key authKey() {
-		return file.zkfs.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
-				"easysafe-page-auth-key");
 	}
 	
 	/** load page contents from underlying storage */

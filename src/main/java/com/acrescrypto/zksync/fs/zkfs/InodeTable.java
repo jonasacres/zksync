@@ -53,6 +53,8 @@ public class InodeTable extends ZKFile {
 	/** Map of inode IDs that we will force to have a specific changedFrom field in a diff merge */
 	protected ConcurrentHashMap<Long,ChangedFromOverrideReference> changedFromOverrides = new ConcurrentHashMap<>();
 	
+	protected BlockManager blockManager;
+	
 	/** serialized size of an inode for a given archive, in bytes */
 	public static int inodeSize(ZKArchive archive) {
 		return Stat.STAT_SIZE
@@ -87,6 +89,9 @@ public class InodeTable extends ZKFile {
 			this.path = INODE_TABLE_PATH;
 			this.mode = O_RDWR;
 			this.allocatedInodeIds = new LinkedList<>();
+			this.blockManager = new BlockManager(
+					zkfs.getArchive(),
+					zkfs.getArchive().getMaster().getGlobalConfig().getInt("fs.settings.maxOpenBlocks"));
 			int cacheSize = fs.getArchive().getMaster().getGlobalConfig().getInt("fs.settings.inodeTablePageCacheSize");
 			this.inodesByPage = new HashCache<Long,Inode[]>(cacheSize, (Long pageNum) -> {
 				logger.trace("ZKFS {} {}: Caching inode table page {}",
@@ -102,6 +107,25 @@ public class InodeTable extends ZKFile {
 				
 				commitInodePage(pageNum, inodes);
 			});
+			
+			tokens.add(fs.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.maxOpenBlocks").asInt((max)->{
+				int oldValue = blockManager.getMaxOpenBlocks();
+				try {
+					logger.trace("ZKFS {} {}: Setting maxOpenBlocks={}, was {}",
+							Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
+							Util.formatRevisionTag(fs.baseRevision),
+							max,
+							oldValue);
+					blockManager.setMaxOpenBlocks(max);
+				} catch (IOException exc) {
+					logger.error("ZKFS {} {}: Caught exception setting maxOpenBlocks={}, was {}",
+							Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
+							Util.formatRevisionTag(fs.baseRevision),
+							max,
+							oldValue,
+							exc);
+				}
+			}));
 			
 			tokens.add(fs.getArchive().getMaster().getGlobalConfig().subscribe("fs.settings.inodeTablePageCacheSize").asInt((s)->{
 				try {
@@ -189,6 +213,8 @@ public class InodeTable extends ZKFile {
 		freelist.commit();
 		ArrayList<RevisionTag> parents = makeParentList(additionalParents);
 		updateRevisionInfo(parents);
+		
+		blockManager.writeAll();
 		
 		if(timestamp >= 0) {
 			Inode[] fixedTimestampInodes = new Inode[] {
@@ -956,5 +982,9 @@ public class InodeTable extends ZKFile {
 		
 		long prevInodeId = allocatedInRevision(inodeId) ? -1 : inodeId;
 		return new ChangedFromOverrideReference(prevInodeId, zkfs.baseRevision);
+	}
+	
+	public BlockManager getBlockManager() {
+		return blockManager;
 	}
 }
