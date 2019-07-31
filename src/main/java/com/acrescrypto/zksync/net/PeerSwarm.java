@@ -402,7 +402,7 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void waitForPage(int priority, StorageTag tag) {
+	public void waitForPage(int priority, StorageTag tag) throws IOException {
 		try {
 			waitForPage(priority, tag, -1);
 		} catch(SwarmTimeoutException exc) {
@@ -411,8 +411,8 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void waitForPage(int priority, StorageTag tag, long timeoutMs) throws SwarmTimeoutException {
-		long shortTag = tag.shortTag();
+	public void waitForPage(int priority, StorageTag tag, long timeoutMs) throws IOException {
+		long shortTag = tag.shortTagPreserialized();
 		long deadline;
 		if(timeoutMs >= 0) {
 			deadline = System.currentTimeMillis() + timeoutMs;
@@ -456,7 +456,7 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	protected boolean waitingForPage(StorageTag tag) {
+	protected boolean waitingForPage(StorageTag tag) throws IOException {
 		if(tag.equals(config.tag())) {
 			return !config.getCacheStorage().exists(tag.path());
 		} else {
@@ -482,7 +482,7 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 
 	protected synchronized void receivedPage(StorageTag tag) {
-		long shortTag = tag.shortTag();
+		long shortTag = tag.shortTagPreserialized();
 		activeFiles.remove(shortTag);
 		
 		if(config.getArchive() != null) {
@@ -506,7 +506,7 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public void announceTag(StorageTag tag) {
-		long shortTag = tag.shortTag();
+		long shortTag = tag.shortTagPreserialized();
 		for(PeerConnection connection : getConnections()) {
 			connection.announceTag(shortTag);
 		}
@@ -523,12 +523,12 @@ public class PeerSwarm implements BlacklistCallback {
 	}
 	
 	public void requestTag(int priority, StorageTag pageTag) {
-		requestTag(priority, pageTag.shortTag());
+		requestTag(priority, pageTag.shortTagPreserialized());
 	}
 	
 	public void cancelTag(StorageTag pageTag) {
 		// TODO API: (test) cover cancelTag bytes
-		cancelTag(pageTag.shortTag());
+		cancelTag(pageTag.shortTagPreserialized());
 	}
 	
 	public int priorityForTag(StorageTag pageTag) {

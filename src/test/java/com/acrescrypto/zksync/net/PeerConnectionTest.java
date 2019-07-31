@@ -383,7 +383,7 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testAnnounceTagDoesNotAddToQueueIfEverythingNotRequested() {
+	public void testAnnounceTagDoesNotAddToQueueIfEverythingNotRequested() throws IOException {
 		MutableBoolean passed = new MutableBoolean();
 		
 		conn.setLocalPaused(true);

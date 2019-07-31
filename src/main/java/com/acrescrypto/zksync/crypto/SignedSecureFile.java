@@ -144,7 +144,7 @@ public class SignedSecureFile {
 		}
 	}
 	
-	protected String path() {
+	protected String path() throws IOException {
 		return tag.path();
 	}
 	

@@ -258,6 +258,7 @@ public class ZKFS extends FS {
 	protected void finalizeCommit(Collection<RevisionTag> parents) throws IOException {
 		long parentHash = makeParentHash(parents);
 		long height = 1 + baseRevision.getHeight();
+		inodeTable.inode.getRefTag().getStorageTag().getTagBytes(); // force finalization
 		baseRevision = new RevisionTag(inodeTable.inode.getRefTag(), parentHash, height);
 		dirty = false;
 		

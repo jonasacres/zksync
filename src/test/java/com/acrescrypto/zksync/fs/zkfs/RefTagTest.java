@@ -73,7 +73,7 @@ public class RefTagTest {
 	}
 	
 	@Test
-	public void testSerialization() {
+	public void testSerialization() throws IOException {
 		byte[] serialized = tag.serialize();
 		RefTag tag2 = new RefTag(archive, serialized);
 		
@@ -88,7 +88,7 @@ public class RefTagTest {
 	}
 	
 	@Test
-	public void testEqualsMatchesForIdenticalTags() {
+	public void testEqualsMatchesForIdenticalTags() throws IOException {
 		RefTag clone = new RefTag(tag.config, tag.serialize());
 		assertEquals(tag, clone);
 	}
@@ -123,7 +123,7 @@ public class RefTagTest {
 	}
 	
 	@Test
-	public void testCompareToReturnsNegativeIfLeftHasLowerTagThanRight() {
+	public void testCompareToReturnsNegativeIfLeftHasLowerTagThanRight() throws IOException {
 		RefTag left = new RefTag(archive, tag.serialize());
 		byte[] rightBytes = new byte[crypto.hashLength()];
 		System.arraycopy(tag.getStorageTag().getTagBytes(), 0, rightBytes, 0, rightBytes.length);
@@ -140,7 +140,7 @@ public class RefTagTest {
 	}
 	
 	@Test
-	public void testCompareToReturnsZeroIfLeftEqualsRight() {
+	public void testCompareToReturnsZeroIfLeftEqualsRight() throws IOException {
 		RefTag left = new RefTag(archive, tag.serialize());
 		RefTag right = new RefTag(archive, tag.serialize());
 		assertTrue(left.compareTo(right) == 0);
@@ -148,7 +148,7 @@ public class RefTagTest {
 
 	
 	@Test
-	public void testCompareToReturnsPositiveIfRightHasLowerTagThanLeft() {
+	public void testCompareToReturnsPositiveIfRightHasLowerTagThanLeft() throws IOException {
 		RefTag right = new RefTag(archive, tag.serialize());
 		byte[] leftBytes = new byte[crypto.hashLength()];
 		System.arraycopy(tag.getStorageTag().getTagBytes(), 0, leftBytes, 0, leftBytes.length);

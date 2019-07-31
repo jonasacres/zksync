@@ -13,7 +13,7 @@ import com.acrescrypto.zksync.utility.Util;
 public class RefTag implements Comparable<RefTag> {
 	protected ZKArchiveConfig config;
 	protected RevisionInfo info;
-	protected byte[] refTagBytes;
+	private byte[] refTagBytes;
 	protected StorageTag storageTag;
 	protected byte archiveType, versionMajor, versionMinor;
 	protected int refType;	
@@ -61,17 +61,28 @@ public class RefTag implements Comparable<RefTag> {
 		this.storageTag = storageTag;
 		this.refType = refType;
 		this.numPages = numPages;
-		this.refTagBytes = serialize();
 	}
 	
 	public RefTag(ZKArchiveConfig config, byte[] tag) {
-		if(tag == null) tag = blank(config.getArchive()).getBytes();
+		if(tag == null) {
+			try {
+				tag = blank(config.getArchive()).getBytes();
+			} catch(IOException exc) {
+				// shouldn't be possible since we don't have to write a block
+				exc.printStackTrace();
+				throw new RuntimeException(exc);
+			}
+		}
 		
 		this.config = config;
 		deserialize(tag);
 	}
 
-	public byte[] getBytes() {
+	public byte[] getBytes() throws IOException {
+		if(refTagBytes == null) {
+			refTagBytes = serialize(); 
+		}
+		
 		return refTagBytes;
 	}
 	
@@ -90,11 +101,12 @@ public class RefTag implements Comparable<RefTag> {
 	public boolean isBlank() {
 		if(numPages != 0) return false;
 		if(refType != RefTag.REF_TYPE_IMMEDIATE) return false;
-		if(storageTag.getTagBytes().length > 0) return false;
+		if(!storageTag.isFinalized()) return false;
+		if(storageTag.getTagBytesPreserialized().length > 0) return false;
 		return true;
 	}
 	
-	protected byte[] serialize() {
+	protected byte[] serialize() throws IOException {
 		ByteBuffer buf = ByteBuffer.allocate(config.refTagSize());
 		buf.put(storageTag.getPaddedTagBytes());
 		buf.put(archiveType);
@@ -128,17 +140,51 @@ public class RefTag implements Comparable<RefTag> {
 		}
 	}
 	
-	public int hashCode() {
-		return ByteBuffer.wrap(refTagBytes).getInt();
-	}
-	
 	public boolean equals(Object other) {
 		if(other == null || !other.getClass().equals(this.getClass())) return false;
-		return Arrays.equals(((RefTag) other).refTagBytes, this.refTagBytes);
+		RefTag o = (RefTag) other;
+		
+		if(refType != o.refType) return false;
+		if(numPages != o.numPages) return false;
+		if(versionMajor != o.versionMajor) return false;
+		if(versionMinor != o.versionMinor) return false;
+		if(archiveType != o.archiveType) return false;
+		
+		if(storageTag.isFinalized() != o.storageTag.isFinalized()) return false;
+		if(!storageTag.isFinalized()) {
+			return storageTag.equals(o.storageTag);
+		}
+
+		try {
+			return Arrays.equals(this.getBytes(), o.getBytes());
+		} catch(IOException exc) {
+			// shouldn't be possible since we checked that we finalized first
+			exc.printStackTrace();
+			throw new RuntimeException(exc);
+		}
 	}
 	
 	public int compareTo(RefTag other) {
-		return Util.compareArrays(refTagBytes, other.refTagBytes);
+		if(storageTag.isFinalized() != other.storageTag.isFinalized()) {
+			if(storageTag.isFinalized()) {
+				// those with finalized tag bytes sort before those with pending tags
+				return -1;
+			}
+			
+			return 1;
+		}
+		
+		if(storageTag.isFinalized()) {
+			try {
+				return Util.compareArrays(getBytes(), other.getBytes());
+			} catch (IOException exc) {
+				// we checked finalized so this shouldn't be possible
+				exc.printStackTrace();
+				throw new RuntimeException(exc);
+			}
+		}
+		
+		return storageTag.compareTo(other.storageTag);
 	}
 	
 	public ZKArchiveConfig getConfig() {
@@ -151,5 +197,24 @@ public class RefTag implements Comparable<RefTag> {
 	
 	public String toString() {
 		return Util.formatRefTag(this);
+	}
+	
+	@Override
+	public int hashCode() {
+		if(refTagBytes == null) {
+			if(storageTag.isFinalized()) {
+				try {
+					getBytes(); // force serialization
+				} catch(IOException exc) {
+					// since storageTag has bytes, this should not be a possibility
+					exc.printStackTrace();
+					throw new RuntimeException(exc);
+				}
+			} else {
+				return storageTag.hashCode();
+			}
+		}
+		
+		return ByteBuffer.wrap(refTagBytes).getInt();
 	}
 }

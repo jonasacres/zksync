@@ -140,8 +140,9 @@ public class Inode implements Comparable<Inode> {
 		this.identity = identity;
 	}
 	
-	/** serialize to plaintext byte array */
-	public byte[] serialize() {
+	/** serialize to plaintext byte array 
+	 * @throws IOException */
+	public byte[] serialize() throws IOException {
 		// force revtag serialization if needed
 		if(changedFrom.getBytes() == null) changedFrom.serialize();
 		
@@ -207,7 +208,7 @@ public class Inode implements Comparable<Inode> {
 	
 	/** hash code based on content reftag */
 	public int hashCode() {
-		return ByteBuffer.wrap(refTag.getBytes()).getInt();
+		return refTag.hashCode();
 	}
 	
 	/**
@@ -232,7 +233,15 @@ public class Inode implements Comparable<Inode> {
 	
 	/** printable string summary for debug */
 	public String toString() {
-		return String.format("%d (%08x) - %d %d bytes, %d %d %s", stat.getInodeId(), hashCode(), nlink, stat.getSize(), stat.getMtime(), stat.getAtime(), Util.bytesToHex(refTag.refTagBytes, 4));
+		return String.format("%d (%08x) - %d %d bytes, %d %d %s",
+				stat.getInodeId(),
+				hashCode(),
+				nlink,
+				stat.getSize(),
+				stat.getMtime(),
+				stat.getAtime(),
+				refTag
+		);
 	}
 
 	@Override
@@ -245,7 +254,13 @@ public class Inode implements Comparable<Inode> {
 		int c;
 		if(modifiedTime != o.modifiedTime) return modifiedTime < o.modifiedTime ? -1 : 1;
 		if((c = Arrays.compareUnsigned(changedFrom.getBytes(), o.changedFrom.getBytes())) != 0) return c;
-		return Arrays.compareUnsigned(serialize(), o.serialize());
+		if(identity != o.identity) Long.compareUnsigned(identity, o.identity);
+		if(refTag != o.refTag) return refTag.compareTo(o.refTag);
+		if(!stat.equals(o.stat)) return Arrays.compareUnsigned(stat.serialize(), o.stat.serialize());
+		if(nlink != o.nlink) return Integer.compare(nlink, o.nlink);
+		if(flags != o.flags) return Byte.compare(flags, o.flags);
+		if(previousInodeId != o.previousInodeId) return Long.compare(previousInodeId, o.previousInodeId);
+		return 0;
 	}
 	
 	/** is this inode in a deleted state? true <=> nlink == 0 and FLAG_RETAIN not set */
@@ -280,7 +295,18 @@ public class Inode implements Comparable<Inode> {
 	
 	/** deep copy of this inode with new fs field */
 	public Inode clone(ZKFS fs) {
-		return new Inode(fs, serialize());
+		Inode newInode = new Inode(fs);
+		newInode.setStat(stat.clone());
+		newInode.setNlink(nlink);
+		newInode.setFlags(flags);
+		newInode.setModifiedTime(modifiedTime);
+		newInode.setIdentity(identity);
+		newInode.setRefTag(refTag);
+		newInode.setChangedFrom(changedFrom);
+		newInode.setPreviousInodeId(previousInodeId);
+		newInode.setDirty(dirty);
+		
+		return newInode;
 	}
 	
 	public String dump() {

@@ -3,9 +3,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.SignedSecureFile;
-
 public class PageTreeChunk {
 	protected PageTree tree;
 	StorageTag chunkTag;
@@ -33,11 +30,7 @@ public class PageTreeChunk {
 	public void setTag(long offset, StorageTag tag) {
 		if(tag.equals(tags[(int) offset])) return;
 		
-		loadTag(offset, tag);
-		if(tag.isStored()) {
-			tree.archive.addPageTag(tag);
-		}
-		
+		loadTag(offset, tag);		
 		markDirty();
 	}
 	
@@ -76,9 +69,14 @@ public class PageTreeChunk {
 	
 	protected void write() throws IOException {
 		byte[] serialized = serialize();
-		chunkTag = SignedSecureFile
-				  .withParams(tree.archive.storage, textKey(), saltKey(), authKey(), tree.archive.config.privKey)
-				  .write(serialized, tree.archive.config.pageSize);
+		Block block = new Block(tree.getArchive());
+		block.addData(tree.inodeIdentity,
+				index,
+				Block.INDEX_TYPE_CHUNK,
+				serialized,
+				0,
+				serialized.length);
+		chunkTag = block.storageTag;
 		
 		if(index != 0) {
 			PageTreeChunk parent = parent();
@@ -93,15 +91,18 @@ public class PageTreeChunk {
 	}
 	
 	protected void read(boolean verify) throws IOException {
-		tree.getArchive().getConfig().waitForPageReady(chunkTag,
-				tree.getReadTimeoutMs());
-		byte[] serialized = SignedSecureFile
-				  .withTag(chunkTag, tree.archive.storage, textKey(), saltKey(), authKey(), tree.archive.config.pubKey)
-				  .read(verify);
+		if(chunkTag.isFinalized()) {
+			// no need to wait for tags if they are not finalized, since non-final tags are cached in memory
+			tree.getArchive().getConfig().waitForPageReady(chunkTag,
+					tree.getReadTimeoutMs());
+		}
+		byte[] serialized = chunkTag
+			.loadBlock(tree.archive, verify)
+			.readData(tree.inodeIdentity, index, Block.INDEX_TYPE_CHUNK);
 		deserialize(ByteBuffer.wrap(serialized));
 	}
 	
-	protected byte[] serialize() {
+	protected byte[] serialize() throws IOException {
 		ByteBuffer buf = ByteBuffer.allocate(tree.tagsPerChunk() * tree.archive.crypto.hashLength());
 		for(StorageTag tag : tags) {
 			buf.put(tag.getTagBytes());
@@ -120,35 +121,6 @@ public class PageTreeChunk {
 			StorageTag tag = new StorageTag(tree.getArchive().getCrypto(), tagBytes);
 			tags[i++] = tag;
 		}
-	}
-	
-	protected Key textKey() {
-		byte[] archiveId = tree.getArchive().getConfig().getArchiveId();
-		ByteBuffer buf = ByteBuffer.allocate(8 + 8 + archiveId.length);
-		buf.putLong(tree.inodeIdentity);
-		buf.putLong(index);
-		buf.put(archiveId);
-		
-		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
-				"easysafe-page-text-key",
-				buf.array());
-	}
-	
-	protected Key saltKey() {
-		byte[] archiveId = tree.getArchive().getConfig().getArchiveId();
-		ByteBuffer buf = ByteBuffer.allocate(8 + 8 + archiveId.length);
-		buf.putLong(tree.inodeIdentity);
-		buf.putLong(index);
-		buf.put(archiveId);
-		
-		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE,
-				"easysafe-page-salt-key",
-				buf.array());
-	}
-	
-	protected Key authKey() {
-		return tree.archive.config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
-				"easysafe-page-auth-key");
 	}
 	
 	public String toString() {

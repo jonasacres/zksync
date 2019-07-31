@@ -236,10 +236,10 @@ public class ZKArchive implements AutoCloseable {
 	}
 	
 	/** Test if we have a given page cached locally. 
-	 * @throws ClosedException */
-	public boolean hasPageTag(StorageTag pageTag) throws ClosedException {
+	 * @throws IOException */
+	public boolean hasPageTag(StorageTag pageTag) throws IOException {
 		assertOpen();
-		if(allPageTags.containsKey(pageTag.shortTag())) return true;
+		if(allPageTags.containsKey(pageTag.shortTagPreserialized())) return true;
 		
 		return config.getCacheStorage().exists(pageTag.path());
 	}
@@ -321,7 +321,7 @@ public class ZKArchive implements AutoCloseable {
 		if(tag.isImmediate()) {
 			Util.debugLog(String.format("Added page tag %s", tag));
 		}
-		long shortTag = tag.shortTag();
+		long shortTag = tag.shortTagPreserialized();
 		if(allPageTags != null && !allPageTags.containsKey(shortTag)) {
 			synchronized(this) {
 				allPageTags.put(shortTag, tag);

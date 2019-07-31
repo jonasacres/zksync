@@ -1,5 +1,7 @@
 package com.acrescrypto.zksyncweb.data;
 
+import java.io.IOException;
+
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.PageTree.PageTreeStats;
@@ -20,8 +22,18 @@ public class XPathStat {
 	public XPathStat(String path, Inode inode, PageTreeStats treeStats, int priority) {
 		this.path = path;
 		this.stat = inode.getStat();
-		this.reftagHex = Util.bytesToHex(inode.getRefTag().getBytes());
-		this.reftag64 = Util.encode64(inode.getRefTag().getBytes());
+		if(inode.getRefTag().getStorageTag().isFinalized()) {
+			try {
+				this.reftagHex = Util.bytesToHex(inode.getRefTag().getBytes());
+				this.reftag64 = Util.encode64(inode.getRefTag().getBytes());
+			} catch(IOException exc) {
+				// shouldn't be possible if hasBytes() == true
+				exc.printStackTrace();
+				throw new RuntimeException(exc);
+			}
+		} else {
+			this.reftag64 = this.reftagHex = null;
+		}
 		this.numChunks = treeStats.totalChunks;
 		this.numPages = treeStats.totalPages;
 		this.numChunksAcquired = treeStats.numCachedChunks;

@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
-import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
@@ -99,27 +98,14 @@ public class Page {
 		if(!dirty) return;
 		dirty = false;
 		
-		ByteBuffer plaintext;
-		
-		if(size < contents.capacity()) {
-			plaintext = ByteBuffer.allocate(size);
-			plaintext.put(contents.array(), 0, size);
-			
-			// don't write immediates to disk; the pageTag = refTag = file contents
-			if(pageNum == 0 && size < file.zkfs.archive.crypto.hashLength()) {
-				StorageTag immediate = new StorageTag(file.getFS().getArchive().getCrypto(),
-						plaintext.array());
-				file.setPageTag(pageNum, immediate);
-				return;
-			}
-		} else {
-			plaintext = contents;
-		}
-		
-		StorageTag pageTag = SignedSecureFile
-		  .withParams(file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.privKey)
-		  .write(plaintext.array(), file.zkfs.archive.config.pageSize);
-		this.file.setPageTag(pageNum, pageTag);
+		Block block = new Block(file.getFS().getArchive());
+		block.addData(file.getInode().getIdentity(),
+				pageNum,
+				Block.INDEX_TYPE_PAGE,
+				contents.array(),
+				0,
+				size);
+		this.file.setPageTag(pageNum, block.getStorageTag());
 	}
 	
 	/** read data from page into a supplied buffer
@@ -211,16 +197,18 @@ public class Page {
 		if(pageNum == 0 && file.tree.numPages == 1 && pageTag.isImmediate()) {
 			contents.put(file.inode.getRefTag().getStorageTag().getTagBytes());
 		} else {
-			if(file.getFS().getArchive().getStorage() instanceof BackedFS) {
+			if(file.getFS().getArchive().getStorage() instanceof BackedFS
+				&& pageTag.isFinalized()) {
 				// make sure the page is ready if this is a non-cached filesystem
+				// (we don't have to wait if we're not finalized, because the data is in memory)
 				file.getFS().getArchive().getConfig().waitForPageReady(pageTag,
 						file.getFS().getReadTimeoutMs());
 			}
 			
 			try {
-				byte[] plaintext = SignedSecureFile
-				  .withTag(pageTag, file.zkfs.archive.storage, textKey(), saltKey(), authKey(), file.zkfs.archive.config.pubKey)
-				  .read(!file.trusted);
+				byte[] plaintext = pageTag
+					.loadBlock(file.getFS().getArchive(), !file.trusted)
+					.readData(file.getInode().getIdentity(), pageNum, Block.INDEX_TYPE_PAGE);
 				contents.put(plaintext);
 			} catch(SecurityException exc) {
 				throw exc;

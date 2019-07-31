@@ -101,7 +101,7 @@ public class PageQueue {
 		
 		@Override ChunkReference reference() { return reference; }
 		@Override int classPriority() { return 0; }
-		@Override long getHash() { return reference.tag.shortTag() + reference.index + 1; } 
+		@Override long getHash() { return reference.tag.shortTagPreserialized() + reference.index + 1; } 
 	}
 	
 	class PageQueueItem extends QueueItem {
@@ -109,7 +109,7 @@ public class PageQueue {
 		StorageTag tag;
 		Shuffler shuffler;
 		
-		PageQueueItem(int priority, ZKArchive archive, StorageTag tag) {
+		PageQueueItem(int priority, ZKArchive archive, StorageTag tag) throws IOException {
 			super(priority);
 			this.archive = archive;
 			this.tag = tag;
@@ -129,7 +129,7 @@ public class PageQueue {
 		}
 		
 		@Override int classPriority() { return -10; }
-		@Override long getHash() { return tag != null ? tag.shortTag() : -1; }
+		@Override long getHash() { return tag != null ? tag.shortTagPreserialized() : -1; }
 	}
 	
 	class InodeContentsQueueItem extends QueueItem {
@@ -181,7 +181,7 @@ public class PageQueue {
 		@Override int classPriority() { return -20; }
 		@Override long getHash() {
 			return tree != null
-				? tree.getRefTag().getStorageTag().shortTag()
+				? tree.getRefTag().getStorageTag().shortTagPreserialized()
 				: -1;
 		}
 	}
@@ -360,7 +360,7 @@ public class PageQueue {
 		}
 	}
 	
-	public void addPageTag(int priority, StorageTag pageTag) {
+	public void addPageTag(int priority, StorageTag pageTag) throws IOException {
 		logger.debug("Enqueuing page tag {}", pageTag);
 		addItem(new PageQueueItem(priority, config.getArchive(), pageTag));
 	}

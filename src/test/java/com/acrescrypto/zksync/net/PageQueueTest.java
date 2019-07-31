@@ -161,7 +161,7 @@ public class PageQueueTest {
 		return expectedTags;
 	}
 	
-	public void expectTagsFromQueue(HashSet<Long> expected) {
+	public void expectTagsFromQueue(HashSet<Long> expected) throws IOException {
 		HashSet<Long> seenTags = new HashSet<Long>();
 		HashSet<Integer> seenChunks = null;
 		long lastTag = 0;
@@ -215,7 +215,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testHasNextChunkReturnsTrueIfQueueHasChunkAtHead() {
+	public void testHasNextChunkReturnsTrueIfQueueHasChunkAtHead() throws IOException {
 		queue.addPageTag(0, pageTag);
 		queue.unpackNextReference();
 		assertTrue(queue.itemsByPriority.peek() instanceof ChunkQueueItem);
@@ -223,14 +223,14 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testHasNextChunkReturnsTrueIfQueueHasNonchunkAtHead() {
+	public void testHasNextChunkReturnsTrueIfQueueHasNonchunkAtHead() throws IOException {
 		queue.addPageTag(0, pageTag);
 		assertFalse(queue.itemsByPriority.peek() instanceof ChunkQueueItem);
 		assertTrue(queue.hasNextChunk());
 	}
 	
 	@Test
-	public void testNextChunkReturnsImmediatelyWhenAvailable() {
+	public void testNextChunkReturnsImmediatelyWhenAvailable() throws IOException {
 		queue.addPageTag(0, pageTag);
 		assertNotNull(queue.nextChunk());
 	}
@@ -248,7 +248,12 @@ public class PageQueueTest {
 			
 			synchronized(queue) {
 				assertFalse(unblocked.passed); // true if parent got past the block
-				queue.addPageTag(0, pageTag); // unblock the parent
+				try {
+					queue.addPageTag(0, pageTag);
+				} catch (IOException e) {
+					e.printStackTrace();
+					fail();
+				} // unblock the parent
 				queued.passed = true;
 			}
 		});
@@ -369,7 +374,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testStopSendingEverythingDoesntStopOtherRequests() {
+	public void testStopSendingEverythingDoesntStopOtherRequests() throws IOException {
 		// ask for everything, read a chunk, ask to stop
 		queue.startSendingEverything();
 		do {} while(pageTag.equals(queue.nextChunk().tag));
@@ -387,7 +392,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testSendEverythingPriority() {
+	public void testSendEverythingPriority() throws IOException {
 		// ask for everything, and get a chunk so the queue has a bunch of chunks at the front at everything's priority
 		// (also make sure that the chunk isn't for the page we're about to ask for)
 		queue.startSendingEverything();
@@ -401,7 +406,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddPageTagEnqueuesAllChunksInPage() {
+	public void testAddPageTagEnqueuesAllChunksInPage() throws IOException {
 		queue.addPageTag(0, pageTag);
 		HashSet<Integer> seenIndexes = new HashSet<Integer>();
 		
@@ -420,7 +425,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddPageTagHonorsPrioritySettingBeforeChunking() {
+	public void testAddPageTagHonorsPrioritySettingBeforeChunking() throws IOException {
 		assertFalse(pageTag.equals(inodeIndirect.getRefTag().getStorageTag())); // nothing up my sleeves...
 		// add a low-priority tag, then a high-priority one
 		queue.addPageTag(0, pageTag);
@@ -439,7 +444,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddPageTagHonorsPrioritySettingAfterChunking() {
+	public void testAddPageTagHonorsPrioritySettingAfterChunking() throws IOException {
 		assertFalse(pageTag.equals(inodeIndirect.getRefTag().getStorageTag()));
 		// add a low-priority tag, then ask for a chunk to get its chunks queued up
 		queue.addPageTag(0, pageTag);
@@ -452,7 +457,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddPageTagSendsChunksInShuffledOrder() {
+	public void testAddPageTagSendsChunksInShuffledOrder() throws IOException {
 		int[] matchCounts = new int[numChunks+1];
 		int numIterations = 10000;
 		
@@ -483,7 +488,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddPageTagToleratesNonexistentPages() {
+	public void testAddPageTagToleratesNonexistentPages() throws IOException {
 		// ask for a nonexistent page; queue should still be empty
 		queue.addPageTag(0, 0);
 		assertFalse(queue.hasNextChunk());
@@ -500,7 +505,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddPageTagAllowsReprioritization() {
+	public void testAddPageTagAllowsReprioritization() throws IOException {
 		// low-priority tag
 		queue.addPageTag(0, pageTag);
 		
@@ -514,7 +519,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddPageTagAllowsCancellation() {
+	public void testAddPageTagAllowsCancellation() throws IOException {
 		// low-priority tag
 		queue.addPageTag(0, pageTag);
 		queue.nextChunk();
@@ -601,7 +606,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddInodeContentsSendsPagesInShuffledOrder() {
+	public void testAddInodeContentsSendsPagesInShuffledOrder() throws IOException {
 		int n = 500;
 		int[] matchCounts = new int[1024];
 		for(int i = 0; i < n; i++) {
@@ -640,7 +645,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddInodeContentsToleratesNonexistentRevTag() {
+	public void testAddInodeContentsToleratesNonexistentRevTag() throws IOException {
 		// make a reftag for which we have no data
 		byte[] corruptRaw = revTag.getRefTag().getBytes().clone();
 		corruptRaw[2] ^= 0x20;
@@ -986,7 +991,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testExpectTagNextReturnsTrueIfPageTagIsNextItem() {
+	public void testExpectTagNextReturnsTrueIfPageTagIsNextItem() throws IOException {
 		queue.addPageTag(0, pageTag);
 		assertTrue(queue.expectTagNext(pageTag));
 		

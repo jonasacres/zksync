@@ -189,7 +189,7 @@ public class RequestPoolTest {
 	}
 	
 	@Test
-	public void testAddPageTagBytes() {
+	public void testAddPageTagBytes() throws IOException {
 		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
 		StorageTag pageTag = new StorageTag(archive.getCrypto(), tagBytes);
 		long shortTag = pageTag.shortTag();
@@ -202,7 +202,7 @@ public class RequestPoolTest {
 	}
 	
 	@Test
-	public void testAddPageTagBytesAllowsReprioritization() {
+	public void testAddPageTagBytesAllowsReprioritization() throws IOException {
 		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
 		StorageTag pageTag = new StorageTag(archive.getCrypto(), tagBytes);
 		long shortTag = pageTag.shortTag();
@@ -215,7 +215,7 @@ public class RequestPoolTest {
 	}
 	
 	@Test
-	public void testCancelPageTagBytes() {
+	public void testCancelPageTagBytes() throws IOException {
 		byte[] tagBytes = archive.getCrypto().hash(Util.serializeInt(1));
 		StorageTag pageTag = new StorageTag(archive.getCrypto(), tagBytes);
 		long shortTag = pageTag.shortTag();

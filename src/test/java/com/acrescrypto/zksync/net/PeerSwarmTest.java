@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -474,7 +475,12 @@ public class PeerSwarmTest {
 		Holder holder = new Holder();
 		
 		Thread thread = new Thread(()->{
-			swarm.waitForPage(0, pageTag);
+			try {
+				swarm.waitForPage(0, pageTag);
+			} catch (IOException e) {
+				e.printStackTrace();
+				fail();
+			}
 			holder.waited = true;
 		});
 		assertFalse(holder.waited);
@@ -494,7 +500,12 @@ public class PeerSwarmTest {
 		StorageTag tag = new StorageTag(archive.getCrypto(), tagBytes);
 		
 		Thread thread = new Thread(()->{
-			swarm.waitForPage(0, tag);
+			try {
+				swarm.waitForPage(0, tag);
+			} catch (IOException e) {
+				e.printStackTrace();
+				fail();
+			}
 			holder.waited = true;
 		});
 		assertFalse(holder.waited);
@@ -523,7 +534,12 @@ public class PeerSwarmTest {
 		}
 		
 		new Thread(()->{
-			swarm.waitForPage(0, tag);
+			try {
+				swarm.waitForPage(0, tag);
+			} catch (IOException e) {
+				e.printStackTrace();
+				fail();
+			}
 		}).start();
 		
 		for(DummyConnection conn : conns) {
@@ -548,7 +564,12 @@ public class PeerSwarmTest {
 		}
 		
 		new Thread(()->{
-			swarm.waitForPage(0, tag);
+			try {
+				swarm.waitForPage(0, tag);
+			} catch (IOException e) {
+				e.printStackTrace();
+				fail();
+			}
 		}).start();
 		
 		for(DummyConnection conn : conns) {

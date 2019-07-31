@@ -415,7 +415,6 @@ public class PageTree {
 			}
 		} else {
 			refType = RefTag.REF_TYPE_2INDIRECT;
-			archive.addPageTag(tag);
 		}
 		
 		refTag = new RefTag(archive, tag, refType, numPages);

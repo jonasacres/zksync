@@ -373,16 +373,16 @@ public class RequestPool {
 	}
 	
 	public synchronized void addPageTag(int priority, StorageTag pageTag) {
-		addPageTag(priority, pageTag.shortTag());
+		addPageTag(priority, pageTag.shortTagPreserialized());
 	}
 	
 	public synchronized void cancelPageTag(StorageTag pageTag) {
-		cancelPageTag(pageTag.shortTag());
+		cancelPageTag(pageTag.shortTagPreserialized());
 	}
 	
 	public int priorityForPageTag(StorageTag pageTag) {
 		try {
-			return requestedPageTags.lookup(pageTag.shortTag()).priority;
+			return requestedPageTags.lookup(pageTag.shortTagPreserialized()).priority;
 		} catch(NullPointerException exc) {
 			return PageQueue.CANCEL_PRIORITY;
 		}

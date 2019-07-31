@@ -54,7 +54,7 @@ public class ChunkAccumulator {
 		
 		protected byte[] hashForChunk(byte[] chunk) {
 			CryptoSupport crypto = swarm.config.getAccessor().getMaster().getCrypto();
-			return crypto.authenticate(tag.getTagBytes(), chunk);
+			return crypto.authenticate(tag.getTagBytesPreserialized(), chunk);
 		}
 		
 		protected void write(byte[] chunk) throws IOException {

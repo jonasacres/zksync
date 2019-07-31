@@ -1,14 +1,17 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.exceptions.StorageTagRewriteException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class StorageTag implements Comparable<StorageTag> {
 	protected CryptoSupport crypto;
+	private Block block;
 	private byte[] tagBytes;
 	private boolean isBlank;
 	private final static char[] hexArray = "0123456789abcdef".toCharArray();
@@ -50,6 +53,11 @@ public class StorageTag implements Comparable<StorageTag> {
 		return new StorageTag(crypto, unpadded);
 	}
 	
+	public StorageTag(Block block) {
+		this.crypto = block.getArchive().getCrypto();
+		this.block = block;
+	}
+	
 	public StorageTag(CryptoSupport crypto, byte[] tagBytes) {
 		this.crypto = crypto;
 		this.setTagBytes(tagBytes);
@@ -71,6 +79,10 @@ public class StorageTag implements Comparable<StorageTag> {
 	}
 	
 	public boolean isImmediate() {
+		if(!isFinalized()) {
+			return block.isImmediate();
+		}
+		
 		return tagBytes.length < crypto.hashLength();
 	}
 	
@@ -78,11 +90,16 @@ public class StorageTag implements Comparable<StorageTag> {
 		return !isBlank() && !isImmediate();
 	}
 	
-	public long shortTag() {
+	public long shortTagPreserialized() {
+		return Util.shortTag(getTagBytesPreserialized());
+	}
+	
+	public long shortTag() throws IOException {
 		return Util.shortTag(getTagBytes());
 	}
 	
-	public String path() {
+	public String path() throws IOException {
+		getTagBytes();
 		// credit: https://stackoverflow.com/questions/9655181/how-to-convert-a-byte-array-to-a-hex-string-in-java#9855338
 		char[] hexChars = new char[2*tagBytes.length + 2];
 		int ofs = 0;
@@ -104,11 +121,25 @@ public class StorageTag implements Comparable<StorageTag> {
 		return crypto;
 	}
 	
-	public byte[] getTagBytes() {
+	public boolean isFinalized() {
+		return tagBytes != null;
+	}
+	
+	public byte[] getTagBytesPreserialized() {
+		assert(isFinalized());
 		return tagBytes;
 	}
 	
-	public byte[] getPaddedTagBytes() {
+	public byte[] getTagBytes() throws IOException {
+		if(tagBytes == null && block != null) {
+			// causes tagBytes to get set
+			block.write();
+		}
+		
+		return tagBytes;
+	}
+	
+	public byte[] getPaddedTagBytes() throws IOException {
 		if(!isImmediate()) {
 			return getTagBytes();
 		}
@@ -117,6 +148,10 @@ public class StorageTag implements Comparable<StorageTag> {
 	}
 	
 	public void setTagBytes(byte[] tagBytes) {
+		if(this.tagBytes != null) {
+			throw new StorageTagRewriteException(this);
+		}
+		
 		this.tagBytes = tagBytes;
 		
 		if(tagBytes.length == crypto.hashLength()) {
@@ -141,13 +176,36 @@ public class StorageTag implements Comparable<StorageTag> {
 			return false;
 		}
 		
-		byte[] oTagBytes = ((StorageTag) other).getTagBytes();
-		return Arrays.equals(tagBytes, oTagBytes);
+		StorageTag o = (StorageTag) other;
+		if((tagBytes == null) != (o.tagBytes == null)) {
+			// one of us has bytes and the other doesn't
+			return false;
+		}
+		
+		if(tagBytes == null) {
+			return block == o.block;
+		}
+		
+		return Arrays.equals(tagBytes, o.tagBytes);
 	}
 	
 	@Override
 	public int compareTo(StorageTag other) {
-		return Arrays.compare(tagBytes, other.getTagBytes());
+		if(tagBytes == null) {
+			if(other.tagBytes == null) {
+				// this is entirely arbitrary but at least it's an answer
+				return Integer.compareUnsigned(
+						System.identityHashCode(this.block),
+						System.identityHashCode(other.block)
+				);
+			}
+			
+			return 1; // tags without bytes always sort after tags with bytes
+		} else if(other.tagBytes == null) {
+			return -1;
+		}
+		
+		return Arrays.compareUnsigned(tagBytes, other.tagBytes);
 	}
 	
 	@Override
@@ -163,6 +221,38 @@ public class StorageTag implements Comparable<StorageTag> {
 	
 	@Override
 	public StorageTag clone() {
-		return new StorageTag(crypto, getTagBytes());
+		if(block != null) {
+			return new StorageTag(block);
+		}
+		
+		return new StorageTag(crypto, tagBytes);
+	}
+	
+	@Override
+	public int hashCode() {
+		if(isFinalized()) {
+			if(tagBytes.length >= 4) {
+				return ByteBuffer.wrap(tagBytes).getInt();
+			} else {
+				try {
+					return ByteBuffer.wrap(getPaddedTagBytes()).getInt();
+				} catch(IOException exc) {
+					// shouldn't be possible if hasBytes() == true
+					exc.printStackTrace();
+					throw new RuntimeException(exc);
+				}
+			}
+		}
+		
+		return System.identityHashCode(block);
+	}
+
+	public Block loadBlock(ZKArchive archive, boolean verifySignature) throws IOException {
+		if(block == null) {
+			assert(isFinalized() && isStored());
+			block = new Block(archive, this, verifySignature);
+		}
+		
+		return block;
 	}
 }

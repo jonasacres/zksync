@@ -435,7 +435,10 @@ public class ZKArchiveConfigTest {
 	
 	@Test
 	public void testValidatePageReturnsTrueOnForgedSignatureAndTag() throws IOException {
-		Key authKey = config.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-page-auth-key");
+		Key authKey = config.deriveKey(
+				ArchiveAccessor.KEY_ROOT_SEED,
+				"easysafe-page-auth-key",
+				config.getArchiveId());
 		ByteBuffer fakePage = ByteBuffer.allocate(PAGE_SIZE+master.crypto.asymSignatureSize());
 		fakePage.position(fakePage.capacity()-master.crypto.asymSignatureSize());
 		fakePage.put(config.privKey.sign(fakePage.array(), 0, fakePage.position()));

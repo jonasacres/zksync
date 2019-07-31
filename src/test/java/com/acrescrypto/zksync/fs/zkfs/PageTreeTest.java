@@ -421,46 +421,6 @@ public class PageTreeTest {
 	}
 	
 	@Test
-	public void testChunkTagsPassedToArchive() throws IOException {
-		for(int i = 0; i < tree.numChunks; i++) {
-			boolean found = false;
-			
-			for(StorageTag passed : archive.allPageTags()) {
-				if(passed.equals(tree.tagForChunk(i))) {
-					found = true;
-					break;
-				}
-			}
-			
-			assertTrue(found);
-		}	
-	}
-	
-	@Test
-	public void testPageTagsPassedToArchive() throws IOException {
-		for(int i = 0; i < tree.numChunks; i++) {
-			boolean found = false;
-			
-			for(StorageTag passed : archive.allPageTags()) {
-				if(passed.equals(tree.getPageTag(i))) {
-					found = true;
-					break;
-				}
-			}
-			
-			assertTrue(found);
-		}	
-	}
-	
-	@Test
-	public void testImmediatesNotPassedToArchive() throws IOException {
-		for(StorageTag passed : archive.allPageTags()) {
-			assertFalse(passed.equals(immediateTag.getStorageTag()));
-			assertFalse(passed.equals(immediateTag.getStorageTag().getTagBytes()));
-		}
-	}
-	
-	@Test
 	public void testResizeDownwardToSameTreeHeight() throws IOException {
 		int max = (int) (1.5*tree.tagsPerChunk());
 		int cutoff = tree.tagsPerChunk() + 1;

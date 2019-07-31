@@ -198,7 +198,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 		return new StorageTag(getCrypto(), tagBytes);
 	}
 	
-	public boolean haveConfigLocally() {
+	public boolean haveConfigLocally() throws IOException {
 		return storage.getCacheFS().exists(tag().path());
 	}
 	
@@ -465,7 +465,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 			return verify(allegedPage);
 		}
 		
-		Key authKey = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-page-auth-key");
+		Key authKey = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-page-auth-key", archiveId);
 		int sigOffset = allegedPage.length - accessor.master.crypto.asymSignatureSize();
 		if(!tag.equals(authKey.authenticate(allegedPage))) return false;
 		if(!pubKey.verify(allegedPage, 0, sigOffset, allegedPage, sigOffset, pubKey.getCrypto().asymSignatureSize())) return false;
@@ -545,7 +545,8 @@ public class ZKArchiveConfig implements AutoCloseable {
 	}
 	
 	public int getSerializedPageSize() {
-		return SignedSecureFile.fileSize(accessor.master.crypto, pageSize);
+		int blockSize = pageSize + Block.fixedHeaderLength() + Block.indexEntryLength();
+		return SignedSecureFile.fileSize(accessor.master.crypto, blockSize);
 	}
 	
 	public String getDescription() {

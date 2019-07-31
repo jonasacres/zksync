@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.utility;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -408,7 +409,16 @@ public class Util {
 
 	public static String formatRefTag(RefTag refTag) {
 		try {
-			return "ref-" + refTag.getRefType() + "-" + Util.toWebSafeBase64(Util.encode64(refTag.getBytes())).substring(0, 8);
+			if(refTag.getStorageTag().isFinalized()) {
+				return String.format("ref-%d-%s",
+						refTag.getRefType(),
+						refTag.getBytes());
+			} else {
+				return String.format("ref-%d-pending", refTag.getRefType());
+			}
+		} catch(IOException exc) {
+			exc.printStackTrace();
+			throw new RuntimeException(exc);
 		} catch(NullPointerException exc) {
 			return "ref-null";
 		}

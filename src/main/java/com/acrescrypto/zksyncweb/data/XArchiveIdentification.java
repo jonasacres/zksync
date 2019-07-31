@@ -31,7 +31,7 @@ public class XArchiveIdentification {
 
 	private XArchiveSettings config;
 	
-	public static XArchiveIdentification fromConfig(ZKArchiveConfig config) {
+	public static XArchiveIdentification fromConfig(ZKArchiveConfig config) throws IOException {
 		XArchiveIdentification id = new XArchiveIdentification();
 		XArchiveSettings xset;
 		

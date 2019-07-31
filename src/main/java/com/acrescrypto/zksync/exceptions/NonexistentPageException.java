@@ -8,7 +8,7 @@ import com.acrescrypto.zksync.utility.Util;
 public class NonexistentPageException extends IOException {
 
 	public NonexistentPageException(RefTag tag, int pageNum) {
-		super("page not found: revtag " + Util.bytesToHex(tag.getBytes()) + ", page: " + pageNum);
+		super("page not found: revtag " + Util.formatRefTag(tag) + ", page: " + pageNum);
 	}
 
 	/**

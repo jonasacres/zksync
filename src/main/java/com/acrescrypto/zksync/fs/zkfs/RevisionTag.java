@@ -35,6 +35,9 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public RevisionTag(RefTag refTag, long parentHash, long height) {
+		// the reftag needs to already have a final storage tag for us to make a revtag
+		assert(refTag.getStorageTag().isFinalized());
+		
 		this.refTag = refTag;
 		this.parentHash = parentHash;
 		this.height = height;
@@ -131,7 +134,14 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		 * revtags. But since we want our adversaries in the dark as much as possible, we obfuscate.
 		 */
 		ByteBuffer plaintext = ByteBuffer.allocate(sizeForConfig(refTag.config) - refTag.config.getCrypto().asymSignatureSize());
-		plaintext.put(refTag.serialize());
+		try {
+			plaintext.put(refTag.serialize());
+		} catch(IOException exc) {
+			// should not be possible since we must have refTag.storageTag.hasBytes()
+			exc.printStackTrace();
+			throw new RuntimeException(exc);
+		}
+		
 		plaintext.putLong(parentHash);
 		plaintext.putLong(height);
 

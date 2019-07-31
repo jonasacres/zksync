@@ -9,7 +9,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.LinkedList;
 
 import org.junit.After;
@@ -20,7 +19,6 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
-import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateSigningKey;
 import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.utility.Util;
@@ -235,38 +233,23 @@ public class PageTreeChunkTest {
 		chunk.setTag(0, makeTag(0));
 		chunk.write();
 		byte[] chunkData = tree.archive.storage.read(chunk.chunkTag.path());
-		chunkData[23219] ^= 0x08;
+		chunkData[23219] ^= 0x08; // flip some arbitrary bit
 		tree.archive.storage.write(chunk.chunkTag.path(), chunkData);
 		
-		new PageTreeChunk(tree, chunk.chunkTag, chunk.index, false);
-	}
-	
-	@Test
-	public void testTextKeyConsistent() throws IOException {
-		PageTreeChunk chunk2 = new PageTreeChunk(tree, chunk.chunkTag, chunk.index, false);
-		assertArrayEquals(chunk.textKey().getRaw(), chunk2.textKey().getRaw());
-	}
-	
-	@Test
-	public void testTextKeyDependsOnInodeIdentity() {
-		Key oldKey = chunk.textKey();
-		tree.inodeIdentity++;
-		assertFalse(Arrays.equals(oldKey.getRaw(), chunk.textKey().getRaw()));
-	}
-	
-	@Test
-	public void testTextKeyDependsOnChunkIndex() throws IOException {
-		PageTreeChunk chunk2 = new PageTreeChunk(tree, chunk.chunkTag, chunk.index+1, false);
-		assertFalse(Arrays.equals(chunk.textKey().getRaw(), chunk2.textKey().getRaw()));
+		// need to copy the tag to avoid block cache
+		StorageTag newTag = new StorageTag(crypto, chunk.chunkTag.getTagBytes());
+		new PageTreeChunk(tree, newTag, chunk.index, false);
 	}
 	
 	@Test
 	public void validatesChunkSignatureIfInitializedWithVerifyTrue() throws IOException {
-		byte[] data = chunk.serialize();
+		chunk.write();
 		PrivateSigningKey fakeKey = crypto.makePrivateSigningKey();
+		Block block = chunk.chunkTag.loadBlock(tree.archive, false);
+		byte[] data = block.serialize();
 		StorageTag tag = SignedSecureFile
-				  .withParams(tree.archive.storage, chunk.textKey(), chunk.saltKey(), chunk.authKey(), fakeKey)
-				  .write(data, tree.archive.config.pageSize);
+				  .withParams(tree.archive.storage, block.textKey(), block.saltKey(), block.authKey(), fakeKey)
+				  .write(data, tree.archive.config.pageSize + Block.fixedHeaderLength() + Block.indexEntryLength());
 
 		try {
 			new PageTreeChunk(tree, tag, chunk.index, true);
@@ -276,11 +259,13 @@ public class PageTreeChunkTest {
 	
 	@Test
 	public void doesNotValidateChunkSignatureIfInitializedWithVerifyFalse() throws IOException {
-		byte[] data = chunk.serialize();
+		chunk.write();
 		PrivateSigningKey fakeKey = crypto.makePrivateSigningKey();
+		Block block = chunk.chunkTag.loadBlock(tree.archive, false);
+		byte[] data = block.serialize();
 		StorageTag tag = SignedSecureFile
-				  .withParams(tree.archive.storage, chunk.textKey(), chunk.saltKey(), chunk.authKey(), fakeKey)
-				  .write(data, tree.archive.config.pageSize);
+				  .withParams(tree.archive.storage, block.textKey(), block.saltKey(), block.authKey(), fakeKey)
+				  .write(data, tree.archive.config.pageSize + Block.fixedHeaderLength() + Block.indexEntryLength());
 
 		new PageTreeChunk(chunk.tree, tag, chunk.index, false);
 	}

@@ -249,7 +249,7 @@ public class PeerConnection {
 		ByteBuffer serialized = ByteBuffer.allocate(tags.size() * RefTag.REFTAG_SHORT_SIZE);
 		for(StorageTag tag : tags) {
 			if(!serialized.hasRemaining()) break; // possible to add tags as we iterate
-			serialized.putLong(tag.shortTag());
+			serialized.putLong(tag.shortTagPreserialized());
 		}
 		send(CMD_ANNOUNCE_TAGS, serialized.array());
 	}
@@ -445,7 +445,7 @@ public class PeerConnection {
 	}
 
 	public boolean wantsFile(StorageTag tag) {
-		return !announcedTags.contains(tag.shortTag());
+		return !announcedTags.contains(tag.shortTagPreserialized());
 	}
 
 	public boolean hasFile(long shortTag) {
