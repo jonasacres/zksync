@@ -53,19 +53,41 @@ public class BlockManagerTest {
 	
 	@Test
 	public void testAddDataCreatesNewBlockIfPendingListIsEmpty() throws IOException {
+		byte[] data = new byte[crypto.hashLength()];
 		assertEquals(0, mgr.pendingBlocks.size());
-		Block block = mgr.addData(0, 0, Block.INDEX_TYPE_PAGE, new byte[0], 0, 0);
+		Block block = mgr.addData(0, 0, Block.INDEX_TYPE_PAGE, data, 0, data.length);
 		assertEquals(1, mgr.pendingBlocks.size());
 		assertNotNull(block.readData(0, 0, Block.INDEX_TYPE_PAGE));
 	}
 	
 	@Test
-	public void testAddDataAddsToExistingBlockIfSuitableBlockAvailable() throws IOException {
-		Block blockA = mgr.addData(0, 0, Block.INDEX_TYPE_PAGE, new byte[0], 0, 0);
-		Block blockB = mgr.addData(0, 1, Block.INDEX_TYPE_PAGE, new byte[0], 0, 0);
+	public void testAddDataCreatesImmediateBlockWhenDataLessThanHashLength() throws IOException {
+		byte[] data = new byte[crypto.hashLength()-1]; // needs to be bigger than an immediate
+		Block blockA = mgr.addData(0, 0, Block.INDEX_TYPE_PAGE, data, 0, data.length);
+		Block blockB = mgr.addData(1, 0, Block.INDEX_TYPE_PAGE, data, 0, data.length);
 		int expectedAvailable = Block.initialCapacity(archive.getConfig())
 				- Block.fixedHeaderLength()
-				- 2*Block.indexEntryLength();
+				- Block.indexEntryLength()
+				- data.length;
+		
+		assertFalse(blockA.isWritable());
+		assertFalse(blockB.isWritable());
+		assertNotEquals(blockA, blockB);
+		assertEquals(expectedAvailable, blockB.getRemainingCapacity());
+		assertNotNull(blockA.readData(0, 0, Block.INDEX_TYPE_PAGE));
+		assertNotNull(blockB.readData(1, 0, Block.INDEX_TYPE_PAGE));
+		assertEquals(0, mgr.pendingBlocks.size());
+	}
+	
+	@Test
+	public void testAddDataAddsToExistingBlockIfSuitableBlockAvailable() throws IOException {
+		byte[] data = new byte[crypto.hashLength()]; // needs to be bigger than an immediate
+		Block blockA = mgr.addData(0, 0, Block.INDEX_TYPE_PAGE, data, 0, data.length);
+		Block blockB = mgr.addData(0, 1, Block.INDEX_TYPE_PAGE, data, 0, data.length);
+		int expectedAvailable = Block.initialCapacity(archive.getConfig())
+				- Block.fixedHeaderLength()
+				- 2*Block.indexEntryLength()
+				- 2*data.length;
 		
 		assertEquals(1, mgr.pendingBlocks.size());
 		assertTrue(blockA == blockB);

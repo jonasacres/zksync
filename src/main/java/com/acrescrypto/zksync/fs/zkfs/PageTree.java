@@ -367,8 +367,7 @@ public class PageTree {
 			PageTreeChunk chunk = new PageTreeChunk(this, tagForChunk(0), 0, !trusted);
 			
 			if(refTag.getRefType() != RefTag.REF_TYPE_2INDIRECT && !refTag.isBlank()) {
-				StorageTag tag = new StorageTag(archive.getCrypto(), refTag.getStorageTag().getTagBytes());
-				chunk.loadTag(0, tag);
+				chunk.loadTag(0, refTag.getStorageTag());
 			}
 			
 			return chunk;

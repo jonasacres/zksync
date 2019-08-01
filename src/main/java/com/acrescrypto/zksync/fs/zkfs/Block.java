@@ -245,6 +245,12 @@ public class Block {
 	}
 	
 	protected Block writeImmediate() {
+		storageTag.setTagBytes(immediateValue());
+		isWritable = false;
+		return this;
+	}
+	
+	public byte[] immediateValue() {
 		for(BlockEntry entry : entries.values()) {
 			byte[] contents = entry.contents;
 			if(entry.offset != 0 || entry.length != contents.length) {
@@ -252,13 +258,10 @@ public class Block {
 				System.arraycopy(entry.contents, entry.offset, contents, 0, entry.length);
 			}
 			
-			storageTag.setTagBytes(contents);
-			return this;
+			return contents;
 		}
 		
-		// no entries, just make it an empty tag
-		storageTag.setTagBytes(new byte[0]);
-		return this;
+		return new byte[0];
 	}
 	
 	public boolean isWritable() {

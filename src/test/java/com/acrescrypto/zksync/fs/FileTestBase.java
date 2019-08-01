@@ -53,7 +53,9 @@ public class FileTestBase {
 			assertTrue(Arrays.equals(file.read(), "read".getBytes()));
 			file.write("write".getBytes());
 		}
-		assertTrue(Arrays.equals(scratch.read("readwrite-allows-readwrite"), "readwrite".getBytes()));
+		
+		byte[] reread = scratch.read("readwrite-allows-readwrite");
+		assertTrue(Arrays.equals(reread, "readwrite".getBytes()));
 	}
 	
 	@Test

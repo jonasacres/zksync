@@ -412,7 +412,7 @@ public class Util {
 			if(refTag.getStorageTag().isFinalized()) {
 				return String.format("ref-%d-%s",
 						refTag.getRefType(),
-						refTag.getBytes());
+						Util.bytesToHex(refTag.getBytes(), 4));
 			} else {
 				return String.format("ref-%d-pending", refTag.getRefType());
 			}

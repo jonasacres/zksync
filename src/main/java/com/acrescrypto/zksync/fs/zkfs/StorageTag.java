@@ -212,8 +212,13 @@ public class StorageTag implements Comparable<StorageTag> {
 	public String toString() {
 		int maxLen = 6;
 		if(isImmediate()) {
-			int len = Math.min(maxLen, tagBytes.length);
-			return "tag-i" + tagBytes.length + "-" + Util.bytesToHex(tagBytes, len);
+			byte[] value = isFinalized() ? tagBytes : block.immediateValue();
+			int len = Math.min(maxLen, value.length);
+			return "tag-i" + value.length + "-" + Util.bytesToHex(value, len);
+		}
+		
+		if(!isFinalized()) {
+			return "tag-s-?";
 		}
 		
 		return "tag-s-" + Util.bytesToHex(tagBytes, maxLen);

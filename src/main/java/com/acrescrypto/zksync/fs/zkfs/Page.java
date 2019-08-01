@@ -97,8 +97,7 @@ public class Page {
 		if(!dirty) return;
 		dirty = false;
 		
-		Block block = new Block(file.getFS().getArchive());
-		block.addData(file.getInode().getIdentity(),
+		Block block = file.getFS().getInodeTable().getBlockManager().addData(file.getInode().getIdentity(),
 				pageNum,
 				Block.INDEX_TYPE_PAGE,
 				contents.array(),

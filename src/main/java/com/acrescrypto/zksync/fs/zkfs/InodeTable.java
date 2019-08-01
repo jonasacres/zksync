@@ -347,6 +347,9 @@ public class InodeTable extends ZKFile {
 		} catch(NullPointerException exc) {
 			exc.printStackTrace();
 			throw exc;
+		} catch(SecurityException exc) {
+			Util.debugLog(String.format("InodeTable jammed on inodeId %d", inodeId));
+			throw exc;
 		}
 	}
 	

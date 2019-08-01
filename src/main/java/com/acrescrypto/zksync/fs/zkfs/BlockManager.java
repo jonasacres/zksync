@@ -15,8 +15,10 @@ public class BlockManager {
 	}
 	
 	public Block addData(long identity, long pageNum, byte type, byte[] contents, int offset, int length) throws IOException {
-		if(length >= archive.getConfig().getPageSize()) {
-			// don't even mess with the pendingBlock list if we know we need a whole block
+		boolean canStoreAsImmediate = pageNum == 0 && length < archive.getCrypto().hashLength();
+		boolean requiresWholePage = length >= archive.getConfig().getPageSize();
+		
+		if(canStoreAsImmediate || requiresWholePage) {
 			return addDataSingle(identity, pageNum, type, contents, offset, length);
 		}
 
@@ -42,7 +44,9 @@ public class BlockManager {
 	
 	public synchronized void writeAll() throws IOException {
 		for(Block block : pendingBlocks) {
-			block.write();
+			if(block.isWritable()) {
+				block.write();
+			}
 		}
 		
 		pendingBlocks.clear();
@@ -62,6 +66,7 @@ public class BlockManager {
 	
 	protected Block pendingBlockToFit(long identity, long pageNum, byte type, int length) {
 		Block bestFit = null;
+		pruneClosedBlocks();
 		for(Block block : pendingBlocks) {
 			if(block.hasData(identity, pageNum, type)) {
 				block.removeData(identity, pageNum, type);
@@ -77,6 +82,10 @@ public class BlockManager {
 		}
 		
 		return bestFit;
+	}
+	
+	protected void pruneClosedBlocks() {
+		pendingBlocks.removeIf((block)->!block.isWritable);
 	}
 	
 	protected void enforceOpenBlockLimit() throws IOException {
