@@ -1175,7 +1175,9 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testHandleRequestInodesToleratesNonexistentRevTags() throws IOException, ProtocolViolationException {
-		RefTag refTag = new RefTag(archive, crypto.rng(archive.getConfig().refTagSize()));
+		byte[] storageTagBytes = crypto.rng(crypto.hashLength());
+		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
+		RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
 		RevisionTag fakeTag = new RevisionTag(refTag, 0, 1);
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_INODES);
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array()); // priority
