@@ -467,7 +467,8 @@ public class ZKArchiveConfig implements AutoCloseable {
 		
 		Key authKey = deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-page-auth-key", archiveId);
 		int sigOffset = allegedPage.length - accessor.master.crypto.asymSignatureSize();
-		if(!tag.equals(authKey.authenticate(allegedPage))) return false;
+		byte[] actualTag = authKey.authenticate(allegedPage);
+		if(!Arrays.equals(actualTag, tag.getTagBytesPreserialized())) return false;
 		if(!pubKey.verify(allegedPage, 0, sigOffset, allegedPage, sigOffset, pubKey.getCrypto().asymSignatureSize())) return false;
 		return true;
 	}

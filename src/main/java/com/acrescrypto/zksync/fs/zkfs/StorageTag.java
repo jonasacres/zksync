@@ -152,7 +152,7 @@ public class StorageTag implements Comparable<StorageTag> {
 			throw new StorageTagRewriteException(this);
 		}
 		
-		this.tagBytes = tagBytes;
+		this.tagBytes = tagBytes.clone();
 		
 		if(tagBytes.length == crypto.hashLength()) {
 			for(byte b : tagBytes) {
@@ -164,10 +164,6 @@ public class StorageTag implements Comparable<StorageTag> {
 			
 			isBlank = true;
 		}
-	}
-	
-	public boolean equals(byte[] other) {
-		return Arrays.equals(tagBytes, other);
 	}
 	
 	@Override

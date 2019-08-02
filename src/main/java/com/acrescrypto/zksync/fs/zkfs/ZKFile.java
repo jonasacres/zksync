@@ -404,12 +404,6 @@ public class ZKFile extends File {
 				
 				RefTag newRefTag = tree.commit();
 				inode.setRefTag(newRefTag);
-				Util.debugLog(String.format("Commit %s (inodeId %d, size %d): %s %s",
-						path,
-						inode.getStat().getInodeId(),
-						pendingSize,
-						newRefTag,
-						newRefTag.getStorageTag()));
 				inode.getStat().setSize(pendingSize);
 				dirty = false;
 				zkfs.inodeTable.setInode(inode);
