@@ -939,7 +939,7 @@ public class PeerConnection {
 				if(chunk == null || !wantsFile(chunk.tag)) continue;
 				waitForUnpause();
 				
-				if(lastStream == null || !chunk.tag.equals(chunk.tag)) {
+				if(lastStream == null || !lastTag.equals(chunk.tag)) {
 					if(lastStream != null) {
 						lastStream.eof();
 					}
