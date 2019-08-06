@@ -11,6 +11,7 @@ import com.acrescrypto.zksync.exceptions.BlockDoesNotContainPageException;
 import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.InsufficientCapacityException;
 import com.acrescrypto.zksync.exceptions.InvalidBlockException;
+import com.acrescrypto.zksync.utility.Util;
 
 public class Block {
 	protected ZKArchive archive;
@@ -164,17 +165,6 @@ public class Block {
 			throw new InsufficientCapacityException();
 		}
 		
-		if(contents.length - length >= 1024) {
-			/* we don't want to have a bunch of sparsely-written pages in memory, so
-			 * resize arrays opportunistically. The original contents array will get
-			 * freed when the Page/PageTreeChunk object owning it is evicted.
-			 */
-			byte[] newContents = new byte[length];
-			System.arraycopy(contents, offset, newContents, 0, length);
-			contents = newContents;
-			offset = 0;
-		}
-		
 		BlockEntryIndex index = new BlockEntryIndex(identity, pageNum, type);
 		BlockEntry entry = entries.get(index);
 		if(entry == null) {
@@ -183,10 +173,16 @@ public class Block {
 		} else {
 			remainingCapacity += entry.length + indexEntryLength();
 		}
-		
-		entry.contents = contents;
-		entry.offset = offset;
+
+		entry.contents = new byte[length];
+		System.arraycopy(contents, offset, entry.contents, 0, length);
+		entry.offset = 0;
 		entry.length = length;
+		if(identity == 0) {
+			Util.hexdump("Identity " + identity + ", page " + pageNum,
+					entry.contents);
+			(new Throwable()).printStackTrace();
+		}
 		remainingCapacity -= length + indexEntryLength();
 	}
 	

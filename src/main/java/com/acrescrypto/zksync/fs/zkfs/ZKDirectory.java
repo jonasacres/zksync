@@ -414,13 +414,13 @@ public class ZKDirectory extends ZKFile implements Directory {
 			while(buf.hasRemaining()) {
 				assertIntegrity(buf.remaining() >= inodeIdSize, "Directory seems truncated; does not contain enough bytes for next inodeId (expected " + inodeIdSize + ", have " + buf.remaining() + ")");
 				long inodeId = deserializeValueWithType(buf, inodeIdType);
-				assertIntegrity(buf.remaining() >= 1, "Directory seems truncated; does not contain enough bytes for next path length (expected 1, have " + buf.remaining() + ")");
+				assertIntegrity(buf.remaining() >= 1, "Directory seems truncated; does not contain enough bytes for next path length for inodeId " + inodeId + " (expected 1, have " + buf.remaining() + ")");
 				int pathLen = Util.unsignByte(buf.get());
 	
 				// Don't check existence of inodes; it will trip up merges
 				assertIntegrity(inodeId >= 0, String.format("Directory references invalid inodeId %d", inodeId));
 				assertIntegrity(pathLen >= 0, "Directory references negative path length (" + pathLen + ")");
-				assertIntegrity(pathLen <= buf.remaining(), "Directory appears truncated; does not contain enough bytes for next path (expected " + pathLen + ", have " + buf.remaining() + ")");
+				assertIntegrity(pathLen <= buf.remaining(), "Directory appears truncated; does not contain enough bytes for next path for inodeId " + inodeId + " (expected " + pathLen + ", have " + buf.remaining() + ")");
 				assertIntegrity(pathLen <= MAX_NAME_LEN, "Directory references name of illegal length " + pathLen);
 				
 				byte[] pathBuf = new byte[pathLen];

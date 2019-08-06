@@ -215,13 +215,17 @@ public class ZKFS extends FS {
 					Util.formatRevisionTag(baseRevision),
 					parentStr);
 
-//			Util.debugLog(String.format("ZKFS %s: created revtag %s from %s\n%s\n%s\n%s\n",
-//					archive.getMaster().getName(),
-//					Util.formatRevisionTag(baseRevision),
-//					parentStr,
-//					dump(),
-//					inodeTable.dumpInodes(),
-//					inodeTable.freelist.dump()));
+			Util.debugLog(String.format("ZKFS %s: created revtag %s from %s\n%s\n%s\n%s\n",
+					archive.getMaster().getName(),
+					Util.formatRevisionTag(baseRevision),
+					parentStr,
+					dump(),
+					inodeTable.dumpInodes(),
+					inodeTable.freelist.dump()));
+			try(ZKDirectory dir = new ZKDirectory(this, inodeTable.inodeWithId(1))) {
+				Util.hexdump("Root directory in " + Util.formatRevisionTag(baseRevision),
+						dir.read());
+			}
 			// archive.getConfig().getRevisionList().dump();
 			if(!skipIntegrity) {
 				IntegrityChecker.assertValidFilesystem(baseRevision); // TODO: Delete me after testing
