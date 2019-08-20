@@ -81,6 +81,7 @@ public class Block {
 		
 		public BlockEntry(ByteBuffer buf) throws InvalidBlockException {
 			this.identity = buf.getLong();
+			buf.get(new byte[7]); // reserved
 			this.type = buf.get();
 			this.pageNum = buf.getLong();
 			this.contents = blockContents;
@@ -96,6 +97,7 @@ public class Block {
 
 		public void serialize(ByteBuffer buf) {
 			buf.putLong(identity);
+			buf.put(new byte[7]); // reserved
 			buf.put(type);
 			buf.putLong(pageNum);
 			buf.putLong(offset);
@@ -136,7 +138,7 @@ public class Block {
 	}
 	
 	public static int indexEntryLength() {
-		return 8 + 1 + 8 + 8; // identity, type, page, offset
+		return 8 + 1 + 7 + 8 + 8; // identity, type, reserved, page, offset
 	}
 	
 	public static int initialCapacity(ZKArchiveConfig config) {
@@ -178,11 +180,6 @@ public class Block {
 		System.arraycopy(contents, offset, entry.contents, 0, length);
 		entry.offset = 0;
 		entry.length = length;
-		if(identity == 0) {
-			Util.hexdump("Identity " + identity + ", page " + pageNum,
-					entry.contents);
-			(new Throwable()).printStackTrace();
-		}
 		remainingCapacity -= length + indexEntryLength();
 	}
 	
@@ -371,5 +368,32 @@ public class Block {
 	
 	public ZKArchive getArchive() {
 		return archive;
+	}
+	
+	public String dump() {
+		StringBuilder sb = new StringBuilder();
+		if(isWritable) {
+			sb.append("Pending block");
+		} else {
+			sb.append("Block " + storageTag);
+		}
+		
+		sb.append(String.format(", %d entries\n", entries.size()));
+		LinkedList<BlockEntryIndex> indices = new LinkedList<>(entries.keySet());
+		indices.sort(null);
+		
+		for(BlockEntryIndex index : indices) {
+			BlockEntry entry = entries.get(index);
+			sb.append(String.format("identity %016x, pageNum %d: type %02x, offset 0x%04x, length %5d, hash %s\n",
+					entry.identity,
+					entry.pageNum,
+					entry.type,
+					entry.offset,
+					entry.length,
+					Util.bytesToHex(archive.crypto.hash(entry.contents, entry.offset, entry.length), 8)
+					));
+		}
+		
+		return sb.toString();
 	}
 }

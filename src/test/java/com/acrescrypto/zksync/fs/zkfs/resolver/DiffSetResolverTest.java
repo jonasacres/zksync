@@ -740,7 +740,7 @@ public class DiffSetResolverTest {
 	@Test
 	public void testInodeDiffRenumberingCausesRemapOfDotDotReferences() throws IOException, DiffResolutionException {
 		fs.write("a", "".getBytes());
-		fs.inodeForPath("a").setIdentity(1); // guarantee that this version gets inode 16 in the resolution
+		fs.inodeForPath("a").setIdentity(InodeTable.USER_INODE_ID_START); // guarantee that this version gets inode 16 in the resolution
 		assertEquals(InodeTable.USER_INODE_ID_START, fs.inodeForPath("a").getStat().getInodeId());
 		RevisionTag revWithFile = fs.commitAndClose();
 		
@@ -799,7 +799,7 @@ public class DiffSetResolverTest {
 		 */
 		for(int i = 0; i < 3; i++) {
 			PRNG prng = master.getCrypto().prng(Util.serializeInt(7));
-			long lowIdentity = 0x10, highIdentity = 0x20;
+			long lowIdentity = InodeTable.USER_INODE_ID_START, highIdentity = 2*InodeTable.USER_INODE_ID_START;
 			LinkedList<RevisionTag> aTags = new LinkedList<>(),
 			                        bTags = new LinkedList<>(),
 			                        cTags = new LinkedList<>(),

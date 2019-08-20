@@ -218,7 +218,10 @@ public class BlockTest {
 		assertEquals(indices.length, buf.getLong());
 		assertEquals(0, buf.getLong());
 		for(BlockEntryIndex idx : indices) {
+			byte[] reserved = new byte[7];
 			assertEquals(idx.identity, buf.getLong());
+			buf.get(reserved);
+			assertArrayEquals(new byte[7], reserved);
 			assertEquals(idx.type, buf.get());
 			assertEquals(idx.pageNum, buf.getLong());
 			buf.getLong(); // not validating length here

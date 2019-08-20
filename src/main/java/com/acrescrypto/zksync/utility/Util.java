@@ -457,8 +457,9 @@ public class Util {
 	}
 	
 	public static void debugLog(String message) {
-		String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss:nnnnnnnnn"));
-		String s = ts + " " + message;
-		System.out.println(s);
+//		String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss:nnnnnnnnn"));
+//		String s = ts + " " + message;
+//		System.out.println(s);
+		logger.debug(message);
 	}
 }

@@ -222,10 +222,6 @@ public class ZKFS extends FS {
 					dump(),
 					inodeTable.dumpInodes(),
 					inodeTable.freelist.dump()));
-			try(ZKDirectory dir = new ZKDirectory(this, inodeTable.inodeWithId(1))) {
-				Util.hexdump("Root directory in " + Util.formatRevisionTag(baseRevision),
-						dir.read());
-			}
 			// archive.getConfig().getRevisionList().dump();
 			if(!skipIntegrity) {
 				IntegrityChecker.assertValidFilesystem(baseRevision); // TODO: Delete me after testing

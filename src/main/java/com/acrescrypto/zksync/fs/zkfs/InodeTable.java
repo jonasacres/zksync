@@ -53,7 +53,7 @@ public class InodeTable extends ZKFile {
 	/** Map of inode IDs that we will force to have a specific changedFrom field in a diff merge */
 	protected ConcurrentHashMap<Long,ChangedFromOverrideReference> changedFromOverrides = new ConcurrentHashMap<>();
 	
-	protected BlockManager blockManager;
+	private BlockManager blockManager;
 	
 	/** serialized size of an inode for a given archive, in bytes */
 	public static int inodeSize(ZKArchive archive) {
@@ -399,7 +399,10 @@ public class InodeTable extends ZKFile {
 		long now = Util.currentTimeNanos();
 		/* The identity field in an inode is the only source of nondeterminism in a zksync archive,
 		 * at least as of this writing (10/30/18). */
-		inode.setIdentity(ByteBuffer.wrap(zkfs.archive.crypto.rng(8)).getLong());
+		do {
+			inode.setIdentity(ByteBuffer.wrap(zkfs.archive.crypto.rng(8)).getLong());
+		} while(inode.getIdentity() < USER_INODE_ID_START); // do not allow random assignment of reserved inode identities
+		
 		logger.debug("ZKFS {} {}: Issuing inode {} with identity {}",
 				Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 				Util.formatRevisionTag(zkfs.getBaseRevision()),
@@ -781,6 +784,7 @@ public class InodeTable extends ZKFile {
 		rootInode.getStat().setAtime(now);
 		rootInode.getStat().setMtime(now);
 		rootInode.getStat().setInodeId(INODE_ID_ROOT_DIRECTORY);
+		rootInode.setIdentity(INODE_ID_ROOT_DIRECTORY);
 		rootInode.getStat().makeDirectory();
 		rootInode.getStat().setMode(0777);
 		rootInode.getStat().setUid(0);
@@ -811,7 +815,7 @@ public class InodeTable extends ZKFile {
 	private void makeEmptyFreelist() throws IOException {
 		Inode freelistInode = issueInode(INODE_ID_FREELIST);
 		freelistInode.setFlags(Inode.FLAG_RETAIN);
-		freelistInode.setIdentity(0);
+		freelistInode.setIdentity(INODE_ID_FREELIST);
 		freelistInode.setStat(new Stat());
 		freelistInode.getStat().setInodeId(INODE_ID_FREELIST);
 		this.freelist = new FreeList(freelistInode);

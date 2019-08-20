@@ -176,10 +176,10 @@ public class IntegrityChecker {
 	protected boolean validateReservedInode(Collection<IntegrityIssue> issues, Inode inode, long expectedId) {
 		boolean passed = true;
 		
-		if(inode.getIdentity() != 0) {
+		if(inode.getIdentity() != inode.getStat().getInodeId()) {
 			issues.add(new IntegrityIssueInode(inode, expectedId,
 					String.format("Expected identity %016x; got %016x",
-							0,
+							inode.getStat().getInodeId(),
 							inode.getIdentity())));
 			passed = false;
 		}

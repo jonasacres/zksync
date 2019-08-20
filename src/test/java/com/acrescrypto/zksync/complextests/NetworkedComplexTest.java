@@ -692,7 +692,7 @@ public class NetworkedComplexTest {
 	@Test
 	public void indefiniteTestComplexZKFSOnlyManyPeerVariableMembershipEquivalent() throws IOException {
 		int checkIntervalMs = 30000;
-		int numPeersInit = 1;
+		int numPeersInit = 2;
 
 		int peerNum = 0;
 		CryptoSupport crypto = CryptoSupport.defaultCrypto();

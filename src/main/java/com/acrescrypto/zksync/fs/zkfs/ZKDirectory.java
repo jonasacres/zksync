@@ -525,11 +525,11 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 	
 	protected byte serializationType(long inodeId) {
-		if(inodeId < 1 << 8) {
+		if(inodeId < (1 << 8)) {
 			return SERIALIZATION_TYPE_BYTE;
-		} else if(inodeId < 1 << 16) {
+		} else if(inodeId < (1 << 16)) {
 			return SERIALIZATION_TYPE_SHORT;
-		} else if(inodeId < 1 << 32) {
+		} else if(inodeId < (1 << 32)) {
 			return SERIALIZATION_TYPE_INT;
 		} else {
 			return SERIALIZATION_TYPE_LONG;
