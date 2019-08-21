@@ -218,13 +218,15 @@ public class RevisionList implements AutoCloseable {
 		}
 
 		for (RevisionTag tip : tips) {
-			if (tip.equals(newBranch))
+			if (tip.equals(newBranch)) {
 				continue;
-			if (tree.descendentOf(newBranch, tip)) {
+			}
+
+			if(tree.descendentOf(newBranch, tip)) {
 				toRemove.add(tip);
 			} else {
 				Collection<RevisionTag> tipParents = tree.parentsForTag(tip, RevisionTree.treeSearchTimeoutMs);
-				if (parents.size() > tipParents.size() && parents.containsAll(tipParents)) {
+				if(tipParents.size() > 1 && parents.size() > tipParents.size() && parents.containsAll(tipParents)) {
 					toRemove.add(tip);
 				}
 			}
@@ -244,7 +246,8 @@ public class RevisionList implements AutoCloseable {
 		ArrayList<RevisionTag> tips, toRemove = new ArrayList<>();
 		RevisionTree tree = config.getRevisionTree();
 
-		logger.info("RevisionList {} {}: Starting general consolidation", config.getArchive().getMaster().getName(),
+		logger.info("RevisionList {} {}: Starting general consolidation",
+				config.getArchive().getMaster().getName(),
 				Util.formatArchiveId(config.getArchiveId()));
 
 		synchronized (this) {
@@ -258,7 +261,8 @@ public class RevisionList implements AutoCloseable {
 		}
 
 		synchronized (this) {
-			logger.info("RevisionList {} {}: Removing {} branch tips due to general consolidation",
+			logger.info("RevisionList {} {} {}: Removing {} branch tips due to general consolidation",
+					config.getMaster().getName(),
 					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()),
 					toRemove.size());
 			for (RevisionTag tip : toRemove) {
@@ -270,11 +274,13 @@ public class RevisionList implements AutoCloseable {
 	public synchronized void removeBranchTip(RevisionTag oldBranch) throws IOException {
 		branchTips.remove(oldBranch);
 		logger.info("RevisionList {} {}: Removed branch tip {}, remaining list size = {}",
-				config.getArchive().getMaster().getName(), Util.formatArchiveId(config.archiveId),
+				config.getArchive().getMaster().getName(),
+				Util.formatArchiveId(config.archiveId),
 				Util.formatRevisionTag(oldBranch), branchTips.size());
 		if (latest != null && latest.equals(oldBranch)) {
 			logger.debug("RevisionList {} {}: Recalculating latest branch tip due to removal of previous latest tip {}",
-					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.archiveId),
+					config.getArchive().getMaster().getName(),
+					Util.formatArchiveId(config.archiveId),
 					Util.formatRevisionTag(oldBranch));
 			recalculateLatest();
 		}
@@ -312,7 +318,9 @@ public class RevisionList implements AutoCloseable {
 				updateLatest(revTag);
 			} catch (SecurityException exc) {
 				logger.error("RevisionList {} {}: Invalid signature on stored revision tag; skipping",
-						config.getArchive().getMaster().getName(), Util.formatArchiveId(config.archiveId), exc);
+						config.getArchive().getMaster().getName(),
+						Util.formatArchiveId(config.archiveId),
+						exc);
 			}
 		}
 
@@ -452,8 +460,10 @@ public class RevisionList implements AutoCloseable {
 		for (RevisionTag tip : branchTips) {
 			if (latest == null || tip.compareTo(latest) > 0) {
 				logger.info("RevisionList {} {}: Recalculated latest revtag {}, was {}",
-						config.getArchive().getMaster().getName(), Util.formatArchiveId(config.archiveId),
-						Util.formatRevisionTag(tip), latest != null ? Util.formatRevisionTag(latest) : "null");
+						config.getArchive().getMaster().getName(),
+						Util.formatArchiveId(config.archiveId),
+						Util.formatRevisionTag(tip),
+						latest != null ? Util.formatRevisionTag(latest) : "null");
 				latest = tip;
 			}
 		}
@@ -462,7 +472,8 @@ public class RevisionList implements AutoCloseable {
 	public void executeAutomerge() {
 		if (config.getArchive().isClosed()) {
 			logger.debug("RevisionList {} {}: Skipping automerge of closed archive",
-					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()));
+					config.getArchive().getMaster().getName(),
+					Util.formatArchiveId(config.getArchiveId()));
 			Util.debugLog(String.format("RevisionList %s: Skipping automerge of closed archive",
 					config.getMaster().getName()));
 			return;
@@ -475,7 +486,8 @@ public class RevisionList implements AutoCloseable {
 				 */
 				// TODO API: (coverage) branch
 				logger.debug("RevisionList {} {}: Consolidating branches on read-only archive due to automerge thread",
-						config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()));
+						config.getArchive().getMaster().getName(),
+						Util.formatArchiveId(config.getArchiveId()));
 				consolidate();
 			} else {
 				logger.info("RevisionList {} {}: Automerge started", config.getArchive().getMaster().getName(),
@@ -493,16 +505,20 @@ public class RevisionList implements AutoCloseable {
 			}
 		} catch (ClosedException exc) {
 			logger.debug("RevisionList {} {}: Automerge aborted since archive closed",
-					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()));
+					config.getArchive().getMaster().getName(),
+					Util.formatArchiveId(config.getArchiveId()));
 		} catch (Throwable exc) {
-			logger.error("RevisionList {} {}: Error performing automerge", config.getArchive().getMaster().getName(),
-					Util.formatArchiveId(config.archiveId), exc);
+			logger.error("RevisionList {} {}: Error performing automerge",
+					config.getArchive().getMaster().getName(),
+					Util.formatArchiveId(config.archiveId),
+					exc);
 			exc.printStackTrace();
 		}
 	}
 
 	protected synchronized void queueAutomerge() throws IOException {
-		logger.debug("RevisionList {} {}: Queuing automerge", config.getArchive().getMaster().getName(),
+		logger.debug("RevisionList {} {}: Queuing automerge",
+				config.getArchive().getMaster().getName(),
 				Util.formatArchiveId(config.getArchiveId()));
 
 		if (automergeSnoozeThread == null || automergeSnoozeThread.isCancelled()) {
