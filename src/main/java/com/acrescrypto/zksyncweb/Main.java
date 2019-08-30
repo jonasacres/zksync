@@ -56,7 +56,13 @@ public class Main {
 			Util.launchTime();
 			State.sharedState();
 			startServer();
-			System.in.read();
+			while(true) {
+				try {
+					Thread.sleep(10000);
+				} catch (InterruptedException e) {
+					break;
+				}
+			}
 		} catch (ProcessingException | IOException | URISyntaxException e) {
 			throw new Error("Unable to create HTTP server.", e);
 		}

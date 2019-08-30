@@ -2,8 +2,11 @@ package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
+
+import com.acrescrypto.zksync.utility.Shuffler;
 
 public class DirectoryTraverser {
 	LinkedList<String> paths = new LinkedList<String>();
@@ -50,20 +53,23 @@ public class DirectoryTraverser {
 	}
 	
 	protected void addDirectory(Directory dir) throws IOException {
+		/* As a concession to make PageQueue easier to implement, (non-cryptographic) randomness is added
+		 * to the order that paths are returned in by shuffling the entries in each directory. This is NOT
+		 * equivalent to a uniform shuffle of the entire result set, but is likely good enough for the purposes
+		 * of ensuring peers send files in a generally different order from one another.
+		 */
 		Collection<String> subpaths = dir.list();
-		for(String path : subpaths) {
+		ArrayList<String> arrayified = new ArrayList<>(subpaths);
+		Shuffler shuffler = new Shuffler(subpaths.size());
+		while(shuffler.hasNext()) {
+			String path = arrayified.get(shuffler.next());
 			paths.add(Paths.get(dir.getPath(), path).toString());
 		}
 		dir.close();
 	}
 	
 	protected String popPath() {
-		/** right now our only customer is PageQueue which really wants stuff in random order.
-		 * This isn't a uniform distribution: files from directories we've visited will be selected more often
-		 * than files in directories we haven't visited yet. This should be good enough for our purposes. 
-		 */
 		if(paths.isEmpty()) return null;
-		int index = (int) (Math.random() * paths.size());
-		return paths.remove(index);
+		return paths.remove();
 	}
 }

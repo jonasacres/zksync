@@ -1,6 +1,7 @@
 package com.acrescrypto.zksyncweb;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
@@ -9,9 +10,15 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonReader;
+import javax.json.stream.JsonParsingException;
 import javax.ws.rs.core.MultivaluedMap;
 
+import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
+import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.File;
@@ -35,6 +42,7 @@ public class ArchiveCrud {
 		boolean isInodeRaw = Boolean.parseBoolean(params.getOrDefault("inodeRaw", "false"));
 		boolean isQueue = Boolean.parseBoolean(params.getOrDefault("queue", "false"));
 		boolean isCancel = Boolean.parseBoolean(params.getOrDefault("cancel", "false"));
+		boolean isNofollow = Boolean.parseBoolean(params.getOrDefault("nofollow", "false"));
 		
 		while(path.startsWith("//")) path = path.substring(1);
 
@@ -63,9 +71,10 @@ public class ArchiveCrud {
 			existingPriority = fs.getArchive().getConfig().getSwarm().priorityForInode(fs.getBaseRevision(), inodeId);
 			if(isStat) {
 				// ?stat=true causes us to return stat information instead of contents
+				// add in ?nofollow=true to do lstat
 				Inode inode = fs.getInodeTable().inodeWithId(inodeId);
 				PageTree tree = new PageTree(inode);
-				throw XAPIResponse.withPayload(new XPathStat(path, inode, tree.getStats(), existingPriority));
+				throw XAPIResponse.withPayload(new XPathStat(fs, path, inode, tree.getStats(), existingPriority, isNofollow, 0));
 			}
 			
 			if(params.containsKey("priority") || existingPriority == PageQueue.CANCEL_PRIORITY) {
@@ -93,11 +102,16 @@ public class ArchiveCrud {
 			
 			ZKFile file = null;
 			try {
+				int mode = File.O_RDONLY;
+				if(isNofollow) {
+					mode |= File.O_NOFOLLOW | ZKFile.O_LINK_LITERAL;
+				}
+				
 				if(isInode) {
 					// direct open using new ZKFile avoids EISDIR
-					file = new ZKFile(fs, fs.getInodeTable().inodeWithId(inodeId), File.O_RDONLY, true);
+					file = new ZKFile(fs, fs.getInodeTable().inodeWithId(inodeId), mode, true);
 				} else {
-					file = fs.open(path, File.O_RDONLY);
+					file = fs.open(path, mode);
 				}
 				
 				if(isInodeRaw) {
@@ -131,18 +145,17 @@ public class ArchiveCrud {
 			Map<String,Object> payload = new HashMap<>(), fsMap = new HashMap<>();
 			payload.put("fs", fsMap);
 			fsMap.put("revtag", fs.getBaseRevision());
-			fsMap.put("dirty", fs.isDirty());			
-			fsMap.put("identity", System.identityHashCode(fs));
+			fsMap.put("dirty", fs.isDirty());
 			
 			if(isListStat) {
 				// ?liststat=true causes stat information to be included with directory listings
 				ArrayList<XPathStat> pathStats = new ArrayList<>(listings.size());
 				for(String subpath : listings) {
 					String fqSubpath = path + "/" + subpath;
-					Inode inode = fs.inodeForPath(fqSubpath);
-					PageTreeStats treeStat = new PageTree(fs.inodeForPath(fqSubpath)).getStats();
+					Inode inode = fs.inodeForPath(fqSubpath, false);
+					PageTreeStats treeStat = new PageTree(inode).getStats();
 					
-					pathStats.add(new XPathStat(subpath, inode, treeStat, existingPriority));
+					pathStats.add(new XPathStat(fs, fqSubpath, inode, treeStat, existingPriority, isNofollow, 0));
 				}
 				
 				payload.put("entries", pathStats);
@@ -162,6 +175,9 @@ public class ArchiveCrud {
 		String group = params.getOrDefault("group", null);
 		int uid = Integer.parseInt(params.getOrDefault("uid", "-1"));
 		int gid = Integer.parseInt(params.getOrDefault("gid", "-1"));
+		long atime = Long.parseLong(params.getOrDefault("atime", "-1"));
+		long mtime = Long.parseLong(params.getOrDefault("mtime", "-1"));
+		boolean isDir = Boolean.parseBoolean(params.getOrDefault("isDir", "false"));
 		int mode;
 		
 		if(params.getOrDefault("mode", "-1").startsWith("0")) {
@@ -173,11 +189,19 @@ public class ArchiveCrud {
 		}
 
 		try {
-			try(ZKFile file = fs.open(path, File.O_WRONLY|File.O_CREAT)) {
-				file.seek(offset, File.SEEK_SET);
-				file.write(contents);
-				if(truncate) {
-					file.truncate(file.pos());
+			if(isDir) {
+				fs.mkdir(path);
+			} else {
+				try(ZKFile file = fs.open(path, File.O_WRONLY|File.O_CREAT)) {
+					if(offset < 0) {
+						offset = file.getSize() - offset + 1;
+					}
+					
+					file.seek(offset, File.SEEK_SET);
+					file.write(contents);
+					if(truncate) {
+						file.truncate(file.pos());
+					}
 				}
 			}
 		} catch(ENOENTException exc) {
@@ -186,6 +210,10 @@ public class ArchiveCrud {
 			if(offset > 0 || truncate || contents.length > 0) {
 				throw XAPIResponse.withError(409, "Is a directory");
 			}
+		} catch(EEXISTSException exc) {
+			throw XAPIResponse.withError(409, "Path already exists");
+		} catch(EISNOTDIRException exc) {
+			throw XAPIResponse.withError(409, "Parent is not a directory");
 		}
 		
 		if(user != null) {
@@ -208,14 +236,28 @@ public class ArchiveCrud {
 			fs.chmod(path, mode);
 		}
 		
+		if(params.containsKey("mtime")) {
+			fs.setMtime(path, mtime);
+		}
+		
+		if(params.containsKey("atime")) {
+			fs.setAtime(path, atime);
+		}
+
+		
 		return XAPIResponse.successResponse();
 	}
 	
 	public static XAPIResponse delete(ZKFS fs, String path, Map<String, String> params) throws IOException {
 		while(path.startsWith("//")) path = path.substring(1);
+		boolean recursive = Boolean.parseBoolean(params.getOrDefault("recursive", "false"));
 		
 		try {
-			fs.unlink(path);
+			if(recursive) {
+				fs.rmrf(path);
+			} else {
+				fs.unlink(path);
+			}
 		} catch(ENOENTException exc) {
 			throw XAPIResponse.notFoundErrorResponse();
 		} catch(EISDIRException exc) {
@@ -224,9 +266,131 @@ public class ArchiveCrud {
 			} catch(ENOTEMPTYException exc2) {
 				throw XAPIResponse.withError(409, "Directory not empty");
 			}
+		} catch(EISNOTDIRException exc) {
+			fs.unlink(path);
 		}
 		
 		return XAPIResponse.successResponse();
+	}
+	
+	public static XAPIResponse put(ZKFS fs, String path, Map<String, String> params, byte[] body) throws IOException {
+		while(path.startsWith("//")) path = path.substring(1);
+		JsonReader reader = Json.createReader(new StringReader(new String(body)));
+		JsonObject json = null;
+		
+		try {
+			json = reader.readObject();
+		} catch(JsonParsingException exc) {
+			throw XAPIResponse.withError(400, "Must supply JSON object as body");
+		}
+		
+		if(!json.containsKey("type")) {
+			throw XAPIResponse.withError(400, "must supply type field");
+		}
+
+		String source = json.getString("source", null);
+		String type = json.getString("type");
+		boolean followSymlinks = json.getBoolean("followSymlinks", true);
+		
+		// TODO: need nofollow and recursive
+		
+		try {
+			switch(type) {
+			case "copy":
+				if(source == null) throw XAPIResponse.withError(400, "Must supply source field");
+				fs.cp(source, path);
+				break;
+			case "hardlink":
+				if(source == null) throw XAPIResponse.withError(400, "Must supply source field");
+				if(fs.stat(source).isDirectory()) {
+					throw XAPIResponse.withError(400, "Cannot create hard links to directories");
+				}
+				fs.link(source, path);
+				break;
+			case "symlink":
+				if(source == null) throw XAPIResponse.withError(400, "Must supply source field");
+				followSymlinks = false;
+				fs.symlink(source, path);
+				break;
+			case "directory":
+				boolean makeParents = json.getBoolean("parents", false);
+				if(makeParents) {
+					fs.mkdirp(path);
+				} else {
+					fs.mkdir(path);
+				}
+				break;
+			case "fifo":
+				fs.mkfifo(path);
+				break;
+			case "device":
+				try {
+					String device_type = json.getJsonString("device_type").getString();
+					int major = json.getJsonNumber("major").intValueExact();
+					int minor = json.getJsonNumber("minor").intValueExact();
+					if(!device_type.equals("b") && !device_type.equals("c")) {
+						throw XAPIResponse.withError(400, "device_type field must be 'b' or 'c'");
+					}
+					
+					int devtype = device_type.equals("b") ? Stat.TYPE_BLOCK_DEVICE : Stat.TYPE_CHARACTER_DEVICE;
+					fs.mknod(path, devtype, major, minor);
+					break;
+				} catch(ArithmeticException|ClassCastException exc) {
+					throw XAPIResponse.withError(400, "Must supply string device_type, int32 major, int32 minor. device_type must be 'b' or 'c'.");
+				}
+			case "metadata":
+				// no special action, just use the metadata stuff
+				break;
+			case "move":
+				// TODO
+			default:
+				throw XAPIResponse.withError(400, "Invalid type: " + type);
+			}
+			
+			if(json.containsKey("mode")) {
+				try {
+					fs.chmod(path, json.getInt("mode"), followSymlinks);
+				} catch(ClassCastException exc) {
+					String modeStr = json.getString("mode");
+					int mode = Integer.parseInt(modeStr, 8);
+					fs.chmod(path, mode, followSymlinks);
+				}
+			}
+			
+			if(json.containsKey("uid")) {
+				fs.chown(path, json.getInt("uid"), followSymlinks);
+			}
+			
+			if(json.containsKey("user")) {
+				fs.chown(path, json.getString("user"), followSymlinks);
+			}
+			
+			if(json.containsKey("gid")) {
+				fs.chgrp(path, json.getInt("gid"), followSymlinks);
+			}
+
+			if(json.containsKey("group")) {
+				fs.chgrp(path, json.getString("group"), followSymlinks);
+			}
+
+			if(json.containsKey("mtime")) {
+				fs.setMtime(path, json.getJsonNumber("mtime").longValue(), followSymlinks);
+			}
+			
+			if(json.containsKey("atime")) {
+				fs.setAtime(path, json.getJsonNumber("atime").longValue(), followSymlinks);
+			}
+			
+			if(json.containsKey("ctime")) {
+				fs.setCtime(path, json.getJsonNumber("ctime").longValue(), followSymlinks);
+			}
+			
+			throw XAPIResponse.successResponse();
+		} catch(ENOENTException exc) {
+			throw XAPIResponse.notFoundErrorResponse();
+		} catch(EEXISTSException exc) {
+			throw XAPIResponse.withError(409, "Path already exists");
+		}
 	}
 	
 	public static String basePath(String path) throws MalformedURLException {

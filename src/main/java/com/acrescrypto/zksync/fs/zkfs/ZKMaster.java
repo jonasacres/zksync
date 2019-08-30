@@ -40,7 +40,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 	protected LinkedList<ArchiveAccessor> accessors = new LinkedList<>();
 	protected LinkedList<ZKArchiveConfig> allConfigs = new LinkedList<>();
 	protected Blacklist blacklist;
-	protected Logger logger = LoggerFactory.getLogger(ZKMaster.class);
+	protected static Logger logger = LoggerFactory.getLogger(ZKMaster.class);
 	protected TCPPeerSocketListener listener;
 	protected DHTClient dhtClient;
 	protected DHTZKArchiveDiscovery dhtDiscovery;
@@ -94,6 +94,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 	
 	public static ZKMaster openAtPath(PassphraseProvider ppProvider, String path) throws IOException {
 		try {
+			logger.info("Opening EasySafe at {}", path);
 			return new ZKMaster(CryptoSupport.defaultCrypto(), new LocalFS(path), ppProvider);
 		} catch (InvalidBlacklistException e) {
 			// InvalidBlacklistException masked as a runtime to avoid having to add a bunch of throws InBlEx to a zillion tests

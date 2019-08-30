@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import org.junit.AfterClass;
 import org.junit.FixMethodOrder;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 
@@ -20,7 +21,7 @@ public abstract class FSBenchmark {
 		Benchmarks.finishBenchmarkSuite();
 	}
 	
-	@Test
+	@Test @Ignore
 	public void benchmarkFileCreationThroughput() throws IOException {
 		Benchmarks.run("files", (i)->{
 			storage.write("create-throughput-"+i, "".getBytes());
@@ -42,7 +43,7 @@ public abstract class FSBenchmark {
 		storage.purge();
 	}
 	
-	@Test
+	@Test @Ignore
 	public void benchmarkFileReadThroughput() throws IOException {
 		// this test has a definite risk of getting misled by caching
 		byte[] oneMiB = new byte[1024*1024];

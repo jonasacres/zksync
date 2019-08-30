@@ -315,7 +315,8 @@ public class LocalFS extends FS {
 	}
 
 	@Override
-	public void chmod(String path, int mode) throws IOException {
+	public void chmod(String path, int mode, boolean followSymlinks) throws IOException {
+		if(!followSymlinks) throw new UnsupportedOperationException("can't chmod without following symlinks");
 		logger.debug("LocalFS {}: chmod {} {}", root, path, mode);
 		Set<PosixFilePermission> modeSet = new HashSet<PosixFilePermission>();
 		
@@ -341,43 +342,51 @@ public class LocalFS extends FS {
 	}
 
 	@Override
-	public void chown(String path, int uid) throws IOException {
+	public void chown(String path, int uid, boolean followSymlinks) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public void chown(String path, String user) throws IOException {
+	public void chown(String path, String user, boolean followSymlinks) throws IOException {
 		logger.debug("LocalFS {}: chown {} {}", root, path, user);
 		try {
 			UserPrincipal userPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByName(user);
 			java.io.File targetFile = new java.io.File(expandPath(path));
-			Files.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).setOwner(userPrincipal);
+			LinkOption[] options = followSymlinks ? new LinkOption[0] : new LinkOption[] { LinkOption.NOFOLLOW_LINKS };
+			
+			Files
+				.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, options)
+				.setOwner(userPrincipal);
 		} catch(FileSystemException exc) {
 			throw new UnsupportedOperationException();
 		}
 	}
 
 	@Override
-	public void chgrp(String path, int gid) throws IOException {
+	public void chgrp(String path, int gid, boolean followSymlinks) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public void chgrp(String path, String group) throws IOException {
+	public void chgrp(String path, String group, boolean followSymlinks) throws IOException {
 		logger.debug("LocalFS {}: chgrp {} {}", root, path, group);
 		try {
 			GroupPrincipal groupPrincipal = FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByGroupName(group);
 			java.io.File targetFile = new java.io.File(expandPath(path));
-			Files.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, LinkOption.NOFOLLOW_LINKS).setGroup(groupPrincipal);
+			LinkOption[] options = followSymlinks ? new LinkOption[0] : new LinkOption[] { LinkOption.NOFOLLOW_LINKS };
+			Files
+				.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, options)
+				.setGroup(groupPrincipal);
 		} catch(FileSystemException exc) {
 			throw new UnsupportedOperationException();
 		}
 	}
 
 	@Override
-	public void setMtime(String path, long mtime) throws IOException {
+	public void setMtime(String path, long mtime, boolean followSymlinks) throws IOException {
 		logger.debug("LocalFS {}: set_mtime {} {}", root, path, mtime);
 		// attempting to use java.nio to set timestamps causes an indefinite block on linux (btrfs/Ubuntu 18.04)
+		if(!followSymlinks) throw new UnsupportedOperationException("can't setMtime without following symlinks");
 		if(stat(path).isFifo()) throw new UnsupportedOperationException("can't set atime on fifo");
 		FileTime fileTime = FileTime.from(mtime, TimeUnit.NANOSECONDS);
 		try {
@@ -388,13 +397,14 @@ public class LocalFS extends FS {
 	}
 
 	@Override
-	public void setCtime(String path, long ctime) throws IOException {
+	public void setCtime(String path, long ctime, boolean followSymlinks) throws IOException {
 		throw new UnsupportedOperationException("can't set ctime on filesystem");
 	}
 
 	@Override
-	public void setAtime(String path, long atime) throws IOException {
+	public void setAtime(String path, long atime, boolean followSymlinks) throws IOException {
 		logger.debug("LocalFS {}: set_atime {} {}", root, path, atime);
+		if(!followSymlinks) throw new UnsupportedOperationException("can't setAtime without following symlinks");
 		if(stat(path).isFifo()) throw new UnsupportedOperationException("can't set atime on fifo");
 		FileTime fileTime = FileTime.from(atime, TimeUnit.NANOSECONDS);
 		try {

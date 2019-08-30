@@ -147,14 +147,14 @@ public class BackedFSTest extends FSTestBase {
 		public String readlink_unsafe(String link) throws IOException { throw new RuntimeException("attempted to read link on backup"); }
 		public void mknod(String path, int type, int major, int minor) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public void mkfifo(String path) throws IOException { throw new RuntimeException("attempted to write to backup"); }
-		public void chmod(String path, int mode) throws IOException { throw new RuntimeException("attempted to write to backup"); }
-		public void chown(String path, int uid) throws IOException { throw new RuntimeException("attempted to write to backup"); }
-		public void chown(String path, String user) throws IOException { throw new RuntimeException("attempted to write to backup"); }
-		public void chgrp(String path, int gid) throws IOException { throw new RuntimeException("attempted to write to backup"); }
-		public void chgrp(String path, String group) throws IOException { throw new RuntimeException("attempted to write to backup"); }
-		public void setMtime(String path, long mtime) throws IOException { throw new RuntimeException("attempted to write to backup"); }
-		public void setCtime(String path, long ctime) throws IOException { throw new RuntimeException("attempted to write to backup"); }
-		public void setAtime(String path, long atime) throws IOException { throw new RuntimeException("attempted to write to backup"); }
+		public void chmod(String path, int mode, boolean followSymlinks) throws IOException { throw new RuntimeException("attempted to write to backup"); }
+		public void chown(String path, int uid, boolean followSymlinks) throws IOException { throw new RuntimeException("attempted to write to backup"); }
+		public void chown(String path, String user, boolean followSymlinks) throws IOException { throw new RuntimeException("attempted to write to backup"); }
+		public void chgrp(String path, int gid, boolean followSymlinks) throws IOException { throw new RuntimeException("attempted to write to backup"); }
+		public void chgrp(String path, String group, boolean followSymlinks) throws IOException { throw new RuntimeException("attempted to write to backup"); }
+		public void setMtime(String path, long mtime, boolean followSymlinks) throws IOException { throw new RuntimeException("attempted to write to backup"); }
+		public void setCtime(String path, long ctime, boolean followSymlinks) throws IOException { throw new RuntimeException("attempted to write to backup"); }
+		public void setAtime(String path, long atime, boolean followSymlinks) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public void write(String path, byte[] contents, int offset, int length) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public File open(String path, int mode) throws IOException {  throw new RuntimeException("attempted to open file handle from backup");  }
 		public void truncate(String path, long size) throws IOException { throw new RuntimeException("attempted to write to backup"); }

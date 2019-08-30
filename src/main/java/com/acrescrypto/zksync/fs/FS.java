@@ -48,15 +48,25 @@ public abstract class FS implements AutoCloseable {
 	public abstract void mknod(String path, int type, int major, int minor) throws IOException;
 	public abstract void mkfifo(String path) throws IOException;
 	
-	public abstract void chmod(String path, int mode) throws IOException;
-	public abstract void chown(String path, int uid) throws IOException;
-	public abstract void chown(String path, String user) throws IOException;
-	public abstract void chgrp(String path, int gid) throws IOException;
-	public abstract void chgrp(String path, String group) throws IOException;
+	public final void chmod(String path, int mode) throws IOException { chmod(path, mode, true); }
+	public final void chown(String path, int uid) throws IOException { chown(path, uid, true); }
+	public final void chown(String path, String user) throws IOException { chown(path, user, true); }
+	public final void chgrp(String path, int gid) throws IOException { chgrp(path, gid, true); }
+	public final void chgrp(String path, String group) throws IOException { chgrp(path, group, true); }
+
+	public abstract void chmod(String path, int mode, boolean followSymlins) throws IOException;
+	public abstract void chown(String path, int uid, boolean followSymlinks) throws IOException;
+	public abstract void chown(String path, String user, boolean followSymlinks) throws IOException;
+	public abstract void chgrp(String path, int gid, boolean followSymlinks) throws IOException;
+	public abstract void chgrp(String path, String group, boolean followSymlinks) throws IOException;
 		
-	public abstract void setMtime(String path, long mtime) throws IOException;
-	public abstract void setCtime(String path, long ctime) throws IOException;
-	public abstract void setAtime(String path, long atime) throws IOException;
+	public final void setMtime(String path, long mtime) throws IOException { setMtime(path, mtime, true); }
+	public final void setCtime(String path, long ctime) throws IOException { setCtime(path, ctime, true); }
+	public final void setAtime(String path, long atime) throws IOException { setAtime(path, atime, true); }
+
+	public abstract void setMtime(String path, long mtime, boolean followSymlinks) throws IOException;
+	public abstract void setCtime(String path, long ctime, boolean followSymlinks) throws IOException;
+	public abstract void setAtime(String path, long atime, boolean followSymlinks) throws IOException;
 	
 	public abstract void write(String path, byte[] contents, int offset, int length) throws IOException;
 	public abstract File open(String path, int mode) throws IOException;

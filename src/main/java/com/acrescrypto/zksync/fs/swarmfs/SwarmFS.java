@@ -112,42 +112,42 @@ public class SwarmFS extends FS implements TimedReader {
 	}
 
 	@Override
-	public void chmod(String path, int mode) throws IOException {
+	public void chmod(String path, int mode, boolean followSymlinks) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public void chown(String path, int uid) throws IOException {
+	public void chown(String path, int uid, boolean followSymlinks) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public void chown(String path, String user) throws IOException {
+	public void chown(String path, String user, boolean followSymlinks) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public void chgrp(String path, int gid) throws IOException {
+	public void chgrp(String path, int gid, boolean followSymlinks) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public void chgrp(String path, String group) throws IOException {
+	public void chgrp(String path, String group, boolean followSymlinks) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public void setMtime(String path, long mtime) throws IOException {
+	public void setMtime(String path, long mtime, boolean followSymlinks) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public void setCtime(String path, long ctime) throws IOException {
+	public void setCtime(String path, long ctime, boolean followSymlinks) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 
 	@Override
-	public void setAtime(String path, long atime) throws IOException {
+	public void setAtime(String path, long atime, boolean followSymlinks) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 

@@ -2,8 +2,6 @@ package com.acrescrypto.zksync.utility;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collection;

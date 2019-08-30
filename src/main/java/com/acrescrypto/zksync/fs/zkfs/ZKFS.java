@@ -645,105 +645,105 @@ public class ZKFS extends FS {
 	}
 	
 	@Override
-	public void chmod(String path, int mode) throws IOException {
+	public void chmod(String path, int mode, boolean followSymlinks) throws IOException {
 		assertWritable(path);
 		logger.debug("ZKFS {} {}: chmod {} 0{}",
 				Util.formatArchiveId(archive.getConfig().getArchiveId()),
 				Util.formatRevisionTag(baseRevision),
 				path,
 				String.format("%3o", mode));
-		Inode inode = inodeForPath(path);
+		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setMode(mode);
 		markDirty();
 	}
 
 	@Override
-	public void chown(String path, int uid) throws IOException {
+	public void chown(String path, int uid, boolean followSymlinks) throws IOException {
 		assertWritable(path);
 		logger.debug("ZKFS {} {}: chown {} {}",
 				Util.formatArchiveId(archive.getConfig().getArchiveId()),
 				Util.formatRevisionTag(baseRevision),
 				path,
 				uid);
-		Inode inode = inodeForPath(path);
+		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setUid(uid);
 		markDirty();
 	}
 
 	@Override
-	public void chown(String path, String name) throws IOException {
+	public void chown(String path, String name, boolean followSymlinks) throws IOException {
 		assertWritable(path);
 		logger.debug("ZKFS {} {}: chown {} '{}'",
 				Util.formatArchiveId(archive.getConfig().getArchiveId()),
 				Util.formatRevisionTag(baseRevision),
 				path,
 				name);
-		Inode inode = inodeForPath(path);
+		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setUser(name);
 		markDirty();
 	}
 
 	@Override
-	public void chgrp(String path, int gid) throws IOException {
+	public void chgrp(String path, int gid, boolean followSymlinks) throws IOException {
 		assertWritable(path);
 		logger.debug("ZKFS {} {}: chgrp {} {}",
 				Util.formatArchiveId(archive.getConfig().getArchiveId()),
 				Util.formatRevisionTag(baseRevision),
 				path,
 				gid);
-		Inode inode = inodeForPath(path);
+		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setGid(gid);
 		markDirty();
 	}
 
 	@Override
-	public void chgrp(String path, String group) throws IOException {
+	public void chgrp(String path, String group, boolean followSymlinks) throws IOException {
 		assertWritable(path);
 		logger.debug("ZKFS {} {}: chgrp {} '{}'",
 				Util.formatArchiveId(archive.getConfig().getArchiveId()),
 				Util.formatRevisionTag(baseRevision),
 				path,
 				group);
-		Inode inode = inodeForPath(path);
+		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setGroup(group);
 		markDirty();
 	}
 
 	@Override
-	public void setMtime(String path, long mtime) throws IOException {
+	public void setMtime(String path, long mtime, boolean followSymlinks) throws IOException {
 		assertWritable(path);
 		logger.debug("ZKFS {} {}: set mtime {} {}",
 				Util.formatArchiveId(archive.getConfig().getArchiveId()),
 				Util.formatRevisionTag(baseRevision),
 				path,
 				mtime);
-		Inode inode = inodeForPath(path, false);
+		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setMtime(mtime);
 		markDirty();
 	}
 
 	@Override
-	public void setCtime(String path, long ctime) throws IOException {
+	public void setCtime(String path, long ctime, boolean followSymlinks) throws IOException {
 		assertWritable(path);
 		logger.debug("ZKFS {} {}: set ctime {} {}",
 				Util.formatArchiveId(archive.getConfig().getArchiveId()),
 				Util.formatRevisionTag(baseRevision),
 				path,
 				ctime);
-		Inode inode = inodeForPath(path, false);
+		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setCtime(ctime);
 		markDirty();
 	}
 
 	@Override
-	public void setAtime(String path, long atime) throws IOException {
+	public void setAtime(String path, long atime, boolean followSymlinks) throws IOException {
 		assertWritable(path);
 		logger.debug("ZKFS {} {}: set atime {} {}",
 				Util.formatArchiveId(archive.getConfig().getArchiveId()),
 				Util.formatRevisionTag(baseRevision),
 				path,
 				atime);
-		Inode inode = inodeForPath(path, false);
+		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setAtime(atime);
 		markDirty();
 	}

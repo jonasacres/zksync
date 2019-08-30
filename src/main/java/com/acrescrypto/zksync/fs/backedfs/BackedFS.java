@@ -152,51 +152,51 @@ public class BackedFS extends FS {
 	}
 
 	@Override
-	public void chmod(String path, int mode) throws IOException {
+	public void chmod(String path, int mode, boolean followSymlinks) throws IOException {
 		ensurePresent(path, -1);
-		cacheFS.chmod(path, mode);
+		cacheFS.chmod(path, mode, followSymlinks);
 	}
 
 	@Override
-	public void chown(String path, int uid) throws IOException {
+	public void chown(String path, int uid, boolean followSymlinks) throws IOException {
 		ensurePresent(path, -1);
-		cacheFS.chown(path, uid);
+		cacheFS.chown(path, uid, followSymlinks);
 	}
 
 	@Override
-	public void chown(String path, String user) throws IOException {
+	public void chown(String path, String user, boolean followSymlinks) throws IOException {
 		ensurePresent(path, -1);
-		cacheFS.chown(path, user);
+		cacheFS.chown(path, user, followSymlinks);
 	}
 
 	@Override
-	public void chgrp(String path, int gid) throws IOException {
+	public void chgrp(String path, int gid, boolean followSymlinks) throws IOException {
 		ensurePresent(path, -1);
-		cacheFS.chgrp(path, gid);
+		cacheFS.chgrp(path, gid, followSymlinks);
 	}
 
 	@Override
-	public void chgrp(String path, String group) throws IOException {
+	public void chgrp(String path, String group, boolean followSymlinks) throws IOException {
 		ensurePresent(path, -1);
-		cacheFS.chgrp(path, group);
+		cacheFS.chgrp(path, group, followSymlinks);
 	}
 
 	@Override
-	public void setMtime(String path, long mtime) throws IOException {
+	public void setMtime(String path, long mtime, boolean followSymlinks) throws IOException {
 		ensurePresent(path, -1);
-		cacheFS.setMtime(path, mtime);
+		cacheFS.setMtime(path, mtime, followSymlinks);
 	}
 
 	@Override
-	public void setCtime(String path, long ctime) throws IOException {
+	public void setCtime(String path, long ctime, boolean followSymlinks) throws IOException {
 		ensurePresent(path, -1);
-		cacheFS.setCtime(path, ctime);
+		cacheFS.setCtime(path, ctime, followSymlinks);
 	}
 
 	@Override
-	public void setAtime(String path, long atime) throws IOException {
+	public void setAtime(String path, long atime, boolean followSymlinks) throws IOException {
 		ensurePresent(path, -1);
-		cacheFS.setAtime(path, atime);
+		cacheFS.setAtime(path, atime, followSymlinks);
 	}
 
 	@Override

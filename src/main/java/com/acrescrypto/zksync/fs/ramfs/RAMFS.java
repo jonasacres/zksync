@@ -165,43 +165,43 @@ public class RAMFS extends FS {
 	}
 
 	@Override
-	public void chmod(String path, int mode) throws IOException {
-		lookup(path).stat.setMode(mode);
+	public void chmod(String path, int mode, boolean followSymlinks) throws IOException {
+		lookup(path, followSymlinks).stat.setMode(mode);
 	}
 
 	@Override
-	public void chown(String path, int uid) throws IOException {
-		lookup(path).stat.setUid(uid);
+	public void chown(String path, int uid, boolean followSymlinks) throws IOException {
+		lookup(path, followSymlinks).stat.setUid(uid);
 	}
 
 	@Override
-	public void chown(String path, String user) throws IOException {
-		lookup(path).stat.setUser(user);
+	public void chown(String path, String user, boolean followSymlinks) throws IOException {
+		lookup(path, followSymlinks).stat.setUser(user);
 	}
 
 	@Override
-	public void chgrp(String path, int gid) throws IOException {
-		lookup(path).stat.setGid(gid);
+	public void chgrp(String path, int gid, boolean followSymlinks) throws IOException {
+		lookup(path, followSymlinks).stat.setGid(gid);
 	}
 
 	@Override
-	public void chgrp(String path, String group) throws IOException {
-		lookup(path).stat.setGroup(group);
+	public void chgrp(String path, String group, boolean followSymlinks) throws IOException {
+		lookup(path, followSymlinks).stat.setGroup(group);
 	}
 
 	@Override
-	public void setMtime(String path, long mtime) throws IOException {
-		lookup(path).stat.setMtime(mtime);
+	public void setMtime(String path, long mtime, boolean followSymlinks) throws IOException {
+		lookup(path, followSymlinks).stat.setMtime(mtime);
 	}
 
 	@Override
-	public void setCtime(String path, long ctime) throws IOException {
-		lookup(path).stat.setCtime(ctime);
+	public void setCtime(String path, long ctime, boolean followSymlinks) throws IOException {
+		lookup(path, followSymlinks).stat.setCtime(ctime);
 	}
 
 	@Override
-	public void setAtime(String path, long atime) throws IOException {
-		lookup(path).stat.setAtime(atime);
+	public void setAtime(String path, long atime, boolean followSymlinks) throws IOException {
+		lookup(path, followSymlinks).stat.setAtime(atime);
 	}
 	
 	@Override
@@ -253,6 +253,10 @@ public class RAMFS extends FS {
 	@Override
 	public RAMFS unscopedFS() throws IOException {
 		return new RAMFS("/", this);
+	}
+	
+	protected Inode lookup(String path, boolean followSymlinks) throws IOException {
+		return followSymlinks ? lookup(path) : llookup(path);
 	}
 	
 	protected Inode lookup(String path) throws IOException {

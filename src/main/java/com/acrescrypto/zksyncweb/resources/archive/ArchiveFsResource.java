@@ -6,6 +6,7 @@ import java.util.Map;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
@@ -51,6 +52,23 @@ public class ArchiveFsResource {
 		ZKFS fs = State.sharedState().activeFs(config);
 
 		return ArchiveCrud.post(fs, path, params, contents);
+	}
+	
+	
+	@PUT
+	@Produces(MediaType.APPLICATION_JSON)
+	public XAPIResponse putPath(
+			@PathParam("archiveId") String archiveId,
+			@PathParam("path") String fullPath,
+			@Context UriInfo uriInfo,
+			byte[] contents) throws XAPIResponse, IOException {
+		String path = ArchiveCrud.basePath(fullPath);
+		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
+		Map<String,String> params = ArchiveCrud.convertMultivaluedToSingle(uriInfo.getQueryParameters());
+		if(config == null) throw XAPIResponse.notFoundErrorResponse();
+		ZKFS fs = State.sharedState().activeFs(config);
+
+		return ArchiveCrud.put(fs, path, params, contents);
 	}
 	
 	@DELETE
