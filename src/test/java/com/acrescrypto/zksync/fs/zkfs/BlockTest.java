@@ -256,7 +256,7 @@ public class BlockTest {
 		block.write();
 		String configPath = archive.getConfig().tag().path();
 		long blockSize = archive.getStorage().stat(block.getStorageTag().path()).getSize();
-		long configSize = archive.getStorage().storageSize(configPath);
+		long configSize = archive.getStorage().storageSize(configPath, false);
 		assertEquals(configSize, blockSize);
 	}
 
@@ -268,7 +268,7 @@ public class BlockTest {
 		block.write();
 		String configPath = archive.getConfig().tag().path();
 		long blockSize = archive.getStorage().stat(block.getStorageTag().path()).getSize();
-		long configSize = archive.getStorage().storageSize(configPath);
+		long configSize = archive.getStorage().storageSize(configPath, false);
 		assertEquals(configSize, blockSize);
 	}
 	

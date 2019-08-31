@@ -52,7 +52,7 @@ public class SwarmFS extends FS implements TimedReader {
 	}
 
 	@Override
-	public Directory opendir(String path) throws IOException {
+	public Directory opendir(String path, Stat stat) throws IOException {
 		throw new UnsupportedOperationException();
 	}
 

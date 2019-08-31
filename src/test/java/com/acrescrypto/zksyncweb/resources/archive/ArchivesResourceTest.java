@@ -68,8 +68,8 @@ public class ArchivesResourceTest {
 
 	ZKArchiveConfig validateSingleArchiveListing(JsonNode resp, XArchiveSpecification spec) throws IOException {
 		ZKArchiveConfig storedConfig = State.sharedState().getOpenConfigs().iterator().next();
-		long expectedStorageSize = storedConfig.getStorage().storageSize("/");
-		long expectedLocalStorageSize = storedConfig.getLocalStorage().storageSize("/");
+		long expectedStorageSize = storedConfig.getStorage().storageSize("/", false);
+		long expectedLocalStorageSize = storedConfig.getLocalStorage().storageSize("/", false);
 
 		boolean speccedWriteKey = spec.getWriteKey() != null || spec.getWritePassphrase() != null;
 		boolean expectReadKey = spec.getReadKey() != null || spec.getReadPassphrase() != null;

@@ -5,9 +5,9 @@ import java.io.StringReader;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.Map;
 
 import javax.json.Json;
@@ -21,6 +21,8 @@ import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
+import com.acrescrypto.zksync.fs.DirectoryTraverser;
+import com.acrescrypto.zksync.fs.DirectoryTraverser.TraversalEntry;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
@@ -130,15 +132,18 @@ public class ArchiveCrud {
 		} catch(ENOENTException exc) {
 			throw XAPIResponse.notFoundErrorResponse();
 		} catch(EISDIRException exc) {
-			Collection<String> listings = null;
 			boolean isRecursive = Boolean.parseBoolean(params.getOrDefault("recursive", "false"));
 			boolean isListStat = Boolean.parseBoolean(params.getOrDefault("liststat", "false"));
+			boolean dotdirs = Boolean.parseBoolean(params.getOrDefault("dotdirs", "false"));
 			
+			LinkedList<TraversalEntry> entries = new LinkedList<>();
 			try(ZKDirectory dir = fs.opendir(path)) {
-				if(isRecursive) {
-					listings = dir.listRecursive();
-				} else {
-					listings = dir.list();
+				DirectoryTraverser traverser = new DirectoryTraverser(fs, dir);
+				traverser.setRecursive(isRecursive);
+				traverser.setHideDirectories(false);
+				traverser.setIncludeDotDirs(dotdirs);
+				while(traverser.hasNext()) {
+					entries.add(traverser.next());
 				}
 			}
 			
@@ -149,18 +154,21 @@ public class ArchiveCrud {
 			
 			if(isListStat) {
 				// ?liststat=true causes stat information to be included with directory listings
-				ArrayList<XPathStat> pathStats = new ArrayList<>(listings.size());
-				for(String subpath : listings) {
-					String fqSubpath = path + "/" + subpath;
-					Inode inode = fs.inodeForPath(fqSubpath, false);
+				ArrayList<XPathStat> pathStats = new ArrayList<>(entries.size());
+				for(TraversalEntry entry : entries) {
+					Inode inode = fs.inodeForPath(entry.getPath(), false);
 					PageTreeStats treeStat = new PageTree(inode).getStats();
 					
-					pathStats.add(new XPathStat(fs, fqSubpath, inode, treeStat, existingPriority, isNofollow, 0));
+					pathStats.add(new XPathStat(fs, entry.getPath(), inode, treeStat, existingPriority, isNofollow, 0));
 				}
 				
 				payload.put("entries", pathStats);
 			} else {
-				payload.put("entries", listings);
+				ArrayList<String> paths = new ArrayList<>(entries.size());
+				for(TraversalEntry entry : entries) {
+					paths.add(entry.getPath());
+				}
+				payload.put("entries", paths);
 			}
 			throw XAPIResponse.withPayload(payload);
 		}
@@ -390,6 +398,8 @@ public class ArchiveCrud {
 			throw XAPIResponse.notFoundErrorResponse();
 		} catch(EEXISTSException exc) {
 			throw XAPIResponse.withError(409, "Path already exists");
+		} catch(ClassCastException exc) {
+			throw XAPIResponse.withError(400, "Invalid parameter datatype");
 		}
 	}
 	

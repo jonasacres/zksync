@@ -71,7 +71,7 @@ public class BackedFS extends FS {
 	/** This will almost certainly end in tears, since we can't guarantee that the directory
 	 * actually has correct contents. But support is provided.
 	 */
-	public Directory opendir(String path) throws IOException {
+	public Directory opendir(String path, Stat stat) throws IOException {
 		if(!cacheFS.exists(path)) {
 			if(backupFS.stat(path).isDirectory()) {
 				mkdirp(path);

@@ -7,47 +7,98 @@ import java.util.Collection;
 import java.util.LinkedList;
 
 import com.acrescrypto.zksync.utility.Shuffler;
+import com.acrescrypto.zksync.utility.Util;
 
 public class DirectoryTraverser {
-	LinkedList<String> paths = new LinkedList<String>();
-	String nextPath;
+	public class TraversalEntry {
+		String path;
+		Stat stat;
+		
+		public TraversalEntry(String path, Stat stat) {
+			this.path = path;
+			this.stat = stat;
+		}
+		
+		public String getPath() { return path; }
+		public Stat getStat() { return stat; }
+	}
+	
+	LinkedList<TraversalEntry> entries = new LinkedList<>();
+	TraversalEntry nextEntry;
+	Directory base;
 	
 	FS fs;
+	boolean initialized = false;
+
+	boolean recursive = true;
 	boolean hideDirectories = true;
+	boolean followSymlinks = false;
+	boolean includeDotDirs = false;
 	
 	public DirectoryTraverser(FS fs, Directory base) throws IOException {
+		this(fs, base, false);
+	}
+	
+	public static DirectoryTraverser withPath(FS fs, String path) throws IOException {
+		try(Directory dir = fs.opendir(path)) {
+			return new DirectoryTraverser(fs, dir, true);
+		}
+	}
+	
+	public DirectoryTraverser(FS fs, Directory base, boolean immediateInit) throws IOException {
 		this.fs = fs;
+		this.base = base;
+		if(immediateInit) {
+			initializeIfNeeded();
+		}
+	}
+	
+	protected void initializeIfNeeded() throws IOException {
+		if(initialized) return;
+		initialized = true;
 		addDirectory(base);
 		stageNext();
 	}
 	
-	public boolean hasNext() {
-		return nextPath != null;
+	public boolean hasNext() throws IOException {
+		initializeIfNeeded();
+		return nextEntry != null;
 	}
 	
-	public String next() throws IOException {
-		if(nextPath == null) return null;
-		String retPath = nextPath;
+	public TraversalEntry next() throws IOException {
+		initializeIfNeeded();
+		if(nextEntry == null) return null;
+		TraversalEntry retEntry = nextEntry;
 		
 		stageNext();
-		return retPath;
+		return retEntry;
 	}
 	
 	protected void stageNext() throws IOException {
-		/* a bit convoluted, but we stage the next result in nextPath so we can filter out directories while still
+		/* a bit convoluted, but we stage the next result in nextEntry so we can filter out directories while still
 		 * having hasNext() work in all cases.
 		 */
-		nextPath = popPath();
-		if(nextPath == null) return;
+		nextEntry = popEntry();
+		if(nextEntry == null) return;
 		
-		if(hideDirectories) {
-			while(nextPath != null && fs.stat(nextPath).isDirectory()) {
-				addDirectory(fs.opendir(nextPath));
-				nextPath = popPath();
-			}
-		} else {
-			if(fs.stat(nextPath).isDirectory()) {
-				addDirectory(fs.opendir(nextPath));
+		String basename = fs.basename(nextEntry.path);
+		boolean isDotDir = basename.equals(".") || basename.equals("..");
+
+		if(recursive) {
+			if(hideDirectories) {
+				while(nextEntry != null && nextEntry.stat.isDirectory()) {
+					if(!isDotDir) {
+						addDirectory(fs.opendir(nextEntry.path));
+					}
+					
+					nextEntry = popEntry();
+					basename = fs.basename(nextEntry.path);
+					isDotDir = basename.equals(".") || basename.equals("..");
+				}
+			} else {
+				if(nextEntry.stat.isDirectory() && !isDotDir) {
+					addDirectory(fs.opendir(nextEntry.path));
+				}
 			}
 		}
 	}
@@ -58,18 +109,54 @@ public class DirectoryTraverser {
 		 * equivalent to a uniform shuffle of the entire result set, but is likely good enough for the purposes
 		 * of ensuring peers send files in a generally different order from one another.
 		 */
-		Collection<String> subpaths = dir.list();
+		int flags = includeDotDirs ? Directory.LIST_OPT_INCLUDE_DOT_DOTDOT : 0;
+		Collection<String> subpaths = dir.list(flags);
 		ArrayList<String> arrayified = new ArrayList<>(subpaths);
 		Shuffler shuffler = new Shuffler(subpaths.size());
 		while(shuffler.hasNext()) {
-			String path = arrayified.get(shuffler.next());
-			paths.add(Paths.get(dir.getPath(), path).toString());
+			String subpath = arrayified.get(shuffler.next()),
+			          path = Paths.get(dir.getPath(), subpath).toString();
+			Stat stat = followSymlinks ? fs.stat(path) : fs.lstat(path);
+			TraversalEntry entry = new TraversalEntry(path, stat);
+			entries.add(entry);
 		}
 		dir.close();
 	}
 	
-	protected String popPath() {
-		if(paths.isEmpty()) return null;
-		return paths.remove();
+	protected TraversalEntry popEntry() {
+		if(entries.isEmpty()) return null;
+		return entries.remove();
+	}
+	
+	public boolean getHideDirectories() {
+		return hideDirectories;
+	}
+	
+	public void setHideDirectories(boolean hideDirectories) {
+		this.hideDirectories = hideDirectories;
+	}
+
+	public boolean getFollowSymlinks() {
+		return followSymlinks;
+	}
+	
+	public void setFollowSymlinks(boolean followSymlinks) {
+		this.followSymlinks = followSymlinks;
+	}
+	
+	public boolean getRecursive() {
+		return recursive;
+	}
+
+	public void setRecursive(boolean recursive) {
+		this.recursive = recursive;
+	}
+	
+	public boolean getIncludeDotDirs() {
+		return includeDotDirs;
+	}
+	
+	public void setIncludeDotDirs(boolean includeDotDirs) {
+		this.includeDotDirs = includeDotDirs;
 	}
 }

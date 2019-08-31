@@ -80,10 +80,15 @@ public class RAMFS extends FS {
 	public Stat lstat(String path) throws IOException {
 		return llookup(path).stat;
 	}
-
+	
 	@Override
 	public RAMDirectory opendir(String path) throws IOException {
-		if(!lookup(path).stat.isDirectory()) throw new EISNOTDIRException(path);
+		return opendir(path, stat(path));
+	}
+	
+	@Override
+	public RAMDirectory opendir(String path, Stat stat) throws IOException {
+		if(!stat.isDirectory()) throw new EISNOTDIRException(path);
 		return new RAMDirectory(this, path);
 	}
 

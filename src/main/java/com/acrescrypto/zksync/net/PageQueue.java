@@ -294,7 +294,8 @@ public class PageQueue {
 			Directory dir = null;
 			try {
 				dir = this.archive.getStorage().opendir("/");
-				traverser = new DirectoryTraverser(this.archive.getStorage(), this.archive.getStorage().opendir("/"));
+				traverser = new DirectoryTraverser(this.archive.getStorage(),
+						this.archive.getStorage().opendir("/"));
 			} catch(IOException exc) {
 				logger.error("Caught exception establishing EverythingQueueItem", exc);
 			} finally {
@@ -310,14 +311,14 @@ public class PageQueue {
 		
 		@Override
 		QueueItem nextChildActual() {
-			if(traverser == null || !traverser.hasNext()) {
-				done = true;
-				return null;
-			}
-			
 			try {
+				if(traverser == null || !traverser.hasNext()) {
+					done = true;
+					return null;
+				}
+
 				String path;
-				path = traverser.next();
+				path = traverser.next().getPath();
 				logger.trace("Enqueuing path {}", path);
 				StorageTag tag = new StorageTag(archive.getCrypto(), path);
 				return new PageQueueItem(priority, archive, tag);

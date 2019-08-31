@@ -135,7 +135,7 @@ public class BackedFSTest extends FSTestBase {
 			return read(path);
 		}
 
-		public Directory opendir(String path) throws IOException { throw new RuntimeException("attempted to opendir on backup"); }
+		public Directory opendir(String path, Stat stat) throws IOException { throw new RuntimeException("attempted to opendir on backup"); }
 		public void mkdir(String path) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public void mkdirp(String path) throws IOException { throw new RuntimeException("attempted to write to backup"); }
 		public void rmdir(String path) throws IOException { throw new RuntimeException("attempted to write to backup"); }

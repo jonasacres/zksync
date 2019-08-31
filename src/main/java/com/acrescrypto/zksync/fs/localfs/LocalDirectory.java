@@ -20,11 +20,13 @@ public class LocalDirectory implements Directory {
 	
 	protected String path;
 	protected LocalFS fs;
+	protected Stat stat;
 	
-	LocalDirectory(LocalFS fs, String path) throws IOException {
+	LocalDirectory(LocalFS fs, String path, Stat stat) throws IOException {
 		this.fs = fs;
 		this.path = fs.absolutePath(path);
-		if(!fs.stat(path).isDirectory()) throw new EISNOTDIRException(path + ": not a directory");
+		this.stat = stat;
+		if(!stat.isDirectory()) throw new EISNOTDIRException(path + ": not a directory");
 	}
 	
 	public Collection<String> list() throws IOException {
@@ -103,7 +105,9 @@ public class LocalDirectory implements Directory {
 						cb.foundPath(subpath, stat, isBrokenSymlink, this);
 					}
 					
-					if(!isDotDir) fs.opendir(realSubpath).walkRecursiveIterate(opts, subpath, cb);
+					if(!isDotDir) {
+						fs.opendir(realSubpath).walkRecursiveIterate(opts, subpath, cb);
+					}
 				} else {
 					cb.foundPath(subpath, stat, isBrokenSymlink, this);
 				}

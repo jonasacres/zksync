@@ -50,6 +50,13 @@ public class LocalFS extends FS {
 	public LocalFS(String root) {
 		this.root = root;
 	}
+	
+	@Override
+	public long size(String path, boolean followSymlinks) throws IOException {
+		LinkOption[] linkOpt = followSymlinks ? new LinkOption[0] : new LinkOption[] { LinkOption.NOFOLLOW_LINKS };
+		BasicFileAttributes attr = Files.readAttributes(Paths.get(path), BasicFileAttributes.class, linkOpt);
+		return attr.size();
+	}
 
 	private Stat statWithLinkOption(String pathStr, LinkOption... linkOpt) throws IOException {
 		Stat stat = new Stat();
@@ -62,17 +69,19 @@ public class LocalFS extends FS {
 		 */
 		
 		try {
-			stat.setAtime(decodeTime(Files.getAttribute(path, "lastAccessTime", linkOpt)));
-			stat.setMtime(decodeTime(Files.getAttribute(path, "lastModifiedTime", linkOpt)));
-			stat.setCtime(decodeTime(Files.getAttribute(path, "creationTime", linkOpt)));
-			stat.setMode(getFilePermissions(path, linkOpt));
+			PosixFileAttributes attr = Files.readAttributes(path, PosixFileAttributes.class, linkOpt);
+
+			stat.setMtime(attr.lastModifiedTime().to(TimeUnit.NANOSECONDS));
+			stat.setAtime(attr.lastAccessTime().to(TimeUnit.NANOSECONDS));
+			stat.setCtime(attr.creationTime().to(TimeUnit.NANOSECONDS));
+			stat.setMode(getFilePermissions(attr));
 			if(!isWindows()) {
 				stat.setUid((Integer) Files.getAttribute(path, "unix:uid", linkOpt));
 				stat.setGid((Integer) Files.getAttribute(path, "unix:gid", linkOpt));
 				stat.setGroup(cachedGroupName(stat.getGid(), path, linkOpt));
 			}
 			stat.setUser(cachedUserName(stat.getUid(), path, linkOpt));
-			int type = getStatType(path, linkOpt);
+			int type = getStatType(attr);
 			if(type >= 0) {
 				stat.setType(type);
 			} else {
@@ -86,7 +95,7 @@ public class LocalFS extends FS {
 			if(stat.isSymlink()) {
 				stat.setSize(0);
 			} else {
-				stat.setSize(Files.size(path));
+				stat.setSize(attr.size());
 			}
 						
 			if(!isWindows()) stat.setInodeId((Long) Files.getAttribute(path, "unix:ino", linkOpt));
@@ -99,17 +108,12 @@ public class LocalFS extends FS {
 		return stat;
 	}
 	
-	private long decodeTime(Object obj) {
-		FileTime time = (FileTime) obj;
-		return time.to(TimeUnit.NANOSECONDS);
-	}
-	
-	private int getStatType(Path path, LinkOption... linkOpt) {
-		if(Files.isDirectory(path, linkOpt)) {
+	private int getStatType(PosixFileAttributes attr) {
+		if(attr.isDirectory()) {
 			return Stat.TYPE_DIRECTORY;
-		} else if(Files.isRegularFile(path, linkOpt)) {
+		} else if(attr.isRegularFile()) {
 			return Stat.TYPE_REGULAR_FILE;
-		} else if(Files.isSymbolicLink(path) && linkOpt != null) {
+		} else if(attr.isSymbolicLink()) {
 			return Stat.TYPE_SYMLINK;
 		} else {
 			return -1;
@@ -133,9 +137,9 @@ public class LocalFS extends FS {
 		}		
 	}
 	
-	private int getFilePermissions(Path path, LinkOption... linkOpt) throws IOException {
+	private int getFilePermissions(PosixFileAttributes attr) throws IOException {
 		int mode = 0;
-		Set<PosixFilePermission> perms = Files.getPosixFilePermissions(path, linkOpt);
+		Set<PosixFilePermission> perms = attr.permissions();
 		
 		if(perms.contains(PosixFilePermission.OTHERS_EXECUTE)) mode |= 0001;
 		if(perms.contains(PosixFilePermission.OTHERS_WRITE)) mode |= 0002;
@@ -187,7 +191,12 @@ public class LocalFS extends FS {
 	
 	@Override
 	public LocalDirectory opendir(String path) throws IOException {
-		return new LocalDirectory(this, path);
+		return opendir(path, stat(path));
+	}
+	
+	@Override
+	public LocalDirectory opendir(String path, Stat stat) throws IOException {
+		return new LocalDirectory(this, path, stat);
 	}
 
 	@Override

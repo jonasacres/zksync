@@ -332,18 +332,12 @@ public class ZKArchive implements AutoCloseable {
 	}
 	
 	public void rescanPageTags() throws IOException {
-		Directory dir = null;
 		allPageTags.clear();
-		try {
-			dir = storage.opendir("/");
+		try(Directory dir = storage.opendir("/")) {
 			DirectoryTraverser traverser = new DirectoryTraverser(storage, dir);
 			while(traverser.hasNext()) {
-				StorageTag tag = new StorageTag(crypto, traverser.next());
+				StorageTag tag = new StorageTag(crypto, traverser.next().getPath());
 				allPageTags.put(tag.shortTag(), tag);
-			}
-		} finally {
-			if(dir != null) {
-				dir.close();
 			}
 		}
 	}

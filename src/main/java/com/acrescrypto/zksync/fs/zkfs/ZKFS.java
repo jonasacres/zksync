@@ -485,6 +485,11 @@ public class ZKFS extends FS {
 			return dir;
 		}
 	}
+
+	@Override
+	public ZKDirectory opendir(String path, Stat stat) throws IOException {
+		return opendir(path); // can't leverage pre-fetched stats with the HashCache :(
+	}
 	
 	/** Return a directory by inode from the cache if we have it; otherwise, open it. Caller
 	 * should already be in a lockedOperation(). */ 

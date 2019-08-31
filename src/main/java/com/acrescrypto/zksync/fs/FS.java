@@ -31,10 +31,23 @@ public abstract class FS implements AutoCloseable {
 	
 	public static boolean fileHandleTelemetryEnabled = false;
 	
+	public long size(String path) throws IOException {
+		return size(path, true);
+	}
+	
+	public long size(String path, boolean followSymlinks) throws IOException {
+		if(followSymlinks) {
+			return stat(path).getSize();
+		} else {
+			return lstat(path).getSize();
+		}
+	}
+	
 	public abstract Stat stat(String path) throws IOException;
 	public abstract Stat lstat(String path) throws IOException;
 	
-	public abstract Directory opendir(String path) throws IOException;
+	public Directory opendir(String path) throws IOException { return opendir(path, stat(path)); }
+	public abstract Directory opendir(String path, Stat stat) throws IOException;
 	public abstract void mkdir(String path) throws IOException;
 	public abstract void mkdirp(String path) throws IOException;
 	public abstract void rmdir(String path) throws IOException;
@@ -284,21 +297,17 @@ public abstract class FS implements AutoCloseable {
 		}
 	}
 	
-	public long storageSize(String path) throws IOException {
+	public long storageSize(String path, boolean followSymlinks) throws IOException {
 		// TODO API: (test) FS.storageSize
 		long totalSize = 0;
 		
 		Stat s = stat(path);
 		if(s.isDirectory()) {
-			Directory dir = null;
-			try {
-				dir = opendir(path);
-				for(String item : dir.listRecursive(0)) {
-					totalSize += stat(item).size;
-				}
-			} finally {
-				if(dir != null) {
-					dir.close();
+			try(Directory dir = opendir(path, s)) {
+				DirectoryTraverser traverser = new DirectoryTraverser(this, dir);
+				traverser.followSymlinks = followSymlinks;
+				while(traverser.hasNext()) {
+					totalSize += traverser.next().stat.getSize();
 				}
 			}
 		} else if(s.isRegularFile() || s.isSymlink()) {

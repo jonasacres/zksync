@@ -63,8 +63,8 @@ public class XArchiveIdentification {
 		
 		try {
 			xset = XArchiveSettings.fromConfig(config);
-			id.consumedStorage = config.getStorage().storageSize("/");
-			id.consumedLocalStorage = config.getLocalStorage().storageSize("/");
+			id.consumedStorage = config.getStorage().storageSize("/", false);
+			id.consumedLocalStorage = config.getLocalStorage().storageSize("/", false);
 		} catch(IOException exc) {
 			xset = new XArchiveSettings();
 			// TODO API: (log) worth logging this...
