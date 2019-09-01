@@ -236,6 +236,8 @@ public class InodeTable extends ZKFile {
 			inode.setChangedFrom(zkfs.getBaseRevision());
 		}
 		
+		inode.setFlags((byte) (inode.getFlags() | Inode.FLAG_RETAIN));
+		
 		syncInodes();
 		allocatedInodeIds.clear();
 		changedFromOverrides.clear();
