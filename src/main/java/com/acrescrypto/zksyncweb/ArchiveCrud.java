@@ -76,7 +76,7 @@ public class ArchiveCrud {
 				// add in ?nofollow=true to do lstat
 				Inode inode = fs.getInodeTable().inodeWithId(inodeId);
 				PageTree tree = new PageTree(inode);
-				throw XAPIResponse.withPayload(new XPathStat(fs, path, inode, tree.getStats(), existingPriority, isNofollow, 0));
+				throw XAPIResponse.withPayload(new XPathStat(fs, path, inode, tree.getStats(), existingPriority, !isNofollow, 0));
 			}
 			
 			if(params.containsKey("priority") || existingPriority == PageQueue.CANCEL_PRIORITY) {
@@ -156,10 +156,16 @@ public class ArchiveCrud {
 				// ?liststat=true causes stat information to be included with directory listings
 				ArrayList<XPathStat> pathStats = new ArrayList<>(entries.size());
 				for(TraversalEntry entry : entries) {
-					Inode inode = fs.inodeForPath(entry.getPath(), false);
+					Inode inode = fs.inodeForPath(entry.getPath(), !isNofollow);
 					PageTreeStats treeStat = new PageTree(inode).getStats();
 					
-					pathStats.add(new XPathStat(fs, entry.getPath(), inode, treeStat, existingPriority, isNofollow, 0));
+					pathStats.add(new XPathStat(fs,
+							entry.getPath(),
+							inode,
+							treeStat,
+							existingPriority,
+							!isNofollow,
+							0));
 				}
 				
 				payload.put("entries", pathStats);

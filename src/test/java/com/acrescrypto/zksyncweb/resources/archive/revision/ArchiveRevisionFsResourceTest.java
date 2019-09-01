@@ -135,9 +135,9 @@ public class ArchiveRevisionFsResourceTest {
 		ArrayList<String> items = new ArrayList<>();
 		resp.get("entries").forEach((node)->items.add(node.asText()));
 
-		assertTrue(items.contains("a"));
-		assertTrue(items.contains("b"));
-		assertTrue(items.contains("dir"));
+		assertTrue(items.contains("/a"));
+		assertTrue(items.contains("/b"));
+		assertTrue(items.contains("/dir"));
 	}
 
 	@Test
@@ -148,9 +148,9 @@ public class ArchiveRevisionFsResourceTest {
 		ArrayList<String> items = new ArrayList<>();
 		resp.get("entries").forEach((node)->items.add(node.asText()));
 
-		assertTrue(items.contains("a"));
-		assertTrue(items.contains("b"));
-		assertTrue(items.contains("dir"));
-		assertTrue(items.contains("dir/d"));
+		assertTrue(items.contains("/a"));
+		assertTrue(items.contains("/b"));
+		assertTrue(items.contains("/dir"));
+		assertTrue(items.contains("/dir/d"));
 	}
 }

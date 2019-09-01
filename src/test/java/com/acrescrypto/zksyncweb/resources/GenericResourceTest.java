@@ -20,6 +20,7 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksyncweb.Main;
+import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.WebTestUtils;
 
 public class GenericResourceTest {
@@ -43,6 +44,7 @@ public class GenericResourceTest {
 	@After
 	public void afterEach() throws Exception {
 		server.shutdownNow();
+		State.clearState();
 	}
 
 	@AfterClass

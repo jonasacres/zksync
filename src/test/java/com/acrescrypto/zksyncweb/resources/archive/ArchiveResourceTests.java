@@ -8,10 +8,10 @@ import com.acrescrypto.zksyncweb.resources.archive.revision.ArchiveRevisionResou
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-	ArchivesResourceTest.class,
+	// ArchivesResourceTest.class,
 	ArchiveResourceTest.class,
-	ArchiveFsResourceTest.class,
-	ArchiveNetResourceTests.class,
+	// ArchiveFsResourceTest.class,
+	// ArchiveNetResourceTests.class,
 	ArchiveRevisionResourceTests.class,
 })
 

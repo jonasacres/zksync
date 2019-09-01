@@ -563,9 +563,9 @@ public class ArchiveFsResourceTest {
 		ArrayList<String> items = new ArrayList<>();
 		resp.get("entries").forEach((node)->items.add(node.asText()));
 
-		assertTrue(items.contains("1"));
-		assertTrue(items.contains("2"));
-		assertTrue(items.contains("3"));
+		assertTrue(items.contains("/dir/1"));
+		assertTrue(items.contains("/dir/2"));
+		assertTrue(items.contains("/dir/3"));
 	}
 
 	@Test
@@ -599,7 +599,7 @@ public class ArchiveFsResourceTest {
 
 		resp.get("entries").forEach((node)->{
 			try {
-				WebTestUtils.validatePathStat(fs, "dir", node);
+				WebTestUtils.validatePathStat(fs, "/", node);
 			} catch (IOException e) {
 				fail();
 			}
@@ -619,13 +619,13 @@ public class ArchiveFsResourceTest {
 
 		ArrayList<String> items = new ArrayList<>();
 		resp.get("entries").forEach((node)->items.add(node.asText()));
-
-		assertTrue(items.contains("a"));
-		assertTrue(items.contains("b"));
-		assertTrue(items.contains("c"));
-		assertTrue(items.contains("a/1"));
-		assertTrue(items.contains("b/2"));
-		assertTrue(items.contains("c/3"));
+		
+		assertTrue(items.contains("/dir/a"));
+		assertTrue(items.contains("/dir/b"));
+		assertTrue(items.contains("/dir/c"));
+		assertTrue(items.contains("/dir/a/1"));
+		assertTrue(items.contains("/dir/b/2"));
+		assertTrue(items.contains("/dir/c/3"));
 	}
 
 	@Test
@@ -639,7 +639,7 @@ public class ArchiveFsResourceTest {
 		ArrayList<String> items = new ArrayList<>();
 		resp.get("entries").forEach((node)->items.add(node.asText()));
 
-		assertTrue(items.contains("1"));
+		assertTrue(items.contains("/1"));
 	}
 
 	@Test

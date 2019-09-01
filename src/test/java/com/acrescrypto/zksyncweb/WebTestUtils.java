@@ -10,6 +10,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLDecoder;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -231,7 +232,7 @@ public class WebTestUtils {
 	}
 
 	public static void validatePathStat(ZKFS fs, String prefix, JsonNode pathStat) throws IOException {
-		String fullPath = prefix + "/" + pathStat.get("path").asText();
+		String fullPath = Paths.get(prefix, pathStat.get("path").asText()).toString();
 
 		Stat stat = null;
 		JsonNode statNode = pathStat.get("stat");
@@ -274,7 +275,7 @@ public class WebTestUtils {
 		resp.get("parents").forEach((parent)->{
 			assertTrue(tags.removeIf((t)->{
 				try {
-					return Arrays.equals(t.getBytes(), parent.binaryValue());
+					return Arrays.equals(t.getBytes(), parent.get("revTag").binaryValue());
 				} catch (IOException e) {
 					return false;
 				}

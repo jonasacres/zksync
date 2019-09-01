@@ -26,23 +26,23 @@ public class XPathStat {
 	private boolean isRequested;
 	private long priority;
 	
-	public static XPathStat withPath(ZKFS fs, String path, int priority, boolean nofollow, int depth) throws IOException {
+	public static XPathStat withPath(ZKFS fs, String path, int priority, boolean followSymlinks, int depth) throws IOException {
 		if(depth >= ZKFS.MAX_SYMLINK_DEPTH) {
-			return new XPathStat(fs, path, null, null, priority, nofollow, depth);
+			return new XPathStat(fs, path, null, null, priority, followSymlinks, depth);
 		}
 		
 		try {
-			Inode inode = fs.inodeForPath(path, nofollow);
+			Inode inode = fs.inodeForPath(path, followSymlinks);
 			PageTree tree = new PageTree(inode);
 			PageTreeStats treeStats = tree.getStats();
 			
-			return new XPathStat(fs, path, inode, treeStats, priority, nofollow, depth);
+			return new XPathStat(fs, path, inode, treeStats, priority, followSymlinks, depth);
 		} catch(ENOENTException exc) {
-			return new XPathStat(fs, path, null, null, priority, nofollow, depth);
+			return new XPathStat(fs, path, null, null, priority, followSymlinks, depth);
 		}
 	}
 	
-	public XPathStat(ZKFS fs, String path, Inode inode, PageTreeStats treeStats, int priority, boolean nofollow, int depth) throws IOException {
+	public XPathStat(ZKFS fs, String path, Inode inode, PageTreeStats treeStats, int priority, boolean followSymlinks, int depth) throws IOException {
 		this.path = path;
 		
 		if(inode != null) {
@@ -66,7 +66,11 @@ public class XPathStat {
 				String linkTargetRelative = fs.readlink(path);
 				String linkTargetResolved = Paths.get(fs.dirname(path), linkTargetRelative).toString();
 				this.targetPath = linkTargetRelative;
-				this.target = XPathStat.withPath(fs, linkTargetResolved, priority, nofollow, depth + 1);
+				this.target = XPathStat.withPath(fs,
+						linkTargetResolved,
+						priority,
+						followSymlinks,
+						depth + 1);
 			}
 		}
 		
