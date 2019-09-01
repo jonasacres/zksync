@@ -7,7 +7,6 @@ import java.util.Collection;
 import java.util.LinkedList;
 
 import com.acrescrypto.zksync.utility.Shuffler;
-import com.acrescrypto.zksync.utility.Util;
 
 public class DirectoryTraverser {
 	public class TraversalEntry {

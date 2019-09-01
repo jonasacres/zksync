@@ -53,6 +53,7 @@ public class InodeTable extends ZKFile {
 	/** Map of inode IDs that we will force to have a specific changedFrom field in a diff merge */
 	protected ConcurrentHashMap<Long,ChangedFromOverrideReference> changedFromOverrides = new ConcurrentHashMap<>();
 	
+	private boolean dirty;
 	private BlockManager blockManager;
 	
 	/** serialized size of an inode for a given archive, in bytes */
@@ -169,7 +170,7 @@ public class InodeTable extends ZKFile {
 	/** calculate the next inode ID to be issued (by scanning for the largest issued inode ID) */
 	protected synchronized long lookupNextInodeId() throws IOException {
 		long maxPageNum;
-		if(dirty) {
+		if(isDirty()) {
 			maxPageNum = tree.numPages;
 			for(Long pageNum : inodesByPage.cachedKeys()) {
 				if(maxPageNum <= pageNum) maxPageNum = pageNum + 1;
@@ -215,9 +216,11 @@ public class InodeTable extends ZKFile {
 		updateRevisionInfo(parents);
 		
 		blockManager.writeAll();
+		inode.setChangedFrom(zkfs.baseRevision);
 		
 		if(timestamp >= 0) {
 			Inode[] fixedTimestampInodes = new Inode[] {
+					this.inodeWithId(INODE_ID_INODE_TABLE),
 					this.inodeWithId(INODE_ID_ROOT_DIRECTORY),
 					this.inodeWithId(INODE_ID_FREELIST),
 			};
@@ -226,12 +229,17 @@ public class InodeTable extends ZKFile {
 				fixedInode.setModifiedTime(timestamp);
 				fixedInode.getStat().setMtime(timestamp);
 				fixedInode.getStat().setAtime(timestamp);
+				fixedInode.setChangedFrom(zkfs.getBaseRevision());
 			}
+		} else if(dirty) {
+			inode.setModifiedTime(Util.currentTimeNanos());
+			inode.setChangedFrom(zkfs.getBaseRevision());
 		}
 		
 		syncInodes();
 		allocatedInodeIds.clear();
 		changedFromOverrides.clear();
+		dirty = false;
 		return parents;
 	}
 	
@@ -516,7 +524,7 @@ public class InodeTable extends ZKFile {
 			
 			this.nextInodeId = -1;
 			Util.debugLog(sb.toString());
-			dirty = true;
+			setDirty(true);
 			
 			return null;
 		});
@@ -644,7 +652,14 @@ public class InodeTable extends ZKFile {
 		}
 		
 		while(i < list.length) list[i++] = new Inode(zkfs);
+		inode.copyValuesFrom(list[0], true);
+		inode.setDirty(false);
 		list[0] = inode; // inject our own inode in at index 0
+		
+		Util.debugLog(String.format("InodeTable %s: Read table with timestamp %d, changedFrom %s",
+				Util.formatRevisionTag(zkfs.getBaseRevision()),
+				inode.getModifiedTime(),
+				Util.formatRevisionTag(inode.getChangedFrom())));
 		
 		return list;
 	}
@@ -664,6 +679,7 @@ public class InodeTable extends ZKFile {
 		boolean hasDirty = false;
 		for(Inode inode : inodes) {
 			if(inode.isDirty()) {
+				Util.debugLog("DIRTY INODE: " + inode.getStat().getInodeId());
 				hasDirty = true;
 				break;
 			}
@@ -701,6 +717,7 @@ public class InodeTable extends ZKFile {
 	protected void commitFirstInodePage(Inode[] inodes) throws IOException {
 		seek(0, SEEK_SET);
 		write(revision.serialize());
+		int inodeCount = 0;
 		for(Inode inode : inodes) {
 			logger.trace("ZKFS {} {}: Commit inode {} {} size {} at offset {}",
 					Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
@@ -709,6 +726,10 @@ public class InodeTable extends ZKFile {
 					getSize(),
 					Util.formatRefTag(inode.getRefTag()),
 					this.pos());
+			if(inodeCount == 0) {
+				Util.debugLog("SERIALIZING MODIFIED TIME: " + inode.getStat().getMtime() + " " + Util.formatRevisionTag(inode.getChangedFrom()));
+			}
+			inodeCount++;
 			write(inode.serialize());
 			inode.setDirty(false);
 		}
@@ -844,6 +865,7 @@ public class InodeTable extends ZKFile {
 		this.inode = new Inode(zkfs);
 		this.inode.setRefTag(tag.getRefTag());
 		this.inode.setFlags(Inode.FLAG_RETAIN);
+		this.inode.setDirty(false);
 		this.pendingSize = zkfs.archive.config.pageSize * tag.getRefTag().numPages;
 		this.inode.getStat().setSize(this.pendingSize);
 		this.revision = readRevisionInfo();
@@ -911,7 +933,7 @@ public class InodeTable extends ZKFile {
 		s += String.format("Inode table dump for %s, nextInodeId=%d, dirty=%s, size=%d, inodesPerPage %d/%d\n",
 				Util.formatRevisionTag(zkfs.baseRevision),
 				nextInodeId,
-				dirty ? "true" : "false",
+				isDirty() ? "true" : "false",
 				getSize(),
 				numInodesForPage(0),
 				numInodesForPage(1));
@@ -993,5 +1015,13 @@ public class InodeTable extends ZKFile {
 	
 	public BlockManager getBlockManager() {
 		return blockManager;
+	}
+
+	public boolean isDirty() {
+		return dirty;
+	}
+
+	public void setDirty(boolean dirty) {
+		this.dirty = dirty;
 	}
 }

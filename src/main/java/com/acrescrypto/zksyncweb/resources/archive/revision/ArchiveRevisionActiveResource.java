@@ -1,6 +1,7 @@
 package com.acrescrypto.zksyncweb.resources.archive.revision;
 
 import java.io.IOException;
+import java.util.Map;
 
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -8,10 +9,13 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.UriInfo;
 
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksyncweb.ArchiveCrud;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 import com.acrescrypto.zksyncweb.data.XRevisionInfo;
@@ -22,11 +26,14 @@ public class ArchiveRevisionActiveResource {
 	
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
-	public XAPIResponse getActive(@PathParam("archiveId") String archiveId) throws IOException {
+	public XAPIResponse getActive(@PathParam("archiveId") String archiveId,
+			@Context UriInfo uriInfo) throws IOException {
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
+		Map<String,String> params = ArchiveCrud.convertMultivaluedToSingle(uriInfo.getQueryParameters());
+		int depth = Integer.parseInt(params.getOrDefault("depth", "1"));
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
 		
-		XRevisionInfo xInfo = new XRevisionInfo(State.sharedState().activeFs(config).getBaseRevision());
+		XRevisionInfo xInfo = new XRevisionInfo(State.sharedState().activeFs(config).getBaseRevision(), depth);
 		return XAPIResponse.withPayload(xInfo);
 	}
 	

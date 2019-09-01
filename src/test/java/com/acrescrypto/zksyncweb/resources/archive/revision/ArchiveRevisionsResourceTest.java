@@ -94,11 +94,11 @@ public class ArchiveRevisionsResourceTest {
 	public void testPostCommitCreatesNewRevisionWithSpecifiedParentsIfWritableAndParentsSupplied() throws IOException {
 		XRevisionInfo info = new XRevisionInfo();
 		ArrayList<byte[]> tags = new ArrayList<>();
-		info.setParents(new byte[10][]);
+		info.setParents(new XRevisionInfo[10]);
 		for(int i = 0; i < info.getParents().length; i++) {
 			try(ZKFS fs = archive.openBlank()) {
-				info.getParents()[i] = fs.commit().getBytes();
-				tags.add(info.getParents()[i]);
+				info.getParents()[i] = new XRevisionInfo(fs.commit(), 0);
+				tags.add(info.getParents()[i].getRevTag());
 			}
 		}
 
@@ -116,7 +116,8 @@ public class ArchiveRevisionsResourceTest {
 	@Test
 	public void testPostCommiFailsIfInvalidParentsSupplied() throws IOException {
 		XRevisionInfo info = new XRevisionInfo();
-		info.setParents(new byte[1][1]);
+		info.setParents(new XRevisionInfo[] { new XRevisionInfo() });
+		info.getParents()[0].setRevTag(new byte[1]);
 		WebTestUtils.requestPostWithError(target, 400, basePath, info);
 	}
 

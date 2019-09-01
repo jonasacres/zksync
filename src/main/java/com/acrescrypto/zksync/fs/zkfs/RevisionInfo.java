@@ -109,4 +109,8 @@ public class RevisionInfo {
 	public ArrayList<RevisionTag> getParents() {
 		return new ArrayList<>(parents);
 	}
+	
+	public InodeTable getInodeTable() {
+		return inodeTable;
+	}
 }

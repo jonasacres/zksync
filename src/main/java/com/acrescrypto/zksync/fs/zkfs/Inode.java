@@ -170,7 +170,7 @@ public class Inode implements Comparable<Inode> {
 		this.modifiedTime = buf.getLong();
 		this.identity = buf.getLong();
 		this.nlink = buf.getInt();
-		this.setFlags(buf.get());
+		this.flags = buf.get();
 		
 		byte[] refTagBytes = new byte[fs.archive.config.refTagSize()];
 		buf.get(refTagBytes);
@@ -181,6 +181,7 @@ public class Inode implements Comparable<Inode> {
 		this.changedFrom = new RevisionTag(fs.archive.config, revisionTagBytes, false);
 		
 		this.previousInodeId = buf.getLong();
+		this.dirty = false;
 	}
 	
 	/** increment link count */
@@ -309,6 +310,24 @@ public class Inode implements Comparable<Inode> {
 		return newInode;
 	}
 	
+	public void copyValuesFrom(Inode inode, boolean preserveSizeAndReftag) {
+		long oldSize = this.stat.getSize();
+		RefTag oldRefTag = this.getRefTag();
+		
+		this.setStat(inode.stat.clone());
+		this.setNlink(inode.getNlink());
+		this.setFlags(inode.getFlags());
+		this.setModifiedTime(inode.getModifiedTime());
+		this.setIdentity(inode.getIdentity());
+		this.setRefTag(inode.getRefTag());
+		this.setChangedFrom(inode.getChangedFrom());
+		
+		if(preserveSizeAndReftag) {
+			this.stat.setSize(oldSize);
+			this.setRefTag(oldRefTag);
+		}
+	}
+	
 	public String dump() {
 		String s = "Inode " + stat.getInodeId() + " size: " + stat.getSize() + "\n";
 		s += "\tMode: " + String.format("0%03o", stat.getMode()) + "\n";
@@ -330,6 +349,11 @@ public class Inode implements Comparable<Inode> {
 	}
 
 	public void setDirty(boolean dirty) {
+		if(dirty == this.dirty) return;		
 		this.dirty = dirty;
+		
+		if(dirty && fs != null && fs.getInodeTable() != null) {
+			fs.getInodeTable().setDirty(true);
+		}
 	}
 }
