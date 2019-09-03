@@ -757,4 +757,68 @@ public class RevisionTreeTest {
 		config.getCacheStorage().purge();
 		tree.isSuperceded(tag);
 	}
+	
+	@Test
+	public void testTagWithPrefixReturnsNullForNonexistentTag() throws IOException {
+		// make sure we're non-empty, since empty tree is a different test case
+		try(ZKFS fs = archive.openBlank()) {
+			fs.commit();
+		}
+		
+		assertNull(tree.tagWithPrefix("ABCDEF"));
+	}
+	
+	@Test
+	public void testTagWithPrefixReturnsNullForEmptyDataset() throws IOException {
+		// make sure we're non-empty, since empty tree is a different test case
+		assertNull(tree.tagWithPrefix(""));
+	}
+	
+	@Test
+	public void testTagWithPrefixReturnsFullyMatchedBranchTip() throws IOException {
+		RevisionTag tag;
+		try(ZKFS fs = archive.openBlank()) {
+			tag = fs.commit();
+		}
+		
+		String prefix = Util.encode64(tag.getBytes());
+		assertEquals(tag, tree.tagWithPrefix(prefix));
+	}
+
+	@Test
+	public void testTagWithPrefixReturnsPrefixMatchedBranchTip() throws IOException {
+		RevisionTag tag;
+		try(ZKFS fs = archive.openBlank()) {
+			tag = fs.commit();
+		}
+		
+		String prefix = Util.encode64(tag.getBytes()).substring(0, 8);
+		assertEquals(tag, tree.tagWithPrefix(prefix));
+	}
+	
+	@Test
+	public void testTagWithPrefixReturnsMatchedAncestor() throws IOException {
+		RevisionTag tag;
+		try(ZKFS fs = archive.openBlank()) {
+			tag = fs.commit();
+			fs.commit();
+			fs.commit();
+		}
+		
+		String prefix = Util.encode64(tag.getBytes()).substring(0, 8);
+		assertEquals(tag, tree.tagWithPrefix(prefix));
+	}
+	
+	@Test
+	public void testTagWithPrefixReturnsMatchedRoot() throws IOException {
+		RevisionTag tag = RevisionTag.blank(archive.getConfig());
+		try(ZKFS fs = archive.openBlank()) {
+			fs.commit();
+			fs.commit();
+			fs.commit();
+		}
+		
+		String prefix = Util.encode64(tag.getBytes()).substring(0, 8);
+		assertEquals(tag, tree.tagWithPrefix(prefix));
+	}
 }

@@ -16,6 +16,8 @@ public class XDHTInfo {
 	
 	private Boolean closed;
 	private Boolean initialized;
+	private Boolean enabled;
+	private Boolean paused;
 	
 	private Integer numPeers;
 	private Integer numGoodPeers;
@@ -44,6 +46,8 @@ public class XDHTInfo {
 		
 		this.closed = client.isClosed();
 		this.initialized = client.isInitialized();
+		this.enabled = client.isEnabled();
+		this.setPaused(client.isPaused());
 		
 		this.numPeers = client.getRoutingTable().allPeers().size();
 		for(DHTPeer peer : client.getRoutingTable().allPeers()) {
@@ -217,5 +221,21 @@ public class XDHTInfo {
 
 	public void setLifetimeBytesRx(Long lifetimeBytesRx) {
 		this.lifetimeBytesRx = lifetimeBytesRx;
+	}
+
+	public Boolean getEnabled() {
+		return enabled;
+	}
+
+	public void setEnabled(Boolean enabled) {
+		this.enabled = enabled;
+	}
+
+	public Boolean getPaused() {
+		return paused;
+	}
+
+	public void setPaused(Boolean paused) {
+		this.paused = paused;
 	}
 }

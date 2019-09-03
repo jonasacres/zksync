@@ -138,6 +138,16 @@ public class RevisionList implements AutoCloseable {
 		this.monitors.remove(monitor);
 	}
 	
+	public RevisionTag tipWithPrefix(String prefix) {
+		for(RevisionTag tip : this.branchTips()) {
+			if(tip.matchesPrefix(prefix)) {
+				return tip;
+			}
+		}
+		
+		return null;
+	}
+	
 	public boolean addBranchTip(RevisionTag newBranch) throws IOException {
 		return addBranchTip(newBranch, false);
 	}

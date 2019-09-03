@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.exceptions.InvalidRevisionTagException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.PassphraseProvider;
@@ -178,7 +179,26 @@ public class State implements AutoCloseable {
 		 * a truncated revtag with the way storage works...
 		 */
 		revTag64 = Util.fromWebSafeBase64(revTag64);
-		RevisionTag revTag = new RevisionTag(config, Base64.getDecoder().decode(revTag64), false);
+		byte[] rawBytes;
+		try {
+			rawBytes = Util.decode64(revTag64);
+		} catch(IllegalArgumentException exc) {
+			// if the thing can't deserialize, see if it works as a string prefix
+			rawBytes = null;
+		}
+		
+		RevisionTag revTag;
+		if(rawBytes != null && rawBytes.length == RevisionTag.sizeForConfig(config)) {
+			// deserialize the revtag if we got a whole revtag
+			revTag = new RevisionTag(config, rawBytes, false);
+		} else {
+			// but if we only got a prefix (or something we can't decode), try looking for a match
+			revTag = config.getRevisionTree().tagWithPrefix(revTag64);
+			if(revTag == null) {
+				throw new InvalidRevisionTagException(revTag64);
+			}
+		}
+		
 		return revTag.getFS();
 	}
 	

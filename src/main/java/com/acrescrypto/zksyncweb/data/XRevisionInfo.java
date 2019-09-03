@@ -66,7 +66,7 @@ public class XRevisionInfo {
 	
 	@Override
 	public int hashCode() {
-		return ByteBuffer.wrap(revTag).getInt();
+		return revTag == null ? 0 : ByteBuffer.wrap(revTag).getInt();
 	}
 	
 	@Override

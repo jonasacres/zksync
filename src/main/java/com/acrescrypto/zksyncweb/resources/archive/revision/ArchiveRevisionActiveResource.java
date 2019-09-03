@@ -13,12 +13,13 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.UriInfo;
 
-import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksyncweb.ArchiveCrud;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 import com.acrescrypto.zksyncweb.data.XRevisionInfo;
+import com.acrescrypto.zksyncweb.data.XRevisionPrefix;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Path("/archives/{archiveId}/revisions/active")
@@ -40,14 +41,15 @@ public class ArchiveRevisionActiveResource {
 	@PUT
 	@Produces(MediaType.APPLICATION_JSON)
 	public XAPIResponse putActive(@PathParam("archiveId") String archiveId, String json) throws IOException {
-		// technically this just wants an object of the form { "revTag":... }, but we can borrow XRevisionInfo and ignore the unused fields
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
-		XRevisionInfo info = new ObjectMapper().readValue(json, XRevisionInfo.class);
+		XRevisionPrefix info = new ObjectMapper().readValue(json, XRevisionPrefix.class);
+		
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
 		
-		RevisionTag revTag = new RevisionTag(config, info.getRevTag(), false);
-		State.sharedState().setActiveFs(config, revTag.getFS());
-		return XAPIResponse.successResponse();
+		ZKFS fs = State.sharedState().fsForRevision(config, info.getRevTag());
+		State.sharedState().setActiveFs(config, fs);
+		
+		return XAPIResponse.withPayload(new XRevisionInfo(fs.getBaseRevision(), 1));
 	}
 	
 	@DELETE
@@ -57,6 +59,6 @@ public class ArchiveRevisionActiveResource {
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
 		
 		State.sharedState().activeManager(config).setFs(config.getRevisionList().latest().getFS());
-		return XAPIResponse.successResponse();
+		return XAPIResponse.withPayload(new XRevisionInfo(State.sharedState().activeFs(config).getBaseRevision(), 1));
 	}	
 }

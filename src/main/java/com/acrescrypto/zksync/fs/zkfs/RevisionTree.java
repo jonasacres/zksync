@@ -159,6 +159,30 @@ public class RevisionTree implements AutoCloseable {
 			}
 		}
 		
+		RevisionTag tagWithPrefix(String prefix) throws SearchFailedException {
+			while(true) {
+				boolean hasNonRoot = false;
+				
+				for(TreeSearchItem item : items) {
+					for(RevisionTag tag : item.revTags) {
+						if(tag.matchesPrefix(prefix)) {
+							return tag;
+						}
+						
+						if(tag.getHeight() > 0) {
+							hasNonRoot = true;
+						}
+					}
+				}
+				
+				if(!hasNonRoot) return null;
+				
+				for(TreeSearchItem item : items) {
+					item.recurse();
+				}
+			}
+		}
+		
 		RevisionTag commonAncestor() throws SearchFailedException {
 			makeFlush();
 			while(true) {
@@ -289,6 +313,11 @@ public class RevisionTree implements AutoCloseable {
 	
 	public synchronized void clear() throws IOException {
 		map.removeAll();
+	}
+	
+	public RevisionTag tagWithPrefix(String prefix) throws SearchFailedException {
+		TreeSearch search = new TreeSearch(config.getRevisionList().branchTips());
+		return search.tagWithPrefix(prefix);
 	}
 	
 	public void addParentsForTag(RevisionTag revTag, Collection<RevisionTag> parents) {

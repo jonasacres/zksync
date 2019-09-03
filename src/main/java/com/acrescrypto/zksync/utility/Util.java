@@ -284,35 +284,50 @@ public class Util {
 		return ByteBuffer.allocate(8).putLong(x).array();
 	}
 	
-	public static String threadReport(boolean includeStackTraces) {
+	public static ArrayList<Map<String, Object>> threadReport() {
+		ArrayList<Map<String, Object>> report = new ArrayList<>();
 		Map<Thread,StackTraceElement[]> stackTraces = Thread.getAllStackTraces();
-		HashMap<String,Integer> instanceCounts = new HashMap<>();
-		String output = "";
 		
-		output += "Thread count: " + stackTraces.size() + "\n";
 		for(Thread t : stackTraces.keySet()) {
-			instanceCounts.put(t.getName(), instanceCounts.getOrDefault(t.getName(), 0) + 1);
-			if(includeStackTraces) {
-				output += t.getName() + " - " + t.getId() + "\n";
-				for(StackTraceElement e : stackTraces.get(t)) {
-					output += "\t"+e.getClassName() + "::" + e.getMethodName() + " line " + e.getLineNumber() + "\n";
+			StackTraceElement[] elements = stackTraces.get(t);
+			HashMap<String,Object> threadInfo = new HashMap<>();
+			ArrayList<HashMap<String,Object>> traceList = new ArrayList<>(elements.length);
+			
+			ThreadGroup group = t.getThreadGroup();
+			HashMap<String,Object> groupMap = new HashMap<>(), currentGroupMap = groupMap;
+			while(group != null) {
+				currentGroupMap.put("name", group.getName());
+				group = group.getParent();
+				if(group != null) {
+					HashMap<String, Object> parentGroupMap = new HashMap<>();
+					currentGroupMap.put("parent", parentGroupMap);
+					currentGroupMap = parentGroupMap;
+				} else {
+					currentGroupMap.put("parent", null);
+					currentGroupMap = null;
 				}
-				output += "\n";
 			}
+			
+			for(StackTraceElement e : stackTraces.get(t)) {
+				HashMap<String, Object> elementMap = new HashMap<>();
+				elementMap.put("class", e.getClassName());
+				elementMap.put("method", e.getMethodName());
+				elementMap.put("file", e.getFileName());
+				elementMap.put("line", e.getLineNumber());
+				traceList.add(elementMap);
+			}
+			
+			threadInfo.put("name", t.getName());
+			threadInfo.put("priority", t.getPriority());
+			threadInfo.put("id", t.getId());
+			threadInfo.put("group", groupMap);
+			threadInfo.put("state", t.getState().toString());
+			threadInfo.put("trace", traceList);
+			
+			report.add(threadInfo);
 		}
 		
-		ArrayList<String> sortedInstanceNames = new ArrayList<>();
-		sortedInstanceNames.addAll(instanceCounts.keySet());
-		sortedInstanceNames.sort((a, b)->instanceCounts.get(b).compareTo(instanceCounts.get(a)));
-		
-		for(String name : sortedInstanceNames) {
-			output += name + ": " + instanceCounts.get(name) + "\n";
-		}
-		
-		output += SnoozeThreadSupervisor.shared().report();
-		
-		output += "\n";
-		return output;
+		return report;
 	}
 	
 	public static String caller(int depth) {

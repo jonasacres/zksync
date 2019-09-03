@@ -156,7 +156,15 @@ public class ArchiveCrud {
 				// ?liststat=true causes stat information to be included with directory listings
 				ArrayList<XPathStat> pathStats = new ArrayList<>(entries.size());
 				for(TraversalEntry entry : entries) {
-					Inode inode = fs.inodeForPath(entry.getPath(), !isNofollow);
+					Inode inode;
+					try {
+						inode = fs.inodeForPath(entry.getPath(), !isNofollow);
+					} catch(ENOENTException exc2) {
+						/* we hit a broken symlink. we don't want to leave it out, but we need a stat,
+						 * and so we need to take the stat of the sylink itself regardless of what was requested.
+						 */
+						inode = fs.inodeForPath(entry.getPath(), false);
+					}
 					PageTreeStats treeStat = new PageTree(inode).getStats();
 					
 					pathStats.add(new XPathStat(fs,

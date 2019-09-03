@@ -116,6 +116,11 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		return new ZKFS(this);
 	}
 	
+	public boolean matchesPrefix(String base64Prefix) {
+		String myBase64 = Util.encode64(this.getBytes());
+		return myBase64.startsWith(base64Prefix);
+	}
+	
 	public byte[] serialize() {
 		if(refTag == null) {
 			// TODO API: (coverage) branch

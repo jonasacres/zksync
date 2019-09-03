@@ -64,6 +64,8 @@ public class GlobalResource {
 				config.set(field.getKey(), v.asDouble());
 			} else if(v.isBoolean()) {
 				config.set(field.getKey(), v.asBoolean());
+			} else if(v.isNull()) {
+				throw XAPIResponse.withError(400, "Cannot specify null values");
 			}
 		});
 		
@@ -74,7 +76,11 @@ public class GlobalResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/uptime")
 	public XAPIResponse getUptime() throws IOException {
-		throw XAPIResponse.withWrappedPayload("uptime", System.currentTimeMillis() - Util.launchTime());
+		HashMap<String,Object> result = new HashMap<>();
+		result.put("uptime", System.currentTimeMillis() - Util.launchTime());
+		result.put("launchTimeMs", Util.launchTime());
+		
+		throw XAPIResponse.withPayload(200, result);
 	}
 	
 	@GET
@@ -142,7 +148,7 @@ public class GlobalResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("/threads")
 	public XAPIResponse getThreads() throws IOException {
-		throw XAPIResponse.withWrappedPayload("report", Util.threadReport(true));
+		throw XAPIResponse.withWrappedPayload("report", Util.threadReport());
 	}
 	
 	public LinkedList<HashMap<String,Object>> renderStackTrace(Throwable trace) {

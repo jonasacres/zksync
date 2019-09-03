@@ -236,6 +236,10 @@ public class DHTClient {
 		return !paused && socket != null;
 	}
 	
+	public boolean isEnabled() {
+		return master.getGlobalConfig().getBool("net.dht.enabled");
+	}
+	
 	public DHTClient listen(String address, int port) throws SocketException {
 		closed = paused = false;
 		
@@ -453,8 +457,8 @@ public class DHTClient {
 				
 				byte[] receiveData = new byte[MAX_DATAGRAM_SIZE];
 				DatagramPacket packet = new DatagramPacket(receiveData, receiveData.length);
-				monitorRx.observeTraffic(packet.getLength());
 				socket.receive(packet);
+				monitorRx.observeTraffic(packet.getLength());
 				logger.trace("DHT {}:{}: received {} bytes",
 						packet.getAddress().getHostAddress(),
 						packet.getPort(),
