@@ -85,7 +85,7 @@ public class DHTBucket {
 	
 	protected void prune() {
 		for(DHTPeer peer : peers) {
-			if(peer.isBad()) {
+			if(peer.isBad() && !peer.isPinned()) {
 				peers.remove(peer);
 				client.routingTable.removedPeer(peer);
 				return;

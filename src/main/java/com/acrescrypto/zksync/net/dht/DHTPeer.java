@@ -18,6 +18,8 @@ import com.acrescrypto.zksync.utility.Util;
 public class DHTPeer implements Sendable {
 	public final int QUESTIONABLE_TIME_INTERVAL_MS = 1000*60*15; // ping peers in our routing table if they haven't been seen in this interval of time
 	
+	public final static byte FLAG_PINNED = 0x01;
+	
 	interface DHTFindNodePeerCallback {
 		void response(Collection<DHTPeer> references, boolean isFinal);
 	}
@@ -34,6 +36,7 @@ public class DHTPeer implements Sendable {
 	int missedMessages;
 	protected PublicDHKey key;
 	protected byte[] remoteAuthTag = new byte[DHTClient.AUTH_TAG_SIZE];
+	protected boolean pinned; // do not prune this peer
 	
 	private Logger logger = LoggerFactory.getLogger(DHTPeer.class);
 	
@@ -158,12 +161,18 @@ public class DHTPeer implements Sendable {
 
 	@Override
 	public byte[] serialize() {
-		ByteBuffer buf = ByteBuffer.allocate(2 + address.getBytes().length + 2 + 2 + key.getBytes().length);
+		byte flags = 0;
+		if(pinned) {
+			flags |= FLAG_PINNED;
+		}
+		
+		ByteBuffer buf = ByteBuffer.allocate(2 + address.getBytes().length + 2 + 2 + key.getBytes().length + 1);
 		buf.putShort((short) address.getBytes().length);
 		buf.put(address.getBytes());
 		buf.putShort((short) port);
 		buf.putShort((short) key.getBytes().length);
 		buf.put(key.getBytes());
+		buf.put(flags);
 		return buf.array();
 	}
 	
@@ -195,6 +204,14 @@ public class DHTPeer implements Sendable {
 		return lastSeen;
 	}
 	
+	public boolean isPinned() {
+		return pinned;
+	}
+	
+	public void setPinned(boolean pinned) {
+		this.pinned = pinned;
+	}
+	
 	protected void deserialize(ByteBuffer serialized) throws EINVALException {
 		try {
 			int addrLen = Util.unsignShort(serialized.getShort());
@@ -206,6 +223,8 @@ public class DHTPeer implements Sendable {
 			serialized.get(keyBytes);
 			this.key = client.crypto.makePublicDHKey(keyBytes);
 			this.id = new DHTID(this.key);
+			byte flags = serialized.get();
+			this.pinned = (flags & FLAG_PINNED) != 0;
 		} catch(BufferUnderflowException exc) {
 			throw new EINVALException("(dht peer)");
 		}

@@ -215,21 +215,16 @@ public class DHTClient {
 		PublicDHKey pubkey = crypto.makePublicDHKey(Util.decode64(defaultKey));
 		routingTable.reset();
 		
-		try {
-			addPeer(new DHTPeer(this,
-					InetAddress.getByName(defaultHost).getHostAddress(),
-					defaultPort,
-					pubkey));
-			logger.info("DHT {}:{}: Added bootstrap key={}; routing table reset",
-					defaultHost,
-					defaultPort,
-					defaultKey);
-		} catch (UnknownHostException exc) {
-			logger.error("DHT {}:{}: Unable to resolve hostname",
-					defaultHost,
-					defaultPort,
-					exc);
-		}
+		DHTPeer bootstrap = new DHTPeer(this,
+				defaultHost,
+				defaultPort,
+				pubkey);
+		bootstrap.setPinned(true);
+		addPeer(bootstrap);
+		logger.info("DHT {}:{}: Added bootstrap key={}; routing table reset",
+				defaultHost,
+				defaultPort,
+				defaultKey);
 	}
 	
 	protected boolean isListening() {
