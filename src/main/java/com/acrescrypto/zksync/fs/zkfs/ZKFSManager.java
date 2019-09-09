@@ -430,6 +430,16 @@ public class ZKFSManager implements AutoCloseable {
 		this.fs = fs;
 		setupMonitors();
 		setAutomirrorPath(this.automirrorPath); // reinit mirror
+		if(mirror != null) {
+			try {
+				mirror.syncArchiveToTarget();
+			} catch(IOException exc) {
+				logger.info("ZKFS {} {}: Failed to mirror changes",
+						Util.formatArchiveId(fs.archive.config.archiveId),
+						Util.formatRevisionTag(fs.baseRevision),
+						exc);
+			}
+		}
 		// setting the path already called autosaveIfDesired()
 	}
 

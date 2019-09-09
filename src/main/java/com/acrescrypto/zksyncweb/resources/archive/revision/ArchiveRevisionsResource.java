@@ -45,9 +45,9 @@ public class ArchiveRevisionsResource {
 			return listAll(config, depth);
 		}
 		
-		ArrayList<byte[]> tips = new ArrayList<>();
+		ArrayList<XRevisionInfo> tips = new ArrayList<>();
 		for(RevisionTag tip :  config.getRevisionList().branchTips()) {
-			tips.add(tip.getBytes());
+			tips.add(new XRevisionInfo(tip, depth));
 		}
 		
 		return XAPIResponse.withWrappedPayload("branchTips", tips);
