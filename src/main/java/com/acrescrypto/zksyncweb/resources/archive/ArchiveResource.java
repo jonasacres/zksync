@@ -19,13 +19,13 @@ import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.StoredAccess;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
-import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.WebUtils;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 import com.acrescrypto.zksyncweb.data.XArchiveSettings;
 import com.acrescrypto.zksyncweb.data.XArchiveIdentification;
 import com.acrescrypto.zksyncweb.data.XArchiveSpecification;
+import com.acrescrypto.zksyncweb.data.XRevisionInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Path("/archives/{archiveId}")
@@ -156,8 +156,7 @@ public class ArchiveResource {
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
 		
 		RevisionTag tag = State.sharedState().activeFs(config).commit();
-		
-		throw XAPIResponse.withWrappedPayload("revTag", Util.encode64(tag.getBytes()));
+		return XAPIResponse.withPayload(new XRevisionInfo(tag, 1));
 	}
 	
 	@PUT

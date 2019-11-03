@@ -175,9 +175,6 @@ public class State implements AutoCloseable {
 	
 	public ZKFS fsForRevision(ZKArchiveConfig config, String revTag64) throws IOException {
 		// TODO API: (refactor) A cache would be nice here.
-		/* And my god, wouldn't it be nice to be able to truncate these? But there's no easy way to locate
-		 * a truncated revtag with the way storage works...
-		 */
 		revTag64 = Util.fromWebSafeBase64(revTag64);
 		byte[] rawBytes;
 		try {

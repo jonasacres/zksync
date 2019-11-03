@@ -426,6 +426,8 @@ public class ZKFSManager implements AutoCloseable {
 	}
 
 	public void setFs(ZKFS fs) throws IOException {
+		if(fs == this.fs) return;
+		
 		this.fs.close();
 		this.fs = fs;
 		setupMonitors();
