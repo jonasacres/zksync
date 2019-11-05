@@ -4,6 +4,8 @@ import java.nio.ByteBuffer;
 
 import org.bouncycastle.util.Arrays;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 public class Stat {
 	int gid, uid, mode;
 	private int type;
@@ -35,30 +37,37 @@ public class Stat {
 		deserialize(serialized);
 	}
 	
+	@JsonIgnore
 	public boolean isSymlink() {
 		return getType() == TYPE_SYMLINK;
 	}
 	
+	@JsonIgnore
 	public boolean isRegularFile() {
 		return getType() == TYPE_REGULAR_FILE;
 	}
 	
+	@JsonIgnore
 	public boolean isDirectory() {
 		return getType() == TYPE_DIRECTORY;
 	}
 	
+	@JsonIgnore
 	public boolean isDevice() {
 		return isBlockDevice() || isCharacterDevice();
 	}
 	
+	@JsonIgnore
 	public boolean isBlockDevice() {
 		return getType() == TYPE_BLOCK_DEVICE;
 	}
 	
+	@JsonIgnore
 	public boolean isCharacterDevice() {
 		return getType() == TYPE_CHARACTER_DEVICE;
 	}
 	
+	@JsonIgnore
 	public boolean isFifo() {
 		return getType() == TYPE_FIFO;
 	}

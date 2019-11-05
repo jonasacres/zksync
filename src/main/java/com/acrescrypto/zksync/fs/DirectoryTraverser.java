@@ -33,6 +33,9 @@ public class DirectoryTraverser {
 	boolean hideDirectories = true;
 	boolean followSymlinks = false;
 	boolean includeDotDirs = false;
+	boolean includeBase = false;
+	
+	boolean baseAdded = false;
 	
 	public DirectoryTraverser(FS fs, Directory base) throws IOException {
 		this(fs, base, false);
@@ -78,7 +81,14 @@ public class DirectoryTraverser {
 		 * having hasNext() work in all cases.
 		 */
 		nextEntry = popEntry();
-		if(nextEntry == null) return;
+		if(nextEntry == null) {
+			if(!includeBase || baseAdded) return;
+			
+			Stat stat = followSymlinks ? fs.stat(base.getPath()) : fs.lstat(base.getPath());
+			nextEntry = new TraversalEntry(base.getPath(), stat);
+			baseAdded = true;
+			return;
+		}
 		
 		String basename = fs.basename(nextEntry.path);
 		boolean isDotDir = basename.equals(".") || basename.equals("..");
@@ -157,5 +167,13 @@ public class DirectoryTraverser {
 	
 	public void setIncludeDotDirs(boolean includeDotDirs) {
 		this.includeDotDirs = includeDotDirs;
+	}
+	
+	public boolean getIncludeBase() {
+		return includeBase;
+	}
+	
+	public void setIncludeBase(boolean includeBase) {
+		this.includeBase = includeBase;
 	}
 }
