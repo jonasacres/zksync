@@ -489,7 +489,7 @@ public class RevisionList implements AutoCloseable {
 			return;
 		}
 		try {
-			if (config.isReadOnly()) {
+			if(config.isReadOnly()) {
 				/*
 				 * obviously we're not doing any merging if we don't have the write key, so
 				 * let's just consolidate instead.
