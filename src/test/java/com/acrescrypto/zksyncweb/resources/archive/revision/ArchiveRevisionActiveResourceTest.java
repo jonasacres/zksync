@@ -20,10 +20,11 @@ import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.StoredAccess;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
+import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.Main;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.WebTestUtils;
-import com.acrescrypto.zksyncweb.data.XRevisionInfo;
+import com.acrescrypto.zksyncweb.data.XRevisionPrefix;
 import com.fasterxml.jackson.databind.JsonNode;
 
 public class ArchiveRevisionActiveResourceTest {
@@ -97,9 +98,9 @@ public class ArchiveRevisionActiveResourceTest {
 			fs.commit();
 			State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
 	
-			XRevisionInfo xinfo = new XRevisionInfo();
-			xinfo.setRevTag(revTag.getBytes());
-	
+			XRevisionPrefix xinfo = new XRevisionPrefix();
+			xinfo.setRevTag(Util.encode64(revTag.getBytes()));
+			
 			WebTestUtils.requestPut(target, basePath, xinfo);
 			assertArrayEquals(revTag.getBytes(), State.sharedState().activeFs(archive.getConfig()).getBaseRevision().getBytes());
 		}
