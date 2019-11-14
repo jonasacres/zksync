@@ -129,13 +129,13 @@ public class GlobalResource {
 			
 			LinkedList<LinkedList<HashMap<String, Object>>> retentions = new LinkedList<>();
 			for(Throwable retention : fs.getRetentions()) {
-				retentions.add(renderStackTrace(retention));				
+				retentions.add(renderStackTrace(retention));
 			}
 			info.put("retentions", retentions);
 			
 			LinkedList<LinkedList<HashMap<String, Object>>> closures = new LinkedList<>();
 			for(Throwable closure : fs.getClosures()) {
-				closures.add(renderStackTrace(closure));				
+				closures.add(renderStackTrace(closure));
 			}
 			info.put("closures", closures);
 			

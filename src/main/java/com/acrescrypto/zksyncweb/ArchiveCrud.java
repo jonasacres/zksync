@@ -142,6 +142,7 @@ public class ArchiveCrud {
 				traverser.setRecursive(isRecursive);
 				traverser.setHideDirectories(false);
 				traverser.setIncludeDotDirs(dotdirs);
+				traverser.setIncludeBase(true);
 				while(traverser.hasNext()) {
 					entries.add(traverser.next());
 				}

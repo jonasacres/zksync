@@ -185,6 +185,13 @@ public class ZKArchive implements AutoCloseable {
 		synchronized(readOnlyFilesystems) {
 			// grab the monitor on rOF to prevent eviction before we retain
 			fs = readOnlyFilesystems.get(revision).retain();
+			
+			if(fs.isClosed()) {
+				// defensively, we will ensure that we don't return a closed FS
+				readOnlyFilesystems.remove(revision);
+				fs = readOnlyFilesystems.get(revision).retain();
+				
+			}
 		}
 		
 		if(isClosed()) {

@@ -234,9 +234,6 @@ public class RevisionTag implements Comparable<RevisionTag> {
 			}
 		}
 		
-		Util.debugLog(String.format("RevisionTag %s: hasStructureLocally=true",
-				Util.formatRevisionTag(this)));
-		
 		hasStructureCheckTime = Util.currentTimeMillis();
 		return true;
 	}
