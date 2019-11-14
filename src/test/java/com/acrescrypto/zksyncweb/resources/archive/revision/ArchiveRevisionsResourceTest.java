@@ -82,7 +82,7 @@ public class ArchiveRevisionsResourceTest {
 		resp.get("branchTips").forEach((tip)->{
 			assertTrue(tags.removeIf((tag)->{
 				try {
-					return Arrays.equals(tag.getBytes(), tip.binaryValue());
+					return Arrays.equals(tag.getBytes(), tip.get("revTag").binaryValue());
 				} catch (IOException e) {
 					return false;
 				}
