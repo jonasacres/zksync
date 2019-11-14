@@ -61,7 +61,10 @@ public class RevisionTagTest {
 	}
 	
 	public void setupPacked(boolean finish) throws IOException {
-		ZKArchiveConfig config2 = ZKArchiveConfig.openExisting(config.accessor, config.getArchiveId(), false, config.writeRoot);
+		ZKArchiveConfig config2 = ZKArchiveConfig.openExisting(config.accessor,
+				config.getArchiveId(),
+				false,
+				config.writeRoot);
 		config.close();
 		config = config2;
 		packed = new RevisionTag(config, revTag.serialize(), false);

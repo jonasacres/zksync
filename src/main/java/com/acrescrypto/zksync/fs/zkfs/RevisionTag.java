@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.exceptions.CantUnpackRevisionTagException;
 import com.acrescrypto.zksync.exceptions.InvalidRevisionTagException;
 import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
@@ -80,12 +81,22 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public long getHeight() {
-		ensureUnpacked();
+		try {
+			ensureUnpacked();
+		} catch(CantUnpackRevisionTagException exc) {
+			return -1;
+		}
+		
 		return height;
 	}
 	
 	public long getParentHash() {
-		ensureUnpacked();
+		try {
+			ensureUnpacked();
+		} catch(CantUnpackRevisionTagException exc) {
+			return -1;
+		}
+		
 		return parentHash;
 	}
 	
@@ -294,7 +305,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		if(refTag != null) return;
 		unpack();
 		if(refTag == null) {
-			throw new RuntimeException("Can't unpack revision tag " + this);
+			throw new CantUnpackRevisionTagException(this);
 		}
 	}
 	
