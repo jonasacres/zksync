@@ -386,6 +386,10 @@ public class FSMirror {
 	}
 
 	public void syncArchiveToTarget() throws IOException {
+		logger.info("FSMirror {} {}: Mirroring ZKFS to mirror target",
+				Util.formatArchiveId(zkfs.archive.config.archiveId),
+				Util.formatRevisionTag(zkfs.baseRevision));
+		
 		boolean wasWatching = isWatching();
 		if(wasWatching) {
 			stopWatch();

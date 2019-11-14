@@ -71,7 +71,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public RefTag getRefTag() {
-		unpack();
+		ensureUnpacked();
 		return refTag;
 	}
 	
@@ -80,12 +80,12 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public long getHeight() {
-		unpack();
+		ensureUnpacked();
 		return height;
 	}
 	
 	public long getParentHash() {
-		unpack();
+		ensureUnpacked();
 		return parentHash;
 	}
 	
@@ -97,6 +97,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public ZKFS readOnlyFS() throws IOException {
+		ensureUnpacked();
 		if(cacheOnly) {
 			return refTag.config.archive.cacheOnlyArchive().openRevisionReadOnly(this);
 		} else {
@@ -287,6 +288,14 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		height = raw.getLong();
 		refTag = new RefTag(config, rawRefTag);
 		if(height < 0) throw new SecurityException();
+	}
+	
+	protected void ensureUnpacked() {
+		if(refTag != null) return;
+		unpack();
+		if(refTag == null) {
+			throw new RuntimeException("Can't unpack revision tag " + this);
+		}
 	}
 	
 	public int compareTo(RevisionTag other) {

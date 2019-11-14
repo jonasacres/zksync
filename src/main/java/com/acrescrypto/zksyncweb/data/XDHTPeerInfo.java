@@ -10,6 +10,7 @@ public class XDHTPeerInfo {
 	
 	private Integer missedMessages;
 	private Long lastSeen;
+	private boolean pinned;
 	
 	private String status;
 	
@@ -20,6 +21,7 @@ public class XDHTPeerInfo {
 		this.address = peer.getAddress();
 		this.missedMessages = peer.getMissedMessages();
 		this.lastSeen = peer.getLastSeen();
+		this.pinned = peer.isPinned();
 		
 		if(peer.isBad()) {
 			this.setStatus("bad");
@@ -86,5 +88,13 @@ public class XDHTPeerInfo {
 
 	public void setStatus(String status) {
 		this.status = status;
+	}
+
+	public boolean isPinned() {
+		return pinned;
+	}
+
+	public void setPinned(boolean pinned) {
+		this.pinned = pinned;
 	}
 }
