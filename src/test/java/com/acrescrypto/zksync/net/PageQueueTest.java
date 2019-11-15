@@ -19,6 +19,7 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -895,7 +896,8 @@ public class PageQueueTest {
 		assertFalse(queue.hasNextChunk());
 	}
 	
-	@Test
+	// Disabled for now 
+	@Test @Ignore
 	public void testAddRevisionTagForStructureSendsInodesInShuffledOrder() throws IOException {
 		LinkedList<Long> seenInodes = new LinkedList<Long>();
 

@@ -102,6 +102,7 @@ public class ArchiveResourceTest {
 	public static void afterAll() {
 		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
+		Util.setCurrentTimeMillis(-1);
 	}
 
 	public String encodeArchiveId(ZKArchive archive) {
@@ -1014,7 +1015,8 @@ public class ArchiveResourceTest {
 		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/keys", spec);
 
 		try(State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage())) {
-			assertTrue(state2.configForArchiveId(archive.getConfig().getArchiveId()).getAccessor().isSeedOnly());
+			byte[] archiveId = archive.getConfig().getArchiveId();
+			assertTrue(state2.configForArchiveId(archiveId).getAccessor().isSeedOnly());
 		}
 	}
 

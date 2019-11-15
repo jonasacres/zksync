@@ -159,7 +159,7 @@ public class State implements AutoCloseable {
 	public ZKFS activeFs(ZKArchiveConfig config) throws IOException {
 		if(activeFilesystems.containsKey(config)) {
 			ZKFS fs = activeFilesystems.get(config).getFs();
-			if(!fs.isClosed()) {
+			if(fs != null && !fs.isClosed()) {
 				return activeFilesystems.get(config).getFs();
 			}
 		}
@@ -167,7 +167,7 @@ public class State implements AutoCloseable {
 		synchronized(this) {
 			if(activeFilesystems.containsKey(config)) {
 				ZKFS fs = activeFilesystems.get(config).getFs();
-				if(!fs.isClosed()) {
+				if(fs != null && !fs.isClosed()) {
 					return fs;
 				}
 				

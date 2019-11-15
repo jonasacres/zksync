@@ -106,6 +106,7 @@ public class ArchiveNetPoolResourceTest {
 
 	@After
 	public void afterEach() throws Exception {
+		Util.setCurrentTimeMillis(-1);
 		archive.close();
 		server.shutdownNow();
 		State.clearState();

@@ -70,6 +70,7 @@ public class DHTResourceTest {
 		@Override public void purge() { purged = true; }
 		@Override public int numPendingRequests() { return 777; }
 		@Override public void addPeer(DHTPeer peer) { this.addedPeer = peer; }
+		@Override public boolean isEnabled() { return true; }
 	}
 
 	class DummyDHTRecordStore extends DHTRecordStore {
