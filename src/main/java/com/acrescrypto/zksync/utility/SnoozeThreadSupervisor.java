@@ -31,6 +31,18 @@ public class SnoozeThreadSupervisor {
 		}
 	}
 	
+	/** Notify the supervisor that a SnoozeThread has changed */
+	public synchronized void reevaluate(SnoozeThread item) {
+		items.remove(item);
+		if(nextExpiredItem == item) {
+			nextExpiredItem = null;
+		}
+		
+		if(!item.isCancelled()) {
+			add(item);
+		}
+	}
+	
 	public boolean isEmpty() {
 		return items.isEmpty();
 	}

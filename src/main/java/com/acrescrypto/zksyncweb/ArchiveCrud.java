@@ -100,7 +100,7 @@ public class ArchiveCrud {
 				length = (int) (size - offset + length + 1);
 			}
 			
-			length = (int) Math.min(size-offset, length);
+			length = (int) Math.max(0, Math.min(size-offset, length));
 			
 			ZKFile file = null;
 			try {

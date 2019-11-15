@@ -52,10 +52,12 @@ public class RevisionList implements AutoCloseable {
 
 		toks.add(config.getMaster().getGlobalConfig().subscribe("fs.settings.automergeDelayMs").asInt((delay) -> {
 			this.automergeDelayMs = delay;
+			this.updateAutomergeDelayParams(automergeDelayMs, maxAutomergeDelayMs);
 		}));
 
-		toks.add(config.getMaster().getGlobalConfig().subscribe("fs.settings.maxAutomergeDelayMs").asInt((delay) -> {
-			this.maxAutomergeDelayMs = delay;
+		toks.add(config.getMaster().getGlobalConfig().subscribe("fs.settings.maxAutomergeDelayMs").asInt((maxDelay) -> {
+			this.maxAutomergeDelayMs = maxDelay;
+			this.updateAutomergeDelayParams(automergeDelayMs, maxAutomergeDelayMs);
 		}));
 
 		try {
@@ -537,6 +539,31 @@ public class RevisionList implements AutoCloseable {
 			});
 		} else {
 			automergeSnoozeThread.snooze();
+		}
+	}
+	
+	protected void updateAutomergeDelayParams(long automergeDelayMs, long maxAutomergeDelayMs) {
+		this.automergeDelayMs = automergeDelayMs;
+		this.maxAutomergeDelayMs = maxAutomergeDelayMs;
+		
+		if(automergeSnoozeThread == null || automergeSnoozeThread.isCancelled()) {
+			return;
+		}
+		
+		long currentDeadline = automergeSnoozeThread.getDeadline();
+		long currentTrigger = automergeSnoozeThread.getExpirationMs();
+
+		long newTrigger = System.currentTimeMillis() + automergeDelayMs;
+		long newDeadline = maxAutomergeDelayMs < 0
+			? Long.MAX_VALUE
+			: automergeSnoozeThread.getDeadline() - automergeSnoozeThread.getMaxTimeMs() + maxAutomergeDelayMs;
+		
+		if(newDeadline < currentDeadline || newTrigger < currentTrigger) {
+			// cleans up old timer + invokes automerge (snoozethread set to invoke callback on cancel)
+			automergeSnoozeThread.cancel();
+		} else {
+			automergeSnoozeThread.setDelayMs(automergeDelayMs);
+			automergeSnoozeThread.setMaxTimeMs(maxAutomergeDelayMs);
 		}
 	}
 }
