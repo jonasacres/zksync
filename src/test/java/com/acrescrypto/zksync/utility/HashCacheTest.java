@@ -290,7 +290,7 @@ public class HashCacheTest {
 			t.start();
 		}
 		
-		assertTrue(Util.waitUntil(durationMs + 500, ()->{
+		assertTrue(Util.waitUntil(durationMs + 5000, ()->{
 			for(Thread t : threads) {
 				if(t.isAlive()) return false;
 			}
