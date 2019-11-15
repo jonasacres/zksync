@@ -131,7 +131,7 @@ public class ArchiveRevisionFsResourceTest {
 	public void testGetReturnsDirectoryListingIfPathIsDirectory() {
 		JsonNode resp = WebTestUtils.requestGet(target, basePath);
 		assertTrue(resp.get("entries").isArray());
-		assertEquals(3, resp.get("entries").size());
+		assertEquals(4, resp.get("entries").size());
 		ArrayList<String> items = new ArrayList<>();
 		resp.get("entries").forEach((node)->items.add(node.asText()));
 
@@ -144,7 +144,7 @@ public class ArchiveRevisionFsResourceTest {
 	public void testGetReturnsRecursiveDirectoryListingIfPathIsDirectoryAndRecursionRequested() {
 		JsonNode resp = WebTestUtils.requestGet(target, basePath + "?recursive=true");
 		assertTrue(resp.get("entries").isArray());
-		assertEquals(4, resp.get("entries").size());
+		assertEquals(5, resp.get("entries").size());
 		ArrayList<String> items = new ArrayList<>();
 		resp.get("entries").forEach((node)->items.add(node.asText()));
 

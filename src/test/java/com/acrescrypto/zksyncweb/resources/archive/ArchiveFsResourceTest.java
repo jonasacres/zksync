@@ -558,7 +558,7 @@ public class ArchiveFsResourceTest {
 
 		JsonNode resp = WebTestUtils.requestGet(target, basePath + "dir");
 		assertTrue(resp.get("entries").isArray());
-		assertEquals(3, resp.get("entries").size());
+		assertEquals(4, resp.get("entries").size());
 
 		ArrayList<String> items = new ArrayList<>();
 		resp.get("entries").forEach((node)->items.add(node.asText()));
@@ -595,7 +595,7 @@ public class ArchiveFsResourceTest {
 
 		JsonNode resp = WebTestUtils.requestGet(target, basePath + "dir/?liststat=true");
 		assertTrue(resp.get("entries").isArray());
-		assertEquals(9, resp.get("entries").size());
+		assertEquals(10, resp.get("entries").size());
 
 		resp.get("entries").forEach((node)->{
 			try {
@@ -615,7 +615,7 @@ public class ArchiveFsResourceTest {
 
 		JsonNode resp = WebTestUtils.requestGet(target, basePath + "dir?recursive=true");
 		assertTrue(resp.get("entries").isArray());
-		assertEquals(6, resp.get("entries").size());
+		assertEquals(7, resp.get("entries").size());
 
 		ArrayList<String> items = new ArrayList<>();
 		resp.get("entries").forEach((node)->items.add(node.asText()));
@@ -634,7 +634,7 @@ public class ArchiveFsResourceTest {
 
 		JsonNode resp = WebTestUtils.requestGet(target, basePath);
 		assertTrue(resp.get("entries").isArray());
-		assertEquals(1, resp.get("entries").size());
+		assertEquals(2, resp.get("entries").size());
 
 		ArrayList<String> items = new ArrayList<>();
 		resp.get("entries").forEach((node)->items.add(node.asText()));

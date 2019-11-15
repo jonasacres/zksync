@@ -102,6 +102,7 @@ public class ArchiveResourceTest {
 	public static void afterAll() {
 		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
+		Util.setCurrentTimeMillis(-1);
 	}
 
 	public String encodeArchiveId(ZKArchive archive) {
