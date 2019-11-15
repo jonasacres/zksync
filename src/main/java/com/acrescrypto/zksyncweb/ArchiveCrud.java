@@ -60,7 +60,7 @@ public class ArchiveCrud {
 				inodeId = Integer.parseInt(path);
 				stat = fs.getInodeTable().inodeWithId(inodeId).getStat();
 			} else {
-				stat = fs.stat(path);
+				stat = isNofollow ? fs.lstat(path) : fs.stat(path);
 				inodeId = stat.getInodeId();
 			}
 			
@@ -314,6 +314,7 @@ public class ArchiveCrud {
 		String source = json.getString("source", null);
 		String type = json.getString("type");
 		boolean followSymlinks = json.getBoolean("followSymlinks", true);
+		boolean copyMetadata = json.getBoolean("copyMetadata", false);
 		
 		// TODO: need nofollow and recursive
 		
@@ -321,7 +322,7 @@ public class ArchiveCrud {
 			switch(type) {
 			case "copy":
 				if(source == null) throw XAPIResponse.withError(400, "Must supply source field");
-				fs.cp(source, path);
+				fs.cp(source, path, copyMetadata);
 				break;
 			case "hardlink":
 				if(source == null) throw XAPIResponse.withError(400, "Must supply source field");
@@ -415,6 +416,8 @@ public class ArchiveCrud {
 			throw XAPIResponse.withError(409, "Path already exists");
 		} catch(ClassCastException exc) {
 			throw XAPIResponse.withError(400, "Invalid parameter datatype");
+		} catch(EISDIRException exc) {
+			throw XAPIResponse.withError(400, "Path is directory");
 		}
 	}
 	

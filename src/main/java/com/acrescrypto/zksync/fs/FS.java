@@ -152,6 +152,10 @@ public abstract class FS implements AutoCloseable {
 	}
 	
 	public void cp(String oldPath, String newPath) throws IOException {
+		cp(oldPath, newPath, false);
+	}
+	
+	public void cp(String oldPath, String newPath, boolean copyMetadata) throws IOException {
 		try {
 			Stat stat = stat(newPath);
 			if(stat.isDirectory()) {
@@ -163,17 +167,25 @@ public abstract class FS implements AutoCloseable {
 			}
 		} catch(ENOENTException exc) {}
 		
-		File in = open(oldPath, File.O_RDONLY);
-		File out = open(newPath, File.O_WRONLY|File.O_CREAT|File.O_TRUNC);
-		
-		byte[] buf = new byte[(int) Math.min(64*1024, in.getSize())];
-		while(in.hasData()) {
-			int readLen = in.read(buf, 0, buf.length);
-			out.write(buf, 0, readLen);
+		try(File in = open(oldPath, File.O_RDONLY)) {
+			try(File out = open(newPath, File.O_WRONLY|File.O_CREAT|File.O_TRUNC)) {
+				byte[] buf = new byte[(int) Math.min(64*1024, in.getSize())];
+				while(in.hasData()) {
+					int readLen = in.read(buf, 0, buf.length);
+					out.write(buf, 0, readLen);
+				}
+			}
+			
+			this.chmod(newPath, in.getStat().mode);
+			if(copyMetadata) {
+				this.chown(newPath, in.getStat().uid);
+				this.chown(newPath, in.getStat().user);
+				this.chgrp(newPath, in.getStat().gid);
+				this.chgrp(newPath, in.getStat().group);
+				this.setMtime(newPath, in.getStat().getMtime());
+				this.setAtime(newPath, in.getStat().getAtime());
+			}
 		}
-		
-		in.close();
-		out.close();
 	}
 
 	public String dirname(String path) {

@@ -7,6 +7,7 @@ import java.util.Arrays;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
 import com.acrescrypto.zksync.fs.zkfs.RevisionInfo;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 
 public class XRevisionInfo {
 	private byte[] revTag;
@@ -15,16 +16,18 @@ public class XRevisionInfo {
 	private Long timestamp;
 	
 	public XRevisionInfo(RevisionTag tag, int depth) throws IOException {
-		RevisionInfo info = tag.getInfo();
-		this.setRevTag(tag.getBytes());
-		this.setGeneration(info.getGeneration());
-		this.timestamp = info.getInodeTable().inodeWithId(InodeTable.INODE_ID_INODE_TABLE).getModifiedTime();
-		
-		if(depth != 0) { // let negative numbers imply unlimited depth
-			this.setParents(new XRevisionInfo[info.getParents().size()]);
+		try(ZKFS fs = tag.getFS()) {
+			RevisionInfo info = fs.getRevisionInfo();
+			this.setRevTag(tag.getBytes());
+			this.setGeneration(info.getGeneration());
+			this.timestamp = info.getInodeTable().inodeWithId(InodeTable.INODE_ID_INODE_TABLE).getModifiedTime();
 			
-			for(int i = 0; i < getParents().length; i++) {
-				parents[i] = new XRevisionInfo(info.getParents().get(i), depth-1);
+			if(depth != 0) { // let negative numbers imply unlimited depth
+				this.setParents(new XRevisionInfo[info.getParents().size()]);
+				
+				for(int i = 0; i < getParents().length; i++) {
+					parents[i] = new XRevisionInfo(info.getParents().get(i), depth-1);
+				}
 			}
 		}
 	}
