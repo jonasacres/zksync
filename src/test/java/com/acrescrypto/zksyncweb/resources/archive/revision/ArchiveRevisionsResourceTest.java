@@ -147,7 +147,7 @@ public class ArchiveRevisionsResourceTest {
 		JsonNode resp = WebTestUtils.requestGet(target, basePath + "?mode=all");
 		assertTrue(resp.has("revisions"));
 		assertTrue(resp.get("revisions").isArray());
-		assertTrue(resp.get("revisions").size() == 0);
+		assertEquals(1, resp.get("revisions").size()); // we list a blank revision if we have nothing else
 	}
 	
 	@Test
