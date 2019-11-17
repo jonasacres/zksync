@@ -769,12 +769,6 @@ public class RevisionTreeTest {
 	}
 	
 	@Test
-	public void testTagWithPrefixReturnsNullForEmptyDataset() throws IOException {
-		// make sure we're non-empty, since empty tree is a different test case
-		assertNull(tree.tagWithPrefix(""));
-	}
-	
-	@Test
 	public void testTagWithPrefixReturnsFullyMatchedBranchTip() throws IOException {
 		RevisionTag tag;
 		try(ZKFS fs = archive.openBlank()) {

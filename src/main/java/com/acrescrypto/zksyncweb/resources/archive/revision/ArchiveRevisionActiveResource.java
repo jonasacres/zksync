@@ -13,6 +13,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.UriInfo;
 
+import com.acrescrypto.zksync.exceptions.InvalidRevisionTagException;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksyncweb.ArchiveCrud;
@@ -46,10 +47,12 @@ public class ArchiveRevisionActiveResource {
 		
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
 		
-		ZKFS fs = State.sharedState().fsForRevision(config, info.getRevTag());
-		State.sharedState().setActiveFs(config, fs);
-		
-		return XAPIResponse.withPayload(new XRevisionInfo(fs.getBaseRevision(), 1));
+		try(ZKFS fs = State.sharedState().fsForRevision(config, info.getRevTag())) {
+			State.sharedState().setActiveFs(config, fs);
+			return XAPIResponse.withPayload(new XRevisionInfo(fs.getBaseRevision(), 1));
+		} catch(InvalidRevisionTagException exc) {
+			throw XAPIResponse.notFoundErrorResponse();
+		}
 	}
 	
 	@DELETE

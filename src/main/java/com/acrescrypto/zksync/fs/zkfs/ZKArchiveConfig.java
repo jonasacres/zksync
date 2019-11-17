@@ -64,6 +64,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 	protected PeerSwarm swarm;
 	protected RevisionList revisionList;
 	protected RevisionTree revisionTree;
+	protected RevisionTag blank;
 	protected boolean advertising;
 	protected boolean closed;
 	protected Logger logger = LoggerFactory.getLogger(ZKArchiveConfig.class);
@@ -701,5 +702,15 @@ public class ZKArchiveConfig implements AutoCloseable {
 			page.seek(offset, File.SEEK_SET);
 			return page.read(length);
 		}
+	}
+
+	public RevisionTag blankRevisionTag() {
+		if(isReadOnly()) return null;
+		
+		if(blank == null) {
+			blank = RevisionTag.blank(this);
+		}
+		
+		return blank;
 	}
 }

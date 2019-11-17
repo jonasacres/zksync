@@ -32,7 +32,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public static RevisionTag blank(ZKArchiveConfig config) {
-		return new RevisionTag(RefTag.blank(config.getArchive()), 0, 0);
+		return new RevisionTag(RefTag.blank(config), 0, 0);
 	}
 	
 	public RevisionTag(RefTag refTag, long parentHash, long height) {
@@ -53,6 +53,14 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	public RevisionTag(ZKArchiveConfig config, ByteBuffer buf, boolean verifySignature) {
 		this.config = config;
 		deserialize(buf, verifySignature);
+	}
+
+	public RevisionTag(RevisionTag existing, ZKArchive archive) throws IOException {
+		this.refTag = new RefTag(existing.refTag.getArchive().cacheOnlyArchive(), existing.refTag.getBytes());
+		this.serialized = existing.serialized;
+		this.height = existing.height;
+		this.parentHash = existing.parentHash;
+		this.config = archive.getConfig();
 	}
 
 	public ZKArchive getArchive() throws IOException {
@@ -118,8 +126,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	
 	public RevisionTag makeCacheOnly() throws IOException {
 		if(cacheOnly) return this;
-		RefTag coRefTag = new RefTag(refTag.getArchive().cacheOnlyArchive(), refTag.getBytes());
-		RevisionTag tag = new RevisionTag(coRefTag, parentHash, height);
+		RevisionTag tag = new RevisionTag(this, refTag.getArchive().cacheOnlyArchive());
 		tag.cacheOnly = true;
 		return tag;
 	}
@@ -129,8 +136,9 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public boolean matchesPrefix(String base64Prefix) {
+		String unsafedPrefix = Util.fromWebSafeBase64(base64Prefix);
 		String myBase64 = Util.encode64(this.getBytes());
-		return myBase64.startsWith(base64Prefix);
+		return myBase64.startsWith(unsafedPrefix);
 	}
 	
 	public byte[] serialize() {

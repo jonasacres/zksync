@@ -161,8 +161,8 @@ public class IntegrationTest {
 		// now see if we can actually get the expected data from each ID
 		for(ZKArchiveConfig config : blankMaster.allConfigs()) {
 			config.finishOpening();
-			assertTrue(Util.waitUntil(3000, ()->config.getRevisionList().branchTips().size() > 0));
-			ZKFS fs = config.getRevisionList().branchTips().get(0).getFS();
+			assertTrue(Util.waitUntil(3000, ()->config.getRevisionList().branchTips().size() > 1));
+			ZKFS fs = config.getRevisionList().branchTips().get(1).getFS();
 			
 			byte[] expectedImmediate = crypto.prng(config.getArchiveId()).getBytes(crypto.hashLength()-1);
 			byte[] expected1page = crypto.prng(config.getArchiveId()).getBytes(config.getPageSize()-1);

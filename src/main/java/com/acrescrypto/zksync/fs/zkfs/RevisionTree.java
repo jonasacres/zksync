@@ -356,6 +356,7 @@ public class RevisionTree implements AutoCloseable {
 	}
 	
 	public Collection<RevisionTag> parentsForTag(RevisionTag revTag, long timeoutMs) {
+		if(revTag.getHeight() == 0) return new ArrayList<>(); // top-level revisions have no parents
 		Collection<RevisionTag> r = parentsForTagLocal(revTag);
 		if(r != null) return r;
 		fetchParentsForTag(revTag, timeoutMs);
@@ -394,6 +395,7 @@ public class RevisionTree implements AutoCloseable {
 	}
 	
 	public boolean descendentOf(RevisionTag tag, RevisionTag possibleAncestor) throws SearchFailedException {
+		if(possibleAncestor.equals(config.blankRevisionTag())) return true;
 		if(tag.equals(possibleAncestor)) return true;
 		return new TreeSearchItem(tag).hasAncestor(possibleAncestor);
 	}
@@ -472,9 +474,12 @@ public class RevisionTree implements AutoCloseable {
 				bases.add(current);
 			} else {				
 				Collection<RevisionTag> parents = parentsForTag(current, treeSearchTimeoutMs);
-				if(parents.size() > 1) {
+				if(parents != null && parents.size() > 1) {
 					toProcess.addAll(parents);
 				} else {
+					// Note that we get here if parents.size() == 1, or if parents is null.
+					/* null parents => couldn't find parent information, so we run the risk of a non-canonical
+					 * merge, but we don't have much choice. */
 					bases.add(current);
 				}
 			}

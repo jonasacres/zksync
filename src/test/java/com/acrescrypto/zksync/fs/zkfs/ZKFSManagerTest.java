@@ -65,7 +65,7 @@ public class ZKFSManagerTest {
 	
 	@Test
 	public void testConstructorAddsMonitorToZKFS() {
-		assertTrue(fs.dirtyMonitors.contains(manager.fsMonitor));
+		assertTrue(fs.changeMonitors.contains(manager.fsMonitor));
 	}
 
 	@Test
@@ -76,7 +76,7 @@ public class ZKFSManagerTest {
 	@Test
 	public void testCloseRemovesMonitorFromZKFS() throws IOException {
 		manager.close();
-		assertFalse(fs.dirtyMonitors.contains(manager.fsMonitor));
+		assertFalse(fs.changeMonitors.contains(manager.fsMonitor));
 	}
 	
 	@Test

@@ -262,11 +262,27 @@ public class FSMirror {
 	}
 
 	public synchronized void observedTargetPathChange(String path) throws IOException {
-		logger.info("FS {}: FSMirror observed change: {}",
+		logger.info("FS {}: FSMirror observed target change: {}",
 				Util.formatArchiveId(zkfs.archive.config.archiveId),
 				path);
 		try {
 			copy(target, zkfs, path);
+		} catch(Exception exc) {
+			Util.debugLog(String.format("FSMirror %s: %s Caught exception processing path: %s (%d bytes)",
+					zkfs.getArchive().getMaster().getName(),
+					Util.formatRevisionTag(zkfs.baseRevision),
+					path,
+					path.length()));
+			throw exc;
+		}
+	}
+	
+	protected synchronized void observedArchivePathChange(String path) throws IOException {
+		logger.info("FS {}: FSMirror observed archive change: {}",
+				Util.formatArchiveId(zkfs.archive.config.archiveId),
+				path);
+		try {
+			copy(zkfs, target, path);
 		} catch(Exception exc) {
 			Util.debugLog(String.format("FSMirror %s: %s Caught exception processing path: %s (%d bytes)",
 					zkfs.getArchive().getMaster().getName(),

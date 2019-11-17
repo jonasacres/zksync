@@ -20,7 +20,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.RevisionList.RevisionMonitor;
-import com.acrescrypto.zksync.fs.zkfs.ZKFS.ZKFSDirtyMonitor;
+import com.acrescrypto.zksync.fs.zkfs.ZKFS.ZKFSChangeMonitor;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -38,7 +38,7 @@ public class ZKFSManager implements AutoCloseable {
 	
 	protected Logger logger = LoggerFactory.getLogger(ZKFSManager.class);
 	protected RevisionMonitor revMonitor;
-	protected ZKFSDirtyMonitor fsMonitor;
+	protected ZKFSChangeMonitor fsMonitor;
 	
 	protected boolean autosave;
 	
@@ -77,7 +77,7 @@ public class ZKFSManager implements AutoCloseable {
 	}
 	
 	protected void setupMonitors() {
-		this.fsMonitor = (f)->notifyLocalChanges();
+		this.fsMonitor = (fs, path)->notifyZKFSPathChange(path);
 		this.revMonitor = (revTag)->notifyNewRevtag(revTag);
 		
 		if(fs != null) {
@@ -98,7 +98,7 @@ public class ZKFSManager implements AutoCloseable {
 		}
 	}
 	
-	public void notifyLocalChanges() {
+	public synchronized void notifyZKFSPathChange(String path) {
 		if(autocommitTimer != null && !autocommitTimer.isExpired()) {
 			logger.info("ZKFS {} {}: ZKFSManager snoozing autocommit timer, interval={}ms (id={})",
 					Util.formatArchiveId(fs.archive.config.archiveId),
@@ -107,6 +107,13 @@ public class ZKFSManager implements AutoCloseable {
 					System.identityHashCode(this)
 					);
 			autocommitTimer.snooze();
+		}
+
+		if(mirror == null) return;
+		try {
+			mirror.observedArchivePathChange(path);
+		} catch (IOException exc) {
+			logger.error("Caught exception attempting to sync ZKFS to target for updated path {}", path, exc);
 		}
 	}
 	

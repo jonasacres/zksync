@@ -74,7 +74,7 @@ public class NetModuleTest {
 		assertEquals(aConfig.getArchive().allPageTags().size(), bConfig.getArchive().allPageTags().size());
 		
 		ZKFS fsa = aConfig.getRevisionList().branchTips().get(0).getFS();
-		ZKFS fsb = bConfig.getRevisionList().branchTips().get(0).getFS();
+		ZKFS fsb = bConfig.getRevisionList().branchTips().get(1).getFS();
 		assertArrayEquals(fsa.read("file0"), fsb.read("file0"));
 		assertArrayEquals(fsa.read("file1"), fsb.read("file1"));
 		assertArrayEquals(fsa.read("file2"), fsb.read("file2"));
@@ -154,7 +154,7 @@ public class NetModuleTest {
 		
 		assertTrue(Util.waitUntil(2000, ()->aConfig.getArchive().allPageTags().size() == bConfig.getArchive().allPageTags().size()));
 		
-		ZKFS fsb = bConfig.getRevisionList().branchTips().get(0).getFS();
+		ZKFS fsb = bConfig.getRevisionList().branchTips().get(1).getFS();
 		fsb.write("file3", crypto.rng(2*bConfig.getPageSize()));
 		fsb.commit();
 		
@@ -208,7 +208,7 @@ public class NetModuleTest {
 		Util.waitUntil(2000, ()->bConfig.getArchive().allPageTags().size() == 6);
 		assertEquals(5, bConfig.getArchive().allPageTags().size());
 				
-		ZKFS fsb = bConfig.getRevisionList().branchTips().get(0).getFS();
+		ZKFS fsb = bConfig.getRevisionList().branchTips().get(1).getFS();
 		assertArrayEquals(fsb.read("path"), fsa.read("path"));
 		
 		fsa.close();
@@ -246,8 +246,8 @@ public class NetModuleTest {
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 
-		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionList().branchTips().size() == 1));
-		bConfig.getSwarm().requestInode(0, bConfig.getRevisionList().branchTips().get(0), inode.getStat().getInodeId());
+		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionList().branchTips().size() > 1));
+		bConfig.getSwarm().requestInode(0, bConfig.getRevisionList().branchTips().get(1), inode.getStat().getInodeId());
 		
 		// we should get a config (1 page), pagetree (1), and file pages (numPages from reftag)
 		Util.waitUntil(2000, ()->bConfig.getArchive().allPageTags().size() == 2 + inode.getRefTag().getNumPages());
@@ -329,8 +329,8 @@ public class NetModuleTest {
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
 
-		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionList().branchTips().size() == 1));
-		ZKFS fsb = bConfig.getRevisionList().branchTips().get(0).getFS();
+		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionList().branchTips().size() > 1));
+		ZKFS fsb = bConfig.getRevisionList().branchTips().get(1).getFS();
 		assertArrayEquals(fsa.read("immediate"), fsb.read("immediate"));
 		assertArrayEquals(fsa.read("indirect"), fsb.read("indirect"));
 		assertArrayEquals(fsa.read("2indirect"), fsb.read("2indirect"));

@@ -813,6 +813,7 @@ public class InodeTable extends ZKFile {
 		rootInode.getStat().setUid(0);
 		rootInode.getStat().setGid(0);
 		rootInode.setRefTag(RefTag.blank(zkfs.archive));
+		rootInode.setChangedFrom(zkfs.archive.config.blankRevisionTag());
 		rootInode.setFlags(Inode.FLAG_RETAIN);
 		rootInode.setNlink(2); // . and ..
 		

@@ -29,7 +29,7 @@ public class RevisionList implements AutoCloseable {
 		public void notifyNewRevision(RevisionTag revTag);
 	}
 
-	protected ArrayList<RevisionTag> branchTips = new ArrayList<>();
+	private ArrayList<RevisionTag> branchTips = new ArrayList<>();
 	protected LinkedList<RevisionMonitor> monitors = new LinkedList<>();
 	protected ZKArchiveConfig config;
 	protected RevisionTag latest; // "latest" tip; understood to mean tip with greatest height, using hash
@@ -75,6 +75,10 @@ public class RevisionList implements AutoCloseable {
 
 	/** All revisions we know of that are not yet merged into other revisions. */
 	public synchronized ArrayList<RevisionTag> branchTips() {
+		if(branchTips.isEmpty() && config.hasKey() && !config.isReadOnly()) {
+			branchTips.add(config.blankRevisionTag());
+		}
+		
 		return new ArrayList<>(branchTips);
 	}
 	
@@ -161,12 +165,13 @@ public class RevisionList implements AutoCloseable {
 		
 		int totalAddsPrevious = totalAdds;
 		if(verify) {
-			if(!acceptBranchTip(newBranch)) {
+			/* public key verifications are expensive, so we defer revtag validation until after we know
+			 * we'd even consider inserting it */
+
+			if(!shouldAcceptBranchTip(newBranch)) {
 				return false;
 			}
 			
-			/* public key verifications are expensive, so we defer revtag validation until after we know
-			 * we'd even consider inserting it */
 			newBranch.assertValid();
 		}
 
@@ -175,7 +180,7 @@ public class RevisionList implements AutoCloseable {
 			 * we got into the synchronized block 
 			 */
 			boolean lastCheckStillGood = verify && totalAdds == totalAddsPrevious;
-			if(!lastCheckStillGood && !acceptBranchTip(newBranch)) {
+			if(!lastCheckStillGood && !shouldAcceptBranchTip(newBranch)) {
 				return false;
 			}
 			
@@ -200,7 +205,7 @@ public class RevisionList implements AutoCloseable {
 		return true;
 	}
 	
-	protected boolean acceptBranchTip(RevisionTag newBranch) throws SearchFailedException {
+	protected boolean shouldAcceptBranchTip(RevisionTag newBranch) throws SearchFailedException {
 		if (config.revisionTree.isSuperceded(newBranch)) {
 			return false;
 		}
@@ -238,7 +243,10 @@ public class RevisionList implements AutoCloseable {
 				toRemove.add(tip);
 			} else {
 				Collection<RevisionTag> tipParents = tree.parentsForTag(tip, RevisionTree.treeSearchTimeoutMs);
-				if(tipParents.size() > 1 && parents.size() > tipParents.size() && parents.containsAll(tipParents)) {
+				if(tipParents != null && parents != null
+						&& tipParents.size() > 1
+						&& parents.size() > tipParents.size()
+						&& parents.containsAll(tipParents)) {
 					toRemove.add(tip);
 				}
 			}

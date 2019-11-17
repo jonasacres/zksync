@@ -220,7 +220,7 @@ public class RevisionListTest {
 			assertTrue(list.branchTips().contains(smallMerge));
 			list.consolidate(largeMerge);
 			assertEquals(1, list.branchTips().size());
-			assertEquals(largeMerge, list.branchTips.get(0));
+			assertEquals(largeMerge, list.branchTips().get(0));
 		}
 	}
 	
@@ -242,12 +242,12 @@ public class RevisionListTest {
 	}
 	
 	@Test
-	public void testClearRemovesAllEntriesFromList() throws IOException {
+	public void testClearResetsListToBlank() throws IOException {
 		int count = 16;
 		setupFakeRevisions(count);
 		assertEquals(count, list.branchTips().size());
 		list.clear();
-		assertEquals(0, list.branchTips().size());
+		assertEquals(1, list.branchTips().size());
 	}
 	
 	@Test

@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import java.io.IOException;
 
 import java.nio.ByteBuffer;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collection;
@@ -249,17 +250,26 @@ public class ZKDirectory extends ZKFile implements Directory {
 
 	public void link(Inode inode, String link) throws IOException {
 		assertWritable();
+		
 		zkfs.lockedOperation(()->{
 			synchronized(this) {
 				assertWritable();
 				if(!isValidName(link)) throw new EINVALException(link + ": invalid filename");
+				String fullPath;
+				try {
+					fullPath = Paths.get(path, link).toString();
+				} catch(InvalidPathException exc) {
+					throw new EINVALException(link + ": invalid filename");
+				}
+				
 				if(entries.containsKey(link)) {
-					throw new EEXISTSException(Paths.get(path, link).toString());
+					throw new EEXISTSException(fullPath);
 				}
 				entries.put(link, inode.getStat().getInodeId());
 				inode.addLink();
 				dirty = true;
 				zkfs.markDirty();
+				zkfs.notifyChange(fullPath);
 				return null;
 			}
 		});
@@ -302,6 +312,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 
 	@Override
 	public void unlink(String name) throws IOException {
+		String fullPath = Paths.get(path, name).toString();
 		assertWritable();
 		zkfs.lockedOperation(()->{
 			synchronized(this) {
@@ -325,6 +336,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 				
 				dirty = true;
 				zkfs.markDirty();
+				zkfs.notifyChange(fullPath);
 				return null;
 			}
 		});

@@ -408,6 +408,7 @@ public class ZKFile extends File {
 				dirty = false;
 				zkfs.inodeTable.setInode(inode);
 				zkfs.markDirty();
+				zkfs.notifyChange(path);
 				setOverrideMtime(null);
 
 				return null;

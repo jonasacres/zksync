@@ -36,8 +36,8 @@ public class ZKFS extends FS {
 		return openInstances;
 	}
 	
-	public interface ZKFSDirtyMonitor {
-		public void notifyDirty(ZKFS fs);
+	public interface ZKFSChangeMonitor {
+		public void notifyChanged(ZKFS fs, String path);
 	}
 	
 	public interface ZKFSLockedOperation {
@@ -50,7 +50,7 @@ public class ZKFS extends FS {
 	protected RevisionTag baseRevision;
 	protected String root;
 	protected boolean dirty;
-	protected LinkedList<ZKFSDirtyMonitor> dirtyMonitors = new LinkedList<>();
+	protected LinkedList<ZKFSChangeMonitor> changeMonitors = new LinkedList<>();
 	protected LinkedList<SubscriptionToken<?>> tokens = new LinkedList<>();
 	protected boolean isReadOnly; // was this specific ZKFS opened RO? (not the whole archive)
 	protected int retainCount;
@@ -641,12 +641,15 @@ public class ZKFS extends FS {
 		default:
 			throw new IllegalArgumentException(String.format("Illegal node type: %d", type));
 		}
+		
+		notifyChange(path);
 	}
 	
 	@Override
 	public void mkfifo(String path) throws IOException {
 		assertWritable(path);
 		create(path).getStat().makeFifo();
+		notifyChange(path);
 	}
 	
 	@Override
@@ -660,6 +663,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setMode(mode);
 		markDirty();
+		notifyChange(path);
 	}
 
 	@Override
@@ -673,6 +677,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setUid(uid);
 		markDirty();
+		notifyChange(path);
 	}
 
 	@Override
@@ -686,6 +691,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setUser(name);
 		markDirty();
+		notifyChange(path);
 	}
 
 	@Override
@@ -699,6 +705,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setGid(gid);
 		markDirty();
+		notifyChange(path);
 	}
 
 	@Override
@@ -712,6 +719,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setGroup(group);
 		markDirty();
+		notifyChange(path);
 	}
 
 	@Override
@@ -725,6 +733,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setMtime(mtime);
 		markDirty();
+		notifyChange(path);
 	}
 
 	@Override
@@ -738,6 +747,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setCtime(ctime);
 		markDirty();
+		notifyChange(path);
 	}
 
 	@Override
@@ -751,6 +761,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setAtime(atime);
 		markDirty();
+		notifyChange(path);
 	}
 	
 	@Override
@@ -843,12 +854,12 @@ public class ZKFS extends FS {
 		this.dirty = false;
 	}
 	
-	public synchronized void addMonitor(ZKFSDirtyMonitor monitor) {
-		dirtyMonitors.add(monitor);
+	public synchronized void addMonitor(ZKFSChangeMonitor monitor) {
+		changeMonitors.add(monitor);
 	}
 	
-	public synchronized void removeMonitor(ZKFSDirtyMonitor monitor) {
-		dirtyMonitors.remove(monitor);
+	public synchronized void removeMonitor(ZKFSChangeMonitor monitor) {
+		changeMonitors.remove(monitor);
 	}
 
 	public boolean isDirty() {
@@ -857,8 +868,11 @@ public class ZKFS extends FS {
 	
 	public void markDirty() {
 		this.dirty = true;
-		for(ZKFSDirtyMonitor monitor : dirtyMonitors) {
-			monitor.notifyDirty(this);
+	}
+	
+	public void notifyChange(String path) {
+		for(ZKFSChangeMonitor monitor : changeMonitors) {
+			monitor.notifyChanged(this, path);
 		}
 	}
 

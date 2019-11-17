@@ -40,8 +40,12 @@ public class RefTag implements Comparable<RefTag> {
 	public static int REFTAG_SHORT_SIZE = 8;
 	
 	public static RefTag blank(ZKArchive archive) {
-		return new RefTag(archive,
-				new StorageTag(archive.getCrypto(), new byte[0]),
+		return blank(archive.config);
+	}
+	
+	public static RefTag blank(ZKArchiveConfig config) {
+		return new RefTag(config,
+				new StorageTag(config.getCrypto(), new byte[0]),
 				RefTag.REF_TYPE_IMMEDIATE,
 				0);
 	}

@@ -634,6 +634,7 @@ public class PeerConnection {
 		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(revTagRaw);
 			RevisionTag revTag = new RevisionTag(socket.swarm.config, revTagRaw, false);
+			
 			try {
 				logger.debug("Swarm {} {}:{}: PeerConnection announceTips considering revtag {}",
 						Util.formatArchiveId(socket.swarm.config.getArchiveId()),
