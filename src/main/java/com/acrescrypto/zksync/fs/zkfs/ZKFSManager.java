@@ -47,6 +47,10 @@ public class ZKFSManager implements AutoCloseable {
 			read(config);
 		} catch(ENOENTException exc) {
 			if(!config.getAccessor().isSeedOnly()) {
+				if(this.fs != null) {
+					this.fs.close();
+				}
+				
 				this.fs = config.getArchive().openLatest();
 			}
 		}
