@@ -102,7 +102,7 @@ public class ZKFSManager implements AutoCloseable {
 		}
 	}
 	
-	public synchronized void notifyZKFSPathChange(String path) {
+	public void notifyZKFSPathChange(String path) {
 		if(autocommitTimer != null && !autocommitTimer.isExpired()) {
 			logger.info("ZKFS {} {}: ZKFSManager snoozing autocommit timer, interval={}ms (id={})",
 					Util.formatArchiveId(fs.archive.config.archiveId),

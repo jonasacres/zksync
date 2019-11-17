@@ -445,6 +445,9 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 		globalConfig.setDefault("fs.settings.maxAutomergeAcquireWaitTimeMs", 60000);
 		globalConfig.setDefault("fs.settings.revtagHasLocalCacheTimeout", 60000);
 		
+		globalConfig.setDefault("fs.settings.mirror.zkfsToHostSyncDelayMs", 100);
+		globalConfig.setDefault("fs.settings.mirror.zkfsToHostSyncMaxDelayMs", 1000);
+		
 		globalConfig.setDefault("fs.fileHandleTelemetry", FS.fileHandleTelemetryEnabled);
 		
 		globalConfig.setDefault("net.limits.tx", -1);
