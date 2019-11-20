@@ -15,7 +15,6 @@ import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.InodeDiffResolver;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver.PathDiffResolver;
-import com.acrescrypto.zksync.utility.Util;
 
 /* Describes a difference between a set of revisions. */
 public class DiffSet {
@@ -74,14 +73,6 @@ public class DiffSet {
 			}
 		}
 		
-		StringBuilder sb = new StringBuilder(String.format("DiffSet %s: listed %d inodes.",
-				revisions[0].getArchive().getMaster().getName(),
-				allInodes.size()));
-		for(Long inodeId : allInodes) {
-			sb.append(" " + inodeId);
-		}
-		Util.debugLog(sb.toString());
-		
 		return allInodes;
 	}
 	
@@ -108,26 +99,9 @@ public class DiffSet {
 	 * inode IDs.
 	 *  */
 	protected Map<Long,Map<RevisionTag,Long>> findInodeDiffs(ZKFS mergeFs) throws IOException {
-		StringBuilder sb = new StringBuilder(String.format("DiffSet %s: finding inode diffs",
-				revisions[0].getArchive().getMaster().getName()));
 		Map<Long,Map<RevisionTag,Long>> idMap = new HashMap<Long,Map<RevisionTag,Long>>();
 		for(long inodeId : allInodes()) {
 			InodeDiff diff = new InodeDiff(inodeId, revisions);
-			sb.append(String.format("\n\tinodeId %d has %d candidates, isConflict=%s",
-					inodeId,
-					diff.resolutions.size(),
-					diff.isConflict() ? "true" : "false"));
-			for(Inode inode : diff.resolutions.keySet()) {
-				sb.append(String.format("\n\t\tIdentity %16s, size %7s, reftag %15s, changedfrom %15s [",
-						inode == null ? "null" : String.format("%016x", inode.getIdentity()),
-						inode == null ? "null" : String.format("%7d", inode.getStat().getSize()),
-						inode == null ? "null" : Util.formatRefTag(inode.getRefTag()),
-						inode == null ? "null" : Util.formatRevisionTag(inode.getChangedFrom())));
-				for(RevisionTag rev : diff.resolutions.get(inode)) {
-					sb.append(" " + Util.formatRevisionTag(rev));
-				}
-				sb.append(" ]");
-			}
 			if(!diff.isConflict()) continue;
 			renumberInodeDiff(mergeFs, diff, idMap);
 		}
@@ -139,17 +113,13 @@ public class DiffSet {
 			ArrayList<InodeDiff> diffs = identityVersions.get(identity);
 			if(diffs.size() <= 1) continue;
 			
-			long minId = Long.MAX_VALUE, minIdOriginal = Long.MAX_VALUE;
+			long minId = Long.MAX_VALUE;
 			for(InodeDiff diff : diffs) {
 				if(minId > diff.inodeId) {
 					minId = diff.inodeId;
 				}
 			}
 			
-			sb.append(String.format("\n\tStandardizing identity %016x to inodeId %d / original inodeId %d",
-					identity,
-					minId,
-					minIdOriginal));
 			final long fMinId = minId;
 			InodeDiff megadiff = new InodeDiff(minId);
 			for(InodeDiff diff : diffs) {
@@ -165,11 +135,6 @@ public class DiffSet {
 					
 					for(RevisionTag tag : tags) {
 						idMap.putIfAbsent(diff.originalInodeIdForTag(tag), new HashMap<>());
-						sb.append(String.format("\n\t\tRemapping %s inodeId %d to inodeId %d (was: inodeId %s)",
-								Util.formatRevisionTag(tag),
-								diff.originalInodeIdForTag(tag),
-								fMinId,
-								idMap.get(diff.originalInodeIdForTag(tag)).get(tag)));
 						idMap.get(diff.originalInodeIdForTag(tag)).put(tag, fMinId);
 					}
 				});
@@ -179,8 +144,6 @@ public class DiffSet {
 			
 			inodeDiffs.put(minId, megadiff);
 		}
-		
-		Util.debugLog(sb.toString());
 		
 		return idMap;
 	}
@@ -240,12 +203,6 @@ public class DiffSet {
 		sortedIdentities.addAll(byIdentity.keySet());
 		sortedIdentities.sort(null);
 		
-		StringBuilder sb = new StringBuilder();
-		sb.append(String.format("DiffSet %s: Renumbering %d candidates of inodeId %d, minIdent %016x\n",
-				revisions[0].getArchive().getMaster().getName(),
-				sortedIdentities.size(),
-				diff.inodeId,
-				minIdent));
 		for(Long identity : sortedIdentities) {
 			long newId;
 			if(identity.equals(minIdent)) {
@@ -253,18 +210,6 @@ public class DiffSet {
 			} else {
 				newId = issueInodeId(fs);
 			}
-			
-			sb.append(String.format("\t%sIdentity %16x, new inodeId %d,",
-					identity.equals(minIdent) ? "* " : "  ",
-					identity,
-					newId));
-
-			for(RevisionTag tag : byIdentity.get(identity)) {
-				sb.append(" ");
-				sb.append(Util.formatRevisionTag(tag));
-			}
-			
-			sb.append("\n");
 			
 			idMap.putIfAbsent(diff.inodeId, new HashMap<>());
 			for(RevisionTag tag : byIdentity.get(identity)) {
@@ -276,7 +221,6 @@ public class DiffSet {
 			identityVersions.putIfAbsent(identity, new ArrayList<InodeDiff>());
 			identityVersions.get(identity).add(renumberedDiff);
 		}
-		Util.debugLog(sb.toString());
 	}
 	
 	/** assign a new inode ID to a given identity constant in an inode diffset */

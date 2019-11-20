@@ -494,8 +494,6 @@ public class RevisionList implements AutoCloseable {
 			logger.debug("RevisionList {} {}: Skipping automerge of closed archive",
 					config.getArchive().getMaster().getName(),
 					Util.formatArchiveId(config.getArchiveId()));
-			Util.debugLog(String.format("RevisionList %s: Skipping automerge of closed archive",
-					config.getMaster().getName()));
 			return;
 		}
 		try {
@@ -512,8 +510,6 @@ public class RevisionList implements AutoCloseable {
 			} else {
 				logger.info("RevisionList {} {}: Automerge started", config.getArchive().getMaster().getName(),
 						Util.formatArchiveId(config.getArchiveId()));
-				Util.debugLog(String.format("RevisionList %s: Starting automerge",
-						config.getMaster().getName()));
 				Collection<RevisionTag> tips;
 				
 				synchronized(this) {

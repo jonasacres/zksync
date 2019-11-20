@@ -11,8 +11,6 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
-import com.acrescrypto.zksync.fs.zkfs.ZKFS;
-import com.acrescrypto.zksync.utility.Util;
 
 public abstract class FS implements AutoCloseable {
 	protected static ConcurrentHashMap<File,Throwable> globalFileBacktraces = new ConcurrentHashMap<>();
@@ -118,14 +116,6 @@ public abstract class FS implements AutoCloseable {
 			}
 		} catch(Exception exc) {
 			logger.error("Caught exception on rmrf(\"{}\"), exists={}: ", path, exists(path), exc);
-			if(this instanceof ZKFS) {
-				ZKFS zkfs = (ZKFS) this;
-				Util.debugLog(String.format("FS %s: caught exception %s in rmrf %s\n%s",
-						zkfs.getArchive().getMaster().getName(),
-						exc.getClass().getSimpleName(),
-						path,
-						zkfs.dump()));
-			}
 		} finally {
 			dir.close();
 			rmdir(path);

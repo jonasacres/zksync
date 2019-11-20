@@ -214,14 +214,6 @@ public class ZKFS extends FS {
 					Util.formatArchiveId(archive.getConfig().getArchiveId()),
 					Util.formatRevisionTag(baseRevision),
 					parentStr);
-
-			Util.debugLog(String.format("ZKFS %s: created revtag %s from %s\n%s\n%s\n%s\n",
-					archive.getMaster().getName(),
-					Util.formatRevisionTag(baseRevision),
-					parentStr,
-					dump(),
-					inodeTable.dumpInodes(),
-					inodeTable.freelist.dump()));
 			// archive.getConfig().getRevisionList().dump();
 			if(!skipIntegrity) {
 				IntegrityChecker.assertValidFilesystem(baseRevision); // TODO: Delete me after testing
@@ -370,14 +362,6 @@ public class ZKFS extends FS {
 				inode.getStat().getInodeId(),
 				inode.getStat().isDirectory());
 		if(!inode.getStat().isDirectory()) {
-			Util.debugLog(String.format("ZKFS %s: %s EISNOTDIR %s, inodeId %d, identity %016x, type %02x\n%s",
-					archive.master.getName(),
-					Util.formatRevisionTag(baseRevision),
-					path,
-					inode.getStat().getInodeId(),
-					inode.getIdentity(),
-					inode.getStat().getType(),
-					inodeTable.dumpInodes()));
 			throw new EISNOTDIRException(path);
 		}
 	}
@@ -397,20 +381,6 @@ public class ZKFS extends FS {
 	public void assertDirectoryIsEmpty(String path) throws IOException {
 		try(ZKDirectory dir = opendir(path)) {
 			if(dir.list().size() > 0) {
-				StringBuilder sb = new StringBuilder(String.format("ZKFS %s: %s ENOTEMPTY on directory %s, inodeId %d, identity %016x, %d entries",
-						archive.getMaster().getName(),
-						Util.formatRevisionTag(baseRevision),
-						path,
-						dir.getStat().getInodeId(),
-						dir.inode.getIdentity(),
-						dir.list().size()));
-				for(String subpath : dir.list()) {
-					sb.append(String.format("\n\t%16s", subpath));
-				}
-				sb.append("\n" + this.dump());
-				sb.append("\n" + inodeTable.dumpInodes());
-				Util.debugLog(sb.toString());
-				
 				throw new ENOTEMPTYException(path);
 			}
 		}

@@ -30,12 +30,6 @@ public class PathDiff implements Comparable<PathDiff> {
 				if(idMap != null && idMap.containsKey(inodeId)) {
 					long newInodeId = idMap.get(inodeId).getOrDefault(candidate, inodeId);
 					if(inodeId != newInodeId) {
-						Util.debugLog(String.format("PathDiff %s: candidate %s, remapping inodeId for path %s %d -> %d due to diff renumbering",
-								fs.getArchive().getMaster().getName(),
-								Util.formatRevisionTag(candidate),
-								path,
-								inodeId,
-								newInodeId));
 						inodeId = newInodeId;
 						
 						// need this to appear as a path diff to guarantee renumbering is executed, so set forceConflict

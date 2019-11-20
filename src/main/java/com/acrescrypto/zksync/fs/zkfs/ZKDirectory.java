@@ -221,16 +221,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 						return null;
 					}
 					
-					Util.debugLog(String.format("ZKDirectory %s: %s In directory %d %016x %s, renumbering %s %s -> %s",
-							zkfs.getArchive().getMaster().getName(),
-							Util.formatRevisionTag(zkfs.baseRevision),
-							inode.getStat().getInodeId(),
-							inode.getIdentity(),
-							getPath(),
-							link,
-							existing,
-							inodeId));
-					
 					entries.remove(link);
 					zkfs.uncache(fullPath);
 					dirty = true;
@@ -321,12 +311,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 				
 				Long inodeId = entries.get(name);
 				if(inodeId == null) {
-					Util.debugLog(String.format("ZKDirectory %s: removing entry %s, but entry is not in directory %s %d %016x; ignoring",
-							zkfs.getArchive().getMaster().getName(),
-							name,
-							path,
-							this.inode.getStat().getInodeId(),
-							this.inode.getIdentity()));
 					return null; // allow quiet unlinking of "ghost entries" (those not linked by their alleged parent)
 				}
 				
@@ -568,23 +552,13 @@ public class ZKDirectory extends ZKFile implements Directory {
 	}
 
 	public synchronized void remap(HashMap<Long, Long> remappedIds) {
-		StringBuilder sb = new StringBuilder(String.format("ZKDirectory %s: (directory inodeId %d) remapping from base revision %s",
-				zkfs.archive.master.getName(),
-				inode.getStat().getInodeId(),
-				Util.formatRevisionTag(zkfs.baseRevision)));
 		ConcurrentHashMap<String, Long> remappedEntries = new ConcurrentHashMap<>();
 		entries.forEach((name, inodeId)->{
 			long newId = remappedIds.getOrDefault(inodeId, inodeId);
 			dirty |= newId != inodeId;
 			remappedEntries.put(name, newId);
-			sb.append(String.format("\n\t%30s %3d -> %3d %s",
-					name,
-					inodeId,
-					newId,
-					newId != inodeId ? "CHANGED" : ""));
 		});
 		
-		Util.debugLog(sb.toString());
 		entries = remappedEntries;
 	}
 

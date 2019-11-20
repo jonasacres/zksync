@@ -297,4 +297,21 @@ public class Stat {
 				size,
 				Integer.toOctalString(mode));
 	}
+	
+	/* See if these stats "loosely match" on stuff that would be comparable between filesystems.
+	 */
+	public boolean matches(Stat stat) {
+		if(stat == null) return false;
+		
+		if(size != stat.size) return false;
+		if(mode != stat.mode) return false;
+		if(type != stat.type) return false;
+		
+		if(isDevice()) {
+			if(devMajor != stat.devMajor) return false;
+			if(devMinor != stat.devMinor) return false;
+		}
+		
+		return true;
+	}
 }

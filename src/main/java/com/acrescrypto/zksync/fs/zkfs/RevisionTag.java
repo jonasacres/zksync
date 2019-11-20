@@ -221,8 +221,6 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		
 		PageTree tree = new PageTree(getRefTag());
 		if(!tree.exists()) {
-			Util.debugLog(String.format("RevisionTag %s: hasStructureLocally=false, does not have inode 0",
-					Util.formatRevisionTag(this)));
 			return false;
 		}
 		
@@ -233,10 +231,6 @@ public class RevisionTag implements Comparable<RevisionTag> {
 				
 				PageTree dirTree = new PageTree(inode);
 				if(!dirTree.exists()) {
-					Util.debugLog(String.format("RevisionTag %s: hasStructureLocally=false, does not have inode %d, %s",
-							Util.formatRevisionTag(this),
-							inode.getStat().getInodeId(),
-							Util.formatRefTag(inode.getRefTag())));
 					return false;
 				}
 			}
@@ -256,11 +250,6 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		}
 		
 		while(!hasStructureLocally()) {
-			Util.debugLog(String.format("RevisionTag %s: Waiting for structure, timeoutMs=%d, deadline=%d, now=%d",
-					Util.formatRevisionTag(this),
-					timeoutMs,
-					deadline,
-					System.currentTimeMillis()));
 			if(System.currentTimeMillis() >= deadline) return false;
 			long waitIntervalMs = timeoutMs < 0 ? timeoutMs : deadline - System.currentTimeMillis();
 			config.getSwarm().waitForPage(waitIntervalMs);

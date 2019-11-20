@@ -54,35 +54,11 @@ public class DiffSetResolver {
 		}
 		
 		long timeoutMs = archive.getMaster().getGlobalConfig().getLong("fs.settings.mergeRevisionAcquisitionMaxWaitMs");
-		StringBuilder sb = new StringBuilder();
-		sb.append(String.format("DiffSetResolver %s: Assembling branch tips (availability timeout=%dms).\nBranch tips:\n",
-				archive.getMaster().getName(),
-				timeoutMs));
-
-		sb.append("Branch tips:\n");
-		for(RevisionTag tag : tags) {
-			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
-		}
 
 		Collection<RevisionTag> minimalTips = archive.getConfig().getRevisionTree().minimalSet(tags);
-		sb.append("Minimal tips:\n");
-		for(RevisionTag tag : minimalTips) {
-			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
-		}
-		
 		Collection<RevisionTag> baseTips = archive.getConfig().getRevisionTree().canonicalBases(minimalTips);
-		sb.append("Base tips:\n");
-		for(RevisionTag tag : baseTips) {
-			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
-		}
-		
 		Collection<RevisionTag> availableBaseTips = archive.getConfig().getRevisionList().availableTags(baseTips, timeoutMs);
-		sb.append("Available tips:\n");
-		for(RevisionTag tag : availableBaseTips) {
-			sb.append(String.format("\t%s\n", Util.formatRevisionTag(tag)));
-		}
 		
-		Util.debugLog(sb.toString());
 		DiffSet diffSet = DiffSet.withCollection(availableBaseTips);
 		return latestVersionResolver(diffSet);
 	}
@@ -251,7 +227,6 @@ public class DiffSetResolver {
 			});
 			
 			fs.getArchive().getConfig().getRevisionList().consolidate(revTag);
-			Util.debugLog("Diff " + fs.getArchive().getMaster().getName() + ": Produced merged revision " + Util.formatRevisionTag(revTag) + " from " + revList);
 			return revTag;
 		} catch(Throwable exc) {
 			throw exc;
@@ -309,9 +284,6 @@ public class DiffSetResolver {
 		Collection<PathDiff> diffsToRecalculate = detectPathInconsistencies();
 		while(!diffsToRecalculate.isEmpty()) {
 			for(PathDiff diff : diffsToRecalculate) {
-				Util.debugLog(String.format("DiffSetResolver %s: reprocessing diff for path %s",
-						fs.getArchive().getMaster().getName(),
-						diff.path));
 				Long resolution = null;
 				diff.clearResolution();
 				diff.resolutions.remove(null);
