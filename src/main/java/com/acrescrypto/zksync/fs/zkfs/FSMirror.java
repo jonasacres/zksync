@@ -150,6 +150,7 @@ public class FSMirror {
 					localTarget.getRoot(),
 					numActive());
 			watchDirectory(dir, watcher, pathsByKey);
+			suppressWatch = false;
 	
 			watchThread = new Thread( () -> watchThread(flag, watcher, pathsByKey) );
 			watchThread.start();
@@ -214,7 +215,9 @@ public class FSMirror {
 				Path basePath = Paths.get(((LocalFS) target).getRoot());
 				String realPath = basePath.relativize(subdir).toString();
 				
-				suspectedTargetPathChange(realPath);
+				if(!suppressWatch) {
+					suspectedTargetPathChange(realPath);
+				}
 
 				return FileVisitResult.CONTINUE;
 			}
@@ -223,7 +226,11 @@ public class FSMirror {
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
 				Path basePath = Paths.get(((LocalFS) target).getRoot());
 				String realPath = basePath.relativize(file).toString();
-				suspectedTargetPathChange(realPath);
+				
+				if(!suppressWatch) {
+					suspectedTargetPathChange(realPath);
+				}
+				
 				return FileVisitResult.CONTINUE;
 			}
 			
@@ -245,7 +252,6 @@ public class FSMirror {
 		try {
 			while(flag.booleanValue()) {
 				boolean shouldContinue = watchThreadBody(flag, watcher, pathsByKey);
-				suppressWatch = false;
 				if(!shouldContinue) break;
 			}
 		} catch(Throwable exc) {
