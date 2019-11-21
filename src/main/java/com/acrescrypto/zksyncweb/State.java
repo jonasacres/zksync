@@ -175,6 +175,7 @@ public class State implements AutoCloseable {
 			}
 			
 			if(config.getArchive() == null) return null;
+			
 			ZKFSManager manager = new ZKFSManager(config);
 			activeFilesystems.put(config, manager);
 			return manager.getFs();

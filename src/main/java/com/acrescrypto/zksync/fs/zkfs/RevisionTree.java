@@ -417,6 +417,11 @@ public class RevisionTree implements AutoCloseable {
 		
 		Collection<RevisionTag> parents = parentsForTag(existing);
 		
+		if(parents == null) {
+			logger.warn("Unable to get parent information for " + existing + ", assuming tag is not superceded by " + newTag);
+			return false;
+		}
+		
 		if(parents.size() <= 1) {
 			return false;
 		}

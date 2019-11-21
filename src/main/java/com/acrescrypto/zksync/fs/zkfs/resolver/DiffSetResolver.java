@@ -427,7 +427,7 @@ public class DiffSetResolver {
 					) {
 						inodePaths.addAll(dir.findPathsForInode(diff.inodeId));
 					} catch(IOException exc) {
-						exc.printStackTrace();
+						logger.info("Aborting dump of DiffSetResolver due to exception", exc);
 					}
 				}
 				

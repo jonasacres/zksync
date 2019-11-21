@@ -77,7 +77,7 @@ public class ArchiveRevisionLatestResourceTest {
 		}
 		
 		try(ZKFS fs = revTag.getFS()) {
-			State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
+			State.sharedState().setActiveFs(archive.getConfig(), fs);
 	
 			JsonNode resp = WebTestUtils.requestGet(target, basePath);
 			assertArrayEquals(archive.getConfig().getRevisionList().latest().getBytes(), resp.get("revTag").binaryValue());

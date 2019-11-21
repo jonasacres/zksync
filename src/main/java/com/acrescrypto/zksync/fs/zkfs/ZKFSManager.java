@@ -258,10 +258,6 @@ public class ZKFSManager implements AutoCloseable {
 				
 				setupAutocommitTimer();
 			} catch (IOException exc) {
-				Util.debugLog(String.format("ZKFS %s %s: IOException performing autocommit on revision %s\n",
-						Util.formatArchiveId(fs.archive.config.archiveId),
-						fs.archive.master.getName(),
-						fs.getBaseRevision()));
 				exc.printStackTrace();
 				logger.error("ZKFS {} {}: IOException performing autocommit",
 						Util.formatArchiveId(fs.archive.config.archiveId),
@@ -306,7 +302,15 @@ public class ZKFSManager implements AutoCloseable {
 		}
 		
 		if(automirrorPath != null) {
-			mirror = new FSMirror(fs, new LocalFS(automirrorPath));
+			LocalFS localFs = new LocalFS(automirrorPath);
+			
+			if(mirror == null) {
+				mirror = new FSMirror(fs, localFs);
+			} else {
+				mirror.setTargetFs(localFs);
+				mirror.setZkfs(fs);
+			}
+			
 			if(automirror) {
 				mirror.startWatch();
 			}
@@ -424,7 +428,7 @@ public class ZKFSManager implements AutoCloseable {
 		if(fs == this.fs) return;
 		
 		this.fs.close();
-		this.fs = fs;
+		this.fs = fs.retain();
 		setupMonitors();
 		setAutomirrorPath(this.automirrorPath); // reinit mirror
 		if(mirror != null) {

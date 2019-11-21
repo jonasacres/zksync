@@ -61,8 +61,10 @@ public class ArchiveRevisionActiveResource {
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
 		
-		ZKFS fs = config.getRevisionList().latest().getFS();
-		State.sharedState().activeManager(config).setFs(fs);
+		try(ZKFS fs = config.getRevisionList().latest().getFS()) {
+			State.sharedState().activeManager(config).setFs(fs);
+		}
+		
 		return XAPIResponse.withPayload(new XRevisionInfo(State.sharedState().activeFs(config).getBaseRevision(), 1));
 	}	
 }

@@ -330,11 +330,8 @@ public class ZKFSManagerTest {
 	public void testSetAutomirrorPathRestartsWatchIfPreviouslyRunning() throws IOException {
 		manager.setAutomirrorPath(mirrorFs.getRoot());
 		manager.setAutomirror(true);
-		FSMirror mirror = manager.mirror;
 		
 		manager.setAutomirrorPath(mirrorFs.getRoot());
-		assertNotEquals(mirror, manager.mirror);
-		assertFalse(mirror.isWatching());
 		assertTrue(manager.isAutomirroring());
 		assertTrue(manager.mirror.isWatching());
 	}

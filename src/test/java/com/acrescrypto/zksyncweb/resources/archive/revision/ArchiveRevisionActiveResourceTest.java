@@ -83,7 +83,10 @@ public class ArchiveRevisionActiveResourceTest {
 		try(ZKFS fs = archive.openBlank()) {
 			RevisionTag revTag = fs.commit();
 			fs.commit();
-			State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
+			
+			try(ZKFS newFs = revTag.getFS()) {
+				State.sharedState().setActiveFs(archive.getConfig(), newFs);
+			}
 	
 			JsonNode resp = WebTestUtils.requestGet(target, basePath);
 			assertArrayEquals(revTag.getBytes(), resp.get("revTag").binaryValue());
@@ -96,7 +99,10 @@ public class ArchiveRevisionActiveResourceTest {
 		try(ZKFS fs = archive.openBlank()) {
 			RevisionTag revTag = fs.commit();
 			fs.commit();
-			State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
+			
+			try(ZKFS newFs = revTag.getFS()) {
+				State.sharedState().setActiveFs(archive.getConfig(), newFs);
+			}
 	
 			XRevisionPrefix xinfo = new XRevisionPrefix();
 			xinfo.setRevTag(Util.encode64(revTag.getBytes()));
@@ -111,7 +117,10 @@ public class ArchiveRevisionActiveResourceTest {
 		try(ZKFS fs = archive.openBlank()) {
 			RevisionTag revTag = fs.commit();
 			fs.commit();
-			State.sharedState().setActiveFs(archive.getConfig(), revTag.getFS());
+			
+			try(ZKFS newFs = revTag.getFS()) {
+				State.sharedState().setActiveFs(archive.getConfig(), newFs);
+			}
 	
 			WebTestUtils.requestDelete(target, basePath);
 			assertArrayEquals(archive.getConfig().getRevisionList().latest().getBytes(),

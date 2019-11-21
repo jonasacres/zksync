@@ -968,7 +968,8 @@ public class FSMirrorTest {
 			zkfs.write(p, "foo".getBytes());
 		});
 		
-		target.write("foo", "bar".getBytes());
+		target.write("foo", "ding".getBytes());
+		assertTrue(mirror.isWatching());
 		assertTrue(Util.waitUntil(100, ()->zkfs.dirty));
 	}
 	
@@ -1027,6 +1028,7 @@ public class FSMirrorTest {
 		
 		watcherTest("foo", (p)->{
 			target.chmod(p, 0600);
+			System.out.println("chmod done to " + p);
 		});
 	}
 	
