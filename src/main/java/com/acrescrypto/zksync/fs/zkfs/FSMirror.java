@@ -12,8 +12,8 @@ import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
@@ -78,7 +78,7 @@ public class FSMirror {
 	}
 	
 	SnoozeThread archiveToTargetSyncThread;
-	HashSet<String> queuedArchivePaths = new HashSet<>();
+	ConcurrentHashMap<String, Boolean> queuedArchivePaths = new ConcurrentHashMap<>();
 	HashMap<String, SquelchedPath> squelchedPaths = new HashMap<>();
 	
 	public static int numActive() {
@@ -187,7 +187,7 @@ public class FSMirror {
 				()->{
 					synchronized(this) {
 						syncQueuedArchivePaths();
-						this.archiveToTargetSyncThread = null;
+						startArchiveToTargetSyncThread();
 					}
 				});
 	}
@@ -371,24 +371,33 @@ public class FSMirror {
 		}
 	}
 	
-	protected synchronized void observedArchivePathChange(String path) throws IOException {
+	protected void observedArchivePathChange(String path) throws IOException {
 		if(watchFlag.isFalse()) return;
-		queuedArchivePaths.add(path);
+		
+		try {
+			if(archiveToTargetSyncThread != null && !archiveToTargetSyncThread.isCancelled()) {
+				queuedArchivePaths.put(path, true);
+				archiveToTargetSyncThread.snooze();
+			}
+		} catch(NullPointerException exc) {
+			// we can't synchronize this method for fear of deadlocks with ZKFS operations
+			// but someone could stop the watch while we're running, which will null out archiveToTargetSyncThread
+			// just let it go...
+		}
+		
 		logger.info("FS {}: FSMirror observed archive change: {}",
 				Util.formatArchiveId(zkfs.archive.config.archiveId),
 				path);
 	}
 	
 	protected synchronized void syncQueuedArchivePaths() {
-		for(String path : queuedArchivePaths) {
+		for(String path : queuedArchivePaths.keySet()) {
 			try {
 				copy(zkfs, target, path);
 			} catch(Exception exc) {
 				logger.error("Caught exception processing path: %s", path, exc);
 			}
 		}
-		
-		this.queuedArchivePaths.clear();
 	}
 
 	protected synchronized void suspectedTargetPathChange(String path) throws IOException {
@@ -633,7 +642,6 @@ public class FSMirror {
 			applyStat(srcStat, dest, path);
 			keepSquelched = true;
 		} catch(ENOENTException exc) {
-			Util.debugLog("enoent: " + src.getClass().getSimpleName() + " -> " + dest.getClass().getSimpleName() + " " + path);
 			try {
 				dest.unlink(path);
 			} catch(EISDIRException exc2) {
