@@ -79,6 +79,18 @@ public class BackedFS extends FS {
 		}
 		return cacheFS.opendir(path);
 	}
+	
+	@Override
+	public void mv(String source, String dest) throws IOException {
+		ensureParentPresent(dest);
+		cacheFS.mv(source, dest);
+	}
+	
+	@Override
+	public void cp(String source, String dest) throws IOException {
+		ensureParentPresent(dest);
+		cacheFS.cp(source, dest);
+	}
 
 	@Override
 	public void mkdir(String path) throws IOException {

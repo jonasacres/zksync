@@ -538,6 +538,57 @@ public class ZKFS extends FS {
 		// grab the lock for this to prevent someone from adding to a directory in another thread
 		super.rmrf(path);
 	}
+	
+	@Override
+	public void mv(String oldPath, String newPath) throws IOException {
+		try {
+			super.mv(oldPath, newPath);
+		} catch(EISDIRException exc) {
+			String canonical = canonicalPath(oldPath);
+			Inode target = inodeForPath(canonical, false);
+			String actualTargetPath;
+			try {
+				Stat destStat = stat(newPath);
+				if(destStat.isDirectory()) {
+					actualTargetPath = Paths.get(newPath, basename(oldPath)).toString();
+					
+					try {
+						destStat = stat(actualTargetPath);
+						if(destStat.isDirectory() && target.getStat().isDirectory()) {
+							// a peculiar bit of semantics -- picked up from GNU, not sure how common it is
+							// Let: A be a directory, B a directory, B/A a directory
+							// `mv A B` succeeds if B/A empty, fail otherwise
+							try(ZKDirectory dir = opendir(actualTargetPath)) {
+								if(dir.list().size() > 0) {
+									throw new ENOTEMPTYException(actualTargetPath);
+								}
+								
+								rmdir(actualTargetPath);
+							}
+						} else {
+							throw new EEXISTSException(actualTargetPath);
+						}
+					} catch(ENOENTException exc3) {}
+				} else {
+					throw new EEXISTSException(newPath);
+				}
+			} catch(ENOENTException exc2) {
+				actualTargetPath = newPath;
+			}
+			
+			assertWritable(dirname(actualTargetPath));
+			assertWritable(dirname(oldPath));
+			try(ZKDirectory dir = opendir(dirname(actualTargetPath))) {
+				dir.link(target, basename(actualTargetPath));
+			}
+			
+			try(ZKDirectory dir = opendir(dirname(oldPath))) {
+				dir.unlink(basename(oldPath));
+			}
+			
+			uncache(canonical);
+		}
+	}
 
 	@Override
 	public void unlink(String path) throws IOException {
@@ -562,6 +613,10 @@ public class ZKFS extends FS {
 		synchronized(this) {
 			assertWritable(dest);
 			Inode target = inodeForPath(source);
+			if(target.getStat().isDirectory()) {
+				throw new EISDIRException(source);
+			}
+			
 			try(ZKDirectory destDir = opendir(dirname(dest))) {
 				destDir.link(target, basename(dest));
 			}

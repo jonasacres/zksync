@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 
@@ -102,13 +103,12 @@ public abstract class FS implements AutoCloseable {
 	}
 	
 	public void rmrf(String path) throws IOException {
-		Directory dir = opendir(path);
-		try {
+		try(Directory dir = opendir(path)) {
 			for(String entry : dir.list()) {
 				String subpath = Paths.get(path, entry).toString();
 				Stat lstat = lstat(subpath);
 				
-				if(lstat.isDirectory()) {
+				if(lstat.isDirectory() && !entry.equals("..") && !entry.equals(".")) {
 					rmrf(subpath);
 				} else {
 					unlink(subpath);
@@ -117,7 +117,6 @@ public abstract class FS implements AutoCloseable {
 		} catch(Exception exc) {
 			logger.error("Caught exception on rmrf(\"{}\"), exists={}: ", path, exists(path), exc);
 		} finally {
-			dir.close();
 			rmdir(path);
 		}
 	}
@@ -133,6 +132,8 @@ public abstract class FS implements AutoCloseable {
 					throw new EISDIRException(newPath);
 				}
 			} else {
+				Stat sourceStat = stat(oldPath);
+				if(sourceStat.isDirectory()) throw new EEXISTSException(newPath);
 				unlink(newPath);
 			}
 		} catch(ENOENTException exc) {}

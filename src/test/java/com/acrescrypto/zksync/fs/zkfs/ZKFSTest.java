@@ -1104,7 +1104,7 @@ public class ZKFSTest extends FSTestBase {
 		}
 		
 		String path = makeRandomPath(fs, prng) + "-file";
-		System.out.println("write " + path + " " + size);
+		// System.out.println("write " + path + " " + size);
 		try(ZKFile file = fs.open(path, File.O_CREAT|File.O_TRUNC|File.O_RDWR)) {
 			file.write(prng.getBytes(size));
 			file.flush();
@@ -1133,7 +1133,7 @@ public class ZKFSTest extends FSTestBase {
 				throw new CantDoThatRightNowException();
 			}
 			
-			System.out.println("truncate " + path + " " + newSize);
+			// System.out.println("truncate " + path + " " + newSize);
 			file.truncate(newSize);
 			file.flush();
 			addTag(path, null, fs, tags);
@@ -1148,7 +1148,7 @@ public class ZKFSTest extends FSTestBase {
 		String path = pickRandomFile(fs, prng, tags);
 		int pageSize = fs.getArchive().getConfig().getPageSize();
 		byte[] data = prng.getBytes(prng.getInt(2*pageSize));
-		System.out.println("extend " + path + " " + data.length);
+		// System.out.println("extend " + path + " " + data.length);
 		
 		try(ZKFile file = fs.open(path, File.O_RDWR|File.O_APPEND)) {
 			file.write(data);
@@ -1166,7 +1166,7 @@ public class ZKFSTest extends FSTestBase {
 		
 		try(ZKFile file = fs.open(path, File.O_RDWR)) {
 			int offset = prng.getInt(Math.max(1, (int) file.inode.getStat().getSize()));
-			System.out.println("modify " + path + " " + data.length + " " + "@" + offset);
+			// System.out.println("modify " + path + " " + data.length + " " + "@" + offset);
 			file.seek(offset, File.SEEK_SET);
 			file.write(data);
 			file.flush();
@@ -1178,7 +1178,7 @@ public class ZKFSTest extends FSTestBase {
 
 	public String unlinkRandomFile(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		String path = pickRandomFile(fs, prng, tags);
-		System.out.println("unlink " + path);
+		// System.out.println("unlink " + path);
 		
 		String target = null;
 		try {
@@ -1194,7 +1194,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	public String makeRandomDirectory(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		String path = makeRandomPath(fs, prng) + "-dir";
-		System.out.println("mkdir " + path);
+		// System.out.println("mkdir " + path);
 		
 		try {
 			fs.mkdirp(path);
@@ -1207,7 +1207,7 @@ public class ZKFSTest extends FSTestBase {
 	
 	public String unlinkRandomDirectory(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		String path = pickRandomEmptyDirectory(fs, prng);
-		System.out.println("rmdir " + path);
+		// System.out.println("rmdir " + path);
 		try {
 			fs.rmdir(path);
 		} catch(ENOENTException|ENOTEMPTYException exc) {
@@ -1220,8 +1220,8 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	public String makeRandomCommit(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
-		RevisionTag oldTag = fs.getBaseRevision(), tag = fs.commit();
-		System.out.println("commit " + Util.formatRevisionTag(oldTag) + " -> " + Util.formatRevisionTag(tag));
+		fs.commit();
+		// System.out.println("commit " + Util.formatRevisionTag(oldTag) + " -> " + Util.formatRevisionTag(tag));
 		return null;
 	}
 	
@@ -1229,7 +1229,7 @@ public class ZKFSTest extends FSTestBase {
 		String path = makeRandomPath(fs, prng) + "-symlink-file";
 		String target = pickRandomFile(fs, prng, tags);
 		try {
-			System.out.println("symlink " + path + " -> " + target);
+			// System.out.println("symlink " + path + " -> " + target);
 			fs.symlink(target, path);
 		} catch(ENOENTException exc) {
 			addTag(target, null, fs, tags);
@@ -1242,7 +1242,7 @@ public class ZKFSTest extends FSTestBase {
 	public String makeRandomInvalidSymlink(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		String path = makeRandomPath(fs, prng) + "-symlink-broken";
 		String target = makeRandomPath(fs, prng) + "-invalid";
-		System.out.println("symlink " + path + " -> " + target);
+		// System.out.println("symlink " + path + " -> " + target);
 		try {
 			fs.symlink(target, path);
 		} catch(ENOENTException exc) {
@@ -1255,7 +1255,7 @@ public class ZKFSTest extends FSTestBase {
 	public String makeRandomDirectorySymlink(ZKFS fs, PRNG prng, ConcurrentHashMap<String, RefTag> tags) throws IOException {
 		String path = makeRandomPath(fs, prng) + "-symlink-dir";
 		String target = pickRandomDirectory(fs, prng);
-		System.out.println("symlink " + path + " -> " + target);
+		// System.out.println("symlink " + path + " -> " + target);
 		try {
 			fs.symlink(target, path);
 		} catch(ENOENTException exc) {
@@ -1269,7 +1269,7 @@ public class ZKFSTest extends FSTestBase {
 		String link = makeRandomPath(fs, prng) + "-hardlink";
 		String target = pickRandomFile(fs, prng, tags);
 		try {
-			System.out.println("hardlink " + link + " -> " + target);
+			// System.out.println("hardlink " + link + " -> " + target);
 			fs.link(target, link);
 		} catch(ENOENTException exc) {
 			addTag(target, null, fs, tags);

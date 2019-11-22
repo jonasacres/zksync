@@ -366,7 +366,9 @@ public class ArchiveCrud {
 				// no special action, just use the metadata stuff
 				break;
 			case "move":
-				// TODO
+				if(source == null) throw XAPIResponse.withError(400, "Must supply source field");
+				fs.mv(source, path);
+				break;
 			default:
 				throw XAPIResponse.withError(400, "Invalid type: " + type);
 			}

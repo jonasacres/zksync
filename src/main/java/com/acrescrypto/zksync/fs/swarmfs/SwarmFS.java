@@ -55,6 +55,11 @@ public class SwarmFS extends FS implements TimedReader {
 	public Directory opendir(String path, Stat stat) throws IOException {
 		throw new UnsupportedOperationException();
 	}
+	
+	@Override
+	public void mv(String source, String dest) {
+		throw new UnsupportedOperationException();
+	}
 
 	@Override
 	public void mkdir(String path) throws IOException {

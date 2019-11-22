@@ -411,6 +411,7 @@ public class PageQueue {
 		unpackNextReference();
 		if(itemsByPriority.isEmpty()) return false;
 		QueueItem head = itemsByPriority.peek();
+		if(head == null) return false;
 		return head.reference() != null & tag.equals(head.reference().tag);
 	}
 	

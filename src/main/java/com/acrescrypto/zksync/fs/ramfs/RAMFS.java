@@ -10,6 +10,7 @@ import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
@@ -114,10 +115,69 @@ public class RAMFS extends FS {
 		if(!stat(path).isDirectory()) throw new EISNOTDIRException(path);
 		clearInode(path);
 	}
+	
+	@Override
+	public void mv(String oldPath, String newPath) throws IOException {
+		try {
+			super.mv(oldPath, newPath);
+		} catch(EISDIRException exc) {
+			// adapted from ZKFS version
+			Stat oldStat = stat(oldPath);
+			String actualTargetPath;
+			try {
+				Stat destStat = stat(newPath);
+				if(destStat.isDirectory()) {
+					actualTargetPath = Paths.get(newPath, basename(oldPath)).toString();
+					
+					try {
+						destStat = stat(actualTargetPath);
+						if(destStat.isDirectory() && oldStat.isDirectory()) {
+							try(RAMDirectory dir = opendir(actualTargetPath)) {
+								if(dir.list().size() > 0) {
+									throw new ENOTEMPTYException(actualTargetPath);
+								}
+								
+								rmdir(actualTargetPath);
+							}
+						} else {
+							throw new EEXISTSException(actualTargetPath);
+						}
+					} catch(ENOENTException exc3) {}
+				} else {
+					throw new EEXISTSException(newPath);
+				}
+			} catch(ENOENTException exc2) {
+				actualTargetPath = newPath;
+			}
+			
+			try(RAMDirectory dir = opendir(dirname(actualTargetPath))) {
+				dir.link(oldPath, basename(actualTargetPath));
+			}
+			
+			try(RAMDirectory existingDir = opendir(oldPath)) {
+				for(String subpath : existingDir.list()) {
+					String oldSubPath = Paths.get(oldPath, subpath).toString();
+					String newSubPath = Paths.get(actualTargetPath, subpath).toString();
+					Inode inode = llookup(oldSubPath);
+					setInode(newSubPath, inode);
+				}
+			}
+
+			try(RAMDirectory existingDir = opendir(oldPath)) {
+				for(String subpath : existingDir.list()) {
+					unlink(Paths.get(oldPath, subpath).toString());
+				}
+			}
+			
+			try(RAMDirectory dir = opendir(dirname(oldPath))) {
+				dir.unlink(basename(oldPath));
+			}
+		}
+	}
 
 	@Override
 	public void unlink(String path) throws IOException {
-		if(lstat(path).isDirectory()) throw new EISDIRException(path);
+		if(!exists(path, false)) throw new ENOENTException(path);
 		clearInode(path);
 	}
 
@@ -134,6 +194,7 @@ public class RAMFS extends FS {
 	}
 	
 	@Override
+	/** unsafe because there is no scope check */
 	public void symlink_unsafe(String target, String link) throws IOException {
 		if(exists(link)) throw new EEXISTSException(link);
 		makeInode(link, (inode)->{
@@ -298,22 +359,67 @@ public class RAMFS extends FS {
 		}
 	}
 	
-	protected synchronized void setInode(String path, Inode inode) throws ENOENTException {
+	protected String canonicalPath(String path) throws IOException {
+		String unscoped = unscopedPath(path);
+
+		if(unscoped.length() == 0 || unscoped.equals("/")) {
+			return "/";
+		}
+		
+		if(unscoped.charAt(0) != '/') unscoped = "/" + unscoped;
+		String[] comps = unscoped.split("/");
+		String[] partials = new String[comps.length];
+
+		for(int i =  0; i < comps.length; i++) {
+			String p;
+			if(i == 0) {
+				p = "/";
+			} else if(i == 1) {
+				p = partials[i-1] + comps[i];
+			} else {
+				p = partials[i-1] + "/" + comps[i];
+			}
+			
+			Inode inode = inodesByPath.getOrDefault(p, null);
+			if(inode != null && inode.stat.isSymlink()) {
+				String target = readlink(p);
+				if(target.startsWith("/")) {
+					partials[i] = target;
+				} else if(i == 0) {
+					partials[i] = Paths.get("/", target).normalize().toString();
+				} else {
+					partials[i] = Paths.get(partials[i-1], target).normalize().toString();
+				}
+			} else {
+				partials[i] = p;
+			}
+		}
+		
+		String result = partials[partials.length - 1];
+		if(result.charAt(0) != '/') result = "/" + result;
+		return result;
+	}
+	
+	protected String canonicalSubpath(String path) throws IOException {
+		return Paths.get(canonicalPath(dirname(path)), basename(path)).toString();
+	}
+	
+	protected synchronized void setInode(String path, Inode inode) throws IOException {
 		synchronized(inodesByPath) {
-			inodesByPath.put(unscopedPath(path), inode);
+			inodesByPath.put(canonicalSubpath(path), inode);
 		}
 	}
 	
-	protected void clearInode(String path) {
+	protected void clearInode(String path) throws IOException {
 		try {
 			if(unscopedPath(path).equals("/")) return;
 			synchronized(inodesByPath) {
-				inodesByPath.remove(unscopedPath(path));
+				inodesByPath.remove(canonicalSubpath(path));
 			}
 		} catch(ENOENTException exc) {}
 	}
 	
-	protected Inode makeInode(String path, InodeMaker lambda) throws ENOENTException {
+	protected Inode makeInode(String path, InodeMaker lambda) throws IOException {
 		Inode inode = new Inode();
 		lambda.make(inode);
 		inode.stat.setSize(inode.data.length);
@@ -335,6 +441,7 @@ public class RAMFS extends FS {
 		if(path.equals(".")) path = "/";
 		Path p = Paths.get("/", scope, path).normalize();
 		if(!p.startsWith(scope)) throw new ENOENTException(path);
+		if(!p.startsWith("/")) return "/" + p.toString();
 		return p.toString();
 	}
 	

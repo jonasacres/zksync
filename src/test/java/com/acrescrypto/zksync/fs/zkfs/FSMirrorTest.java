@@ -113,7 +113,7 @@ public class FSMirrorTest {
 		assertEquals(expected.getType(), stat.getType());
 		
 		final int conversion = 1000*1000*1000;
-		final int timeTolerance = 60; // don't be too picky or we get ITFs here
+		final int timeTolerance = 100; // don't be too picky or we get ITFs here
 		
 		if(!expected.isSymlink()) {
 			assertEquals(expected.getAtime()/conversion, stat.getAtime()/conversion, timeTolerance);

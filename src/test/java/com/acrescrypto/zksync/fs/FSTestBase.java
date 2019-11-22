@@ -8,9 +8,11 @@ import java.util.Arrays;
 
 import org.junit.Test;
 
+import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.exceptions.FileTypeNotSupportedException;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -414,20 +416,78 @@ public abstract class FSTestBase {
 	}
 	
 	@Test
-	public void testMvThrowsEISDIRIfDestIsDirectoryContainingFilename() throws IOException {
+	public void testMvThrowsEEXISTSIfDestIsDirectoryContainingFilename() throws IOException {
 		scratch.write("file", "test".getBytes());
 		scratch.mkdir("dir");
 		scratch.mkdir("dir/file");
 		try {
 			scratch.mv("file", "dir");
-			fail("expected EISDIRException");
-		} catch(EISDIRException exc) {
+			fail("expected EEXISTSException");
+		} catch(EEXISTSException exc) {
 		}
 		
 		assertTrue(scratch.exists("dir/file"));
 		assertTrue(scratch.stat("dir/file").isDirectory());
 		assertTrue(scratch.exists("file"));
 		assertArrayEquals("test".getBytes(), scratch.read("file"));
+	}
+	
+	@Test
+	public void testMvRenamesDirectories() throws IOException {
+		scratch.mkdir("dir");
+		scratch.mv("dir", "dir2");
+		assertTrue(scratch.exists("dir2"));
+		assertFalse(scratch.exists("dir"));
+	}
+	
+	@Test
+	public void testMvMovesDirectoriesIntoSubdirectoriesWhenTargetIsDirectory() throws IOException {
+		scratch.mkdir("dir");
+		scratch.mkdir("dest");
+		scratch.mv("dir", "dest");
+		assertTrue(scratch.exists("dest/dir"));
+		assertFalse(scratch.exists("dir"));
+	}
+	
+	@Test
+	public void testMvMovesDirectoriesIntoSubdirectoriesWhenTargetIsSymlinkToDirectory() throws IOException {
+		scratch.mkdir("dir");
+		scratch.mkdir("destdir");
+		scratch.symlink("destdir", "dest");
+		scratch.mv("dir", "dest");
+		assertTrue(scratch.exists("dest/dir"));
+		assertTrue(scratch.exists("destdir/dir"));
+		assertFalse(scratch.exists("dir"));
+	}
+	
+	@Test(expected=EEXISTSException.class)
+	public void testMvDoesNotMovesDirectoriesWhenTargetIsFile() throws IOException {
+		scratch.mkdir("dir");
+		scratch.write("dest", "foo".getBytes());
+		scratch.mv("dir", "dest");
+	}
+	
+	@Test(expected=EEXISTSException.class)
+	public void testMvDoesNotMovesDirectoriesWhenTargetIsDirectoryAndContainsFileWithName() throws IOException {
+		scratch.mkdir("dir");
+		scratch.write("dest/dir", "foo".getBytes());
+		scratch.mv("dir", "dest");
+	}
+	
+	@Test(expected=ENOTEMPTYException.class)
+	public void testMvDoesNotMovesDirectoriesWhenTargetIsDirectoryAndContainsNonemptyDirectoryWithName() throws IOException {
+		scratch.mkdir("dir");
+		scratch.write("dest/dir/file", "foo".getBytes());
+		scratch.mv("dir", "dest");
+	}
+	
+	@Test
+	public void testMvOverwritesDirectoriesWhenTargetIsDirectoryAndContainsEmptySubdirectoryWithName() throws IOException {
+		scratch.mkdir("dir");
+		scratch.write("dir/file", "foo".getBytes());
+		scratch.mkdirp("dest/dir");
+		scratch.mv("dir", "dest");
+		assertTrue(scratch.exists("dest/dir/file"));
 	}
 	
 	@Test

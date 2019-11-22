@@ -16,6 +16,7 @@ import com.acrescrypto.zksync.exceptions.CommandFailedException;
 import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.exceptions.FileTypeNotSupportedException;
 import com.acrescrypto.zksync.fs.*;
 import com.acrescrypto.zksync.utility.Util;
@@ -197,6 +198,60 @@ public class LocalFS extends FS {
 	@Override
 	public LocalDirectory opendir(String path, Stat stat) throws IOException {
 		return new LocalDirectory(this, path, stat);
+	}
+	
+	@Override
+	public void mv(String oldPath, String newPath) throws ENOENTException, IOException {
+		CopyOption[] opts = new CopyOption[] { StandardCopyOption.REPLACE_EXISTING };
+		String relocatedPath = Paths.get(newPath, basename(oldPath)).toString();
+		String targetPath = newPath;
+		
+		Stat existingStat = stat(oldPath);
+		
+		try {
+			Stat newPathStat = stat(newPath);
+			if(newPathStat.isDirectory()) {
+				try {
+					Stat reloStat = stat(relocatedPath);
+					if(existingStat.isDirectory()) {
+						if(reloStat.isDirectory()) {
+							try(LocalDirectory dir = opendir(relocatedPath)) {
+								if(!dir.list().isEmpty()) {
+									throw new ENOTEMPTYException(relocatedPath);
+								}
+							}
+							
+							rmdir(relocatedPath);
+							targetPath = relocatedPath;
+						} else {
+							throw new EEXISTSException(newPath);
+						}
+					} else {
+						throw new EEXISTSException(relocatedPath);
+					}
+				} catch(ENOENTException exc) {
+					targetPath = relocatedPath;
+				}
+			} else if(existingStat.isDirectory()) {
+				throw new EEXISTSException(newPath);
+			}
+		} catch(ENOENTException exc) {}
+				
+		try {
+			Files.move(qualifiedPath(oldPath), qualifiedPath(targetPath), opts);
+		} catch(DirectoryNotEmptyException exc) {
+			try {
+				Stat reloStat = stat(relocatedPath);
+				if(reloStat.isDirectory()) {
+					throw new ENOTEMPTYException(relocatedPath);
+				} else {
+					throw new EEXISTSException(relocatedPath);
+				}
+			} catch(ENOENTException exc2) {
+				logger.error("Unexpected exception handling mv " + oldPath + " " + newPath, exc2);
+				throw exc2;
+			}
+		}
 	}
 
 	@Override
