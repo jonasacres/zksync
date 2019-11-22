@@ -612,7 +612,7 @@ public class ZKFS extends FS {
 		
 		synchronized(this) {
 			assertWritable(dest);
-			Inode target = inodeForPath(source);
+			Inode target = inodeForPath(source, false);
 			if(target.getStat().isDirectory()) {
 				throw new EISDIRException(source);
 			}

@@ -450,6 +450,18 @@ public abstract class FSTestBase {
 	}
 	
 	@Test
+	public void testMvMovesSymlinksIntoDirectoriesWithoutAlteringTarget() throws IOException {
+		scratch.purge();
+		scratch.mkdir("dir");
+		scratch.write("target", "foo".getBytes());
+		scratch.symlink("/target", "symlink");
+		scratch.mv("symlink", "dir");
+		assertTrue(scratch.lstat("dir/symlink").isSymlink());
+		assertTrue(scratch.stat("target").isRegularFile());
+		assertEquals("/target", scratch.readlink("dir/symlink"));
+	}
+	
+	@Test
 	public void testMvMovesDirectoriesIntoSubdirectoriesWhenTargetIsSymlinkToDirectory() throws IOException {
 		scratch.mkdir("dir");
 		scratch.mkdir("destdir");

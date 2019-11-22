@@ -184,7 +184,7 @@ public class RAMFS extends FS {
 	@Override
 	public void link(String target, String link) throws IOException {
 		if(exists(link)) throw new EEXISTSException(link);
-		setInode(link, lookup(target));
+		setInode(link, llookup(target));
 	}
 
 	@Override
