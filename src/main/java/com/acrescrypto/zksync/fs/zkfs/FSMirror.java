@@ -572,29 +572,24 @@ public class FSMirror {
 		
 		SquelchedPath squelch = new SquelchedPath(abspath, srcFs, srcStat);
 		squelchedPaths.put(abspath, squelch);
-		System.out.println("Acquired squelch: " + abspath + ", list has " + squelchedPaths.size() + " elements, id=" + System.identityHashCode(squelchedPaths));
 		return true;
 	}
 	
 	protected boolean isSquelched(String path, FS fs, Stat stat) {
 		SquelchedPath squelch = squelchedPaths.get(path);
 		if(squelch == null) {
-			System.out.println("Squelch: " + path + ", false, no record for path, list has " + squelchedPaths.size() + " elements");
 			return false;
 		}
 		
 		if(squelch.isExpired()) {
-			System.out.println("Squelch: " + path + ", false, record is expired");
 			pruneSquelches();
 			return false;
 		}
 		
 		if(!squelch.matches(path, fs, stat)) {
-			System.out.println("Squelch: " + path + ", false, no match for stat");
 			return false;
 		}
 		
-		System.out.println("Squelch: " + path + ", true");
 		return true;
 	}
 	

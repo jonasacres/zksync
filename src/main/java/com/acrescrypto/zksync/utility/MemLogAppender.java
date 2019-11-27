@@ -9,6 +9,10 @@ public class MemLogAppender extends AppenderBase<ILoggingEvent> {
 	private static MemLogAppender sharedMemlog;
 	
 	public static MemLogAppender sharedInstance() {
+		if(sharedMemlog == null) {
+			new MemLogAppender();
+		}
+		
 		return sharedMemlog;
 	}
 	
@@ -36,7 +40,9 @@ public class MemLogAppender extends AppenderBase<ILoggingEvent> {
 	private long nextEntryId = 0;
 	
 	public MemLogAppender() {
-		sharedMemlog = this;
+		if(sharedMemlog == null) {
+			sharedMemlog = this;
+		}
 	}
 	
 	protected synchronized long issueEntryId() {
