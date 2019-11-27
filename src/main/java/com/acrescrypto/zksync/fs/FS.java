@@ -103,13 +103,22 @@ public abstract class FS implements AutoCloseable {
 	}
 	
 	public void rmrf(String path) throws IOException {
+		rmrf(path, lstat(path));
+	}
+	
+	protected void rmrf(String path, Stat pathLstat) throws IOException {
+		if(!pathLstat.isDirectory()) {
+			unlink(path);
+			return;
+		}
+		
 		try(Directory dir = opendir(path)) {
 			for(String entry : dir.list()) {
 				String subpath = Paths.get(path, entry).toString();
 				Stat lstat = lstat(subpath);
 				
 				if(lstat.isDirectory() && !entry.equals("..") && !entry.equals(".")) {
-					rmrf(subpath);
+					rmrf(subpath, lstat);
 				} else {
 					unlink(subpath);
 				}
