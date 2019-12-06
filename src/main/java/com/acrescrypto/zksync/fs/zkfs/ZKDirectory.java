@@ -259,7 +259,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 				inode.addLink();
 				dirty = true;
 				zkfs.markDirty();
-				zkfs.notifyChange(fullPath);
+				zkfs.notifyChange(fullPath, inode.getStat());
 				return null;
 			}
 		});
@@ -320,7 +320,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 				
 				dirty = true;
 				zkfs.markDirty();
-				zkfs.notifyChange(fullPath);
+				zkfs.notifyChange(fullPath, inode.getStat());
 				return null;
 			}
 		});

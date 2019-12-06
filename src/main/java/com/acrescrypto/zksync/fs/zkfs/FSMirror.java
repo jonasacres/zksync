@@ -49,20 +49,17 @@ public class FSMirror {
 	protected class SquelchedPath {
 		String path;
 		FS fs;
-		Stat stat;
 		long timestamp;
 		
-		public SquelchedPath(String path, FS fs, Stat stat) {
+		public SquelchedPath(String path, FS fs) {
 			this.path = path;
-			this.stat = stat;
+			this.fs = fs;
 			this.timestamp = System.currentTimeMillis();
 		}
 		
-		public boolean matches(String path, FS fs, Stat stat) {
+		public boolean matches(String path, FS fs) {
 			if(!path.equals(this.path)) return false;
-			if((stat == null && this.stat != null) || (this.stat == null && stat != null)) return false;
-			if(stat != this.stat && !stat.equals(this.stat)) return false;
-			
+			if(fs != this.fs) return false; 
 			return true;
 		}
 		
@@ -371,8 +368,9 @@ public class FSMirror {
 		}
 	}
 	
-	protected void observedArchivePathChange(String path) throws IOException {
+	protected void observedArchivePathChange(String path, Stat stat) throws IOException {
 		if(watchFlag.isFalse()) return;
+		if(isSquelched(path, target)) return;
 		
 		try {
 			if(archiveToTargetSyncThread != null && !archiveToTargetSyncThread.isCancelled()) {
@@ -385,8 +383,9 @@ public class FSMirror {
 			// just let it go...
 		}
 		
-		logger.info("FS {}: FSMirror observed archive change: {}",
+		logger.info("FS {}: FSMirror {} observed archive change: {}",
 				Util.formatArchiveId(zkfs.archive.config.archiveId),
+				System.identityHashCode(this),
 				path,
 				new Throwable());
 	}
@@ -564,11 +563,9 @@ public class FSMirror {
 		}
 	}
 	
-	protected synchronized boolean acquireSquelch(String path, FS srcFs, Stat srcStat, FS destFs, Stat destStat) {
+	protected synchronized boolean acquireSquelch(String path, FS srcFs, FS destFs) {
 		String abspath = destFs.absolutePath(path);
-		if(isSquelched(abspath, destFs, destStat)
-				&& srcStat != null
-				&& srcStat.matches(destStat)) {
+		if(isSquelched(abspath, destFs)) {
 			logger.debug("FS {}: FSMirror {} path is squelched: {}",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),
 					System.identityHashCode(this),
@@ -576,17 +573,18 @@ public class FSMirror {
 			return false;
 		}
 		
-		logger.debug("FS {}: FSMirror {} squelching path: {}",
+		logger.debug("FS {}: FSMirror {} squelching path: {} {}",
 				Util.formatArchiveId(zkfs.archive.config.archiveId),
 				System.identityHashCode(this),
-				path);
+				path,
+				srcFs);
 
-		SquelchedPath squelch = new SquelchedPath(abspath, srcFs, srcStat);
+		SquelchedPath squelch = new SquelchedPath(abspath, srcFs);
 		squelchedPaths.put(abspath, squelch);
 		return true;
 	}
 	
-	protected boolean isSquelched(String path, FS fs, Stat stat) {
+	protected boolean isSquelched(String path, FS fs) {
 		SquelchedPath squelch = squelchedPaths.get(path);
 		if(squelch == null) {
 			return false;
@@ -597,17 +595,22 @@ public class FSMirror {
 			return false;
 		}
 		
-		if(!squelch.matches(path, fs, stat)) {
+		if(!squelch.matches(path, fs)) {
 			return false;
 		}
 		
 		return true;
 	}
 	
-	protected synchronized void pruneSquelches() {
+	protected void pruneSquelches() {
 		LinkedList<String> toRemove = new LinkedList<>();
 		squelchedPaths.forEach((path, squelch)->{
 			if(squelch.isExpired()) {
+				logger.debug("FS {}: FSMirror {} canceling expired squelch for path: {} {}",
+						Util.formatArchiveId(zkfs.archive.config.archiveId),
+						System.identityHashCode(this),
+						path,
+						squelch.fs);
 				toRemove.add(path);
 			}
 		});
@@ -628,7 +631,7 @@ public class FSMirror {
 			} catch(ENOENTException exc) {}
 			
 			srcStat = src.lstat(path);
-			if(!acquireSquelch(path, src, srcStat, dest, destStat)) {
+			if(!acquireSquelch(path, src, dest)) {
 				keepSquelched = true;
 				return srcStat;
 			}

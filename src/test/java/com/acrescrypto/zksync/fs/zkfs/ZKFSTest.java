@@ -459,7 +459,7 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testMonitorsReceiveDirtyMessagesForFileCreation() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -471,7 +471,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForFileModification() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("newfile", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -483,7 +483,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForFileUnlink() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("newfile", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -495,7 +495,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForSymlink() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("origin", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -507,7 +507,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForHardlink() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("origin", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -518,7 +518,7 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testMonitorsReceiveDirtyMessagesForMkfifo() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -529,7 +529,7 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testMonitorsReceiveDirtyMessagesForMknod() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -540,7 +540,7 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testMonitorsReceiveDirtyMessagesForMkdir() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -552,7 +552,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForRmdir() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.mkdir("somedir");
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -564,7 +564,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForChmod() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("somefile", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -576,7 +576,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForChownWithUid() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("somefile", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -588,7 +588,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForChownWithUsername() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("somefile", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -600,7 +600,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForChgrpWithGid() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("somefile", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -612,7 +612,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForChgrpWithGroupname() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("somefile", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -624,7 +624,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForSetMtime() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("somefile", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -636,7 +636,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForSetAtime() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("somefile", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -648,7 +648,7 @@ public class ZKFSTest extends FSTestBase {
 	public void testMonitorsReceiveDirtyMessagesForSetCtime() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
 		zkscratch.write("somefile", "some data".getBytes());
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		
 		assertFalse(notified.booleanValue());
@@ -659,7 +659,7 @@ public class ZKFSTest extends FSTestBase {
 	@Test
 	public void testRemovedMonitorsDoNotReceiveDirtyMessages() throws IOException {
 		MutableBoolean notified = new MutableBoolean();
-		ZKFSChangeMonitor monitor = (f, p)->notified.setTrue();
+		ZKFSChangeMonitor monitor = (f, p, s)->notified.setTrue();
 		zkscratch.addMonitor(monitor);
 		zkscratch.removeMonitor(monitor);
 		

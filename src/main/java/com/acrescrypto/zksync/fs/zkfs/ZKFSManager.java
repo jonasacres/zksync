@@ -81,7 +81,7 @@ public class ZKFSManager implements AutoCloseable {
 	}
 	
 	protected void setupMonitors() {
-		this.fsMonitor = (fs, path)->notifyZKFSPathChange(path);
+		this.fsMonitor = (fs, path, stat)->notifyZKFSPathChange(path, stat);
 		this.revMonitor = (revTag)->notifyNewRevtag(revTag);
 		
 		if(fs != null) {
@@ -102,7 +102,7 @@ public class ZKFSManager implements AutoCloseable {
 		}
 	}
 	
-	public void notifyZKFSPathChange(String path) {
+	public void notifyZKFSPathChange(String path, Stat stat) {
 		if(autocommitTimer != null && !autocommitTimer.isExpired()) {
 			logger.info("ZKFS {} {}: ZKFSManager snoozing autocommit timer, interval={}ms (id={})",
 					Util.formatArchiveId(fs.archive.config.archiveId),
@@ -115,7 +115,7 @@ public class ZKFSManager implements AutoCloseable {
 
 		if(mirror == null) return;
 		try {
-			mirror.observedArchivePathChange(path);
+			mirror.observedArchivePathChange(path, stat);
 		} catch (IOException exc) {
 			logger.error("Caught exception attempting to sync ZKFS to target for updated path {}", path, exc);
 		}

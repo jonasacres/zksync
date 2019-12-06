@@ -37,7 +37,7 @@ public class ZKFS extends FS {
 	}
 	
 	public interface ZKFSChangeMonitor {
-		public void notifyChanged(ZKFS fs, String path);
+		public void notifyChanged(ZKFS fs, String path, Stat stat);
 	}
 	
 	public interface ZKFSLockedOperation {
@@ -656,25 +656,29 @@ public class ZKFS extends FS {
 	@Override
 	public void mknod(String path, int type, int major, int minor) throws IOException {
 		assertWritable(path);
+		Stat stat;
 		switch(type) {
 		case Stat.TYPE_CHARACTER_DEVICE:
-			create(path).getStat().makeCharacterDevice(major, minor);
+			stat = create(path).getStat();
+			stat.makeCharacterDevice(major, minor);
 			break;
 		case Stat.TYPE_BLOCK_DEVICE:
-			create(path).getStat().makeBlockDevice(major, minor);
+			stat = create(path).getStat();
+			stat.makeBlockDevice(major, minor);
 			break;
 		default:
 			throw new IllegalArgumentException(String.format("Illegal node type: %d", type));
 		}
 		
-		notifyChange(path);
+		notifyChange(path, stat);
 	}
 	
 	@Override
 	public void mkfifo(String path) throws IOException {
 		assertWritable(path);
-		create(path).getStat().makeFifo();
-		notifyChange(path);
+		Stat stat = create(path).getStat();
+		stat.makeFifo();
+		notifyChange(path, stat);
 	}
 	
 	@Override
@@ -688,7 +692,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setMode(mode);
 		markDirty();
-		notifyChange(path);
+		notifyChange(path, inode.getStat());
 	}
 
 	@Override
@@ -702,7 +706,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setUid(uid);
 		markDirty();
-		notifyChange(path);
+		notifyChange(path, inode.getStat());
 	}
 
 	@Override
@@ -716,7 +720,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setUser(name);
 		markDirty();
-		notifyChange(path);
+		notifyChange(path, inode.getStat());
 	}
 
 	@Override
@@ -730,7 +734,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setGid(gid);
 		markDirty();
-		notifyChange(path);
+		notifyChange(path, inode.getStat());
 	}
 
 	@Override
@@ -744,7 +748,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setGroup(group);
 		markDirty();
-		notifyChange(path);
+		notifyChange(path, inode.getStat());
 	}
 
 	@Override
@@ -758,7 +762,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setMtime(mtime);
 		markDirty();
-		notifyChange(path);
+		notifyChange(path, inode.getStat());
 	}
 
 	@Override
@@ -772,7 +776,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setCtime(ctime);
 		markDirty();
-		notifyChange(path);
+		notifyChange(path, inode.getStat());
 	}
 
 	@Override
@@ -786,7 +790,7 @@ public class ZKFS extends FS {
 		Inode inode = inodeForPath(path, followSymlinks);
 		inode.getStat().setAtime(atime);
 		markDirty();
-		notifyChange(path);
+		notifyChange(path, inode.getStat());
 	}
 	
 	@Override
@@ -895,9 +899,9 @@ public class ZKFS extends FS {
 		this.dirty = true;
 	}
 	
-	public void notifyChange(String path) {
+	public void notifyChange(String path, Stat stat) {
 		for(ZKFSChangeMonitor monitor : changeMonitors) {
-			monitor.notifyChanged(this, path);
+			monitor.notifyChanged(this, path, stat);
 		}
 	}
 
