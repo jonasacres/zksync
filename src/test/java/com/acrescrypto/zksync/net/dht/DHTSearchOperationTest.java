@@ -204,7 +204,7 @@ public class DHTSearchOperationTest {
 		op = new DHTSearchOperation(client,
 				searchId,
 				lookupKey,
-				(results)->this.results = results,
+				(op, results)->this.results = results,
 				(record)->this.records.add(record));
 	}
 	

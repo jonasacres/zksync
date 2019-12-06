@@ -59,6 +59,8 @@ public class ConfigFile {
 		JsonReader reader = Json.createReader(new StringReader(new String(serialized)));
 		JsonObject json = reader.readObject();
 		
+		logger.info("Deserializing ConfigFile\n{}", new String(serialized));
+		
 		boolean oldAutowriteEnabled = autowriteEnabled;
 		this.autowriteEnabled = false; // don't rewrite config when calling set()
 		

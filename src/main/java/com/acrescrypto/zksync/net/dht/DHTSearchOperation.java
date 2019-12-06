@@ -13,7 +13,7 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class DHTSearchOperation {
 	interface SearchOperationPeerCallback {
-		void searchOperationFinished(Collection<DHTPeer> closestPeers);
+		void searchOperationFinished(DHTSearchOperation op, Collection<DHTPeer> closestPeers);
 	}
 	
 	interface SearchOperationRecordCallback {
@@ -36,6 +36,7 @@ public class DHTSearchOperation {
 	SearchOperationRecordCallback recordCallback;
 	SnoozeThread timeout;
 	Key lookupKey;
+	boolean cancelled;
 	
 	private Logger logger = LoggerFactory.getLogger(DHTSearchOperation.class);
 	
@@ -47,8 +48,22 @@ public class DHTSearchOperation {
 		this.lookupKey = lookupKey;
 	}
 	
-	public synchronized void run() {
-		this.timeout = new SnoozeThread(searchQueryTimeoutMs, true, ()->peerCallback.searchOperationFinished(closestPeers));
+	public void cancel() {
+		cancelled = true;
+	}
+	
+	public boolean isCancelled() {
+		return cancelled;
+	}
+	
+	public synchronized DHTSearchOperation run() {
+		if(cancelled) return this;
+		
+		this.timeout = new SnoozeThread(searchQueryTimeoutMs, true, ()->{
+			if(cancelled) return;
+			peerCallback.searchOperationFinished(this, closestPeers);
+		});
+		
 		logger.debug("DHT -: Searching for id {}, routing table has {} peers",
 				Util.bytesToHex(searchId.rawId),
 				client.routingTable.allPeers().size());
@@ -58,13 +73,15 @@ public class DHTSearchOperation {
 		}
 		
 		if(closestPeers.isEmpty()) {
-			peerCallback.searchOperationFinished(closestPeers);
-			return;
+			peerCallback.searchOperationFinished(this, closestPeers);
+			return this;
 		}
 		
 		for(DHTPeer peer : closestPeers) {
 			requestNodes(peer);
 		}
+		
+		return this;
 	}
 	
 	protected synchronized void addIfBetter(DHTPeer peer) {
@@ -77,17 +94,20 @@ public class DHTSearchOperation {
 	}
 	
 	protected synchronized void requestNodes(DHTPeer peer) {
+		if(cancelled) return;
+		
 		queried.add(peer);
 		activeQueries++;
 		peer.findNode(searchId, lookupKey, (peers, isFinal)->{
 			handleFindNodeResults(peers, isFinal);
 		}, (record)->{
+			if(cancelled) return;
 			recordCallback.searchOperationDiscoveredRecord(record);
 		});
 	}
 	
 	protected synchronized void handleFindNodeResults(Collection<DHTPeer> peers, boolean isFinal) {
-		if(timeout.isCancelled()) return;
+		if(cancelled || timeout.isCancelled()) return;
 		
 		if(peers != null) {
 			for(DHTPeer peer : peers) {
@@ -105,6 +125,8 @@ public class DHTSearchOperation {
 	}
 	
 	protected synchronized void finishedQuery() {
+		if(cancelled) return;
+		
 		activeQueries--;
 		if(activeQueries == 0) {
 			timeout.cancel(); // invokes callback.searchOperationFinished

@@ -25,7 +25,7 @@ public class SnoozeThreadSupervisor {
 	
 	public synchronized void add(SnoozeThread item) {
 		items.add(item);
-		if(nextExpiredItem == null || item.expiration < nextExpiredItem.expiration) {
+		if(nextExpiredItem == null || item.getFireTime() < nextExpiredItem.getFireTime()) {
 			nextExpiredItem = item;
 			this.notifyAll();
 		}
@@ -68,7 +68,7 @@ public class SnoozeThreadSupervisor {
 				long waitTime = Long.MAX_VALUE;
 				
 				if(nextExpiredItem != null) {
-					waitTime = nextExpiredItem.expiration - System.currentTimeMillis();
+					waitTime = nextExpiredItem.getFireTime() - System.currentTimeMillis();
 				}
 				
 				if(waitTime > 0) {
@@ -94,7 +94,7 @@ public class SnoozeThreadSupervisor {
 		for(SnoozeThread item : items) {
 			if(!item.isExpired() && !item.isCancelled()) {
 				newList.add(item);
-				if(nextExpiredItem == null || item.expiration < nextExpiredItem.expiration) {
+				if(nextExpiredItem == null || item.getFireTime() < nextExpiredItem.getFireTime()) {
 					nextExpiredItem = item;
 				}
 				
@@ -103,7 +103,7 @@ public class SnoozeThreadSupervisor {
 			
 			// item must be expired or cancelled
 			
-			if(runTasks && (item.isExpired() || item.callbackOnManualCancel)) {
+			if(runTasks && (item.isExpired() || item.isCalledBackOnManualCancel())) {
 				runCallback(item);
 			}
 		}
@@ -118,7 +118,7 @@ public class SnoozeThreadSupervisor {
 	public synchronized String report() {
 		String output = "Pending snooze threads: " + items.size() + "\n";
 		for(SnoozeThread item : items) {
-			output += "\t" + item.delayMs + "ms " + item.callback.getClass().getSimpleName() + "\n";
+			output += "\t" + item.getDelayMs() + "ms " + item.callback.getClass().getSimpleName() + "\n";
 		}
 		return output; 
 	}

@@ -387,7 +387,8 @@ public class FSMirror {
 		
 		logger.info("FS {}: FSMirror observed archive change: {}",
 				Util.formatArchiveId(zkfs.archive.config.archiveId),
-				path);
+				path,
+				new Throwable());
 	}
 	
 	protected synchronized void syncQueuedArchivePaths() {
@@ -567,9 +568,19 @@ public class FSMirror {
 		String abspath = destFs.absolutePath(path);
 		if(isSquelched(abspath, destFs, destStat)
 				&& srcStat != null
-				&& srcStat.matches(destStat))
+				&& srcStat.matches(destStat)) {
+			logger.debug("FS {}: FSMirror {} path is squelched: {}",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					System.identityHashCode(this),
+					path);
 			return false;
+		}
 		
+		logger.debug("FS {}: FSMirror {} squelching path: {}",
+				Util.formatArchiveId(zkfs.archive.config.archiveId),
+				System.identityHashCode(this),
+				path);
+
 		SquelchedPath squelch = new SquelchedPath(abspath, srcFs, srcStat);
 		squelchedPaths.put(abspath, squelch);
 		return true;

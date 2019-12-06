@@ -5,12 +5,12 @@ public class SnoozeThread {
 		void callback();
 	}
 	
-	long delayMs;
-	long maxTimeMs;
-	long deadline;
-	long expiration;
-	boolean cancelled;
-	boolean callbackOnManualCancel;
+	private long delayMs;
+	private long maxTimeMs;
+	private long deadline;
+	private long expiration;
+	private boolean cancelled;
+	private boolean callbackOnManualCancel;
 	SnoozeThreadCallback callback;
 	
 	public SnoozeThread(long delayMs, boolean callbackOnManualCancel, SnoozeThreadCallback callback) {
@@ -51,6 +51,10 @@ public class SnoozeThread {
 		return true;
 	}
 	
+	public long getFireTime() {
+		return Math.min(deadline, expiration);
+	}
+	
 	public long getDeadline() {
 		return deadline;
 	}
@@ -83,5 +87,9 @@ public class SnoozeThread {
 
 	public long getDelayMs() {
 		return delayMs;
+	}
+
+	public boolean isCalledBackOnManualCancel() {
+		return callbackOnManualCancel;
 	}
 }

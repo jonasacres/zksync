@@ -103,6 +103,7 @@ public class DHTClient {
 	protected LinkedList<SubscriptionToken<?>> subscriptions = new LinkedList<>();
 	
 	protected ArrayList<DHTMessageStub> pendingRequests;
+	protected LinkedList<DHTSearchOperation> pendingOperations = new LinkedList<>();
 	
 	public DHTClient(Key storageKey, ZKMaster master) {
 		this.master = master;
@@ -207,13 +208,15 @@ public class DHTClient {
 		subscriptions.add(master.getGlobalConfig().subscribe("net.dht.bootstrap.key").asString((key)->addDefaults()));
 	}
 	
-	protected void addDefaults() {
+	protected synchronized void addDefaults() {
 		String defaultHost = master.getGlobalConfig().getString("net.dht.bootstrap.host");
 		int defaultPort = master.getGlobalConfig().getInt("net.dht.bootstrap.port");
 		String defaultKey = master.getGlobalConfig().getString("net.dht.bootstrap.key");
 		
 		PublicDHKey pubkey = crypto.makePublicDHKey(Util.decode64(defaultKey));
 		routingTable.reset();
+		pendingRequests.clear();
+		cancelOperations();
 		
 		DHTPeer bootstrap = new DHTPeer(this,
 				defaultHost,
@@ -221,7 +224,7 @@ public class DHTClient {
 				pubkey);
 		bootstrap.setPinned(true);
 		addPeer(bootstrap);
-		logger.info("DHT {}:{}: Added bootstrap key={}; routing table reset",
+		logger.info("DHT: Added bootstrap {}:{}, key={}; routing table reset, pending requests cleared",
 				defaultHost,
 				defaultPort,
 				defaultKey);
@@ -269,7 +272,7 @@ public class DHTClient {
 	public void findPeers() {
 		if(!isListening()) return;
 		logger.debug("DHT -: Finding peers...");
-		new DHTSearchOperation(this, id, new Key(crypto), (peers)->{
+		addOperation(new DHTSearchOperation(this, id, new Key(crypto), (op, peers)->{
 			logger.debug("DHT -: Found {} peers", peers.size());
 			// no need to do anything; just doing the search populates the routing table
 			if(peers == null || peers.isEmpty()) {
@@ -277,9 +280,10 @@ public class DHTClient {
 			}
 			
 			initialized = true;
+			finishedOperation(op);
 		}, (record)->{
 			// just ignore records here
-		}).run();
+		}));
 	}
 	
 	public void autoFindPeers() {
@@ -297,12 +301,13 @@ public class DHTClient {
 	}
 	
 	public void lookup(DHTID searchId, Key lookupKey, LookupCallback callback) {
-		new DHTSearchOperation(this, searchId, lookupKey, (peers)->{
+		addOperation(new DHTSearchOperation(this, searchId, lookupKey, (op, peers)->{
 			if(peers == null || peers.isEmpty()) {
 				updateStatus(STATUS_QUESTIONABLE);
 			}
 			
 			callback.receivedRecord(null); // we won't be getting any more records, so signal end of results
+			finishedOperation(op);
 		}, (record)->{
 			try {
 				logger.info("DHT {}:{}: Received TCP ad record for ID {}: {}, key {}",
@@ -319,7 +324,7 @@ public class DHTClient {
 						record.routingInfo());
 			}
 			callback.receivedRecord(record);
-		}).run();
+		}));
 	}
 	
 	public void addPeer(DHTPeer peer) {
@@ -327,7 +332,7 @@ public class DHTClient {
 	}
 	
 	public void addRecord(DHTID searchId, Key lookupKey, DHTRecord record) {
-		new DHTSearchOperation(this, searchId, lookupKey, (peers)->{
+		addOperation(new DHTSearchOperation(this, searchId, lookupKey, (op, peers)->{
 			if(peers == null || peers.isEmpty()) {
 				updateStatus(STATUS_QUESTIONABLE);
 			}
@@ -348,9 +353,11 @@ public class DHTClient {
 					peer.addRecord(searchId, lookupKey, record);
 				}
 			}
+			
+			finishedOperation(op);
 		}, (existingRecord)->{
 			// don't need to do anything with existing records here
-		}).run();
+		}));
 	}
 	
 	public int idLength() {
@@ -394,6 +401,23 @@ public class DHTClient {
 		System.out.println("DHTClient " + this + " initialized=" + initialized);
 		routingTable.dump();
 		store.dump();
+	}
+	
+	protected synchronized void addOperation(DHTSearchOperation op) {
+		pendingOperations.add(op);
+		op.run();
+	}
+	
+	protected synchronized void finishedOperation(DHTSearchOperation op) {
+		pendingOperations.remove(op);
+	}
+	
+	protected synchronized void cancelOperations() {
+		for(DHTSearchOperation op : pendingOperations) {
+			op.cancel();
+		}
+		
+		pendingOperations.clear();
 	}
 	
 	protected void openSocket() throws SocketException {
