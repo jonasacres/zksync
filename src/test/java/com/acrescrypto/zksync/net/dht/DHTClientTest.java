@@ -65,6 +65,8 @@ public class DHTClientTest {
 			this.blacklist = new Blacklist(storage, "blacklist", new Key(crypto));
 			this.globalConfig = new ConfigFile(storage, "config.json");
 			setupDefaultConfig();
+			globalConfig.setDefault("net.dht.enabled", false);
+			globalConfig.setDefault("net.dht.bootstrap.enabled", false);
 			setupBandwidth();
 		}
 		
@@ -1311,5 +1313,11 @@ public class DHTClientTest {
 		Util.waitUntil(3000, ()->client.routingTable.allPeers().size() > 0);
 		master.getGlobalConfig().set("net.dht.bootstrap.enabled", false);
 		assertTrue(Util.waitUntil(3000, ()->client.routingTable.allPeers().size() == 0));
+	}
+	
+	@Test
+	public void testPingAllPingsPeers() throws ProtocolViolationException {
+		client.pingAll();
+		assertNotNull(remote.receivePacket(DHTMessage.CMD_PING));
 	}
 }

@@ -57,6 +57,14 @@ public class DHTResource {
 	
 	@POST
 	@Produces(MediaType.APPLICATION_JSON)
+	@Path("refresh")
+	public XAPIResponse postRefresh() throws IOException {
+		State.sharedState().getMaster().getDHTClient().pingAll();
+		throw XAPIResponse.successResponse();
+	}
+	
+	@POST
+	@Produces(MediaType.APPLICATION_JSON)
 	@Path("regenerate")
 	public XAPIResponse postRegenerate() throws IOException {
 		State.sharedState().getMaster().regenerateDHTClient();

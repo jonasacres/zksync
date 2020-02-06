@@ -1,5 +1,7 @@
 package com.acrescrypto.zksync.net.dht;
 
+/* TODO: The DHT client code is MASSIVELY overconcentrated into this class and should be broken up. */
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -267,6 +269,12 @@ public class DHTClient {
 	public DHTClient setStatusCallback(DHTStatusCallback statusCallback) {
 		this.statusCallback = statusCallback;
 		return this;
+	}
+	
+	public void pingAll() {
+		this.routingTable.allPeers().forEach((peer)->{
+			peer.ping();
+		});
 	}
 	
 	public void findPeers() {
