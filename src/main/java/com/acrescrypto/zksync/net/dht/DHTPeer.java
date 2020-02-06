@@ -83,11 +83,6 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public void findNode(DHTID nodeId, Key lookupKey, DHTFindNodePeerCallback peerCallback, DHTFindNodeRecordCallback recordCallback) {
-		logger.debug("DHT {}:{}: send findNode {} {}",
-				address,
-				port,
-				Util.bytesToHex(nodeId.rawId),
-				new Throwable());
 		client.findNodeMessage(this, nodeId, lookupKey, (resp)->{
 			ArrayList<DHTPeer> receivedPeers = new ArrayList<>();
 			this.remoteAuthTag = resp.authTag;

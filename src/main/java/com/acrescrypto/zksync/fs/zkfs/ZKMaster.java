@@ -401,16 +401,16 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 	protected void setupDefaultConfig() {
 		globalConfig.setDefault("crypto.pbkdf.maxsimultaneous", 1);
 		
-		globalConfig.setDefault("net.dht.enabled", false);
+		globalConfig.setDefault("net.dht.enabled", true);
 		globalConfig.setDefault("net.dht.bindaddress", "0.0.0.0");
 		globalConfig.setDefault("net.dht.port", 0);
 		globalConfig.setDefault("net.dht.upnp", false);
 		globalConfig.setDefault("net.dht.network", "easysafe");
 		
-		globalConfig.setDefault("net.dht.bootstrap.enabled", false);
+		globalConfig.setDefault("net.dht.bootstrap.enabled", true);
 		globalConfig.setDefault("net.dht.bootstrap.host", "dht1.easysafe.io");
 		globalConfig.setDefault("net.dht.bootstrap.port", 49921);
-		globalConfig.setDefault("net.dht.bootstrap.key", "sFmC46lkaxLfDUdWufZuRXf4wSoxiJCsxQp/qi/dEg0=");
+		globalConfig.setDefault("net.dht.bootstrap.key", "+y+OStBfRsEE3L51aVoJIHX6C+FYcBYN+MVqz+/zFXE=");
 		
 		globalConfig.setDefault("net.dht.discoveryintervalms", DHTZKArchiveDiscovery.DEFAULT_DISCOVERY_INTERVAL_MS);
 		globalConfig.setDefault("net.dht.advertisementintervalms", DHTZKArchiveDiscovery.DEFAULT_ADVERTISEMENT_INTERVAL_MS);
