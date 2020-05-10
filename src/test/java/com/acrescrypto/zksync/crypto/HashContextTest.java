@@ -10,7 +10,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
-import com.acrescrypto.zksync.crypto.HashContext;
 import com.acrescrypto.zksync.utility.Util;
 
 public class HashContextTest {

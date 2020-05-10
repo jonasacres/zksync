@@ -418,7 +418,7 @@ public class DHTMessageTest {
 			
 			serialized[i/8] ^= (1 << (i%8));
 			try {
-				new DHTMessage(client, "127.0.0.1", 54321, ByteBuffer.wrap(serialized));
+				new DHTMessage(client, "127.0.0.1", 54321, ByteBuffer.wrap(serialized)).hashCode();
 				fail();
 			} catch(ProtocolViolationException exc) {}
 			serialized[i/8] ^= (1 << (i%8));
@@ -434,7 +434,7 @@ public class DHTMessageTest {
 		
 		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
 		buf.limit(buf.limit()-1);
-		new DHTMessage(client, "127.0.0.1", 54321, buf);
+		new DHTMessage(client, "127.0.0.1", 54321, buf).hashCode();
 	}
 
 	@Test(expected=ProtocolViolationException.class)
@@ -446,7 +446,7 @@ public class DHTMessageTest {
 		
 		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
 		buf.limit(crypto.asymPublicDHKeySize()-1);
-		new DHTMessage(client, "127.0.0.1", 54321, buf);
+		new DHTMessage(client, "127.0.0.1", 54321, buf).hashCode();
 	}
 	
 	@Test(expected=ProtocolViolationException.class)
@@ -467,7 +467,7 @@ public class DHTMessageTest {
 		serialized.put(ciphertext);
 		serialized.rewind();
 		
-		new DHTMessage(client, "127.0.0.1", 54321, serialized);
+		new DHTMessage(client, "127.0.0.1", 54321, serialized).hashCode();
 	}
 	
 	@Test

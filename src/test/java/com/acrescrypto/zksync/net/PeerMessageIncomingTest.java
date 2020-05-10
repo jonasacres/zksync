@@ -123,7 +123,10 @@ public class PeerMessageIncomingTest {
 		};
 		
 		synchronized(holder) {
-			new PeerMessageIncoming(conn, (byte) 0, (byte) PeerMessage.FLAG_FINAL, 0);
+			// as of java 11.0.2 we get compiler warnings if we don't "use" an allocated object,
+			// so ask for hash code
+			new PeerMessageIncoming(conn, (byte) 0, (byte) PeerMessage.FLAG_FINAL, 0).hashCode();
+			
 			try {
 				holder.wait();
 			} catch (InterruptedException e) { fail(); }

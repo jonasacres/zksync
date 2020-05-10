@@ -22,9 +22,11 @@ public class DHTSearchOperation {
 	
 	public final static int DEFAULT_MAX_RESULTS = 8;
 	public final static int DEFAULT_SEARCH_QUERY_TIMEOUT_MS = 3000;
+	public final static int DEFAULT_MAX_SEARCH_QUERY_WAIT_TIME_MS = 30000;
 	
 	public static int maxResults = DEFAULT_MAX_RESULTS;
 	public static int searchQueryTimeoutMs = DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
+	public static int maxSearchQueryWaitTimeMs = DEFAULT_MAX_SEARCH_QUERY_WAIT_TIME_MS;
 	
 	int activeQueries = 0;
 	
@@ -59,7 +61,9 @@ public class DHTSearchOperation {
 	public synchronized DHTSearchOperation run() {
 		if(cancelled) return this;
 		
-		this.timeout = new SnoozeThread(searchQueryTimeoutMs, true, ()->{
+		System.out.println("Set timeout for " + searchQueryTimeoutMs);
+		this.timeout = new SnoozeThread(searchQueryTimeoutMs, maxSearchQueryWaitTimeMs, true, ()->{
+			System.out.println("Timeout fired, cancelled=" + cancelled);
 			if(cancelled) return;
 			peerCallback.searchOperationFinished(this, closestPeers);
 		});

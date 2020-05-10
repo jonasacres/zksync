@@ -119,7 +119,7 @@ public class ArchivesResource {
 						try {
 							cconfig.finishOpeningFromSwarm(0);
 						} catch (IOException e) {}
-					});
+					}).start();
 				}
 			}
 

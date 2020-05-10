@@ -121,7 +121,7 @@ public class RevisionTagTest {
 			
 			raw[index] ^= mask;
 			try {
-				new RevisionTag(config, raw, true);
+				new RevisionTag(config, raw, true).hashCode();
 				fail("expected security exception");
 			} catch(SecurityException exc) {
 			}

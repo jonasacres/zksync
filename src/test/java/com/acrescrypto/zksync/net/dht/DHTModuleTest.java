@@ -61,13 +61,15 @@ public class DHTModuleTest {
 			DummyMaster master = new DummyMaster();
 			DHTClient client = new DHTClient(new Key(crypto), master);
 			clients.add(client);
+			client.routingTable.reset();
 			client.addPeer(makePeer(root, client));
 			client.listen(null, 0);
 			client.findPeers();
 		}
 		
 		for(DHTClient client : clients) {
-			assertTrue(Util.waitUntil(2000, ()->client.isInitialized()));
+			assertTrue(Util.waitUntil(DHTSearchOperation.maxSearchQueryWaitTimeMs + 1000,
+					()->client.isInitialized()));
 		}
 		
 		return clients;
@@ -93,6 +95,8 @@ public class DHTModuleTest {
 		DHTClient.socketCycleDelayMs = 50;
 		DHTClient.socketOpenFailCycleDelayMs = 100;
 		DHTClient.lookupResultMaxWaitTimeMs = 50;
+		DHTSearchOperation.searchQueryTimeoutMs = 100;
+		DHTSearchOperation.maxSearchQueryWaitTimeMs = 1000;
 	}
 	
 	@Before
@@ -101,6 +105,7 @@ public class DHTModuleTest {
 		master = ZKMaster.openBlankTestVolume();
 		root = master.getDHTClient();
 		root.listen(null, 0);
+		root.routingTable.reset();
 		assertTrue(Util.waitUntil(100, ()->root.getStatus() >= DHTClient.STATUS_QUESTIONABLE));
 	}
 	
@@ -122,12 +127,14 @@ public class DHTModuleTest {
 		DHTClient.socketCycleDelayMs = DHTClient.DEFAULT_SOCKET_CYCLE_DELAY_MS;
 		DHTClient.socketOpenFailCycleDelayMs = DHTClient.DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS;
 		DHTClient.lookupResultMaxWaitTimeMs = DHTClient.DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS;
+		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
+		DHTSearchOperation.maxSearchQueryWaitTimeMs = DHTSearchOperation.DEFAULT_MAX_SEARCH_QUERY_WAIT_TIME_MS;
 	}
 	
 	@Test
 	public void testPeerDiscovery() throws IOException, InvalidBlacklistException {
 		// TODO Urgent: (itf) Linux 81cc346 2018-12-12 UniversalTests, assertion failed
-		ArrayList<DHTClient> clients = makeClients(256);
+		ArrayList<DHTClient> clients = makeClients(32);
 		DHTID id = new DHTID(crypto.rng(crypto.hashLength()));
 		DHTAdvertisementRecord ad = makeBogusAd(0);
 		Key lookupKey = new Key(crypto);

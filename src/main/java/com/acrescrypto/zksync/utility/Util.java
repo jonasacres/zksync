@@ -203,7 +203,7 @@ public class Util {
 	}
 	
 	public static void delay(long delay, AnonymousCallback action) {
-		new SnoozeThread(delay, false, ()->{try { action.cb(); } catch(Exception exc) {}});
+		new SnoozeThread(delay, false, ()->{try { action.cb(); } catch(Exception exc) {}}).hashCode();
 	}
 	
 	public static void sleep(long durationMs) {

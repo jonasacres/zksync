@@ -429,7 +429,7 @@ public abstract class PeerSocket {
 				getAddress(),
 				getPort(),
 				msgId);
-		new PeerMessageOutgoing(connection, msgId, cmd, PeerMessage.FLAG_CANCEL, new ByteArrayInputStream(new byte[0]));
+		new PeerMessageOutgoing(connection, msgId, cmd, PeerMessage.FLAG_CANCEL, new ByteArrayInputStream(new byte[0])).hashCode();
 	}
 	
 	protected void dataReady(MessageSegment segment) {

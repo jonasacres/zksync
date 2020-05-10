@@ -20,7 +20,6 @@ import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFile;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
-import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSet;
 
 
 public class DiffSetTest {

@@ -968,7 +968,7 @@ public class FSMirrorTest {
 			zkfs.write(p, "foo".getBytes());
 		});
 		
-		target.write("foo", "ding".getBytes());
+		target.write("foo2", "ding".getBytes());
 		assertTrue(mirror.isWatching());
 		assertTrue(Util.waitUntil(100, ()->zkfs.dirty));
 	}

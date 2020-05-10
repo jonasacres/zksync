@@ -47,7 +47,6 @@ import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
-import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
 import com.dosse.upnp.UPnP;
 
@@ -146,14 +145,6 @@ public class DHTClientTest {
 			 */
 			listenClient.key = dhKey;
 			listenClient.socket = socket;
-		}
-		
-		public void addSubsetOfPeers(ArrayList<RemotePeer> remotes, int numToAdd) {
-			assertTrue(numToAdd <= remotes.size());
-			Shuffler shuffler = new Shuffler(remotes.size());
-			for(int i = 0; i < numToAdd; i++) {
-				listenClient.addPeer(remotes.get(shuffler.next()).peer);
-			}
 		}
 		
 		public void addAllPeers(ArrayList<RemotePeer> remotes) {

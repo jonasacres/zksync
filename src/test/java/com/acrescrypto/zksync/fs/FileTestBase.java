@@ -9,7 +9,6 @@ import java.util.Arrays;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.exceptions.*;
-import com.acrescrypto.zksync.fs.File;
 
 public class FileTestBase {
 	protected FS scratch;

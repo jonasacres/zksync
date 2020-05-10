@@ -10,7 +10,9 @@ public class MemLogAppender extends AppenderBase<ILoggingEvent> {
 	
 	public static MemLogAppender sharedInstance() {
 		if(sharedMemlog == null) {
-			new MemLogAppender();
+			// we have to ask for hashCode to do something harmless with new instance
+			// otherwise we get a compiler warning
+			new MemLogAppender().hashCode();
 		}
 		
 		return sharedMemlog;

@@ -46,6 +46,14 @@ public class FSMirror {
 	Logger logger = LoggerFactory.getLogger(FSMirror.class);
 	MutableBoolean watchFlag = new MutableBoolean();
 	
+	/* We don't want a situation where syncing the archive to the target triggers our
+	 * filesystem watch, which triggers a write to the archive, which triggers a write back
+	 * to the target, which triggers a write to the archive, and so on. So we "squelch"
+	 * writes for a configurable time (fs.settings.mirror.pathSquelchPeriodMs, default 100ms
+	 * as of this writing).
+	 * 
+	 * This means we're blind to changes to the target FS for this interval after a sync.
+	 */
 	protected class SquelchedPath {
 		String path;
 		FS fs;

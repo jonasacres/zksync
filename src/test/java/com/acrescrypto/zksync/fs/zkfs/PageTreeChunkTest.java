@@ -238,7 +238,7 @@ public class PageTreeChunkTest {
 		
 		// need to copy the tag to avoid block cache
 		StorageTag newTag = new StorageTag(crypto, chunk.chunkTag.getTagBytes());
-		new PageTreeChunk(tree, newTag, chunk.index, false);
+		new PageTreeChunk(tree, newTag, chunk.index, false).hashCode();
 	}
 	
 	@Test
@@ -252,7 +252,7 @@ public class PageTreeChunkTest {
 				  .write(data, tree.archive.config.pageSize + Block.fixedHeaderLength() + Block.indexEntryLength());
 
 		try {
-			new PageTreeChunk(tree, tag, chunk.index, true);
+			new PageTreeChunk(tree, tag, chunk.index, true).hashCode();
 			fail("Expected SecurityException");
 		} catch(SecurityException exc) {}
 	}
@@ -267,6 +267,6 @@ public class PageTreeChunkTest {
 				  .withParams(tree.archive.storage, block.textKey(), block.saltKey(), block.authKey(), fakeKey)
 				  .write(data, tree.archive.config.pageSize + Block.fixedHeaderLength() + Block.indexEntryLength());
 
-		new PageTreeChunk(chunk.tree, tag, chunk.index, false);
+		new PageTreeChunk(chunk.tree, tag, chunk.index, false).hashCode();
 	}
 }

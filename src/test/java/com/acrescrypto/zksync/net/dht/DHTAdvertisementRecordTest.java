@@ -65,7 +65,10 @@ public class DHTAdvertisementRecordTest {
 		DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(crypto, ad);
 		byte[] serialized = adRecord.serialize();
 		serialized[0] += 1;
-		new DHTAdvertisementRecord(crypto, ByteBuffer.wrap(serialized));
+		
+		/* we ask for the hashCode() because java is now throwing compiler warnings if we don't
+		 * do something :rolleyes: */ 
+		new DHTAdvertisementRecord(crypto, ByteBuffer.wrap(serialized)).hashCode();
 	}
 	
 	@Test(expected=UnsupportedProtocolException.class)
@@ -73,7 +76,7 @@ public class DHTAdvertisementRecordTest {
 		DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(crypto, ad);
 		byte[] serialized = adRecord.serialize();
 		serialized[2] -= 1;
-		new DHTAdvertisementRecord(crypto, ByteBuffer.wrap(serialized));
+		new DHTAdvertisementRecord(crypto, ByteBuffer.wrap(serialized)).hashCode();
 	}
 	
 	@Test(expected=UnsupportedProtocolException.class)
@@ -81,7 +84,7 @@ public class DHTAdvertisementRecordTest {
 		DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(crypto, ad);
 		byte[] serialized = adRecord.serialize();
 		serialized[2] += 1;
-		new DHTAdvertisementRecord(crypto, ByteBuffer.wrap(serialized));
+		new DHTAdvertisementRecord(crypto, ByteBuffer.wrap(serialized)).hashCode();
 	}
 	
 	@Test(expected=UnsupportedProtocolException.class)
@@ -91,7 +94,7 @@ public class DHTAdvertisementRecordTest {
 		serialized[2] += 1;
 		ByteBuffer buf = ByteBuffer.allocate(2*serialized.length);
 		buf.put(serialized);
-		new DHTAdvertisementRecord(crypto, buf);
+		new DHTAdvertisementRecord(crypto, buf).hashCode();
 	}
 
 	@Test(expected=UnsupportedProtocolException.class)
@@ -99,6 +102,6 @@ public class DHTAdvertisementRecordTest {
 		DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(crypto, ad);
 		byte[] serialized = adRecord.serialize();
 		serialized[3] = Byte.MIN_VALUE;
-		new DHTAdvertisementRecord(crypto, ByteBuffer.wrap(serialized));
+		new DHTAdvertisementRecord(crypto, ByteBuffer.wrap(serialized)).hashCode();
 	}
 }

@@ -453,7 +453,9 @@ public class DHTClient {
 			if(socket.getLocalPort() != master.getGlobalConfig().getInt("net.dht.port")) {
 				master.getGlobalConfig().set("net.dht.port", socket.getLocalPort());
 			}
+			
 			logger.info("DHT -: listening on UDP port " + getPort());
+			
 			checkUPnP();
 			updateStatus(STATUS_QUESTIONABLE);
 		} catch(SocketException exc) {

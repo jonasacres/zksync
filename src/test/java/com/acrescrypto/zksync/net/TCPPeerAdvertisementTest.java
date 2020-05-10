@@ -145,6 +145,6 @@ public class TCPPeerAdvertisementTest {
 	public void testConstructorThrowsExceptionIfUnsupportedVersion() throws UnconnectableAdvertisementException {
 		ad.version = 1;
 		byte[] serialized = ad.serialize();
-		new TCPPeerAdvertisement(crypto, ByteBuffer.wrap(serialized));
+		new TCPPeerAdvertisement(crypto, ByteBuffer.wrap(serialized)).hashCode();
 	}
 }
