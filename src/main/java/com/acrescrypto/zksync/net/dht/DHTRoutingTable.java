@@ -57,11 +57,15 @@ public class DHTRoutingTable {
 	}
 	
 	public synchronized void freshen() {
-		if(closed || !client.isListening()) return;
+		if(closed || !client.getSocketManager().isListening()) return;
 		for(DHTBucket bucket : buckets) {
 			bucket.prune();
 			if(!bucket.needsFreshening()) continue;
-			client.lookup(bucket.randomIdInRange(), new Key(client.crypto), (results)->{}); // can ignore results; just doing search freshens routing table
+			client.getProtocolManager().lookup(
+					bucket.randomIdInRange(),
+					new Key(client.crypto),
+					(results)->{}               // can ignore results; just doing search freshens routing table
+				);
 		}
 	}
 	
@@ -101,10 +105,10 @@ public class DHTRoutingTable {
 	}
 	
 	public synchronized void suggestPeer(DHTPeer peer, long lastSeen) {
-		if(peer.id.equals(client.getId())) return; // we don't need an entry for ourselves!
+		if(peer.id.equals(client.getId())) return;            // we don't need an entry for ourselves!
 		for(DHTPeer existing : allPeers) {
 			if(existing.id.equals(peer.id) && existing.address.equals(peer.address) && existing.port == peer.port) {
-				return; // already have this peer
+				return;                                       // already have this peer
 			}
 		}
 		
@@ -113,7 +117,7 @@ public class DHTRoutingTable {
 		insertablePeer.setPinned(peer.isPinned());
 		
 		int order = insertablePeer.id.xor(client.id).order();
-		DHTBucket bucket = buckets.get(order+1); // add 1 since an exact match has order -1
+		DHTBucket bucket = buckets.get(order+1);              // add 1 since an exact match has order -1
 		if(bucket.hasCapacity()) {
 			bucket.add(insertablePeer, lastSeen);
 			allPeers.add(insertablePeer);
@@ -186,14 +190,14 @@ public class DHTRoutingTable {
 	}
 	
 	protected void write() throws IOException {
-		MutableSecureFile file = MutableSecureFile.atPath(client.storage, path(), client.routingTableKey());
+		MutableSecureFile file = MutableSecureFile.atPath(client.getStorage(), path(), client.routingTableKey());
 		file.write(serialize(), 0);
 	}
 	
 	protected void read() {
 		reset();
 		
-		MutableSecureFile file = MutableSecureFile.atPath(client.storage, path(), client.routingTableKey());
+		MutableSecureFile file = MutableSecureFile.atPath(client.getStorage(), path(), client.routingTableKey());
 		try {
 			deserialize(ByteBuffer.wrap(file.read()));
 		} catch(IOException|SecurityException exc) {

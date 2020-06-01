@@ -127,12 +127,6 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 		loadStoredAccessors();
 	}
 	
-	public void activateDHT(String address, int port, DHTPeer root) throws SocketException {
-		// TODO Release: (refactor) This isn't used anymore; use net.dht.enabled config setting instead.
-		dhtClient.listen(address, port);
-		dhtClient.addPeer(root);
-	}
-	
 	public void getLocalKey() throws IOException {
 		logger.info("Setting up local key...");
 		Key ppKey;

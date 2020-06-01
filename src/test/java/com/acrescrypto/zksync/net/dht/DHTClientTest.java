@@ -1171,7 +1171,7 @@ public class DHTClientTest {
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.pingMessage(remote.peer, null).send();
 		remote.receivePacket(DHTMessage.CMD_PING).makeResponse(new ArrayList<>()).send();
-		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_CAN_SEND == receivedStatus.intValue()));
+		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_CAN_REQUEST == receivedStatus.intValue()));
 	}
 	
 	@Test
@@ -1191,7 +1191,7 @@ public class DHTClientTest {
 		client.bindPort = remote.peer.port;
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.pingMessage(remote.peer, null).send();
-		client.lastStatus = DHTClient.STATUS_CAN_SEND;
+		client.lastStatus = DHTClient.STATUS_CAN_REQUEST;
 		remote.receivePacket(DHTMessage.CMD_PING).makeResponse(new ArrayList<>()).send();
 		assertFalse(Util.waitUntil(100, ()->-1 != receivedStatus.intValue()));
 	}

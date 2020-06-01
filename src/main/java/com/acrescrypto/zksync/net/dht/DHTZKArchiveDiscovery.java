@@ -16,7 +16,7 @@ import com.acrescrypto.zksync.net.TCPPeerAdvertisementListener;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
-	public final static int DEFAULT_DISCOVERY_INTERVAL_MS = 1000*60*5;
+	public final static int DEFAULT_DISCOVERY_INTERVAL_MS     = 1000*60*5;
 	public final static int DEFAULT_ADVERTISEMENT_INTERVAL_MS = 1000*60*5;
 	
 	class DiscoveryEntry {
@@ -116,7 +116,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		Util.setThreadName("DHTZKArchiveDiscovery advertisement thread");
 		while(isAdvertising(entry.accessor)) {
 			try {
-				Util.blockOn(()->isAdvertising(entry.accessor) && !entry.accessor.getMaster().getDHTClient().initialized);
+				Util.blockOn(()->isAdvertising(entry.accessor) && !entry.accessor.getMaster().getDHTClient().isInitialized());
 				if(isAdvertising(entry.accessor)) {
 					advertise(entry);
 				}
@@ -158,7 +158,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		DHTID searchId = new DHTID(entry.accessor.temporalSeedId(0));
 		logger.debug("DHT -: Doing discovery for archive with temporal seed ID {}",
 				Util.bytesToHex(entry.accessor.temporalSeedId(0), 8));
-		entry.accessor.getMaster().getDHTClient().lookup(searchId, lookupKey, (record)->{
+		entry.accessor.getMaster().getDHTClient().getProtocolManager().lookup(searchId, lookupKey, (record)->{
 			if(!(record instanceof DHTAdvertisementRecord)) return;
 			DHTAdvertisementRecord adRecord = (DHTAdvertisementRecord) record;
 			if(!(adRecord.ad instanceof TCPPeerAdvertisement)) return;
@@ -196,7 +196,11 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 			
 			for(int i = -1; i <= 1; i++) {
 				DHTID searchId = new DHTID(entry.accessor.temporalSeedId(i));
-				entry.accessor.getMaster().getDHTClient().addRecord(searchId, lookupKey, adRecord);
+				entry.accessor.getMaster().getDHTClient().getProtocolManager().addRecord(
+						searchId,
+						lookupKey,
+						adRecord
+					);
 			}
 		}
 	}

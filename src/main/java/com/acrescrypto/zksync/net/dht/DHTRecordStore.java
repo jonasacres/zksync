@@ -19,17 +19,17 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class DHTRecordStore {
 	public final static int MAX_RECORDS_PER_ID = 64;
-	public final static int MAX_IDS = 64;
+	public final static int MAX_IDS            = 64;
 	public final static int EXPIRATION_TIME_MS = 1000*60*60*4; // entries cannot be pruned until they are at least 4 hours old
 	
 	class StoreEntry {
-		DHTRecord record;
-		byte[] token;
-		long expirationTime;
+		protected DHTRecord record;
+		protected byte[]    token;
+		protected long      expirationTime;
 		
 		public StoreEntry(DHTRecord record, byte[] token) {
-			this.record = record;
-			this.token = token;
+			this.record         = record;
+			this.token          = token;
 			this.expirationTime = Util.currentTimeMillis() + EXPIRATION_TIME_MS;
 		}
 		
@@ -43,12 +43,19 @@ public class DHTRecordStore {
 		
 		public byte[] serialize() {
 			byte[] recordSer = record.serialize();
-			ByteBuffer buf = ByteBuffer.allocate(8+2+2+recordSer.length+token.length);
-			buf.putLong(expirationTime);
-			buf.putShort((short) token.length);
-			buf.put(token);
+			ByteBuffer buf = ByteBuffer.allocate(
+					  8                               // expiration time
+					+ 2                               // token length
+					+ token.length                    // token
+					+ 2                               // record length
+					+ recordSer.length                // record
+				);
+			buf.putLong (        expirationTime  );
+			buf.putShort((short) token.length    );
+			buf.put     (        token           );
 			buf.putShort((short) recordSer.length);
-			buf.put(recordSer);
+			buf.put     (        recordSer       );
+			
 			return buf.array();
 		}
 		
@@ -62,7 +69,7 @@ public class DHTRecordStore {
 			int expectedPos = serialized.getShort() + serialized.position();
 			
 			try {
-				record = client.deserializeRecord(null, serialized);
+				record = client.getProtocolManager().deserializeRecord(null, serialized);
 				if(serialized.position() != expectedPos) throw new UnsupportedProtocolException();
 			} catch (UnsupportedProtocolException exc) {
 				exc.printStackTrace();
@@ -194,12 +201,12 @@ public class DHTRecordStore {
 	}
 	
 	protected synchronized void write() throws IOException {
-		MutableSecureFile file = MutableSecureFile.atPath(client.storage, path(), client.recordStoreKey());
+		MutableSecureFile file = MutableSecureFile.atPath(client.getStorage(), path(), client.recordStoreKey());
 		file.write(serialize(), 0);
 	}
 	
 	protected void read() {
-		MutableSecureFile file = MutableSecureFile.atPath(client.storage, path(), client.recordStoreKey());
+		MutableSecureFile file = MutableSecureFile.atPath(client.getStorage(), path(), client.recordStoreKey());
 		try {
 			deserialize(ByteBuffer.wrap(file.read()));
 		} catch(IOException|SecurityException exc) {

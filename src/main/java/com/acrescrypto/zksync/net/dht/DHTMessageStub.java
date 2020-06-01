@@ -7,26 +7,31 @@ import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 
 public class DHTMessageStub {
-	DHTPeer peer;
-	DHTMessageCallback callback;
-	SnoozeThread expirationMonitor;
-	DatagramPacket packet;
+	protected DHTPeer            peer;
+	protected DHTMessageCallback callback;
+	protected SnoozeThread       expirationMonitor;
+	protected DatagramPacket     packet;
 	
-	byte cmd;
-	int msgId;
-	int responsesReceived;
+	protected byte               cmd;
+	protected int                msgId;
+	protected int                responsesReceived;
 	
 	public DHTMessageStub(DHTMessage msg, DatagramPacket packet) {
-		this.peer = msg.peer;
-		this.cmd = msg.cmd;
-		this.msgId = msg.msgId;
-		this.packet = packet;
-		this.expirationMonitor = new SnoozeThread(DHTClient.messageRetryTimeMs, false, ()->retry());
-		this.callback = msg.callback;
+		this.peer              = msg.peer;
+		this.cmd               = msg.cmd;
+		this.msgId             = msg.msgId;
+		this.callback          = msg.callback;
+		this.packet            = packet;
+		this.expirationMonitor = new SnoozeThread(
+				                   DHTClient.messageRetryTimeMs,
+				                   false,
+				                   ()->retry());
 	}
 	
 	public boolean matchesMessage(DHTMessage msg) {
-		return msgId == msg.msgId && cmd == msg.cmd && peer.equals(msg.peer);
+		return msgId ==    msg.msgId
+			&& cmd   ==    msg.cmd
+			&& peer.equals(msg.peer);
 	}
 	
 	public void dispatchResponse(DHTMessage msg) throws ProtocolViolationException {
@@ -43,11 +48,14 @@ public class DHTMessageStub {
 	}
 	
 	public void retry() {
-		peer.client.sendDatagram(packet);
-		expirationMonitor = new SnoozeThread(DHTClient.messageExpirationTimeMs - DHTClient.messageRetryTimeMs, false, ()->fail());
+		peer.client.getSocketManager().sendDatagram(packet);
+		expirationMonitor = new SnoozeThread(
+				DHTClient.messageExpirationTimeMs - DHTClient.messageRetryTimeMs,
+				false,
+				()->fail());
 	}
 	
 	public void fail() {
-		peer.client.missedResponse(this);
+		peer.client.getProtocolManager().missedResponse(this);
 	}
 }

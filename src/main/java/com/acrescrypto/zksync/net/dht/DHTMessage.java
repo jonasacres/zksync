@@ -17,38 +17,43 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 
 public class DHTMessage {
-	public final static byte CMD_PING = 0;
-	public final static byte CMD_FIND_NODE = 1;
-	public final static byte CMD_ADD_RECORD = 2;
+	public final static byte CMD_PING          = 0;
+	public final static byte CMD_FIND_NODE     = 1;
+	public final static byte CMD_ADD_RECORD    = 2;
 	
-	public final static byte FLAG_RESPONSE = 0x01;
+	public final static byte FLAG_RESPONSE     = 0x01;
 	
 	public interface DHTMessageCallback {
 		void responseReceived(DHTMessage response) throws ProtocolViolationException;
 	}
 	
-	DHTMessageCallback callback;
-	DHTPeer peer;
-	int msgId;
-	byte cmd, flags, numExpected;
-	byte[] payload, authTag;
-	boolean isFinal;
-	ArrayList<Collection<? extends Sendable>> itemLists;
-	Logger logger = LoggerFactory.getLogger(DHTMessage.class);
+	protected DHTMessageCallback                        callback;
+	protected DHTPeer                                   peer;
+	protected int                                       msgId;
+	protected byte                                      cmd,
+	                                                    flags,
+	                                                    numExpected;
+	protected byte[]                                    payload,
+	                                                    authTag;
+	protected boolean                                   isFinal;
+	protected ArrayList<Collection<? extends Sendable>> itemLists;
+	
+	private Logger logger = LoggerFactory.getLogger(DHTMessage.class);
 	
 	public DHTMessage(DHTPeer recipient, byte cmd, byte[] payload, DHTMessageCallback callback) {
 		this(recipient, cmd, ByteBuffer.wrap(payload), callback);
 	}
 	
 	public DHTMessage(DHTPeer recipient, byte cmd, ByteBuffer payloadBuf, DHTMessageCallback callback) {
-		this.peer = recipient;
-		this.cmd = cmd;
-		this.flags = 0;
-		this.authTag = recipient.remoteAuthTag;
+		this.peer     = recipient;
+		this.cmd      = cmd;
+		this.flags    = 0;
+		this.authTag  = recipient.remoteAuthTag;
 		this.callback = callback;
-		this.payload = new byte[payloadBuf.remaining()];
+		this.msgId    = recipient.client.crypto.defaultPrng().getInt();
+		this.payload  = new byte[payloadBuf.remaining()];
+		
 		payloadBuf.get(payload);
-		this.msgId = recipient.client.crypto.defaultPrng().getInt();
 	}
 	
 	public DHTMessage(DHTClient client, String senderAddress, int senderPort, ByteBuffer serialized) throws ProtocolViolationException {
@@ -56,13 +61,14 @@ public class DHTMessage {
 	}
 	
 	public DHTMessage(DHTPeer recipient, byte cmd, int msgId, Collection<? extends Sendable> items) {
-		this.peer = recipient;
-		this.cmd = cmd;
-		this.flags = FLAG_RESPONSE;
-		this.authTag = recipient.localAuthTag();
+		this.peer      = recipient;
+		this.cmd       = cmd;
+		this.flags     = FLAG_RESPONSE;
+		this.authTag   = recipient.localAuthTag();
 		this.itemLists = new ArrayList<>();
+		this.msgId     = msgId;
+
 		if(items != null) this.itemLists.add(new ArrayList<>(items));
-		this.msgId = msgId;
 	}
 	
 	public boolean isResponse() {
@@ -82,7 +88,7 @@ public class DHTMessage {
 		if(isResponse()) {
 			sendItems();
 		} else {
-			peer.client.watchForResponse(this, sendPayload());
+			peer.client.getProtocolManager().watchForResponse(this, sendPayload());
 		}
 	}
 	
@@ -154,30 +160,39 @@ public class DHTMessage {
 				cmd,
 				String.format("%02x", flags),
 				msgId);
-		peer.client.sendDatagram(packet);
+		peer.client.getSocketManager().sendDatagram(packet);
 		return packet;
 	}
 	
 	protected byte[] serialize(int numPackets, ByteBuffer sendBuf) {
-		PrivateDHKey ephKey = peer.client.crypto.makePrivateDHKey();
-		ByteBuffer keyMaterial = ByteBuffer.allocate(peer.client.networkId.length+peer.client.crypto.asymDHSecretSize());
+		PrivateDHKey ephKey    = peer.client.crypto.makePrivateDHKey();
+		
+		ByteBuffer keyMaterial = ByteBuffer.allocate(
+				  peer.client.networkId.length
+				+ peer.client.crypto.asymDHSecretSize());
 		keyMaterial.put(peer.client.networkId);
 		keyMaterial.put(ephKey.sharedSecret(peer.key));
-		byte[] symKeyRaw = peer.client.crypto.makeSymmetricKey(keyMaterial.array());
-		Key symKey = new Key(peer.client.crypto, symKeyRaw);
 		
-		ByteBuffer plaintext = ByteBuffer.allocate(headerSize() + sendBuf.remaining());
-		plaintext.put(peer.client.key.publicKey().getBytes());
-		plaintext.put(authTag);
+		byte[] symKeyRaw       = peer.client.crypto.makeSymmetricKey(keyMaterial.array());
+		Key symKey             = new Key(peer.client.crypto, symKeyRaw);
+		
+		ByteBuffer plaintext   = ByteBuffer.allocate(headerSize() + sendBuf.remaining());
+		plaintext.put   (peer.client.getPublicKey().getBytes());
+		plaintext.put   (authTag);
 		plaintext.putInt(msgId);
-		plaintext.put(cmd);
-		plaintext.put(flags);
-		plaintext.put((byte) numPackets);
-		plaintext.put(sendBuf);
+		plaintext.put   (cmd);
+		plaintext.put   (flags);
+		plaintext.put   ((byte) numPackets);
+		plaintext.put   (sendBuf);
 		
-		byte[] ciphertext = symKey.encrypt(new byte[peer.client.crypto.symIvLength()], plaintext.array(), 0);
+		byte[] ciphertext = symKey.encrypt(
+				new byte[peer.client.crypto.symIvLength()],
+				plaintext.array(),
+				0);
 		
-		ByteBuffer serialized = ByteBuffer.allocate(ephKey.getBytes().length + ciphertext.length);
+		ByteBuffer serialized = ByteBuffer.allocate(
+				  ephKey.getBytes().length
+				+ ciphertext.length);
 		serialized.put(ephKey.publicKey().getBytes());
 		serialized.put(ciphertext);
 		return serialized.array();
@@ -192,14 +207,22 @@ public class DHTMessage {
 		assertStateWithoutBlacklist(serialized.remaining() > keyBytes.length);
 		serialized.get(keyBytes);
 		
-		PublicDHKey pubKey = new PublicDHKey(client.crypto, keyBytes);
-		ByteBuffer keyMaterial = ByteBuffer.allocate(client.networkId.length+client.crypto.asymDHSecretSize());
+		PublicDHKey pubKey     = new PublicDHKey(client.crypto, keyBytes);
+		ByteBuffer keyMaterial = ByteBuffer.allocate(
+				client.networkId.length
+			  + client.crypto.asymDHSecretSize()
+			);
 		keyMaterial.put(client.networkId);
-		keyMaterial.put(client.key.sharedSecret(pubKey));
+		keyMaterial.put(client.getPrivateKey().sharedSecret(pubKey));
 		Key key = new Key(client.crypto, client.crypto.makeSymmetricKey(keyMaterial.array()));
 		
 		try {
-			byte[] plaintext = key.decrypt(new byte[client.crypto.symIvLength()], serialized.array(), serialized.position(), serialized.remaining());
+			byte[] plaintext = key.decrypt(
+					new byte[client.crypto.symIvLength()],  // blank IV
+					serialized.array(),
+					serialized.position(),
+					serialized.remaining()
+				);
 			serialized = ByteBuffer.wrap(plaintext);
 		} catch(SecurityException exc) {
 			logger.info("DHT {}:{}: Cannot decrypt message from peer",
@@ -212,27 +235,42 @@ public class DHTMessage {
 		/* We just did an authenticated decrypt that validated the message, so we know this was
 		 * meant for us and received correctly. If it's invalid, assume the worst and blacklist.
 		 */
-		assertState(serialized.remaining() >= keyBytes.length + DHTClient.AUTH_TAG_SIZE + 4 + 1 + 1 + 1);
+		int expectedHeaderLen = keyBytes.length
+				        + DHTClient.AUTH_TAG_SIZE
+				        + 4                          // msgId
+				        + 1                          // cmd
+				        + 1                          // flags
+				        + 1;                         // numPackets
+		assertState(serialized.remaining() >= expectedHeaderLen);
 		serialized.get(keyBytes);
 
-		this.authTag = new byte[DHTClient.AUTH_TAG_SIZE];
+		this.authTag     = new byte[DHTClient.AUTH_TAG_SIZE];
 		serialized.get(authTag);
 
-		this.peer = client.routingTable.peerForMessage(senderAddress, senderPort, client.crypto.makePublicDHKey(keyBytes));
-		this.msgId = serialized.getInt();
-		this.cmd = serialized.get();
-		this.flags = serialized.get();
+		this.peer        = client.routingTable.peerForMessage(senderAddress, senderPort, client.crypto.makePublicDHKey(keyBytes));
+		this.msgId       = serialized.getInt();
+		this.cmd         = serialized.get();
+		this.flags       = serialized.get();
 		this.numExpected = serialized.get();
-		this.payload = new byte[serialized.remaining()];
+		this.payload     = new byte[serialized.remaining()];
 		serialized.get(payload);
 	}
 	
 	protected int headerSize() {
-		return peer.client.crypto.asymPublicDHKeySize() + DHTClient.AUTH_TAG_SIZE + 4 + 1 + 1 + 1;
+		return peer.client.crypto.asymPublicDHKeySize()
+		     + DHTClient.AUTH_TAG_SIZE
+			 + 4
+			 + 1
+			 + 1
+			 + 1;
 	}
 	
 	protected int maxPayloadSize() {
-		return peer.client.crypto.symPadToReachSize(DHTClient.MAX_DATAGRAM_SIZE-headerSize()-peer.client.crypto.asymPublicDHKeySize());
+		return peer.client.crypto.symPadToReachSize(
+				   DHTSocketManager.MAX_DATAGRAM_SIZE
+				 - headerSize()
+				 - peer.client.crypto.asymPublicDHKeySize()
+			);
 	}
 	
 	protected void assertValidAuthTag() throws ProtocolViolationException {
