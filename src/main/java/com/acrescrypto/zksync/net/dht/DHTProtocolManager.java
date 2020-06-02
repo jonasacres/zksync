@@ -33,6 +33,8 @@ public class DHTProtocolManager {
 		this.pendingRequests = new ArrayList<>();
 	}
 	
+	protected DHTProtocolManager() {}
+	
 	public void clearPendingRequests() {
 		pendingRequests.clear();
 	}
@@ -47,12 +49,6 @@ public class DHTProtocolManager {
 	
 	protected DHTMessage pingMessage(DHTPeer recipient, DHTMessageCallback callback) {
 		return new DHTMessage(recipient, DHTMessage.CMD_PING, new byte[0], callback);
-	}
-	
-	public void pingAll() {
-		client.getRoutingTable().allPeers().forEach((peer)->{
-			peer.ping();
-		});
 	}
 	
 	public void findPeers() {
@@ -406,5 +402,13 @@ public class DHTProtocolManager {
 		if(!state) {
 			throw new UnsupportedProtocolException();
 		}
+	}
+
+	public void setAutofind(boolean autofind) {
+		this.autofind = autofind;		
+	}
+	
+	public boolean getAutofind() {
+		return autofind;
 	}
 }

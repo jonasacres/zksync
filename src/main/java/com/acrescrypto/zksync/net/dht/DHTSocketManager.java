@@ -24,15 +24,13 @@ public class DHTSocketManager {
 	 *   -   8 bytes   (UDP header)
 	 */
 	public final static int MAX_DATAGRAM_SIZE                       = 508;
-	
 	public final static int DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS = 9000;
 	public final static int DEFAULT_SOCKET_CYCLE_DELAY_MS           = 1000;
 	
 	public       static int socketCycleDelayMs                      = DEFAULT_SOCKET_CYCLE_DELAY_MS;
 	public       static int socketOpenFailCycleDelayMs              = DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS;
 	
-	protected DHTClient client;
-
+	protected DHTClient           client;
 	protected BandwidthMonitor    monitorTx,
 	                              monitorRx;
 	protected DatagramSocket      socket;
@@ -50,6 +48,8 @@ public class DHTSocketManager {
 		this.monitorTx = new BandwidthMonitor(client.getMaster().getBandwidthMonitorTx());
 		this.monitorRx = new BandwidthMonitor(client.getMaster().getBandwidthMonitorRx());
 	}
+	
+	protected DHTSocketManager() {}
 	
 	public void listen(String address, int port) throws SocketException {
 		this.paused      = false;
@@ -92,6 +92,10 @@ public class DHTSocketManager {
 	
 	public void setBindPort(int bindPort) {
 		this.bindPort = bindPort;
+	}
+	
+	public void setBindAddress(String bindAddress) {
+		this.bindAddress = bindAddress;
 	}
 	
 	public boolean isPaused() {
@@ -243,5 +247,21 @@ public class DHTSocketManager {
 	
 	protected void setPrivateKey(PrivateDHKey key) {
 		this.key = key;
+	}
+
+	public BandwidthMonitor getMonitorRx() {
+		return monitorRx;
+	}
+	
+	public BandwidthMonitor getMonitorTx() {
+		return monitorTx;
+	}
+
+	public void setMonitorRx(BandwidthMonitor monitorRx) {
+		this.monitorRx = monitorRx;
+	}
+	
+	public void setMonitorTx(BandwidthMonitor monitorTx) {
+		this.monitorTx = monitorTx;
 	}
 }

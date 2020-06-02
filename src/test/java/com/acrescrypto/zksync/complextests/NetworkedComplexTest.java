@@ -150,12 +150,13 @@ public class NetworkedComplexTest {
 		return root;
 	}
 	
+	@SuppressWarnings("deprecation")
 	public ZKArchiveConfig initConfig(String peerName) throws IOException {
 		ZKMaster master = ZKMaster.open(ZKMaster.demoPassphraseProvider(),
 				new LocalFS(encryptedDataPath(peerName)));
 		master.setName(peerName);
 		master.getGlobalConfig().set("net.swarm.enabled", true);
-		master.activateDHT("127.0.0.1", 0, dhtRoot.getDHTClient().getLocalPeer());
+		master.activateDHT("127.0.0.1", 0, dhtRoot.getDHTClient().getProtocolManager().getLocalPeer());
 		ZKArchive archive = master.createDefaultArchive("NetworkedComplexTest".getBytes());
 		archive.getConfig().advertise();
 		return archive.getConfig();

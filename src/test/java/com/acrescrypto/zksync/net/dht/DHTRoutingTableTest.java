@@ -21,32 +21,59 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.net.dht.DHTClient.LookupCallback;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTRoutingTableTest {
 	class DummyClient extends DHTClient {
 		LinkedList<DHTID> lookupIds;
+		RAMFS storage;
 		
 		public DummyClient() {
-			this.storage = new RAMFS();
-			this.crypto = CryptoSupport.defaultCrypto();
-			this.storageKey = new Key(this.crypto);
-			this.key = crypto.makePrivateDHKey();
-			this.id = new DHTID(key.publicKey());
-			this.lookupIds = new LinkedList<>();
+			this.crypto           = CryptoSupport.defaultCrypto();
+			this.privateKey       = crypto.makePrivateDHKey();
+			this.storage          = new RAMFS();
+			this.storageKey       = new Key(this.crypto);
+			this.id               = new DHTID(privateKey.publicKey());
+			this.lookupIds        = new LinkedList<>();
+			
+			super.protocolManager = this.protocolManager = new DummyProtocolManager(this);
+			super.socketManager   = this.socketManager   = new DummySocketManager(this);
 		}
 		
+		@Override
+		public RAMFS getStorage() {
+			return storage;
+		}
+	}
+	
+	class DummyProtocolManager extends DHTProtocolManager {
+		DummyClient client;
+		
+		public DummyProtocolManager(DummyClient client) {
+			this.client = client;
+		}
+
+		@Override
+		public void lookup(DHTID id, Key lookupKey, LookupCallback callback) {
+			client.lookupIds.add(id);
+		}
+		
+		@Override public void watchForResponse(DHTMessage msg, DatagramPacket packet) {}
+	}
+	
+	class DummySocketManager extends DHTSocketManager {
+		DummyClient client;
+		
+		public DummySocketManager(DummyClient client) {
+			this.client = client;
+		}
+
 		@Override
 		public boolean isListening() {
 			return true;
 		}
 		
-		@Override
-		public void lookup(DHTID id, Key lookupKey, LookupCallback callback) {
-			lookupIds.add(id);
-		}
-		
-		@Override public void watchForResponse(DHTMessage msg, DatagramPacket packet) {}
 		@Override public void sendDatagram(DatagramPacket msg) {}
 	}
 	

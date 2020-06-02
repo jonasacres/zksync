@@ -36,26 +36,48 @@ public class DHTMessageTest {
 		DHTMessage watch;
 		
 		protected DummyClient() {
-			this.crypto = CryptoSupport.defaultCrypto();
-			this.key = this.crypto.makePrivateDHKey();
-			this.tagKey = new Key(crypto);
-			this.routingTable = new DummyRoutingTable();
-			this.networkId = new byte[crypto.hashLength()];
-			routingTable.client = this;
+			this.crypto          = CryptoSupport.defaultCrypto();
+			this.privateKey      = this.crypto.makePrivateDHKey();
+			this.tagKey          = new  Key(crypto);
+			this.networkId       = new byte[crypto.hashLength()];
+			
+			this.routingTable    = new DummyRoutingTable   (this);
+			this.socketManager   = new DummySocketManager  (this);
+			this.protocolManager = new DummyProtocolManager(this);
 		}
+	}
+	
+	class DummyProtocolManager extends DHTProtocolManager {
+		DummyClient client;
 		
+		public DummyProtocolManager(DummyClient client) {
+			super.client = this.client = client;
+		}
+
 		@Override
 		protected void watchForResponse(DHTMessage message, DatagramPacket packet) {
-			watch = message;
+			client.watch = message;
 		}
+	}
+	
+	class DummySocketManager extends DHTSocketManager {
+		DummyClient client;
 		
+		public DummySocketManager(DummyClient client) {
+			super.client = this.client = client;
+		}
+
 		@Override
 		protected void sendDatagram(DatagramPacket packet) {
-			packets.add(packet);
+			client.packets.add(packet);
 		}
 	}
 	
 	class DummyRoutingTable extends DHTRoutingTable {
+		public DummyRoutingTable(DummyClient client) {
+			this.client = client;
+		}
+		
 		@Override public DHTPeer peerForMessage(String address, int port, PublicDHKey pubKey) {
 			return new DHTPeer(client, address, port, pubKey.getBytes());
 		}
@@ -146,7 +168,7 @@ public class DHTMessageTest {
 		ptBuf.get(senderKey);
 		ptBuf.get(authTag);
 		
-		assertArrayEquals(client.key.publicKey().getBytes(), senderKey);
+		assertArrayEquals(client.getPublicKey().getBytes(), senderKey);
 		assertArrayEquals(msg.authTag, authTag);
 		assertEquals(msg.msgId, ptBuf.getInt());
 		assertEquals(msg.cmd, ptBuf.get());
@@ -386,7 +408,7 @@ public class DHTMessageTest {
 	@Test
 	public void testDeserializesMessagesToClient() throws ProtocolViolationException {
 		byte[] payload = crypto.rng(32);
-		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.key.publicKey().getBytes());
+		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
 		DHTMessage req = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
@@ -401,13 +423,13 @@ public class DHTMessageTest {
 		
 		assertEquals("127.0.0.1", deserialized.peer.address);
 		assertEquals(54321, deserialized.peer.port);
-		assertArrayEquals(client.key.publicKey().getBytes(), req.peer.key.getBytes());
+		assertArrayEquals(client.getPublicKey().getBytes(), req.peer.key.getBytes());
 	}
 	
 	@Test
 	public void testDeserializeThrowsProtocolViolationExceptionIfTampered() {
 		byte[] payload = crypto.rng(32);
-		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.key.publicKey().getBytes());
+		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
 		DHTMessage req = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
@@ -428,7 +450,7 @@ public class DHTMessageTest {
 	@Test(expected=ProtocolViolationException.class)
 	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedCiphertext() throws ProtocolViolationException {
 		byte[] payload = crypto.rng(32);
-		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.key.publicKey().getBytes());
+		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
 		DHTMessage req = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
@@ -440,7 +462,7 @@ public class DHTMessageTest {
 	@Test(expected=ProtocolViolationException.class)
 	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedKey() throws ProtocolViolationException {
 		byte[] payload = crypto.rng(32);
-		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.key.publicKey().getBytes());
+		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
 		DHTMessage req = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
@@ -453,11 +475,11 @@ public class DHTMessageTest {
 	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedPlaintext() throws ProtocolViolationException {
 		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_ADD_RECORD, new byte[0], (resp)->{});
 		PrivateDHKey ephKey = peer.client.crypto.makePrivateDHKey();
-		byte[] symKeyRaw = peer.client.crypto.makeSymmetricKey(ephKey.sharedSecret(client.key.publicKey()));
+		byte[] symKeyRaw = peer.client.crypto.makeSymmetricKey(ephKey.sharedSecret(client.getPublicKey()));
 		Key symKey = new Key(peer.client.crypto, symKeyRaw);
 		
 		ByteBuffer plaintext = ByteBuffer.allocate(req.headerSize()-1);
-		plaintext.put(peer.client.key.publicKey().getBytes());
+		plaintext.put(peer.client.getPublicKey().getBytes());
 		plaintext.putInt(1234);
 		
 		byte[] ciphertext = symKey.encrypt(new byte[peer.client.crypto.symIvLength()], plaintext.array(), 0);

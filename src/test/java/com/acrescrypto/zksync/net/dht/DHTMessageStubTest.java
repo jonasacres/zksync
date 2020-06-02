@@ -28,14 +28,34 @@ public class DHTMessageStubTest {
 		DatagramPacket sent;
 		
 		public DummyClient() {
-			this.crypto = CryptoSupport.defaultCrypto();
-			this.tagKey = new Key(crypto);
-			this.key = crypto.makePrivateDHKey();
-			this.networkId = new byte[crypto.hashLength()];
+			this.crypto          = CryptoSupport.defaultCrypto();
+			this.tagKey          = new Key(crypto);
+			this.networkId       = new byte[crypto.hashLength()];
+			this.privateKey      = crypto.makePrivateDHKey();
+			
+			this.socketManager   = new DummySocketManager(this);
+			this.protocolManager = new DummyProtocolManager(this);
 		}
+	}
+	
+	class DummyProtocolManager extends DHTProtocolManager {
+		DummyClient client;
 		
-		@Override public void missedResponse(DHTMessageStub stub) { this.missed = stub; }
-		@Override public void sendDatagram(DatagramPacket packet) { this.sent = packet; }
+		public DummyProtocolManager(DummyClient client) {
+			this.client = client;
+		}
+
+		@Override public void missedResponse(DHTMessageStub stub) { client.missed = stub; }
+	}
+	
+	class DummySocketManager extends DHTSocketManager {
+		DummyClient client;
+		
+		public DummySocketManager(DummyClient client) {
+			this.client = client;
+		}
+
+		@Override public void sendDatagram(DatagramPacket packet) { client.sent = packet; }
 	}
 	
 	CryptoSupport crypto;

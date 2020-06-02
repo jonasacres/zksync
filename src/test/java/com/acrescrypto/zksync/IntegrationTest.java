@@ -67,6 +67,7 @@ public class IntegrationTest {
 		return config.getArchive();
 	}
 	
+	@SuppressWarnings("deprecation")
 	void activateDHT(ZKMaster master, ZKArchiveConfig config) throws IOException {
 		master.getGlobalConfig().set("net.swarm.enabled", true);
 		master.activateDHT("127.0.0.1", 0, root);
@@ -111,7 +112,7 @@ public class IntegrationTest {
 		rootClient = rootMaster.getDHTClient();
 		rootClient.listen("127.0.0.1", 0);
 		assertTrue(Util.waitUntil(50, ()->rootClient.getStatus() >= DHTClient.STATUS_QUESTIONABLE));
-		root = rootClient.getLocalPeer();
+		root = rootClient.getProtocolManager().getLocalPeer();
 	}
 	
 	@After
@@ -127,6 +128,7 @@ public class IntegrationTest {
 		TestUtils.stopDebugMode();
 	}
 	
+	@SuppressWarnings("deprecation")
 	@Test
 	public void testIntegratedDiscovery() throws IOException {
 		ZKMaster[] masters = new ZKMaster[3];
@@ -181,6 +183,7 @@ public class IntegrationTest {
 		}
 	}
 	
+	@SuppressWarnings("deprecation")
 	@Test
 	public void testSeedPeerIntegration() throws IOException {
 		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
@@ -336,6 +339,7 @@ public class IntegrationTest {
 		}
 	}
 	
+	@SuppressWarnings("deprecation")
 	@Test
 	public void testDefaultIntegrationWithSeparatelyDevelopedPeer() throws IOException {
 		/* peers 1 ... k-1 each commit and sync

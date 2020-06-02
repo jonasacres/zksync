@@ -25,8 +25,10 @@ import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTID;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
+import com.acrescrypto.zksync.net.dht.DHTProtocolManager;
 import com.acrescrypto.zksync.net.dht.DHTRecordStore;
 import com.acrescrypto.zksync.net.dht.DHTRoutingTable;
+import com.acrescrypto.zksync.net.dht.DHTSocketManager;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.Main;
@@ -47,18 +49,20 @@ public class DHTResourceTest {
 
 		public DummyDHTClient() throws IOException {
 			this.crypto = CryptoSupport.defaultCrypto();
-			this.monitorRx = new DummyMonitor(1000);
-			this.monitorTx = new DummyMonitor(2000);
+			this.socketManager = new DHTSocketManager(this);
+			this.protocolManager = new DHTProtocolManager(this);
+			
+			this.socketManager.setMonitorRx(new DummyMonitor(1000));
+			this.socketManager.setMonitorTx(new DummyMonitor(2000));
 			this.store = new DummyDHTRecordStore();
 			this.routingTable = new DummyDHTRoutingTable(this);
 
-			this.key = new PrivateDHKey(State.sharedCrypto());
-			this.id = new DHTID(key.publicKey());
-			this.pendingRequests = new ArrayList<>();
+			this.privateKey = new PrivateDHKey(State.sharedCrypto());
+			this.id = new DHTID(privateKey.publicKey());
 			this.networkId = crypto.hash(State.sharedState().getMaster().getGlobalConfig().getString("net.dht.network").getBytes());
-
-			this.bindAddress = "0.0.0.0";
-			this.bindPort = 1234;
+			
+			this.socketManager.setBindPort(1234);
+			this.socketManager.setBindAddress("0.0.0.0");
 			
 			subscriptions.add(State.sharedState().getMaster().getGlobalConfig().subscribe("net.dht.network").asString((network)->{
 				byte[] newNetworkId = crypto.hash(network.getBytes());

@@ -24,32 +24,50 @@ import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
+import com.acrescrypto.zksync.net.dht.DHTClient.LookupCallback;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTZKArchiveDiscoveryTest {
 	public class DummyDHTClient extends DHTClient {
 		DHTID searchId;
 		LookupCallback callback;
+		boolean initialized;
+		DummyProtocolManager protocolManager;
 		
 		HashMap<DHTID, DHTRecord> records = new HashMap<>();
 		
 		public DummyDHTClient() { 
 			initialized = true;
+			super.protocolManager = this.protocolManager = new DummyProtocolManager(this);
 		}
 		
 		public void close() {}
 		
 		@Override
+		public boolean isInitialized() {
+			return initialized;
+		}
+	}
+	
+	class DummyProtocolManager extends DHTProtocolManager {
+		DummyDHTClient client;
+		
+		public DummyProtocolManager(DummyDHTClient client) {
+			this.client = client;
+		}
+
+		@Override
 		public void lookup(DHTID searchId, Key lookupKey, LookupCallback callback) {
-			this.searchId = searchId;
-			this.callback = callback;
+			client.searchId = searchId;
+			client.callback = callback;
 		}
 		
 		@Override
 		public void addRecord(DHTID recordId, Key lookupKey, DHTRecord record) {
-			records.put(recordId, record);
+			client.records.put(recordId, record);
 		}
 	}
+
 	
 	CryptoSupport crypto;
 	ZKMaster master;

@@ -17,6 +17,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.net.Blacklist;
+import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -328,6 +329,18 @@ public class DHTClient {
 		return socketManager.getBindAddress();
 	}
 	
+	public int getPort() {
+		return socketManager.getPort();
+	}
+	
+	public BandwidthMonitor getMonitorRx() {
+		return socketManager.getMonitorRx();
+	}
+	
+	public BandwidthMonitor getMonitorTx() {
+		return socketManager.getMonitorTx();
+	}
+	
 	public Blacklist getBlacklist() {
 		return master.getBlacklist();
 	}
@@ -338,6 +351,16 @@ public class DHTClient {
 	
 	public ZKMaster getMaster() {
 		return master;
+	}
+	
+	public void addPeer(DHTPeer peer) {
+		routingTable.suggestPeer(peer);
+	}
+	
+	public void pingAll() {
+		routingTable.allPeers().forEach((peer)->{
+			peer.ping();
+		});
 	}
 	
 	public ThreadGroup getThreadGroup() {
@@ -406,5 +429,4 @@ public class DHTClient {
 			statusCallback.dhtStatusUpdate(newStatus);
 		}
 	}
-	
 }

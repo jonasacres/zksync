@@ -51,7 +51,7 @@ public class DHTModuleTest {
 	ZKMaster master;
 	
 	DHTPeer makePeer(DHTClient dest, DHTClient owner) {
-		return new DHTPeer(owner, "127.0.0.1", dest.getPort(), dest.key.publicKey().getBytes());
+		return new DHTPeer(owner, "127.0.0.1", dest.getPort(), dest.getPublicKey().getBytes());
 	}
 	
 	ArrayList<DHTClient> makeClients(int numClients) throws IOException, InvalidBlacklistException {
@@ -64,7 +64,7 @@ public class DHTModuleTest {
 			client.routingTable.reset();
 			client.addPeer(makePeer(root, client));
 			client.listen(null, 0);
-			client.findPeers();
+			client.getProtocolManager().findPeers();
 		}
 		
 		for(DHTClient client : clients) {
@@ -140,13 +140,13 @@ public class DHTModuleTest {
 		Key lookupKey = new Key(crypto);
 		
 		for(int i = 0; i < 16; i++) {
-			clients.get(i).addRecord(id, lookupKey, ad);
+			clients.get(i).getProtocolManager().addRecord(id, lookupKey, ad);
 		}
 		
 		MutableBoolean finished = new MutableBoolean(), found = new MutableBoolean();
 		
 		for(int i = 0; i < 32; i++) {
-			clients.get(i).lookup(id, lookupKey, (result)->{
+			clients.get(i).getProtocolManager().lookup(id, lookupKey, (result)->{
 				if(result == null) {
 					finished.setTrue();
 				} else {

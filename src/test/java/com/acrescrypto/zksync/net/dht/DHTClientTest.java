@@ -143,8 +143,8 @@ public class DHTClientTest {
 			 * we're basically murdering a DHTClient, hollowing out its skull and working its limbs like a puppet
 			 * to woo a still-living DHTClient. But it's 3 lines and a comment versus a DummyClient subclass...
 			 */
-			listenClient.key = dhKey;
-			listenClient.socket = socket;
+			listenClient.setPrivateKey(dhKey);
+			listenClient.getSocketManager().socket = socket;
 		}
 		
 		public void addAllPeers(ArrayList<RemotePeer> remotes) {
@@ -161,7 +161,7 @@ public class DHTClientTest {
 			try {
 				while(true) {
 					socket.receive(packet);
-					assertTrue(packet.getLength() <= DHTClient.MAX_DATAGRAM_SIZE);
+					assertTrue(packet.getLength() <= DHTSocketManager.MAX_DATAGRAM_SIZE);
 					DHTMessage msg;
 					try {
 						msg = new DHTMessage(listenClient, packet.getAddress().getHostAddress(), packet.getPort(), ByteBuffer.wrap(packet.getData(), 0, packet.getLength()));
@@ -334,7 +334,7 @@ public class DHTClientTest {
 	RemotePeer remote;
 	
 	void assertAlive() throws ProtocolViolationException {
-		remote.listenClient.pingMessage(clientPeer, null).send();
+		remote.listenClient.getProtocolManager().pingMessage(clientPeer, null).send();
 		assertNotNull(remote.receivePacket(DHTMessage.CMD_PING));
 	}
 	
@@ -357,13 +357,13 @@ public class DHTClientTest {
 		master = new DummyMaster();
 		storageKey = new Key(crypto);
 		client = new DHTClient(storageKey, master);
-		client.autofind = false;
+		client.getProtocolManager().setAutofind(false);
 		remote = new RemotePeer();
 		
 		client.addPeer(remote.peer);
 		client.listen("127.0.0.1", 0);
 		
-		clientPeer = new DHTPeer(remote.listenClient, "localhost", client.socket.getLocalPort(), client.key.publicKey());
+		clientPeer = new DHTPeer(remote.listenClient, "localhost", client.getSocketManager().socket.getLocalPort(), client.getPublicKey());
 	}
 	
 	@After
@@ -391,9 +391,9 @@ public class DHTClientTest {
 	
 	@Test
 	public void testConstructorWithoutExistingData() {
-		assertEquals(master.getBlacklist(), client.blacklist);
+		assertEquals(master.getBlacklist(), client.getBlacklist());
 		assertEquals(storageKey, client.storageKey);
-		assertEquals(master.getBlacklist().getFS(), client.storage);
+		assertEquals(master.getBlacklist().getFS(), client.getStorage());
 		assertEquals(crypto, client.crypto);
 		assertNotNull(client.routingTable);
 		assertNotNull(client.store);
@@ -403,15 +403,15 @@ public class DHTClientTest {
 	public void testConstructorWithExistingData() {
 		DHTClient client1 = new DHTClient(storageKey, master);
 
-		assertEquals(master.getBlacklist(), client1.blacklist);
+		assertEquals(master.getBlacklist(), client1.getBlacklist());
 		assertEquals(storageKey, client1.storageKey);
-		assertEquals(master.getBlacklist().getFS(), client1.storage);
+		assertEquals(master.getBlacklist().getFS(), client1.getStorage());
 		assertEquals(crypto, client1.crypto);
 		assertNotNull(client1.routingTable);
 		assertNotNull(client1.store);
 		
-		assertArrayEquals(client.key.getBytes(), client1.key.getBytes());
-		assertArrayEquals(client.key.publicKey().getBytes(), client1.key.publicKey().getBytes());
+		assertArrayEquals(client.getPrivateKey().getBytes(), client1.getPrivateKey().getBytes());
+		assertArrayEquals(client.getPublicKey().getBytes(), client1.getPrivateKey().getBytes());
 		assertArrayEquals(client.tagKey.getRaw(), client1.tagKey.getRaw());
 		assertEquals(client.id, client1.id);
 		
@@ -421,14 +421,14 @@ public class DHTClientTest {
 	@Test
 	public void testListenBindsToAddressAndPort() throws SocketException {
 		client.listen("127.0.0.1", 41851); // randomly picked
-		assertEquals(41851, client.socket.getLocalPort());
-		assertEquals("127.0.0.1", client.socket.getLocalAddress().getHostAddress());
+		assertEquals(41851, client.getSocketManager().socket.getLocalPort());
+		assertEquals("127.0.0.1", client.getSocketManager().socket.getLocalAddress().getHostAddress());
 	}
 	
 	@Test
 	public void testListenOnNullBindsToAllAddresses() throws SocketException {
 		client.listen(null, 0);
-		assertEquals("0.0.0.0", client.socket.getLocalAddress().getHostAddress());
+		assertEquals("0.0.0.0", client.getSocketManager().socket.getLocalAddress().getHostAddress());
 	}
 	
 	@Test(expected=SocketException.class)
@@ -438,7 +438,7 @@ public class DHTClientTest {
 	
 	@Test
 	public void testFindPeersTriggersSearchOperationForOwnId() throws IOException, ProtocolViolationException {
-		client.findPeers();
+		client.getProtocolManager().findPeers();
 		DHTMessage msg = remote.receivePacket();
 		byte[] rxId = new byte[client.id.rawId.length];
 		System.arraycopy(msg.payload, 0, rxId, 0, rxId.length);
@@ -450,7 +450,7 @@ public class DHTClientTest {
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
 		byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, remote.peer.key.getBytes()));
-		client.lookup(searchId, lookupKey, (resp)->{});
+		client.getProtocolManager().lookup(searchId, lookupKey, (resp)->{});
 		DHTMessage msg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
 		ByteBuffer rxBuf = ByteBuffer.wrap(msg.payload);
 		byte[] rxId = new byte[searchId.rawId.length], rxToken = new byte[token.length];
@@ -467,7 +467,7 @@ public class DHTClientTest {
 		Key lookupKey = new Key(crypto);
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
 
-		client.lookup(searchId, lookupKey, (record)->{
+		client.getProtocolManager().lookup(searchId, lookupKey, (record)->{
 			assertFalse(seenNull.booleanValue());
 			if(record == null) {
 				seenNull.setTrue();
@@ -504,7 +504,7 @@ public class DHTClientTest {
 		DHTSearchOperation.searchQueryTimeoutMs = 50;
 
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
-		client.lookup(searchId, new Key(crypto), (record)->{
+		client.getProtocolManager().lookup(searchId, new Key(crypto), (record)->{
 			assertFalse(seenNull.booleanValue());
 			assertNull(record);
 			seenNull.setTrue();
@@ -524,7 +524,7 @@ public class DHTClientTest {
 		DHTSearchOperation.searchQueryTimeoutMs = 50;
 
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
-		client.lookup(searchId, new Key(crypto), (resp)->{
+		client.getProtocolManager().lookup(searchId, new Key(crypto), (resp)->{
 			assertFalse(seenNull.booleanValue());
 			if(resp == null) {
 				seenNull.setTrue();
@@ -566,7 +566,7 @@ public class DHTClientTest {
 		for(RemotePeer r : remotes) peers.add(r.peer);
 
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
-		client.lookup(searchId, new Key(crypto), (resp)->{
+		client.getProtocolManager().lookup(searchId, new Key(crypto), (resp)->{
 			assertFalse(seenNull.booleanValue());
 			if(resp == null) {
 				seenNull.setTrue();
@@ -636,7 +636,7 @@ public class DHTClientTest {
 				client.addPeer(remote.peer);
 			}
 			
-			client.addRecord(searchId, lookupKey, makeBogusAd(0));
+			client.getProtocolManager().addRecord(searchId, lookupKey, makeBogusAd(0));
 			network.run();
 			
 			// TODO Urgent: (itf) linux UniversalTests 2018-12-11 8cda32e. AssertionError: expected<8> but was <7>
@@ -649,9 +649,9 @@ public class DHTClientTest {
 		ArrayList<DHTPeer> list = new ArrayList<>(1);
 		list.add(clientPeer);
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(client.id.rawId, client.getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(client.id.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
 		
-		client.addRecord(client.id, lookupKey, makeBogusAd(0));
+		client.getProtocolManager().addRecord(client.id, lookupKey, makeBogusAd(0));
 		remote.receivePacket().makeResponse(list).send();
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->client.store.recordsForId(client.id, token).size() > 0));
 	}
@@ -663,19 +663,19 @@ public class DHTClientTest {
 	
 	@Test
 	public void testIsInitializedReturnsFalseIfFindPeersNotCalled() {
-		assertFalse(client.initialized);
+		assertFalse(client.isInitialized());
 	}
 	
 	@Test
 	public void testIsInitializedReturnsTrueIfFindPeersComplete() throws IOException, ProtocolViolationException {
-		client.findPeers();
+		client.getProtocolManager().findPeers();
 		remote.receivePacket().makeResponse(new ArrayList<>()).send();
 		assertTrue(Util.waitUntil(100, ()->client.isInitialized()));
 	}
 	
 	@Test
 	public void testGetPortReturnsBoundPortNumber() {
-		assertEquals(client.socket.getLocalPort(), client.getPort());
+		assertEquals(client.getSocketManager().socket.getLocalPort(), client.getPort());
 	}
 	
 	@Test
@@ -683,13 +683,13 @@ public class DHTClientTest {
 		/* send an corrupted one, and then a valid one and make sure we get a reply.
 		 * (in other words, did we blow up the listen thread or get blacklisted?)
 		 */
-		DHTMessage ping = remote.listenClient.pingMessage(clientPeer, (resp)->fail());
+		DHTMessage ping = remote.listenClient.getProtocolManager().pingMessage(clientPeer, (resp)->fail());
 		byte[] pingBytes = ping.serialize(1, ByteBuffer.allocate(0));
 		pingBytes[crypto.asymPublicDHKeySize()] ^= 0x01;
 		
 		InetAddress address = InetAddress.getByName(clientPeer.address);
 		DatagramPacket datagram = new DatagramPacket(pingBytes, pingBytes.length, address, clientPeer.port);
-		clientPeer.client.sendDatagram(datagram);
+		clientPeer.client.getSocketManager().sendDatagram(datagram);
 		
 		Util.sleep(10);
 		
@@ -701,7 +701,7 @@ public class DHTClientTest {
 	@Test
 	public void testToleratesUnsupportedMessages() throws UnknownHostException {
 		// same idea as toleratesIndecipherableMessages, except with unsupported message types
-		DHTMessage ping = remote.listenClient.pingMessage(clientPeer, (resp)->fail());
+		DHTMessage ping = remote.listenClient.getProtocolManager().pingMessage(clientPeer, (resp)->fail());
 		ping.cmd = -1;
 		ping.send();
 		
@@ -716,7 +716,7 @@ public class DHTClientTest {
 	public void testMessageSendersAutomaticallyAddedToRoutingTable() {
 		client.routingTable.reset();
 		assertFalse(client.routingTable.allPeers().contains(remote.peer));
-		remote.listenClient.pingMessage(clientPeer, (resp)->fail()).send();		
+		remote.listenClient.getProtocolManager().pingMessage(clientPeer, (resp)->fail()).send();		
 		Util.sleep(10);
 		assertTrue(client.routingTable.allPeers().contains(remote.peer));
 	}
@@ -758,7 +758,7 @@ public class DHTClientTest {
 	
 	@Test
 	public void testRespondsToPing() throws ProtocolViolationException {
-		DHTMessage req = remote.listenClient.pingMessage(clientPeer, null);
+		DHTMessage req = remote.listenClient.getProtocolManager().pingMessage(clientPeer, null);
 		req.send();
 		
 		DHTMessage resp = remote.receivePacket(DHTMessage.CMD_PING);
@@ -768,7 +768,7 @@ public class DHTClientTest {
 	@Test
 	public void testIgnoresMessagesFromAlternateNetworkIds() throws ProtocolViolationException {
 		remote.listenClient.networkId = crypto.rng(crypto.hashLength());
-		DHTMessage req = remote.listenClient.pingMessage(clientPeer, null);
+		DHTMessage req = remote.listenClient.getProtocolManager().pingMessage(clientPeer, null);
 		req.send();
 		
 		remote.strict = false;
@@ -777,7 +777,7 @@ public class DHTClientTest {
 	
 	@Test
 	public void testFindNodeIgnoresTruncatedID() throws IOException, ProtocolViolationException {
-		DHTMessage req = remote.listenClient.findNodeMessage(clientPeer,
+		DHTMessage req = remote.listenClient.getProtocolManager().findNodeMessage(clientPeer,
 				clientPeer.id,
 				new Key(crypto),
 				null);
@@ -792,7 +792,7 @@ public class DHTClientTest {
 	
 	@Test
 	public void testFindNodeIgnoresOverlyLongID() throws IOException, ProtocolViolationException {
-		DHTMessage req = remote.listenClient.findNodeMessage(clientPeer, clientPeer.id, new Key(crypto), null);
+		DHTMessage req = remote.listenClient.getProtocolManager().findNodeMessage(clientPeer, clientPeer.id, new Key(crypto), null);
 		req.payload = crypto.rng(req.payload.length+1);
 		req.send();
 		
@@ -887,7 +887,7 @@ public class DHTClientTest {
 		int numRecords = 16;
 		ArrayList<DHTRecord> records = new ArrayList<>(numRecords);
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, client.getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
 		
 		for(int i = 0; i < numRecords; i++) {
 			DHTRecord record = new DummyRecord(i);
@@ -926,7 +926,7 @@ public class DHTClientTest {
 		DHTID searchId = remote.peer.id;
 		int numRecords = 16;
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, client.getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
 		
 		for(int i = 0; i < numRecords; i++) {
 			DHTRecord record = new DummyRecord(i);
@@ -988,7 +988,7 @@ public class DHTClientTest {
 	public void testAddRecordIgnoresRequestsWithInvalidAuthTag() throws ProtocolViolationException {
 		DHTID id = new DHTID(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
 		clientPeer.addRecord(id, new Key(crypto), makeBogusAd(0));
 		assertFalse(Util.waitUntil(100, ()->client.store.recordsForId(id, token).size() > 0));
 		assertAlive();
@@ -998,9 +998,9 @@ public class DHTClientTest {
 	public void testAddRecordIgnoresRequestsWithTruncatedPayload() throws ProtocolViolationException {
 		DHTID id = new DHTID(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
 
-		DHTMessage msg = remote.listenClient.addRecordMessage(clientPeer, id, lookupKey, makeBogusAd(0), null);
+		DHTMessage msg = remote.listenClient.getProtocolManager().addRecordMessage(clientPeer, id, lookupKey, makeBogusAd(0), null);
 		byte[] fakePayload = new byte[msg.payload.length - 1];
 		System.arraycopy(msg.payload, 0, fakePayload, 0, fakePayload.length);
 		msg.authTag = remote.peer.localAuthTag();
@@ -1015,9 +1015,9 @@ public class DHTClientTest {
 	public void testAddRecordIgnoresUnsupportedRecordTypes() throws ProtocolViolationException {
 		DHTID id = new DHTID(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
 
-		DHTMessage msg = remote.listenClient.addRecordMessage(clientPeer, id, new Key(crypto), makeBogusAd(0), null);
+		DHTMessage msg = remote.listenClient.getProtocolManager().addRecordMessage(clientPeer, id, new Key(crypto), makeBogusAd(0), null);
 		msg.authTag = remote.peer.localAuthTag();
 		msg.payload[id.rawId.length + crypto.hashLength()] = Byte.MIN_VALUE; // first byte after token is record type field
 		msg.send();
@@ -1036,9 +1036,9 @@ public class DHTClientTest {
 	public void testAddRecordAddsValidRecordsToStore() throws ProtocolViolationException {
 		DHTID id = new DHTID(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
 
-		DHTMessage msg = remote.listenClient.addRecordMessage(clientPeer, id, lookupKey, makeBogusAd(0), null);
+		DHTMessage msg = remote.listenClient.getProtocolManager().addRecordMessage(clientPeer, id, lookupKey, makeBogusAd(0), null);
 		msg.authTag = remote.peer.localAuthTag();
 		msg.send();
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->client.store.recordsForId(id, token).size() > 0));
@@ -1048,7 +1048,7 @@ public class DHTClientTest {
 	@Test
 	public void testPingMessageConstructsAppropriatePingMessages() {
 		DHTMessageCallback callback = (resp)->{};
-		DHTMessage ping = client.pingMessage(remote.peer, callback);
+		DHTMessage ping = client.getProtocolManager().pingMessage(remote.peer, callback);
 		assertNotEquals(0, ping.msgId); // admittedly there's a 1 in 2**32 chance of this failing randomly
 		assertEquals(callback, ping.callback);
 		assertEquals(DHTMessage.CMD_PING, ping.cmd);
@@ -1063,7 +1063,7 @@ public class DHTClientTest {
 		DHTID id = new DHTID(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
 		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, remote.peer.key.getBytes()));
-		DHTMessage findNode = client.findNodeMessage(remote.peer, id, lookupKey, callback);
+		DHTMessage findNode = client.getProtocolManager().findNodeMessage(remote.peer, id, lookupKey, callback);
 		assertNotEquals(0, findNode.msgId); // admittedly there's a 1 in 2**32 chance of this failing randomly
 		assertEquals(callback, findNode.callback);
 		assertEquals(DHTMessage.CMD_FIND_NODE, findNode.cmd);
@@ -1079,7 +1079,7 @@ public class DHTClientTest {
 		Key lookupKey = new Key(crypto);
 		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, remote.peer.key.getBytes()));
 		DHTRecord record = makeBogusAd(0);
-		DHTMessage addRecord = client.addRecordMessage(remote.peer, id, lookupKey, record, callback);
+		DHTMessage addRecord = client.getProtocolManager().addRecordMessage(remote.peer, id, lookupKey, record, callback);
 		
 		byte[] expected = Util.concat(
 				id.rawId,
@@ -1098,7 +1098,7 @@ public class DHTClientTest {
 		DHTAdvertisementRecord record = makeBogusAd(0);
 		TCPPeerAdvertisement ad = (TCPPeerAdvertisement) record.ad;
 		DHTPeer peer = new DHTPeer(client, ad.getHost(), ad.getPort(), ad.getPubKey());
-		assertEquals(record, client.deserializeRecord(peer, ByteBuffer.wrap(record.serialize())));
+		assertEquals(record, client.getProtocolManager().deserializeRecord(peer, ByteBuffer.wrap(record.serialize())));
 	}
 	
 	@Test
@@ -1107,7 +1107,7 @@ public class DHTClientTest {
 		client.lastStatus = -1; // we're already in a questionable state, so clear this
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.routingTable.reset();
-		client.findPeers();
+		client.getProtocolManager().findPeers();
 		
 		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_QUESTIONABLE == receivedStatus.intValue()));
 	}
@@ -1118,7 +1118,7 @@ public class DHTClientTest {
 		client.lastStatus = -1; // we're already in a questionable state, so clear this
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.routingTable.reset();
-		client.lookup(clientPeer.id, new Key(crypto), (record)->{});
+		client.getProtocolManager().lookup(clientPeer.id, new Key(crypto), (record)->{});
 		
 		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_QUESTIONABLE == receivedStatus.intValue()));
 	}
@@ -1129,7 +1129,7 @@ public class DHTClientTest {
 		client.lastStatus = -1; // we're already in a questionable state, so clear this
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.routingTable.reset();
-		client.addRecord(clientPeer.id, new Key(crypto), makeBogusAd(0));
+		client.getProtocolManager().addRecord(clientPeer.id, new Key(crypto), makeBogusAd(0));
 		
 		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_QUESTIONABLE == receivedStatus.intValue()));
 	}
@@ -1139,7 +1139,7 @@ public class DHTClientTest {
 		MutableBoolean seen = new MutableBoolean();
 		client.lastStatus = -1; // we're already in a questionable state, so clear this
 		client.setStatusCallback((status)->{ if(status == DHTClient.STATUS_ESTABLISHING) seen.setTrue(); });
-		client.openSocket();
+		client.getSocketManager().openSocket();
 		assertTrue(Util.waitUntil(100, ()->seen.booleanValue()));
 	}
 	
@@ -1148,17 +1148,17 @@ public class DHTClientTest {
 		MutableInt receivedStatus = new MutableInt(-1);
 		client.lastStatus = -1; // we're already in a questionable state, so clear this
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
-		client.openSocket();
+		client.getSocketManager().openSocket();
 		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_QUESTIONABLE == receivedStatus.intValue()));
 	}
 	
 	@Test
 	public void testStatusCallbackOfflineWhenSocketFailsToBind() throws SocketException {
 		MutableInt receivedStatus = new MutableInt(-1);
-		client.bindPort = remote.peer.port;
+		client.getSocketManager().setBindPort(remote.peer.port);
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		try {
-			client.openSocket();
+			client.getSocketManager().openSocket();
 		} catch(SocketException exc) {}
 		
 		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_OFFLINE == receivedStatus.intValue()));
@@ -1167,9 +1167,9 @@ public class DHTClientTest {
 	@Test
 	public void testStatusCallbackCanSendWhenResponseReceivedAndLastStatusNotGood() throws ProtocolViolationException {
 		MutableInt receivedStatus = new MutableInt(-1);
-		client.bindPort = remote.peer.port;
+		client.getSocketManager().setBindPort(remote.peer.port);
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
-		client.pingMessage(remote.peer, null).send();
+		client.getProtocolManager().pingMessage(remote.peer, null).send();
 		remote.receivePacket(DHTMessage.CMD_PING).makeResponse(new ArrayList<>()).send();
 		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_CAN_REQUEST == receivedStatus.intValue()));
 	}
@@ -1177,9 +1177,9 @@ public class DHTClientTest {
 	@Test
 	public void testStatusCallbackDoesNotGetCanSendWhenLastStatusWasGood() throws ProtocolViolationException {
 		MutableInt receivedStatus = new MutableInt(-1);
-		client.bindPort = remote.peer.port;
+		client.getSocketManager().setBindPort(remote.peer.port);
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
-		client.pingMessage(remote.peer, null).send();
+		client.getProtocolManager().pingMessage(remote.peer, null).send();
 		client.lastStatus = DHTClient.STATUS_GOOD;
 		remote.receivePacket(DHTMessage.CMD_PING).makeResponse(new ArrayList<>()).send();
 		assertFalse(Util.waitUntil(100, ()->-1 != receivedStatus.intValue()));
@@ -1188,9 +1188,9 @@ public class DHTClientTest {
 	@Test
 	public void testStatusCallbackDoesNotGetCanSendWhenLastStatusWasCanSend() throws ProtocolViolationException {
 		MutableInt receivedStatus = new MutableInt(-1);
-		client.bindPort = remote.peer.port;
+		client.getSocketManager().setBindPort(remote.peer.port);
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
-		client.pingMessage(remote.peer, null).send();
+		client.getProtocolManager().pingMessage(remote.peer, null).send();
 		client.lastStatus = DHTClient.STATUS_CAN_REQUEST;
 		remote.receivePacket(DHTMessage.CMD_PING).makeResponse(new ArrayList<>()).send();
 		assertFalse(Util.waitUntil(100, ()->-1 != receivedStatus.intValue()));
@@ -1199,7 +1199,7 @@ public class DHTClientTest {
 	@Test
 	public void testStatusCallbackGoodWhenRequestReceived() throws ProtocolViolationException {
 		MutableInt receivedStatus = new MutableInt(-1);
-		client.bindPort = remote.peer.port;
+		client.getSocketManager().setBindPort(remote.peer.port);
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		clientPeer.ping();
 		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_GOOD == receivedStatus.intValue()));
@@ -1208,7 +1208,7 @@ public class DHTClientTest {
 	@Test
 	public void testStatusCallbackDoesNotGetGoodWhenLastStatusWasGood() throws ProtocolViolationException {
 		MutableInt receivedStatus = new MutableInt(-1);
-		client.bindPort = remote.peer.port;
+		client.getSocketManager().setBindPort(remote.peer.port);
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.lastStatus = DHTClient.STATUS_GOOD;
 		clientPeer.ping();
@@ -1218,7 +1218,7 @@ public class DHTClientTest {
 	@Test
 	public void testAutoFindPeersCallsFindPeersOnInterval() throws IOException, ProtocolViolationException {
 		DHTClient.autoFindPeersIntervalMs = 50;
-		client.autofind = true;
+		client.getProtocolManager().setAutofind(true);
 		long timeStart = Util.currentTimeMillis();
 		for(int i = 0; i < 8; i++) {
 			remote.receivePacket().makeResponse(new ArrayList<>()).send();
@@ -1229,15 +1229,15 @@ public class DHTClientTest {
 	@Test
 	public void testPausesWhenNetDhtEnabledSetFalse() {
 		master.getGlobalConfig().set("net.dht.enabled", false);
-		assertTrue(Util.waitUntil(100, ()->client.socket.isClosed()));
+		assertTrue(Util.waitUntil(100, ()->client.getSocketManager().socket.isClosed()));
 	}
 	
 	@Test
 	public void testUnpausesWhenNetDhtEnabledSetTrueFromFalse() {
 		master.getGlobalConfig().set("net.dht.enabled", false);
-		assertTrue(Util.waitUntil(100, ()->client.socket.isClosed()));
+		assertTrue(Util.waitUntil(100, ()->client.getSocketManager().socket.isClosed()));
 		master.getGlobalConfig().set("net.dht.enabled", true);
-		assertTrue(Util.waitUntil(100, ()->!client.socket.isClosed()));
+		assertTrue(Util.waitUntil(100, ()->!client.getSocketManager().socket.isClosed()));
 	}
 	
 	@Test

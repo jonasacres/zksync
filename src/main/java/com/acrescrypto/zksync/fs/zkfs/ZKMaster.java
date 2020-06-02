@@ -299,6 +299,14 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 	public DHTClient getDHTClient() {
 		return dhtClient;
 	}
+	
+	@Deprecated
+	/** @deprecated use net.dht.enabled config property instead */
+	public void activateDHT(String address, int port, DHTPeer root) throws SocketException {
+		// this basically exists just to avoid rewriting all the tests now.
+		dhtClient.listen(address, port);
+		dhtClient.addPeer(root);
+	}
 
 	protected void loadStoredAccessors() {
 		try {

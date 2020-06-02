@@ -30,6 +30,49 @@ import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTPeerTest {
+	class DummyProtocolManager extends DHTProtocolManager {
+		DummyClient client;
+		
+		public DummyProtocolManager(DummyClient client) {
+			this.client = client;
+		}
+
+		@Override
+		protected DHTMessage pingMessage(DHTPeer recipient, DHTMessageCallback callback) {
+			client.reqId = client.id;
+			client.reqPeer = recipient;
+			return client.msg = new DummyMessage(recipient, DHTMessage.CMD_PING, new byte[0], callback);
+		}
+		
+		@Override
+		protected DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, Key lookupKey, DHTMessageCallback callback) {
+			client.reqId = id;
+			client.reqPeer = recipient;
+			client.reqKey = lookupKey;
+			return client.msg = new DummyMessage(recipient, DHTMessage.CMD_FIND_NODE, id.rawId, callback);
+		}
+		
+		@Override
+		protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, Key lookupKey, DHTRecord record, DHTMessageCallback callback) {
+			client.reqId = id;
+			client.reqRecord = record;
+			client.reqPeer = recipient;
+			client.reqKey = lookupKey;
+			
+			byte[] serializedRecord = record.serialize();
+			ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + serializedRecord.length + recipient.remoteAuthTag.length);
+			buf.put(recipient.remoteAuthTag);
+			buf.put(id.rawId);
+			buf.put(record.serialize());
+			return client.msg = new DummyMessage(recipient, DHTMessage.CMD_ADD_RECORD, buf.array(), callback);
+		}
+		
+		@Override
+		protected DHTRecord deserializeRecord(DHTPeer peer, ByteBuffer serialized) throws UnsupportedProtocolException {
+			return new DummyRecord(serialized);
+		}
+	}
+	
 	class DummyClient extends DHTClient {
 		DummyMessage msg;
 		DHTPeer reqPeer;
@@ -43,42 +86,9 @@ public class DHTPeerTest {
 			super.routingTable = this.routingTable = new DummyRoutingTable();
 			this.id = new DHTID(crypto.rng(crypto.hashLength()));
 			this.tagKey = new Key(crypto);
+			super.protocolManager = this.protocolManager = new DummyProtocolManager(this);
 		}
 		
-		@Override
-		protected DHTMessage pingMessage(DHTPeer recipient, DHTMessageCallback callback) {
-			reqId = id;
-			reqPeer = recipient;
-			return msg = new DummyMessage(recipient, DHTMessage.CMD_PING, new byte[0], callback);
-		}
-		
-		@Override
-		protected DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, Key lookupKey, DHTMessageCallback callback) {
-			reqId = id;
-			reqPeer = recipient;
-			reqKey = lookupKey;
-			return msg = new DummyMessage(recipient, DHTMessage.CMD_FIND_NODE, id.rawId, callback);
-		}
-		
-		@Override
-		protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, Key lookupKey, DHTRecord record, DHTMessageCallback callback) {
-			reqId = id;
-			reqRecord = record;
-			reqPeer = recipient;
-			reqKey = lookupKey;
-			
-			byte[] serializedRecord = record.serialize();
-			ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + serializedRecord.length + recipient.remoteAuthTag.length);
-			buf.put(recipient.remoteAuthTag);
-			buf.put(id.rawId);
-			buf.put(record.serialize());
-			return msg = new DummyMessage(recipient, DHTMessage.CMD_ADD_RECORD, buf.array(), callback);
-		}
-		
-		@Override
-		protected DHTRecord deserializeRecord(DHTPeer peer, ByteBuffer serialized) throws UnsupportedProtocolException {
-			return new DummyRecord(serialized);
-		}
 	}
 	
 	class DummyRecord extends DHTRecord {

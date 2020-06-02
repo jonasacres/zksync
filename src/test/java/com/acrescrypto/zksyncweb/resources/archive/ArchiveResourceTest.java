@@ -18,7 +18,6 @@ import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
 
-import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.glassfish.grizzly.http.server.HttpServer;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -38,7 +37,9 @@ import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.net.dht.DHTID;
+import com.acrescrypto.zksync.net.dht.DHTProtocolManager;
 import com.acrescrypto.zksync.net.dht.DHTClient;
+import com.acrescrypto.zksync.net.dht.DHTClient.LookupCallback;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.Main;
@@ -49,6 +50,34 @@ import com.acrescrypto.zksyncweb.data.XArchiveSpecification;
 import com.fasterxml.jackson.databind.JsonNode;
 
 public class ArchiveResourceTest {
+	class DummyProtocolManager extends DHTProtocolManager {
+		DummyClient client;
+		
+		public DummyProtocolManager(DummyClient client) {
+			super.client = this.client = client;
+		}
+
+		@Override
+		public void lookup(DHTID searchId, Key lookupKey, LookupCallback callback) {
+			client.called = true;
+		}
+	}
+	
+	class DummyClient extends DHTClient {
+		boolean called;
+		
+		DummyClient() {
+			this.protocolManager = new DummyProtocolManager(this);
+		}
+		
+		@Override
+		public boolean isInitialized() {
+			return true;
+		}
+		
+		@Override public void close() {}
+	};
+	
 	public final static String TESTDIR = "/tmp/zksync-test/archiveresourcetest";
 
 	private HttpServer server;
@@ -1097,27 +1126,12 @@ public class ArchiveResourceTest {
 	@SuppressWarnings("deprecation")
 	@Test
 	public void testPostDiscoverTriggersDHTSearch() throws IOException {
-		MutableBoolean called = new MutableBoolean();
-
-		class DummyClient extends DHTClient {
-			DummyClient() {
-				this.initialized = true;
-			}
-			
-			@Override
-			public void lookup(DHTID searchId, Key lookupKey, LookupCallback callback) {
-				called.setTrue();
-			}
-			
-			@Override public void close() {}
-		};
-		
 		DummyClient client = new DummyClient(); 
 		
 		State.sharedState().getMaster().getDHTClient().close();
 		State.sharedState().getMaster().setDHTClient(client);
 		WebTestUtils.requestPost(target, "archives/" + transformArchiveId(archive) + "/discover", null);
-		assertTrue(called.booleanValue());
+		assertTrue(client.called);
 	}
 	
 	@Test

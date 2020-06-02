@@ -25,13 +25,28 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class DHTRecordStoreTest {
 	class DummyClient extends DHTClient {
+		RAMFS storage;
+		
 		public DummyClient() {
 			this.storage = new RAMFS();
 			this.threadPool = GroupedThreadPool.newCachedThreadPool(Thread.currentThread().getThreadGroup(), "DummyClient");
 			this.crypto = CryptoSupport.defaultCrypto();
 			this.storageKey = new Key(crypto);
+			
+			super.protocolManager = this.protocolManager = new DummyProtocolManager(this);
 		}
-
+		
+		@Override
+		public RAMFS getStorage() { return storage; }
+	}
+	
+	class DummyProtocolManager extends DHTProtocolManager {
+		DummyClient client;
+		
+		public DummyProtocolManager(DummyClient client) {
+			super.client = this.client = client;
+		}
+		
 		@Override
 		protected DHTRecord deserializeRecord(DHTPeer peer, ByteBuffer serialized) throws UnsupportedProtocolException {
 			return new DummyRecord(serialized);
