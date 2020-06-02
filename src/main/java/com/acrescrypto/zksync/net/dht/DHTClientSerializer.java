@@ -46,7 +46,8 @@ public class DHTClientSerializer {
 	public void unlinkIfExists(String path) throws IOException {
 		try {
 			client.getStorage().unlink(path);
-		} catch(ENOENTException exc) {}
+		} catch(ENOENTException exc) {
+		}
 	}
 	
 	public byte[] serialize() {

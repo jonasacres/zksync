@@ -122,7 +122,7 @@ public class DHTClient {
 			// unable to read stored DHT client info; set up from scratch
 			privateKey = crypto.makePrivateDHKey();
 			tagKey     = new Key(crypto, crypto.makeSymmetricKey());
-			id         = new DHTID(socketManager.publicKey());
+			id         = new DHTID(getPublicKey());
 			
 			assert(id.rawId.length == idLength());
 			

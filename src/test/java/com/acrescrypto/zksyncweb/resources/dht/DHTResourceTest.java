@@ -22,6 +22,8 @@ import org.junit.Test;
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
+import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTID;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
@@ -48,33 +50,60 @@ public class DHTResourceTest {
 		DHTPeer addedPeer;
 
 		public DummyDHTClient() throws IOException {
-			this.crypto = CryptoSupport.defaultCrypto();
-			this.socketManager = new DHTSocketManager(this);
-			this.protocolManager = new DHTProtocolManager(this);
+			byte[] netKey        = State.sharedState().getMaster().getGlobalConfig().getString("net.dht.network").getBytes();
 			
-			this.socketManager.setMonitorRx(new DummyMonitor(1000));
-			this.socketManager.setMonitorTx(new DummyMonitor(2000));
-			this.store = new DummyDHTRecordStore();
-			this.routingTable = new DummyDHTRoutingTable(this);
+			this.master          = State.sharedState().getMaster();
+			this.crypto          = CryptoSupport.defaultCrypto();
+			
+			this.socketManager   = new DummyDHTSocketManager(this);
+			this.protocolManager = new DummyDHTProtocolManager(this);
+			this.store           = new DummyDHTRecordStore();
+			this.routingTable    = new DummyDHTRoutingTable(this);
 
-			this.privateKey = new PrivateDHKey(State.sharedCrypto());
-			this.id = new DHTID(privateKey.publicKey());
-			this.networkId = crypto.hash(State.sharedState().getMaster().getGlobalConfig().getString("net.dht.network").getBytes());
+			this.privateKey      = new PrivateDHKey(State.sharedCrypto());
+			this.id              = new DHTID(privateKey.publicKey());
+			this.networkId       = crypto.hash(netKey);
 			
 			this.socketManager.setBindPort(1234);
 			this.socketManager.setBindAddress("0.0.0.0");
+			this.socketManager.setMonitorRx(new DummyMonitor(1000));
+			this.socketManager.setMonitorTx(new DummyMonitor(2000));
 			
-			subscriptions.add(State.sharedState().getMaster().getGlobalConfig().subscribe("net.dht.network").asString((network)->{
+			subscriptions.add(master.getGlobalConfig().subscribe("net.dht.network").asString((network)->{
 				byte[] newNetworkId = crypto.hash(network.getBytes());
 				this.networkId = newNetworkId;
 			}));
 		}
-
+		
 		@Override public void close() { closed = true; closeSubscriptions(); }
-		@Override public void purge() { purged = true; }
+		@Override public void purge() throws IOException { purged = true; super.purge(); }
 		@Override public int numPendingRequests() { return 777; }
 		@Override public void addPeer(DHTPeer peer) { this.addedPeer = peer; }
 		@Override public boolean isEnabled() { return true; }
+		@Override public FS getStorage() {
+			try {
+				return State.sharedState().getMaster().getStorage();
+			} catch (IOException e) {
+				e.printStackTrace();
+				throw new RuntimeException(e);
+			}
+		}
+	}
+	
+	class DummyDHTSocketManager extends DHTSocketManager {
+		DummyDHTClient client;
+		
+		public DummyDHTSocketManager(DummyDHTClient client) {
+			super.client = this.client = client;
+		}
+	}
+	
+	class DummyDHTProtocolManager extends DHTProtocolManager {
+		DummyDHTClient client;
+		
+		public DummyDHTProtocolManager(DummyDHTClient client) {
+			super.client = this.client = client;
+		}
 	}
 
 	class DummyDHTRecordStore extends DHTRecordStore {
@@ -138,6 +167,7 @@ public class DHTResourceTest {
 		Util.setCurrentTimeMillis(0);
 
 		client = new DummyDHTClient();
+		State.sharedState().getMaster().getDHTClient().close();
 		State.sharedState().getMaster().setDHTClient(client);
 
 		basepath = "/dht/";
@@ -253,8 +283,11 @@ public class DHTResourceTest {
 
 	@Test
 	public void testRegenerateClearsRoutingTable() throws IOException {
+		ZKMaster master = State.sharedState().getMaster();
+		master.getGlobalConfig().set("net.dht.bootstrap.enabled", false);
+		
 		WebTestUtils.requestPost(target, basepath + "regenerate", null);
-		DHTClient newClient = State.sharedState().getMaster().getDHTClient();
+		DHTClient newClient = master.getDHTClient();
 		assertEquals(0, newClient.getRoutingTable().allPeers().size());
 	}
 

@@ -11,8 +11,6 @@ import java.nio.ByteBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.acrescrypto.zksync.crypto.PrivateDHKey;
-import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.Util;
 import com.dosse.upnp.UPnP;
@@ -34,7 +32,6 @@ public class DHTSocketManager {
 	protected BandwidthMonitor    monitorTx,
 	                              monitorRx;
 	protected DatagramSocket      socket;
-	protected PrivateDHKey        key;
 	protected String              bindAddress;
 	protected Thread              socketListenerThread;
 	protected boolean             paused;
@@ -45,8 +42,10 @@ public class DHTSocketManager {
 	public DHTSocketManager(DHTClient client) {
 		this.client = client;
 		
-		this.monitorTx = new BandwidthMonitor(client.getMaster().getBandwidthMonitorTx());
-		this.monitorRx = new BandwidthMonitor(client.getMaster().getBandwidthMonitorRx());
+		if(client.getMaster() != null) {
+			this.monitorTx = new BandwidthMonitor(client.getMaster().getBandwidthMonitorTx());
+			this.monitorRx = new BandwidthMonitor(client.getMaster().getBandwidthMonitorRx());
+		}
 	}
 	
 	protected DHTSocketManager() {}
@@ -69,7 +68,7 @@ public class DHTSocketManager {
 	}
 	
 	public void pause() {
-		paused = true;
+		paused   = true;
 		int port = getPort();
 		
 		if(socket != null) {
@@ -104,10 +103,6 @@ public class DHTSocketManager {
 	
 	public boolean isListening() {
 		return !paused && socket != null;
-	}
-	
-	public PublicDHKey publicKey() {
-		return key.publicKey();
 	}
 	
 	
@@ -166,7 +161,7 @@ public class DHTSocketManager {
 	}
 	
 	protected void socketListener() {
-		Util.setThreadName("DHTSocketManager socketListener " + Util.bytesToHex(key.publicKey().getBytes(), 4) + " " + getPort());
+		Util.setThreadName("DHTSocketManager socketListener " + Util.bytesToHex(client.getPublicKey().getBytes(), 4) + " " + getPort());
 		int lastPort = -1;
 		
 		while(!paused) {
@@ -241,14 +236,6 @@ public class DHTSocketManager {
 		}
 	}
 	
-	protected PrivateDHKey privateKey() {
-		return key;
-	}
-	
-	protected void setPrivateKey(PrivateDHKey key) {
-		this.key = key;
-	}
-
 	public BandwidthMonitor getMonitorRx() {
 		return monitorRx;
 	}

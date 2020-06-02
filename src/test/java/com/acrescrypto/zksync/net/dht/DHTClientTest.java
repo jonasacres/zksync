@@ -354,12 +354,12 @@ public class DHTClientTest {
 		
 		crypto = CryptoSupport.defaultCrypto();
 		
-		master = new DummyMaster();
+		master     = new DummyMaster();
 		storageKey = new Key(crypto);
-		client = new DHTClient(storageKey, master);
-		client.getProtocolManager().setAutofind(false);
-		remote = new RemotePeer();
+		client     = new DHTClient(storageKey, master);
+		remote     = new RemotePeer();
 		
+		client.getProtocolManager().setAutofind(false);
 		client.addPeer(remote.peer);
 		client.listen("127.0.0.1", 0);
 		
@@ -403,17 +403,26 @@ public class DHTClientTest {
 	public void testConstructorWithExistingData() {
 		DHTClient client1 = new DHTClient(storageKey, master);
 
-		assertEquals(master.getBlacklist(), client1.getBlacklist());
-		assertEquals(storageKey, client1.storageKey);
-		assertEquals(master.getBlacklist().getFS(), client1.getStorage());
-		assertEquals(crypto, client1.crypto);
-		assertNotNull(client1.routingTable);
-		assertNotNull(client1.store);
+		assertEquals     (master .getBlacklist(),
+				          client1.getBlacklist());
+		assertEquals     (this   .storageKey,
+				          client1.storageKey);
+		assertEquals     (master .getBlacklist().getFS(),
+				          client1.getStorage());
+		assertEquals     (this   .crypto,
+				          client1.crypto);
+		assertNotNull    (client1.routingTable);
+		assertNotNull    (client1.store);
 		
-		assertArrayEquals(client.getPrivateKey().getBytes(), client1.getPrivateKey().getBytes());
-		assertArrayEquals(client.getPublicKey().getBytes(), client1.getPrivateKey().getBytes());
-		assertArrayEquals(client.tagKey.getRaw(), client1.tagKey.getRaw());
-		assertEquals(client.id, client1.id);
+		assertArrayEquals(client .getPrivateKey().getBytes(),
+				          client1.getPrivateKey().getBytes());
+		assertArrayEquals(client .getPublicKey() .getBytes(),
+				          client1.getPublicKey() .getBytes());
+		assertArrayEquals(client .tagKey.getRaw(),
+				          client1.tagKey.getRaw());
+		
+		assertEquals      (client.id,
+				          client1.id);
 		
 		client1.close();
 	}

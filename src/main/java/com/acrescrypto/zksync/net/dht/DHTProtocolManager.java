@@ -43,7 +43,7 @@ public class DHTProtocolManager {
 		return new DHTPeer(client,
 				client.getSocketManager().getBindAddress(),
 				client.getSocketManager().getPort(),
-				client.getSocketManager().publicKey().getBytes()
+				client.getPublicKey().getBytes()
 			);
 	}
 	
@@ -123,7 +123,7 @@ public class DHTProtocolManager {
 			
 			for(DHTPeer peer : peers) {
 				boolean keysMatch = Arrays.equals(
-						client.getSocketManager().publicKey().getBytes(),
+						client.getPublicKey().getBytes(),
 						peer.key.getBytes()
 					);
 				if(keysMatch) {

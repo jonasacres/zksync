@@ -61,9 +61,7 @@ public class DHTSearchOperation {
 	public synchronized DHTSearchOperation run() {
 		if(cancelled) return this;
 		
-		System.out.println("Set timeout for " + searchQueryTimeoutMs);
 		this.timeout = new SnoozeThread(searchQueryTimeoutMs, maxSearchQueryWaitTimeMs, true, ()->{
-			System.out.println("Timeout fired, cancelled=" + cancelled);
 			if(cancelled) return;
 			peerCallback.searchOperationFinished(this, closestPeers);
 		});
