@@ -109,6 +109,7 @@ public class DHTSocketManager {
 	
 	protected void openSocket() throws SocketException {
 		if(paused) return;
+		
 		InetAddress addr;
 		try {
 			addr = InetAddress.getByName(bindAddress);
@@ -117,6 +118,7 @@ public class DHTSocketManager {
 		}
 		
 		client.updateStatus(DHTClient.STATUS_ESTABLISHING);
+		
 		if(socket != null && !socket.isClosed()) {
 			int oldPort = socket.getLocalPort();
 			socket.close();
@@ -127,9 +129,10 @@ public class DHTSocketManager {
 		}
 		
 		try {
+			int expectedPort = client.getMaster().getGlobalConfig().getInt("net.dht.port");
 			socket = new DatagramSocket(bindPort, addr);
 			socket.setReuseAddress(true);
-			if(socket.getLocalPort() != client.getMaster().getGlobalConfig().getInt("net.dht.port")) {
+			if(socket.getLocalPort() != expectedPort) {
 				client.getMaster().getGlobalConfig().set("net.dht.port", socket.getLocalPort());
 			}
 			
@@ -217,7 +220,17 @@ public class DHTSocketManager {
 				break;
 			} catch (IOException exc) {
 				// TODO API: (coverage) exception
+				System.out.printf("Packet: %s:%d\n",
+						packet.getAddress().toString(),
+						packet.getPort());
+				System.out.printf("Socket: bound=%s, connected=%s, closed=%s, port=%d, interface=%s\n",
+						socket.isBound(),
+						socket.isConnected(),
+						socket.isClosed(),
+						socket.getLocalPort(),
+						socket.getLocalSocketAddress());
 				if(paused) return;
+				exc.printStackTrace();
 				if(i == 0) {
 					logger.warn("DHT {}:{}: Encountered exception sending on DHT socket; retrying",
 							packet.getAddress().getHostAddress(),
