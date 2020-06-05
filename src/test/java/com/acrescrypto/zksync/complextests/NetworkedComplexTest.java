@@ -156,7 +156,7 @@ public class NetworkedComplexTest {
 				new LocalFS(encryptedDataPath(peerName)));
 		master.setName(peerName);
 		master.getGlobalConfig().set("net.swarm.enabled", true);
-		master.activateDHT("127.0.0.1", 0, dhtRoot.getDHTClient().getProtocolManager().getLocalPeer());
+		master.activateDHTForTest("127.0.0.1", 0, dhtRoot.getDHTClient().getProtocolManager().getLocalPeer());
 		ZKArchive archive = master.createDefaultArchive("NetworkedComplexTest".getBytes());
 		archive.getConfig().advertise();
 		return archive.getConfig();

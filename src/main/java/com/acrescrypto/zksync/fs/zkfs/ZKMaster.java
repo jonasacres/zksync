@@ -17,6 +17,7 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor.ArchiveAccessorDiscoveryCallback;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
 import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.TCPPeerSocketListener;
@@ -109,7 +110,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 		this.storage = storage;
 		
 		this.globalConfig = new ConfigFile(storage, "config.json");
-		setupDefaultConfig();
+		globalConfig.apply(ConfigDefaults.getActiveDefaults());
 		setupSubscriptions();
 		setupBandwidth();
 		
@@ -301,11 +302,11 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 	}
 	
 	@Deprecated
-	/** @deprecated use net.dht.enabled config property instead */
-	public void activateDHT(String address, int port, DHTPeer root) throws SocketException {
+	/** @deprecated use net.dht.enabled config property instead for production use */
+	public void activateDHTForTest(String address, int port, DHTPeer root) throws SocketException {
 		// this basically exists just to avoid rewriting all the tests now.
-		dhtClient.listen(address, port);
 		dhtClient.addPeer(root);
+		dhtClient.listen(address, port);
 	}
 
 	protected void loadStoredAccessors() {
@@ -400,67 +401,6 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 		return globalConfig;
 	}
 	
-	protected void setupDefaultConfig() {
-		globalConfig.setDefault("crypto.pbkdf.maxsimultaneous", 1);
-		
-		globalConfig.setDefault("net.dht.enabled", true);
-		globalConfig.setDefault("net.dht.bindaddress", "0.0.0.0");
-		globalConfig.setDefault("net.dht.port", 0);
-		globalConfig.setDefault("net.dht.upnp", false);
-		globalConfig.setDefault("net.dht.network", "easysafe");
-		
-		globalConfig.setDefault("net.dht.bootstrap.enabled", true);
-		globalConfig.setDefault("net.dht.bootstrap.host", "dht1.easysafe.io");
-		globalConfig.setDefault("net.dht.bootstrap.port", 49921);
-		globalConfig.setDefault("net.dht.bootstrap.key", "+y+OStBfRsEE3L51aVoJIHX6C+FYcBYN+MVqz+/zFXE=");
-		
-		globalConfig.setDefault("net.dht.discoveryintervalms", DHTZKArchiveDiscovery.DEFAULT_DISCOVERY_INTERVAL_MS);
-		globalConfig.setDefault("net.dht.advertisementintervalms", DHTZKArchiveDiscovery.DEFAULT_ADVERTISEMENT_INTERVAL_MS);
-		
-		globalConfig.setDefault("net.swarm.enabled", false);
-		globalConfig.setDefault("net.swarm.bindaddress", "0.0.0.0");
-		globalConfig.setDefault("net.swarm.backlog", 50);
-		globalConfig.setDefault("net.swarm.port", 0);
-		globalConfig.setDefault("net.swarm.upnp", false);
-		globalConfig.setDefault("net.swarm.maxOpenMessages", 16);
-		globalConfig.setDefault("net.swarm.rejectionCacheSize", 16);
-		globalConfig.setDefault("net.swarm.pageSendAvailabilityTimeoutMs", 1000);
-		
-		globalConfig.setDefault("fs.default.fileMode", 0644);
-		globalConfig.setDefault("fs.default.username", "root");
-		globalConfig.setDefault("fs.default.uid", 0);
-		globalConfig.setDefault("fs.default.groupname", "root");
-		globalConfig.setDefault("fs.default.gid", 0);
-		globalConfig.setDefault("fs.default.directoryMode", 0755);
-		globalConfig.setDefault("fs.settings.maxOpenBlocks", 4);
-		
-		globalConfig.setDefault("fs.settings.pageReadyMaxRetries", 50);
-		globalConfig.setDefault("fs.settings.pageReadyRetryDelayMs", 10);
-		globalConfig.setDefault("fs.settings.pageTreeChunkCacheSize", 16);
-		globalConfig.setDefault("fs.settings.directoryCacheSize", 128);
-		globalConfig.setDefault("fs.settings.inodeTablePageCacheSize", 16);
-		globalConfig.setDefault("fs.settings.revisionTreeCacheSize", 256);
-		globalConfig.setDefault("fs.settings.readOnlyFilesystemCacheSize", 64);
-		globalConfig.setDefault("fs.settings.mergeRevisionAcquisitionMaxWaitMs", 30000);
-		globalConfig.setDefault("fs.settings.automergeDelayMs", 10000);
-		globalConfig.setDefault("fs.settings.maxAutomergeDelayMs", 60000);
-		globalConfig.setDefault("fs.settings.maxAutomergeAcquireWaitTimeMs", 60000);
-		globalConfig.setDefault("fs.settings.revtagHasLocalCacheTimeout", 60000);
-		
-		globalConfig.setDefault("fs.settings.mirror.pathSquelchPeriodMs", 100);
-		globalConfig.setDefault("fs.settings.mirror.zkfsToHostSyncDelayMs", 100);
-		globalConfig.setDefault("fs.settings.mirror.zkfsToHostSyncMaxDelayMs", 1000);
-		
-		globalConfig.setDefault("fs.fileHandleTelemetry", FS.fileHandleTelemetryEnabled);
-		
-		globalConfig.setDefault("net.limits.tx", -1);
-		globalConfig.setDefault("net.limits.rx", -1);
-		
-		globalConfig.setDefault("log.includeLogRequests", false);
-		globalConfig.setDefault("log.historyDepth", MemLogAppender.sharedInstance().getHistoryDepth());
-		globalConfig.setDefault("log.threshold", MemLogAppender.sharedInstance().getThreshold());
-	}
-	
 	protected void setupSubscriptions() {
 		globalConfig.subscribe("fs.fileHandleTelemetry").asBoolean((enabled)->FS.fileHandleTelemetryEnabled = enabled);
 		globalConfig.subscribe("net.limits.tx").asLong((v)->bandwidthAllocatorTx.setBytesPerSecond(v));
@@ -476,8 +416,8 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 	}
 	
 	protected void setupBandwidth() {
-		bandwidthMonitorTx = new BandwidthMonitor(100, 3000);
-		bandwidthMonitorRx = new BandwidthMonitor(100, 3000);
+		bandwidthMonitorTx   = new BandwidthMonitor  (100, 3000);
+		bandwidthMonitorRx   = new BandwidthMonitor  (100, 3000);
 		bandwidthAllocatorTx = new BandwidthAllocator(globalConfig.getLong("net.limits.tx"));
 		bandwidthAllocatorRx = new BandwidthAllocator(globalConfig.getLong("net.limits.rx"));
 	}

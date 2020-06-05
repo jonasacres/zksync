@@ -113,11 +113,12 @@ public class DHTRoutingTable {
 		}
 		
 		DHTPeer insertablePeer = new DHTPeer(client, peer.address, peer.port, peer.key);
-		insertablePeer.id = new DHTID(peer.id.rawId.clone()); // some tests hijack this field, so we'll respect that
+		insertablePeer.id      = new DHTID(peer.id.rawId.clone()); // some tests hijack this field, so we'll respect that
 		insertablePeer.setPinned(peer.isPinned());
 		
-		int order = insertablePeer.id.xor(client.id).order();
-		DHTBucket bucket = buckets.get(order+1);              // add 1 since an exact match has order -1
+		int order        = insertablePeer.id.xor(client.id).order();
+		DHTBucket bucket = buckets.get(order+1); // add 1 since an exact match has order -1
+		
 		if(bucket.hasCapacity()) {
 			bucket.add(insertablePeer, lastSeen);
 			allPeers.add(insertablePeer);

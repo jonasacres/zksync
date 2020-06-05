@@ -53,6 +53,12 @@ public class BandwidthMonitor {
 		this.startTime = Util.currentTimeMillis();
 		this.addParent(parent);
 	}
+	
+	public void clear() {
+		this.samples.clear();
+		this.currentSample = null;
+		this.lastRecalculationTime = 0;
+	}
 
 	public long observeTraffic(long bytes) {
 		if(bytes <= 0) return bytes; // passthrough without doing anything
@@ -78,7 +84,11 @@ public class BandwidthMonitor {
 	}
 	
 	protected synchronized void recalculate() {
-		long totalSeen = 0, oldestTimestamp = Math.max(startTime, Util.currentTimeMillis()-sampleExpirationMs);
+		long totalSeen       = 0,
+			 oldestTimestamp = Math.max(
+						startTime,
+						Util.currentTimeMillis() - sampleExpirationMs
+					);
 		
 		samples.removeIf((sample)->sample.isExpired());
 		if(currentSample != null && currentSample.isExpired()) {

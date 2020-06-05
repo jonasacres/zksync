@@ -21,6 +21,7 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
 import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
@@ -36,7 +37,7 @@ public class DHTModuleTest {
 			this.storage = new RAMFS();
 			this.blacklist = new Blacklist(storage, "blacklist", new Key(crypto));
 			this.globalConfig = new ConfigFile(storage, "config.json");
-			setupDefaultConfig();
+			globalConfig.apply(ConfigDefaults.getActiveDefaults());
 			setupBandwidth();
 		}
 		
@@ -87,6 +88,9 @@ public class DHTModuleTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
+		ConfigDefaults.getActiveDefaults().set("net.dht.enabled", false);
+		ConfigDefaults.getActiveDefaults().set("net.dht.bootstrap.enabled", false);
+		
 		TestUtils.startDebugMode();
 		TCPPeerAdvertisement.disableReachabilityTest = true;
 		// DHTRoutingTable.freshenIntervalMs = 400;
@@ -118,6 +122,7 @@ public class DHTModuleTest {
 	@AfterClass
 	public static void afterAll() {
 		Util.waitUntil(1000, ()->TestUtils.isTidy()); // add a ton of grace time to wrap up threads on this test
+		ConfigDefaults.resetDefaults();
 		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 		TCPPeerAdvertisement.disableReachabilityTest = false;

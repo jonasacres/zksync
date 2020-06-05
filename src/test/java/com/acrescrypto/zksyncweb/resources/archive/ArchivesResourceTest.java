@@ -108,7 +108,7 @@ public class ArchivesResourceTest {
 		assertArrayEquals(storedConfig.getArchiveId(), resp.get("archiveId").binaryValue());
 
 		JsonNode xconfig = resp.get("config");
-		assertEquals(false, xconfig.get("advertising").asBoolean());
+		
 		assertEquals(false, xconfig.get("requestingAll").asBoolean());
 		assertEquals(false, xconfig.get("autocommit").asBoolean());
 		assertEquals(false, xconfig.get("autofollow").asBoolean());

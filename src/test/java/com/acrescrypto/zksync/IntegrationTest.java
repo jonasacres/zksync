@@ -22,6 +22,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
 import com.acrescrypto.zksync.net.dht.DHTSearchOperation;
@@ -70,7 +71,7 @@ public class IntegrationTest {
 	@SuppressWarnings("deprecation")
 	void activateDHT(ZKMaster master, ZKArchiveConfig config) throws IOException {
 		master.getGlobalConfig().set("net.swarm.enabled", true);
-		master.activateDHT("127.0.0.1", 0, root);
+		master.activateDHTForTest("127.0.0.1", 0, root);
 		config.advertise();
 		config.getRevisionList().automergeDelayMs = 5;
 		config.getRevisionList().maxAutomergeDelayMs = 100;
@@ -107,6 +108,9 @@ public class IntegrationTest {
 	
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
+		ConfigDefaults.getActiveDefaults().set("net.dht.bootstrap.enabled", false);
+		ConfigDefaults.getActiveDefaults().set("net.dht.enabled", false);
+		
 		crypto = CryptoSupport.defaultCrypto();
 		rootMaster = ZKMaster.openBlankTestVolume();
 		rootClient = rootMaster.getDHTClient();
@@ -118,6 +122,7 @@ public class IntegrationTest {
 	@After
 	public void afterEach() {
 		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
+		ConfigDefaults.resetDefaults();
 		rootClient.close();
 		rootMaster.close();
 	}
@@ -139,7 +144,7 @@ public class IntegrationTest {
 			masters[i] = ZKMaster.openBlankTestVolume("test"+i);
 			archives[i] = masters[i].createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "test"+i);
 			masters[i].getGlobalConfig().set("net.swarm.enabled", true);
-			masters[i].activateDHT("127.0.0.1", 0, root);
+			masters[i].activateDHTForTest("127.0.0.1", 0, root);
 			archives[i].getConfig().advertise();
 			
 			ZKFS fs = archives[i].openBlank();
@@ -153,7 +158,7 @@ public class IntegrationTest {
 		// make a new master and look for that passphrase on the DHT and expect to find all of them
 		ZKMaster blankMaster = ZKMaster.openBlankTestVolume("blank");
 		blankMaster.getGlobalConfig().set("net.swarm.enabled", true);
-		blankMaster.activateDHT("127.0.0.1", 0, root);
+		blankMaster.activateDHTForTest("127.0.0.1", 0, root);
 		ArchiveAccessor accessor = blankMaster.makeAccessorForPassphrase("zksync".getBytes());
 		accessor.discoverOnDHT();
 
@@ -192,7 +197,7 @@ public class IntegrationTest {
 		ZKMaster originalMaster = ZKMaster.openBlankTestVolume("original");
 		ZKArchive originalArchive = originalMaster.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "an archive");
 		originalMaster.getGlobalConfig().set("net.swarm.enabled", true);
-		originalMaster.activateDHT("127.0.0.1", 0, root);
+		originalMaster.activateDHTForTest("127.0.0.1", 0, root);
 		originalArchive.getConfig().advertise();
 		byte[] archiveId = originalArchive.getConfig().getArchiveId();
 
@@ -211,7 +216,7 @@ public class IntegrationTest {
 		ZKMaster seedMaster = ZKMaster.openBlankTestVolume("seed");
 		ArchiveAccessor seedAccessor = seedMaster.makeAccessorForRoot(originalArchive.getConfig().getAccessor().getSeedRoot(), true);
 		seedMaster.getGlobalConfig().set("net.swarm.enabled", true);
-		seedMaster.activateDHT("127.0.0.1", 0, root);
+		seedMaster.activateDHTForTest("127.0.0.1", 0, root);
 		seedAccessor.discoverOnDHT();
 		assertTrue(Util.waitUntil(3000, ()->seedAccessor.configWithId(archiveId) != null));
 		
@@ -229,7 +234,7 @@ public class IntegrationTest {
 		ZKMaster cloneMaster = ZKMaster.openBlankTestVolume("clone");
 		Util.sleep(1000);
 		cloneMaster.getGlobalConfig().set("net.swarm.enabled", true);
-		cloneMaster.activateDHT("127.0.0.1", 0, root);
+		cloneMaster.activateDHTForTest("127.0.0.1", 0, root);
 		ArchiveAccessor cloneAccessor = cloneMaster.makeAccessorForPassphrase("zksync".getBytes());
 		cloneAccessor.discoverOnDHT();
 		assertTrue(Util.waitUntil(3000, ()->cloneAccessor.configWithId(archiveId) != null));
@@ -376,7 +381,7 @@ public class IntegrationTest {
 		createInitialCommit(separateArch, masters.length);
 		
 		separate.getGlobalConfig().set("net.swarm.enabled", true);
-		separate.activateDHT("127.0.0.1", 0, root);
+		separate.activateDHTForTest("127.0.0.1", 0, root);
 		separate.getTCPListener().advertise(separateArch.getConfig().getSwarm());
 		separateArch.getConfig().getAccessor().discoverOnDHT();
 		separateArch.getConfig().getRevisionList().automergeDelayMs = archives[0].getConfig().getRevisionList().automergeDelayMs;

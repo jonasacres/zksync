@@ -286,6 +286,7 @@ public class WebTestUtils {
 	}
 
 	public static void rigMonitors(BandwidthMonitor[] monitors, int targetBytesPerSecond) {
+		
 		int expMs = monitors[0].getSampleExpirationMs();
 		double expSecs = expMs / 1000.0;
 		long bytesPerInterval = (long) (targetBytesPerSecond * expSecs);
@@ -293,9 +294,10 @@ public class WebTestUtils {
 		Util.setCurrentTimeMillis(Util.currentTimeMillis() + expMs - 1);
 
 		for(BandwidthMonitor monitor : monitors) {
+			monitor.clear();
 			monitor.observeTraffic(bytesPerInterval);
 		}
-
+		
 		Util.setCurrentTimeMillis(Util.currentTimeMillis() + expMs - 1);
 	}
 }

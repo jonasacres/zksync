@@ -63,8 +63,6 @@ public class DHTSocketManager {
 			socketListenerThread = new Thread(client.getThreadGroup(), ()->socketListener());
 			socketListenerThread.start();
 		}
-		
-		client.getProtocolManager().autoFindPeers();
 	}
 	
 	public void pause() {
@@ -170,6 +168,7 @@ public class DHTSocketManager {
 		while(!paused) {
 			try {
 				if(socket == null) {
+					System.out.println("Waiting for socket to open");
 					Util.sleep(10);
 					continue;
 				}

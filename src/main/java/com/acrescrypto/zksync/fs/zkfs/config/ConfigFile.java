@@ -38,6 +38,10 @@ public class ConfigFile {
 	protected Logger logger = LoggerFactory.getLogger(ConfigFile.class);
 	protected boolean autowriteEnabled = true;
 	
+	public ConfigFile() {
+		this.autowriteEnabled = false;
+	}
+	
 	public ConfigFile(FS storage, String path) throws IOException {
 		this.storage = storage;
 		this.path = path;
@@ -56,10 +60,14 @@ public class ConfigFile {
 	
 	protected void deserialize(byte[] serialized) {
 		info.clear();
+		applySerializedConfig(serialized);
+	}
+	
+	protected void applySerializedConfig(byte[] serialized) {
 		JsonReader reader = Json.createReader(new StringReader(new String(serialized)));
 		JsonObject json = reader.readObject();
 		
-		logger.info("Deserializing ConfigFile\n{}", new String(serialized));
+		logger.info("Applying serialized ConfigFile\n{}", new String(serialized));
 		
 		boolean oldAutowriteEnabled = autowriteEnabled;
 		this.autowriteEnabled = false; // don't rewrite config when calling set()
@@ -91,6 +99,8 @@ public class ConfigFile {
 	}
 	
 	protected synchronized void writeQuietly() {
+		if(!autowriteEnabled) return;
+		
 		try {
 			write();
 		} catch(IOException exc) {
@@ -278,6 +288,14 @@ public class ConfigFile {
 		}
 		
 		return r;
+	}
+	
+	public void apply(ConfigFile other) {
+		other.defaults.forEach((key, value) -> {
+			this.setDefault(key, value);
+		});
+		
+		this.applySerializedConfig(other.serialize());
 	}
 	
 	public SubscriptionService getSubsciptionService() {

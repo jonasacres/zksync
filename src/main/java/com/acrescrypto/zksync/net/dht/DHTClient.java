@@ -143,7 +143,7 @@ public class DHTClient {
 			
 			if(enabled) {
 				try {
-					socketManager.listen(
+					listen(
 							socketManager.getBindAddress(),
 							master.getGlobalConfig().getInt("net.dht.port")
 						);
@@ -201,7 +201,7 @@ public class DHTClient {
 	
 	protected void start() {
 		String addr = master.getGlobalConfig().getString("net.dht.bindaddress");
-		int port    = master.getGlobalConfig().getInt   ("net.dht.port");
+		int    port = master.getGlobalConfig().getInt   ("net.dht.port");
 		
 		try {
 			listen(addr, port);
@@ -242,6 +242,7 @@ public class DHTClient {
 	
 	public DHTClient listen(String address, int port) throws SocketException {
 		socketManager.listen(address, port);
+		protocolManager.autoFindPeers();
 		return this;
 	}
 	

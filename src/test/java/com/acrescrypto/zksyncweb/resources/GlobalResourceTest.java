@@ -60,7 +60,12 @@ public class GlobalResourceTest {
 
 		master = State.sharedState().getMaster();
 		Util.setCurrentTimeMillis(0);
-		WebTestUtils.rigMonitors(new BandwidthMonitor[] { master.getBandwidthMonitorRx(), master.getBandwidthMonitorTx() }, 1000);
+		WebTestUtils.rigMonitors(
+			new BandwidthMonitor[] {
+				master.getBandwidthMonitorRx(),
+				master.getBandwidthMonitorTx(),
+			},
+			1000);
 	}
 
 	@After
