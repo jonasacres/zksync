@@ -3,27 +3,27 @@ package com.acrescrypto.zksyncweb.data;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
 
 public class XDHTPeerInfo {
-	private byte[] id;
-	private byte[] pubKey;
+	private byte[]  id;
+	private byte[]  pubKey;
 	private Integer port;
-	private String address;
+	private String  address;
 	
 	private Integer missedMessages;
-	private Long lastSeen;
+	private Long    lastSeen;
 	private boolean pinned;
 	
 	private String status;
 	
 	public XDHTPeerInfo(DHTPeer peer) {
-		this.id = peer.getId().serialize();
-		this.pubKey = peer.getKey().getBytes();
-		this.port = peer.getPort();
-		this.address = peer.getAddress();
+		this.id             = peer.getId().serialize();
+		this.pubKey         = peer.getKey().getBytes();
+		this.port           = peer.getPort();
+		this.address        = peer.getAddress();
 		this.missedMessages = peer.getMissedMessages();
-		this.lastSeen = peer.getLastSeen();
-		this.pinned = peer.isPinned();
+		this.lastSeen       = peer.getLastSeen();
+		this.pinned         = peer.isPinned();
 		
-		if(peer.isBad()) {
+		if       (peer.isBad()) {
 			this.setStatus("bad");
 		} else if(peer.isQuestionable()) {
 			this.setStatus("questionable");

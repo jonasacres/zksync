@@ -3,6 +3,8 @@ package com.acrescrypto.zksyncweb.resources.dht;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -12,6 +14,7 @@ import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.WebTarget;
 
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.glassfish.grizzly.http.server.HttpServer;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -134,6 +137,7 @@ public class DHTResourceTest {
 
 			Util.setCurrentTimeMillis(i*100000);
 			peer.acknowledgedMessage();
+			
 			for(int j = 0; j < i; j++) peer.missedMessage();
 
 			return peer;
@@ -298,4 +302,48 @@ public class DHTResourceTest {
 		DHTClient newClient = State.sharedState().getMaster().getDHTClient();
 		assertArrayEquals(client.getNetworkId(), newClient.getNetworkId());
 	}
+	
+	@Test
+	public void testPeerFileIncludesNetworkId() throws IOException {
+		byte[] networkId = WebTestUtils
+			.requestGet(target, basepath + "peerfile")
+			.get("networkId")
+			.binaryValue();
+		assertArrayEquals(client.getNetworkId(), networkId);
+	}
+	
+	@Test
+	public void testPeerFileIncludesSelf() throws IOException {
+		MutableBoolean found = new MutableBoolean();
+		
+		WebTestUtils
+			.requestGet(target, basepath + "peerfile")
+			.get("peers")
+			.elements()
+			.forEachRemaining((peer)-> {
+				try {
+					byte[] id              = peer.get("id")     .binaryValue();
+					byte[] pubKey          = peer.get("pubKey") .binaryValue();
+					int    port            = peer.get("port")   .asInt();
+					String addr            = peer.get("address").asText();
+					
+					String expectedAddress = client.getProtocolManager().getLocalPeer().getAddress();
+				
+					if(!Arrays.equals(pubKey, client.getPublicKey().getBytes())) return;
+					assertArrayEquals(client.getId().serialize(), id);
+					assertEquals     (client.getPort(),           port);
+					assertEquals     (expectedAddress,            addr);
+					
+					found.setTrue();
+				} catch(IOException exc) {
+					fail();
+				}
+			});
+		
+		assertTrue(found.booleanValue());
+	}
+	
+	// TODO: testPeerFileIncludesGoodPeers
+	// TODO: testPeerFileDoesNotIncludeBadPeers
+	// TODO: testPeerFileDoesNotIncludeQuestionablePeers
 }

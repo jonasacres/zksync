@@ -16,6 +16,7 @@ import com.acrescrypto.zksync.net.dht.DHTPeer;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 import com.acrescrypto.zksyncweb.data.XDHTInfo;
+import com.acrescrypto.zksyncweb.data.XDHTPeerFile;
 import com.acrescrypto.zksyncweb.data.XDHTPeerInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -25,6 +26,14 @@ public class DHTResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	public XAPIResponse getDht() throws IOException {
 		throw XAPIResponse.withPayload(new XDHTInfo(State.sharedState().getMaster().getDHTClient()));
+	}
+	
+	@GET
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("peerfile")
+	public XAPIResponse getDhtPeerFile() throws IOException {
+		XDHTPeerFile peerFile = new XDHTPeerFile(State.sharedState().getMaster().getDHTClient()); 
+		throw XAPIResponse.withPayload(peerFile);
 	}
 	
 	@GET
