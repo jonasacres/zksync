@@ -26,14 +26,13 @@ public class ConfigDefaults {
 		
 		config.setDefault("net.dht.enabled",           true);
 		config.setDefault("net.dht.bindaddress",  "0.0.0.0");
+		config.setDefault("net.dht.localaddress", "0.0.0.0");
 		config.setDefault("net.dht.port",                 0);
 		config.setDefault("net.dht.upnp",             false);
 		config.setDefault("net.dht.network",     "easysafe");
 		
-		config.setDefault("net.dht.bootstrap.enabled", true);
-		config.setDefault("net.dht.bootstrap.host",    "dht1.easysafe.io");
-		config.setDefault("net.dht.bootstrap.port",    49921);
-		config.setDefault("net.dht.bootstrap.key",     "+y+OStBfRsEE3L51aVoJIHX6C+FYcBYN+MVqz+/zFXE=");
+		config.setDefault("net.dht.bootstrap.enabled",   true);
+		config.setDefault("net.dht.bootstrap.peerfile",  "http://dht1.easysafe.io/dht/peerfile");
 		
 		config.setDefault("net.dht.discoveryintervalms",      DHTZKArchiveDiscovery.DEFAULT_DISCOVERY_INTERVAL_MS);
 		config.setDefault("net.dht.advertisementintervalms",  DHTZKArchiveDiscovery.DEFAULT_ADVERTISEMENT_INTERVAL_MS);

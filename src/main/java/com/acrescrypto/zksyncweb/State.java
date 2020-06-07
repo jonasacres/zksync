@@ -69,7 +69,9 @@ public class State implements AutoCloseable {
 	
 	public static State setTestState() throws IOException {
 		clearState();
-		return sharedState = new State(defaultPassphrase(), new RAMFS());
+		sharedState = new State(defaultPassphrase(), new RAMFS());
+		
+		return sharedState;
 	}
 	
 	public static void resetState() throws IOException {

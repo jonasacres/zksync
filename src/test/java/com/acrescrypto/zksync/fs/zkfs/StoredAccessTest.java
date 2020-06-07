@@ -16,6 +16,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
 
 public class StoredAccessTest {
 	ZKMaster master;
@@ -24,6 +25,9 @@ public class StoredAccessTest {
 	public static void beforeClass() throws IOException {
 		Security.addProvider(new BouncyCastleProvider());
 		TestUtils.startDebugMode();
+		
+		// disable dht so we don't have to worry about rebinding port numbers when cloning ZKMaster
+		ConfigDefaults.getActiveDefaults().setDefault("net.dht.enabled", false);
 	}
 	
 	@AfterClass
@@ -128,16 +132,18 @@ public class StoredAccessTest {
 	
 	@Test
 	public void testPurge() throws IOException {
-		ZKArchiveConfig config = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "").config;
-		master.storedAccess.storeArchiveAccess(config, StoredAccess.ACCESS_LEVEL_READWRITE);
-		assertTrue(master.allConfigs().contains(config));
-		master.storedAccess.purge();
-		assertFalse(master.allConfigs().contains(config));
+		try(
+				ZKArchive       archive = master.createArchive(ZKArchive.DEFAULT_PAGE_SIZE, "");
+				ZKArchiveConfig  config = archive.config;
+		) {
+			master.storedAccess.storeArchiveAccess(config, StoredAccess.ACCESS_LEVEL_READWRITE);
+			assertTrue(master.allConfigs().contains(config));
+			master.storedAccess.purge();
+			assertFalse(master.allConfigs().contains(config));
 
-		ZKMaster clone = ZKMaster.openTestVolume();
-		assertFalse(clone.allConfigs().contains(config));
-		
-		config.close();
-		clone.close();
-}
+			try(ZKMaster clone = ZKMaster.openTestVolume()) {
+				assertFalse(clone.allConfigs().contains(config));
+			}
+		}
+	}
 }

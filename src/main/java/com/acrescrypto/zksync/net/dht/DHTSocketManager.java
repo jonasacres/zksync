@@ -263,4 +263,8 @@ public class DHTSocketManager {
 	public void setMonitorTx(BandwidthMonitor monitorTx) {
 		this.monitorTx = monitorTx;
 	}
+
+	public String getLocalAddress() {
+		return client.getMaster().getGlobalConfig().getString("net.dht.localaddress");
+	}
 }

@@ -337,6 +337,7 @@ public class ZKFSManagerTest {
 	
 	@Test
 	public void testSyncsArchiveToMirrorTargetIfAutofollowEnabled() throws IOException {
+		// Noticed a test fail here while troubleshooting other stuff.. possible ITF? 2020-06-06
 		manager.setAutofollow(true);
 		manager.setAutomirrorPath(mirrorFs.getRoot());
 

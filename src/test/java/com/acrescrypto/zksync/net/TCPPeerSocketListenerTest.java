@@ -14,6 +14,7 @@ import java.net.UnknownHostException;
 import java.net.ConnectException;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -90,28 +91,41 @@ public class TCPPeerSocketListenerTest {
 	}
 	
 	protected void assertSocketClosed(Socket socket, boolean immediate) {
-		class Holder { boolean closed; }
-		Holder holder = new Holder();
+		MutableBoolean closed = new MutableBoolean();
 		
 		Thread thread = new Thread(()-> {
 			try {
 				IOUtils.readFully(socket.getInputStream(), new byte[1]);
 			} catch (IOException e) {
-				holder.closed = true;
+				closed.setTrue();
 			}
 		});
 		
 		long startTime = System.currentTimeMillis();
 		thread.start();
 		try {
-			thread.join(TCPPeerSocket.socketCloseDelay+50);
+			thread.join(TCPPeerSocket.socketCloseDelay + 50);
 		} catch (InterruptedException exc) {}
 		
 		if(!immediate) {
-			// we should have waited about as long as the close delay, with a couple seconds knocked off to account for the time to get here
-			assertTrue(System.currentTimeMillis() - startTime >= TCPPeerSocket.socketCloseDelay-2);
+			/* setting the minimum delay here is tricky.
+			 * we want to wait long enough to prove that we closed because of the
+			 * socket timeout; but the socket started timing out before this
+			 * method even gets called, and we don't know how long that's been.
+			 * 
+			 * right now, just pick a reasonable fudge interval -- this is the
+			 * maximum length of time we'll expect the socket to have been timing
+			 * out before getting to the point where we calculate startTime.
+			 * this will probably have to get tuned as this test runs on different
+			 * systems, and maybe a better solution will present itself.
+			 */
+			long fudgeMs     = 25;
+			long elapsed     = System.currentTimeMillis() - startTime;
+			long minDuration = TCPPeerSocket.socketCloseDelay - fudgeMs;
+			
+			assertTrue(elapsed >= minDuration);
 		}
-		assertTrue(holder.closed);
+		assertTrue(closed.isTrue());
 	}
 	
 	protected byte[] readData(Socket socket, int length) {

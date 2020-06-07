@@ -20,6 +20,7 @@ import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
+import com.fasterxml.jackson.core.JsonProcessingException;
 
 public class DHTClient {
 	public final static int AUTH_TAG_SIZE = 4;
@@ -108,7 +109,7 @@ public class DHTClient {
 		}
 		
 		if(master.getGlobalConfig().getBool("net.dht.bootstrap.enabled")) {
-			addDefaults();
+			bootstrap();
 		}
 	}
 	
@@ -176,27 +177,15 @@ public class DHTClient {
 		}));
 		
 		subscriptions.add(config.subscribe("net.dht.bootstrap.enabled").asBoolean((useBootstrap)->{
-			if(useBootstrap) {
-				addDefaults();
-			} else {
-				logger.warn("DHT -: Wiping routing table since net.dht.bootstrap.enabled set false");
-				routingTable.reset();
-			}
+			if(useBootstrap) bootstrap();
 		}));
 		
 		subscriptions.add(config.subscribe("net.dht.network").asString((network)->{
-			
 			byte[] newNetworkId = crypto.hash(network.getBytes());
-			if(Arrays.equals(newNetworkId, networkId)) return;
-			
-			this.networkId = newNetworkId;
-			logger.info("DHT -: Updated network id to {}; clearing routing table", Util.bytesToHex(networkId));
-			routingTable.reset();
+			setNetworkId(newNetworkId);
 		}));
 		
-		subscriptions.add(config.subscribe("net.dht.bootstrap.host").asString( (host) -> addDefaults() ));
-		subscriptions.add(config.subscribe("net.dht.bootstrap.port").asInt   ( (port) -> addDefaults() ));
-		subscriptions.add(config.subscribe("net.dht.bootstrap.key") .asString( (key)  -> addDefaults() ));
+		subscriptions.add(config.subscribe("net.dht.bootstrap.peerfile").asString( (host) -> bootstrap() ));
 	}
 	
 	protected void start() {
@@ -213,27 +202,30 @@ public class DHTClient {
 		}
 	}
 	
-	protected synchronized void addDefaults() {
-		String      defaultHost = master.getGlobalConfig().getString("net.dht.bootstrap.host");
-		int         defaultPort = master.getGlobalConfig().getInt   ("net.dht.bootstrap.port");
-		String      defaultKey  = master.getGlobalConfig().getString("net.dht.bootstrap.key");
-		PublicDHKey pubkey      = crypto.makePublicDHKey(Util.decode64(defaultKey));
+	protected synchronized void bootstrap() {
+		if(!master.getGlobalConfig().getBool("net.dht.bootstrap.enabled")) return;
 		
 		routingTable.reset();
 		protocolManager.pendingRequests.clear();
 		protocolManager.cancelOperations();
 		
-		DHTPeer bootstrap = new DHTPeer(this,
-				defaultHost,
-				defaultPort,
-				pubkey);
-		bootstrap.setPinned(true);
-		routingTable.suggestPeer(bootstrap);
-		
-		logger.info("DHT: Added bootstrap {}:{}, key={}; routing table reset, pending requests cleared",
-				defaultHost,
-				defaultPort,
-				defaultKey);
+		try {
+			new DHTBootstrapper(this).bootstrap();
+			
+			/* TODO: It just isn't enough to log these errors. Clients need a way to find
+			 * out in a very obvious fashion that their DHT bootstraps aren't working because
+			 * they're not accessible, or aren't valid. This needs to make it all the way up
+			 * to the API level.
+			 * 
+			 * One idea would be to make DHTBootstrapper persist as a member variable, then
+			 * have it store these exceptions, and let the API return that information in
+			 * GET /dht or something.
+			 */
+		} catch (JsonProcessingException exc) {
+			logger.error("DHT -: Unable to bootstrap client, due to JSON processing exception", exc);
+		} catch (IOException exc) {
+			logger.error("DHT -: Unable to bootstrap client, due to IOException", exc);
+		}
 	}
 	
 	public boolean isEnabled() {
@@ -324,6 +316,20 @@ public class DHTClient {
 	
 	public byte[] getNetworkId() {
 		return networkId;
+	}
+	
+	public void setNetworkId(byte[] newNetworkId) {
+		if(Arrays.equals(newNetworkId, this.networkId)) return;
+		
+		this.networkId = newNetworkId;
+		logger.info("DHT -: Updated network id to {}; clearing routing table", Util.bytesToHex(networkId));
+		routingTable.reset();
+		
+		try {
+			new DHTClientSerializer(this).write();
+		} catch (IOException exc) {
+			logger.error("DHT -: Error writing DHT configuration after updating network ID", exc);
+		}
 	}
 	
 	public String getBindAddress() {

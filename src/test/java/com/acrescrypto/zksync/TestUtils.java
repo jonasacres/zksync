@@ -12,6 +12,7 @@ import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.FSMirror;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFile;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.SnoozeThreadSupervisor;
 import com.acrescrypto.zksync.utility.Util;
@@ -168,14 +169,16 @@ public class TestUtils {
 	}
 	
 	public static void stopDebugMode() {
-		CryptoSupport.cheapArgon2 = false;
+		CryptoSupport.cheapArgon2     = false;
 		FS.fileHandleTelemetryEnabled = false;
 		UPnP.disableDebug();
+		ConfigDefaults.resetDefaults();
 	}
 
 	public static void startDebugMode() {
-		CryptoSupport.cheapArgon2 = true;
+		CryptoSupport.cheapArgon2     = true;
 		FS.fileHandleTelemetryEnabled = true;
 		UPnP.enableDebug();
+		ConfigDefaults.getActiveDefaults().set("net.dht.bootstrap.peerfile", "");
 	}
 }

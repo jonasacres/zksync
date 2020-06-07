@@ -1028,7 +1028,6 @@ public class FSMirrorTest {
 		
 		watcherTest("foo", (p)->{
 			target.chmod(p, 0600);
-			System.out.println("chmod done to " + p);
 		});
 	}
 	

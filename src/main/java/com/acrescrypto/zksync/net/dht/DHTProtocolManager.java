@@ -41,7 +41,7 @@ public class DHTProtocolManager {
 	
 	public DHTPeer getLocalPeer() {
 		return new DHTPeer(client,
-				client.getSocketManager().getBindAddress(),
+				client.getSocketManager().getLocalAddress(),
 				client.getSocketManager().getPort(),
 				client.getPublicKey().getBytes()
 			);

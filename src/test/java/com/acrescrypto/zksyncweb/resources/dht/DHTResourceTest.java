@@ -322,7 +322,6 @@ public class DHTResourceTest {
 			.elements()
 			.forEachRemaining((peer)-> {
 				try {
-					byte[] id              = peer.get("id")     .binaryValue();
 					byte[] pubKey          = peer.get("pubKey") .binaryValue();
 					int    port            = peer.get("port")   .asInt();
 					String addr            = peer.get("address").asText();
@@ -330,7 +329,6 @@ public class DHTResourceTest {
 					String expectedAddress = client.getProtocolManager().getLocalPeer().getAddress();
 				
 					if(!Arrays.equals(pubKey, client.getPublicKey().getBytes())) return;
-					assertArrayEquals(client.getId().serialize(), id);
 					assertEquals     (client.getPort(),           port);
 					assertEquals     (expectedAddress,            addr);
 					

@@ -53,14 +53,17 @@ public class DHTClientSerializer {
 	public byte[] serialize() {
 		PrivateDHKey key = client.getPrivateKey();
 		Key tagKey       = client.tagKey();
+		byte[] netId     = client.getNetworkId();
 		
 		ByteBuffer buf   = ByteBuffer.allocate(
 				   key.getBytes().length
 				 + key.publicKey().getBytes().length
-				 + tagKey.getRaw().length);
+				 + tagKey.getRaw().length
+				 + netId.length);
 		buf.put(key.getBytes());
 		buf.put(key.publicKey().getBytes());
 		buf.put(tagKey.getRaw());
+		buf.put(netId);
 		assert(buf.remaining() == 0);
 		
 		return buf.array();
@@ -72,14 +75,17 @@ public class DHTClientSerializer {
 			byte[] privKeyRaw    = new byte[crypto.asymPrivateDHKeySize()];
 			byte[] pubKeyRaw     = new byte[crypto.asymPublicDHKeySize()];
 			byte[] tagKeyRaw     = new byte[crypto.symKeyLength()];
+			byte[] netId         = new byte[crypto.hashLength()];
 			
 			serialized.get(privKeyRaw);
 			serialized.get(pubKeyRaw);
 			serialized.get(tagKeyRaw);
+			serialized.get(netId);
 			
 			client.setPrivateKey(crypto.makePrivateDHKeyPair(privKeyRaw, pubKeyRaw));
 			client.setTagKey    (new Key(crypto, tagKeyRaw));
 			client.setId        (new DHTID(client.getPublicKey()));
+			client.setNetworkId (netId);
 		} catch(BufferUnderflowException exc) {
 			throw new EINVALException(path());
 		}

@@ -967,6 +967,7 @@ public class ZKFSTest extends FSTestBase {
 		
 		zkscratch.commit();
 
+		// TODO: still seem to have an ITF in this test. 2020-06-06
 		verifyTags(zkscratch, tags);
 		
 		try(ZKFS fs = zkscratch.baseRevision.getFS()) {

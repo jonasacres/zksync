@@ -9,11 +9,14 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -25,6 +28,7 @@ import java.util.Queue;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.apache.commons.lang3.mutable.MutableInt;
+import org.glassfish.grizzly.http.server.HttpServer;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -49,7 +53,11 @@ import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.Util;
+import com.acrescrypto.zksyncweb.Main;
+import com.acrescrypto.zksyncweb.State;
+import com.acrescrypto.zksyncweb.data.XDHTPeerFile;
 import com.dosse.upnp.UPnP;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class DHTClientTest {
 	final static int MAX_TEST_TIME_MS = 2000;
@@ -59,14 +67,17 @@ public class DHTClientTest {
 		public DummyMaster()
 				throws IOException, InvalidBlacklistException {
 			super();
-			this.crypto = CryptoSupport.defaultCrypto();
-			this.threadGroup = Thread.currentThread().getThreadGroup();
-			this.storage = new RAMFS();
-			this.blacklist = new Blacklist(storage, "blacklist", new Key(crypto));
+			
+			this.crypto       = CryptoSupport.defaultCrypto();
+			this.threadGroup  = Thread.currentThread().getThreadGroup();
+			this.storage      = new RAMFS();
+			this.blacklist    = new Blacklist (storage, "blacklist", new Key(crypto));
 			this.globalConfig = new ConfigFile(storage, "config.json");
 			globalConfig.apply(ConfigDefaults.getActiveDefaults());
-			globalConfig.setDefault("net.dht.enabled", false);
+			globalConfig.setDefault("net.dht.enabled",           false);
 			globalConfig.setDefault("net.dht.bootstrap.enabled", false);
+			globalConfig.setDefault("net.dht.localaddress",      "127.0.0.1");
+			
 			setupBandwidth();
 		}
 		
@@ -347,6 +358,7 @@ public class DHTClientTest {
 	
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
+		ConfigDefaults.getActiveDefaults().setDefault("net.dht.bootstrap.enabled", false);
 		DHTClient.messageExpirationTimeMs = 125;
 		DHTClient.lookupResultMaxWaitTimeMs = 150;
 		DHTClient.messageRetryTimeMs = 50;
@@ -369,6 +381,7 @@ public class DHTClientTest {
 	
 	@After
 	public void afterEach() {
+		ConfigDefaults.resetDefaults();
 		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
 		
 		master.close();
@@ -521,7 +534,7 @@ public class DHTClientTest {
 		});
 
 		remote.receivePacket(DHTMessage.CMD_FIND_NODE);
-		assertTrue(Util.waitUntil(DHTSearchOperation.searchQueryTimeoutMs+10, ()->seenNull.booleanValue()));
+		assertTrue(Util.waitUntil(DHTSearchOperation.searchQueryTimeoutMs+30, ()->seenNull.booleanValue()));
 		assertEquals(0, records.size());
 	}
 	
@@ -1292,28 +1305,88 @@ public class DHTClientTest {
 	}
 	
 	@Test
-	public void testAddsDefaultHostIfBootstrapEnabledBeforeInit() {
-		master.getGlobalConfig().set("net.dht.bootstrap.enabled", true);
-		client.close();
+	public void testAddsPeerFileFromStringIfBootstrapEnabledBeforeInit() throws IOException {
+		XDHTPeerFile peerFile      = new XDHTPeerFile(client);
+		ObjectMapper mapper        = new ObjectMapper();
+		String       peerFileJson  = mapper.writeValueAsString(peerFile);
+		
+		client.purge();
+		master.getGlobalConfig().set("net.dht.bootstrap.peerfile", peerFileJson);
+		master.getGlobalConfig().set("net.dht.bootstrap.enabled",  true);
 		
 		DHTClient client2 = new DHTClient(storageKey, master);
 		assertTrue(Util.waitUntil(3000, ()->client2.routingTable.allPeers().size() > 0));
+		client2.close();
 	}
-	
+
 	@Test
-	public void testAddsDefaultHostIfBootstrapEnabledAfterInit() {
-		client.routingTable.reset();
-		master.getGlobalConfig().set("net.dht.bootstrap.enabled", true);
+	public void testAddsPeerFileFromFileIfBootstrapEnabledBeforeInit() throws IOException {
+		XDHTPeerFile peerFile      = new XDHTPeerFile(client);
+		ObjectMapper mapper        = new ObjectMapper();
+		String       peerFileJson  = mapper.writeValueAsString(peerFile);
+		
+		String tmpPath = "/tmp/zksync-peerfile-test";
+		String fileUrl = "file://" + tmpPath;
+		
+		try(FileWriter writer = new FileWriter(tmpPath)) {
+			writer.write(peerFileJson);
+			writer.close();
+
+			client.purge();
+			master.getGlobalConfig().set("net.dht.bootstrap.peerfile", fileUrl);
+			master.getGlobalConfig().set("net.dht.bootstrap.enabled",  true);
+			
+			DHTClient client2 = new DHTClient(storageKey, master);
+			assertTrue(Util.waitUntil(3000, ()->client2.routingTable.allPeers().size() > 0));
+			client2.close();
+		} finally {
+			File file = new File(tmpPath);
+			file.delete();
+		}
+	}
+
+	@Test
+	public void testAddsPeerFileFromURLIfBootstrapEnabledBeforeInit() throws IOException, URISyntaxException {
+		// This one is a little ugly since we have to spin up the http server
+		State.setTestState();
+		
+		HttpServer server  = Main.startServer();
+		String     url     = "http://localhost:8080/dht/peerfile";
+		DHTClient  client2 = null;
+		
+		try {
+			client.purge();
+			master.getGlobalConfig().set("net.dht.bootstrap.peerfile", url);
+			master.getGlobalConfig().set("net.dht.bootstrap.enabled",  true);
+			
+			final DHTClient client2_ = client2 = new DHTClient(storageKey, master);
+			assertTrue(Util.waitUntil(3000, ()->client2_.routingTable.allPeers().size() > 0));
+			client2.close();
+		} finally {	
+			if(client2 != null) {
+				client2.close();
+			}
+			
+			server.shutdownNow();
+			State.clearState();
+		}
+	}
+
+	@Test
+	public void testAddsPeerFileIfBootstrapEnabledAfterInit() throws IOException {
+		XDHTPeerFile peerFile      = new XDHTPeerFile(client);
+		ObjectMapper mapper        = new ObjectMapper();
+		String       peerFileJson  = mapper.writeValueAsString(peerFile);
+
+		client.purge();
+		DHTClient client2          = new DHTClient(storageKey, master);
+		assertFalse(Util.waitUntil(100, ()->client2.routingTable.allPeers().size() > 0));
+		
+		master.getGlobalConfig().set("net.dht.bootstrap.peerfile", peerFileJson);
+		master.getGlobalConfig().set("net.dht.bootstrap.enabled",  true);
 		assertTrue(Util.waitUntil(3000, ()->client.routingTable.allPeers().size() > 0));
-	}
-	
-	@Test
-	public void testClearsRoutingTableWhenBootstrapEnabled() {
-		client.routingTable.reset();
-		master.getGlobalConfig().set("net.dht.bootstrap.enabled", true);
-		Util.waitUntil(3000, ()->client.routingTable.allPeers().size() > 0);
-		master.getGlobalConfig().set("net.dht.bootstrap.enabled", false);
-		assertTrue(Util.waitUntil(3000, ()->client.routingTable.allPeers().size() == 0));
+		
+		client2.close();
 	}
 	
 	@Test
