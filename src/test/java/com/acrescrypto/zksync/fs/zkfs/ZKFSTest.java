@@ -963,11 +963,13 @@ public class ZKFSTest extends FSTestBase {
 				lastUpdate = System.currentTimeMillis();
 			}
 		}
+		
+		// TODO: still seem to have an ITF in this test. 2020-06-06
 		assertEquals(0, lastThreadCount);
 		
 		zkscratch.commit();
-
-		// TODO: still seem to have an ITF in this test. 2020-06-06
+		
+		// ITF hits here as well
 		verifyTags(zkscratch, tags);
 		
 		try(ZKFS fs = zkscratch.baseRevision.getFS()) {

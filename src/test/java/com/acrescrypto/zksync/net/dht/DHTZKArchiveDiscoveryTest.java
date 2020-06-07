@@ -167,6 +167,8 @@ public class DHTZKArchiveDiscoveryTest {
 		for(int i = 0; i < 4; i++) {
 			client.searchId = null;
 			assertFalse(Util.waitUntil(discovery.discoveryIntervalMs-50, ()->client.searchId != null));
+			
+			// TODO: ITF here, 2020-06-07, 135bcbe 
 			assertTrue(Util.waitUntil(60, ()->client.searchId != null));
 		}
 	}
