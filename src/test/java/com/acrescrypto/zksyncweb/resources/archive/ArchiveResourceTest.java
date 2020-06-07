@@ -35,6 +35,7 @@ import com.acrescrypto.zksync.fs.zkfs.StoredAccessRecord;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
 import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.net.dht.DHTID;
 import com.acrescrypto.zksync.net.dht.DHTProtocolManager;
@@ -94,6 +95,9 @@ public class ArchiveResourceTest {
 
 	@Before
 	public void beforeEach() throws Exception {
+		ConfigDefaults.getActiveDefaults().setDefault("net.dht.enabled", false);
+		ConfigDefaults.getActiveDefaults().setDefault("net.dht.bootstrap.enabled", false);
+		
 		State.setTestState();
 		server = Main.startServer();
 		Client c = ClientBuilder.newClient();
@@ -125,6 +129,7 @@ public class ArchiveResourceTest {
 		archive.getMaster().close();
 		server.shutdownNow();
 		State.clearState();
+		ConfigDefaults.resetDefaults();
 	}
 
 	@AfterClass
@@ -319,7 +324,7 @@ public class ArchiveResourceTest {
 		assertEquals(StoredAccess.ACCESS_LEVEL_SEED, record.getAccessLevel());
 		assertTrue(archive.getConfig().isReadOnly());
 		assertTrue(archive.getConfig().getAccessor().isSeedOnly());
-
+		
 		try(State state2 = new State(State.defaultPassphrase(), State.sharedState().getMaster().getStorage())) {
 			StoredAccessRecord record2 = state2.getMaster().storedAccess().recordForArchiveId(archive.getConfig().getArchiveId());
 			assertNotNull(record2);

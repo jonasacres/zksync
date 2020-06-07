@@ -434,11 +434,7 @@ public class ArchiveFsResourceTest {
 	@Test
 	public void testGetSetsDefaultPriorityInReadFile() throws IOException {
 		long inodeId = setupMissingFile();
-		new Thread(()->{
-			try {
-				WebTestUtils.requestGet(target, basePath + "missing");
-			} catch(Exception exc) {} // our request hangs since the path is missing, so squelch the error
-		}).start();
+		WebTestUtils.requestGetWithError(target, 598, basePath + "missing");
 		assertTrue(Util.waitUntil(2000,
 				()->archive.getConfig().getSwarm().priorityForInode(fs.getBaseRevision(), inodeId) == 0));
 	}
@@ -446,11 +442,7 @@ public class ArchiveFsResourceTest {
 	@Test
 	public void testGetSetsDefaultPriorityInReadDirectory() throws IOException {
 		long inodeId = setupMissingDirectory();
-		new Thread(()->{
-			try {
-				WebTestUtils.requestGet(target, basePath + "missing");
-			} catch(Exception exc) {} // our request hangs since the path is missing, so squelch the error
-		}).start();
+		WebTestUtils.requestGetWithError(target, 598, basePath + "missing");
 		assertTrue(Util.waitUntil(2000,
 				()->archive.getConfig().getSwarm().priorityForInode(fs.getBaseRevision(), inodeId) == 0));
 	}
@@ -458,11 +450,7 @@ public class ArchiveFsResourceTest {
 	@Test
 	public void testGetAllowsSettingOfPriorityInReadFile() throws IOException {
 		long inodeId = setupMissingFile();
-		new Thread(()->{
-			try {
-				WebTestUtils.requestGet(target, basePath + "missing?priority=13");
-			} catch(Exception exc) {}
-		}).start();
+		WebTestUtils.requestGetWithError(target, 598, basePath + "missing?priority=13");
 		assertTrue(Util.waitUntil(2000,
 				()->archive.getConfig().getSwarm().priorityForInode(fs.getBaseRevision(), inodeId) == 13));
 	}
@@ -470,11 +458,7 @@ public class ArchiveFsResourceTest {
 	@Test
 	public void testGetAllowsSettingOfPriorityInReadDirectory() throws IOException {
 		long inodeId = setupMissingDirectory();
-		new Thread(()->{
-			try {
-				WebTestUtils.requestGet(target, basePath + "missing?priority=13");
-			} catch(Exception exc) {}
-		}).start();
+		WebTestUtils.requestGetWithError(target, 598, basePath + "missing?priority=13");
 		assertTrue(Util.waitUntil(2000,
 				()->archive.getConfig().getSwarm().priorityForInode(fs.getBaseRevision(), inodeId) == 13));
 	}
@@ -483,11 +467,7 @@ public class ArchiveFsResourceTest {
 	public void testGetDoesNotOverwritePriorityInReadFileIfPriorityNotSpecified() throws IOException {
 		long inodeId = setupMissingFile();
 		archive.getConfig().getSwarm().requestInode(-1234, fs.getBaseRevision(), inodeId);
-		new Thread(()->{
-			try {
-				WebTestUtils.requestGet(target, basePath + "missing");
-			} catch(Exception exc) {}
-		}).start();
+		WebTestUtils.requestGetWithError(target, 598, basePath + "missing");
 		assertFalse(Util.waitUntil(500,
 				()->archive.getConfig().getSwarm().priorityForInode(fs.getBaseRevision(), inodeId) != -1234));
 	}
@@ -496,11 +476,7 @@ public class ArchiveFsResourceTest {
 	public void testGetDoesNotOverwritePriorityInReadDirectoryIfPriorityNotSpecified() throws IOException {
 		long inodeId = setupMissingDirectory();
 		archive.getConfig().getSwarm().requestInode(-1234, fs.getBaseRevision(), inodeId);
-		new Thread(()->{
-			try {
-				WebTestUtils.requestGet(target, basePath + "missing");
-			} catch(Exception exc) {}
-		}).start();
+		WebTestUtils.requestGetWithError(target, 598, basePath + "missing");
 		assertFalse(Util.waitUntil(500,
 				()->archive.getConfig().getSwarm().priorityForInode(fs.getBaseRevision(), inodeId) != -1234));
 	}
@@ -509,11 +485,7 @@ public class ArchiveFsResourceTest {
 	public void testGetOverwritesPriorityInReadFileIfPrioritySpecified() throws IOException {
 		long inodeId = setupMissingFile();
 		archive.getConfig().getSwarm().requestInode(4321, fs.getBaseRevision(), inodeId);
-		new Thread(()->{
-			try {
-				WebTestUtils.requestGet(target, basePath + "missing?priority=-1234");
-			} catch(Exception exc) {}
-		}).start();
+		WebTestUtils.requestGetWithError(target, 598, basePath + "missing?priority=-1234");
 		assertTrue(Util.waitUntil(500,
 				()->archive.getConfig().getSwarm().priorityForInode(fs.getBaseRevision(), inodeId) == -1234));
 	}
@@ -522,11 +494,7 @@ public class ArchiveFsResourceTest {
 	public void testGetOverwritesPriorityInReadDirectoryIfPrioritySpecified() throws IOException {
 		long inodeId = setupMissingDirectory();
 		archive.getConfig().getSwarm().requestInode(4321, fs.getBaseRevision(), inodeId);
-		new Thread(()->{
-			try {
-				WebTestUtils.requestGet(target, basePath + "missing?priority=-1234");
-			} catch(Exception exc) {}
-		}).start();
+		WebTestUtils.requestGetWithError(target, 598, basePath + "missing?priority=-1234");
 		assertTrue(Util.waitUntil(500,
 				()->archive.getConfig().getSwarm().priorityForInode(fs.getBaseRevision(), inodeId) == -1234));
 	}

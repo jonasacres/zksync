@@ -234,9 +234,10 @@ public class DHTZKArchiveDiscoveryTest {
 			client.records.clear();
 			assertTrue(Util.waitUntil(100+discovery.advertisementIntervalMs, ()->!client.records.isEmpty()));
 			
-			// fudge expected timestamp by 3ms due to rounding issues (increased from 2ms 2019-02-09)
-			// TODO Urgent: (itf) ba549c3 linux UniversalTests 2018-12-12, AssertionError
-			assertTrue(Util.currentTimeMillis()+3 >= timeStart + i*discovery.advertisementIntervalMs);
+			// these time-based tests seem rife with ITFs.
+			long elapsed = Util.currentTimeMillis() - timeStart;
+			int minimumTime = i * (discovery.advertisementIntervalMs - 10);
+			assertTrue(elapsed > minimumTime);
 		}
 	}
 

@@ -333,7 +333,6 @@ public class InodeTable extends ZKFile {
 	/** return an inode with a given ID */
 	public synchronized Inode inodeWithId(long inodeId) throws IOException {
 		if(closed || closing) {
-			System.out.println("Closed: " + this.zkfs + " " + System.identityHashCode(this.zkfs));
 			throw new ClosedException();
 		}
 		try {

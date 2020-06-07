@@ -278,7 +278,7 @@ public class GlobalResourceTest {
 	@Test
 	public void testPutSettingsWithNullPortDoesNotInterfereWithActiveListener() {
 		master.getGlobalConfig().set("net.swarm.enabled", true);
-		assertTrue(Util.waitUntil(100, ()->master.getTCPListener().getPort() > 0));
+		assertTrue(Util.waitUntil(1000, ()->master.getTCPListener().getPort() > 0));
 		int port = master.getTCPListener().getPort();
 
 		HashMap<String,Object> settings = new HashMap<>();
@@ -295,8 +295,8 @@ public class GlobalResourceTest {
 		settings.put("net.swarm.port", 0);
 		settings.put("net.swarm.enabled", true);
 		WebTestUtils.requestPut(target, "/global/settings", settings);
-		assertTrue(Util.waitUntil(100, ()->master.getTCPListener().getPort() > 0));
-		assertTrue(Util.waitUntil(100, ()->master.getTCPListener().isListening()));
+		assertTrue(Util.waitUntil(1000, ()->master.getTCPListener().getPort() > 0));
+		assertTrue(Util.waitUntil(1000, ()->master.getTCPListener().isListening()));
 	}
 
 	@Test
@@ -305,14 +305,14 @@ public class GlobalResourceTest {
 		settings.put("net.swarm.port", 41312);
 		settings.put("net.swarm.enabled", true);
 		WebTestUtils.requestPut(target, "/global/settings", settings);
-		assertTrue(Util.waitUntil(100, ()->master.getTCPListener().isListening()));
+		assertTrue(Util.waitUntil(1000, ()->master.getTCPListener().isListening()));
 		assertEquals(41312, master.getTCPListener().getPort());
 	}
 
 	@Test
 	public void testPutSettingsWithPositivePortReopensOnRequestedPortIfListenerOpen() throws UnknownHostException, IOException {
 		master.getGlobalConfig().set("net.swarm.enabled", true);
-		assertTrue(Util.waitUntil(100, ()->master.getTCPListener().getPort() > 0));
+		assertTrue(Util.waitUntil(1000, ()->master.getTCPListener().getPort() > 0));
 		int port = master.getTCPListener().getPort();
 
 		HashMap<String,Object> settings = new HashMap<>();
@@ -320,7 +320,7 @@ public class GlobalResourceTest {
 		settings.put("net.swarm.enabled", true);
 		WebTestUtils.requestPut(target, "/global/settings", settings);
 
-		assertTrue(Util.waitUntil(100, ()->master.getTCPListener().getPort() == port + 1));
+		assertTrue(Util.waitUntil(1000, ()->master.getTCPListener().getPort() == port + 1));
 	}
 	
 	@Test
@@ -329,7 +329,7 @@ public class GlobalResourceTest {
 		HashMap<String,Object> settings = new HashMap<>();
 		settings.put("net.dht.bootstrap.host", "localhost");
 		WebTestUtils.requestPut(target, "/global/settings", settings);
-		assertTrue(Util.waitUntil(100, ()->master.getGlobalConfig().getString("net.dht.bootstrap.host").equals("localhost")));
+		assertTrue(Util.waitUntil(1000, ()->master.getGlobalConfig().getString("net.dht.bootstrap.host").equals("localhost")));
 	}
 
 	@Test

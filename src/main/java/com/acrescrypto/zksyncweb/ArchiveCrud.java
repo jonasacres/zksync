@@ -129,8 +129,6 @@ public class ArchiveCrud {
 					file.close();
 				}
 			}
-		} catch(ENOENTException exc) {
-			throw XAPIResponse.notFoundErrorResponse();
 		} catch(EISDIRException exc) {
 			boolean isRecursive = Boolean.parseBoolean(params.getOrDefault("recursive", "false"));
 			boolean isListStat = Boolean.parseBoolean(params.getOrDefault("liststat", "false"));

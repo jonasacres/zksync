@@ -55,6 +55,7 @@ import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.Main;
 import com.acrescrypto.zksyncweb.State;
+import com.acrescrypto.zksyncweb.WebTestUtils;
 import com.acrescrypto.zksyncweb.data.XDHTPeerFile;
 import com.dosse.upnp.UPnP;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -775,8 +776,9 @@ public class DHTClientTest {
 		bucket.peers.get(0).ping();
 		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
 		req.makeResponse(new ArrayList<>(0)).send();
-		Util.sleep(10);
-		assertFalse(bucket.needsFreshening());
+		
+		DHTBucket _bucket = bucket;
+		assertTrue(Util.waitUntil(100, ()->!_bucket.needsFreshening()));
 	}
 	
 	@Test
@@ -941,6 +943,7 @@ public class DHTClientTest {
 			if(resp.numExpected == numReceived) break;
 		}
 		
+		Util.waitUntil(100, ()->records.isEmpty());
 		assertEquals(0, records.size());
 	}
 	
@@ -1350,6 +1353,7 @@ public class DHTClientTest {
 		// This one is a little ugly since we have to spin up the http server
 		State.setTestState();
 		
+		WebTestUtils.squelchGrizzlyLogs();
 		HttpServer server  = Main.startServer();
 		String     url     = "http://localhost:8080/dht/peerfile";
 		DHTClient  client2 = null;

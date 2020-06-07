@@ -27,6 +27,7 @@ import com.acrescrypto.zksync.fs.zkfs.StoredAccess;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
 import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksyncweb.Main;
 import com.acrescrypto.zksyncweb.State;
@@ -48,6 +49,9 @@ public class ArchivesResourceTest {
 
 	@Before
 	public void beforeEach() throws Exception {
+		ConfigDefaults.getActiveDefaults().set("net.dht.enabled", false);
+		ConfigDefaults.getActiveDefaults().set("net.dht.bootstrap.enabled", false);
+		
 		State.setTestState();
 		server = Main.startServer();
 		Client c = ClientBuilder.newClient();

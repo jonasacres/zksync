@@ -283,8 +283,9 @@ public class NetModuleTest {
 		ZKArchiveConfig bConfig = ZKArchiveConfig.openExisting(bAccessor, aConfig.getArchiveId(), false, Key.blank(crypto));
 		bConfig.getSwarm().addPeerAdvertisement(ad);
 		bConfig.finishOpening();
-
-		assertTrue(Util.waitUntil(1000, ()->bConfig.getRevisionList().branchTips().size() == 1));
+		
+		// TODO ITF: 2020-06-07, AssertionError
+		assertTrue(Util.waitUntil(2000, ()->bConfig.getRevisionList().branchTips().size() == 1));
 		bConfig.getSwarm().requestTag(0, requestedTag);
 		
 		// we should get the requested page and the config file

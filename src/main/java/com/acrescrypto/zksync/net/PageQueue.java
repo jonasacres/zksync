@@ -381,13 +381,13 @@ public class PageQueue {
 		addItem(new RevisionStructureQueueItem(priority, revTag));
 	}
 	
-	public void startSendingEverything() {
+	public synchronized void startSendingEverything() {
 		if(everythingItem != null && !everythingItem.done) return;
 		everythingItem = new EverythingQueueItem(DEFAULT_EVERYTHING_PRIORITY, config.getArchive());
 		addItem(everythingItem);
 	}
 	
-	public void stopSendingEverything() {
+	public synchronized void stopSendingEverything() {
 		if(everythingItem == null) return;
 		everythingItem.cancel();
 	}

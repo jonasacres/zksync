@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.swarmfs;
 import java.io.IOException;
 
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.NetworkFileUnavailableException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
@@ -199,6 +200,10 @@ public class SwarmFS extends FS implements TimedReader {
 	public byte[] read(String path, long timeoutRemainingMs) throws IOException {
 		StorageTag pageTag = new StorageTag(swarm.getConfig().getCrypto(), path);
 		swarm.waitForPage(REQUEST_PRIORITY, pageTag, timeoutRemainingMs);
-		return swarm.getConfig().getCacheStorage().read(path);
+		try {
+			return swarm.getConfig().getCacheStorage().read(path);
+		} catch(ENOENTException exc) {
+			throw new NetworkFileUnavailableException(path);
+		}
 	}
 }

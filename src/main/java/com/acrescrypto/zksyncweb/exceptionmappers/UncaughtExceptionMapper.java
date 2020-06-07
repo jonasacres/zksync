@@ -12,6 +12,8 @@ import javax.ws.rs.ext.Provider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.NetworkFileUnavailableException;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 import com.fasterxml.jackson.core.JsonParseException;
 
@@ -24,10 +26,23 @@ public class UncaughtExceptionMapper implements ExceptionMapper<Throwable> {
 
 	@Override
 	public Response toResponse(Throwable exception) {
+		if(exception instanceof NetworkFileUnavailableException) {
+			/* We want to return 598 when a page is listed in a ZKFS,
+			 * but is not held locally and we couldn't get it from the network before
+			 * the timeout.
+			 */
+			return XAPIResponse.withError(598, "Unable to acquire data").toResponse();
+		}
+
 		if(exception instanceof NotFoundException) {
 			return XAPIResponse.withError(404, "Not found").toResponse();
 		}
 		
+		if(exception instanceof ENOENTException) {
+			return XAPIResponse.withError(404, "Not found").toResponse();
+		}
+
+
 		if(exception instanceof NotAllowedException) {
 			return XAPIResponse.withError(405, "Method not allowed for this resource").toResponse();
 		}
@@ -38,7 +53,7 @@ public class UncaughtExceptionMapper implements ExceptionMapper<Throwable> {
 		
 		String preamble = "Unknown request";
 		if(request != null) {
-			String.format("%s %s %s",
+			preamble = String.format("%s %s %s",
 					request.getRemoteAddr(),
 					request.getMethod(),
 					request.getRequestURI());

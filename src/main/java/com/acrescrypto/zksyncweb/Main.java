@@ -23,6 +23,7 @@ import ch.qos.logback.core.util.StatusPrinter;
 
 public class Main {
 	public final static String BASE_URI = "http://0.0.0.0:8080/";
+
 	public static HttpServer startServer() throws IOException, URISyntaxException {
 		ResourceConfig rc = new ResourceConfig();
 		rc
@@ -31,14 +32,12 @@ public class Main {
 			.register(CustomLoggingFilter.class)
 			.packages("com.acrescrypto.zksyncweb.exceptionmappers")
 			.packages("com.acrescrypto.zksyncweb.resources");
-
+		
+		URI uri = new URI(BASE_URI);
+		HttpServer server = GrizzlyHttpServerFactory.createHttpServer(uri);
 		HttpHandler handler = ContainerFactory.createContainer(
 				GrizzlyHttpContainer.class, rc);
-
-		URI uri = new URI(BASE_URI);
-
-		HttpServer server = GrizzlyHttpServerFactory.createHttpServer(uri);
-
+		
 		ServerConfiguration config = server.getServerConfiguration();
 		config.addHttpHandler(handler, "/");
 
