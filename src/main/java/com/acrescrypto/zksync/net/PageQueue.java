@@ -412,7 +412,13 @@ public class PageQueue {
 		if(itemsByPriority.isEmpty()) return false;
 		QueueItem head = itemsByPriority.peek();
 		if(head == null) return false;
-		return head.reference() != null & tag.equals(head.reference().tag);
+		try {
+			return head.reference() != null && tag.equals(head.reference().tag);
+		} catch(NullPointerException exc) {
+			System.out.println("wtf");
+			exc.printStackTrace();
+			throw exc;
+		}
 	}
 	
 	public synchronized ChunkReference nextChunk() {
@@ -443,16 +449,25 @@ public class PageQueue {
 	
 	protected synchronized void unpackNextReference() {
 		while(!itemsByPriority.isEmpty()) {
-			QueueItem head = itemsByPriority.peek();
-			QueueItem child = head.nextChild();
-			if(child != null) {
-				itemsByPriority.add(child);
-				itemsByHash.put(child.getHash(), child);
-			} else if(head.reference() == null) {
-				QueueItem item = itemsByPriority.poll();
-				itemsByHash.remove(item.getHash());
-			} else {
-				return;
+			try {
+				QueueItem head  = itemsByPriority.peek();
+				QueueItem child = head.nextChild();
+				
+				if(child != null) {
+					itemsByPriority.add(child);
+					itemsByHash    .put(child.getHash(), child);
+					
+				} else if(head.reference() == null) {
+					QueueItem item = itemsByPriority.poll();
+					itemsByHash.remove(item.getHash());
+					
+				} else {
+					return;
+				}
+			} catch(NullPointerException exc) {
+				System.out.println("dafuq");
+				exc.printStackTrace();
+				throw exc;
 			}
 		}
 	}

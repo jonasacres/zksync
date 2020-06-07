@@ -450,8 +450,8 @@ public class PeerConnection {
 	}
 	
 	protected void waitForFullInit() throws EOFException {
-		Util.blockOn(()->!closed && !socket.swarm.config.hasKey() && !socket.swarm.config.getAccessor().isSeedOnly());
-		Util.blockOn(()->!closed && socket.swarm.config.getArchive() == null);
+		Util.blockOnPoll(()->!closed && !socket.swarm.config.hasKey() && !socket.swarm.config.getAccessor().isSeedOnly());
+		Util.blockOnPoll(()->!closed && socket.swarm.config.getArchive() == null);
 		if(closed) throw new EOFException(); // maybe not best exception, but we just want to stop processing without triggering a blacklist
 	}
 	
@@ -602,7 +602,7 @@ public class PeerConnection {
 		assert(RefTag.REFTAG_SHORT_SIZE == 8); // This code depends on tags being sent as 64-bit values.
 		while(msg.rxBuf.hasRemaining()) {
 			// lots of tags to go through, and locks are expensive; accumulate into a buffer so we can minimize lock/release cycling
-			Util.blockOn(()->msg.rxBuf.available() < 8 && !msg.rxBuf.isEOF());
+			Util.blockOnPoll(()->msg.rxBuf.available() < 8 && !msg.rxBuf.isEOF());
 			if(msg.rxBuf.isEOF() && msg.rxBuf.available() < 8) break;
 			
 			int len = Math.min(64*1024, msg.rxBuf.available());

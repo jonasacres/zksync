@@ -102,9 +102,16 @@ public class TestUtils {
 			for(Thread t : traces.keySet()) {
 				if(!isThreadAcceptable(t, traces.get(t))) {
 					System.out.println("Unacceptable thread: " + t + "\n" + Util.dumpStackTrace(traces.get(t), 1));
+					
+					/* Commenting this out since it is quite spammy in an integration test,
+					 * which is where most of our tidiness issues happen. Re-enable for
+					 * more information on unexpected threads persisting between tests.
+					 */
+					
+					/*
 					for(StackTraceElement element : t.getStackTrace()) {
 						System.out.println("\t" + element);
-					}
+					}*/
 				}
 			}
 			

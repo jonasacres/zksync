@@ -76,13 +76,18 @@ public class DHTProtocolManager {
 			logger.debug("DHT -: Starting autoFindPeers thread; querying each {}ms",
 					DHTClient.autoFindPeersIntervalMs);
 			while(!client.isClosed()) {
-				Util.blockOn(
-						() ->   client.getRoutingTable().allPeers().isEmpty() 
-							|| !client.getSocketManager().isListening()
-							|| !autofind
+				Util.blockOnPoll(
+						() ->
+							!client.isClosed() && (
+									 client.getRoutingTable().allPeers().isEmpty() 
+								 || !client.getSocketManager().isListening()
+							     || !autofind
+							)
 					);
-				findPeers();
-				Util.sleep(DHTClient.autoFindPeersIntervalMs);
+				if(!client.isClosed()) {
+					findPeers();
+					Util.sleep(DHTClient.autoFindPeersIntervalMs);
+				}
 			}
 			logger.debug("DHT -: Stopping autoFindPeers thread");
 		}).start();

@@ -196,7 +196,7 @@ public class Util {
 		return true;
 	}
 	
-	public static void blockOn(WaitTest test) {
+	public static void blockOnPoll(WaitTest test) {
 		while(test.test()) {
 			sleep(1);
 		}

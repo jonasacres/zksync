@@ -176,7 +176,7 @@ public class FSMirror {
 				((LocalFS) target).getRoot(),
 				numActive());
 		watchFlag.setFalse();
-		Util.blockOn(()->stoppedThread.isAlive());
+		Util.blockOnPoll(()->stoppedThread.isAlive());
 		logger.info("FS {}: FSMirror stopped watch of {}, {} watches active",
 				Util.formatArchiveId(zkfs.archive.config.archiveId),
 				((LocalFS) target).getRoot(),
