@@ -465,6 +465,12 @@ public class PageQueue {
 					return;
 				}
 			} catch(NullPointerException exc) {
+				/* This is a very odd situation where head is apparently null,
+				** despite itemsByPriority not being empty, and this method being
+				** synchronized. It appears every few UniversalTest runs, but
+				** doesn't seem to cause test failures.
+				** 2020-06-07, 3e6d9e9, Linux
+				*/
 				System.out.println("dafuq");
 				exc.printStackTrace();
 				throw exc;

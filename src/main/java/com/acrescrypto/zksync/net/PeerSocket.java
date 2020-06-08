@@ -58,7 +58,11 @@ public abstract class PeerSocket {
 	
 	protected PeerSocket(PeerSwarm swarm) {
 		this.swarm = swarm;
-		threadPool = GroupedThreadPool.newCachedThreadPool(swarm != null ? swarm.threadPool.threadGroup : Thread.currentThread().getThreadGroup(), "PeerSocket");
+		threadPool = GroupedThreadPool.newCachedThreadPool(
+				   swarm != null
+				 ? swarm.threadPool.threadGroup
+				 : Thread.currentThread().getThreadGroup(),
+				 "PeerSocket");
 	}
 	
 	public final void close() throws IOException {

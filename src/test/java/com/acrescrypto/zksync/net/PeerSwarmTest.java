@@ -283,7 +283,7 @@ public class PeerSwarmTest {
 	}
 	
 	@Test
-	public void testAddPeerIgnoresPeerAdIfCapacityReached() {
+	public void testAddPeerIgnoresPeerAdIfCapacityReached() throws IOException {
 		for(int i = 0; i < swarm.maxPeerListSize; i++) {
 			DummyAdvertisement ad = new DummyAdvertisement();
 			ad.type = PeerAdvertisement.TYPE_TCP_PEER;
