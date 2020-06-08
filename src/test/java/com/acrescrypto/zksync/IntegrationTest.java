@@ -362,54 +362,56 @@ public class IntegrationTest {
 			createInitialCommit(archives[i], i);
 		}
 		
-		assertTrue(Util.waitUntil(10000, ()->{
-			// wait for everyone to merge to the same revtag
-			for(int i = 0; i < masters.length; i++) {
-				if(archives[i].getConfig().getRevisionList().branchTips().size() > 1) return false;
-				
-				RevisionTag baseTag = archives[0].getConfig().getRevisionList().branchTips().get(0);
-				RevisionTag tag = archives[i].getConfig().getRevisionList().branchTips().get(0);
-				if(!tag.equals(baseTag)) return false;
-			}
-			
-			return true;
-		}));
-		
-		RevisionTag mergeTag = archives[0].getConfig().getRevisionList().branchTips().get(0);
-		ZKMaster separate = ZKMaster.openBlankTestVolume("delayed");
-		ZKArchive separateArch = separate.createDefaultArchive();
-		createInitialCommit(separateArch, masters.length);
-		
-		separate.getGlobalConfig().set("net.swarm.enabled", true);
-		separate.activateDHTForTest("127.0.0.1", 0, root);
-		separate.getTCPListener().advertise(separateArch.getConfig().getSwarm());
-		separateArch.getConfig().getAccessor().discoverOnDHT();
-		separateArch.getConfig().getRevisionList().automergeDelayMs = archives[0].getConfig().getRevisionList().automergeDelayMs;
-		separateArch.getConfig().getRevisionList().maxAutomergeDelayMs = archives[0].getConfig().getRevisionList().maxAutomergeDelayMs;
-		separateArch.getConfig().getRevisionList().setAutomerge(true);
-		separateArch.getConfig().getSwarm().requestAll();
-
-		assertTrue(Util.waitUntil(30000, ()->{
-			RevisionTag firstLatest = archives[0].getConfig().getRevisionList().latest();
-			for(ZKArchive archive : archives) {
-				if(!archive.getConfig().getRevisionList().latest().equals(firstLatest)) {
-					return false;
+		try {
+			assertTrue(Util.waitUntil(10000, ()->{
+				// wait for everyone to merge to the same revtag
+				for(int i = 0; i < masters.length; i++) {
+					if(archives[i].getConfig().getRevisionList().branchTips().size() > 1) return false;
+					
+					RevisionTag baseTag = archives[0].getConfig().getRevisionList().branchTips().get(0);
+					RevisionTag tag = archives[i].getConfig().getRevisionList().branchTips().get(0);
+					if(!tag.equals(baseTag)) return false;
 				}
-			}
+				
+				return true;
+			}));
 			
-			RevisionTag sepLatest = separateArch.getConfig().getRevisionList().latest();
-			if(sepLatest.equals(mergeTag)) return false;
-			return sepLatest.equals(firstLatest);
-		}));
-		
-		try(ZKFS mergedFs = separateArch.openLatest()) {
-			for(int i = 0; i <= masters.length; i++) {
-				expectCommitData(mergedFs, i);
+			RevisionTag mergeTag = archives[0].getConfig().getRevisionList().branchTips().get(0);
+			ZKMaster separate = ZKMaster.openBlankTestVolume("delayed");
+			ZKArchive separateArch = separate.createDefaultArchive();
+			createInitialCommit(separateArch, masters.length);
+			
+			separate.getGlobalConfig().set("net.swarm.enabled", true);
+			separate.activateDHTForTest("127.0.0.1", 0, root);
+			separate.getTCPListener().advertise(separateArch.getConfig().getSwarm());
+			separateArch.getConfig().getAccessor().discoverOnDHT();
+			separateArch.getConfig().getRevisionList().automergeDelayMs = archives[0].getConfig().getRevisionList().automergeDelayMs;
+			separateArch.getConfig().getRevisionList().maxAutomergeDelayMs = archives[0].getConfig().getRevisionList().maxAutomergeDelayMs;
+			separateArch.getConfig().getRevisionList().setAutomerge(true);
+			separateArch.getConfig().getSwarm().requestAll();
+	
+			assertTrue(Util.waitUntil(30000, ()->{
+				RevisionTag firstLatest = archives[0].getConfig().getRevisionList().latest();
+				for(ZKArchive archive : archives) {
+					if(!archive.getConfig().getRevisionList().latest().equals(firstLatest)) {
+						return false;
+					}
+				}
+				
+				RevisionTag sepLatest = separateArch.getConfig().getRevisionList().latest();
+				if(sepLatest.equals(mergeTag)) return false;
+				return sepLatest.equals(firstLatest);
+			}));
+			
+			try(ZKFS mergedFs = separateArch.openLatest()) {
+				for(int i = 0; i <= masters.length; i++) {
+					expectCommitData(mergedFs, i);
+				}
+			} finally {
+				separateArch.close();
+				separate.close();
 			}
 		} finally {
-			separateArch.close();
-			separate.close();
-			
 			for(int i = 0; i < masters.length; i++) {
 				archives[i].close();
 				masters[i].close();

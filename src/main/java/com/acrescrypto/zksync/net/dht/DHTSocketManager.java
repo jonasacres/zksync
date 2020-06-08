@@ -219,15 +219,6 @@ public class DHTSocketManager {
 				break;
 			} catch (IOException exc) {
 				// TODO API: (coverage) exception
-				System.out.printf("Packet: %s:%d\n",
-						packet.getAddress().toString(),
-						packet.getPort());
-				System.out.printf("Socket: bound=%s, connected=%s, closed=%s, port=%d, interface=%s\n",
-						socket.isBound(),
-						socket.isConnected(),
-						socket.isClosed(),
-						socket.getLocalPort(),
-						socket.getLocalSocketAddress());
 				if(paused) return;
 				exc.printStackTrace();
 				if(i == 0) {

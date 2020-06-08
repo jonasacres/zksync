@@ -347,6 +347,8 @@ public class ZKFSManagerTest {
 			
 			assertTrue(Util.waitUntil(100, ()->fs.baseRevision.equals(tag)));
 			assertTrue(Util.waitUntil(100, ()->mirrorFs.exists("file")));
+			
+			// TODO ITF: 2020-06-07 6f4c136, mirrorFs.read returns empty array 
 			assertArrayEquals("somebytes".getBytes(), mirrorFs.read("file"));
 		}
 	}
