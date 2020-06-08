@@ -316,11 +316,13 @@ public class GlobalResourceTest {
 		int port = master.getTCPListener().getPort();
 
 		HashMap<String,Object> settings = new HashMap<>();
-		settings.put("net.swarm.port", port+1);
+		int expectedPort = port + 1;
+		settings.put("net.swarm.port", expectedPort);;
 		settings.put("net.swarm.enabled", true);
 		WebTestUtils.requestPut(target, "/global/settings", settings);
 
-		assertTrue(Util.waitUntil(1000, ()->master.getTCPListener().getPort() == port + 1));
+		assertTrue(Util.waitUntil(1000, ()->master.getTCPListener().getPort() == expectedPort));
+		assertEquals(expectedPort, master.getTCPListener().getPort());
 	}
 	
 	@Test

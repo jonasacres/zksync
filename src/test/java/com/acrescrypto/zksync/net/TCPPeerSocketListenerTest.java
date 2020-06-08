@@ -232,6 +232,7 @@ public class TCPPeerSocketListenerTest {
 		Thread.sleep(10); // give OS some time to free up the socket
 		TCPPeerSocketListener listener2 = new TCPPeerSocketListener(master);
 		Util.waitUntil(100, ()->listener2.listenSocket != null);
+		Util.waitUntil(100, ()->listener2.port == port);
 		assertEquals(port, listener2.port);
 		listener2.close();
 	}

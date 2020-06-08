@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -362,6 +363,13 @@ public class PeerSwarm implements BlacklistCallback {
 						ad.routingInfo(),
 						Util.formatPubKey(ad.getPubKey()),
 						exc);
+			} catch(RejectedExecutionException exc) {
+				if(!isClosed() && !conn.getSocket().isClosed()) {
+					logger.error("Swarm {} {}: Thread was rejected for execution, but socket is not marked closed.",
+							Util.formatArchiveId(config.getArchiveId()),
+							ad.routingInfo(),
+							exc);
+				}
 			} catch(Exception exc) {
 				if(!isClosed()) {
 					logger.error("Swarm {} {}: Caught exception connecting to peer",

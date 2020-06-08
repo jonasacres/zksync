@@ -101,17 +101,16 @@ public class TestUtils {
 			knownZombieThreads.clear();
 			for(Thread t : traces.keySet()) {
 				if(!isThreadAcceptable(t, traces.get(t))) {
-					System.out.println("Unacceptable thread: " + t + "\n" + Util.dumpStackTrace(traces.get(t), 1));
+					System.out.println("Unacceptable thread: " + t);
+					/* This is easy to turn off since it can be quite noisy.  */
 					
-					/* Commenting this out since it is quite spammy in an integration test,
-					 * which is where most of our tidiness issues happen. Re-enable for
-					 * more information on unexpected threads persisting between tests.
-					 */
-					
-					/*
-					for(StackTraceElement element : t.getStackTrace()) {
-						System.out.println("\t" + element);
-					}*/
+					boolean enableNoisyOutput = true;
+					if(enableNoisyOutput) {
+						System.out.println(Util.dumpStackTrace(traces.get(t), 1));
+						for(StackTraceElement element : t.getStackTrace()) {
+							System.out.println("\t" + element);
+						}
+					}
 				}
 			}
 			
@@ -173,6 +172,8 @@ public class TestUtils {
 			System.out.println("Open ZKFS instances: " + ZKFS.getOpenInstances().size());
 			fail();
 		}
+		
+		System.gc();
 	}
 	
 	public static void stopDebugMode() {
@@ -180,6 +181,7 @@ public class TestUtils {
 		FS.fileHandleTelemetryEnabled = false;
 		UPnP.disableDebug();
 		ConfigDefaults.resetDefaults();
+		System.gc();
 	}
 
 	public static void startDebugMode() {
@@ -187,5 +189,6 @@ public class TestUtils {
 		FS.fileHandleTelemetryEnabled = true;
 		UPnP.enableDebug();
 		ConfigDefaults.getActiveDefaults().set("net.dht.bootstrap.peerfile", "");
+		System.gc();
 	}
 }
