@@ -207,7 +207,7 @@ public class TCPPeerSocketListener {
 	}
 	
 	protected void openSocket() {
-		int lastPort = master.getGlobalConfig().getInt("net.swarm.lastport");
+		int lastPort    = master.getGlobalConfig().getInt("net.swarm.lastport");
 		int requestPort = master.getGlobalConfig().getInt("net.swarm.port");
 		if(lastPort != 0 && port == 0) {
 			logger.debug("Swarm - -: Attempting to require previously-bound TCP port {}", lastPort);

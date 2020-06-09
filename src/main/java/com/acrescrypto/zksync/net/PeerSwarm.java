@@ -39,48 +39,54 @@ import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerSwarm implements BlacklistCallback {
-	public final static int EMBARGO_EXPIRE_TIME_MS = 1000*60*10; // wait 10 minutes before retrying consistently unconnectable ads
-	public final static int EMBARGO_SOFT_EXPIRE_TIME_MS = 1000; // wait 1s before retrying an ad before it is classified as consistently unconnectable
-	public final static int EMBARGO_FAIL_COUNT_THRESHOLD = 3; // how many times do we try an ad before deeming it consistently unconnectable?
-	public final static int DEFAULT_WAIT_PAGE_RETRY_TIME_MS = 5000; // how often should waitForPage retry requests for the page it is waiting in?
-	public final static int DEFAULT_MAX_SOCKET_COUNT = 128;
-	public final static int DEFAULT_MAX_PEER_LIST_SIZE = 1024;
+	public final static int EMBARGO_EXPIRE_TIME_MS             = 10*60*1000; // wait 10 minutes before retrying consistently unconnectable ads
+	public final static int EMBARGO_SOFT_EXPIRE_TIME_MS        =       1000; // wait 1s before retrying an ad before it is classified as consistently unconnectable
+	public final static int EMBARGO_FAIL_COUNT_THRESHOLD       =          3; // how many times do we try an ad before deeming it consistently unconnectable?
+	public final static int DEFAULT_WAIT_PAGE_RETRY_TIME_MS    =       5000; // how often should waitForPage retry requests for the page it is waiting in?
+	public final static int DEFAULT_MAX_SOCKET_COUNT           =        128;
+	public final static int DEFAULT_MAX_PEER_LIST_SIZE         =       1024;
 	
-	protected ArrayList<PeerConnection> connections = new ArrayList<PeerConnection>();
-	protected HashSet<PeerAdvertisement> knownAds = new HashSet<PeerAdvertisement>();
-	protected HashSet<PeerAdvertisement> connectedAds = new HashSet<PeerAdvertisement>();
-	protected ZKArchiveConfig config;
-	protected HashMap<Long,ChunkAccumulator> activeFiles = new HashMap<Long,ChunkAccumulator>();
-	protected HashMap<Long,Condition> pageWaits = new HashMap<Long,Condition>();
-	protected HashMap<PeerAdvertisement,Long> adEmbargoes = new HashMap<PeerAdvertisement,Long>();
-	protected RequestPool pool;
-	protected GroupedThreadPool threadPool;
-	protected BandwidthMonitor bandwidthMonitorTx, bandwidthMonitorRx;
+	private             int maxSocketCount                     = DEFAULT_MAX_SOCKET_COUNT;
+	private             int maxPeerListSize                    = DEFAULT_MAX_PEER_LIST_SIZE;
+	private             int waitPageRetryTimeMs                = DEFAULT_WAIT_PAGE_RETRY_TIME_MS;
 	
-	protected Lock pageWaitLock = new ReentrantLock();
-	protected Lock connectionWaitLock = new ReentrantLock();
-	protected Condition connectionWaitCondition = connectionWaitLock.newCondition();
-	protected Object pageNotifier = new Object();
-	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
+	protected ArrayList  <PeerConnection>         connections  = new ArrayList<>();
+	protected HashMap    <Long,ChunkAccumulator>  activeFiles  = new HashMap  <>();
+	protected HashMap    <Long,Condition>         pageWaits    = new HashMap  <>();
+	protected HashMap    <PeerAdvertisement,Long> adEmbargoes  = new HashMap  <>();
+	protected HashSet    <PeerAdvertisement>      knownAds     = new HashSet  <>();
+	protected HashSet    <PeerAdvertisement>      connectedAds = new HashSet  <>();
+	protected RequestPool                         pool;
+	protected ZKArchiveConfig                     config;
+	protected GroupedThreadPool                   threadPool;
+	protected BandwidthMonitor                    bandwidthMonitorTx,
+	                                              bandwidthMonitorRx;
 	
-	protected boolean closed;
-	protected int activeSockets;
+	protected Object     pageNotifier             = new Object();
+	protected Lock       pageWaitLock             = new ReentrantLock(),
+	                     connectionWaitLock       = new ReentrantLock();
+	protected Condition  connectionWaitCondition  = connectionWaitLock.newCondition();
+	protected Logger     logger                   = LoggerFactory.getLogger(PeerSwarm.class);
 	
-	private int maxSocketCount = DEFAULT_MAX_SOCKET_COUNT;
-	int maxPeerListSize = DEFAULT_MAX_PEER_LIST_SIZE;
-	int waitPageRetryTimeMs = DEFAULT_WAIT_PAGE_RETRY_TIME_MS;
+	protected boolean    closed;
+	protected int        activeSockets;
 	
 	protected PeerSwarm() {}
 	
 	public PeerSwarm(ZKArchiveConfig config) throws IOException {
 		this.config = config;
 		this.config.getAccessor().getMaster().getBlacklist().addCallback(this);
-		this.threadPool = GroupedThreadPool.newCachedThreadPool(config.getThreadGroup(), "PeerSwarm " + Util.bytesToHex(config.getArchiveId()));
+		
+		this.threadPool         = GroupedThreadPool.newCachedThreadPool(
+				                       config.getThreadGroup(),
+				                       "PeerSwarm " + Util.bytesToHex(config.getArchiveId())
+				                     );
 		this.bandwidthMonitorTx = new BandwidthMonitor(100, 3000);
 		this.bandwidthMonitorRx = new BandwidthMonitor(100, 3000);
 		this.bandwidthMonitorTx.addParent(config.getMaster().getBandwidthMonitorTx());
 		this.bandwidthMonitorRx.addParent(config.getMaster().getBandwidthMonitorRx());
 		connectionThread();
+		
 		pool = new RequestPool(config);
 		pool.read();
 	}

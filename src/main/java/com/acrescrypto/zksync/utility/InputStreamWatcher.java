@@ -19,9 +19,9 @@ public class InputStreamWatcher {
 	}
 	
 	public class InputStreamWatchInstance {
-		Queue<Expectation> expectations = new LinkedList<>();
-		ByteBuffer rxBuffer;
-		String     name;
+		Queue       <Expectation> expectations = new LinkedList<>();
+		ByteBuffer                rxBuffer;
+		String                    name;
 		
 		protected class Expectation {
 			boolean                               started;
@@ -35,7 +35,7 @@ public class InputStreamWatcher {
 			}
 			
 			public void begin() {
-				int cap = rxBuffer.capacity();
+				int cap               =      rxBuffer.capacity();
 				boolean needNewBuffer =      rxBuffer == null
 						                 || (cap < expectedBytes || cap > expectedBytes + 1024);
 				
@@ -48,11 +48,11 @@ public class InputStreamWatcher {
 				rxBuffer.limit(0);
 			}
 			
-			public void read() throws IOException {
+			public boolean read() throws IOException {
 				if(!started) begin();
 				
 				int available = stream.available();
-				if(available == 0) return;
+				if(available == 0) return false;
 				
 				int numToRead = Math.min(available, expectedBytes);
 				int numRead = stream.read(rxBuffer.array(), rxBuffer.limit(), numToRead);
@@ -60,6 +60,7 @@ public class InputStreamWatcher {
 				if(numRead < 0) {
 					logger.debug("InputStreamWatcher {}: Reached EOF while waiting on additional data", name);
 					close();
+					return false;
 				}
 				
 				rxBuffer.limit(rxBuffer.limit() + numRead);
@@ -73,6 +74,8 @@ public class InputStreamWatcher {
 					callback.receivedData(rxBuffer);
 					finishExpectation();
 				}
+				
+				return !expectations.isEmpty() && stream.available() > 0;
 			}
 		}
 		
@@ -123,10 +126,20 @@ public class InputStreamWatcher {
 		}
 		
 		protected synchronized void scheduleCheck() {
-			if(scheduled) return;
-			
-			scheduled = true;
-			threadPool.submit(()->check());
+			try {
+				if(scheduled)               return;
+				if(stream.available() == 0) return;
+				
+				scheduled = true;
+				threadPool.submit(()->check());
+			} catch(IOException exc) {
+				logger.warn("InputStreamWatcher {}: Caught exception polling stream", name, exc);
+				try {
+					close();
+				} catch(IOException exc2) {
+					logger.error("InputStreamWatcher {}: Caught exception closing socket", name, exc2);
+				}
+			}
 		}
 		
 		protected synchronized void check() {
@@ -134,9 +147,19 @@ public class InputStreamWatcher {
 			
 			if(!needsCheck()) return;
 			try {
-				Expectation current = expectations.peek();
-				current.read();
+				boolean shouldContinue;
+				do {
+					/* Keep this thread reading the stream and delivering data as long as
+					 * we have an open expectation and reading is non-blocking.
+					 */
+					Expectation current = expectations.peek();
+					shouldContinue = current.read();
+				} while(shouldContinue);
+				
 				if(needsCheck()) {
+					/* If we still have open expectations, let the watcher know to poll again
+					 * right away.
+					 */
 					synchronized(InputStreamWatcher.this) {
 						InputStreamWatcher.this.notifyAll();
 					}
@@ -172,7 +195,7 @@ public class InputStreamWatcher {
 		watchInstances.remove(instance);
 	}
 	
-	protected void watchThread() {
+	protected synchronized void watchThread() {
 		while(true) {
 			try {
 				for(InputStreamWatchInstance instance : watchInstances) {
@@ -181,9 +204,12 @@ public class InputStreamWatcher {
 				}
 				
 				/* Scan whenever we add an instance or finish checking one.
-				 * And also defensively scan every 100ms in case we somehow fail to notify...
+				 * And also defensively scan every 1ms in case we somehow fail to notify...
+				 * 
+				 * What would be REALLY nice is to select on this so that we get notified of
+				 * available bytes, instead of having to poll for them. 
 				 */
-				this.wait(100);
+				this.wait(1);
 			} catch(Exception exc) {
 				logger.error("InputStreamWatcher: Uncaught exception in watch thread", exc);
 			}
