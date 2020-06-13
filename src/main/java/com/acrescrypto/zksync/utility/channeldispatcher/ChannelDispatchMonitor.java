@@ -1,9 +1,9 @@
 package com.acrescrypto.zksync.utility.channeldispatcher;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
-import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
@@ -22,29 +22,75 @@ public class ChannelDispatchMonitor {
 		void closed();
 	}
 	
+	public interface ChannelDispatchConnectedCallback {
+		void connected() throws Exception;
+	}
+	
 	public interface ChannelDispatchReadCallback {
-		void read(ByteBuffer data);
+		void read(ByteBuffer data) throws Exception;
+	}
+	
+	public interface ChannelDispatchWriteCallback {
+		void sent() throws Exception;
+	}
+	
+	public interface ChannelDispatchExceptionHandler {
+		void exception(Exception exc);
+	}
+	
+	public class Transmission {
+		ChannelDispatchWriteCallback        callback;
+		ChannelDispatchExceptionHandler     exceptionHandler;
+		ByteBuffer                          data;
+		
+		public Transmission(
+			ByteBuffer                      data,
+			ChannelDispatchExceptionHandler exceptionHandler,
+			ChannelDispatchWriteCallback    callback)
+		{
+			this.exceptionHandler  =        exceptionHandler;
+			this.callback          =        callback;
+			this.data              =        data;
+		}
+		
+		public void write() throws IOException {
+			if(!data.hasRemaining()) {
+				try {
+					if(callback != null) callback.sent();
+				} catch(Exception exc) {
+					exceptionHandler.exception(exc);
+				}
+				
+				finishTransmission();
+			}
+		}
 	}
 	
 	public class Expectation {
-		int                              expectedBytes;
-		ChannelDispatchReadCallback      callback;
-		boolean                          active;
+		boolean                             active;
+		ChannelDispatchReadCallback         callback;
+		ChannelDispatchExceptionHandler     exceptionHandler;
+		int                                 expectedBytes;
 		
-		public Expectation(int expectedBytes, ChannelDispatchReadCallback callback) {
-			this.expectedBytes    =      expectedBytes;
-			this.callback         =      callback;
+		public Expectation(
+			int                             expectedBytes,
+			ChannelDispatchExceptionHandler exceptionHandler,
+			ChannelDispatchReadCallback     callback)
+		{
+			this.exceptionHandler  =        exceptionHandler;
+			this.callback          =        callback;
+			this.expectedBytes     =        expectedBytes;
 		}
 		
 		public void begin() {
-			active                =      true;
-			int     cap           =      rxBuffer.capacity();
-			boolean needNewBuffer =      rxBuffer == null
-	                                  || cap < expectedBytes
-	                                  || cap > expectedBytes + BUFFER_SCALE_INCREMENT;
+			active                 =        true;
+			int     cap            =        rxBuffer.capacity();
+			boolean needNewBuffer  =        rxBuffer == null
+	                                     || cap < expectedBytes
+	                                     || cap > expectedBytes + BUFFER_SCALE_INCREMENT;
 
 			if(needNewBuffer) {
-				rxBuffer          =      ByteBuffer.allocate(expectedBytes);
+				rxBuffer           =        ByteBuffer.allocate(expectedBytes);
 			} else {
 				rxBuffer.clear();
 			}
@@ -71,7 +117,12 @@ public class ChannelDispatchMonitor {
 			if(expectedBytes <= 0) {
 				rxBuffer.limit(rxBuffer.position());
 				rxBuffer.position(0);
-				callback.read(rxBuffer);
+				try {
+					callback.read(rxBuffer);
+				} catch(Exception exc) {
+					exceptionHandler.exception(exc);
+				}
+				
 				finishExpectation();
 			}
 		}
@@ -80,54 +131,87 @@ public class ChannelDispatchMonitor {
 	public final static int DEFAULT_BUFFER_SIZE    = 1024;
 	public final static int BUFFER_SCALE_INCREMENT = 1024;
 	
-	protected String                        name;
-	protected SocketChannel                 channel;
-	protected BandwidthAllocator            allocatorTx,
-	                                        allocatorRx;
-	protected BandwidthMonitor              monitorTx,
-	                                        monitorRx;
-	protected SelectionKey                  acceptDispatchKey,
-	                                        acceptLocalKey,
-	                                        txDispatchKey,
-	                                        txLocalKey,
-	                                        rxDispatchKey,
-	                                        rxLocalKey;
-	protected Selector                      acceptSelector,
-	                                        txSelector,
-	                                        rxSelector;
-	protected ByteBuffer                    txBuffer,
-	                                        rxBuffer;
-	protected boolean                       calledClosedCallback;
-	protected ChannelDispatchClosedCallback closedCallback;
-	protected Queue<Expectation>            expectations;
-	protected ChannelDispatch               dispatch;
-	protected long                          acceptStartTime,
-	                                        txStartTime,
-	                                        rxStartTime;
+	protected String                           name;
+	protected SocketChannel                    channel;
+	protected BandwidthAllocator               allocatorTx,
+	                                           allocatorRx;
+	protected BandwidthMonitor                 monitorTx,
+	                                           monitorRx;
+	protected SelectionKey                     txDispatchKey,
+	                                           txLocalKey,
+	                                           rxDispatchKey,
+	                                           rxLocalKey,
+	                                           connectDispatchKey;
+	protected Selector                         txSelector,
+	                                           rxSelector;
+	protected ByteBuffer                       rxBuffer;
+	protected boolean                          calledClosedCallback;
+	protected ChannelDispatchClosedCallback    closedCallback;
+	protected ChannelDispatchConnectedCallback connectedCallback;
+	protected Queue<Expectation>               expectations;
+	protected Queue<Transmission>              transmissions;
+	protected ChannelDispatch                  dispatch;
+	protected long                             txStartTime,
+	                                           rxStartTime;
+	protected ChannelDispatchExceptionHandler  defaultExceptionHandler;
 	
-	private   Logger                        logger = LoggerFactory.getLogger(ChannelDispatchMonitor.class);
+	private   Logger                           logger = LoggerFactory.getLogger(ChannelDispatchMonitor.class);
+	
+	public static ChannelDispatchMonitor connectChannel(ChannelDispatch dispatch, String name, String host, int port, ChannelDispatchConnectedCallback callback) throws IOException {
+		SocketChannel     channel  = SocketChannel.open();
+		InetSocketAddress address  = new InetSocketAddress(host, port);
+		/* TODO: Above InetSocketAddress blocks while host is resolved.
+		 * How do we do non-blocking DNS? For now, we will just have to tolerate it. */
+		
+		channel.configureBlocking(false);
+		channel.connect          (address);
+		
+		ChannelDispatchMonitor monitor = new ChannelDispatchMonitor(dispatch, name, channel);
+		monitor.setConnectedCallback(callback);
+		monitor.registerConnect();
+		
+		return monitor;
+	}
 	
 	public ChannelDispatchMonitor(ChannelDispatch dispatch, String name, SocketChannel channel) throws IOException {
-		this.dispatch           = dispatch;
-		this.name               = name;
-		this.channel            = channel;
-		this.expectations       = new LinkedList<>();
+		channel.configureBlocking(false);
 		
-		this.txBuffer           = ByteBuffer.allocate(DEFAULT_BUFFER_SIZE);
-		this.rxBuffer           = ByteBuffer.allocate(DEFAULT_BUFFER_SIZE);
+		this.dispatch                = dispatch;
+		this.name                    = name;
+		this.channel                 = channel;
+		this.expectations            = new LinkedList<>();
+		this.transmissions           = new LinkedList<>();
+		this.defaultExceptionHandler = (exc) -> {
+			logger.error("ChannelDispatch {}: Unhandled exception", exc);
+			try {
+				close();
+			} catch (IOException exc2) {
+				logger.error("ChannelDispatch {}: Exception closing dispatch following unhandled exception", exc2);
+			}
+		};
 		
-		this.txSelector         = Selector.open();
-		this.rxSelector         = Selector.open();
+		this.rxBuffer                = ByteBuffer.allocate(DEFAULT_BUFFER_SIZE);
 		
-		this.txLocalKey         = channel.register(txSelector,     SelectionKey.OP_WRITE );
-		this.rxLocalKey         = channel.register(rxSelector,     SelectionKey.OP_READ  );
+		this.txSelector              = Selector.open();
+		this.rxSelector              = Selector.open();
+		
+		this.txLocalKey              = channel.register(txSelector, SelectionKey.OP_WRITE);
+		this.rxLocalKey              = channel.register(rxSelector, SelectionKey.OP_READ );
 	}
 	
 	public void setClosedCallback(ChannelDispatchClosedCallback closedCallback) {
 		this.closedCallback = closedCallback;
 	}
 	
-	public SelectableChannel getChannel() {
+	public void setDefaultExceptionHandler(ChannelDispatchExceptionHandler handler) {
+		this.defaultExceptionHandler = handler;
+	}
+	
+	public void setConnectedCallback(ChannelDispatchConnectedCallback connectedCallback) {
+		this.connectedCallback = connectedCallback;
+	}
+	
+	public SocketChannel getChannel() {
 		return channel;
 	}
 	
@@ -169,7 +253,6 @@ public class ChannelDispatchMonitor {
 		
 		unregisterRx();
 		unregisterTx();
-		acceptLocalKey.cancel();
 		txLocalKey    .cancel();
 		rxLocalKey    .cancel();
 		
@@ -178,28 +261,43 @@ public class ChannelDispatchMonitor {
 		
 		closedCallback           = null;
 		rxBuffer                 = null;
-		txBuffer                 = null;
 		expectations             = null;
+		transmissions            = null;
 	}
 	
 	public boolean closed() {
 		return calledClosedCallback;
 	}
 	
-	public void send(byte[]     bytes) throws IOException {
-		send(ByteBuffer.wrap(bytes));
+	public void send(byte[] bytes) throws IOException {
+		send(ByteBuffer.wrap(bytes), defaultExceptionHandler, null);
 	}
 	
-	public void send(ByteBuffer bytes) throws IOException {
-		reallocateTxBuffer(bytes.remaining());
-		txBuffer.limit(txBuffer.position() + bytes.remaining());
-		txBuffer.put(bytes);
-		
+	public void send(
+			ByteBuffer                      bytes,
+			ChannelDispatchWriteCallback    callback
+		) throws IOException
+	{
+		send(bytes, defaultExceptionHandler, callback);
+	}
+
+	public void send(
+			ByteBuffer                      bytes,
+			ChannelDispatchExceptionHandler exceptionHandler,
+			ChannelDispatchWriteCallback    callback
+		) throws IOException
+	{
+		Transmission transmission         = new Transmission(bytes, exceptionHandler, callback);
+		transmissions.add(transmission);
 		registerTx();
 	}
 	
 	public ChannelDispatchMonitor expect(int length, ChannelDispatchReadCallback callback) {
-		Expectation expectation = new Expectation(length, callback);
+		return expect(length, defaultExceptionHandler, callback);
+	}
+	
+	public ChannelDispatchMonitor expect(int length, ChannelDispatchExceptionHandler exceptionHandler, ChannelDispatchReadCallback callback) {
+		Expectation expectation = new Expectation(length, exceptionHandler, callback);
 		expectations.add(expectation);
 		
 		if(expectations.size() == 1) {
@@ -209,8 +307,12 @@ public class ChannelDispatchMonitor {
 		return this;
 	}
 	
-	public void finishExpectation() {
+	protected void finishExpectation() {
 		expectations.remove();
+	}
+	
+	protected void finishTransmission() {
+		transmissions.remove();
 	}
 	
 	protected void registerTx() {
@@ -221,6 +323,11 @@ public class ChannelDispatchMonitor {
 	protected void registerRx() {
 		if(rxDispatchKey     != null) return;
 		rxDispatchKey         = registerKey(SelectionKey.OP_READ);
+	}
+	
+	protected void registerConnect() {
+		if(connectDispatchKey != null) return;
+		connectDispatchKey    = registerKey(SelectionKey.OP_CONNECT);
 	}
 	
 	protected SelectionKey registerKey(int flags) {
@@ -258,43 +365,14 @@ public class ChannelDispatchMonitor {
 		rxDispatchKey = null;
 	}
 	
-	protected void reallocateTxBuffer(int neededExtraSize) {
-		// how much room will we have AFTER adding this to the buffer?
-		int spareCapacity     = txBuffer.capacity()
-				              - txBuffer.limit()
-				              - neededExtraSize;
-		
-		// how many bytes will we have queued up AFTER we add this in?
-		int totalSize         = txBuffer.limit()
-				              + neededExtraSize
-				              - txBuffer.position();
-		
-		int downsizeThreshold = (int) Math.max(txBuffer.limit(),  0.5 * totalSize);
-		
-		if(    spareCapacity       <  0                      // buffer too small
-		    || spareCapacity       >  BUFFER_SCALE_INCREMENT // buffer too big
-		    || txBuffer.position() >= downsizeThreshold      // buffer too used up
-		  ) {
-			/* The buffer grows in increments of BUFFER_SCALE_INCREMENT, with a minimum of 1
-			 * increment. */
-			int rounded    = (int) Math.ceil((double) totalSize / (double) BUFFER_SCALE_INCREMENT) * BUFFER_SCALE_INCREMENT;
-			int allocation = Math.max(DEFAULT_BUFFER_SIZE, rounded);
-			
-			ByteBuffer newTxBuffer = ByteBuffer.allocate(allocation);
-			newTxBuffer.put(txBuffer);
-			txBuffer = newTxBuffer;
-		}
-	}
-	
 	protected synchronized void doTx() {
-		if(closed())              return;
+		if(transmissions.isEmpty())  return;
+		if(closed())                 return;
 		txStartTime = Util.currentTimeMillis();
 		
 		try {
 			while(canWrite()) {
-				// TODO: Bandwidth limitation
-				int numWritten = channel.write(txBuffer);
-				monitorTx.observeTraffic(numWritten);
+				transmissions.peek().write();
 			}
 		} catch(IOException exc) {
 			logger.info("ChannelDispatch {}: Caught exception writing channel; closing", name, exc);
@@ -305,12 +383,6 @@ public class ChannelDispatchMonitor {
 			}
 		} finally {
 			if(closed()) return;
-			
-			if(!txBuffer.hasRemaining()) {
-				// We've sent all pending data; resize the buffer if appropriate
-				reallocateTxBuffer(0);
-			}
-			
 			registerTx();
 		}
 	}
@@ -338,9 +410,25 @@ public class ChannelDispatchMonitor {
 		}
 	}
 	
+	protected synchronized void doConnect() {
+		try {
+			connectDispatchKey.cancel();
+			connectDispatchKey = null;
+			
+			if(connectedCallback != null) connectedCallback.connected();
+		} catch(Exception exc) {
+			logger.error("ChannelDispatch {}: Caught exception finishing connection", name, exc);
+			try {
+				close();
+			} catch(IOException exc2) {
+				logger.error("ChannelDispatch {}: Caught exception closing socket after catching exception finishing connection", name, exc2);
+			}
+		}
+	}
+	
 	protected boolean canWrite() throws IOException {
 		if(closed())                    return false;
-		if(!txBuffer.hasRemaining())    return false;
+		if(transmissions.isEmpty())     return false;
 		
 		long expiration = txStartTime + dispatch.maxWorkerThreadDuration();
 		boolean expired = Util.currentTimeMillis() > expiration;

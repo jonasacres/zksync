@@ -29,6 +29,10 @@ public class PageQueue {
 	public final static int DEFAULT_EVERY_REVISION_STRUCTURE_PRIORITY = -10;
 	public final static int CANCEL_PRIORITY = Integer.MIN_VALUE;
 	
+	public interface PageQueueChunkReadyCallback {
+		boolean ready(ChunkReference chunk) throws IOException;
+	}
+	
 	public class ChunkReference {
 		FS fs;
 		StorageTag tag;
@@ -332,18 +336,19 @@ public class PageQueue {
 		@Override long getHash() { return 0; }
 	}
 	
-	private Logger logger = LoggerFactory.getLogger(PageQueue.class);
-	protected PriorityQueue<QueueItem> itemsByPriority = new PriorityQueue<QueueItem>();
-	protected Map<Long,QueueItem> itemsByHash = new HashMap<>();
-	protected ZKArchiveConfig config;
-	protected EverythingQueueItem everythingItem;
-	protected boolean closed;
+	protected boolean                               closed;
+	protected PriorityQueue        <QueueItem>      itemsByPriority = new PriorityQueue<>();
+	protected Map                  <Long,QueueItem> itemsByHash     = new HashMap<>();
+	protected ZKArchiveConfig                       config;
+	protected EverythingQueueItem                   everythingItem;
+	protected PageQueueChunkReadyCallback           nextChunkCallback;
+	private   Logger                                logger          = LoggerFactory.getLogger(PageQueue.class);
 	
 	public PageQueue(ZKArchiveConfig config) {
 		this.config = config;
 	}
 	
-	public void addChunkReference(int priority, ChunkReference reference) {
+	public void addChunkReference(int priority, ChunkReference reference) throws IOException {
 		addItem(new ChunkQueueItem(priority, reference));
 	}
 	
@@ -366,22 +371,22 @@ public class PageQueue {
 		addItem(new PageQueueItem(priority, config.getArchive(), pageTag));
 	}
 	
-	public void addInodeContents(int priority, RevisionTag revTag, long inodeId) {
+	public void addInodeContents(int priority, RevisionTag revTag, long inodeId) throws IOException {
 		logger.debug("Enqueuing inode {} of {}", inodeId, Util.formatRevisionTag(revTag));
 		addItem(new InodeContentsQueueItem(priority, revTag, inodeId));
 	}
 	
-	public void addRevisionTag(int priority, RevisionTag revTag) {
+	public void addRevisionTag(int priority, RevisionTag revTag) throws IOException {
 		logger.debug("Enqueuing {}", Util.formatRevisionTag(revTag));
 		addItem(new RevisionQueueItem(priority, revTag));
 	}
 	
-	public void addRevisionTagForStructure(int priority, RevisionTag revTag) {
+	public void addRevisionTagForStructure(int priority, RevisionTag revTag) throws IOException {
 		logger.debug("Enqueuing {} (structure only)", Util.formatRevisionTag(revTag));
 		addItem(new RevisionStructureQueueItem(priority, revTag));
 	}
 	
-	public synchronized void startSendingEverything() {
+	public synchronized void startSendingEverything() throws IOException {
 		if(everythingItem != null && !everythingItem.done) return;
 		everythingItem = new EverythingQueueItem(DEFAULT_EVERYTHING_PRIORITY, config.getArchive());
 		addItem(everythingItem);
@@ -397,14 +402,8 @@ public class PageQueue {
 		itemsByHash.clear();
 	}
 	
-	public synchronized void close() {
+	public void close() {
 		closed = true;
-		this.notifyAll();
-	}
-	
-	public boolean hasNextChunk() {
-		unpackNextReference();
-		return !itemsByPriority.isEmpty();
 	}
 	
 	public boolean expectTagNext(StorageTag tag) {
@@ -421,21 +420,32 @@ public class PageQueue {
 		}
 	}
 	
-	public synchronized ChunkReference nextChunk() {
-		while(!hasNextChunk() && !closed) {
-			try {
-				this.wait();
-			} catch(InterruptedException exc) {}
+	public synchronized void nextChunk(PageQueueChunkReadyCallback callback) throws IOException {
+		// TODO: Make this event-driven and asynchronous (oh boy this is gonna be fun)
+		// callback returns false => retain callback for next chunk
+		// otherwise, callback is now null
+		
+		if(closed) return;
+		if(nextChunkReady()) {
+			nextChunkCallback = null;
+			callback.ready(dequeueNextChunk());
+			return;
 		}
 		
-		if(closed) return null;
-		
+		nextChunkCallback = callback;
+	}
+	
+	public boolean nextChunkReady() {
+		return unpackNextReference();
+	}
+	
+	public ChunkReference dequeueNextChunk() {
 		QueueItem item = itemsByPriority.remove();
 		itemsByHash.remove(item.getHash());
 		return item.reference();
 	}
 	
-	protected synchronized void addItem(QueueItem item) {
+	protected synchronized void addItem(QueueItem item) throws IOException {
 		QueueItem existing = itemsByHash.get(item.getHash());
 		if(existing != null) {
 			existing.reprioritize(item.priority);
@@ -444,10 +454,12 @@ public class PageQueue {
 		
 		itemsByPriority.add(item);
 		itemsByHash.put(item.getHash(), item);
-		this.notifyAll();
+		if(nextChunkCallback != null && unpackNextReference()) {
+			nextChunkCallback.ready(dequeueNextChunk());
+		}
 	}
 	
-	protected synchronized void unpackNextReference() {
+	protected synchronized boolean unpackNextReference() {
 		while(!itemsByPriority.isEmpty()) {
 			try {
 				QueueItem head  = itemsByPriority.peek();
@@ -462,7 +474,7 @@ public class PageQueue {
 					itemsByHash.remove(item.getHash());
 					
 				} else {
-					return;
+					return true;
 				}
 			} catch(NullPointerException exc) {
 				/* This is a very odd situation where head is apparently null,
@@ -476,5 +488,7 @@ public class PageQueue {
 				throw exc;
 			}
 		}
+		
+		return false;
 	}
 }

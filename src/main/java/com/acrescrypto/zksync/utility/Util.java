@@ -206,6 +206,10 @@ public class Util {
 		new SnoozeThread(delay, false, ()->{try { action.cb(); } catch(Exception exc) {}}).hashCode();
 	}
 	
+	public static void delayUntil(long timestamp, AnonymousCallback action) {
+		delay(timestamp - Util.currentTimeMillis(), action);
+	}
+	
 	public static void sleep(long durationMs) {
 		if(durationMs <= 0) return;
 		try {

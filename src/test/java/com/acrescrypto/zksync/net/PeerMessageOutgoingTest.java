@@ -258,7 +258,7 @@ public class PeerMessageOutgoingTest {
 	
 	@Test
 	public void testSendOversizedMessages() throws IOException, TimeoutException {
-		byte[] oversized = writePRNG.getBytes(100*msg.maxPayloadBufferSize());
+		byte[] oversized = writePRNG.getBytes(100*msg.maxPayloadLength());
 		ByteBuffer readBuf = ByteBuffer.allocate(oversized.length);
 		
 		new Thread(()-> {

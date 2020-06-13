@@ -16,7 +16,6 @@ import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
-import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
 import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
@@ -205,7 +204,7 @@ public class RevisionList implements AutoCloseable {
 		return true;
 	}
 	
-	protected boolean shouldAcceptBranchTip(RevisionTag newBranch) throws SearchFailedException {
+	protected boolean shouldAcceptBranchTip(RevisionTag newBranch) throws IOException {
 		if (config.revisionTree.isSuperceded(newBranch)) {
 			return false;
 		}

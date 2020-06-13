@@ -13,8 +13,8 @@ import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
 public class ChannelDispatch {
-	protected ConcurrentHashMap <ChannelDispatchMonitor,Boolean> activeRxMonitors     = new ConcurrentHashMap<>(),
-			                                                     activeTxMonitors     = new ConcurrentHashMap<>();
+	protected ConcurrentHashMap <ChannelDispatchMonitor,Boolean>    activeRxMonitors     = new ConcurrentHashMap<>(),
+			                                                        activeTxMonitors     = new ConcurrentHashMap<>();
 	protected ConcurrentHashMap <ChannelDispatchAcceptor,Boolean>   activeAcceptMonitors = new ConcurrentHashMap<>();
             
 	protected Selector          selector;

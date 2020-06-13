@@ -324,7 +324,7 @@ public class ZKArchive implements AutoCloseable {
 		return new ArrayList<>(allPageTags.values());
 	}
 	
-	public void addPageTag(StorageTag tag) {
+	public void addPageTag(StorageTag tag) throws IOException {
 		long shortTag = tag.shortTagPreserialized();
 		if(allPageTags != null && !allPageTags.containsKey(shortTag)) {
 			synchronized(this) {

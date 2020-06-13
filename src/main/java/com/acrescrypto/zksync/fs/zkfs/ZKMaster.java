@@ -26,8 +26,10 @@ import com.acrescrypto.zksync.net.dht.DHTPeer;
 import com.acrescrypto.zksync.net.dht.DHTZKArchiveDiscovery;
 import com.acrescrypto.zksync.utility.BandwidthAllocator;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
+import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.MemLogAppender;
 import com.acrescrypto.zksync.utility.Util;
+import com.acrescrypto.zksync.utility.channeldispatcher.ChannelDispatch;
 
 public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable {
 	public final static String TEST_VOLUME = "test";
@@ -49,6 +51,8 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 	protected ConfigFile globalConfig;
 	protected long debugTime = -1;
 	protected String name;
+	protected GroupedThreadPool workerPool;
+	protected ChannelDispatch channelDispatch;
 	
 	private BandwidthMonitor bandwidthMonitorTx;
 	private BandwidthMonitor bandwidthMonitorRx;
@@ -124,8 +128,18 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 		this.dhtDiscovery = new DHTZKArchiveDiscovery(
 				globalConfig.getInt("net.dht.discoveryintervalms"),
 				globalConfig.getInt("net.dht.advertisementintervalms"));
+		this.workerPool = GroupedThreadPool.newFixedThreadPool(
+				threadGroup,
+				"Worker pool",
+				globalConfig.getInt("proc.workerthreads"));
+		this.channelDispatch = new ChannelDispatch(workerPool);
 		listener = new TCPPeerSocketListener(this);
+
 		loadStoredAccessors();
+	}
+	
+	public ChannelDispatch getChannelDispatch() {
+		return channelDispatch;
 	}
 	
 	public void getLocalKey() throws IOException {
@@ -352,6 +366,10 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 
 	public ThreadGroup getThreadGroup() {
 		return threadGroup;
+	}
+	
+	public GroupedThreadPool getWorkerPool() {
+		return workerPool;
 	}
 	
 	public DHTZKArchiveDiscovery getDHTDiscovery() {

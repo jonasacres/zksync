@@ -3,7 +3,7 @@ package com.acrescrypto.zksyncweb;
 import java.io.IOException;
 
 public class WebUtils {
-	public interface EmptyFieldActor { void act(); }
+	public interface EmptyFieldActor { void act() throws IOException; }
 	public interface FieldActor<T> { void act(T b); }
 	public interface FieldActorIOException<T> { void act(T b) throws IOException; }
 	
@@ -19,7 +19,7 @@ public class WebUtils {
 		}
 	}
 	
-	public static void mapField(Boolean field, EmptyFieldActor trueActor, EmptyFieldActor falseActor) {
+	public static void mapField(Boolean field, EmptyFieldActor trueActor, EmptyFieldActor falseActor) throws IOException {
 		if(field != null) {
 			if(field) {
 				trueActor.act();

@@ -150,7 +150,7 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void openedConnection(PeerConnection connection) {
+	public void openedConnection(PeerConnection connection) throws IOException {
 		if(closed) {
 			connection.close();
 			return;
@@ -222,7 +222,7 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void addPeerAdvertisement(PeerAdvertisement ad) {
+	public void addPeerAdvertisement(PeerAdvertisement ad) throws IOException {
 		// This could be improved. Once we hit capacity, how can we prune ads for low-quality peers for higher-quality ones?
 		if(ad instanceof TCPPeerAdvertisement) { // ignore our own ad
 			TCPPeerAdvertisement tcpAd = (TCPPeerAdvertisement) ad;
@@ -255,7 +255,7 @@ public class PeerSwarm implements BlacklistCallback {
 		return knownAds;
 	}
 	
-	public void advertiseSelf(PeerAdvertisement ad) {
+	public void advertiseSelf(PeerAdvertisement ad) throws IOException {
 		for(PeerConnection connection : getConnections()) {
 			connection.announceSelf(ad);
 		}
@@ -495,7 +495,7 @@ public class PeerSwarm implements BlacklistCallback {
 		return activeFiles.get(shortTag);
 	}
 
-	protected synchronized void receivedPage(StorageTag tag) {
+	protected synchronized void receivedPage(StorageTag tag) throws IOException {
 		long shortTag = tag.shortTagPreserialized();
 		activeFiles.remove(shortTag);
 		
@@ -519,14 +519,14 @@ public class PeerSwarm implements BlacklistCallback {
 		announceTag(tag);
 	}
 	
-	public void announceTag(StorageTag tag) {
+	public void announceTag(StorageTag tag) throws IOException {
 		long shortTag = tag.shortTagPreserialized();
 		for(PeerConnection connection : getConnections()) {
 			connection.announceTag(shortTag);
 		}
 	}
 	
-	public void announceTip(RevisionTag tip) {
+	public void announceTip(RevisionTag tip) throws IOException {
 		logger.info("Swarm {} -: Announcing revtag {} to {} peers",
 				Util.formatArchiveId(config.getArchiveId()),
 				Util.formatRevisionTag(tip),
@@ -536,11 +536,11 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void requestTag(int priority, StorageTag pageTag) {
+	public void requestTag(int priority, StorageTag pageTag) throws IOException {
 		requestTag(priority, pageTag.shortTagPreserialized());
 	}
 	
-	public void cancelTag(StorageTag pageTag) {
+	public void cancelTag(StorageTag pageTag) throws IOException {
 		// TODO API: (test) cover cancelTag bytes
 		cancelTag(pageTag.shortTagPreserialized());
 	}
@@ -550,7 +550,7 @@ public class PeerSwarm implements BlacklistCallback {
 		return pool.priorityForPageTag(pageTag);
 	}
 	
-	public void requestTag(int priority, long shortTag) {
+	public void requestTag(int priority, long shortTag) throws IOException {
 		pool.addPageTag(priority, shortTag);
 	}
 	
@@ -559,16 +559,16 @@ public class PeerSwarm implements BlacklistCallback {
 		return pool.priorityForPageTag(pageTag);
 	}
 	
-	public void cancelTag(long shortTag) {
+	public void cancelTag(long shortTag) throws IOException {
 		// TODO API: (test) cover cancelTag long
 		pool.cancelPageTag(shortTag);
 	}
 	
-	public void requestInode(int priority, RevisionTag revTag, long inodeId) {
+	public void requestInode(int priority, RevisionTag revTag, long inodeId) throws IOException {
 		pool.addInode(priority, revTag, inodeId);
 	}
 	
-	public void cancelInode(RevisionTag revTag, long inodeId) {
+	public void cancelInode(RevisionTag revTag, long inodeId) throws IOException {
 		// TODO API: (test) cover cancelInode
 		pool.cancelInode(revTag, inodeId);
 	}
@@ -578,20 +578,20 @@ public class PeerSwarm implements BlacklistCallback {
 		return pool.priorityForInode(revTag, inodeId);
 	}
 	
-	public void requestRevision(int priority, RevisionTag revTag) {
+	public void requestRevision(int priority, RevisionTag revTag) throws IOException {
 		pool.addRevision(priority, revTag);
 	}
 	
-	public void requestRevisionStructure(int priority, RevisionTag revTag) {
+	public void requestRevisionStructure(int priority, RevisionTag revTag) throws IOException {
 		pool.addRevisionStructure(priority, revTag);
 	}
 	
-	public void cancelRevision(RevisionTag revTag) {
+	public void cancelRevision(RevisionTag revTag) throws IOException {
 		// TODO API: (test) cover cancelRevision
 		pool.cancelRevision(revTag);
 	}
 	
-	public void cancelRevisionStructure(RevisionTag revTag) {
+	public void cancelRevisionStructure(RevisionTag revTag) throws IOException {
 		// TODO API: (test) cover cancelRevisionStructure
 		pool.cancelRevisionStructure(revTag);
 	}
@@ -606,7 +606,7 @@ public class PeerSwarm implements BlacklistCallback {
 		return pool.priorityForRevisionStructure(revTag);
 	}
 	
-	public void requestRevisionDetails(int priority, RevisionTag revTag) {
+	public void requestRevisionDetails(int priority, RevisionTag revTag) throws IOException {
 		pool.addRevisionDetails(priority, revTag);
 	}
 	
@@ -615,13 +615,13 @@ public class PeerSwarm implements BlacklistCallback {
 		return pool.priorityForRevisionDetails(revTag);
 	}
 	
-	public void requestAll() {
+	public void requestAll() throws IOException {
 		logger.info("Swarm {} -: Requesting all pages",
 				Util.formatArchiveId(config.getArchiveId()));
 		pool.setRequestingEverything(true);
 	}
 	
-	public void stopRequestingAll() {
+	public void stopRequestingAll() throws IOException {
 		logger.info("Swarm {} -: Canceling request for all pages",
 				Util.formatArchiveId(config.getArchiveId()));
 		pool.setRequestingEverything(false);
@@ -635,7 +635,7 @@ public class PeerSwarm implements BlacklistCallback {
 		return pool.requestingEverything; 
 	}
 
-	public void setPaused(boolean paused) {
+	public void setPaused(boolean paused) throws IOException {
 		logger.info("Swarm {} -: Setting paused={}",
 				Util.formatArchiveId(config.getArchiveId()),
 				paused);
@@ -652,7 +652,7 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 	}
 	
-	public void announcePeer(PeerAdvertisement ad) {
+	public void announcePeer(PeerAdvertisement ad) throws IOException {
 		// TODO API: (coverage) method... seems weird it's not called
 		for(PeerConnection connection : getConnections()) {
 			connection.announcePeer(ad);

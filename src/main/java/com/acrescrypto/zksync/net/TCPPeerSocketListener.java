@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.io.StringReader;
 import java.net.InetAddress;
 import java.net.ServerSocket;
-import java.net.Socket;
+import java.nio.channels.SocketChannel;
 import java.util.LinkedList;
 
 import javax.json.Json;
@@ -13,7 +13,6 @@ import javax.json.JsonObject;
 import javax.json.JsonObjectBuilder;
 import javax.json.JsonReader;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.mutable.MutableInt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,34 +23,36 @@ import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
-import com.acrescrypto.zksync.net.noise.CipherState;
 import com.acrescrypto.zksync.net.noise.SipObfuscator;
 import com.acrescrypto.zksync.net.noise.VariableLengthHandshakeState;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
-import com.acrescrypto.zksync.utility.RateLimitedInputStream;
-import com.acrescrypto.zksync.utility.RateLimitedOutputStream;
 import com.acrescrypto.zksync.utility.Util;
+import com.acrescrypto.zksync.utility.channeldispatcher.ChannelDispatchAcceptor;
+import com.acrescrypto.zksync.utility.channeldispatcher.ChannelDispatchMonitor;
 import com.dosse.upnp.UPnP;
 
 // I hate this implementation. Burn it.
 
 public class TCPPeerSocketListener {
-	public final static int MAX_RECENT_PROOFS = 128;
-	protected int port;
+	public final static int                                MAX_RECENT_PROOFS = 128;
 	
-	protected CryptoSupport crypto;
-	protected Blacklist blacklist;
-	protected ServerSocket listenSocket;
-	protected ZKMaster master;
-	protected Thread thread;
-	protected Logger logger = LoggerFactory.getLogger(TCPPeerSocketListener.class);
-	protected LinkedList<TCPPeerAdvertisementListener> adListeners;
-	protected boolean closed, established;
-	protected PrivateDHKey identityKey;
-	protected LinkedList<SubscriptionToken<?>> subscriptions = new LinkedList<>();
+	protected int                                          port;
+	protected CryptoSupport                                crypto;
+	protected Blacklist                                    blacklist;
+	protected ServerSocket                                 listenSocket;
+	protected ChannelDispatchAcceptor                      dispatchAcceptor;
+	protected ZKMaster                                     master;
+	protected LinkedList    <TCPPeerAdvertisementListener> adListeners;
+	protected boolean                                      closed,
+	                                                       established;
+	protected PrivateDHKey                                 identityKey;
+	protected LinkedList    <SubscriptionToken<?>>         subscriptions = new LinkedList<>();
 	
-	protected BandwidthMonitor bandwidthMonitorTx, bandwidthMonitorRx;
-	
+	protected BandwidthMonitor                             bandwidthMonitorTx,
+	                                                       bandwidthMonitorRx;
+
+	protected Logger                                       logger = LoggerFactory.getLogger(TCPPeerSocketListener.class);
+
 	public TCPPeerSocketListener(ZKMaster master) throws IOException {
 		initMaster(master);
 		setupSubscriptions();
@@ -61,11 +62,11 @@ public class TCPPeerSocketListener {
 	}
 	
 	protected void initMaster(ZKMaster master) {
-		this.crypto = master.getCrypto();
-		this.blacklist = master.getBlacklist();
-		this.master = master;
-		this.adListeners = new LinkedList<>();
-		this.identityKey = crypto.makePrivateDHKey(); // TODO Noise: cache static key to disk
+		this.master             = master;
+		this.crypto             = master.getCrypto();
+		this.blacklist          = master.getBlacklist();
+		this.identityKey        = crypto.makePrivateDHKey(); // TODO Noise: cache static key to disk
+		this.adListeners        = new LinkedList<>();
 		this.bandwidthMonitorRx = new BandwidthMonitor(master.getBandwidthMonitorRx());
 		this.bandwidthMonitorTx = new BandwidthMonitor(master.getBandwidthMonitorTx());
 		
@@ -106,8 +107,7 @@ public class TCPPeerSocketListener {
 	
 	protected void startListening() {
 		closed = false;
-		this.thread = new Thread(master.getThreadGroup(), ()->listenThread() );
-		this.thread.start();
+		checkSocketOpen();
 	}
 	
 	public int getPort() {
@@ -118,19 +118,14 @@ public class TCPPeerSocketListener {
 		return listenSocket != null && port != 0 && !listenSocket.isClosed() && !closed; 
 	}
 	
-	protected void rebind() {
-		int configPort = master.getGlobalConfig().getInt("net.swarm.port");
-		if(isListening() && listenSocket.getLocalPort() != configPort && configPort != 0) {
-			try {
-				close();
-			} catch (IOException e) {}
-			startListening();
-		}
-	}
-	
 	public void close() throws IOException {
 		if(closed) return;
 		closed = true;
+		
+		if(dispatchAcceptor != null) {
+			dispatchAcceptor.close();
+		}
+		
 		for(SubscriptionToken<?> sub : subscriptions) {
 			sub.close();
 		}
@@ -162,28 +157,6 @@ public class TCPPeerSocketListener {
 		return null;
 	}
 	
-	protected void listenThread() {
-		Util.setThreadName("TCPPeerSocketListener listen thread");
-		while(!closed) {
-			ServerSocket oldSocket = listenSocket;
-			
-			try {
-				checkSocketOpen();
-				if(listenSocket != null) {
-					Socket socket = listenSocket.accept();
-					processIncomingPeer(socket);
-				}
-			} catch(Exception exc) {
-				if(closed || oldSocket != listenSocket || listenSocket.isClosed()) {
-					logger.info("Swarm - -: Closed TCP socket on port {}", listenSocket.getLocalPort());
-					break;
-				}
-				
-				logger.error("Swarm - -: TCP listen thread on port " + port + " caught exception", exc);
-			}
-		}
-	}
-	
 	protected void checkSocketOpen() {
 		if(listenSocket == null || listenSocket.isClosed()) {
 			openSocket();
@@ -192,18 +165,6 @@ public class TCPPeerSocketListener {
 				announceListening();
 			}
 		}
-	}
-	
-	protected void processIncomingPeer(Socket socket) throws IOException {
-		if(blacklist.contains(socket.getInetAddress().getHostAddress())) {
-			logger.info("Swarm - {}: Rejected connection from blacklisted peer", socket.getInetAddress().getHostAddress());
-			socket.close();
-			return;
-		}
-		
-		logger.debug("Swarm - {}: Accepted TCP connection from peer",
-				socket.getInetAddress().getHostAddress());
-		new Thread(master.getThreadGroup(), ()->peerThread(socket) ).start();
 	}
 	
 	protected void openSocket() {
@@ -229,6 +190,7 @@ public class TCPPeerSocketListener {
 					Util.formatPubKey(identityKey.publicKey()));
 			master.getGlobalConfig().set("net.swarm.lastport", listenSocket.getLocalPort());
 			rebind();
+			registerForDispatch();
 		} catch(IOException exc) {
 			if(port == 0 && requestPort != 0) {
 				logger.warn("Swarm - -: Unable to re-acquire TCP port {}, requesting new port number...", requestPort, exc);
@@ -244,56 +206,84 @@ public class TCPPeerSocketListener {
 		}
 	}
 	
+	protected void rebind() {
+		int configPort = master.getGlobalConfig().getInt("net.swarm.port");
+		if(isListening() && listenSocket.getLocalPort() != configPort && configPort != 0) {
+			try {
+				close();
+			} catch (IOException e) {}
+			startListening();
+		}
+	}
+	
+	protected void registerForDispatch() throws IOException {
+		if(dispatchAcceptor != null) {
+			dispatchAcceptor.close();
+		}
+		
+		dispatchAcceptor = new ChannelDispatchAcceptor(
+				master.getChannelDispatch(),
+				"TCPPeerSocketListener " + listenSocket.getLocalPort(),
+				listenSocket.getChannel());
+		dispatchAcceptor.setClosedCallback(()->dispatchSawClose());
+		dispatchAcceptor.setAcceptCallback((peerChannel)->acceptPeer(peerChannel));
+	}
+	
+	protected void dispatchSawClose() {
+		if(closed) return;
+		checkSocketOpen();
+	}
+	
+	protected void acceptPeer(SocketChannel peerChannel) {
+		try {
+			processIncomingPeer(peerChannel);
+		} catch(Exception exc) {
+			String addr = peerChannel.socket().getInetAddress().getHostAddress();
+			logger.info("Swarm - {}: Caught exception accepting peer", addr, exc);
+		}
+	}
+	
+	protected void processIncomingPeer(SocketChannel peerChannel) throws IOException {
+		String addr = peerChannel.socket().getInetAddress().getHostAddress();
+		
+		if(blacklist.contains(addr)) {
+			logger.info("Swarm - {}: Rejected connection from blacklisted peer", addr);
+			peerChannel.close();
+			return;
+		}
+		
+		logger.debug("Swarm - {}: Accepted TCP connection from peer",
+				peerChannel.socket().getInetAddress().getHostAddress());
+		
+		ChannelDispatchMonitor peer = new ChannelDispatchMonitor(
+				master.getChannelDispatch(),
+				"TCP Peer " + addr,
+				peerChannel);
+		connectPeer(peer);
+	}
+	
 	protected synchronized void announceListening() {
 		for(TCPPeerAdvertisementListener listener : adListeners) {
 			listener.announce();
 		}
 	}
 	
-	protected void peerThread(Socket peerSocketRaw) {
-		long startTime = Util.currentTimeMillis();
-		try {
-			performResponderHandshake(peerSocketRaw);
-		} catch(EOFException exc) {
-			logger.debug("Swarm - {}: Peer disconnected during handshake; possibly a reachability probe.",
-					peerSocketRaw.getInetAddress().getHostAddress());
-		} catch(ProtocolViolationException exc) {
-			logger.info("Swarm - {}: Peer sent illegal handshake", peerSocketRaw.getInetAddress().getHostAddress(), exc);
-			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
-			Util.delay(delay, ()->peerSocketRaw.close());
-		} catch(IOException exc) {
-			logger.info("Swarm - {}: Caught IOException on connection to peer", peerSocketRaw.getInetAddress().getHostAddress(), exc);
-			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
-			Util.delay(delay, ()->peerSocketRaw.close());
-		} catch(SecurityException exc) {
-			logger.info("Swarm - {}: Unable to handshake with peer", peerSocketRaw.getInetAddress().getHostAddress(), exc);
-			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
-			Util.delay(delay, ()->peerSocketRaw.close());
-		} catch(Exception exc) {
-			logger.error("Swarm - {}: Caught unexpected exception on connection to peer", peerSocketRaw.getInetAddress().getHostAddress(), exc);
-			long delay = startTime + TCPPeerSocket.socketCloseDelay - Util.currentTimeMillis();
-			Util.delay(delay, ()->peerSocketRaw.close());
-		}
-	}
-	
-	protected TCPPeerSocket performResponderHandshake(Socket peerSocketRaw) throws IOException, ProtocolViolationException {
+	protected void connectPeer(ChannelDispatchMonitor peer) {
+		String addr      = peer.getChannel().socket().getInetAddress().getHostAddress();
+		
 		Util.ensure(TCPPeerSocket.maxHandshakeTimeMillis, 10, ()->established, ()->{
 			logger.debug("Swarm - {}: Closing socket since handshake was not completed within {}ms",
-					peerSocketRaw.getInetAddress().getHostAddress(),
+					addr,
 					TCPPeerSocket.maxHandshakeTimeMillis);
-			peerSocketRaw.close();
+			peer.close();
 		});
 		
 		if(adListeners.isEmpty()) {
-			throw new ProtocolViolationException(); // not ready to accept peers
+			// not ready to accept peers
+			logger.error("Swarm - {} attempted to connect before any listeners were ready", addr);
+			// TODO: blacklist?
+			return;
 		}
-		
-		RateLimitedInputStream in = new RateLimitedInputStream(peerSocketRaw.getInputStream(),
-				master.getBandwidthAllocatorRx(),
-				bandwidthMonitorRx);
-		RateLimitedOutputStream out = new RateLimitedOutputStream(peerSocketRaw.getOutputStream(),
-				master.getBandwidthAllocatorTx(),
-				bandwidthMonitorTx);
 		
 		class MutableAdListener {
 			TCPPeerAdvertisementListener value;
@@ -325,11 +315,12 @@ public class TCPPeerSocketListener {
 					return sym.encryptUnauthenticated(new byte[crypto.symIvLength()], key.getBytes());
 				},
 				
-				(inn)->{
+				(ppeer, callback)->{
 					Key sym = new Key(crypto, crypto.makeSymmetricKey(identityKey.publicKey().getBytes()));
-					byte[] ciphertext = IOUtils.readFully(inn, crypto.asymPublicDHKeySize());
-					byte[] keyRaw = sym.decryptUnauthenticated(new byte[crypto.symIvLength()], ciphertext);
-					return new byte[][] { keyRaw, ciphertext };
+					ppeer.expect(crypto.asymPublicDHKeySize(), (obfuscatedKey)->{
+						byte[] plaintextKey  = sym.decryptUnauthenticated(new byte[crypto.symIvLength()], obfuscatedKey.array());
+						callback.deobfuscated(plaintextKey, obfuscatedKey.array());
+					});
 				}
 			);
 		
@@ -379,17 +370,49 @@ public class TCPPeerSocketListener {
 			}
 		);
 		
-		CipherState[] states = handshake.handshake(in, out);
-		established = true;
+		handshake.setExceptionHandler((exception)->{
+			long expiration = Util.currentTimeMillis() + TCPPeerSocket.socketCloseDelay;
+			
+			try {
+				throw(exception);
+			} catch(EOFException exc) {
+				logger.debug("Swarm - {}: Peer disconnected during handshake; possibly a reachability probe.", addr);
+			} catch(ProtocolViolationException exc) {
+				logger.info ("Swarm - {}: Peer sent illegal handshake", addr, exc);
+				Util.delayUntil(expiration, ()->peer.close());
+				// TODO: blacklist?
+			} catch(IOException exc) {
+				logger.info ("Swarm - {}: Caught IOException on connection to peer", addr, exc);
+				Util.delayUntil(expiration, ()->peer.close());
+			} catch(SecurityException exc) {
+				logger.info ("Swarm - {}: Unable to handshake with peer", addr, exc);
+				Util.delayUntil(expiration, ()->peer.close());
+			} catch(Exception exc) {
+				logger.error("Swarm - {}: Caught unexpected exception on connection to peer", addr, exc);
+				Util.delayUntil(expiration, ()->peer.close());
+			}
+		});
 		
-		return new TCPPeerSocket(ad.value.swarm,
-				handshake.getRemoteStaticKey(),
-				peerSocketRaw,
-				states,
-				sip[0],
-				handshake.getHash(),
-				peerType.intValue(),
-				portNum.intValue());
+		handshake.handshake(peer, (rx, tx)->{
+			established = true;
+			
+			/* Creating this object automatically adds it to the peer swarm, via a wrapped
+			 * PeerConnection, where it is subsequently monitored. The static analyzer does
+			 * not see this and flags this as an unused variable.
+			 * 
+			 * 2020-06-09 JDK 11, Eclipse 2020-03
+			 */
+			@SuppressWarnings("unused")
+			TCPPeerSocket socket = new TCPPeerSocket(ad.value.swarm,
+					handshake.getRemoteStaticKey(),
+					peer,
+					rx,
+					tx,
+					sip[0],
+					handshake.getHash(),
+					peerType.intValue(),
+					portNum.intValue());
+		});
 	}
 	
 	protected PrivateDHKey getIdentityKey() {

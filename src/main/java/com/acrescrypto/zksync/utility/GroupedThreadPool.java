@@ -50,6 +50,7 @@ public class GroupedThreadPool {
 
 		switch(mode) {
 		case MODE_FIXED:
+			if(maxThreads == 0) maxThreads = Runtime.getRuntime().availableProcessors();
 			executor = Executors.newFixedThreadPool(maxThreads, factory);
 			break;
 		case MODE_CACHED:

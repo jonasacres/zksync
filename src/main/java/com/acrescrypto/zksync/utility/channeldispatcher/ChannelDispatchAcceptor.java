@@ -15,7 +15,7 @@ import com.acrescrypto.zksync.utility.channeldispatcher.ChannelDispatchMonitor.C
 
 public class ChannelDispatchAcceptor {
 	public interface ChannelDispatchAcceptCallback {
-		void accept(SocketChannel peer);
+		void accept(SocketChannel channel);
 	}
 	
 	protected String                        name;
@@ -107,10 +107,10 @@ public class ChannelDispatchAcceptor {
 		
 		try {
 			while(canAccept()) {
-				SocketChannel peer = channel.accept();
-				logger.debug("ChannelDispatch {}: Accepted peer {}", name, peer.getRemoteAddress().toString());
+				SocketChannel peerChannel = channel.accept();
+				logger.debug("ChannelDispatch {}: Accepted peer {}", name, peerChannel.getRemoteAddress().toString());
 				if(acceptCallback != null) {
-					acceptCallback.accept(peer);
+					acceptCallback.accept(peerChannel);
 				}
 			}
 		} catch(IOException exc) {

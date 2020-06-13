@@ -1,53 +1,48 @@
 package com.acrescrypto.zksync.net.noise;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Queue;
-
-import org.apache.commons.io.IOUtils;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.net.noise.SymmetricState.DerivationCallback;
+import com.acrescrypto.zksync.utility.channeldispatcher.ChannelDispatchMonitor;
 
 // per section 5.3, Noise specification, http://noiseprotocol.org/noise.html, rev 34, 2018-07-11
 public class HandshakeState {
-	protected CryptoSupport crypto;
+	protected CryptoSupport                       crypto;
+	protected SymmetricState                      symmetricState;
 	
-	protected SymmetricState symmetricState;
+	protected PrivateDHKey                        localStaticKey;       //  's' in noise spec
+	protected PrivateDHKey                        localEphemeralKey;    //  'e' in noise spec
+	protected PublicDHKey                         remoteStaticKey;      // 'rs' in noise spec
+	protected PublicDHKey                         remoteEphemeralKey;   // 're' in noise spec
 	
-	protected PrivateDHKey localStaticKey;          // 's' in noise spec
-	protected PrivateDHKey localEphemeralKey;       // 'e' in noise spec
-	protected PublicDHKey remoteStaticKey;          // 'rs' in noise spec
-	protected PublicDHKey remoteEphemeralKey;       // 're' in noise spec
+	protected boolean                             isInitiator;          // 'initiator' in noise spec
+	protected Queue    <TokenHandler>             tokenHandlers;        // analogous to 'message_patterns' in noise spec
 	
-	protected boolean isInitiator;                  // 'initiator' in noise spec
-	protected Queue<String[]> messagePatterns;      // 'message_patterns' in noise spec
+	protected HashMap  <String,TokenHandler>      writeHandlers = new HashMap<>();
+	protected HashMap  <String,TokenHandler>      readHandlers  = new HashMap<>();
 	
-	protected HashMap<String,TokenWriteHandler> writeHandlers = new HashMap<>();
-	protected HashMap<String,TokenReadHandler> readHandlers = new HashMap<>();
+	protected byte[]                              psk;
 	
-	protected byte[] psk;
+	protected String                              protocolName;
 	
-	protected String protocolName;
+	protected KeyDeobfuscator                     deobfuscator;
+	protected KeyObfuscator                       obfuscator;
+	protected PayloadReader                       payloadReader;
+	protected PayloadWriter                       payloadWriter;
 	
-	protected KeyDeobfuscator deobfuscator;
-	protected KeyObfuscator obfuscator;
-	protected PayloadReader payloadReader;
-	protected PayloadWriter payloadWriter;
+	protected HandshakeCompletionCallback         handshakeCallback;
+	protected ExceptionHandlerCallback            exceptionHandler;
 	
 	protected int round;
 	
-	private interface TokenReadHandler {
-		public void handle(InputStream in) throws IOException;
-	}
-	
-	private interface TokenWriteHandler {
-		public void handle(OutputStream out) throws IOException;
+	private interface TokenHandler {
+		public boolean handle(ChannelDispatchMonitor peer) throws IOException;
 	}
 	
 	public interface DecryptHandler {
@@ -58,12 +53,12 @@ public class HandshakeState {
 		/** Callback for handling additional payload in handshaking.
 		 * 
 		 * @param round Message round. The first message from the initiator is round 1, the response is round 2, the next initiator message is round 3, and so on.
-		 * @param in InputStream bearing ciphertext
-		 * @param decrypter DecryptHandler for decrypting ciphertext. Returns plaintext. Must be called exactly once on a byte array containing entire ciphertext read from InputStream, or handshaking will fail.
-		 * @return Ciphertext bytes read from stream.
+		 * @param peer ChannelDispatchMonitor for peer from which to receive ciphertext
+		 * @param decrypter DecryptHandler for decrypting ciphertext. Returns plaintext. Must be called exactly once on a byte array containing entire ciphertext read from peer, or handshaking will fail.
+		 * @return Ciphertext bytes read from peer.
 		 * @throws IOException
 		 */
-		public void readPayload(int round, InputStream in, DecryptHandler decrypter) throws IOException;
+		public void readPayload(int round, ChannelDispatchMonitor peer, DecryptHandler decrypter) throws IOException;
 	}
 	
 	public interface PayloadWriter {
@@ -80,42 +75,56 @@ public class HandshakeState {
 	}
 
 	public interface KeyDeobfuscator {
-		public byte[][] deobfuscate(InputStream in) throws IOException;
+		public void deobfuscate(ChannelDispatchMonitor peer, KeyDeobfuscatorCallback callback) throws IOException;
+	}
+	
+	public interface KeyDeobfuscatorCallback {
+		public void deobfuscated(byte[] plaintextKey, byte[] obfuscatedKey);
+	}
+	
+	public interface HandshakeCompletionCallback {
+		public void complete(CipherState rx, CipherState tx) throws Exception;
+	}
+	
+	public interface ExceptionHandlerCallback {
+		public void exception(Exception exc);
 	}
 
-	public HandshakeState(CryptoSupport crypto,
-			String protocolName,
-			String handshakePattern,
-			boolean isInitiator,
-			byte[] prologue,
-			PrivateDHKey localStaticKey,
-			PrivateDHKey localEphemeralKey,
-			PublicDHKey remoteStaticKey,
-			PublicDHKey remoteEphemeralKey,
-			byte[] psk) {
+	public HandshakeState(
+			CryptoSupport crypto,
+			String        protocolName,
+			String        handshakePattern,
+			boolean       isInitiator,
+			byte[]        prologue,
+			PrivateDHKey  localStaticKey,
+			PrivateDHKey  localEphemeralKey,
+			PublicDHKey   remoteStaticKey,
+			PublicDHKey   remoteEphemeralKey,
+			byte[]        psk) {
 		initTokenMappers();
-		this.crypto = crypto;
 		
-		this.protocolName = protocolName;
+		this.crypto         = crypto;
+		this.protocolName   = protocolName;
 		this.symmetricState = new SymmetricState(crypto, protocolName);
 		
-		this.deobfuscator = (in) -> {
-			byte[] key = IOUtils.readFully(in, crypto.asymPublicDHKeySize());
-			return new byte[][] { key, key };
+		this.deobfuscator = (peer, callback) -> {
+			peer.expect(crypto.asymPublicDHKeySize(), (key)->{
+				callback.deobfuscated(key.array(), key.array());
+			});
 		};
 		
 		this.obfuscator = (key) -> key.getBytes();
 		
-		this.payloadReader = (round, in, decrypter) -> decrypter.decrypt(new byte[0]);
+		this.payloadReader = (round, peer, decrypter) -> decrypter.decrypt(new byte[0]);
 		this.payloadWriter = (round) -> new byte[0];
 		
 		if(prologue == null) prologue = new byte[0];
 		this.symmetricState.mixHash(prologue);
 
-		this.isInitiator = isInitiator;
-		this.localStaticKey = localStaticKey;
-		this.localEphemeralKey = localEphemeralKey;
-		this.remoteStaticKey = remoteStaticKey;
+		this.isInitiator        = isInitiator;
+		this.localStaticKey     = localStaticKey;
+		this.localEphemeralKey  = localEphemeralKey;
+		this.remoteStaticKey    = remoteStaticKey;
 		this.remoteEphemeralKey = remoteEphemeralKey;
 		this.psk = psk;
 		
@@ -123,8 +132,8 @@ public class HandshakeState {
 	}
 	
 	public void setObfuscation(KeyObfuscator obfuscator, KeyDeobfuscator deobfuscator) {
-		this.obfuscator = obfuscator;
-		this.deobfuscator = deobfuscator;
+		this.obfuscator    = obfuscator;
+		this.deobfuscator  = deobfuscator;
 	}
 	
 	public void setPayload(PayloadWriter payloadWriter, PayloadReader payloadReader) {
@@ -143,9 +152,13 @@ public class HandshakeState {
 	public void setDerivationCallback(DerivationCallback derivationCallback) {
 		symmetricState.setDerivationCallback(derivationCallback);
 	}
+	
+	public void setExceptionHandler(ExceptionHandlerCallback exceptionHandler) {
+		this.exceptionHandler = exceptionHandler;
+	}
 
 	protected void decodeMessagePattern(String bigPattern) {
-		this.messagePatterns = new LinkedList<>();
+		this.tokenHandlers = new LinkedList<>();
 		
 		String[] lines = bigPattern.split("\n");
 		boolean hasPremessage = false;
@@ -185,79 +198,69 @@ public class HandshakeState {
 					}
 				}
 			} else {
-				messagePatterns.add(line.split(",? "));
+				boolean shouldRead = lineForInitiator == isInitiator; 
+				for(String token : line.split(",? ")) {
+					TokenHandler handler = shouldRead
+							             ?  readHandlers.get(token)
+							             : writeHandlers.get(token);
+					tokenHandlers.add(handler);
+				}
+				
+				tokenHandlers.add(shouldRead
+						? (peer) -> handleReadPayload (peer)
+						: (peer) -> handleWritePayload(peer)
+					);
 			}
 		}
 	}
 	
-	public CipherState[] handshake(InputStream in, OutputStream out) throws IOException {
-		CipherState[] result = null;
-		boolean skip = !isInitiator;
-		
-		while(result == null) {
-			if(!skip) {
-				result = writeMessage(out);
-			}
-			
-			if(result == null) {
-				result = readMessage(in);
-			}
-			
-			skip = false;
-		}
-		
-		return result;
+	public void handshake(ChannelDispatchMonitor peer, HandshakeCompletionCallback callback) {
+		this.handshakeCallback = callback;
+		resumeHandshake(peer);
 	}
 	
-	protected CipherState[] writeMessage(OutputStream out) throws IOException {
-		round++;
-		String[] tokens = messagePatterns.poll();
-		for(String token : tokens) {
-			TokenWriteHandler handler = writeHandlers.get(token);
-			if(handler != null) {
-				handler.handle(out);
+	protected void resumeHandshake(ChannelDispatchMonitor peer) {
+		boolean             proceed = true;
+		
+		try {
+			while(proceed) {
+				if(tokenHandlers.isEmpty()) {
+					// we're done!!
+					CipherState[] states = readyStates(); // [rx, tx]
+					handshakeCallback.complete(states[0], states[1]);
+					return;
+				}
+					
+				TokenHandler handler = tokenHandlers.poll();
+				proceed              = handler.handle(peer);
+			}
+		} catch(Exception exc) {
+			if(exceptionHandler != null) {
+				exceptionHandler.exception(exc);
 			}
 		}
-		
-		handleWritePayload(out);
-		
-		if(messagePatterns.isEmpty()) return readyStates();
-		return null;
 	}
 	
-	protected void handleWritePayload(OutputStream out) throws IOException {
+	protected boolean handleWritePayload(ChannelDispatchMonitor peer) throws IOException {
 		byte[] payload = payloadWriter.writePayload(round);
 		if(payload != null && payload.length > 0) {
 			byte[] ciphertext = symmetricState.encryptAndHash(payload);
-			out.write(ciphertext);
-		}
-	}
-	
-	protected CipherState[] readMessage(InputStream in) throws IOException {
-		round++;
-		
-		String[] tokens = messagePatterns.poll();
-		for(String token : tokens) {
-			TokenReadHandler handler = readHandlers.get(token);
-			if(handler != null) {
-				handler.handle(in);
-			}
+			peer.send(ciphertext);
 		}
 		
-		handleReadPayload(in);
-		
-		if(messagePatterns.isEmpty()) return readyStates();
-		return null;
+		return true;
 	}
 	
-	protected void handleReadPayload(InputStream in) throws IOException {
-		payloadReader.readPayload(round, in, (ct)->{
+	protected boolean handleReadPayload(ChannelDispatchMonitor peer) throws IOException {
+		payloadReader.readPayload(round, peer, (ct)->{
 			if(ct != null && ct.length > 0) {
 				return symmetricState.decryptAndHash(ct);
 			}
 			
 			return new byte[0];
 		});
+		
+		return false;
 	}
 	
 	protected CipherState[] readyStates() {
@@ -278,24 +281,29 @@ public class HandshakeState {
 	}
 	
 	private void initWriteTokenMappers() {
-		writeHandlers.put("e", (out)->{
+		writeHandlers.put("e", (peer)->{
 			localEphemeralKey = generateKeypair();
 			byte[] obfuscated = obfuscator.obfuscate(localEphemeralKey.publicKey());
-			out.write(obfuscated);
+			peer.send(obfuscated);
 			symmetricState.mixHash(obfuscated);
+			
+			return true;
 		});
 		
-		writeHandlers.put("s", (out)->{
+		writeHandlers.put("s", (peer)->{
 			if(symmetricState.cipherState.hasKey()) {
-				out.write(symmetricState.encryptAndHash(localStaticKey.publicKey().getBytes()));
+				peer.send(symmetricState.encryptAndHash(localStaticKey.publicKey().getBytes()));
 			} else {
 				byte[] obfuscated = obfuscator.obfuscate(localStaticKey.publicKey());
-				out.write(symmetricState.encryptAndHash(obfuscated));
+				peer.send(symmetricState.encryptAndHash(obfuscated));
 			}
+			
+			return true;
 		});
 		
 		writeHandlers.put("ee", (out)->{
 			symmetricState.mixKey(localEphemeralKey.sharedSecret(remoteEphemeralKey));
+			return true;
 		});
 		
 		writeHandlers.put("es", (out)->{
@@ -304,6 +312,7 @@ public class HandshakeState {
 			} else {
 				symmetricState.mixKey(localStaticKey.sharedSecret(remoteEphemeralKey));
 			}
+			return true;
 		});
 		
 		writeHandlers.put("se", (out)->{
@@ -312,43 +321,56 @@ public class HandshakeState {
 			} else {
 				symmetricState.mixKey(localEphemeralKey.sharedSecret(remoteStaticKey));
 			}
+			return true;
 		});
 		
 		writeHandlers.put("ss", (out)->{
 			symmetricState.mixKey(localStaticKey.sharedSecret(remoteStaticKey));
+			return true;
 		});
 		
 		writeHandlers.put("psk", (out)->{
 			symmetricState.mixKeyAndHash(psk);
+			return true;
 		});
 	}
 	
 	private void initReadTokenMappers() {
-		readHandlers.put("e", (in)->{
+		readHandlers.put("e", (peer)->{
 			assert(remoteEphemeralKey == null);
-			byte[][] deobfuscated = deobfuscator.deobfuscate(in);
-			remoteEphemeralKey = new PublicDHKey(crypto, deobfuscated[0]);
-			symmetricState.mixHash(deobfuscated[1]);
+			deobfuscator.deobfuscate(peer, (plaintextKey, obfuscatedKey)->{
+				remoteEphemeralKey = new PublicDHKey(crypto, plaintextKey);
+				symmetricState.mixHash(obfuscatedKey);
+				resumeHandshake(peer);
+			});
+			
+			return false;
 		});
 		
-		readHandlers.put("s", (in)->{
+		readHandlers.put("s", (peer)->{
 			assert(remoteStaticKey == null);
 			
 			if(symmetricState.cipherState.hasKey()) {
 				// spec says dh key size + 16, where the 16 comes from the tag length
 				int len = crypto.asymPublicDHKeySize() + crypto.symTagLength();
-				byte[] temp = new byte[len];
-				IOUtils.readFully(in, temp);
-				remoteStaticKey = new PublicDHKey(crypto, symmetricState.decryptAndHash(temp));
+				peer.expect(len, (bytes)->{
+					remoteStaticKey = new PublicDHKey(crypto, symmetricState.decryptAndHash(bytes.array()));
+					resumeHandshake(peer);
+				});
 			} else {
-				byte[][] deobfuscated = deobfuscator.deobfuscate(in);
-				remoteStaticKey = new PublicDHKey(crypto, deobfuscated[0]);
-				symmetricState.mixHash(deobfuscated[1]);
+				deobfuscator.deobfuscate(peer, (plaintextKey, obfuscatedKey)->{
+					remoteStaticKey = new PublicDHKey(crypto, plaintextKey);
+					symmetricState.mixHash(obfuscatedKey);
+					resumeHandshake(peer);
+				});
 			}
+			
+			return false;
 		});
 		
 		readHandlers.put("ee", (in)->{
 			symmetricState.mixKey(localEphemeralKey.sharedSecret(remoteEphemeralKey));
+			return true;
 		});
 		
 		readHandlers.put("es", (in)->{
@@ -357,6 +379,8 @@ public class HandshakeState {
 			} else {
 				symmetricState.mixKey(localStaticKey.sharedSecret(remoteEphemeralKey));
 			}
+			
+			return true;
 		});
 		
 		readHandlers.put("se", (in)->{
@@ -365,14 +389,18 @@ public class HandshakeState {
 			} else {
 				symmetricState.mixKey(localEphemeralKey.sharedSecret(remoteStaticKey));
 			}
+			
+			return true;
 		});
 
 		readHandlers.put("ss", (in)->{
 			symmetricState.mixKey(localStaticKey.sharedSecret(remoteStaticKey));
+			return true;
 		});
 		
 		readHandlers.put("psk", (in)->{
 			symmetricState.mixKeyAndHash(psk);
+			return true;
 		});
 	}
 	

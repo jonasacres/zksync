@@ -27,6 +27,10 @@ public class RevisionTree implements AutoCloseable {
 	public final static int DEFAULT_TREE_SEARCH_TIMEOUT_MS = 30000; // when finding ancestors, how long to wait before giving up on a lookup?
 	public static int treeSearchTimeoutMs = DEFAULT_TREE_SEARCH_TIMEOUT_MS;
 	
+	public interface RevisionTreeParentsFetchCompleteCallback {
+		void fetched(boolean success);
+	}
+	
 	class TreeSearchItem {
 		ArrayList<RevisionTag> revTags = new ArrayList<>();
 		HashMap<Long,ArrayList<RevisionTag>> deferred = new HashMap<>();
@@ -351,11 +355,11 @@ public class RevisionTree implements AutoCloseable {
 		return false;
 	}
 	
-	public Collection<RevisionTag> parentsForTag(RevisionTag revTag) {
+	public Collection<RevisionTag> parentsForTag(RevisionTag revTag) throws IOException {
 		return parentsForTag(revTag, treeSearchTimeoutMs);
 	}
 	
-	public Collection<RevisionTag> parentsForTag(RevisionTag revTag, long timeoutMs) {
+	public Collection<RevisionTag> parentsForTag(RevisionTag revTag, long timeoutMs) throws IOException {
 		if(revTag.getHeight() == 0) return new ArrayList<>(); // top-level revisions have no parents
 		Collection<RevisionTag> r = parentsForTagLocal(revTag);
 		if(r != null) return r;
@@ -464,8 +468,9 @@ public class RevisionTree implements AutoCloseable {
 	/** Take a set of revtags and transform it to the most recent set of ancestors of each
 	 * revtag containing only one parent. (In other words, because we don't merge merges
 	 * directly, we want to find the last "real" content-bearing revtags underpinning
-	 * each revtag in a revision set.) */
-	public Collection<RevisionTag> canonicalBases(Collection<RevisionTag> revTags) throws SearchFailedException {
+	 * each revtag in a revision set.) 
+	 * @throws IOException */
+	public Collection<RevisionTag> canonicalBases(Collection<RevisionTag> revTags) throws IOException {
 		/* Common ancestry is expensive to find and calculated twice right now: once when determining the revisions
 		 * to merge, and again when doing the merge. It'd be good to refactor to avoid sometime.
 		 */
@@ -494,8 +499,8 @@ public class RevisionTree implements AutoCloseable {
 	}
 	
 	/** Do we already have a revtag superceding all the data in this revtag? 
-	 * @throws SearchFailedException */
-	public boolean isSuperceded(RevisionTag revTag) throws SearchFailedException {
+	 * @throws IOException */
+	public boolean isSuperceded(RevisionTag revTag) throws IOException {
 		ArrayList<RevisionTag> tips = config.getRevisionList().branchTips();
 		logger.debug("RevisionTree {}: Checking superceded status of {}",
 				Util.formatArchiveId(config.getArchiveId()),
@@ -559,8 +564,38 @@ public class RevisionTree implements AutoCloseable {
 			throw new SecurityException("parent hash for " + Util.bytesToHex(revTag.getBytes(), 4) + " does not match; expected " + String.format("%016x", revTag.getParentHash()) + " got " + String.format("%016x", parentHash));
 		}
 	}
-	
-	protected synchronized boolean fetchParentsForTag(RevisionTag revTag, long timeoutMs) {
+
+	protected synchronized boolean fetchParentsForTag(RevisionTag revTag, long timeoutMs, RevisionTreeParentsFetchCompleteCallback callback) throws IOException {
+		// priority just a bit superior to the default for file lookups since these should go fast
+		config.swarm.requestRevisionDetails(SwarmFS.REQUEST_PRIORITY+1, revTag);
+		long endTime = timeoutMs < 0
+				       ? Long.MAX_VALUE
+				       : System.currentTimeMillis() + timeoutMs;
+		
+		/* TODO: We need a callback to figure out when we have the tag locally.
+		 * But how do we KNOW we have it locally? We'll need to check every time a page comes
+		 * in, it seems. So PeerSwarm should have a "receivedPage" callback, which in turn
+		 * gets invoked from PeerConnection. This leaves the problem of timeouts, which
+		 * may need to be handled as a separate callback from a Snooze thread or something.
+		 */
+		
+		while(parentsForTagLocal(revTag) == null && !config.isClosed() && System.currentTimeMillis() < endTime) {
+			try {
+				this.wait(Math.min(100, endTime - System.currentTimeMillis()));
+			} catch(InterruptedException exc) {}
+		}
+		
+		if(parentsForTagLocal(revTag) == null) {
+			logger.info("RevisionList {}: Timed out fetching parents for tag {}, timeout {}ms",
+					Util.formatArchiveId(config.getArchiveId()),
+					timeoutMs);
+			return false;
+		}
+		
+		return true;
+	}
+
+	protected synchronized boolean fetchParentsForTag(RevisionTag revTag, long timeoutMs) throws IOException {
 		// priority just a bit superior to the default for file lookups since these should go fast
 		logger.debug("RevisionList {}: Fetching parents for tag {}, timeout {}ms",
 				Util.formatArchiveId(config.getArchiveId()),

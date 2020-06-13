@@ -22,6 +22,7 @@ public class ConfigDefaults {
 	public static ConfigFile initBaseDefaults() {
 		ConfigFile config = new ConfigFile();
 		
+		config.setDefault("proc.workerthreads",           0);
 		config.setDefault("crypto.pbkdf.maxsimultaneous", 1);
 		
 		config.setDefault("net.dht.enabled",           true);
@@ -45,6 +46,9 @@ public class ConfigDefaults {
 		config.setDefault("net.swarm.maxOpenMessages",                         16);
 		config.setDefault("net.swarm.rejectionCacheSize",                      16);
 		config.setDefault("net.swarm.pageSendAvailabilityTimeoutMs",         1000);
+		
+		config.setDefault("net.limits.tx",                                     -1);
+		config.setDefault("net.limits.rx",                                     -1);
 		
 		config.setDefault("fs.default.fileMode",                             0644);
 		config.setDefault("fs.default.username",                           "root");
@@ -72,9 +76,6 @@ public class ConfigDefaults {
 		config.setDefault("fs.settings.mirror.zkfsToHostSyncMaxDelayMs",     1000);
 		
 		config.setDefault("fs.fileHandleTelemetry", FS.fileHandleTelemetryEnabled);
-		
-		config.setDefault("net.limits.tx",                                     -1);
-		config.setDefault("net.limits.rx",                                     -1);
 		
 		config.setDefault("log.includeLogRequests", false);
 		config.setDefault("log.historyDepth",       MemLogAppender.sharedInstance().getHistoryDepth());

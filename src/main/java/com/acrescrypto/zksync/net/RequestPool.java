@@ -226,7 +226,7 @@ public class RequestPool {
 		this.notifyAll();
 	}
 	
-	public void setRequestingEverything(boolean requestingEverything) {
+	public void setRequestingEverything(boolean requestingEverything) throws IOException {
 		this.requestingEverything = requestingEverything;
 		dirty = true;
 		
@@ -239,13 +239,13 @@ public class RequestPool {
 		this.paused = paused;
 	}
 	
-	public synchronized void addRequestsToConnection(PeerConnection conn) {
+	public synchronized void addRequestsToConnection(PeerConnection conn) throws IOException {
 		conn.setPaused(paused);
 		
 		addDataRequestsToConnection(conn);
 	}
 	
-	public synchronized void addInode(int priority, RevisionTag revTag, long inodeId) {
+	public synchronized void addInode(int priority, RevisionTag revTag, long inodeId) throws IOException {
 		requestedInodes.add(priority, new InodeRef(revTag, inodeId));
 		dirty = true;
 
@@ -258,7 +258,7 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void cancelInode(RevisionTag revTag, long inodeId) {
+	public synchronized void cancelInode(RevisionTag revTag, long inodeId) throws IOException {
 		requestedInodes.remove(new InodeRef(revTag, inodeId));
 		for(PeerConnection connection : config.getSwarm().getConnections()) {
 			ArrayList<Long> list = new ArrayList<>(1);
@@ -278,7 +278,7 @@ public class RequestPool {
 	}
 
 	
-	public synchronized void addRevision(int priority, RevisionTag revTag) {
+	public synchronized void addRevision(int priority, RevisionTag revTag) throws IOException {
 		requestedRevisions.add(priority,  revTag);
 		dirty = true;
 		
@@ -291,7 +291,7 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void addRevisionStructure(int priority, RevisionTag revTag) {
+	public synchronized void addRevisionStructure(int priority, RevisionTag revTag) throws IOException {
 		requestedRevisionStructures.add(priority,  revTag);
 		dirty = true;
 		
@@ -304,7 +304,7 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void cancelRevision(RevisionTag revTag) {
+	public synchronized void cancelRevision(RevisionTag revTag) throws IOException {
 		requestedRevisions.remove(revTag);
 		dirty = true;
 		
@@ -317,7 +317,7 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void cancelRevisionStructure(RevisionTag revTag) {
+	public synchronized void cancelRevisionStructure(RevisionTag revTag) throws IOException {
 		requestedRevisionStructures.remove(revTag);
 		dirty = true;
 		
@@ -346,7 +346,7 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void addPageTag(int priority, long shortTag) {
+	public synchronized void addPageTag(int priority, long shortTag) throws IOException {
 		requestedPageTags.add(priority, shortTag);
 		dirty = true;
 		
@@ -355,7 +355,7 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void cancelPageTag(long shortTag) {
+	public synchronized void cancelPageTag(long shortTag) throws IOException {
 		requestedPageTags.remove(shortTag);
 		dirty = true;
 		
@@ -372,11 +372,11 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void addPageTag(int priority, StorageTag pageTag) {
+	public synchronized void addPageTag(int priority, StorageTag pageTag) throws IOException {
 		addPageTag(priority, pageTag.shortTagPreserialized());
 	}
 	
-	public synchronized void cancelPageTag(StorageTag pageTag) {
+	public synchronized void cancelPageTag(StorageTag pageTag) throws IOException {
 		cancelPageTag(pageTag.shortTagPreserialized());
 	}
 	
@@ -388,7 +388,7 @@ public class RequestPool {
 		}
 	}
 	
-	public synchronized void addRevisionDetails(int priority, RevisionTag revTag) {
+	public synchronized void addRevisionDetails(int priority, RevisionTag revTag) throws IOException {
 		requestedRevisionDetails.add(priority, revTag);
 		
 		for(PeerConnection connection : config.getSwarm().getConnections()) {
@@ -440,7 +440,7 @@ public class RequestPool {
 		}
 	}
 	
-	protected void addDataRequests() {
+	protected void addDataRequests() throws IOException {
 		// TODO API: (coverage) branch coverage
 		if(config.getSwarm() != null) {
 			for(PeerConnection conn : config.getSwarm().getConnections()) {
@@ -449,7 +449,7 @@ public class RequestPool {
 		}
 	}
 	
-	protected void addDataRequestsToConnection(PeerConnection conn) {
+	protected void addDataRequestsToConnection(PeerConnection conn) throws IOException {
 		if(requestingEverything) {
 			conn.requestAll();
 		}
@@ -604,7 +604,7 @@ public class RequestPool {
 		return buf.array();
 	}
 	
-	protected void deserialize(ByteBuffer buf) {
+	protected void deserialize(ByteBuffer buf) throws IOException {
 		requestingEverything = (buf.get() & 0x01) == 0x01;
 		requestedPageTags.deserialize(buf);
 		requestedInodes.deserialize(buf);

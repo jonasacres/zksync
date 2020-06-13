@@ -1,155 +1,188 @@
 package com.acrescrypto.zksync.net;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.RejectedExecutionException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.net.PeerConnection.PeerCapabilityException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerMessageIncoming extends PeerMessage {
-	protected DataBuffer rxBuf = new DataBuffer();
-	protected final Logger logger = LoggerFactory.getLogger(PeerMessageIncoming.class);
-	protected boolean finished;
-	protected long lastSeen;
-	protected int bytesReceived;
+	public interface PeerMessageIncomingReceivedDataCallback {
+		void received(ByteBuffer data, boolean isEOF) throws IOException, ProtocolViolationException, PeerCapabilityException;
+	}
+
+	public interface PeerMessageIncomingReceivedDataSemiCallback {
+		void received(ByteBuffer data) throws IOException, ProtocolViolationException, PeerCapabilityException;
+	}
 	
-	/** Limit on how much data a message can accumulate in its read buffer. When this limit is reached,
-	 * calls to receivedData will block until the buffer is cleared via read operations.
-	 */
-	public final static int MAX_BUFFER_SIZE = 1024*512; // 512k ought to be enough for anybody
-	
-	protected class DataBuffer {
-		protected ByteBuffer buf = ByteBuffer.allocate(PeerMessage.MESSAGE_SIZE);
-		protected ByteBuffer readBuf = ByteBuffer.wrap(buf.array());
-		protected boolean eof;
+	public interface PeerMessageIncomingFinishedCallback {
+		void finished() throws IOException, ProtocolViolationException;
+	}
+
+	protected class Expectation {
+		protected PeerMessageIncomingReceivedDataCallback readCallback;
+		protected ByteBuffer                              buffer;
+		protected int                                     length;
+		protected boolean                                 standing;
 		
-		public DataBuffer() {
-			readBuf.limit(0);
+		public Expectation(
+			int length,
+			PeerMessageIncomingReceivedDataCallback readCallback)
+		{
+			this.readCallback = readCallback;
+			this.length = length;
 		}
 		
-		public synchronized void write(byte[] data) {
-			if(buf.capacity() - buf.position() < data.length) {
-				resizeBuffer(data.length);
+		public boolean receivedData(ByteBuffer payload) throws IOException, ProtocolViolationException, PeerCapabilityException {
+			if(buffer == null) {
+				if(payload.remaining() >= length) {
+					/* If we haven't read anything yet, and the incoming buffer has all
+					 * our bytes, just pass it directly to save (allo + dupli)cation.
+					 */
+					boolean isEof = isFinished()
+							     && expectations.size() == 1;
+					this.readCallback.received(payload, isEof);
+					return !standing;
+				}
+				
+				// It's possible to get an empty frame; we can safely stop here if that happens
+				if(!payload.hasRemaining()) return false;
+				
+				buffer = ByteBuffer.allocate(length);
 			}
 			
-			buf.put(data);
-			readBuf.limit(buf.position());
-			this.notifyAll();
-		}
-		
-		public boolean hasRemaining() {
-			return !eof || readBuf.hasRemaining();
-		}
-		
-		public boolean isEOF() {
-			return eof;
-		}
-		
-		public synchronized void setEOF() {
-			eof = true;
-			this.notifyAll();
-		}
-		
-		public synchronized void waitForEOF() {
-			while(!eof) {
-				try {
-					this.wait();
-				} catch (InterruptedException e) {}
-			}
-		}
-		
-		public synchronized void requireEOF() throws ProtocolViolationException {
-			if(readBuf.remaining() > 0) throw new ProtocolViolationException();
-			waitForEOF();
-			if(readBuf.remaining() > 0) throw new ProtocolViolationException();
-		}
-		
-		public byte get() throws EOFException {
-			return read(1)[0];
-		}
-		
-		public void get(byte[] buf) throws EOFException {
-			read(buf);
-		}
-		
-		public int getInt() throws EOFException {
-			return ByteBuffer.wrap(read(4)).getInt();
-		}
-		
-		public short getShort() throws EOFException {
-			return ByteBuffer.wrap(read(2)).getShort();
-		}
-		
-		public long getLong() throws EOFException {
-			return ByteBuffer.wrap(read(8)).getLong();
-		}
-		
-		public byte[] read() throws EOFException {
-			return read(new byte[readBuf.remaining()]);
-		}
-		
-		public byte[] read(int length) throws EOFException {
-			return read(new byte[length]);
-		}
-		
-		public int available() {
-			if(readBuf.remaining() == 0 && eof) return -1;
-			return readBuf.remaining();
-		}
-		
-		public synchronized byte[] read(byte[] data) throws EOFException {
-			while(readBuf.remaining() < data.length && !eof) {
-				try {
-					this.wait();
-				} catch (InterruptedException e) {}
+			buffer.put(payload);
+			
+			if(!buffer.hasRemaining()) {
+				// EOF flag set at most once per message, on its final callback invocation.
+				boolean isEof = isFinished()
+						     && expectations.size() == 1;
+				this.readCallback.received(buffer, isEof);
+				this.buffer = null;
+				return !standing;
 			}
 			
-			if(readBuf.remaining() < data.length) throw new EOFException();
-			readBuf.get(data);
-			this.notifyAll();
-			return data;
-		}
-		
-		protected synchronized void resizeBuffer(int additionalSpaceNeeded) {
-			assert(additionalSpaceNeeded <= MAX_BUFFER_SIZE);
-			int totalSpaceNeeded = buf.position() - readBuf.position() + additionalSpaceNeeded;
-			while(totalSpaceNeeded > MAX_BUFFER_SIZE) {
-				try {
-					this.wait();
-				} catch (InterruptedException e) {}
-				totalSpaceNeeded = buf.position() - readBuf.position() + additionalSpaceNeeded;
-			}
-			
-			ByteBuffer newBuf = ByteBuffer.allocate(Math.max(totalSpaceNeeded, buf.capacity()));
-			newBuf.put(readBuf.array(), readBuf.position(), buf.position()-readBuf.position());
-			buf = newBuf;
-			readBuf = ByteBuffer.wrap(buf.array());
-			readBuf.limit(buf.position());
+			return false;
 		}
 	}
 	
-	public PeerMessageIncoming(PeerConnection connection, byte cmd, byte flags, int msgId) {
-		this.connection = connection;
-		this.cmd = cmd;
-		this.flags = flags;
-		this.msgId = msgId;
-		this.lastSeen = Util.currentTimeMillis();
+	protected boolean                                 finished;
+	protected long                                    lastSeen;
+	protected int                                     bytesReceived;
+	protected Queue<ByteBuffer>                       queuedBytes       = new LinkedList<>();
+	protected Queue<Expectation>                      expectations      = new LinkedList<>();
+	protected PeerMessageIncomingFinishedCallback     finishedCallback;
+
+	protected Logger logger = LoggerFactory.getLogger(PeerMessageIncoming.class);
+
+	public PeerMessageIncoming(
+			PeerConnection connection,
+			          byte cmd,
+			          byte flags,
+			           int msgId)
+	{
+		this.connection   = connection;
+		this.cmd          = cmd;
+		this.flags        = flags;
+		this.msgId        = msgId;
+		this.lastSeen     = Util.currentTimeMillis();
 		processThread();
 	}
 	
-	public void receivedData(byte flags, byte[] data) {
-		bytesReceived += data.length; // used for testing so not bothering with synchronization
-		this.lastSeen = Util.currentTimeMillis();
-		flags |= this.flags;
-		boolean isFinal = (flags & FLAG_FINAL) != 0;
-		rxBuf.write(data);
-		if(isFinal) {
-			rxBuf.setEOF();
+	public void begin() throws ProtocolViolationException {
+		connection.handle(this);
+	}
+	
+	public void receivedData(
+			          byte flags,
+			    ByteBuffer payload)
+	                throws IOException, ProtocolViolationException, PeerCapabilityException
+	{
+		bytesReceived    += payload.remaining();
+		this.lastSeen     = Util.currentTimeMillis();
+		flags            |= this.flags;
+		boolean isFinal   = (flags & FLAG_FINAL) != 0;
+		if(isFinal)         markFinished();
+		
+		do {
+			Expectation exp   = expectations.peek();
+			if(exp == null)     return;
+			
+			boolean done      = exp.receivedData(payload);
+			if(done)            expectations.poll();
+		} while(payload.hasRemaining());
+		
+		if(isFinal && finishedCallback != null) {
+			finishedCallback.finished();
+		}
+	}
+	
+	public void expect(
+			int length,
+			PeerMessageIncomingReceivedDataCallback callback
+	) {
+		Expectation exp = new Expectation(length, callback);
+		if(expectations.size() > 0 && expectations.peek().standing) {
+			// expect after a keepExpecting preempts the keepExpecting
+			((LinkedList<Expectation>) expectations).push(exp);
+		} else {
+			expectations.add(exp);
+		}
+	}
+	
+	public void expect(
+			int length,
+			PeerMessageIncomingReceivedDataSemiCallback callback
+	) {
+		expectations.add(new Expectation(length, (data, isEOF)->callback.received(data)));
+	}
+	
+	public void keepExpecting(
+			int length,
+			PeerMessageIncomingReceivedDataCallback callback
+	) {
+		Expectation exp = new Expectation(length, callback);
+		exp.standing    = true;
+		
+		expectations.add(exp);
+	}
+
+	public void keepExpecting(
+			int length,
+			PeerMessageIncomingReceivedDataSemiCallback callback
+	) {
+		Expectation exp = new Expectation(length, (data, isEOF)->callback.received(data));
+		exp.standing    = true;
+		
+		expectations.add(exp);
+	}
+	
+	public void requireFinish(PeerMessageIncomingFinishedCallback callback) throws IOException, ProtocolViolationException {
+		if(isFinished()) {
+			callback.finished();
+			return;
+		}
+		
+		expectations.clear();
+		expect(0, (data, isEOF)->{
+			if(data.hasRemaining()) throw new ProtocolViolationException();
+			if(!isEOF)              throw new ProtocolViolationException();
+			callback.finished();
+		});
+	}
+	
+	public void onFinish(PeerMessageIncomingFinishedCallback callback) throws IOException, ProtocolViolationException {
+		if(isFinished()) {
+			callback.finished();
+		} else {
+			finishedCallback = callback;
 		}
 	}
 	
@@ -157,23 +190,21 @@ public class PeerMessageIncoming extends PeerMessage {
 		return finished;
 	}
 	
-	public synchronized void waitForFinish() {
-		if(finished) return;
-		while(!finished) {
-			try {
-				this.wait();
-			} catch (InterruptedException e) {}
+	public void close() throws IOException, ProtocolViolationException {
+		if(!isFinished()) {
+			connection.getSocket().rejectMessage(msgId, cmd);
 		}
+		
+		markFinished();
 	}
 	
-	protected synchronized void markFinished() {
+	protected void markFinished() {
 		finished = true;
 		try {
 			connection.socket.finishedMessage(this);
 		} catch(IOException exc) {
 			logger.warn("Caught exception marking message {} as finished", msgId, exc);
 		}
-		this.notifyAll();
 	}
 	
 	protected void processThread() {
