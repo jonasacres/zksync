@@ -11,6 +11,7 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFSTests;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
+	FSPathTest.class,
 	LocalFSTests.class,
 	ZKFSTests.class,
 	RAMFSTests.class,

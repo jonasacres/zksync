@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs;
 
 import static org.junit.Assert.*;
+import static org.junit.Assume.assumeTrue;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -73,12 +74,12 @@ public abstract class FSTestBase {
 		if(examplesPrepared) return;
 		
 		scratch.write("regularfile", "just a regular ol file".getBytes());
-		scratch.chmod("regularfile", 0664);
+		if(!Util.isWindows()) scratch.chmod("regularfile", 0664);
 		scratch.mkdir("directory");
-		scratch.chmod("directory", 0755);
+		if(!Util.isWindows()) scratch.chmod("directory", 0755);
 		scratch.link("regularfile", "hardlink");
-		scratch.mkfifo("fifo");
-		scratch.symlink("regularfile", "symlink");
+		if(!Util.isWindows()) scratch.mkfifo("fifo");
+		if(!Util.isWindows()) scratch.symlink("regularfile", "symlink");
 		
 		examplesPrepared = true;
 	}
@@ -125,6 +126,7 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testStatFollowsSymlinks() throws IOException {
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
 		Stat symStat = scratch.stat("symlink"), fileStat = scratch.stat("regularfile");
 		assertEquals(symStat.getInodeId(), fileStat.getInodeId());
 		assertFalse(symStat.isSymlink());
@@ -156,6 +158,7 @@ public abstract class FSTestBase {
 
 	@Test
 	public void testLstatDoesntFollowSymlinks() throws IOException {
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
 		Stat symlink = scratch.lstat("symlink");
 		assertTrue(symlink.isSymlink());
 	}
@@ -170,7 +173,7 @@ public abstract class FSTestBase {
 	@Test
 	public void testOpendir() throws IOException {
 		Directory dir = scratch.opendir("directory");
-		assertEquals(dir.getPath(), "/directory");
+		assertEquals("/directory", dir.getPath());
 	}
 	
 	@Test(expected=ENOENTException.class)
@@ -227,6 +230,7 @@ public abstract class FSTestBase {
 
 	@Test
 	public void testSymlink() throws IOException {
+	    assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
 		scratch.write("symlink-target", "over here".getBytes());
 		scratch.symlink("symlink-target", "symlink-link");
 		byte[] a = scratch.read("symlink-target");
@@ -236,7 +240,7 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testSymlinkUnsafe() throws IOException {
-		// TODO Someday: (refactor) This is going to fail on windows with LocalFS...
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
 		String target = "/tmp/symlink-target";
 		FS unscopedFs = scratch.unscopedFS();
 		
@@ -256,6 +260,7 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testReadlink() throws IOException {
+		assumeTrue("symlinks not tested on windows", !Util.isWindows());
 		String target = "doesntexistbutthatsok";
 		scratch.symlink(target, "readlink");
 		assertEquals(target, scratch.readlink("readlink"));
@@ -263,6 +268,7 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testReadlinkWhenSymlinkPointsToDirectory() throws IOException {
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
 		scratch.mkdir("dir");
 		scratch.symlink("dir", "readlink");
 		assertEquals("dir", scratch.readlink("readlink"));
@@ -288,12 +294,14 @@ public abstract class FSTestBase {
 
 	@Test
 	public void testMkfifo() throws IOException {
+		assumeTrue("FIFOs not tested on Windows", !Util.isWindows());
 		scratch.mkfifo("mkfifo");
 		assertTrue(scratch.stat("mkfifo").isFifo());
 	}
 
 	@Test
 	public void testChmod() throws IOException {
+		assumeTrue("chmod not tested on Windows", !Util.isWindows());
 		scratch.write("chmod", "contents".getBytes());
 		scratch.chmod("chmod", 0777);
 		assertEquals(0777, scratch.stat("chmod").getMode());
@@ -451,6 +459,7 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testMvMovesSymlinksIntoDirectoriesWithoutAlteringTarget() throws IOException {
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
 		scratch.purge();
 		scratch.mkdir("dir");
 		scratch.write("target", "foo".getBytes());
@@ -463,6 +472,7 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testMvMovesDirectoriesIntoSubdirectoriesWhenTargetIsSymlinkToDirectory() throws IOException {
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
 		scratch.mkdir("dir");
 		scratch.mkdir("destdir");
 		scratch.symlink("destdir", "dest");
@@ -620,7 +630,7 @@ public abstract class FSTestBase {
 		scratch.write("a/b/c/d", "test data".getBytes());
 		scratch.write("a/b/e", "test data".getBytes());
 		scratch.write("a/b/g", "test data".getBytes());
-		scratch.mkfifo("special");
+		if(!Util.isWindows()) scratch.mkfifo("special");
 		scratch.purge();
 		
 		assertTrue(scratch.exists("/"));
@@ -640,7 +650,7 @@ public abstract class FSTestBase {
 		scoped.write("a/b/c/d", "test data".getBytes());
 		scoped.write("a/b/e", "test data".getBytes());
 		scoped.write("a/b/g", "test data".getBytes());
-		scoped.mkfifo("fifo");
+		if(!Util.isWindows()) scoped.mkfifo("fifo");
 		scoped.purge();
 		
 		assertTrue(scoped.exists("/"));

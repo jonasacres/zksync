@@ -17,7 +17,6 @@ import com.acrescrypto.zksync.exceptions.EACCESException;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
-import com.acrescrypto.zksync.exceptions.FileTypeNotSupportedException;
 import com.acrescrypto.zksync.fs.*;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -54,12 +53,74 @@ public class LocalFS extends FS {
 	
 	@Override
 	public long size(String path, boolean followSymlinks) throws IOException {
-		LinkOption[] linkOpt = followSymlinks ? new LinkOption[0] : new LinkOption[] { LinkOption.NOFOLLOW_LINKS };
-		BasicFileAttributes attr = Files.readAttributes(Paths.get(path), BasicFileAttributes.class, linkOpt);
+		LinkOption[] linkOpt = followSymlinks
+				               ? new LinkOption[0]
+				               : new LinkOption[] { LinkOption.NOFOLLOW_LINKS };
+		BasicFileAttributes attr = Files.readAttributes(
+				Paths.get(path),
+				BasicFileAttributes.class,
+				linkOpt);
 		return attr.size();
 	}
-
+	
 	private Stat statWithLinkOption(String pathStr, LinkOption... linkOpt) throws IOException {
+		return isWindows()
+			   ? statWithLinkOptionWindows(pathStr, linkOpt)
+			   : statWithLinkOptionPosix  (pathStr, linkOpt);
+	}
+	
+	private Stat statWithLinkOptionWindows(String pathStr, LinkOption... linkOpt) throws IOException {
+		Stat stat = new Stat();
+		Path path = qualifiedPath(pathStr);
+		
+		/* TODO: Profiler shows that in a test like indefiniteTestComplexManyPeerEquivalent, we
+		 * burn most of our time on checking user and group names (string, not ID). In practice, most
+		 * use cases will never care. Consider having the ability to ignore uid/gid/username/group name
+		 * and force them to always be "easysafe" or something. 
+		 */
+		
+		try {
+			BasicFileAttributes attr = Files.readAttributes(path, BasicFileAttributes.class, linkOpt);
+
+			stat.setMtime(attr.lastModifiedTime().to(TimeUnit.NANOSECONDS));
+			stat.setAtime(attr.lastAccessTime  ().to(TimeUnit.NANOSECONDS));
+			stat.setCtime(attr.creationTime    ().to(TimeUnit.NANOSECONDS));
+			stat.setMode(getFilePermissions(attr, path.toString()));
+			
+			if(!isWindows()) {
+				stat.setUid((Integer) Files.getAttribute(path, "unix:uid", linkOpt));
+				stat.setGid((Integer) Files.getAttribute(path, "unix:gid", linkOpt));
+				stat.setGroup(cachedGroupName(stat.getGid(), path, linkOpt));
+			}
+			
+			stat.setUser(cachedUserName(stat.getUid(), path, linkOpt));
+			int type = getStatType(attr);
+			if(type >= 0) {
+				stat.setType(type);
+			} else {
+				try {
+					scrapeLSForUnixSpecific(stat, path.toString());
+				} catch(CommandFailedException exc) {
+					throw new ENOENTException(path.toString());
+				}
+			}
+			
+			if(stat.isSymlink()) {
+				stat.setSize(0);
+			} else {
+				stat.setSize(attr.size());
+			}
+		} catch(NoSuchFileException exc) {
+			throw new ENOENTException(path.toString());
+		} catch(java.nio.file.AccessDeniedException exc) {
+			throw new EACCESException(path.toString());
+		}
+		
+		return stat;
+	}
+
+
+	private Stat statWithLinkOptionPosix(String pathStr, LinkOption... linkOpt) throws IOException {
 		Stat stat = new Stat();
 		Path path = qualifiedPath(pathStr);
 		
@@ -73,8 +134,8 @@ public class LocalFS extends FS {
 			PosixFileAttributes attr = Files.readAttributes(path, PosixFileAttributes.class, linkOpt);
 
 			stat.setMtime(attr.lastModifiedTime().to(TimeUnit.NANOSECONDS));
-			stat.setAtime(attr.lastAccessTime().to(TimeUnit.NANOSECONDS));
-			stat.setCtime(attr.creationTime().to(TimeUnit.NANOSECONDS));
+			stat.setAtime(attr.lastAccessTime()  .to(TimeUnit.NANOSECONDS));
+			stat.setCtime(attr.creationTime()    .to(TimeUnit.NANOSECONDS));
 			stat.setMode(getFilePermissions(attr));
 			if(!isWindows()) {
 				stat.setUid((Integer) Files.getAttribute(path, "unix:uid", linkOpt));
@@ -99,7 +160,7 @@ public class LocalFS extends FS {
 				stat.setSize(attr.size());
 			}
 						
-			if(!isWindows()) stat.setInodeId((Long) Files.getAttribute(path, "unix:ino", linkOpt));
+			stat.setInodeId((Long) Files.getAttribute(path, "unix:ino", linkOpt));
 		} catch(NoSuchFileException exc) {
 			throw new ENOENTException(path.toString());
 		} catch(java.nio.file.AccessDeniedException exc) {
@@ -109,10 +170,10 @@ public class LocalFS extends FS {
 		return stat;
 	}
 	
-	private int getStatType(PosixFileAttributes attr) {
-		if(attr.isDirectory()) {
+	private int getStatType(BasicFileAttributes attr) {
+		if       (attr.isDirectory()   ) {
 			return Stat.TYPE_DIRECTORY;
-		} else if(attr.isRegularFile()) {
+		} else if(attr.isRegularFile() ) {
 			return Stat.TYPE_REGULAR_FILE;
 		} else if(attr.isSymbolicLink()) {
 			return Stat.TYPE_SYMLINK;
@@ -154,6 +215,31 @@ public class LocalFS extends FS {
 		if(perms.contains(PosixFilePermission.OWNER_WRITE)) mode |= 0200;
 		if(perms.contains(PosixFilePermission.OWNER_READ)) mode |= 0400;
 
+		return mode;
+	}
+	
+	private int getFilePermissions(BasicFileAttributes attr, String name) throws IOException {
+		int mode = 0666; // in windowsland, we'll just say everything is a+rw, and a+x if .com, .exe, .bat
+		String[] executableExtensions = {
+			".exe",
+			".bat",
+			".com",
+			".msi",
+			".cmd",
+			".vbs",
+			".jse",
+			".wsf",
+			".wsh",
+			".psc1"
+		};
+		
+		for(String extension : executableExtensions) {
+			if(!name.endsWith(extension)) continue;
+			
+			mode |= 0111;
+			break;
+		}
+		
 		return mode;
 	}
 
@@ -299,16 +385,14 @@ public class LocalFS extends FS {
 
 	@Override
 	public void symlink(String source, String dest) throws IOException {
+		if(Util.isWindows()) throw new UnsupportedOperationException();
+		
 		logger.debug("LocalFS {}: symlink {} -> {}", root, source, dest);
 		Path trueSource = source.substring(0, 1).equals("/")
 				? qualifiedPath(source)
 				: Paths.get(source);
 		
-		String aroot = root.endsWith("/") ? root : root + "/";
-		Path explicit = Paths.get(root).resolve(trueSource).normalize().toAbsolutePath();
-		if(!explicit.startsWith(aroot)) {
-			throw new ENOENTException(source);
-		}
+		assertPathInScope(trueSource.toString());
 		
 		Files.createSymbolicLink(qualifiedPath(dest), trueSource);
 	}
@@ -346,7 +430,7 @@ public class LocalFS extends FS {
 	@Override
 	public void mknod(String path, int type, int major, int minor) throws IOException {
 		logger.debug("LocalFS {}: mknod {} {} {} {}", root, path, type, major, minor);
-		if(isWindows()) throw new FileTypeNotSupportedException(path + ": Windows does not support devices");
+		if(isWindows()) throw new UnsupportedOperationException(path + ": Windows does not support devices");
 		String typeStr;
 		switch(type) {
 		case Stat.TYPE_CHARACTER_DEVICE:
@@ -370,7 +454,7 @@ public class LocalFS extends FS {
 	@Override
 	public void mkfifo(String path) throws IOException {
 		logger.debug("LocalFS {}: mkfifo {}", root, path);
-		if(isWindows()) throw new FileTypeNotSupportedException(path + ": Windows does not support named pipes");
+		if(isWindows()) throw new UnsupportedOperationException(path + ": Windows does not support named pipes");
 		try {
 			runCommand(new String[] { "mkfifo", expandPath(path) });
 		} catch(CommandFailedException exc) {
@@ -423,6 +507,8 @@ public class LocalFS extends FS {
 				.setOwner(userPrincipal);
 		} catch(FileSystemException exc) {
 			throw new UnsupportedOperationException();
+		} catch(UserPrincipalNotFoundException exc) {
+			throw new UnsupportedOperationException();
 		}
 	}
 
@@ -442,6 +528,8 @@ public class LocalFS extends FS {
 				.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, options)
 				.setGroup(groupPrincipal);
 		} catch(FileSystemException exc) {
+			throw new UnsupportedOperationException();
+		} catch(UserPrincipalNotFoundException exc) {
 			throw new UnsupportedOperationException();
 		}
 	}
@@ -561,9 +649,26 @@ public class LocalFS extends FS {
 	}
 	
 	protected Path qualifiedPath(String path) throws ENOENTException {
-		Path p = Paths.get(root, path).normalize();
-		if(!p.startsWith(root)) throw new ENOENTException(path);
-		return p;
+		FSPath normalized = FSPath.with(root).join(path).normalize();
+		System.out.println("        Path: " + path);
+		System.out.println("        Root: " + root);
+		System.out.println("      Joined: " + FSPath.with(root).join(path));
+		System.out.println("FSNormalized: " + normalized.toPosix());
+		System.out.println(" JNormalized: " + Paths.get(path).normalize().toString());
+		System.out.println();
+		if(!normalized.descendsFrom(root)) {
+			throw new ENOENTException(path);
+		}
+		
+		return Paths.get(normalized.toPosix());
+	}
+	
+	protected void assertPathInScope(String path) throws ENOENTException {
+		Path p = Paths.get(root, path).normalize().toAbsolutePath();
+		String r = Paths.get(root).normalize().toAbsolutePath().toString();
+		if(!r.endsWith("/")) r += "/";
+		
+		if(!p.startsWith(r)) throw new ENOENTException(path);
 	}
 	
 	public String toString() {

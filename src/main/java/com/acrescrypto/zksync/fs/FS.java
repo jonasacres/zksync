@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -12,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.utility.Util;
 
 public abstract class FS implements AutoCloseable {
 	protected static ConcurrentHashMap<File,Throwable> globalFileBacktraces = new ConcurrentHashMap<>();
@@ -86,9 +88,34 @@ public abstract class FS implements AutoCloseable {
 	
 	private Logger logger = LoggerFactory.getLogger(FS.class);
 	protected ConcurrentHashMap<File,Throwable> localFileBacktraces = new ConcurrentHashMap<>();
+	protected String root;
 	
 	public long maxFileSize() {
 		return Long.MAX_VALUE;
+	}
+	
+	public void root(String root) {
+		this.root = root;
+	}
+	
+	public String root() {
+		if(root == null) {
+			if(Util.isWindows()) {
+				root = "C:/";
+			} else {
+				root = "/";
+			}
+		}
+		
+		return root;
+	}
+	
+	public String join(String pathStart, String pathEnd) {
+		String sep = FileSystems.getDefault().getSeparator();
+		if(pathStart.equals(sep) || pathStart.equals("/")) {
+			pathStart = root();
+		}
+		return Paths.get(pathStart, pathEnd).toString().replace(sep, "/");
 	}
 	
 	public void write(String path, byte[] contents) throws IOException {
@@ -114,7 +141,7 @@ public abstract class FS implements AutoCloseable {
 		
 		try(Directory dir = opendir(path)) {
 			for(String entry : dir.list()) {
-				String subpath = Paths.get(path, entry).toString();
+				String subpath = join(path, entry);
 				Stat lstat = lstat(subpath);
 				
 				if(lstat.isDirectory() && !entry.equals("..") && !entry.equals(".")) {
@@ -135,7 +162,7 @@ public abstract class FS implements AutoCloseable {
 			Stat stat;
 			stat = stat(newPath);
 			if(stat.isDirectory()) {
-				newPath = Paths.get(newPath, basename(oldPath)).toString();
+				newPath = join(newPath, basename(oldPath));
 				stat = stat(newPath);
 				if(stat.isDirectory()) {
 					throw new EISDIRException(newPath);
@@ -159,7 +186,7 @@ public abstract class FS implements AutoCloseable {
 		try {
 			Stat stat = stat(newPath);
 			if(stat.isDirectory()) {
-				newPath = Paths.get(newPath, basename(oldPath)).toString();
+				newPath = join(newPath, basename(oldPath));
 				stat = stat(newPath);
 				if(stat.isDirectory()) {
 					throw new EISDIRException(newPath);
@@ -176,14 +203,14 @@ public abstract class FS implements AutoCloseable {
 				}
 			}
 			
-			this.chmod(newPath, in.getStat().mode);
+			try {
+				this.chmod(newPath, in.getStat().mode);
+			} catch(UnsupportedOperationException exc) {
+				// leave metadata stuff alone on Windows
+			}
+			
 			if(copyMetadata) {
-				this.chown(newPath, in.getStat().uid);
-				this.chown(newPath, in.getStat().user);
-				this.chgrp(newPath, in.getStat().gid);
-				this.chgrp(newPath, in.getStat().group);
-				this.setMtime(newPath, in.getStat().getMtime());
-				this.setAtime(newPath, in.getStat().getAtime());
+				applyStat(newPath, in.getStat());
 			}
 		}
 	}
@@ -205,12 +232,13 @@ public abstract class FS implements AutoCloseable {
 	}
 
 	public String absolutePath(String path) {
-		return absolutePath(path, "/");
+		return absolutePath(path, root());
 	}
 	
 	public String absolutePath(String path, String root) {
-		String fullPath = Paths.get(root, path).toString();
+		String fullPath = join(root, path);
 		ArrayList<String> comps = new ArrayList<String>();
+		
 		for(String comp : fullPath.split("/")) {
 			if(comp.equals(".")) continue;
 			else if(comp.equals("..")) {
@@ -221,7 +249,13 @@ public abstract class FS implements AutoCloseable {
 		}
 		
 		if(comps.size() == 0 || comps.size() == 1 && comps.get(0).equals("")) return "/";
-		return String.join("/", comps);
+		if(Util.isWindows()	
+				&& comps.size() == 1
+				&& (     comps.get(0)       .equals(root())
+					||  (comps.get(0) + "/").equals(root())
+				 )
+		   ) return "/";
+		return String.join("/", comps).replace(root(), "/");
 	}
 	
 	public boolean exists(String path, boolean followLinks) {

@@ -39,7 +39,7 @@ public class LocalDirectory implements Directory {
 		// Files.newDirectoryStream(Paths.get(fs.root, path));
 		try(DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(fs.root, path))) {
 			for(Path entry: stream) {
-				String entryPath = Paths.get(path, entry.getFileName().toString()).toString();
+				String entryPath = fs.join(path, entry.getFileName().toString());
 				if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(entryPath).isDirectory()) continue;
 				paths.add(entry.getFileName().toString());
 			}
