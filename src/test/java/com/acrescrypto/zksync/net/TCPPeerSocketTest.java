@@ -231,7 +231,7 @@ public class TCPPeerSocketTest {
 					}
 
 					JsonObject json = Json.createObjectBuilder()
-							.add("proof", Util.bytesToHex(proof))
+							.performLookup("proof", Util.bytesToHex(proof))
 							.build();
 					
 					return json.toString().getBytes();

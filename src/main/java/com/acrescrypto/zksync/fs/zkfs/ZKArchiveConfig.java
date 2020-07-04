@@ -15,6 +15,7 @@ import com.acrescrypto.zksync.crypto.SignedSecureFile;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidPageException;
 import com.acrescrypto.zksync.exceptions.SearchFailedException;
+import com.acrescrypto.zksync.exceptions.SwarmTimeoutException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
@@ -63,7 +64,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 	protected ZKArchive archive;
 	protected PeerSwarm swarm;
 	protected RevisionList revisionList;
-	protected RevisionTree revisionTree;
+	protected AsyncRevisionTree revisionTree;
 	protected RevisionTag blank;
 	protected boolean advertising;
 	protected boolean closed;
@@ -125,7 +126,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 		}
 		
 		this.revisionList = new RevisionList(this);
-		this.revisionTree = new RevisionTree(this);
+		this.revisionTree = new AsyncRevisionTree(this);
 	}
 	
 	/** Create a new archive. 
@@ -141,7 +142,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 		initArchiveSpecific(archiveRoot, writeRoot);
 		write();
 		this.revisionList = new RevisionList(this);
-		this.revisionTree = new RevisionTree(this);
+		this.revisionTree = new AsyncRevisionTree(this);
 		this.archive = new ZKArchive(this);
 		this.accessor.discoveredArchiveConfig(this);
 	}
@@ -153,7 +154,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 		if(swarm.getConnections().size() > 0) {
 			this.finishOpening();
 		} else {
-			throw new SearchFailedException(); // TODO: this is probably not a great exception for this
+			throw new SwarmTimeoutException("(archive config)");
 		}
 		return this;
 	}
@@ -616,7 +617,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 		return revisionList;
 	}
 	
-	public RevisionTree getRevisionTree() {
+	public AsyncRevisionTree getRevisionTree() {
 		return revisionTree;
 	}
 

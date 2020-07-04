@@ -255,7 +255,7 @@ public class ZKFS extends FS {
 		dirty = false;
 		
 		RevisionList list = archive.config.getRevisionList();
-		RevisionTree tree = archive.config.getRevisionTree();
+		AsyncRevisionTree tree = archive.config.getRevisionTree();
 		tree.addParentsForTag(baseRevision, parents);		
 		list.addBranchTip(baseRevision);
 		list.consolidate(baseRevision);

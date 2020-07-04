@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.util.Collection;
 
 import javax.json.Json;
 import javax.json.JsonObject;
@@ -17,6 +16,7 @@ import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.SearchFailedException;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.RevisionList.RevisionMonitor;
@@ -121,53 +121,57 @@ public class ZKFSManager implements AutoCloseable {
 		}
 	}
 	
-	public synchronized void notifyNewRevtag(RevisionTag revtag) {
+	public void notifyNewRevtag(RevisionTag revtag) {
+		/* We need to rebase if the new revtag supercedes the latest revtag in our list.
+		 * DO NOT rebase if the filesystem has uncommitted local changes, or if it is not
+		 * based on the latest revtag in our list, or if the new revtag does not supercede
+		 * the latest revtag in our list, or if autofollow is not enabled.
+		 */
+		
+		if(!autofollow)                     return;
+		if(fs.isDirty())                    return;
+		
 		RevisionTag latest = fs.archive.config.revisionList.latest();
-		boolean isDescendent = false;
+		if(!fs.baseRevision.equals(latest)) return;
 		
-		try {
-			isDescendent = fs.archive.config.revisionTree.descendentOf(latest, fs.baseRevision);
-			if(!isDescendent) {
-				Collection<RevisionTag> baseParents = fs.archive.config.revisionTree.parentsForTag(fs.baseRevision);
-				if(baseParents.size() > 1) {
-					if(fs.baseRevision.getHeight() <= revtag.getHeight()) {
-						/* If the incoming tag is at a greater height, it could still be a merge containing all
-						 * of our parent merges, plus a node with a greater height. */
-						boolean couldBeDescendent = true;
-						for(RevisionTag parent : baseParents) {
-							if(!fs.archive.config.revisionTree.descendentOf(revtag, parent)) {
-								couldBeDescendent = false;
-								break;
-							}
-						}
+		fs.getArchive().getConfig().getRevisionTree().supercededBy(
+				revtag,
+				latest,
+				(isSuperceded)->{
+					if(!isSuperceded                      ) return;
+					synchronized(this) {
+						if(!autofollow                    ) return;
+						if( fs.isDirty()                  ) return;
+						if(!fs.baseRevision.equals(latest)) return;
 						
-						isDescendent = couldBeDescendent;
+						logger.info("ZKFS {} {}: Automatically rebasing to new revtag {}",
+								Util.formatArchiveId(fs.archive.config.archiveId),
+								Util.formatRevisionTag(fs.baseRevision),
+								Util.formatRevisionTag(latest));
+						fs.rebase(latest);
+						if(mirror != null) {
+							mirror.syncArchiveToTarget();
+						}
 					}
-				}
-			}
-		} catch(IOException exc) {}
-		
-		if(autofollow
-			&& !fs.isDirty()
-			&& !fs.baseRevision.equals(latest)
-			&& isDescendent) {
-				try {
-					logger.info("ZKFS {} {}: Automatically rebasing to new revtag {}",
-							Util.formatArchiveId(fs.archive.config.archiveId),
-							Util.formatRevisionTag(fs.baseRevision),
-							Util.formatRevisionTag(latest));
-					fs.rebase(latest);
-					if(mirror != null) {
-						mirror.syncArchiveToTarget();
+				},
+				(xx)->{
+					try {
+						throw(xx);
+					} catch(SearchFailedException exc) {
+						logger.warn("ZKFS {} {}: Failed to look up revision tree information when processing incoming tag {}. Search failed on tag {}",
+								Util.formatArchiveId(fs.archive.config.archiveId),
+								Util.formatRevisionTag(fs.baseRevision),
+								Util.formatRevisionTag(revtag),
+								Util.formatRevisionTag(exc.getTag()),
+								exc);
+					} catch(Exception exc) {
+						logger.error("ZKFS {} {}: Unable to rebase to revtag {}",
+								Util.formatArchiveId(fs.archive.config.archiveId),
+								Util.formatRevisionTag(fs.baseRevision),
+								Util.formatRevisionTag(revtag),
+								exc);
 					}
-				} catch (IOException exc) {
-					logger.error("ZKFS {} {}: Unable to rebase to revtag {}",
-							Util.formatArchiveId(fs.archive.config.archiveId),
-							Util.formatRevisionTag(fs.baseRevision),
-							Util.formatArchiveId(fs.archive.config.archiveId),
-							exc);
-				}
-		}
+				});
 	}
 	
 	public ZKFS getFs() {

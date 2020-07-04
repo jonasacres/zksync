@@ -42,7 +42,7 @@ public class RevisionTreeTest {
 	ZKMaster master;
 	ZKArchiveConfig config;
 	ZKArchive archive;
-	RevisionTree tree;
+	OldRevisionTree tree;
 	DummySwarm swarm;
 	
 	@BeforeClass
@@ -67,7 +67,7 @@ public class RevisionTreeTest {
 		archive.close();
 		master.close();
 		Util.setCurrentTimeMillis(-1);
-		RevisionTree.treeSearchTimeoutMs = RevisionTree.DEFAULT_TREE_SEARCH_TIMEOUT_MS;
+		OldRevisionTree.treeSearchTimeoutMs = OldRevisionTree.DEFAULT_TREE_SEARCH_TIMEOUT_MS;
 	}
 	
 	@AfterClass
@@ -751,7 +751,7 @@ public class RevisionTreeTest {
 	
 	@Test(expected=SearchFailedException.class)
 	public void testIsSupercededThrowsSearchFailedExceptionIfLookupTimedOut() throws IOException {
-		RevisionTree.treeSearchTimeoutMs = 1;
+		OldRevisionTree.treeSearchTimeoutMs = 1;
 		RevisionTag tag = archive.openBlank().commitAndClose().getFS().commitAndClose();
 		tree.clear();
 		config.getCacheStorage().purge();

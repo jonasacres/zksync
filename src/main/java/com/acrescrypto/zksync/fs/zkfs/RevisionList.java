@@ -8,6 +8,8 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedList;
 
+import org.apache.commons.lang3.mutable.MutableBoolean;
+import org.apache.commons.lang3.mutable.MutableInt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,8 +19,11 @@ import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.InvalidArchiveException;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
+import com.acrescrypto.zksync.fs.zkfs.AsyncRevisionTree.ExceptionCallback;
 import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetResolver;
+import com.acrescrypto.zksync.utility.Gather;
+import com.acrescrypto.zksync.utility.Util.OpportunisticExceptionHandler;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
@@ -26,6 +31,18 @@ import com.acrescrypto.zksync.utility.Util;
 public class RevisionList implements AutoCloseable {
 	public interface RevisionMonitor {
 		public void notifyNewRevision(RevisionTag revTag);
+	}
+	
+	public interface TaskCompleteCallback {
+		void complete() throws Exception;
+	}
+	
+	public interface ShouldAcceptBranchCallback {
+		void result(boolean shouldAccept) throws Exception;
+	}
+	
+	public interface BranchAddCallback {
+		void result(boolean branchAccepted) throws Exception;
 	}
 
 	private ArrayList<RevisionTag> branchTips = new ArrayList<>();
@@ -153,117 +170,131 @@ public class RevisionList implements AutoCloseable {
 		return null;
 	}
 	
-	public boolean addBranchTip(RevisionTag newBranch) throws IOException {
-		return addBranchTip(newBranch, false);
-	}
-
-	public boolean addBranchTip(RevisionTag newBranch, boolean verify) throws IOException {
-		if(config.revisionTree.isSuperceded(newBranch)) {
-			return false;
-		}
+	public void addBranchTip(
+			RevisionTag                   newBranch,
+			boolean                       verifySignature,
+			TaskCompleteCallback          callback,
+			OpportunisticExceptionHandler exceptionHandler
+		)
+	{
+		MutableBoolean needsVerify       = new MutableBoolean(verifySignature);
+		MutableInt     totalAddsPrevious = new MutableInt(-1);
 		
-		int totalAddsPrevious = totalAdds;
-		if(verify) {
-			/* public key verifications are expensive, so we defer revtag validation until after we know
-			 * we'd even consider inserting it */
+		new Gather<Object,Object>()
+			.add(null)
+			.with((g, ready)->{
+			  totalAddsPrevious.setValue(totalAdds);
+			  shouldAcceptBranchTip(
+			    newBranch,
+			    (shouldAccept)->{
+			    	if(!shouldAccept) {
+			    		ready.found(null);
+			    	} else {
+			    		callback.complete();
+			    	}
+			    },
+			    exceptionHandler);
+		  }).with((g, ready)->{
+			  if(needsVerify.isTrue()) {
+				  newBranch.assertValid();
+				  needsVerify.setFalse();
+			  }
+			  
+			  ready.found(null);			  
+		  }).result((g, _ignored_)->{
+			  synchronized(this) {
+				  if(!totalAddsPrevious.equals(totalAdds)) {
+					  g.restart();
+					  return;
+				  }
+				  
+				  totalAdds += 1;
+				  branchTips.add(newBranch);
+			  }
+			  
+			  logger.info("RevisionList {} {}: Added branch tip {} to revision list, current size = {}",
+					config.getArchive().getMaster().getName(),
+					Util.formatArchiveId(config.archiveId),
+					Util.formatRevisionTag(newBranch),
+					branchTips.size());
+			  updateLatest(newBranch);
+			  config.swarm.announceTip(newBranch);
+			  new Gather<RevisionMonitor,Object>()
+			  	.add(monitors)
+			  	.find(null, (gg, monitor)->{
+			  		monitor.notifyNewRevision(newBranch);
+			  }).runInParallel();
 
-			if(!shouldAcceptBranchTip(newBranch)) {
-				return false;
-			}
-			
-			newBranch.assertValid();
-		}
-
-		synchronized (this) {
-			/* check superceded if we didn't do that last time, or if we added another branch tip before
-			 * we got into the synchronized block 
-			 */
-			boolean lastCheckStillGood = verify && totalAdds == totalAddsPrevious;
-			if(!lastCheckStillGood && !shouldAcceptBranchTip(newBranch)) {
-				return false;
-			}
-			
-			totalAdds++;
-			
-			branchTips.add(newBranch);
-			logger.info("RevisionList {} {}: Added branch tip {} to revision list, current size = {}",
-					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.archiveId),
-					Util.formatRevisionTag(newBranch), branchTips.size());
-			config.swarm.announceTip(newBranch);
-			updateLatest(newBranch);
-		}
-
-		for (RevisionMonitor monitor : monitors) {
-			threadPool.submit(()->monitor.notifyNewRevision(newBranch));
-		}
-
-		if (getAutomerge() && branchTips.size() > 1) {
-			queueAutomerge();
-		}
-
-		return true;
+			  if (getAutomerge() && branchTips.size() > 1) {
+				queueAutomerge();
+			  }
+		  }).passExceptions(exceptionHandler);
 	}
 	
-	protected boolean shouldAcceptBranchTip(RevisionTag newBranch) throws IOException {
-		if (config.revisionTree.isSuperceded(newBranch)) {
-			return false;
-		}
-		
-		if (branchTips.contains(newBranch)) {
+	protected void shouldAcceptBranchTip(
+			RevisionTag                   newBranch,
+			ShouldAcceptBranchCallback    callback,
+			OpportunisticExceptionHandler exceptionCallback
+		) throws IOException
+	{
+		if(branchTips.contains(newBranch)) {
 			logger.debug(
 					"RevisionList {} {}: Not adding branch tip {} to revision list, already in list, current size = {}",
 					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.archiveId),
 					Util.formatRevisionTag(newBranch), branchTips.size());
-			return false;
+			Util.handleExceptions(exceptionCallback,
+					()->callback.result(false));
+			return;
 		}
 		
-		return true;
+		config.revisionTree.isSuperceded(
+				newBranch,
+				(isSuperceded)->callback.result(isSuperceded),
+				exceptionCallback);
 	}
 
-	public void consolidate(RevisionTag newBranch) throws IOException {
-		logger.info("RevisionList {} {}: Consolidating to branch tip {}", config.getArchive().getMaster().getName(),
-				Util.formatArchiveId(config.getArchiveId()), Util.formatRevisionTag(newBranch));
+	public void consolidate(
+			RevisionTag                    newBranch,
+			TaskCompleteCallback           callback,
+			OpportunisticExceptionHandler  exceptionCallback
+		) throws IOException {
+		logger.info("RevisionList {} {}: Consolidating to branch tip {}",
+				config.getArchive().getMaster().getName(),
+				Util.formatArchiveId(config.getArchiveId()),
+				Util.formatRevisionTag(newBranch));
 
-		Collection<RevisionTag> tips, parents;
-		ArrayList<RevisionTag> toRemove = new ArrayList<>();
-		RevisionTree tree = config.getRevisionTree();
-		parents = tree.parentsForTag(newBranch, RevisionTree.treeSearchTimeoutMs);
-
-		synchronized (this) {
-			tips = new ArrayList<>(branchTips);
-		}
-
-		for (RevisionTag tip : tips) {
-			if (tip.equals(newBranch)) {
-				continue;
-			}
-
-			if(tree.descendentOf(newBranch, tip)) {
-				toRemove.add(tip);
-			} else {
-				Collection<RevisionTag> tipParents = tree.parentsForTag(tip, RevisionTree.treeSearchTimeoutMs);
-				if(tipParents != null && parents != null
-						&& tipParents.size() > 1
-						&& parents.size() > tipParents.size()
-						&& parents.containsAll(tipParents)) {
-					toRemove.add(tip);
-				}
-			}
-		}
-
-		synchronized (this) {
-			logger.info("RevisionList {} {}: Removing {} branch tips due to consolidation to tip {}",
-					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()),
-					toRemove.size(), Util.formatRevisionTag(newBranch));
-			for (RevisionTag tip : toRemove) {
-				removeBranchTip(tip);
-			}
-		}
+		AsyncRevisionTree       tree     = config.getRevisionTree();
+		
+		/* For all branch tips t, remove t if newBranch supercedes t */
+		new Gather<RevisionTag, Boolean>()
+			.add(branchTips)
+		    .map((g, tip, result)->{
+			  tree.supercededBy(
+			    newBranch,
+			    tip,
+			    (isSuperceded)->result.yield(isSuperceded),
+			    (exc)->g.exception(exc));
+		  }).results((g, results)->{
+			  synchronized(this) {
+				  for(RevisionTag tip : results.keySet()) {
+					  if(!results.get(tip)) return; // is not superceded
+					  logger.info("RevisionList {} {}: Consolidating to {}, removing superceded branch tip {}",
+							  config.getArchive().getMaster().getName(),
+							  Util.formatArchiveId(config.getArchiveId()),
+							  Util.formatRevisionTag(newBranch),
+							  Util.formatRevisionTag(tip));
+					  removeBranchTip(tip);
+				  };
+			  }
+			  
+			  if(callback != null) callback.complete();
+		  }).passExceptions(exceptionCallback)
+		    .run();
 	}
 
 	public void consolidate() throws IOException {
 		ArrayList<RevisionTag> tips, toRemove = new ArrayList<>();
-		RevisionTree tree = config.getRevisionTree();
+		AsyncRevisionTree tree = config.getRevisionTree();
 
 		logger.info("RevisionList {} {}: Starting general consolidation",
 				config.getArchive().getMaster().getName(),

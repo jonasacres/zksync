@@ -28,7 +28,7 @@ public class RevisionListTest {
 	CryptoSupport crypto;
 	DummySwarm swarm;
 	
-	class DummyRevisionTree extends RevisionTree {
+	class DummyRevisionTree extends OldRevisionTree {
 		public DummyRevisionTree(ZKArchiveConfig config) {
 			super(config);
 		}

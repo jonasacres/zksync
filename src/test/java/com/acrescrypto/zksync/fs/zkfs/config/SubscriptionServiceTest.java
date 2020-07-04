@@ -40,13 +40,13 @@ public class SubscriptionServiceTest {
 	
 	JsonObject makeTestJson() {
 		return Json.createObjectBuilder()
-			.add("bool.true", true)
-			.add("bool.false", false)
-			.add("int", 1234)
-			.add("long", 8589934592L)
-			.add("double", 3.14156)
-			.add("string", "test string")
-			.add("null", JsonValue.NULL)
+			.performLookup("bool.true", true)
+			.performLookup("bool.false", false)
+			.performLookup("int", 1234)
+			.performLookup("long", 8589934592L)
+			.performLookup("double", 3.14156)
+			.performLookup("string", "test string")
+			.performLookup("null", JsonValue.NULL)
 			.build();
 	}
 	

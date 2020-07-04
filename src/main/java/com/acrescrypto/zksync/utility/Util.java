@@ -26,6 +26,10 @@ public class Util {
 	private final static char[] hexArray = "0123456789abcdef".toCharArray();
 	private final static Logger logger = LoggerFactory.getLogger(Util.class);
 	
+	public interface OpportunisticExceptionHandler {
+		void exception(Exception exc) throws Exception;
+	}
+	
 	public interface WaitTest {
 		boolean test();
 	}
@@ -478,5 +482,20 @@ public class Util {
 //		String s = ts + " " + message;
 //		System.out.println(s);
 		logger.debug(message);
+	}
+	
+	public static boolean handleExceptions(OpportunisticExceptionHandler handler, AnonymousCallback code) {
+		try {
+			code.cb();
+			return true;
+		} catch(Exception exc) {
+			try {
+				handler.exception(exc);
+			} catch(Exception exc2) {
+				logger.error("Error handling exception (original exception)", exc);
+				logger.error("Exception triggered when handling exception", exc2);
+			}
+			return false;
+		}
 	}
 }

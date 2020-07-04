@@ -22,22 +22,23 @@ public class ConfigDefaults {
 	public static ConfigFile initBaseDefaults() {
 		ConfigFile config = new ConfigFile();
 		
-		config.setDefault("proc.workerthreads",           0);
-		config.setDefault("crypto.pbkdf.maxsimultaneous", 1);
+		config.setDefault("proc.workerthreads",                                 0);
+		config.setDefault("crypto.pbkdf.maxsimultaneous",                       1);
 		
-		config.setDefault("net.dht.enabled",           true);
-		config.setDefault("net.dht.bindaddress",  "0.0.0.0");
-		config.setDefault("net.dht.localaddress", "0.0.0.0");
-		config.setDefault("net.dht.port",                 0);
-		config.setDefault("net.dht.upnp",             false);
-		config.setDefault("net.dht.network",     "easysafe");
+		config.setDefault("net.dht.enabled",                                 true);
+		config.setDefault("net.dht.bindaddress",                        "0.0.0.0");
+		config.setDefault("net.dht.localaddress",                       "0.0.0.0");
+		config.setDefault("net.dht.port",                                       0);
+		config.setDefault("net.dht.upnp",                                   false);
+		config.setDefault("net.dht.network",                           "easysafe");
 		
-		config.setDefault("net.dht.bootstrap.enabled",   true);
-		config.setDefault("net.dht.bootstrap.peerfile",  "http://dht1.easysafe.io/dht/peerfile");
+		config.setDefault("net.dht.bootstrap.enabled",                        true);
+		config.setDefault("net.dht.bootstrap.peerfile", "http://dht1.easysafe.io/dht/peerfile");
 		
 		config.setDefault("net.dht.discoveryintervalms",      DHTZKArchiveDiscovery.DEFAULT_DISCOVERY_INTERVAL_MS);
 		config.setDefault("net.dht.advertisementintervalms",  DHTZKArchiveDiscovery.DEFAULT_ADVERTISEMENT_INTERVAL_MS);
 		
+		// TODO: Standardize case!
 		config.setDefault("net.swarm.enabled",                              false);
 		config.setDefault("net.swarm.bindaddress",                      "0.0.0.0");
 		config.setDefault("net.swarm.backlog",                                 50);
@@ -46,15 +47,17 @@ public class ConfigDefaults {
 		config.setDefault("net.swarm.maxOpenMessages",                         16);
 		config.setDefault("net.swarm.rejectionCacheSize",                      16);
 		config.setDefault("net.swarm.pageSendAvailabilityTimeoutMs",         1000);
+		config.setDefault("net.swarm.revisionLookupRetryInterval",           1000);
+		config.setDefault("net.swarm.revisionlookuptimeoutms",              60000);
 		
 		config.setDefault("net.limits.tx",                                     -1);
 		config.setDefault("net.limits.rx",                                     -1);
 		
-		config.setDefault("fs.default.fileMode",                             0644);
 		config.setDefault("fs.default.username",                           "root");
-		config.setDefault("fs.default.uid",                                     0);
 		config.setDefault("fs.default.groupname",                          "root");
+		config.setDefault("fs.default.uid",                                     0);
 		config.setDefault("fs.default.gid",                                     0);
+		config.setDefault("fs.default.fileMode",                             0644);
 		config.setDefault("fs.default.directoryMode",                        0755);
 		config.setDefault("fs.settings.maxOpenBlocks",                          4);
 		

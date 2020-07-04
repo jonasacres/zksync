@@ -19,7 +19,7 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.UriInfo;
 
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
-import com.acrescrypto.zksync.fs.zkfs.RevisionTree;
+import com.acrescrypto.zksync.fs.zkfs.OldRevisionTree;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksyncweb.ArchiveCrud;
 import com.acrescrypto.zksyncweb.State;
@@ -57,7 +57,7 @@ public class ArchiveRevisionsResource {
 		HashSet<XRevisionInfo> set = new HashSet<>();
 		LinkedList<RevisionTag> queue = new LinkedList<>();
 
-		RevisionTree tree = config.getRevisionTree();
+		AsyncRevisionTree tree = config.getRevisionTree();
 		
 		queue.addAll(config.getRevisionList().branchTips());
 		while(!queue.isEmpty()) {

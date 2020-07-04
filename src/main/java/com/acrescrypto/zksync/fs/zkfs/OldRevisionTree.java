@@ -23,7 +23,9 @@ import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.HashCache;
 import com.acrescrypto.zksync.utility.Util;
 
-public class RevisionTree implements AutoCloseable {
+/** Only held in source tree temporarily so I can refer to the original logic when debugging async rewrite.
+ */
+public class OldRevisionTree implements AutoCloseable {
 	public final static int DEFAULT_TREE_SEARCH_TIMEOUT_MS = 30000; // when finding ancestors, how long to wait before giving up on a lookup?
 	public static int treeSearchTimeoutMs = DEFAULT_TREE_SEARCH_TIMEOUT_MS;
 	
@@ -100,17 +102,22 @@ public class RevisionTree implements AutoCloseable {
 			ArrayList<Future<?>> futures = new ArrayList<>();
 			for(RevisionTag revTag : lookups) {
 				Future<?> future = threadPool.submit(()->{
-					Collection<RevisionTag> parents = parentsForTag(revTag, treeSearchTimeoutMs);
-					if(parents == null) return;
-					synchronized(this) {
-						for(RevisionTag parent : parents) {
-							if(parent.getHeight() == height) {
-								newRevTags.add(parent);
-							} else {
-								deferred.putIfAbsent(parent.getHeight(), new ArrayList<>());
-								deferred.get(parent.getHeight()).add(parent);
+					Collection<RevisionTag> parents;
+					try { // added to get rid of compiler error
+						parents = parentsForTag(revTag, treeSearchTimeoutMs);
+						if(parents == null) return;
+						synchronized(this) {
+							for(RevisionTag parent : parents) {
+								if(parent.getHeight() == height) {
+									newRevTags.add(parent);
+								} else {
+									deferred.putIfAbsent(parent.getHeight(), new ArrayList<>());
+									deferred.get(parent.getHeight()).add(parent);
+								}
 							}
 						}
+					} catch (IOException e) {
+						e.printStackTrace();
 					}
 				});
 				
@@ -135,7 +142,7 @@ public class RevisionTree implements AutoCloseable {
 						e.printStackTrace();
 					}
 					
-					throw new SearchFailedException();
+					throw new SearchFailedException(null);
 				}
 			}
 			revTags = newRevTags;
@@ -245,7 +252,7 @@ public class RevisionTree implements AutoCloseable {
 	}
 	
 	ZKArchiveConfig config;
-	protected final Logger logger = LoggerFactory.getLogger(RevisionTree.class);
+	protected final Logger logger = LoggerFactory.getLogger(OldRevisionTree.class);
 	HashCache<RevisionTag, HashSet<RevisionTag>> map = new HashCache<>(256,
 			(tag)->{
 				if(hasParentsForTag(tag)) {
@@ -259,7 +266,7 @@ public class RevisionTree implements AutoCloseable {
 							Util.formatRevisionTag(tag));
 					Collection<RevisionTag> parents = parentsForTag(tag);
 					if(parents == null) {
-						throw new SearchFailedException();
+						throw new SearchFailedException(tag);
 					}
 					
 					return new HashSet<>(parents);
@@ -273,7 +280,7 @@ public class RevisionTree implements AutoCloseable {
 	protected GroupedThreadPool threadPool;
 	protected LinkedList<SubscriptionToken<?>> subscriptions = new LinkedList<>();
 	
-	public RevisionTree(ZKArchiveConfig config) {
+	public OldRevisionTree(ZKArchiveConfig config) {
 		this.config = config;
 		
 		try {
@@ -518,7 +525,7 @@ public class RevisionTree implements AutoCloseable {
 		Collection<RevisionTag> parents = parentsForTag(revTag);
 		if(parents == null) {
 			if(config.isClosed()) return false; // avoid needless log spam
-			throw new SearchFailedException();
+			throw new SearchFailedException(revTag);
 		}
 		
 		if(parents.size() > 1) {

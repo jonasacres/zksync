@@ -6,10 +6,13 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class HashCache<K,V> {
+public class AsyncHashCache<K,V> {
+	public interface CacheValueFound<V> {
+		void found(V value) throws IOException;
+	}
 	public interface CacheLookup<K,V> {
 		// not wild about having the IOException, an alternative would be nice
-		public V getValue(K key) throws IOException;
+		public void getValue(K key, CacheValueFound<V> callback) throws IOException;
 	}
 
 	public interface CacheEvict<K,V> {
@@ -23,7 +26,7 @@ public class HashCache<K,V> {
 	protected CacheLookup       <K,V> lookup;
 	protected CacheEvict        <K,V> evict;
 	
-	public HashCache(
+	public AsyncHashCache(
 			int               capacity,
 			CacheLookup <K,V> lookup,
 			CacheEvict  <K,V> evict)
@@ -33,7 +36,7 @@ public class HashCache<K,V> {
 		this.evict    = evict;
 	}
 	
-	public HashCache(
+	public AsyncHashCache(
 			HashCache  <K,V> existing,
 			CacheLookup<K,V> lookup,
 			CacheEvict <K,V> evict)
@@ -43,20 +46,23 @@ public class HashCache<K,V> {
 		evictionQueue = new LinkedList       <>(existing.evictionQueue);
 	}
 	
-	public synchronized V get(K key) throws IOException {
+	public synchronized void get(K key, CacheValueFound<V> callback) throws IOException {
 		V result = cache.getOrDefault(key, null);
 		if(result == null) {
-			result = add(key);
+			performLookup(key, callback);
+			return;
 		} else {
 			resetKey(key);
 		}
-		return result;
+		
+		callback.found(result);
 	}
 	
-	protected V add(K key) throws IOException {
-		V result = lookup.getValue(key);
-		if(result == null) return null;
-		return add(key, result);
+	protected void performLookup(K key, CacheValueFound<V> callback) throws IOException {
+		lookup.getValue(key, (value)->{
+			add(key, value);
+			callback.found(value);
+		});
 	}
 	
 	public synchronized V add(K key, V value) throws IOException {
@@ -136,4 +142,5 @@ public class HashCache<K,V> {
 	public int getCapacity() {
 		return capacity;
 	}
+
 }
