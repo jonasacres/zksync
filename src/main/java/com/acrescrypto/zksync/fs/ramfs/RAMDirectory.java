@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.fs.ramfs;
 
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -12,6 +11,7 @@ import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.WalkAbortException;
 import com.acrescrypto.zksync.fs.Directory;
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -84,8 +84,8 @@ public class RAMDirectory implements Directory {
 	
 	protected void walkRecursiveIterate(int opts, String prefix, DirectoryWalkCallback cb) throws IOException {
 		for(String entry : list(opts & ~Directory.LIST_OPT_OMIT_DIRECTORIES)) {
-			String subpath = Paths.get(prefix, entry).toString(); // what we return in our results
-			String realSubpath = Paths.get(path, entry).toString(); // what we can look up directly in fs
+			String subpath = new FSPath(prefix).join(entry).toPosix(); // what we return in our results
+			String realSubpath = new FSPath(path).join(entry).toPosix(); // what we can look up directly in fs
 			try {
 				Stat stat;
 				boolean isBrokenSymlink = false;
@@ -169,6 +169,6 @@ public class RAMDirectory implements Directory {
 	}
 
 	public String subpath(String basename) {
-		return Paths.get(path, basename).toString();
+		return new FSPath(path).join(basename).toPosix();
 	}
 }

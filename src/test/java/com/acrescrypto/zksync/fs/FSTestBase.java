@@ -74,12 +74,12 @@ public abstract class FSTestBase {
 		if(examplesPrepared) return;
 		
 		scratch.write("regularfile", "just a regular ol file".getBytes());
-		if(!Util.isWindows()) scratch.chmod("regularfile", 0664);
 		scratch.mkdir("directory");
-		if(!Util.isWindows()) scratch.chmod("directory", 0755);
 		scratch.link("regularfile", "hardlink");
-		if(!Util.isWindows()) scratch.mkfifo("fifo");
-		if(!Util.isWindows()) scratch.symlink("regularfile", "symlink");
+		scratch.chmod  ("directory",   0755);
+		scratch.chmod  ("regularfile", 0664);
+		scratch.mkfifo ("fifo");
+		scratch.symlink("regularfile", "symlink");
 		
 		examplesPrepared = true;
 	}
@@ -96,41 +96,44 @@ public abstract class FSTestBase {
 	public void testStatRegularFile() throws IOException {
 		Stat stat = scratch.stat("regularfile");
 		assertTrue(stat.isRegularFile());
-		assertEquals(stat.getMode(), 0664);
 		assertEquals(22, stat.getSize());
-		assertTrue(stat.getCtime() > 0);
-		assertTrue(stat.getAtime() > 0);
-		assertTrue(stat.getMtime() > 0);
-		assertEquals(expectedUid(), stat.getUid());
-		assertEquals(expectedGid(), stat.getGid());
+		assertTrue(stat.getCtime() >  0);
+		assertTrue(stat.getAtime() >  0);
+		assertTrue(stat.getMtime() >  0);
+		if(!Util.isWindows()) {
+			assertEquals(stat.getMode(),          0664);
+			assertEquals(expectedUid (), stat.getUid());
+			assertEquals(expectedGid (), stat.getGid());
+		}
 	}
 	
 	@Test
 	public void testStatDirectory() throws IOException {
 		Stat stat = scratch.stat("directory");
 		assertTrue(stat.isDirectory());
-		assertEquals(0755, stat.getMode());
 		assertTrue(stat.getCtime() > 0);
 		assertTrue(stat.getAtime() > 0);
 		assertTrue(stat.getMtime() > 0);
-		assertEquals(expectedUid(), stat.getUid());
-		assertEquals(expectedGid(), stat.getGid());
+		if(!Util.isWindows()) {
+			assertEquals(0755, stat.getMode());
+			assertEquals(expectedUid(), stat.getUid());
+			assertEquals(expectedGid(), stat.getGid());
+		}
 	}
 	
 	@Test
 	public void testStatGetsInodeId() throws IOException {
 		// probably need to skip this on windows
-		assertEquals(scratch.stat("regularfile").getInodeId(), scratch.stat("hardlink").getInodeId());
-		assertFalse(scratch.stat("regularfile").getInodeId() == scratch.stat("directory").getInodeId());
+		assertEquals(scratch.stat("regularfile").getInodeId(),   scratch.stat("hardlink") .getInodeId());
+		assertFalse (scratch.stat("regularfile").getInodeId() == scratch.stat("directory").getInodeId());
 	}
 	
 	@Test
 	public void testStatFollowsSymlinks() throws IOException {
-		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
 		Stat symStat = scratch.stat("symlink"), fileStat = scratch.stat("regularfile");
 		assertEquals(symStat.getInodeId(), fileStat.getInodeId());
-		assertFalse(symStat.isSymlink());
-		assertTrue(symStat.isRegularFile());
+		assertFalse (symStat.isSymlink());
+		assertTrue  (symStat.isRegularFile());
 	}
 	
 	@Test
@@ -165,8 +168,8 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testLstatWorksOnRegularFiles() throws IOException {
-		Stat symlink = scratch.lstat("regularfile");
-		assertTrue(symlink.isRegularFile());
+		Stat stat = scratch.lstat("regularfile");
+		assertTrue(stat.isRegularFile());
 	}
 
 
@@ -230,7 +233,6 @@ public abstract class FSTestBase {
 
 	@Test
 	public void testSymlink() throws IOException {
-	    assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
 		scratch.write("symlink-target", "over here".getBytes());
 		scratch.symlink("symlink-target", "symlink-link");
 		byte[] a = scratch.read("symlink-target");
@@ -240,7 +242,6 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testSymlinkUnsafe() throws IOException {
-		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
 		String target = "/tmp/symlink-target";
 		FS unscopedFs = scratch.unscopedFS();
 		
@@ -260,7 +261,6 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testReadlink() throws IOException {
-		assumeTrue("symlinks not tested on windows", !Util.isWindows());
 		String target = "doesntexistbutthatsok";
 		scratch.symlink(target, "readlink");
 		assertEquals(target, scratch.readlink("readlink"));
@@ -268,7 +268,6 @@ public abstract class FSTestBase {
 	
 	@Test
 	public void testReadlinkWhenSymlinkPointsToDirectory() throws IOException {
-		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
 		scratch.mkdir("dir");
 		scratch.symlink("dir", "readlink");
 		assertEquals("dir", scratch.readlink("readlink"));
@@ -608,19 +607,19 @@ public abstract class FSTestBase {
 	@Test
 	public void testScopedFS() throws IOException {
 		scratch.mkdir("scoped");
-		scratch.write("basefile", "data".getBytes());
+		scratch.write("basefile",    "data".getBytes());
 		scratch.write("scoped/file", "data".getBytes());
 		
 		FS scoped = scratch.scopedFS("scoped");
 		assertFalse(scoped.exists("scoped/file"));
 		assertFalse(scoped.exists("basefile"));
-		assertTrue(scoped.exists("file"));
+		assertTrue (scoped.exists("file"));
 		
 		scoped.write("file2", "data".getBytes());
-		assertFalse(scoped.exists("scoped/file2"));
-		assertTrue(scoped.exists("file2"));
+		assertFalse(scoped .exists("scoped/file2"));
+		assertTrue (scoped .exists("file2"));
 		assertFalse(scratch.exists("file2"));
-		assertTrue(scratch.exists("scoped/file2"));
+		assertTrue (scratch.exists("scoped/file2"));
 		
 		assertTrue(scoped.opendir("/").contains("file2"));
 	}
@@ -628,12 +627,14 @@ public abstract class FSTestBase {
 	@Test
 	public void testPurge() throws IOException {
 		scratch.write("a/b/c/d", "test data".getBytes());
-		scratch.write("a/b/e", "test data".getBytes());
-		scratch.write("a/b/g", "test data".getBytes());
-		if(!Util.isWindows()) scratch.mkfifo("special");
+		scratch.write("a/b/e",   "test data".getBytes());
+		scratch.write("a/b/g",   "test data".getBytes());
+		try {
+			scratch.mkfifo("special");
+		} catch(UnsupportedOperationException exc) {};
 		scratch.purge();
 		
-		assertTrue(scratch.exists("/"));
+		assertTrue (scratch.exists("/"));
 		assertFalse(scratch.exists("a/b/c/d"));
 		assertFalse(scratch.exists("a/b/e"));
 		assertFalse(scratch.exists("a/b/g"));
@@ -650,7 +651,9 @@ public abstract class FSTestBase {
 		scoped.write("a/b/c/d", "test data".getBytes());
 		scoped.write("a/b/e", "test data".getBytes());
 		scoped.write("a/b/g", "test data".getBytes());
-		if(!Util.isWindows()) scoped.mkfifo("fifo");
+		try {
+			scoped.mkfifo("fifo");
+		} catch(UnsupportedOperationException exc) {}
 		scoped.purge();
 		
 		assertTrue(scoped.exists("/"));
@@ -758,17 +761,17 @@ public abstract class FSTestBase {
 		expectENOENT(()->scoped.setCtime("/shouldntexist", 12345));
 		expectENOENT(()->scoped.setAtime("/shouldntexist", 12345));
 		
-		expectInScope(scoped, "mustbescoped", ()->scoped.open("/mustbescoped", File.O_WRONLY|File.O_CREAT).close());
-		expectInScope(scoped, "mustbescoped", ()->scoped.open("/mustbescoped", File.O_WRONLY|File.O_CREAT).close());
-		expectInScope(scoped, "mustbescoped", ()->scoped.write("/mustbescoped", "test".getBytes()));
-		expectInScope(scoped, "mustbescoped", ()->scoped.mkdir("/mustbescoped"));
-		expectInScope(scoped, "mustbescoped", ()->scoped.mkdirp("/mustbescoped"));
-		expectInScope(scoped, "mustbescoped", ()->scoped.symlink("/shouldntexist", "mustbescoped"));
-		expectInScope(scoped, "mustbescoped", ()->scoped.symlink("exists", "/mustbescoped"));
-		expectInScope(scoped, "mustbescoped", ()->scoped.mknod("/mustbescoped", Stat.TYPE_BLOCK_DEVICE, 0, 0));
-		expectInScope(scoped, "mustbescoped", ()->scoped.mknod("/mustbescoped", Stat.TYPE_CHARACTER_DEVICE, 0, 0));
-		expectInScope(scoped, "mustbescoped", ()->scoped.mkfifo("/mustbescoped"));
-		expectInScope(scoped, "mustbescoped", ()->scoped.truncate("/mustbescoped", 0));
+		expectInScope(scoped, "mustbescoped", ()->scoped.open    ("/mustbescoped",  File.O_WRONLY|File.O_CREAT).close());
+		expectInScope(scoped, "mustbescoped", ()->scoped.open    ("/mustbescoped",  File.O_WRONLY|File.O_CREAT).close());
+		expectInScope(scoped, "mustbescoped", ()->scoped.write   ("/mustbescoped",  "test".getBytes()));
+		expectInScope(scoped, "mustbescoped", ()->scoped.mkdir   ("/mustbescoped"));
+		expectInScope(scoped, "mustbescoped", ()->scoped.mkdirp  ("/mustbescoped"));
+		expectInScope(scoped, "mustbescoped", ()->scoped.symlink ("/shouldntexist", "mustbescoped"));
+		expectInScope(scoped, "mustbescoped", ()->scoped.symlink ("exists",         "/mustbescoped"));
+		expectInScope(scoped, "mustbescoped", ()->scoped.mknod   ("/mustbescoped",  Stat.TYPE_BLOCK_DEVICE, 0, 0));
+		expectInScope(scoped, "mustbescoped", ()->scoped.mknod   ("/mustbescoped",  Stat.TYPE_CHARACTER_DEVICE, 0, 0));
+		expectInScope(scoped, "mustbescoped", ()->scoped.mkfifo  ("/mustbescoped"));
+		expectInScope(scoped, "mustbescoped", ()->scoped.truncate("/mustbescoped",   0));
 		expectInScope(scoped, "mustbescoped", ()->scoped.scopedFS("/mustbescoped"));
 	}
 	

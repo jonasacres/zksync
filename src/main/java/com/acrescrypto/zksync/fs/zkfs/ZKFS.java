@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.concurrent.ConcurrentHashMap;
@@ -550,7 +549,7 @@ public class ZKFS extends FS {
 			try {
 				Stat destStat = stat(newPath);
 				if(destStat.isDirectory()) {
-					actualTargetPath = Paths.get(newPath, basename(oldPath)).toString();
+					actualTargetPath = new FSPath(newPath).join(basename(oldPath)).toPosix();
 					
 					try {
 						destStat = stat(actualTargetPath);
@@ -837,7 +836,7 @@ public class ZKFS extends FS {
 			sorted.sort(null);
 			
 			for(String subpath : sorted) {
-				String fqSubpath = Paths.get(path, subpath).toString();
+				String fqSubpath = new FSPath(path).join(subpath).toPosix();
 				Inode inode = inodeForPath(fqSubpath, false);
 				builder.append(String.format("inodeId %4d, size %8d, identity %016x, type %02x, nlink %02d, %s %s\n",
 						inode.getStat().getInodeId(),

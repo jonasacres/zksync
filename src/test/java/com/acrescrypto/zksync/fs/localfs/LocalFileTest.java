@@ -1,14 +1,19 @@
 package com.acrescrypto.zksync.fs.localfs;
 
+import static org.junit.Assume.assumeTrue;
+
 import java.io.IOException;
 
 import org.apache.commons.io.FileUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
+import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.fs.FileTestBase;
+import com.acrescrypto.zksync.utility.Util;
 
 public class LocalFileTest extends FileTestBase {
 
@@ -32,5 +37,17 @@ public class LocalFileTest extends FileTestBase {
 		LocalFSTest.deleteFiles();
 		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
+	}
+	
+	@Test @Override
+	public void testOpenFollowsSymlinks() throws IOException {
+		assumeTrue(!Util.isWindows());
+		super.testOpenFollowsSymlinks();
+	}
+
+	@Test(expected=EMLINKException.class) @Override
+	public void testONOFOLLOWDoesNotFollowSymlinks() throws IOException {
+		assumeTrue(!Util.isWindows());
+		super.testOpenFollowsSymlinks();
 	}
 }

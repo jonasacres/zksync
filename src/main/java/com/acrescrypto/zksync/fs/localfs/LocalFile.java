@@ -60,7 +60,7 @@ public class LocalFile extends File {
 		}
 		
 		logger.trace("LocalFS {}: open {} {} (0x{}), {} open",
-				fs.root,
+				fs.root(),
 				path,
 				modeStr,
 				Integer.toHexString(mode),
@@ -98,7 +98,7 @@ public class LocalFile extends File {
 
 	@Override
 	public void write(byte[] data, int offset, int length) throws IOException {
-		logger.debug("LocalFS {}: write {}, offset {}, {} bytes", ((LocalFS) fs).root, path, offset, length);
+		logger.debug("LocalFS {}: write {}, offset {}, {} bytes", fs.root(), path, offset, length);
 		assertWritable();
 		channel.write(ByteBuffer.wrap(data, offset, length));
 		size = Math.max(size, channel.position());

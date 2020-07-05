@@ -2,8 +2,6 @@ package com.acrescrypto.zksync.fs.ramfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
@@ -12,6 +10,7 @@ import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -127,7 +126,7 @@ public class RAMFS extends FS {
 			try {
 				Stat destStat = stat(newPath);
 				if(destStat.isDirectory()) {
-					actualTargetPath = Paths.get(newPath, basename(oldPath)).toString();
+					actualTargetPath = join(newPath, basename(oldPath));
 					
 					try {
 						destStat = stat(actualTargetPath);
@@ -156,8 +155,8 @@ public class RAMFS extends FS {
 			
 			try(RAMDirectory existingDir = opendir(oldPath)) {
 				for(String subpath : existingDir.list()) {
-					String oldSubPath = Paths.get(oldPath, subpath).toString();
-					String newSubPath = Paths.get(actualTargetPath, subpath).toString();
+					String oldSubPath = join(oldPath, subpath);
+					String newSubPath = join(actualTargetPath, subpath);
 					Inode inode = llookup(oldSubPath);
 					setInode(newSubPath, inode);
 				}
@@ -165,7 +164,7 @@ public class RAMFS extends FS {
 
 			try(RAMDirectory existingDir = opendir(oldPath)) {
 				for(String subpath : existingDir.list()) {
-					unlink(Paths.get(oldPath, subpath).toString());
+					unlink(join(oldPath, subpath));
 				}
 			}
 			
@@ -386,9 +385,9 @@ public class RAMFS extends FS {
 				if(target.startsWith("/")) {
 					partials[i] = target;
 				} else if(i == 0) {
-					partials[i] = Paths.get("/", target).normalize().toString();
+					partials[i] = new FSPath("/").join(target).normalize().toPosix();
 				} else {
-					partials[i] = Paths.get(partials[i-1], target).normalize().toString();
+					partials[i] = new FSPath(partials[i-1]).join(target).normalize().toPosix();
 				}
 			} else {
 				partials[i] = p;
@@ -401,7 +400,7 @@ public class RAMFS extends FS {
 	}
 	
 	protected String canonicalSubpath(String path) throws IOException {
-		return Paths.get(canonicalPath(dirname(path)), basename(path)).toString();
+		return join(canonicalPath(dirname(path)), basename(path));
 	}
 	
 	protected synchronized void setInode(String path, Inode inode) throws IOException {
@@ -428,8 +427,8 @@ public class RAMFS extends FS {
 	}
 	
 	protected String scopedPath(String path) throws ENOENTException {
-		Path p = Paths.get(path).normalize();
-		if(!p.startsWith(scope)) throw new ENOENTException(path);
+		FSPath p = new FSPath(path).normalize();
+		if(!p.descendsFrom(scope)) throw new ENOENTException(path);
 		String suffix = scope;
 		if(!scope.endsWith("/")) suffix += "/";
 		String scoped = path.substring(suffix.length());
@@ -439,10 +438,10 @@ public class RAMFS extends FS {
 	
 	protected String unscopedPath(String path) throws ENOENTException {
 		if(path.equals(".")) path = "/";
-		Path p = Paths.get("/", scope, path).normalize();
-		if(!p.startsWith(scope)) throw new ENOENTException(path);
-		if(!p.startsWith("/")) return "/" + p.toString();
-		return p.toString();
+		FSPath p = new FSPath("/").join(scope).join(path).normalize().noTrailingSlash();
+		if(!p.descendsFrom(scope)) throw new ENOENTException(path);
+		if(!p.descendsFrom("/")) return "/" + p.toPosix();
+		return p.toPosix();
 	}
 	
 	public String getRoot() {

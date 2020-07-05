@@ -13,6 +13,7 @@ import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.WalkAbortException;
 import com.acrescrypto.zksync.fs.Directory;
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 
@@ -23,7 +24,7 @@ public class LocalDirectory implements Directory {
 	protected Stat stat;
 	
 	LocalDirectory(LocalFS fs, String path, Stat stat) throws IOException {
-		this.fs = fs;
+		this.fs   = fs;
 		this.path = fs.absolutePath(path);
 		this.stat = stat;
 		if(!stat.isDirectory()) throw new EISNOTDIRException(path + ": not a directory");
@@ -37,11 +38,13 @@ public class LocalDirectory implements Directory {
 	public Collection<String> list(int opts) throws IOException {
 		ArrayList<String> paths = new ArrayList<String>();
 		// Files.newDirectoryStream(Paths.get(fs.root, path));
-		try(DirectoryStream<Path> stream = Files.newDirectoryStream(Paths.get(fs.root, path))) {
+		Path jPath = Paths.get(fs.join(fs.root(), path));
+		try(DirectoryStream<Path> stream = Files.newDirectoryStream(jPath)) {
 			for(Path entry: stream) {
 				String entryPath = fs.join(path, entry.getFileName().toString());
 				if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(entryPath).isDirectory()) continue;
-				paths.add(entry.getFileName().toString());
+				String posixPath = new FSPath(entry.getFileName().toString()).toPosix();
+				paths.add(posixPath);
 			}
 		}
 		
@@ -84,8 +87,8 @@ public class LocalDirectory implements Directory {
 	
 	protected void walkRecursiveIterate(int opts, String prefix, DirectoryWalkCallback cb) throws IOException {
 		for(String entry : list(opts & ~Directory.LIST_OPT_OMIT_DIRECTORIES)) {
-			String subpath = Paths.get(prefix, entry).toString(); // what we return in our results
-			String realSubpath = Paths.get(path, entry).toString(); // what we can look up directly in fs
+			String subpath     = fs.join(prefix, entry); // what we return in our results
+			String realSubpath = fs.join(path,   entry); // what we can look up directly in fs
 			try {
 				Stat stat;
 				boolean isBrokenSymlink = false;
@@ -126,7 +129,8 @@ public class LocalDirectory implements Directory {
 	public boolean contains(String entry) {
 		java.io.File file;
 		try {
-			file = new java.io.File(fs.expandPath(Paths.get(path, entry).toString()));
+			String expandedPath = fs.expandPath(new FSPath(path).join(entry).toPosix());
+			file = new java.io.File(expandedPath);
 			return file.exists();
 		} catch (ENOENTException e) {
 			// TODO API: (coverage) exception
@@ -136,7 +140,7 @@ public class LocalDirectory implements Directory {
 	
 	@Override
 	public Directory mkdir(String name) throws IOException {
-		String fullPath = Paths.get(path, name).toString();
+		String fullPath = fs.join(path, name);
 		fs.mkdir(fullPath);
 		return fs.opendir(fullPath);
 	}
@@ -148,12 +152,12 @@ public class LocalDirectory implements Directory {
 	
 	@Override
 	public void link(String target, String link) throws IOException {
-		fs.link(target, Paths.get(this.path, link).toString());
+		fs.link(target, fs.join(this.path, link));
 	}
 
 	@Override
 	public void unlink(String target) throws IOException {
-		fs.unlink(Paths.get(path, target).toString());
+		fs.unlink(fs.join(path, target));
 	}
 	
 	@Override

@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.localfs;
 
 import static org.junit.Assert.*;
+import static org.junit.Assume.assumeTrue;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -38,6 +39,121 @@ public class LocalFSTest extends FSTestBase {
 		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 	}
+	
+	@Override
+	public void prepareExamples() throws IOException {
+		if(examplesPrepared) return;
+		
+		scratch.write("regularfile", "just a regular ol file".getBytes());
+		scratch.mkdir("directory");
+		scratch.link("regularfile", "hardlink");
+		if(!Util.isWindows()) {
+			scratch.chmod  ("directory",   0755);
+			scratch.chmod  ("regularfile", 0664);
+			scratch.mkfifo ("fifo");
+			scratch.symlink("regularfile", "symlink");
+		}
+		
+		examplesPrepared = true;
+	}
+	
+	@Test @Override
+	public void testStatRegularFile() throws IOException {
+		Stat stat = scratch.stat("regularfile");
+		assertTrue(stat.isRegularFile());
+		assertEquals(22, stat.getSize());
+		assertTrue(stat.getCtime() >  0);
+		assertTrue(stat.getAtime() >  0);
+		assertTrue(stat.getMtime() >  0);
+		if(!Util.isWindows()) {
+			assertEquals(stat.getMode(),          0664);
+			assertEquals(expectedUid (), stat.getUid());
+			assertEquals(expectedGid (), stat.getGid());
+		}
+	}
+	
+	@Test @Override
+	public void testStatDirectory() throws IOException {
+		Stat stat = scratch.stat("directory");
+		assertTrue(stat.isDirectory());
+		assertTrue(stat.getCtime() > 0);
+		assertTrue(stat.getAtime() > 0);
+		assertTrue(stat.getMtime() > 0);
+		if(!Util.isWindows()) {
+			assertEquals(0755, stat.getMode());
+			assertEquals(expectedUid(), stat.getUid());
+			assertEquals(expectedGid(), stat.getGid());
+		}
+	}
+	
+	@Test @Override
+	public void testStatGetsInodeId() throws IOException {
+		// probably need to skip this on windows
+		assumeTrue("Inode IDs not tested on Windows", !Util.isWindows());
+		super.testStatGetsInodeId();
+	}
+	
+	@Test @Override
+	public void testStatFollowsSymlinks() throws IOException {
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
+		super.testStatFollowsSymlinks();
+	}
+	
+	@Test @Override
+	public void testLstatDoesntFollowSymlinks() throws IOException {
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
+		super.testLstatDoesntFollowSymlinks();
+	}
+	
+	@Test @Override
+	public void testSymlink() throws IOException {
+	    assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
+	    super.testSymlink();
+	}
+	
+	@Test @Override
+	public void testSymlinkUnsafe() throws IOException {
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
+		super.testSymlinkUnsafe();
+	}
+	
+	@Test @Override
+	public void testReadlink() throws IOException {
+		assumeTrue("symlinks not tested on windows", !Util.isWindows());
+		super.testReadlink();
+	}
+	
+	@Test @Override
+	public void testReadlinkWhenSymlinkPointsToDirectory() throws IOException {
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
+		super.testReadlinkWhenSymlinkPointsToDirectory();
+	}
+	
+	@Test @Override
+	public void testMkfifo() throws IOException {
+		assumeTrue("FIFOs not tested on Windows", !Util.isWindows());
+		super.testMkfifo();
+	}
+
+	@Test @Override
+	public void testChmod() throws IOException {
+		assumeTrue("chmod not tested on Windows", !Util.isWindows());
+		super.testChmod();
+	}
+
+	@Test @Override
+	public void testMvMovesSymlinksIntoDirectoriesWithoutAlteringTarget() throws IOException {
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
+		super.testMvMovesSymlinksIntoDirectoriesWithoutAlteringTarget();
+	}
+	
+	@Test @Override
+	public void testMvMovesDirectoriesIntoSubdirectoriesWhenTargetIsSymlinkToDirectory() throws IOException {
+		assumeTrue("Symlinks not tested on Windows", !Util.isWindows());
+		super.testMvMovesDirectoriesIntoSubdirectoriesWhenTargetIsSymlinkToDirectory();
+	}
+
+	
 
 	protected static int getCurrentId(char type) {
 		try {

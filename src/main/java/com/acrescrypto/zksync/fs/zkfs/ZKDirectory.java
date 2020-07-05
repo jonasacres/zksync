@@ -4,7 +4,6 @@ import java.io.IOException;
 
 import java.nio.ByteBuffer;
 import java.nio.file.InvalidPathException;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -15,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import com.acrescrypto.zksync.exceptions.*;
 import com.acrescrypto.zksync.fs.Directory;
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.utility.Util;
@@ -73,7 +73,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		
 		if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0) {
 			for(String entry : entries.keySet()) {
-				if(fs.stat(Paths.get(path, entry).toString()).isDirectory()) {
+				if(fs.stat(new FSPath(path).join(entry).toPosix()).isDirectory()) {
 					entrySet.remove(entry);
 				}
 			}
@@ -130,8 +130,8 @@ public class ZKDirectory extends ZKFile implements Directory {
 		inodeHistory.add(inodeId);
 		
 		for(String entry : list(opts & ~Directory.LIST_OPT_OMIT_DIRECTORIES)) {
-			String subpath = Paths.get(prefix, entry).toString(); // what we return in our results
-			String realSubpath = Paths.get(path, entry).toString(); // what we can look up directly in fs
+			String subpath = new FSPath(prefix).join(entry).toPosix(); // what we return in our results
+			String realSubpath = new FSPath(path).join(entry).toPosix(); // what we can look up directly in fs
 			try {
 				long entryInodeId = entries.get(entry);
 				Inode entryInode = zkfs.inodeTable.inodeWithId(entryInodeId);
@@ -176,7 +176,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		
 		walk(LIST_OPT_DONT_FOLLOW_SYMLINKS, (subpath, stat, isInvalidSymlink, parent)->{
 			if(stat.getInodeId() == inodeId) {
-				paths.add(Paths.get(this.path, subpath).toString());
+				paths.add(new FSPath(this.path).join(subpath).toPosix());
 			}
 		});
 		
@@ -185,7 +185,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	
 	public long inodeForName(String name) throws IOException {
 		if(!entries.containsKey(name)) {
-			throw new ENOENTException(Paths.get(path, name).toString());
+			throw new ENOENTException(new FSPath(path).join(name).toPosix());
 		}
 		return entries.get(name);
 	}
@@ -194,7 +194,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 		String[] comps = path.split("/");
 		if(comps.length > 1) {
 			try {
-				String nextDir = Paths.get(this.path, comps[0]).toString();
+				String nextDir = new FSPath(this.path).join(comps[0]).toPosix();
 				String subpath = String.join("/", Arrays.copyOfRange(comps, 1, comps.length));
 				try(ZKDirectory dir = zkfs.opendir(nextDir)) {
 					return dir.inodeForPath(subpath);
@@ -210,7 +210,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public void updateLink(Long inodeId, String link) throws IOException {
 		zkfs.lockedOperation(()->{
 			synchronized(this) {
-				String fullPath = Paths.get(path, link).toString();
+				String fullPath = new FSPath(path).join(link).toPosix();
 				if(!isValidName(link)) {
 					throw new EINVALException(link + ": invalid name");
 				}
@@ -247,7 +247,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 				if(!isValidName(link)) throw new EINVALException(link + ": invalid filename");
 				String fullPath;
 				try {
-					fullPath = Paths.get(path, link).toString();
+					fullPath = new FSPath(path).join(link).toPosix();
 				} catch(InvalidPathException exc) {
 					throw new EINVALException(link + ": invalid filename");
 				}
@@ -302,7 +302,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 
 	@Override
 	public void unlink(String name) throws IOException {
-		String fullPath = Paths.get(path, name).toString();
+		String fullPath = new FSPath(path).join(name).toPosix();
 		assertWritable();
 		zkfs.lockedOperation(()->{
 			synchronized(this) {
@@ -353,7 +353,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public Directory mkdir(String name) throws IOException {
 		return (Directory) zkfs.lockedOperation(()->{
 			synchronized(this) {
-				String fullPath = Paths.get(path, name).toString();
+				String fullPath = new FSPath(path).join(name).toPosix();
 				if(entries.containsKey(name)) throw new EEXISTSException(fullPath);
 				zkfs.create(fullPath, this).getStat().makeDirectory();
 	
@@ -474,7 +474,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 				return; // . is implicit, .. is serialized with implicit path name to save bytes
 			}
 			if(!isValidName(name)) {
-				logger.error("Refusing to serialize illegal path: " + Paths.get(path, name).toString());
+				logger.error("Refusing to serialize illegal path: " + new FSPath(path).join(name).toPosix());
 				return; 
 			}
 			serializeValueWithType(buf, types[0], inodeId);
@@ -585,7 +585,7 @@ public class ZKDirectory extends ZKFile implements Directory {
 			});
 			
 			if(name[0] == null) throw new ENOENTException("Unable to locate directory with inodeId " + getStat().getInodeId() + " in parent directory with inodeId " + parentInodeId);
-			return Paths.get(parentDir.calculatePath(), name[0]).toString();
+			return new FSPath(parentDir.calculatePath()).join(name[0]).toPosix();
 		}
 	}
 

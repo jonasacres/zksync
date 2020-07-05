@@ -1,8 +1,6 @@
 package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
-import java.nio.file.FileSystems;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
@@ -111,11 +109,7 @@ public abstract class FS implements AutoCloseable {
 	}
 	
 	public String join(String pathStart, String pathEnd) {
-		String sep = FileSystems.getDefault().getSeparator();
-		if(pathStart.equals(sep) || pathStart.equals("/")) {
-			pathStart = root();
-		}
-		return Paths.get(pathStart, pathEnd).toString().replace(sep, "/");
+		return new FSPath(pathStart).join(pathEnd).toPosix();
 	}
 	
 	public void write(String path, byte[] contents) throws IOException {
@@ -255,7 +249,7 @@ public abstract class FS implements AutoCloseable {
 					||  (comps.get(0) + "/").equals(root())
 				 )
 		   ) return "/";
-		return String.join("/", comps).replace(root(), "/");
+		return new FSPath(String.join("/", comps).replace(root(), "/")).toPosix();
 	}
 	
 	public boolean exists(String path, boolean followLinks) {

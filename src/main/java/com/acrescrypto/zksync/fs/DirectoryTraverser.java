@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -124,7 +123,7 @@ public class DirectoryTraverser {
 		Shuffler shuffler = new Shuffler(subpaths.size());
 		while(shuffler.hasNext()) {
 			String subpath = arrayified.get(shuffler.next()),
-			          path = Paths.get(dir.getPath(), subpath).toString();
+			          path = new FSPath(dir.getPath()).join(subpath).toPosix();
 			Stat stat = followSymlinks ? fs.stat(path) : fs.lstat(path);
 			TraversalEntry entry = new TraversalEntry(path, stat);
 			entries.add(entry);

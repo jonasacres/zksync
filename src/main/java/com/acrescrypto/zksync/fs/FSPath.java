@@ -157,6 +157,16 @@ public class FSPath {
 		return this;
 	}
 	
+	public String delimiter() {
+		return delimiter(platform());
+	}
+	
+	public String delimiter(String platform) {
+		return platform.equals("posix")
+				   ?  "/"
+				   : "\\";
+	}
+	
 	public String sourcePlatform() {
 		return dissection.sourcePlatform;
 	}
@@ -178,6 +188,8 @@ public class FSPath {
 	}
 	
 	public FSPath join(FSPath path) {
+		if(toPosix().equals("")) return new FSPath(path);
+		
 		StringBuilder sb = new StringBuilder();
 		sb.append(toSourcePlatform());
 		
@@ -189,8 +201,12 @@ public class FSPath {
 			sb = new StringBuilder(sb.toString().substring(2));
 		}
 		
-		if(!dissection.hasTrailingDelimiter) sb.append("/");
-		sb.append(path.toPlatform(dissection.sourcePlatform));
+		if(path.toPosix().equals("/")) return new FSPath(this);
+		
+		FSPath path2 = new FSPath(path);
+		path2.dissection.isAbsolute = false;
+		if(!dissection.hasTrailingDelimiter) sb.append(delimiter(sourcePlatform()));
+		sb.append(path2.toPlatform(sourcePlatform()));
 		
 		return new FSPath(sb.toString()).platform(platform());
 	}
@@ -199,9 +215,13 @@ public class FSPath {
 		LinkedList<String> comps = new LinkedList<>();
 		for(String element : dissection.components) {
 			if(element.equals( ".")) continue;
-			if(element.equals("..") && !comps.isEmpty()) {
-				comps.removeLast();
-				continue;
+			if(element.equals("..")) {
+				if(!comps.isEmpty()) {
+					comps.removeLast();
+					continue;
+				} else if(dissection.isAbsolute) {
+					continue;
+				}
 			}
 			
 			comps.add(element);
@@ -211,6 +231,12 @@ public class FSPath {
 		normalized.dissection.components = comps;
 		
 		return normalized;
+	}
+	
+	public FSPath noTrailingSlash() {
+		FSPath dupe = new FSPath(this);
+		dupe.dissection.hasTrailingDelimiter = false;
+		return dupe;
 	}
 	
 	public String toNative() {

@@ -21,7 +21,6 @@ import com.acrescrypto.zksync.fs.*;
 import com.acrescrypto.zksync.utility.Util;
 
 public class LocalFS extends FS {
-	protected String root;
 	protected HashMap<Integer,CachedName> cachedUserNames = new HashMap<>();
 	protected HashMap<Integer,CachedName> cachedGroupNames = new HashMap<>();
 	private Logger logger = LoggerFactory.getLogger(LocalFS.class);
@@ -502,9 +501,10 @@ public class LocalFS extends FS {
 			java.io.File targetFile = new java.io.File(expandPath(path));
 			LinkOption[] options = followSymlinks ? new LinkOption[0] : new LinkOption[] { LinkOption.NOFOLLOW_LINKS };
 			
-			Files
-				.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, options)
-				.setOwner(userPrincipal);
+			PosixFileAttributeView view = Files
+				.getFileAttributeView(targetFile.toPath(), PosixFileAttributeView.class, options);
+			if(view == null) throw new UnsupportedOperationException();
+			view.setOwner(userPrincipal);
 		} catch(FileSystemException exc) {
 			throw new UnsupportedOperationException();
 		} catch(UserPrincipalNotFoundException exc) {
@@ -645,17 +645,11 @@ public class LocalFS extends FS {
 	}
 	
 	protected String expandPath(String path) throws ENOENTException {
-		return qualifiedPath(path).toString();
+		return new FSPath(qualifiedPath(path).toString()).toPosix();
 	}
 	
 	protected Path qualifiedPath(String path) throws ENOENTException {
 		FSPath normalized = FSPath.with(root).join(path).normalize();
-		System.out.println("        Path: " + path);
-		System.out.println("        Root: " + root);
-		System.out.println("      Joined: " + FSPath.with(root).join(path));
-		System.out.println("FSNormalized: " + normalized.toPosix());
-		System.out.println(" JNormalized: " + Paths.get(path).normalize().toString());
-		System.out.println();
 		if(!normalized.descendsFrom(root)) {
 			throw new ENOENTException(path);
 		}
