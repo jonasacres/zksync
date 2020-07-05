@@ -13,8 +13,8 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFSTests;
 @Suite.SuiteClasses({
 	FSPathTest.class,
 	LocalFSTests.class,
-	ZKFSTests.class,
 	RAMFSTests.class,
+	ZKFSTests.class,
 	BackedFSTest.class,
 	SwarmFSTest.class
 })

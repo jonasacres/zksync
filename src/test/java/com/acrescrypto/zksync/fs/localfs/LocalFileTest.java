@@ -39,15 +39,15 @@ public class LocalFileTest extends FileTestBase {
 		TestUtils.stopDebugMode();
 	}
 	
-	@Test @Override
+	@Override
 	public void testOpenFollowsSymlinks() throws IOException {
 		assumeTrue(!Util.isWindows());
 		super.testOpenFollowsSymlinks();
 	}
 
-	@Test(expected=EMLINKException.class) @Override
+	@Override
 	public void testONOFOLLOWDoesNotFollowSymlinks() throws IOException {
 		assumeTrue(!Util.isWindows());
-		super.testOpenFollowsSymlinks();
+		super.testONOFOLLOWDoesNotFollowSymlinks();
 	}
 }
