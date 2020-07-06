@@ -869,7 +869,7 @@ public class FSMirrorTest {
 	public void testSyncArchiveToTargetUpdatesSymlinks() throws IOException {
 		syncArchiveToTargetTest("foo", (p)->{
 			target.symlink("baz", p);
-			zkfs.symlink("bar", p);
+			zkfs  .symlink("bar", p);
 		});
 	}
 

@@ -51,6 +51,19 @@ public class LocalFS extends FS {
 	}
 	
 	@Override
+	public String root() {
+		if(root == null) {
+			if(Util.isWindows()) {
+				root = "C:/";
+			} else {
+				root = "/";
+			}
+		}
+		
+		return root;
+	}
+	
+	@Override
 	public long size(String path, boolean followSymlinks) throws IOException {
 		LinkOption[] linkOpt = followSymlinks
 				               ? new LinkOption[0]

@@ -925,21 +925,22 @@ public class ZKFS extends FS {
 	}
 	
 	public String canonicalPath(String path) throws IOException {
-		while(path.startsWith("//")) path = path.substring(1);
-		if(path.equals("/")) return path;
-		if(path.equals(".")) return "/";
-		if(path.charAt(0) != '/') path = absolutePath(path);
-		if(directoriesByPath.hasCached(path)) return path; // only canonical paths are in the cache
+		String std = FSPath.standardize(path); 
+		while(std.startsWith("//")) std = std.substring(1);
+		if(std.equals("/")) return std;
+		if(std.equals(".")) return "/";
+		if(std.charAt(0) != '/') std = absolutePath(std);
+		if(directoriesByPath.hasCached(std)) return std; // only canonical paths are in the cache
 		
 		try {
-			return canonicalPath(readlink(path));
+			return canonicalPath(readlink(std));
 		} catch(EINVALException exc) {}
 		
 		
-		String parent = dirname(path);
+		String parent = dirname(std);
 		String parentCanon = canonicalPath(parent);
 		if(!parentCanon.endsWith("/")) parentCanon += "/";
-		return parentCanon + basename(path);
+		return parentCanon + basename(std);
 	}
 	
 	public ConcurrentLinkedQueue<Throwable> getRetentions() {

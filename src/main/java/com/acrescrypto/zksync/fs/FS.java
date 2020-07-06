@@ -98,11 +98,7 @@ public abstract class FS implements AutoCloseable {
 	
 	public String root() {
 		if(root == null) {
-			if(Util.isWindows()) {
-				root = "C:/";
-			} else {
-				root = "/";
-			}
+			root = "/";
 		}
 		
 		return root;

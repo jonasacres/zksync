@@ -1384,15 +1384,21 @@ public class PeerConnectionTest {
 	public void testHandleRequestPageTagsAddsRequestedShortTagsToPageQueue() throws ProtocolViolationException, IOException {
 		StorageTag[] tags = new StorageTag[16];
 		try(ZKFS fs = archive.openBlank()) {
-			DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_PAGE_TAGS);
+			DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(
+					(byte) PeerConnection.CMD_REQUEST_PAGE_TAGS);
 			fs.write("file", new byte[tags.length*archive.getConfig().getPageSize()]);
 			fs.commit();
 			PageTree treee = new PageTree(fs.inodeForPath("file"));
 			
-			msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array());
+			msg.receivedData(
+					(byte) 0,
+					ByteBuffer.allocate(4).putInt(0).array());
 			for(int i = 0; i < tags.length; i++) {
 				tags[i] = treee.getPageTag(i);
-				byte[] data = ByteBuffer.allocate(8).putLong(tags[i].shortTag()).array();
+				byte[] data = ByteBuffer
+						.allocate(8)
+						.putLong(tags[i].shortTag())
+						.array();
 				msg.receivedData((byte) 0, data);
 			}
 			

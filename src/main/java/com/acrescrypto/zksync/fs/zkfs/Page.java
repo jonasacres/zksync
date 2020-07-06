@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Paths;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +10,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.utility.Util;
 
@@ -34,7 +34,7 @@ public class Page {
 			dir = storage.opendir(parent);
 			for(String subpath : dir.list()) {
 				if(storage.basename(subpath).startsWith(basename)) {
-					String qualifiedSubpath = Paths.get(parent, subpath).toString();
+					String qualifiedSubpath = FSPath.with(parent).join(subpath).toPosix();
 					return new StorageTag(crypto, qualifiedSubpath);
 				}
 			}

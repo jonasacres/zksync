@@ -4,7 +4,6 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Paths;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -24,6 +23,7 @@ import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.EISNOTDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.ENOTEMPTYException;
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
@@ -1089,7 +1089,7 @@ public class ZKFSTest extends FSTestBase {
 	public String makeRandomPath(ZKFS fs, PRNG prng) throws IOException {
 		String directory = pickRandomDirectory(fs, prng);
 		String filename = Util.bytesToHex(prng.getBytes(4));
-		String path = Paths.get(directory, filename).toString();
+		String path = FSPath.with(directory).join(filename).toPosix();
 		while(path.startsWith("/")) path = path.substring(1);
 		return path;
 	}

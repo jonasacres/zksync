@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs;
 
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.LinkedList;
 
 import com.acrescrypto.zksync.utility.Util;
@@ -125,6 +126,10 @@ public class FSPath {
 		return new FSPath(path);
 	}
 	
+	public static FSPath with(Path path) {
+		return with(path.toString());
+	}
+	
 	protected String             original;
 	protected FSPathDissection   dissection;
 	protected String             defaultDrive = "C";
@@ -231,6 +236,19 @@ public class FSPath {
 		normalized.dissection.components = comps;
 		
 		return normalized;
+	}
+	
+	public FSPath relativize(String path) {
+		return relativize(FSPath.with(path));
+	}
+	
+	public FSPath relativize(FSPath path) {
+		return FSPath.with(
+			Paths
+				.get(this.toPosix())
+				.relativize(Paths.get(path.toPosix()))
+				.toString()
+			);
 	}
 	
 	public FSPath noTrailingSlash() {

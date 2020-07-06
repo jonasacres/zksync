@@ -7,7 +7,6 @@ import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 
@@ -24,6 +23,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.exceptions.SwarmTimeoutException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
@@ -109,7 +109,7 @@ public class BackedFSTest extends FSTestBase {
 		
 		@Override
 		public FS scopedFS(String path) throws IOException {
-			return new DummyFS(Paths.get(scope, path).toString());
+			return new DummyFS(FSPath.with(scope).join(path).toPosix());
 		}
 		
 		@Override
@@ -706,8 +706,8 @@ public class BackedFSTest extends FSTestBase {
 	@Test
 	public void testScopedFS() throws IOException {
 		String scope = "scope";
-		String expectedCacheRoot = Paths.get(((RAMFS) backedFS.cacheFS).getRoot(), scope).toString();
-		String expectedBackupRoot = Paths.get(((DummyFS) backedFS.backupFS).scope, scope).toString();
+		String expectedCacheRoot = FSPath.with(((RAMFS) backedFS.cacheFS).getRoot()).join(scope).toPosix();
+		String expectedBackupRoot = FSPath.with(((DummyFS) backedFS.backupFS).scope).join(scope).toPosix();
 		BackedFS scoped = backedFS.scopedFS("scope");
 		assertEquals(expectedCacheRoot, ((RAMFS) scoped.cacheFS).getRoot());
 		assertEquals(expectedBackupRoot, ((DummyFS) scoped.backupFS).scope);

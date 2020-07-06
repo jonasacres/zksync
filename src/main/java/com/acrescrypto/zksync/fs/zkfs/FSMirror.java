@@ -25,6 +25,7 @@ import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.File;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
@@ -214,11 +215,18 @@ public class FSMirror {
 		Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
 			@Override
 			public FileVisitResult preVisitDirectory(Path subdir, BasicFileAttributes attrs) throws IOException {
-				WatchKey key = subdir.register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY);
+				WatchKey key = subdir.register(
+						watcher,
+						ENTRY_CREATE,
+						ENTRY_DELETE,
+						ENTRY_MODIFY
+					);
 				pathsByKey.put(key, subdir);
 
-				Path basePath = Paths.get(((LocalFS) target).getRoot());
-				String realPath = basePath.relativize(subdir).toString();
+				String realPath = FSPath
+						.with(((LocalFS) target).getRoot())
+						.relativize(FSPath.with(subdir))
+						.toString();
 				
 				if(!suppressWatch) {
 					suspectedTargetPathChange(realPath);
@@ -229,8 +237,10 @@ public class FSMirror {
 
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-				Path basePath = Paths.get(((LocalFS) target).getRoot());
-				String realPath = basePath.relativize(file).toString();
+				String realPath = FSPath
+					.with(((LocalFS) target).getRoot())
+					.relativize(FSPath.with(file))
+					.toPosix();
 				
 				if(!suppressWatch) {
 					suspectedTargetPathChange(realPath);
@@ -303,7 +313,7 @@ public class FSMirror {
 					Path filename = (Path) event.context();
 					Path fullPath = pathsByKey.get(key).resolve(filename);
 					Path basePath = Paths.get(((LocalFS) target).getRoot());
-					String realPath = basePath.relativize(fullPath).toString();
+					String realPath = FSPath.with(basePath.relativize(fullPath).toString()).toPosix();
 
 					try {
 						Stat stat = getLstat(target, realPath);
