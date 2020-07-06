@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
@@ -257,5 +258,14 @@ public class DHTSocketManager {
 
 	public String getLocalAddress() {
 		return client.getMaster().getGlobalConfig().getString("net.dht.localaddress");
+	}
+	
+	public String getSocketAddress() {
+		try {
+			InetSocketAddress addr = (InetSocketAddress) socket.getLocalSocketAddress();
+			return addr.getAddress().getHostAddress();
+		} catch(Exception exc) {
+			return getLocalAddress();
+		}
 	}
 }
