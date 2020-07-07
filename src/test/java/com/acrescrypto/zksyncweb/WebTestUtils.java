@@ -10,7 +10,6 @@ import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLDecoder;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -24,6 +23,7 @@ import javax.ws.rs.client.Entity;
 import javax.ws.rs.client.WebTarget;
 import javax.ws.rs.core.MediaType;
 
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
 import com.acrescrypto.zksync.fs.zkfs.PageTree.PageTreeStats;
@@ -232,7 +232,7 @@ public class WebTestUtils {
 	}
 
 	public static void validatePathStat(ZKFS fs, String prefix, JsonNode pathStat) throws IOException {
-		String fullPath = Paths.get(prefix, pathStat.get("path").asText()).toString();
+		String fullPath = FSPath.with(prefix).join(pathStat.get("path").asText()).toPosix();
 
 		Stat stat = null;
 		JsonNode statNode = pathStat.get("stat");

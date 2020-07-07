@@ -197,6 +197,11 @@ public class DiffSetResolver {
 	}
 	
 	public RevisionTag resolve() throws IOException, DiffResolutionException {
+		if(diffset == null || diffset.revisions == null || diffset.revisions.length == 0) {
+			// Defend against situations where we're merging nothing
+			return fs.getBaseRevision();
+		}
+		
 		ZKArchiveConfig config = diffset.revisions[0].getArchive().getConfig();
 		
 		String revList = "";

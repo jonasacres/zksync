@@ -169,13 +169,13 @@ public class TCPPeerSocketListener {
 			
 			try {
 				checkSocketOpen();
-				if(listenSocket != null) {
-					Socket socket = listenSocket.accept();
+				if(oldSocket != null) {
+					Socket socket = oldSocket.accept();
 					processIncomingPeer(socket);
 				}
 			} catch(Exception exc) {
-				if(closed || oldSocket != listenSocket || listenSocket.isClosed()) {
-					logger.info("Swarm - -: Closed TCP socket on port {}", listenSocket.getLocalPort());
+				if(closed || oldSocket != listenSocket || oldSocket.isClosed()) {
+					logger.info("Swarm - -: Closed TCP socket on port {}", oldSocket.getLocalPort());
 					break;
 				}
 				
@@ -209,6 +209,7 @@ public class TCPPeerSocketListener {
 	protected void openSocket() {
 		int lastPort = master.getGlobalConfig().getInt("net.swarm.lastport");
 		int requestPort = master.getGlobalConfig().getInt("net.swarm.port");
+		
 		if(lastPort != 0 && port == 0) {
 			logger.debug("Swarm - -: Attempting to require previously-bound TCP port {}", lastPort);
 			requestPort = lastPort;

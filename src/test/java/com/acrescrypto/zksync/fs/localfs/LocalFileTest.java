@@ -8,10 +8,8 @@ import org.apache.commons.io.FileUtils;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
-import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
-import com.acrescrypto.zksync.exceptions.EMLINKException;
 import com.acrescrypto.zksync.fs.FileTestBase;
 import com.acrescrypto.zksync.utility.Util;
 

@@ -290,6 +290,7 @@ public class DHTZKArchiveDiscoveryTest {
 		client.searchId = null;
 		discovery.forceUpdate(archive.getConfig().getAccessor());
 		// TODO API: (itf) a215023+ linux 11/29/18 AllTests, assertion failed
+		// observed on Windows 7/6/20 ceb1834
 		assertTrue(Util.waitUntil(500, ()->client.searchId != null));
 	}
 }

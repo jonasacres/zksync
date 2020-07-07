@@ -5,6 +5,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.HashMap;
@@ -79,6 +81,18 @@ public class GlobalResourceTest {
 	public static void afterAll() {
 		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
+	}
+	
+	public int getFreePort() throws UnknownHostException, IOException {
+		// we need a port that we definitely know is open, so bind port 0, see what we get, and close up
+		ServerSocket testSocket = new ServerSocket(0,
+				1,
+				InetAddress.getByName(master.getGlobalConfig().getString("net.swarm.bindaddress")));
+		testSocket.setReuseAddress(true);
+		int freePort = testSocket.getLocalPort();
+		testSocket.close();
+		
+		return freePort;
 	}
 
 	@Test
@@ -300,28 +314,28 @@ public class GlobalResourceTest {
 	}
 
 	@Test
-	public void testPutSettingsWithPositivePortListensOnRequestedPortIfListenerClosed() {
+	public void testPutSettingsWithPositivePortListensOnRequestedPortIfListenerClosed() throws UnknownHostException, IOException {
+		int expectedPort = getFreePort();
 		HashMap<String,Object> settings = new HashMap<>();
-		settings.put("net.swarm.port", 41312);
+		settings.put("net.swarm.port", expectedPort);
 		settings.put("net.swarm.enabled", true);
 		WebTestUtils.requestPut(target, "/global/settings", settings);
 		assertTrue(Util.waitUntil(1000, ()->master.getTCPListener().isListening()));
-		assertEquals(41312, master.getTCPListener().getPort());
+		assertEquals(expectedPort, master.getTCPListener().getPort());
 	}
 
 	@Test
 	public void testPutSettingsWithPositivePortReopensOnRequestedPortIfListenerOpen() throws UnknownHostException, IOException {
+		int expectedPort = getFreePort();
 		master.getGlobalConfig().set("net.swarm.enabled", true);
 		assertTrue(Util.waitUntil(1000, ()->master.getTCPListener().getPort() > 0));
-		int port = master.getTCPListener().getPort();
 
 		HashMap<String,Object> settings = new HashMap<>();
-		int expectedPort = port + 1;
 		settings.put("net.swarm.port", expectedPort);;
 		settings.put("net.swarm.enabled", true);
 		WebTestUtils.requestPut(target, "/global/settings", settings);
-
-		assertTrue(Util.waitUntil(1000, ()->master.getTCPListener().getPort() == expectedPort));
+		
+		Util.waitUntil(1000, ()->master.getTCPListener().getPort() == expectedPort);
 		assertEquals(expectedPort, master.getTCPListener().getPort());
 	}
 	

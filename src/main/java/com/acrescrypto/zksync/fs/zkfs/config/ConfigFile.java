@@ -136,7 +136,11 @@ public class ConfigFile {
 		try { if(((JsonNumber) info.get(key)).intValue() == value) return; } catch(NullPointerException exc) {}
 		
 		logger.info("Config: Setting " + key + " -> " + value);
-		JsonValue jsonValue = Json.createObjectBuilder().add("x", value).build().getJsonNumber("x");
+		JsonValue jsonValue = Json
+				.createObjectBuilder()
+				.add          ("x", value)
+				.build        ()
+				.getJsonNumber("x");
 		info.put(key, jsonValue);
 		sub.updatedKey(key, jsonValue);
 		writeQuietly();
