@@ -95,6 +95,10 @@ public class FSMirrorTest {
 		} catch(IOException exc) { return false; }
 	}
 	
+	void checkPathNotExist(FS fs, String path) {
+		assertFalse(fs.exists(path));
+	}
+	
 	void checkPathMatch(FS src, FS modified, Stat expected, String path) throws IOException {
 		if(expected == null) {
 			assertFalse(modified.exists(path));
@@ -142,7 +146,11 @@ public class FSMirrorTest {
 	}
 	
 	void observeFileChangeTest(String path, PathChangeTest test) throws IOException {
-		test.test(path);
+		try {
+			test.test(path);
+		} catch(UnsupportedOperationException exc) {
+			assumeTrue("Cannot test this operation on this platform", false);
+		}
 		assumeTrue("Cannot test special files on this filesystem", mirror.canMirror(path));
 		
 		Stat expected = null;
@@ -155,7 +163,11 @@ public class FSMirrorTest {
 	}
 	
 	void syncArchiveToTargetTest(String path, PathChangeTest test) throws IOException {
-		test.test(path);
+		try {
+			test.test(path);
+		} catch(UnsupportedOperationException exc) {
+			assumeTrue("Cannot test this operation on this platform", false);
+		}
 		zkfs.commit();
 		assumeTrue("Cannot test special files on this filesystem", mirror.canMirror(path));
 		
@@ -171,7 +183,11 @@ public class FSMirrorTest {
 	void watcherTest(String path, PathChangeTest test) throws IOException {
 		mirror.syncTargetToArchive();
 		mirror.startWatch();
-		test.test(path);
+		try {
+			test.test(path);
+		} catch(UnsupportedOperationException exc) {
+			assumeTrue("Cannot test this operation on this platform", false);
+		}
 		
 		if(target.exists(path)) {
 			assertTrue(Util.waitUntil(100, ()->zkfs.exists(path)));
@@ -185,7 +201,7 @@ public class FSMirrorTest {
 	
 	LinkedList<String> makeDummyFs(FS fs) throws IOException {
 		LinkedList<String> paths = new LinkedList<>();
-		ByteBuffer prng = ByteBuffer.wrap(master.getCrypto().expand(new byte[0], 1024*64, new byte[0], new byte[0]));
+		ByteBuffer prng = ByteBuffer.wrap(master.getCrypto().expand(new byte[0], 1024*128, new byte[0], new byte[0]));
 		
 		for(int i = 0; i < 128; i++) {
 			int depth = 1 + (Util.unsignByte(prng.get()) % 4);
@@ -195,49 +211,59 @@ public class FSMirrorTest {
 			}
 			
 			fs.mkdirp(fs.dirname(p));
-			switch(prng.get() % 8) {
-				case 3:
-					if(isSuperuser()) {
-						p += "-bdev";
-						fs.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
-						break;
+			while(true) {
+				String pp = p;
+				try {
+					switch(prng.get() % 8) {
+						case 3:
+							if(isSuperuser()) {
+								p += "-bdev";
+								fs.mknod(p, Stat.TYPE_BLOCK_DEVICE, 1, 3);
+								break;
+							}
+						case 1:
+							p += "-dir";
+							fs.mkdir(p);
+							break;
+						case 4:
+							if(isSuperuser()) {
+								p += "-cdev";
+								fs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
+								break;
+							}
+						case 2:
+							p += "-fifo";
+							fs.mkfifo(p);
+							break;
+						case 5:
+							p += "-brokensym";
+							fs.symlink(String.format("%08x", prng.getInt()), p);
+							break;
+						case 6:
+							if(!paths.isEmpty()) {
+								p += "-validsym";
+								String linkTarget = null;
+								while(linkTarget == null || fs.lstat(linkTarget).isSymlink()) {
+									linkTarget = paths.get(Util.unsignShort(prng.getShort()) % paths.size());
+								}
+								
+								fs.symlink(linkTarget, p);
+								break;
+							} // if we draw this one first, fall through to file case
+						default:
+							p += "-file";
+							fs.write(p, master.getCrypto().expand(
+									master.crypto.symNonce(prng.getInt()),
+									Util.unsignShort(prng.getShort()),
+									new byte[0],
+									new byte[0]));
 					}
-				case 1:
-					p += "-dir";
-					fs.mkdir(p);
+					
 					break;
-				case 4:
-					if(isSuperuser()) {
-						p += "-cdev";
-						fs.mknod(p, Stat.TYPE_CHARACTER_DEVICE, 1, 3);
-						break;
-					}
-				case 2:
-					p += "-fifo";
-					fs.mkfifo(p);
-					break;
-				case 5:
-					p += "-brokensym";
-					fs.symlink(String.format("%08x", prng.getInt()), p);
-					break;
-				case 6:
-					if(!paths.isEmpty()) {
-						p += "-validsym";
-						String linkTarget = null;
-						while(linkTarget == null || fs.lstat(linkTarget).isSymlink()) {
-							linkTarget = paths.get(Util.unsignShort(prng.getShort()) % paths.size());
-						}
-						
-						fs.symlink(linkTarget, p);
-						break;
-					} // if we draw this one first, fall through to file case
-				default:
-					p += "-file";
-					fs.write(p, master.getCrypto().expand(
-							master.crypto.symNonce(prng.getInt()),
-							Util.unsignShort(prng.getShort()),
-							new byte[0],
-							new byte[0]));
+				} catch(UnsupportedOperationException exc) {
+					// just retry the rng if we picked something this platform doesn't support
+					p = pp;
+				}
 			}
 
 			paths.add(p);
@@ -1092,7 +1118,12 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testWatchMonitorsSymlinkRemoval() throws IOException {
-		target.symlink("fake", "foo");
+		try {
+			target.symlink("fake", "foo");
+		} catch(UnsupportedOperationException exc) {
+			assumeTrue("Symlinks not tested on this platform", false);
+		}
+		
 		watcherTest("foo", (p)->{
 			target.unlink(p);
 		});
@@ -1107,7 +1138,12 @@ public class FSMirrorTest {
 	
 	@Test
 	public void testWatchMonitorsFifoRemoval() throws IOException {
-		target.mkfifo("foo");
+		try {
+			target.mkfifo("foo");
+		} catch(UnsupportedOperationException exc) {
+			assumeTrue("FIFOs not tested on this platform", false);
+		}
+		
 		watcherTest("foo", (p)->{
 			target.unlink(p);
 		});
@@ -1159,7 +1195,11 @@ public class FSMirrorTest {
 		mirror.syncArchiveToTarget();
 		
 		for(String path : paths) {
-			checkPathMatch(zkfs, target, expectations.get(path), path);
+			if(mirror.canMirror(path)) {
+				checkPathMatch(zkfs, target, expectations.get(path), path);
+			} else {
+				checkPathNotExist(target, path);
+			}
 		}
 	}
 
@@ -1188,9 +1228,13 @@ public class FSMirrorTest {
 		}
 		
 		for(String path : paths) {
-			Stat expected = expectations.get(path);
-			assertTrue(Util.waitUntil(100, ()->quickCheck(target, zkfs, expected, path)));
-			checkPathMatch(target, zkfs, expected, path);
+			if(mirror.canMirror(path)) {
+				Stat expected = expectations.get(path);
+				assertTrue(Util.waitUntil(3000, ()->quickCheck(target, zkfs, expected, path)));
+				checkPathMatch(target, zkfs, expected, path);
+			} else {
+				checkPathNotExist(target, path);
+			}
 		}
 	}
 	
@@ -1198,6 +1242,7 @@ public class FSMirrorTest {
 	public void testAbsoluteSymlinksCanCopy() throws IOException {
 		String linkTarget = "/dev/null", link = "test-symlink";
 		zkfs.symlink(linkTarget, link);
+		assumeTrue("symlinks not tested on this platform", mirror.canMirror(link));
 		mirror.syncArchiveToTarget();
 		assertEquals(linkTarget, target.readlink_unsafe(link));
 	}

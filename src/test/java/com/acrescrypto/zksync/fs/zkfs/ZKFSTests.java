@@ -31,7 +31,7 @@ import com.acrescrypto.zksync.fs.zkfs.resolver.DiffSetTest;
 	RevisionTagTest.class,
 	RevisionTreeTest.class,
 	ZKFSManagerTest.class,
-	// FSMirrorTest.class,
+	FSMirrorTest.class,
 	ConfigTests.class
 })
 

@@ -199,6 +199,7 @@ public class DiffSetResolver {
 	public RevisionTag resolve() throws IOException, DiffResolutionException {
 		if(diffset == null || diffset.revisions == null || diffset.revisions.length == 0) {
 			// Defend against situations where we're merging nothing
+			if(fs == null) return null; // pray the caller doesn't mind
 			return fs.getBaseRevision();
 		}
 		
