@@ -127,6 +127,32 @@ public class FSMirror {
 	public ZKFS getZKFS() {
 		return zkfs;
 	}
+	
+	/** Determine if a given path refers to a file in the ZKFS that can be safely mirrored
+	 * to the target filesystem.
+	 */
+	public boolean canMirror(String path) throws IOException {
+		/* ext3, ext4, support everything just fine. It's FAT32/NTFS/etc that are the problem.
+		 * It's possible that, for instance, a Linux system might have an NTFS mount, in
+		 * which case this logic fails. Similarly, it is also conceivable that a Windows
+		 * system will have an ext4 mount.
+		 * 
+		 *  TODO: detect limited-capability filesystems on non-Windows systems
+		 */
+		if(!Util.isWindows()) return true;
+		
+		String std = FSPath.standardize(path);
+		Stat stat;  
+		try {
+			stat   = zkfs.lstat(std);
+		} catch(ENOENTException exc) {
+			return true;
+		}
+		
+		if(stat.isRegularFile()) return true;
+		if(stat.isDirectory())   return true;
+		return false;
+	}
 
 	public boolean isWatching() {
 		return watchFlag.isTrue();
@@ -638,10 +664,13 @@ public class FSMirror {
 		}
 	}
 
-	protected Stat copy(FS src, FS dest, String path) throws IOException {
-		Stat srcStat = null, destStat = null;
-		copyParentDirectories(src, dest, path);
+	protected void copy(FS src, FS dest, String path) throws IOException {
+		Stat          srcStat = null,
+			         destStat = null;
 		boolean keepSquelched = false;
+		
+		copyParentDirectories(src, dest, path);
+		if(!canMirror(path)) return;
 		
 		try {
 			try {
@@ -651,19 +680,19 @@ public class FSMirror {
 			srcStat = src.lstat(path);
 			if(!acquireSquelch(path, src, dest)) {
 				keepSquelched = true;
-				return srcStat;
+				return;
 			}
 			
 			if(srcStat.isRegularFile()) {
-				copyFile(src, dest, path, srcStat, destStat);
+				copyFile     (src, dest, path, srcStat, destStat);
 			} else if(srcStat.isFifo()) {
-				copyFifo(src, dest, path, srcStat, destStat);
+				copyFifo     (src, dest, path, srcStat, destStat);
 			} else if(srcStat.isDevice()) {
-				copyDevice(src, dest, path, srcStat, destStat);
+				copyDevice   (src, dest, path, srcStat, destStat);
 			} else if(srcStat.isDirectory()) {
 				copyDirectory(src, dest, path, srcStat, destStat);
 			} else if(srcStat.isSymlink()) {
-				copySymlink(src, dest, path, srcStat, destStat);
+				copySymlink  (src, dest, path, srcStat, destStat);
 			}
 
 			applyStat(srcStat, dest, path);
@@ -681,7 +710,7 @@ public class FSMirror {
 			}
 		}
 
-		return srcStat;
+		return;
 	}
 
 	protected void copyParentDirectories(FS src, FS dest, String path) throws IOException {

@@ -4,6 +4,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeTrue;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -142,6 +143,7 @@ public class FSMirrorTest {
 	
 	void observeFileChangeTest(String path, PathChangeTest test) throws IOException {
 		test.test(path);
+		assumeTrue("Cannot test special files on this filesystem", mirror.canMirror(path));
 		
 		Stat expected = null;
 		try {
@@ -155,6 +157,7 @@ public class FSMirrorTest {
 	void syncArchiveToTargetTest(String path, PathChangeTest test) throws IOException {
 		test.test(path);
 		zkfs.commit();
+		assumeTrue("Cannot test special files on this filesystem", mirror.canMirror(path));
 		
 		Stat expected = null;
 		try {
