@@ -239,6 +239,8 @@ public class DHTZKArchiveDiscoveryTest {
 			// these time-based tests seem rife with ITFs.
 			long elapsed = Util.currentTimeMillis() - timeStart;
 			int minimumTime = i * (discovery.advertisementIntervalMs - 10);
+			
+			// 2020-07-07 4041e04 observing lots of intermittent failures of this test on windows 
 			assertTrue(elapsed > minimumTime);
 		}
 	}
