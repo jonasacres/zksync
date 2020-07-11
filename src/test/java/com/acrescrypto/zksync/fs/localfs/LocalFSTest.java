@@ -12,13 +12,16 @@ import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 
 import com.acrescrypto.zksync.TestUtils;
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.FSTestBase;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.utility.Util;
 
 
 public class LocalFSTest extends FSTestBase {
-	public final static String SCRATCH_DIR = "/tmp/zksync-test/localfs";
+	public static String scratch() {
+		return FSPath.with("/tmp/zksync-test/localfs").toNative();
+	}
 
 	@BeforeClass
 	public static void beforeAll() {
@@ -28,8 +31,8 @@ public class LocalFSTest extends FSTestBase {
 	@Before
 	public void beforeEach() throws IOException {
 		deleteFiles();
-		(new java.io.File(SCRATCH_DIR)).mkdirs();
-		scratch = new LocalFS(SCRATCH_DIR);
+		(new java.io.File(scratch())).mkdirs();
+		scratch = new LocalFS(scratch());
 		prepareExamples();
 	}
 
@@ -173,7 +176,7 @@ public class LocalFSTest extends FSTestBase {
 
 	protected static void deleteFiles() {
 		try {
-			java.io.File scratchDir = new java.io.File(SCRATCH_DIR);
+			java.io.File scratchDir = new java.io.File(scratch());
 			FileUtils.deleteDirectory(scratchDir);
 			scratchDir.delete();
 		} catch (IOException exc) {
@@ -193,7 +196,7 @@ public class LocalFSTest extends FSTestBase {
 
 	@Test
 	public void testStatIdentifiesDevices() throws IOException {
-		if(Util.isWindows()) return;
+		assumeTrue("Devices not tested on Windows", !Util.isWindows());
 		try(LocalFS root = new LocalFS("/")) {
 			Stat devNull = root.stat("/dev/null");
 			assertTrue(devNull.isCharacterDevice());
@@ -209,18 +212,20 @@ public class LocalFSTest extends FSTestBase {
 
 	@Test @Override
 	public void testStatIdentifiesFifos() throws IOException {
-		if(Util.isWindows()) return;
+		assumeTrue("Fifos not tested on Windows", !Util.isWindows());
 		super.testStatIdentifiesFifos();
 	}
 
 	@Test @Override
 	public void testMknodCharacterDevice() throws IOException {
+		assumeTrue("Devices not tested on Windows", !Util.isWindows());
 		if(!Util.isSuperuser()) return;
 		super.testMknodCharacterDevice();
 	}
 
 	@Test @Override
 	public void testMknodBlockDevice() throws IOException {
+		assumeTrue("Devices not tested on Windows", !Util.isWindows());
 		if(!Util.isSuperuser()) return;
 		super.testMknodBlockDevice();
 	}

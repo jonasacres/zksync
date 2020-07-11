@@ -520,7 +520,7 @@ public class ZKFS extends FS {
 	public void rmdir(String path) throws IOException {
 		assertWritable(path);
 		assertDirectoryIsEmpty(path);
-		if(path.equals("/")) return; // quietly ignore for rmrf("/") support; used to throw new EINVALException("cannot delete root directory");
+		if(absolutePath(path).isRoot()) return; // quietly ignore for rmrf("/") support; used to throw new EINVALException("cannot delete root directory");
 		
 		synchronized(this) {
 			assertWritable(path);
@@ -927,7 +927,7 @@ public class ZKFS extends FS {
 	}
 	
 	public String canonicalPath(String path) throws IOException {
-		String std = FSPath.standardize(path); 
+		String std = FSPath.with(path).normalize().standardize(); 
 		while(std.startsWith("//")) std = std.substring(1);
 		if(std.equals(""))  return "/";
 		if(std.equals("/")) return std;

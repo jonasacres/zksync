@@ -51,7 +51,7 @@ public class LocalFile extends File {
 			} catch (ENOENTException exc) {
 			}
 
-			String fullPath = fs.expandPath(path);
+			String fullPath = fs.qualifiedPathNative(path).toString();
 			this.fileHandle = new RandomAccessFile(fullPath, modeStr);
 			this.channel = this.fileHandle.getChannel();
 		} catch(Throwable exc) {

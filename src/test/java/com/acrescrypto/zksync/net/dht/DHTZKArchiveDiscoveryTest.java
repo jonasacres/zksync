@@ -292,7 +292,8 @@ public class DHTZKArchiveDiscoveryTest {
 		client.searchId = null;
 		discovery.forceUpdate(archive.getConfig().getAccessor());
 		// TODO API: (itf) a215023+ linux 11/29/18 AllTests, assertion failed
-		// observed on Windows 7/6/20 ceb1834
-		assertTrue(Util.waitUntil(500, ()->client.searchId != null));
+		// observed on Windows 10, 7/6/20 ceb1834
+		// this is particularly frequent on windows with 500ms timeout in the waitUntil...
+		assertTrue(Util.waitUntil(2000, ()->client.searchId != null));
 	}
 }

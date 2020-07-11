@@ -17,13 +17,13 @@ public class LocalFileTest extends FileTestBase {
 
 	@Before
 	public void beforeEach() {
-		scratch = new LocalFS(LocalFSTest.SCRATCH_DIR);
+		scratch = new LocalFS(LocalFSTest.scratch());
 	}
 
 	@BeforeClass
 	public static void beforeClass() {
 		TestUtils.startDebugMode();
-		java.io.File scratchDir = new java.io.File(LocalFSTest.SCRATCH_DIR);
+		java.io.File scratchDir = new java.io.File(LocalFSTest.scratch());
 		try {
 			FileUtils.deleteDirectory(scratchDir);
 		} catch (IOException e) {}

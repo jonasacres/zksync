@@ -256,13 +256,20 @@ public class ArchiveResource {
 							automirrorPath = null;
 						} else {
 							try(LocalFS fs = new LocalFS("/")) {
-								if(!fs.exists(automirrorPath) || !fs.stat(automirrorPath).isDirectory()) {
-									throw XAPIResponse.withError(409, "requested automirror path not found or is not directory");
+								if(!fs.exists(automirrorPath)) {
+									throw XAPIResponse.withError(409, "requested automirror path not found");
+								}
+								
+								if(!fs.stat(automirrorPath).isDirectory()) {
+									throw XAPIResponse.withError(409, "requested automirror path is not directory");
 								}
 							}
 						}
 						
-						State.sharedState().activeManager(config).setAutomirrorPath(automirrorPath);
+						State
+							.sharedState()
+							.activeManager(config)
+							.setAutomirrorPath(automirrorPath);
 					});
 			WebUtils.mapFieldWithException(settings.isAutomirror(),
 					(automirror)->{

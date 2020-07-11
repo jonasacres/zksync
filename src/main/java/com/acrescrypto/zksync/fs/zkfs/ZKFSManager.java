@@ -278,7 +278,9 @@ public class ZKFSManager implements AutoCloseable {
 		}
 		
 		if(automirror && this.automirrorPath != null) {
-			Stat stat = mirror.getTarget().stat("/");
+			Stat stat = mirror
+					.getTarget()
+					.stat("/");
 			if(!stat.isDirectory()) {
 				throw new EISNOTDIRException(this.automirrorPath);
 			}

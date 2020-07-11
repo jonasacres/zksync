@@ -87,7 +87,7 @@ public class LocalFS extends FS {
 	
 	private Stat statWithLinkOptionWindows(String pathStr, LinkOption... linkOpt) throws IOException {
 		Stat stat = new Stat();
-		Path path = qualifiedPath(pathStr);
+		Path path = qualifiedPathNative(pathStr);
 		
 		/* TODO: Profiler shows that in a test like indefiniteTestComplexManyPeerEquivalent, we
 		 * burn most of our time on checking user and group names (string, not ID). In practice, most
@@ -96,7 +96,9 @@ public class LocalFS extends FS {
 		 */
 		
 		try {
-			BasicFileAttributes attr = Files.readAttributes(path, BasicFileAttributes.class, linkOpt);
+			BasicFileAttributes attr = Files.readAttributes(path,
+					BasicFileAttributes.class,
+					linkOpt);
 
 			stat.setMtime(attr.lastModifiedTime().to(TimeUnit.NANOSECONDS));
 			stat.setAtime(attr.lastAccessTime  ().to(TimeUnit.NANOSECONDS));
@@ -138,7 +140,7 @@ public class LocalFS extends FS {
 
 	private Stat statWithLinkOptionPosix(String pathStr, LinkOption... linkOpt) throws IOException {
 		Stat stat = new Stat();
-		Path path = qualifiedPath(pathStr);
+		Path path = qualifiedPathNative(pathStr);
 		
 		/* TODO: Profiler shows that in a test like indefiniteTestComplexManyPeerEquivalent, we
 		 * burn most of our time on checking user and group names (string, not ID). In practice, most
@@ -340,7 +342,7 @@ public class LocalFS extends FS {
 		} catch(ENOENTException exc) {}
 				
 		try {
-			Files.move(qualifiedPath(oldPath), qualifiedPath(targetPath), opts);
+			Files.move(qualifiedPathNative(oldPath), qualifiedPathNative(targetPath), opts);
 		} catch(DirectoryNotEmptyException exc) {
 			try {
 				Stat reloStat = stat(relocatedPath);
@@ -359,19 +361,19 @@ public class LocalFS extends FS {
 	@Override
 	public void mkdir(String path) throws IOException {
 		logger.debug("LocalFS {}: mkdir {}", root, path);
-		Files.createDirectory(qualifiedPath(path));
+		Files.createDirectory(qualifiedPathNative(path));
 	}
 	
 	@Override
 	public void mkdirp(String path) throws IOException {
 		logger.debug("LocalFS {}: mkdirp {}", root, path);
-		Files.createDirectories(qualifiedPath(path));
+		Files.createDirectories(qualifiedPathNative(path));
 	}
 
 	@Override
 	public void rmdir(String path) throws IOException {
 		logger.debug("LocalFS {}: rmdir {}", root, path);
-		Path p = qualifiedPath(path);
+		Path p = qualifiedPathNative(path);
 		if(!Files.exists(p)) throw new ENOENTException(path);
 		if(!Files.isDirectory(p)) throw new IOException(path + ": not a directory");
 		Files.delete(p);
@@ -381,7 +383,7 @@ public class LocalFS extends FS {
 	public void unlink(String path) throws IOException {
 		logger.debug("LocalFS {}: unlink {}", root, path);
 		try {
-			Files.delete(qualifiedPath(path));
+			Files.delete(qualifiedPathNative(path));
 		} catch(NoSuchFileException exc) {
 			throw new ENOENTException(path);
 		}
@@ -391,7 +393,7 @@ public class LocalFS extends FS {
 	public void link(String source, String dest) throws IOException {
 		logger.debug("LocalFS {}: link {} -> {}", root, source, dest);
 		try {
-			Files.createLink(qualifiedPath(dest), qualifiedPath(source));
+			Files.createLink(qualifiedPathNative(dest), qualifiedPathNative(source));
 		} catch(FileAlreadyExistsException exc) {
 			throw new EEXISTSException(qualifiedPath(source).toString());
 		} catch(NoSuchFileException exc) {
@@ -410,20 +412,20 @@ public class LocalFS extends FS {
 		
 		assertPathInScope(trueSource.toString());
 		
-		Files.createSymbolicLink(qualifiedPath(dest), trueSource);
+		Files.createSymbolicLink(qualifiedPathNative(dest), trueSource);
 	}
 	
 	@Override
 	public void symlink_unsafe(String source, String dest) throws IOException {
 		logger.debug("LocalFS {}: symlink_unsafe {} -> {}", root, source, dest);
 		Path psource = Paths.get(source);
-		Files.createSymbolicLink(qualifiedPath(dest), psource);
+		Files.createSymbolicLink(qualifiedPathNative(dest), psource);
 	}
 	
 	@Override
 	public String readlink(String link) throws IOException {
 		try {
-			FSPath target = FSPath.with(Files.readSymbolicLink(qualifiedPath(link)).toString());
+			FSPath target = FSPath.with(Files.readSymbolicLink(qualifiedPathNative(link)).toString());
 			if(target.descendsFrom(root)) {
 				return target.isAbsolute()
 					   ? root.relativize(target).makeAbsolute().toNative()
@@ -439,7 +441,7 @@ public class LocalFS extends FS {
 	@Override
 	public String readlink_unsafe(String link) throws IOException {
 		try {
-			return Files.readSymbolicLink(qualifiedPath(link)).toString();
+			return Files.readSymbolicLink(qualifiedPathNative(link)).toString();
 		} catch(NoSuchFileException exc) {
 			throw new ENOENTException(link);
 		}
@@ -501,7 +503,7 @@ public class LocalFS extends FS {
 		// TODO Someday: (implement) Add setuid/setgid/sticky bit support
 		
 		try {
-			Files.setPosixFilePermissions(qualifiedPath(path), modeSet);
+			Files.setPosixFilePermissions(qualifiedPathNative(path), modeSet);
 		} catch(NoSuchFileException exc) {
 			throw new ENOENTException(path);
 		}
@@ -561,7 +563,7 @@ public class LocalFS extends FS {
 		if(stat(path).isFifo()) throw new UnsupportedOperationException("can't set atime on fifo");
 		FileTime fileTime = FileTime.from(mtime, TimeUnit.NANOSECONDS);
 		try {
-			Files.setAttribute(qualifiedPath(path), "lastModifiedTime", fileTime);
+			Files.setAttribute(qualifiedPathNative(path), "lastModifiedTime", fileTime);
 		} catch(NoSuchFileException exc) {
 			throw new ENOENTException(path);
 		}
@@ -579,7 +581,7 @@ public class LocalFS extends FS {
 		if(stat(path).isFifo()) throw new UnsupportedOperationException("can't set atime on fifo");
 		FileTime fileTime = FileTime.from(atime, TimeUnit.NANOSECONDS);
 		try {
-			Files.setAttribute(qualifiedPath(path), "lastAccessTime", fileTime);
+			Files.setAttribute(qualifiedPathNative(path), "lastAccessTime", fileTime);
 		} catch(NoSuchFileException exc) {
 			throw new ENOENTException(path);
 		}
@@ -602,7 +604,7 @@ public class LocalFS extends FS {
 	public void truncate(String path, long size) throws IOException {
 		logger.debug("LocalFS {}: truncate {} {}", root, path, size);
 		try(
-			FileOutputStream stream = new FileOutputStream(expandPath(path), true);
+			FileOutputStream stream = new FileOutputStream(qualifiedPathNative(path).toString(), true);
 			FileChannel chan = stream.getChannel();
 		) {
 			long oldSize = chan.size();
@@ -617,11 +619,11 @@ public class LocalFS extends FS {
 	
 	@Override
 	public boolean exists(String path, boolean followLinks) {
-		LinkOption[] linkOpt;
+		LinkOption[] linkOpt = new LinkOption[] {};
 		if(followLinks) linkOpt = new LinkOption[] {};
 		else linkOpt = new LinkOption[] { LinkOption.NOFOLLOW_LINKS };
 		try {
-			return Files.exists(qualifiedPath(path), linkOpt);
+			return Files.exists(qualifiedPathNative(path), linkOpt);
 		} catch(ENOENTException exc) {
 			return false;
 		}
@@ -630,7 +632,7 @@ public class LocalFS extends FS {
 	@Override
 	public LocalFS scopedFS(String subpath) throws IOException {
 		if(!exists(subpath)) mkdirp(subpath);
-		return new LocalFS(expandPath(subpath));
+		return new LocalFS(root.join(subpath));
 	}
 	
 	@Override
@@ -674,6 +676,15 @@ public class LocalFS extends FS {
 		}
 		
 		return Paths.get(normalized.toPosix());
+	}
+	
+	protected Path qualifiedPathNative(String path) throws ENOENTException {
+		FSPath normalized = root.join(path).normalize();
+		if(!normalized.descendsFrom(root)) {
+			throw new ENOENTException(path);
+		}
+		
+		return Paths.get(normalized.toNative());
 	}
 	
 	protected void assertPathInScope(String path) throws ENOENTException {

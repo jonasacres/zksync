@@ -18,14 +18,14 @@ public class LocalDirectoryTest extends DirectoryTestBase {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		scratch = new LocalFS(LocalFSTest.SCRATCH_DIR);
+		scratch = new LocalFS(LocalFSTest.scratch());
 		scratch.purge();
 	}
 	
 	@BeforeClass
 	public static void beforeClass() {
 		TestUtils.startDebugMode();
-		java.io.File scratchDir = new java.io.File(LocalFSTest.SCRATCH_DIR);
+		java.io.File scratchDir = new java.io.File(LocalFSTest.scratch());
 		try {
 			FileUtils.deleteDirectory(scratchDir);
 		} catch (IOException e) {}

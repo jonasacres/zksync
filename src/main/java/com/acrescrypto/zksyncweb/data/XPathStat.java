@@ -1,9 +1,9 @@
 package com.acrescrypto.zksyncweb.data;
 
 import java.io.IOException;
-import java.nio.file.Paths;
 
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.PageTree;
@@ -64,7 +64,7 @@ public class XPathStat {
 
 			if(inode.getStat().isSymlink()) {
 				String linkTargetRelative = fs.readlink(path);
-				String linkTargetResolved = Paths.get(fs.dirname(path), linkTargetRelative).toString();
+				String linkTargetResolved = FSPath.with(fs.dirname(path)).join(linkTargetRelative).standardize();
 				this.targetPath = linkTargetRelative;
 				this.target = XPathStat.withPath(fs,
 						linkTargetResolved,
