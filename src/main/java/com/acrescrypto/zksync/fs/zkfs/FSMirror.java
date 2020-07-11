@@ -606,7 +606,6 @@ public class FSMirror {
 	
 	protected synchronized boolean acquireSquelch(String path, FS srcFs, FS destFs) {
 		String abspath = zkfs.root().join(path).normalize().toNative();
-		System.out.println("Squelching: " + abspath);
 		
 		if(isSquelched(abspath, destFs)) {
 			logger.debug("FS {}: FSMirror {} path is squelched: {}",
@@ -629,7 +628,6 @@ public class FSMirror {
 	
 	protected boolean isSquelched(String path, FS fs) {
 		String abspath = zkfs.root().join(path).normalize().toNative();
-		System.out.println("Is squelched? " + abspath);
 		SquelchedPath squelch = squelchedPaths.get(abspath);
 		if(squelch == null) {
 			return false;
