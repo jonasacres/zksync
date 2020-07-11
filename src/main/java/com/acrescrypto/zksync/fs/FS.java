@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -11,7 +10,6 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
-import com.acrescrypto.zksync.utility.Util;
 
 public abstract class FS implements AutoCloseable {
 	protected static ConcurrentHashMap<File,Throwable> globalFileBacktraces = new ConcurrentHashMap<>();
@@ -86,19 +84,19 @@ public abstract class FS implements AutoCloseable {
 	
 	private Logger logger = LoggerFactory.getLogger(FS.class);
 	protected ConcurrentHashMap<File,Throwable> localFileBacktraces = new ConcurrentHashMap<>();
-	protected String root;
+	protected FSPath root;
 	
 	public long maxFileSize() {
 		return Long.MAX_VALUE;
 	}
 	
 	public void root(String root) {
-		this.root = root;
+		this.root = FSPath.with(root);
 	}
 	
-	public String root() {
+	public FSPath root() {
 		if(root == null) {
-			root = "/";
+			root = FSPath.with("/");
 		}
 		
 		return root;
@@ -221,31 +219,16 @@ public abstract class FS implements AutoCloseable {
 		return comps[comps.length-1];
 	}
 
-	public String absolutePath(String path) {
-		return absolutePath(path, root());
+	public FSPath absolutePath(String path) {
+		return absolutePath(FSPath.with(path));
 	}
 	
-	public String absolutePath(String path, String root) {
-		String fullPath = join(root, path);
-		ArrayList<String> comps = new ArrayList<String>();
-		
-		for(String comp : fullPath.split("/")) {
-			if(comp.equals(".")) continue;
-			else if(comp.equals("..")) {
-				if(comps.size() > 0) comps.remove(comps.size()-1);
-			} else {
-				comps.add(comp);
-			}
-		}
-		
-		if(comps.size() == 0 || comps.size() == 1 && comps.get(0).equals("")) return "/";
-		if(Util.isWindows()	
-				&& comps.size() == 1
-				&& (     comps.get(0)       .equals(root())
-					||  (comps.get(0) + "/").equals(root())
-				 )
-		   ) return "/";
-		return new FSPath(String.join("/", comps).replace(root(), "/")).toPosix();
+	public FSPath absolutePath(FSPath path) {
+		return root()
+				 .relativize(root()
+					.join(path)
+					.normalize()
+				).makeAbsolute();
 	}
 	
 	public boolean exists(String path, boolean followLinks) {
@@ -270,7 +253,9 @@ public abstract class FS implements AutoCloseable {
 	
 	public void applyStat(String path, Stat stat) throws IOException {
 		try { chown(path, stat.getUser()); } catch(UnsupportedOperationException exc) {}
+		try { chown(path, stat.getUid()); } catch(UnsupportedOperationException exc) {}
 		try { chgrp(path, stat.getGroup()); } catch(UnsupportedOperationException exc) {}
+		try { chgrp(path, stat.getGid()); } catch(UnsupportedOperationException exc) {}
 		try { chmod(path, stat.getMode()); } catch(UnsupportedOperationException exc) {}
 		try { setCtime(path, stat.getCtime()); } catch(UnsupportedOperationException exc) {}
 		try { setMtime(path, stat.getMtime()); } catch(UnsupportedOperationException exc) {}

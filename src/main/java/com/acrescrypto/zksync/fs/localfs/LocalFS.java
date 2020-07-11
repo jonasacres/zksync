@@ -47,16 +47,20 @@ public class LocalFS extends FS {
 	}
 	
 	public LocalFS(String root) {
+		this(FSPath.with(root));
+	}
+	
+	public LocalFS(FSPath root) {
 		this.root = root;
 	}
 	
 	@Override
-	public String root() {
+	public FSPath root() {
 		if(root == null) {
 			if(Util.isWindows()) {
-				root = "C:/";
+				root = FSPath.with("C:\\");
 			} else {
-				root = "/";
+				root = FSPath.with("/");
 			}
 		}
 		
@@ -419,12 +423,14 @@ public class LocalFS extends FS {
 	@Override
 	public String readlink(String link) throws IOException {
 		try {
-			String target = Files.readSymbolicLink(qualifiedPath(link)).toString();
-			if(target.startsWith(root)) {
-				return target.substring(root.length(), target.length());
+			FSPath target = FSPath.with(Files.readSymbolicLink(qualifiedPath(link)).toString());
+			if(target.descendsFrom(root)) {
+				return target.isAbsolute()
+					   ? root.relativize(target).makeAbsolute().toNative()
+					   : root.relativize(target).toNative();
 			}
 			
-			return target;
+			return target.toNative();
 		} catch(NoSuchFileException exc) {
 			throw new ENOENTException(link);
 		}
@@ -632,7 +638,7 @@ public class LocalFS extends FS {
 		return new LocalFS("/");
 	}
 	
-	public String getRoot() {
+	public FSPath getRoot() {
 		return root;
 	}
 	
@@ -662,7 +668,7 @@ public class LocalFS extends FS {
 	}
 	
 	protected Path qualifiedPath(String path) throws ENOENTException {
-		FSPath normalized = FSPath.with(root).join(path).normalize();
+		FSPath normalized = root.join(path).normalize();
 		if(!normalized.descendsFrom(root)) {
 			throw new ENOENTException(path);
 		}
@@ -671,11 +677,9 @@ public class LocalFS extends FS {
 	}
 	
 	protected void assertPathInScope(String path) throws ENOENTException {
-		Path p = Paths.get(root, path).normalize().toAbsolutePath();
-		String r = Paths.get(root).normalize().toAbsolutePath().toString();
-		if(!r.endsWith("/")) r += "/";
-		
-		if(!p.startsWith(r)) throw new ENOENTException(path);
+		if(!root.join(path).normalize().descendsFrom(root)) {
+			throw new ENOENTException(path);
+		}
 	}
 	
 	public String toString() {

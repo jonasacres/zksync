@@ -19,7 +19,7 @@ import com.acrescrypto.zksync.fs.Stat;
 
 public class LocalDirectory implements Directory {
 	
-	protected String path;
+	protected FSPath path;
 	protected LocalFS fs;
 	protected Stat stat;
 	
@@ -38,10 +38,10 @@ public class LocalDirectory implements Directory {
 	public Collection<String> list(int opts) throws IOException {
 		ArrayList<String> paths = new ArrayList<String>();
 		// Files.newDirectoryStream(Paths.get(fs.root, path));
-		Path jPath = Paths.get(fs.join(fs.root(), path));
+		Path jPath = Paths.get(fs.root().join(path).toNative());
 		try(DirectoryStream<Path> stream = Files.newDirectoryStream(jPath)) {
 			for(Path entry: stream) {
-				String entryPath = fs.join(path, entry.getFileName().toString());
+				String entryPath = path.join(entry.getFileName().toString()).toPosix();
 				if((opts & LIST_OPT_OMIT_DIRECTORIES) != 0 && fs.stat(entryPath).isDirectory()) continue;
 				String posixPath = new FSPath(entry.getFileName().toString()).toPosix();
 				paths.add(posixPath);
@@ -64,7 +64,7 @@ public class LocalDirectory implements Directory {
 	@Override
 	public boolean walk(int opts, DirectoryWalkCallback cb) throws IOException {
 		try {
-			walkRecursiveIterate(opts, "", cb);
+			walkRecursiveIterate(opts, FSPath.with(""), cb);
 			return true;
 		} catch(WalkAbortException exc) {
 			return false;
@@ -85,19 +85,20 @@ public class LocalDirectory implements Directory {
 		return results;
 	}
 	
-	protected void walkRecursiveIterate(int opts, String prefix, DirectoryWalkCallback cb) throws IOException {
+	protected void walkRecursiveIterate(int opts, FSPath prefix, DirectoryWalkCallback cb) throws IOException {
 		for(String entry : list(opts & ~Directory.LIST_OPT_OMIT_DIRECTORIES)) {
-			String subpath     = fs.join(prefix, entry); // what we return in our results
-			String realSubpath = fs.join(path,   entry); // what we can look up directly in fs
+			FSPath subpath     = prefix.join(entry); // what we return in our results
+			FSPath realSubpath = path  .join(entry); // what we can look up directly in fs
+			
 			try {
 				Stat stat;
 				boolean isBrokenSymlink = false;
 				
 				if((opts & Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS) == 0) {
-					stat = fs.stat(realSubpath);
+					stat = fs.stat(realSubpath.toNative());
 				} else {
-					stat = fs.lstat(realSubpath);
-					if(stat.isSymlink() && !fs.exists(realSubpath)) {
+					stat = fs.lstat(realSubpath.toNative());
+					if(stat.isSymlink() && !fs.exists(realSubpath.toNative())) {
 						isBrokenSymlink = true;
 					}
 				}
@@ -105,42 +106,36 @@ public class LocalDirectory implements Directory {
 				if(stat.isDirectory()) {
 					boolean isDotDir = entry.equals(".") || entry.equals("..");
 					if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
-						cb.foundPath(subpath, stat, isBrokenSymlink, this);
+						cb.foundPath(subpath.toNative(), stat, isBrokenSymlink, this);
 					}
 					
 					if(!isDotDir) {
-						fs.opendir(realSubpath).walkRecursiveIterate(opts, subpath, cb);
+						fs.opendir(realSubpath.toNative()).walkRecursiveIterate(opts, subpath, cb);
 					}
 				} else {
-					cb.foundPath(subpath, stat, isBrokenSymlink, this);
+					cb.foundPath(subpath.toNative(), stat, isBrokenSymlink, this);
 				}
 			} catch(ENOENTException exc) {
 				// busted symlink
-				Stat lstat = fs.lstat(realSubpath);
-				cb.foundPath(subpath, lstat, true, this);
+				Stat lstat = fs.lstat(realSubpath.toNative());
+				cb.foundPath(subpath.toNative(), lstat, true, this);
 			} catch(EACCESException exc) {
 				// directory with bad permissions
-				cb.foundPath(subpath, null, false, this);
+				cb.foundPath(subpath.toNative(), null, false, this);
 			}
 		}
 	}
 	
 	@Override
 	public boolean contains(String entry) {
-		java.io.File file;
-		try {
-			String expandedPath = fs.expandPath(new FSPath(path).join(entry).toPosix());
-			file = new java.io.File(expandedPath);
-			return file.exists();
-		} catch (ENOENTException e) {
-			// TODO API: (coverage) exception
-			return false;
-		}
+		String expandedPath = fs.root().join(path).normalize().join(entry).toNative();
+		java.io.File file = new java.io.File(expandedPath);
+		return file.exists();
 	}
 	
 	@Override
 	public Directory mkdir(String name) throws IOException {
-		String fullPath = fs.join(path, name);
+		String fullPath = path.join(name).toNative();
 		fs.mkdir(fullPath);
 		return fs.opendir(fullPath);
 	}
@@ -152,17 +147,17 @@ public class LocalDirectory implements Directory {
 	
 	@Override
 	public void link(String target, String link) throws IOException {
-		fs.link(target, fs.join(this.path, link));
+		fs.link(target, path.join(link).toNative());
 	}
 
 	@Override
 	public void unlink(String target) throws IOException {
-		fs.unlink(fs.join(path, target));
+		fs.unlink(path.join(target).toNative());
 	}
 	
 	@Override
 	public String getPath() {
-		return path;
+		return path.toNative();
 	}
 	
 	@Override

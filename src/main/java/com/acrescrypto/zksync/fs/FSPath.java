@@ -107,11 +107,7 @@ public class FSPath {
 	}
 	
 	public static String standardize(String path) {
-		return new FSPath(path).toPosix();
-	}
-	
-	public static String standardize(Path path) {
-		return new FSPath(path.toString()).toPosix();
+		return new FSPath(path).standardize();
 	}
 	
 	public static String nativize(String path) {
@@ -260,7 +256,10 @@ public class FSPath {
 	public String toNative() {
 		return toPlatform(platform());
 	}
-		
+	
+	public Path toNativePath() {
+		return Paths.get(toNative());
+	}
 	
 	public String toPlatform(String platform) {
 		switch(platform) {
@@ -348,5 +347,28 @@ public class FSPath {
 	
 	public String toString() {
 		return toPosix();
+	}
+
+	public String standardize() {
+		return toPosix();
+	}
+
+	public boolean isRoot() {
+		if(!dissection.isAbsolute) return false;
+		if(dissection.components.size() >= 2) return false;
+		if(dissection.components.size() == 1 && dissection.components.getFirst().length() > 0) return false;
+		return true;
+	}
+	
+	public boolean isAbsolute() {
+		return dissection.isAbsolute;
+	}
+
+	public FSPath makeAbsolute() {
+		if(dissection.isAbsolute) return this;
+		
+		FSPath abs = new FSPath(this);
+		abs.dissection.isAbsolute = true;
+		return abs;
 	}
 }

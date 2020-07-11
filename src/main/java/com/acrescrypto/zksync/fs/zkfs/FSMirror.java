@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
@@ -167,7 +166,7 @@ public class FSMirror {
 		if(!(target instanceof LocalFS)) throw new UnsupportedOperationException("Cannot watch this kind of filesystem");
 
 		LocalFS localTarget = (LocalFS) target;
-		Path dir = Paths.get(localTarget.getRoot());
+		Path dir = localTarget.getRoot().toNativePath();
 		WatchService watcher = dir.getFileSystem().newWatchService();
 		HashMap<WatchKey, Path> pathsByKey = new HashMap<>();
 		incrementActive();
@@ -249,8 +248,8 @@ public class FSMirror {
 					);
 				pathsByKey.put(key, subdir);
 
-				String realPath = FSPath
-						.with(((LocalFS) target).getRoot())
+				String realPath = ((LocalFS) target)
+						.getRoot()
 						.relativize(FSPath.with(subdir))
 						.toString();
 				
@@ -263,8 +262,8 @@ public class FSMirror {
 
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-				String realPath = FSPath
-					.with(((LocalFS) target).getRoot())
+				String realPath = ((LocalFS) target)
+					.getRoot()
 					.relativize(FSPath.with(file))
 					.toPosix();
 				
@@ -338,7 +337,7 @@ public class FSMirror {
 
 					Path filename = (Path) event.context();
 					Path fullPath = pathsByKey.get(key).resolve(filename);
-					Path basePath = Paths.get(((LocalFS) target).getRoot());
+					Path basePath = ((LocalFS) target).getRoot().toNativePath();
 					String realPath = FSPath.with(basePath.relativize(fullPath).toString()).toPosix();
 
 					try {
@@ -381,7 +380,7 @@ public class FSMirror {
 		 */
 		LinkedList<String> suspected = new LinkedList<>();
 		for(Path path : pathsByKey.values()) {
-			Path basePath = Paths.get(((LocalFS) target).getRoot());
+			Path basePath = ((LocalFS) target).getRoot().toNativePath();
 			String realPath = basePath.relativize(path).toString();
 			if(!target.exists(realPath.toString())) {
 				if(realPath.length() > 0) {
@@ -608,7 +607,7 @@ public class FSMirror {
 	}
 	
 	protected synchronized boolean acquireSquelch(String path, FS srcFs, FS destFs) {
-		String abspath = destFs.absolutePath(path);
+		String abspath = destFs.root().join(path).normalize().toNative();
 		if(isSquelched(abspath, destFs)) {
 			logger.debug("FS {}: FSMirror {} path is squelched: {}",
 					Util.formatArchiveId(zkfs.archive.config.archiveId),

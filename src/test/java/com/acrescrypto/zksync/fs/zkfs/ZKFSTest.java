@@ -978,7 +978,7 @@ public class ZKFSTest extends FSTestBase {
 	}
 	
 	public void addTag(String path, RefTag tag, ZKFS fs, ConcurrentHashMap<String, RefTag> tags) throws IOException {
-		path = fs.absolutePath(path);
+		path = fs.absolutePath(path).standardize();
 		if(!fs.exists(path)) return;
 		if(fs.stat(path).isDirectory()) return;
 		if(fs.lstat(path).isSymlink()) {
@@ -1020,11 +1020,11 @@ public class ZKFSTest extends FSTestBase {
 			if(files.size() == 0) throw new CantDoThatRightNowException();
 			Shuffler shuffler = new Shuffler(files.size());
 			while(shuffler.hasNext()) {
-				String path = fs.absolutePath(files.get(shuffler.next()));
+				String path = fs.absolutePath(files.get(shuffler.next())).standardize();
 				if(!tags.containsKey(path)) continue;
 				String target = null;
 				if(fs.lstat(path).isSymlink()) {
-					target = fs.absolutePath(fs.readlink(path));
+					target = fs.absolutePath(fs.readlink(path)).standardize();
 				}
 				
 				synchronized(tags) {

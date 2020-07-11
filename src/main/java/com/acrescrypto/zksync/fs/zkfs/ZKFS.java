@@ -269,14 +269,14 @@ public class ZKFS extends FS {
 	
 	public Inode inodeForPath(String path, boolean followSymlinks) throws IOException {
 		if(followSymlinks) return inodeForPathWithSymlinks(path, 0);
-		String absPath = absolutePath(path);
+		FSPath absPath = absolutePath(path);
 		if(path.equals("")) throw new ENOENTException(path);
-		if(absPath.equals("/")) {
+		if(absPath.isRoot()) {
 			return inodeTable.inodeWithId(InodeTable.INODE_ID_ROOT_DIRECTORY);
 		}
 		
 		try(ZKDirectory root = opendir("/")) {
-			long inodeId = root.inodeForPath(absPath);
+			long inodeId = root.inodeForPath(absPath.standardize());
 			Inode inode = inodeTable.inodeWithId(inodeId);
 			
 			return inode;
@@ -295,7 +295,7 @@ public class ZKFS extends FS {
 		}
 		
 		if(depth > MAX_SYMLINK_DEPTH) throw new ELOOPException(path);
-		String absPath = absolutePath(path);
+		String absPath = absolutePath(path).standardize();
 		if(path.equals("")) throw new ENOENTException(path);
 		if(absPath.equals("/")) {
 			return inodeTable.inodeWithId(InodeTable.INODE_ID_ROOT_DIRECTORY);
@@ -549,7 +549,7 @@ public class ZKFS extends FS {
 			try {
 				Stat destStat = stat(newPath);
 				if(destStat.isDirectory()) {
-					actualTargetPath = new FSPath(newPath).join(basename(oldPath)).toPosix();
+					actualTargetPath = new FSPath(newPath).join(basename(oldPath)).standardize();
 					
 					try {
 						destStat = stat(actualTargetPath);
@@ -836,7 +836,7 @@ public class ZKFS extends FS {
 			sorted.sort(null);
 			
 			for(String subpath : sorted) {
-				String fqSubpath = new FSPath(path).join(subpath).toPosix();
+				String fqSubpath = new FSPath(path).join(subpath).standardize();
 				Inode inode = inodeForPath(fqSubpath, false);
 				builder.append(String.format("inodeId %4d, size %8d, identity %016x, type %02x, nlink %02d, %s %s\n",
 						inode.getStat().getInodeId(),
@@ -929,7 +929,7 @@ public class ZKFS extends FS {
 		while(std.startsWith("//")) std = std.substring(1);
 		if(std.equals("/")) return std;
 		if(std.equals(".")) return "/";
-		if(std.charAt(0) != '/') std = absolutePath(std);
+		if(std.charAt(0) != '/') std = absolutePath(std).standardize();
 		if(directoriesByPath.hasCached(std)) return std; // only canonical paths are in the cache
 		
 		try {

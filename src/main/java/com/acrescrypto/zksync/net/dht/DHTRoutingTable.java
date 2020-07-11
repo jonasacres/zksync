@@ -125,8 +125,7 @@ public class DHTRoutingTable {
 			logger.info("DHT {}:{}: Added peer to routing table, table has {} peers",
 					peer.address,
 					peer.port,
-					allPeers.size(),
-					(new Throwable()));
+					allPeers.size());
 			try {
 				write();
 			} catch (IOException exc) {

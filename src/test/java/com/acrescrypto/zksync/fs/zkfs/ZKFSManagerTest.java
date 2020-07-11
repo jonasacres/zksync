@@ -267,7 +267,7 @@ public class ZKFSManagerTest {
 	
 	@Test
 	public void testSetAutomirrorFalseDisablesWatchIfRunning() throws IOException {
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		manager.setAutomirror(true);
 		assertTrue(manager.mirror.isWatching());
 		
@@ -280,7 +280,7 @@ public class ZKFSManagerTest {
 		manager.setAutomirror(false);
 		
 		// and again, with an automirror path set
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		manager.setAutomirror(false);
 	}
 
@@ -291,14 +291,14 @@ public class ZKFSManagerTest {
 	
 	@Test
 	public void testSetAutomirrorTrueStartsWatchIfAutomirrorPathSet() throws IOException {
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		manager.setAutomirror(true);
 		assertTrue(manager.mirror.isWatching());
 	}
 	
 	@Test
 	public void testSetAutomirrorTrueDoesNotFreakOutIfWatchRunning() throws IOException {
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		manager.setAutomirror(true);
 		assertTrue(manager.mirror.isWatching());
 		
@@ -308,7 +308,7 @@ public class ZKFSManagerTest {
 	
 	@Test
 	public void testSetAutomirrorPathNullStopsWatchIfRunning() throws IOException {
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		manager.setAutomirror(true);
 		assertTrue(manager.mirror.isWatching());
 		
@@ -320,17 +320,17 @@ public class ZKFSManagerTest {
 	
 	@Test
 	public void testSetAutomirrorPathDoesNotStartWatchIfNotAlreadyRunning() throws IOException {
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		assertFalse(manager.isAutomirroring());
 		assertFalse(manager.mirror.isWatching());
 	}
 	
 	@Test
 	public void testSetAutomirrorPathRestartsWatchIfPreviouslyRunning() throws IOException {
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		manager.setAutomirror(true);
 		
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		assertTrue(manager.isAutomirroring());
 		assertTrue(manager.mirror.isWatching());
 	}
@@ -339,7 +339,7 @@ public class ZKFSManagerTest {
 	public void testSyncsArchiveToMirrorTargetIfAutofollowEnabled() throws IOException {
 		// Noticed a test fail here while troubleshooting other stuff.. possible ITF? 2020-06-06
 		manager.setAutofollow(true);
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 
 		try(ZKFS fs2 = archive.openBlank()) {
 			fs2.write("file", "somebytes".getBytes());
@@ -356,7 +356,7 @@ public class ZKFSManagerTest {
 	@Test
 	public void testDoesNotSyncArchiveToMirrorTargetIfAutofollowDisabled() throws IOException {
 		manager.setAutofollow(false);
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 
 		try(ZKFS fs2 = archive.openBlank()) {
 			fs2.write("file", "somebytes".getBytes());
@@ -385,7 +385,7 @@ public class ZKFSManagerTest {
 		manager.setAutocommit(true);
 		manager.setAutomerge(true);
 		manager.setAutocommitIntervalMs(123456);
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		manager.setAutomirror(true);
 		byte[] serialized = manager.serialize();
 		
@@ -409,7 +409,7 @@ public class ZKFSManagerTest {
 		manager.setAutocommit(true);
 		manager.setAutomerge(true);
 		manager.setAutocommitIntervalMs(123456);
-		manager.setAutomirrorPath(mirrorFs.getRoot());
+		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		manager.setAutomirror(true);
 		manager.write();
 		
