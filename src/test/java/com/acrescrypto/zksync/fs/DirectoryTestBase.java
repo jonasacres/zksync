@@ -125,7 +125,10 @@ public class DirectoryTestBase {
 		
 		assertEquals(listSet.size(), listed.size()); // no dupes
 		assertEquals(expected.length, listSet.size());
-		for(String expectedItem : expected) assertTrue(listSet.contains(expectedItem));
+		
+		for(String expectedItem : expected) {
+			assertTrue(listSet.contains(expectedItem));
+		}
 	}
 	
 	@Test
@@ -265,11 +268,12 @@ public class DirectoryTestBase {
 		
 		try(Directory dir = scratch.opendir("/")) {
 			dir.walk(Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS, (path, stat, isBrokenSymlink, parent)->{
-				String normPath = scratch.dirname(path), normParentPath = parent.getPath();
-				if(!normPath.startsWith("/")) normPath = "/" + normPath;
-				if(!normParentPath.startsWith("/")) normParentPath = "/" + normParentPath;
+				FSPath normPath       = scratch.absolutePath(scratch.dirname(path)),
+					   normParentPath = scratch.absolutePath(parent.getPath());
 				
-				assertEquals(normPath, normParentPath);
+				assertEquals(
+						normPath,
+						normParentPath);
 			});
 		}
 	}

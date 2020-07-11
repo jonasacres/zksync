@@ -176,7 +176,7 @@ public abstract class FSTestBase {
 	@Test
 	public void testOpendir() throws IOException {
 		Directory dir = scratch.opendir("directory");
-		assertEquals("/directory", dir.getPath());
+		assertEquals(FSPath.with("/directory").standardize(), dir.getPath());
 	}
 	
 	@Test(expected=ENOENTException.class)

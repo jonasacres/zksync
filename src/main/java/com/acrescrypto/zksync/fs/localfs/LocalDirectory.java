@@ -95,10 +95,10 @@ public class LocalDirectory implements Directory {
 				boolean isBrokenSymlink = false;
 				
 				if((opts & Directory.LIST_OPT_DONT_FOLLOW_SYMLINKS) == 0) {
-					stat = fs.stat(realSubpath.toNative());
+					stat = fs.stat(realSubpath.standardize());
 				} else {
-					stat = fs.lstat(realSubpath.toNative());
-					if(stat.isSymlink() && !fs.exists(realSubpath.toNative())) {
+					stat = fs.lstat(realSubpath.standardize());
+					if(stat.isSymlink() && !fs.exists(realSubpath.standardize())) {
 						isBrokenSymlink = true;
 					}
 				}
@@ -106,22 +106,22 @@ public class LocalDirectory implements Directory {
 				if(stat.isDirectory()) {
 					boolean isDotDir = entry.equals(".") || entry.equals("..");
 					if((opts & Directory.LIST_OPT_OMIT_DIRECTORIES) == 0) {
-						cb.foundPath(subpath.toNative(), stat, isBrokenSymlink, this);
+						cb.foundPath(subpath.standardize(), stat, isBrokenSymlink, this);
 					}
 					
 					if(!isDotDir) {
-						fs.opendir(realSubpath.toNative()).walkRecursiveIterate(opts, subpath, cb);
+						fs.opendir(realSubpath.standardize()).walkRecursiveIterate(opts, subpath, cb);
 					}
 				} else {
-					cb.foundPath(subpath.toNative(), stat, isBrokenSymlink, this);
+					cb.foundPath(subpath.standardize(), stat, isBrokenSymlink, this);
 				}
 			} catch(ENOENTException exc) {
 				// busted symlink
-				Stat lstat = fs.lstat(realSubpath.toNative());
-				cb.foundPath(subpath.toNative(), lstat, true, this);
+				Stat lstat = fs.lstat(realSubpath.standardize());
+				cb.foundPath(subpath.standardize(), lstat, true, this);
 			} catch(EACCESException exc) {
 				// directory with bad permissions
-				cb.foundPath(subpath.toNative(), null, false, this);
+				cb.foundPath(subpath.standardize(), null, false, this);
 			}
 		}
 	}
@@ -147,17 +147,17 @@ public class LocalDirectory implements Directory {
 	
 	@Override
 	public void link(String target, String link) throws IOException {
-		fs.link(target, path.join(link).toNative());
+		fs.link(target, path.join(link).standardize());
 	}
 
 	@Override
 	public void unlink(String target) throws IOException {
-		fs.unlink(path.join(target).toNative());
+		fs.unlink(path.join(target).standardize());
 	}
 	
 	@Override
 	public String getPath() {
-		return path.toNative();
+		return path.standardize();
 	}
 	
 	@Override

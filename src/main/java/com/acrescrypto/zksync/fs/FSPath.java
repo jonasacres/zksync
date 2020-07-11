@@ -53,7 +53,9 @@ public class FSPath {
 			hasTrailingDelimiter          = path.endsWith(delimiter);
 			sourcePlatform                = "windows";
 			
-			if(comps[0].length() == 2 && comps[0].endsWith(":")) {
+			if(comps.length == 0) {
+				isAbsolute = true;
+			} else if(comps[0].length() == 2 && comps[0].endsWith(":")) {
 				isAbsolute = true;
 				driveLetter = comps[0].substring(0, 1).toUpperCase();
 			} else if(comps[0].length() == 0) {
@@ -239,10 +241,12 @@ public class FSPath {
 	}
 	
 	public FSPath relativize(FSPath path) {
+		if(!path.drive().equals(drive()) && path.isAbsolute()) return path;
+		
 		return FSPath.with(
 			Paths
-				.get(this.toPosix())
-				.relativize(Paths.get(path.toPosix()))
+				.get(this.toNative())
+				.relativize(Paths.get(path.toNative()))
 				.toString()
 			);
 	}
@@ -285,6 +289,9 @@ public class FSPath {
 		
 		if(dissection.isAbsolute) {
 			sb.append(drive() + ":");
+			if(dissection.components.isEmpty()) {
+				sb.append("\\");
+			}
 		}
 		
 		for(String comp : dissection.components) {
@@ -370,5 +377,49 @@ public class FSPath {
 		FSPath abs = new FSPath(this);
 		abs.dissection.isAbsolute = true;
 		return abs;
+	}
+	
+	public FSPath makeRelative() {
+		if(!dissection.isAbsolute) return this;
+		
+		FSPath abs = new FSPath(this);
+		abs.dissection.isAbsolute = false;
+		return abs;
+	}
+
+	public FSPath dirname() {
+		if(dissection.components.isEmpty()) return this;
+		FSPath dupe = new FSPath(this);
+		dupe.dissection.components.removeLast();
+		return dupe;
+	}
+	
+	public FSPath basename() {
+		if(dissection.components.size() <= 1) return this.makeRelative();
+		FSPath dupe = new FSPath(this);
+		dupe.dissection.components = new LinkedList<>();
+		dupe.dissection.components.add(dissection.components.getLast());
+		return dupe.makeRelative();
+	}
+	
+	@Override
+	public boolean equals(Object o) {
+		if(!(o instanceof FSPath)) return false;
+		FSPath other = (FSPath) o;
+		
+		if(isAbsolute() != other.isAbsolute()) return false;
+		if((dissection.driveLetter == null) != (other.dissection.driveLetter == null)) return false;
+		if(dissection.driveLetter != null && !dissection.driveLetter.equals(other.dissection.driveLetter) ) {
+			return false;
+		}
+		
+		if(dissection.components.size() != other.dissection.components.size()) return false;
+		for(int i = 0; i < dissection.components.size(); i++) {
+			String a = dissection.components.get(i),
+				   b = dissection.components.get(i);
+			if(!a.equals(b)) return false;
+		}
+		
+		return true;
 	}
 }

@@ -505,12 +505,14 @@ public class ZKFS extends FS {
 	
 	@Override
 	public void mkdirp(String path) throws IOException {
+		String absPath = absolutePath(path).standardize();
+		
 		try {
-			assertWritable(path);
-			assertPathIsDirectory(path);
+			assertWritable(absPath);
+			assertPathIsDirectory(absPath);
 		} catch(ENOENTException e) {
-			mkdirp(dirname(path));
-			mkdir(path);
+			mkdirp(dirname(absPath));
+			mkdir(absPath);
 		}
 	}
 
@@ -927,6 +929,7 @@ public class ZKFS extends FS {
 	public String canonicalPath(String path) throws IOException {
 		String std = FSPath.standardize(path); 
 		while(std.startsWith("//")) std = std.substring(1);
+		if(std.equals(""))  return "/";
 		if(std.equals("/")) return std;
 		if(std.equals(".")) return "/";
 		if(std.charAt(0) != '/') std = absolutePath(std).standardize();

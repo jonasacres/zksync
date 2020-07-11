@@ -1230,7 +1230,8 @@ public class FSMirrorTest {
 		for(String path : paths) {
 			if(mirror.canMirror(path)) {
 				Stat expected = expectations.get(path);
-				assertTrue(Util.waitUntil(3000, ()->quickCheck(target, zkfs, expected, path)));
+				assertTrue(path,
+						Util.waitUntil(3000, ()->quickCheck(target, zkfs, expected, path)));
 				checkPathMatch(target, zkfs, expected, path);
 			} else {
 				checkPathNotExist(target, path);

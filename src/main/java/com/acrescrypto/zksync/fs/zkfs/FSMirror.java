@@ -248,10 +248,8 @@ public class FSMirror {
 					);
 				pathsByKey.put(key, subdir);
 
-				String realPath = ((LocalFS) target)
-						.getRoot()
-						.relativize(FSPath.with(subdir))
-						.toString();
+				FSPath root = ((LocalFS) target).getRoot();
+				String realPath = root.relativize(FSPath.with(subdir)).toNative();
 				
 				if(!suppressWatch) {
 					suspectedTargetPathChange(realPath);

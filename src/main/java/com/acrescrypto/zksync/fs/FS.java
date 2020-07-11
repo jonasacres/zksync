@@ -204,19 +204,13 @@ public abstract class FS implements AutoCloseable {
 	}
 
 	public String dirname(String path) {
-		if(path.equals("/")) return path;
-		String[] comps = path.split("/");
-		String parent = String.join("/", Arrays.copyOfRange(comps, 0, comps.length-1));
-		if(comps[0] == "") parent = "/" + parent;
-		if(parent.equals("")) parent = "/";
-		return parent;
+		String dirname = FSPath.with(path).dirname().standardize();
+		if(dirname.equals("")) return "/";
+		return dirname;
 	}
 	
 	public String basename(String path) {
-		if(path.equals("/")) return "/";
-		if(path.equals("")) return "";
-		String[] comps = path.split("/");
-		return comps[comps.length-1];
+		return FSPath.with(path).basename().standardize();
 	}
 
 	public FSPath absolutePath(String path) {

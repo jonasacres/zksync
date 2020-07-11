@@ -339,7 +339,7 @@ public class ZKFSManagerTest {
 	public void testSyncsArchiveToMirrorTargetIfAutofollowEnabled() throws IOException {
 		// Noticed a test fail here while troubleshooting other stuff.. possible ITF? 2020-06-06
 		manager.setAutofollow(true);
-		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
+		manager.setAutomirrorPath(mirrorFs.getRoot().standardize());
 
 		try(ZKFS fs2 = archive.openBlank()) {
 			fs2.write("file", "somebytes".getBytes());
