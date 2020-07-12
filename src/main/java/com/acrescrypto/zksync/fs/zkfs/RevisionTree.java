@@ -415,6 +415,7 @@ public class RevisionTree implements AutoCloseable {
 			return true;
 		}
 		
+		if(!existing.isMerge()) return false;
 		Collection<RevisionTag> parents = parentsForTag(existing);
 		
 		if(parents == null) {
@@ -423,6 +424,7 @@ public class RevisionTree implements AutoCloseable {
 		}
 		
 		if(parents.size() <= 1) {
+			// technically we already checked this, but be defensive
 			return false;
 		}
 		
@@ -478,13 +480,17 @@ public class RevisionTree implements AutoCloseable {
 			if(current.equals(ancestor)) {
 				bases.add(current);
 			} else {				
-				Collection<RevisionTag> parents = parentsForTag(current, treeSearchTimeoutMs);
-				if(parents != null && parents.size() > 1) {
-					toProcess.addAll(parents);
+				if(current.isMerge()) {
+					Collection<RevisionTag> parents = parentsForTag(current, treeSearchTimeoutMs);
+					if(parents != null && parents.size() > 1) {
+						toProcess.addAll(parents);
+					} else {
+						/* |parents| > 1 because current.isMerge(), but we check defensively.
+						 * null parents => couldn't find parent information, so we run the risk of
+						 * a non-canonical merge, but we don't have much choice. */
+						bases.add(current);
+					}
 				} else {
-					// Note that we get here if parents.size() == 1, or if parents is null.
-					/* null parents => couldn't find parent information, so we run the risk of a non-canonical
-					 * merge, but we don't have much choice. */
 					bases.add(current);
 				}
 			}
@@ -508,7 +514,8 @@ public class RevisionTree implements AutoCloseable {
 			}
 		}
 		
-		if(revTag.getHeight() <= 1) return false; // this micro-optimization helps simplify test-writing (no need to provide parent lists for revtags of height 1)
+		if( revTag.getHeight() <= 1) return false; // this micro-optimization helps simplify test-writing (no need to provide parent lists for revtags of height 1)
+		if(!revTag.isMerge())        return false; // no need to check supermerge rule
 		
 		Collection<RevisionTag> parents = parentsForTag(revTag);
 		if(parents == null) {
@@ -516,26 +523,27 @@ public class RevisionTree implements AutoCloseable {
 			throw new SearchFailedException();
 		}
 		
-		if(parents.size() > 1) {
-			for(RevisionTag possibleSuperset : tips) {
-				if(possibleSuperset.equals(revTag)) continue;
-				// if this is a merge, do we already have a merge including everything this one does?
-				Collection<RevisionTag> tipParents = parentsForTagLocal(possibleSuperset);
-				if(tipParents != null && tipParents.containsAll(parents)) {
-					return true;
+		// this should not be possible since revTag.isMerge()
+		if(parents.size() <= 1) return false;
+		
+		for(RevisionTag possibleSuperset : tips) {
+			if(possibleSuperset.equals(revTag)) continue;
+			// if this is a merge, do we already have a merge including everything this one does?
+			Collection<RevisionTag> tipParents = parentsForTagLocal(possibleSuperset);
+			if(tipParents != null && tipParents.containsAll(parents)) {
+				return true;
+			}
+			
+			boolean containsParents = true;
+			for(RevisionTag parent : parents) {
+				if(!descendentOf(possibleSuperset, parent)) {
+					containsParents = false;
+					break;
 				}
-				
-				boolean containsParents = true;
-				for(RevisionTag parent : parents) {
-					if(!descendentOf(possibleSuperset, parent)) {
-						containsParents = false;
-						break;
-					}
-				}
-				
-				if(containsParents) {
-					return true;
-				}
+			}
+			
+			if(containsParents) {
+				return true;
 			}
 		}
 		

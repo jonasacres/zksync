@@ -588,7 +588,7 @@ public class PeerConnectionTest {
 		byte[] storageTagBytes = crypto.hash(Util.serializeInt(1234));
 		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 		RefTag refTag = new RefTag(archive, storageTag, 1, 1);
-		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 		ArrayList<Long> inodeIds = new ArrayList<>(numInodes);
 		
 		for(int i = 0; i < numInodes; i++) {
@@ -610,7 +610,7 @@ public class PeerConnectionTest {
 		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 		try {
 			RefTag refTag = new RefTag(archive, storageTag, 1, 1);
-			RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+			RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 			ArrayList<Long> inodeIds = new ArrayList<>(1);
 			inodeIds.add(crypto.defaultPrng().getLong());
 			conn.requestInodes(0, revTag, inodeIds);
@@ -629,7 +629,7 @@ public class PeerConnectionTest {
 			byte[] storageTagBytes = crypto.hash(Util.serializeInt(i));
 			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 			RefTag refTag = new RefTag(archive, storageTag, 1, 1);
-			RevisionTag revTag = new RevisionTag(refTag, 0, 0); 
+			RevisionTag revTag = new RevisionTag(refTag, 0, 0, false); 
 			tags.add(revTag);
 		}
 		
@@ -648,7 +648,7 @@ public class PeerConnectionTest {
 			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 			ArrayList<RevisionTag> tags = new ArrayList<>(1);
 			RefTag refTag = new RefTag(archive, storageTag, 1, 1);
-			RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+			RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 			tags.add(revTag);
 			conn.requestRevisionContents(0, tags);
 			fail();
@@ -662,7 +662,7 @@ public class PeerConnectionTest {
 		byte[] storageTagBytes = crypto.hash(Util.serializeInt(1234));
 		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 		RefTag refTag = new RefTag(archive, storageTag, 1, 1);
-		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 		conn.requestRevisionDetails(10, revTag);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_REVISION_DETAILS);
 		assertReceivedBytes(Util.serializeInt(10));
@@ -686,7 +686,7 @@ public class PeerConnectionTest {
 			byte[] storageTagBytes = crypto.hash(Util.serializeInt(i));
 			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 			RefTag refTag = new RefTag(archive, storageTag, 1, 1);
-			tags.add(new RevisionTag(refTag, 0, 0));
+			tags.add(new RevisionTag(refTag, 0, 0, false));
 		}
 		conn.requestRevisionDetails(20, tags);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_REVISION_DETAILS);
@@ -716,7 +716,7 @@ public class PeerConnectionTest {
 			byte[] storageTagBytes = crypto.hash(Util.serializeInt(i));
 			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 			RefTag refTag = new RefTag(archive, storageTag, 1, 1);
-			tags.add(new RevisionTag(refTag, 0, 0));
+			tags.add(new RevisionTag(refTag, 0, 0, false));
 		}
 		conn.requestRevisionStructure(20, tags);
 		assertReceivedCmd(PeerConnection.CMD_REQUEST_REVISION_STRUCTURE);
@@ -986,7 +986,7 @@ public class PeerConnectionTest {
 			byte[] storageTagBytes = crypto.hash(Util.serializeInt(i));
 			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 			RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_2INDIRECT, 2);
-			tags[i] = new RevisionTag(refTag, 0, 0);
+			tags[i] = new RevisionTag(refTag, 0, 0, false);
 			msg.receivedData((byte) 0, tags[i].serialize());
 			assertFalse(archive.getConfig().getRevisionList().branchTips().contains(tags[i]));
 		}
@@ -1004,7 +1004,7 @@ public class PeerConnectionTest {
 		byte[] storageTagBytes = crypto.hash(Util.serializeInt(1234));
 		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 		RefTag refTag = new RefTag(archive.getConfig(), storageTag, RefTag.REF_TYPE_2INDIRECT, 2);
-		RevisionTag fakeTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag fakeTag = new RevisionTag(refTag, 0, 0, false);
 		fakeTag.getBytes()[8] ^= 0x40;
 		
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TIPS);
@@ -1179,7 +1179,7 @@ public class PeerConnectionTest {
 		byte[] storageTagBytes = crypto.rng(crypto.hashLength());
 		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 		RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
-		RevisionTag fakeTag = new RevisionTag(refTag, 0, 1);
+		RevisionTag fakeTag = new RevisionTag(refTag, 0, 1, false);
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_REQUEST_INODES);
 		msg.receivedData((byte) 0, ByteBuffer.allocate(4).putInt(0).array()); // priority
 		msg.receivedData((byte) 0, fakeTag.getBytes());
@@ -1292,7 +1292,7 @@ public class PeerConnectionTest {
 				if(i == tags.length/2) {
 					byte[] refTagBytes = crypto.prng(crypto.symNonce(i+3)).getBytes(archive.getConfig().refTagSize());
 					RefTag refTag = new RefTag(archive, refTagBytes);
-					RevisionTag fakeRevTag = new RevisionTag(refTag, 0, 0);
+					RevisionTag fakeRevTag = new RevisionTag(refTag, 0, 0, false);
 					
 					// making this non-immediate gives us more interesting branches
 					assertFalse(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);
@@ -1359,7 +1359,7 @@ public class PeerConnectionTest {
 				if(i == tags.length/2) {
 					byte[] refTagBytes = crypto.prng(crypto.symNonce(i+3)).getBytes(archive.getConfig().refTagSize());
 					RefTag refTag = new RefTag(archive, refTagBytes);
-					RevisionTag fakeRevTag = new RevisionTag(refTag, 0, 0);
+					RevisionTag fakeRevTag = new RevisionTag(refTag, 0, 0, false);
 					
 					// making this non-immediate gives us more interesting branches
 					assertFalse(refTag.getRefType() == RefTag.REF_TYPE_IMMEDIATE);

@@ -16,33 +16,38 @@ public class RevisionTag implements Comparable<RevisionTag> {
 					(tag)->tag.isValidUncached(),
 					(tag, isValid)->{});
 	
-	private RefTag refTag;
-	private long height = -1;
-	private long parentHash = -1;
-	private long hasStructureCheckTime;
+	private RefTag  refTag;
+	private boolean isMerge;
+	private long    height                 = -1;
+	private long    parentHash             = -1;
+	private long    hasStructureCheckTime;
 	
-	byte[] serialized;
-	int hashCode;
-	RevisionInfo info;
-	boolean cacheOnly;
-	ZKArchiveConfig config;
+	private byte[]          serialized;
+	private int             hashCode;
+	private RevisionInfo    info;
+	private boolean         cacheOnly;
+	private ZKArchiveConfig config;
 
 	public static int sizeForConfig(ZKArchiveConfig config) {
-		return config.refTagSize() + 8 + 8 + config.getCrypto().asymSignatureSize();
+		return config.refTagSize()
+			 + 8
+			 + 8
+			 + config.getCrypto().asymSignatureSize();
 	}
 	
 	public static RevisionTag blank(ZKArchiveConfig config) {
-		return new RevisionTag(RefTag.blank(config), 0, 0);
+		return new RevisionTag(RefTag.blank(config), 0, 0, false);
 	}
 	
-	public RevisionTag(RefTag refTag, long parentHash, long height) {
+	public RevisionTag(RefTag refTag, long parentHash, long height, boolean isMerge) {
 		// the reftag needs to already have a final storage tag for us to make a revtag
 		assert(refTag.getStorageTag().isFinalized());
 		
-		this.refTag = refTag;
+		this.refTag     = refTag;
 		this.parentHash = parentHash;
-		this.height = height;
-		this.config = refTag.config;
+		this.height     = height;
+		this.config     = refTag.config;
+		this.isMerge    = isMerge;
 		serialize();
 	}
 	
@@ -56,11 +61,14 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 
 	public RevisionTag(RevisionTag existing, ZKArchive archive) throws IOException {
-		this.refTag = new RefTag(existing.refTag.getArchive().cacheOnlyArchive(), existing.refTag.getBytes());
+		this.refTag     = new RefTag(
+				existing.refTag.getArchive().cacheOnlyArchive(),
+				existing.refTag.getBytes());
 		this.serialized = existing.serialized;
-		this.height = existing.height;
+		this.height     = existing.height;
 		this.parentHash = existing.parentHash;
-		this.config = archive.getConfig();
+		this.isMerge    = existing.isMerge;
+		this.config     = archive.getConfig();
 	}
 
 	public ZKArchive getArchive() throws IOException {
@@ -68,6 +76,7 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		if(cacheOnly && !archive.isCacheOnly()) {
 			archive = archive.cacheOnlyArchive();
 		}
+		
 		return archive;
 	}
 	
@@ -108,7 +117,13 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		return parentHash;
 	}
 	
+	public boolean hasInfoFetched() {
+		return info != null;
+	}
+	
 	public RevisionInfo getInfo() throws IOException {
+		if(info != null) return info;
+		
 		try(ZKFS fs = readOnlyFS()) {
 			if(info == null) info = fs.getRevisionInfo();
 			return info;
@@ -124,11 +139,21 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		}
 	}
 	
-	public RevisionTag makeCacheOnly() throws IOException {
+	public RevisionTag makeCacheOnlyCopy() throws IOException {
 		if(cacheOnly) return this;
+		
 		RevisionTag tag = new RevisionTag(this, refTag.getArchive().cacheOnlyArchive());
 		tag.cacheOnly = true;
+		
 		return tag;
+	}
+	
+	public boolean isCacheOnly() {
+		return cacheOnly;
+	}
+	
+	public boolean isMerge() {
+		return isMerge;
 	}
 	
 	public ZKFS getFS() throws IOException {
@@ -158,7 +183,9 @@ public class RevisionTag implements Comparable<RevisionTag> {
 		 * At this time, there do not seem to be obvious serious consequences to an adversary learning one or more
 		 * revtags. But since we want our adversaries in the dark as much as possible, we obfuscate.
 		 */
-		ByteBuffer plaintext = ByteBuffer.allocate(sizeForConfig(refTag.config) - refTag.config.getCrypto().asymSignatureSize());
+		ByteBuffer plaintext = ByteBuffer.allocate(
+				sizeForConfig(refTag.config)
+			  - refTag.config.getCrypto().asymSignatureSize());
 		try {
 			plaintext.put(refTag.serialize());
 		} catch(IOException exc) {
@@ -167,11 +194,19 @@ public class RevisionTag implements Comparable<RevisionTag> {
 			throw new RuntimeException(exc);
 		}
 		
+		long heightWithMerge = (height & Long.MAX_VALUE)
+				             | (isMerge
+				                ? (1L << 63)
+				                : 0);
 		plaintext.putLong(parentHash);
-		plaintext.putLong(height);
+		plaintext.putLong(heightWithMerge);
 
-		Key key = refTag.config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, "easysafe-reftag-key");
-		byte[] ciphertext = key.encryptUnauthenticated(new byte[key.getCrypto().symIvLength()], plaintext.array());
+		Key key = refTag.config.deriveKey(
+				ArchiveAccessor.KEY_ROOT_ARCHIVE,
+				"easysafe-reftag-key");
+		byte[] ciphertext = key.encryptUnauthenticated(
+				new byte[key.getCrypto().symIvLength()],
+				plaintext.array());
 		
 		ByteBuffer signedCiphertext = ByteBuffer.allocate(sizeForConfig(refTag.getConfig()));
 		signedCiphertext.put(ciphertext);
@@ -180,24 +215,27 @@ public class RevisionTag implements Comparable<RevisionTag> {
 				signedCiphertext.position()));
 		
 		serialized = signedCiphertext.array();
-		hashCode = ByteBuffer.wrap(serialized).getInt();
+		hashCode   = ByteBuffer.wrap(serialized).getInt();
 		return serialized;
 	}
 	
 	public void deserialize(ByteBuffer buf, boolean verifySignature) {
 		byte[] serialized = new byte[sizeForConfig(config)];
+		
 		if(buf.remaining() < sizeForConfig(config)) {
 			throw new InvalidRevisionTagException(Util.bytesToHex(buf.array()));
 		}
+		
 		buf.get(serialized);
 		
 		this.serialized = serialized;
-		hashCode = ByteBuffer.wrap(serialized).getInt();
+		this.hashCode   = ByteBuffer.wrap(serialized).getInt();
 		
 		if(Arrays.equals(new byte[serialized.length], serialized)) {
-			this.refTag = RefTag.blank(config.getArchive());
-			this.height = 0;
+			this.refTag     = RefTag.blank(config.getArchive());
+			this.height     = 0;
 			this.parentHash = 0;
+			this.isMerge    = false;
 			return;
 		}
 		
@@ -279,20 +317,25 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	protected void unpack() {
-		if(refTag != null) return;
+		if(refTag != null)               return;
 		if(config.accessor.isSeedOnly()) return;
-		if(config.archiveRoot == null) return;
+		if(config.archiveRoot == null)   return;
 		
 		Key key = config.deriveKey(ArchiveAccessor.KEY_ROOT_ARCHIVE, "easysafe-reftag-key");
-		byte[] rawBytes = key.decryptUnauthenticated(new byte[key.getCrypto().symIvLength()],
-				serialized, 0, serialized.length - config.getCrypto().asymSignatureSize());
-		ByteBuffer raw = ByteBuffer.wrap(rawBytes);
+		byte[] rawBytes = key.decryptUnauthenticated(
+				new byte[key.getCrypto().symIvLength()],
+				serialized,
+				0,
+				serialized.length - config.getCrypto().asymSignatureSize());
+		ByteBuffer raw   = ByteBuffer.wrap(rawBytes);
 		byte[] rawRefTag = new byte[config.refTagSize()];
 		raw.get(rawRefTag);
-		parentHash = raw.getLong();
-		height = raw.getLong();
-		refTag = new RefTag(config, rawRefTag);
-		if(height < 0) throw new SecurityException();
+		
+		parentHash           = raw.getLong();
+		long heightWithMerge = raw.getLong();
+		refTag               = new RefTag(config, rawRefTag);
+		height               = heightWithMerge & Long.MAX_VALUE;
+		isMerge              = heightWithMerge < 0;
 	}
 	
 	protected void ensureUnpacked() {
@@ -314,7 +357,9 @@ public class RevisionTag implements Comparable<RevisionTag> {
 	}
 	
 	public String toString() {
-		return Util.formatRevisionTag(this) + " parentHash=" + String.format("%016x", parentHash);
+		return Util.formatRevisionTag(this)
+			 + " parentHash="
+			 + String.format("%016x", parentHash);
 	}
 	
 	public int hashCode() {

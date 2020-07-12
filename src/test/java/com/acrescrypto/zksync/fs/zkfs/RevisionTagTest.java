@@ -4,7 +4,6 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -85,31 +84,53 @@ public class RevisionTagTest {
 	}
 	
 	@Test
-	public void testConstructFromRefTag() {
-		byte[] storageTagBytes = crypto.hash(Util.serializeInt(0));
-		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
-		RefTag tag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
-		RevisionTag revTag = new RevisionTag(tag, 1, 2);
-		assertEquals(tag, revTag.getRefTag());
-		assertEquals(1, revTag.getParentHash());
-		assertEquals(2, revTag.getHeight());
-		assertArrayEquals(revTag.serialized, revTag.serialize());
-		assertFalse(revTag.cacheOnly);
-		assertNull(revTag.info);
-		assertNotEquals(0, revTag.hashCode);
+	public void testConstructFromRefTag() throws IOException {
+		byte[]     storageTagBytes = crypto.hash(Util.serializeInt(0));
+		StorageTag storageTag      = new StorageTag(crypto, storageTagBytes);
+		
+		RefTag      tag    = new RefTag(archive,storageTag, RefTag.REF_TYPE_INDIRECT, 1);
+		RevisionTag revTag = new RevisionTag(tag, 1, 2, false);
+		
+		assertEquals     (tag,               revTag.getRefTag()    );
+		assertEquals     (1,                 revTag.getParentHash());
+		assertEquals     (2,                 revTag.getHeight()    );
+		assertEquals     (false,             revTag.isMerge()      );
+		assertArrayEquals(revTag.getBytes(), revTag.serialize()    );
+		assertNotEquals  (0,                 revTag.hashCode()     );
+		assertFalse      (revTag.isCacheOnly()                     );
+		assertFalse      (revTag.hasInfoFetched()                  );
 	}
 	
 	@Test
-	public void testConstructFromSerialization() {
-		RevisionTag origTag = new RevisionTag(revTag.getRefTag(), 100, 200);
+	public void testConstructFromSerializationWithMergeFalse() throws IOException {
+		RevisionTag origTag  = new RevisionTag(revTag.getRefTag(), 100, 200, false);
 		RevisionTag cloneTag = new RevisionTag(config, origTag.getBytes(), true);
-		assertEquals(origTag.getRefTag(), cloneTag.getRefTag());
-		assertEquals(origTag.getParentHash(), cloneTag.getParentHash());
-		assertEquals(origTag.getHeight(), cloneTag.getHeight());
-		assertArrayEquals(origTag.getBytes(), cloneTag.serialized);
-		assertFalse(cloneTag.cacheOnly);
-		assertNull(cloneTag.info);
-		assertNotEquals(0, cloneTag.hashCode);
+		
+		assertEquals     (origTag.getRefTag(),     cloneTag.getRefTag()    );
+		assertEquals     (origTag.getParentHash(), cloneTag.getParentHash());
+		assertEquals     (origTag.getHeight(),     cloneTag.getHeight()    );
+		assertEquals     (origTag.isMerge(),       cloneTag.isMerge()      );
+		assertArrayEquals(origTag.getBytes(),      cloneTag.getBytes()     );
+		
+		assertFalse    (   cloneTag.isCacheOnly()   );
+		assertFalse    (   cloneTag.hasInfoFetched());
+		assertNotEquals(0, cloneTag.hashCode()      );
+	}
+	
+	@Test
+	public void testConstructFromSerializationWithMergeTrue() throws IOException {
+		RevisionTag origTag  = new RevisionTag(revTag.getRefTag(), 100, 200, true);
+		RevisionTag cloneTag = new RevisionTag(config, origTag.getBytes(), true);
+		
+		assertEquals     (origTag.getRefTag(),     cloneTag.getRefTag()    );
+		assertEquals     (origTag.getParentHash(), cloneTag.getParentHash());
+		assertEquals     (origTag.getHeight(),     cloneTag.getHeight()    );
+		assertEquals     (origTag.isMerge(),       cloneTag.isMerge()      );
+		assertArrayEquals(origTag.getBytes(),      cloneTag.getBytes()     );
+		
+		assertFalse    (   cloneTag.isCacheOnly()   );
+		assertFalse    (   cloneTag.hasInfoFetched());
+		assertNotEquals(0, cloneTag.hashCode()      );
 	}
 	
 	@Test
@@ -131,14 +152,14 @@ public class RevisionTagTest {
 	
 	@Test
 	public void testMakeCacheOnlyReturnsCacheOnlyClone() throws IOException {
-		RevisionTag cacheOnly = revTag.makeCacheOnly();
+		RevisionTag cacheOnly = revTag.makeCacheOnlyCopy();
 		assertFalse(revTag == cacheOnly);
 		
-		assertFalse(revTag.cacheOnly);
-		assertTrue(cacheOnly.cacheOnly);
+		assertFalse(revTag   .isCacheOnly());
+		assertTrue (cacheOnly.isCacheOnly());
 		
-		assertFalse(revTag.getArchive().isCacheOnly());
-		assertTrue(cacheOnly.getArchive().isCacheOnly());
+		assertFalse(revTag   .getArchive().isCacheOnly());
+		assertTrue (cacheOnly.getArchive().isCacheOnly());
 	}
 	
 	@Test
@@ -150,10 +171,11 @@ public class RevisionTagTest {
 	
 	@Test
 	public void testCompareToComparesHeight() {
-		RevisionTag a = new RevisionTag(revTag.getRefTag(), 100, 1);
-		RevisionTag b = new RevisionTag(revTag.getRefTag(), 50, 2);
-		assertTrue(a.compareTo(b) < 0);
-		assertTrue(b.compareTo(a) > 0);
+		RevisionTag a = new RevisionTag(revTag.getRefTag(), 100, 1, false);
+		RevisionTag b = new RevisionTag(revTag.getRefTag(),  50, 2, true);
+		
+		assertTrue(a.compareTo(b) <  0);
+		assertTrue(b.compareTo(a) >  0);
 		assertTrue(a.compareTo(a) == 0);
 		assertTrue(b.compareTo(b) == 0);
 	}
@@ -168,28 +190,42 @@ public class RevisionTagTest {
 		
 		RefTag aTag = new RefTag(config, storageTagA, RefTag.REF_TYPE_INDIRECT, 1);
 		RefTag bTag = new RefTag(config, storageTagB, RefTag.REF_TYPE_INDIRECT, 1);
-		RevisionTag a = new RevisionTag(aTag, 1, 1);
-		RevisionTag b = new RevisionTag(bTag, 1, 1);
+		RevisionTag a = new RevisionTag(aTag, 1, 1, false);
+		RevisionTag b = new RevisionTag(bTag, 1, 1, false);
 		
-		assertTrue(a.compareTo(b) > 0);
-		assertTrue(b.compareTo(a) < 0);
+		assertTrue(a.compareTo(b) >  0);
+		assertTrue(b.compareTo(a) <  0);
 		assertTrue(a.compareTo(a) == 0);
 		assertTrue(b.compareTo(b) == 0);
 	}
 	
 	@Test
-	public void testEquals() {
-		RevisionTag clone = new RevisionTag(revTag.getRefTag(), revTag.getParentHash(), revTag.getHeight());
-		assertTrue(clone.equals(revTag));
-		assertTrue(revTag.equals(clone));
-		assertTrue(clone.equals(clone));
-		assertTrue(revTag.equals(revTag));
+	public void testEqualsSymmetry() {
+		RevisionTag clone = new RevisionTag(
+				revTag.getRefTag(),
+				revTag.getParentHash(),
+				revTag.getHeight(),
+				revTag.isMerge());
+		assertTrue(clone .equals(revTag));
+		assertTrue(revTag.equals(clone) );
+	}
+	
+	@Test
+	public void testEqualsReflexivity() {
+		RevisionTag clone = new RevisionTag(
+				revTag.getRefTag(),
+				revTag.getParentHash(),
+				revTag.getHeight(),
+				revTag.isMerge());
+		assertTrue(clone .equals(revTag));
+		assertTrue(revTag.equals(clone) );
 	}
 	
 	@Test
 	public void testHashCode() {
-		assertEquals(revTag.hashCode, revTag.hashCode());
-		assertEquals(ByteBuffer.wrap(revTag.serialize()).getInt(), revTag.hashCode());
+		assertEquals(
+				ByteBuffer.wrap(revTag.serialize()).getInt(),
+				revTag.hashCode());
 	}
 	
 	@Test
@@ -200,9 +236,10 @@ public class RevisionTagTest {
 	@Test
 	public void testRevTagGetHeightUnpacks() throws IOException {
 		setupPacked(true);
-		assertFalse(packed.isUnpacked());
+		
+		assertFalse (packed.isUnpacked());
 		assertEquals(revTag.getHeight(), packed.getHeight());
-		assertTrue(packed.isUnpacked());
+		assertTrue  (packed.isUnpacked());
 	}
 	
 	@Test

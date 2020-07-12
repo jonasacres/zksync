@@ -117,7 +117,7 @@ public class ZKArchiveTest {
 			byte[] storageTagBytes = crypto.hash(Util.serializeInt(0));
 			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 			RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
-			RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+			RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 			assertFalse(archive.hasInode(revTag, fs.stat("file2").getInodeId()));
 		}
 	}

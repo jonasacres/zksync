@@ -248,16 +248,22 @@ public class ZKFS extends FS {
 	/** add our new commit to the list of branch tips, and remove our ancestors */
 	protected void finalizeCommit(Collection<RevisionTag> parents) throws IOException {
 		long parentHash = makeParentHash(parents);
-		long height = 1 + baseRevision.getHeight();
+		long height     = 1 + baseRevision.getHeight();
 		inodeTable.inode.getRefTag().getStorageTag().getTagBytes(); // force finalization
-		baseRevision = new RevisionTag(inodeTable.inode.getRefTag(), parentHash, height);
+		
+		baseRevision = new RevisionTag(
+				inodeTable.inode.getRefTag(),
+				parentHash,
+				height,
+				parents.size() > 1);
 		dirty = false;
 		
-		RevisionList list = archive.config.getRevisionList();
-		RevisionTree tree = archive.config.getRevisionTree();
+		RevisionList list   = archive.config.getRevisionList();
+		RevisionTree tree   = archive.config.getRevisionTree();
+		
 		tree.addParentsForTag(baseRevision, parents);		
-		list.addBranchTip(baseRevision);
-		list.consolidate(baseRevision);
+		list.addBranchTip    (baseRevision);
+		list.consolidate     (baseRevision);
 		list.write();
 		
 		archive.config.swarm.announceTips();

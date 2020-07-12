@@ -651,7 +651,7 @@ public class PageQueueTest {
 		byte[] corruptRaw = revTag.getRefTag().getBytes().clone();
 		corruptRaw[2] ^= 0x20;
 		RefTag corruptRef = new RefTag(archive, corruptRaw);
-		RevisionTag corrupt = new RevisionTag(corruptRef, 0, 0);
+		RevisionTag corrupt = new RevisionTag(corruptRef, 0, 0, false);
 		
 		// queue it up; shouldn't generate any chunks, or problems
 		queue.addInodeContents(0, corrupt, inodeIndirect.getStat().getInodeId());
@@ -806,7 +806,7 @@ public class PageQueueTest {
 		byte[] corruptRaw = revTag.getRefTag().getBytes().clone();
 		corruptRaw[2] ^= 0x20;
 		RefTag corruptRef = new RefTag(archive, corruptRaw);
-		RevisionTag corrupt = new RevisionTag(corruptRef, 0, 0);
+		RevisionTag corrupt = new RevisionTag(corruptRef, 0, 0, false);
 		
 		// queue it up; shouldn't generate any chunks, or problems
 		queue.addRevisionTag(0, corrupt);
@@ -827,7 +827,7 @@ public class PageQueueTest {
 	public void testAddRevisionTagToleratesFileRefTags() throws IOException {
 		RefTag[] tags = { inodeImmediate.getRefTag(), inodeIndirect.getRefTag(), inode2Indirect.getRefTag() };
 		for(RefTag tag : tags) {
-			RevisionTag pageRevTag = new RevisionTag(tag, 0, 0);
+			RevisionTag pageRevTag = new RevisionTag(tag, 0, 0, false);
 			// queue it up with a file reftag; shouldn't generate any chunks, or problems
 			queue.addRevisionTag(0, pageRevTag);
 			assertFalse(queue.hasNextChunk());
@@ -935,7 +935,7 @@ public class PageQueueTest {
 		byte[] corruptRaw = revTag.getRefTag().getBytes().clone();
 		corruptRaw[2] ^= 0x20;
 		RefTag corruptRef = new RefTag(archive, corruptRaw);
-		RevisionTag corrupt = new RevisionTag(corruptRef, 0, 0);
+		RevisionTag corrupt = new RevisionTag(corruptRef, 0, 0, false);
 		
 		// queue it up; shouldn't generate any chunks, or problems
 		queue.addRevisionTagForStructure(0, corrupt);
@@ -956,7 +956,7 @@ public class PageQueueTest {
 	public void testAddRevisionTagForStructureToleratesFileRefTags() throws IOException {
 		RefTag[] tags = { inodeImmediate.getRefTag(), inodeIndirect.getRefTag(), inode2Indirect.getRefTag() };
 		for(RefTag tag : tags) {
-			RevisionTag pageRevTag = new RevisionTag(tag, 0, 0);
+			RevisionTag pageRevTag = new RevisionTag(tag, 0, 0, false);
 			// queue it up with a file reftag; shouldn't generate any chunks, or problems
 			queue.addRevisionTagForStructure(0, pageRevTag);
 			assertFalse(queue.hasNextChunk());

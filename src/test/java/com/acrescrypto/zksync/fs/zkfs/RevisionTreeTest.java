@@ -752,10 +752,19 @@ public class RevisionTreeTest {
 	@Test(expected=SearchFailedException.class)
 	public void testIsSupercededThrowsSearchFailedExceptionIfLookupTimedOut() throws IOException {
 		RevisionTree.treeSearchTimeoutMs = 1;
-		RevisionTag tag = archive.openBlank().commitAndClose().getFS().commitAndClose();
-		tree.clear();
-		config.getCacheStorage().purge();
-		tree.isSuperceded(tag);
+		RevisionTag        parent  = archive.openBlank().commitAndClose();
+		RevisionTag[] extraParents = new RevisionTag[1];
+		
+		for(int i = 0; i < extraParents.length; i++) {
+			extraParents[i] = archive.openBlank().commitAndClose();
+		}
+		
+		try(ZKFS fs = parent.getFS()) {
+			RevisionTag tag = fs.commit(extraParents);
+			config.getCacheStorage().purge();
+			tree.clear();
+			tree.isSuperceded(tag);
+		}
 	}
 	
 	@Test

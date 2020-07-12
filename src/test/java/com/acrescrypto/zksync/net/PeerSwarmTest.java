@@ -727,7 +727,7 @@ public class PeerSwarmTest {
 	public void testRequestInodeSendsRequestInodeToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		RefTag refTag = makeRandomRefTag(0);
-		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 		long inodeId = archive.getCrypto().defaultPrng().getLong();
 		
 		for(int i = 0; i < conns.length; i++) {
@@ -747,7 +747,7 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestInodeSendsRequestInodeToAllNewPeers() throws IOException {
 		RefTag refTag = makeRandomRefTag(0);
-		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 		long inodeId = archive.getCrypto().defaultPrng().getLong();
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestInode(Integer.MAX_VALUE, revTag, inodeId);
@@ -761,7 +761,7 @@ public class PeerSwarmTest {
 	public void testRequestRevisionSendsRequestRevisionContentsToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		RefTag refTag = makeRandomRefTag(0);
-		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 		
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
@@ -779,7 +779,7 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestRevisionSendsRequestRevisionContentsToAllNewPeers() throws IOException {
 		RefTag refTag = makeRandomRefTag(0);
-		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestRevision(11235813, revTag);
 		swarm.openedConnection(conn);
@@ -791,7 +791,7 @@ public class PeerSwarmTest {
 	public void testRequestRevisionStructureSendsRequestRevisionStructureToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		RefTag refTag = makeRandomRefTag(0);
-		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 		
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
@@ -809,7 +809,7 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestRevisionStructureSendsRequestRevisionStructureToAllNewPeers() throws IOException {
 		RefTag refTag = makeRandomRefTag(0);
-		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestRevisionStructure(11235813, revTag);
 		swarm.openedConnection(conn);
@@ -822,7 +822,7 @@ public class PeerSwarmTest {
 	public void testRequestRevisionDetailsSendsRequestRevisionDetailsToAllCurrentPeers() throws IOException {
 		DummyConnection[] conns = new DummyConnection[16];
 		RefTag refTag = makeRandomRefTag(0);
-		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 
 		for(int i = 0; i < conns.length; i++) {
 			conns[i] = new DummyConnection(new DummySocket("10.0.1." + i, swarm));
@@ -840,7 +840,7 @@ public class PeerSwarmTest {
 	@Test
 	public void testRequestRevisionDetailsSendsRequestRevisionDetailsToAllNewPeers() throws IOException {
 		RefTag refTag = makeRandomRefTag(0);
-		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 		DummyConnection conn = new DummyConnection(new DummySocket("10.0.1.1", swarm));
 		swarm.requestRevisionDetails(-48151623, revTag);
 		swarm.openedConnection(conn);

@@ -104,7 +104,7 @@ public class RevisionListTest {
 			byte refType = i % 2 == 0 ? RefTag.REF_TYPE_INDIRECT : RefTag.REF_TYPE_2INDIRECT;
 			int numPages = refType == RefTag.REF_TYPE_INDIRECT ? 1 : 2 + i;
 			RefTag refTag = new RefTag(archive, storageTag, refType, numPages);
-			RevisionTag tag = new RevisionTag(refTag, i, 1);
+			RevisionTag tag = new RevisionTag(refTag, i, 1, false);
 			revTags.add(tag);
 			list.addBranchTip(tag);
 		}
@@ -131,9 +131,9 @@ public class RevisionListTest {
 		byte[] storageTagBytes = crypto.hash(Util.serializeInt(0));
 		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
 		RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
-		RevisionTag shallow = new RevisionTag(refTag, 0, 1);
-		RevisionTag deep = new RevisionTag(refTag, 1, 2);
-		RevisionTag shallowAgain = new RevisionTag(refTag, 3, 1);
+		RevisionTag shallow = new RevisionTag(refTag, 0, 1, false);
+		RevisionTag deep = new RevisionTag(refTag, 1, 2, false);
+		RevisionTag shallowAgain = new RevisionTag(refTag, 3, 1, false);
 		
 		list.addBranchTip(shallow);
 		assertEquals(shallow, list.latest());
@@ -262,12 +262,18 @@ public class RevisionListTest {
 	public void testSerialization() throws IOException {
 		LinkedList<RevisionTag> revTags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
-			byte[] storageTagBytes = crypto.hash(Util.serializeInt(1000 + i));
-			StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
-			byte refType = i % 2 == 0 ? RefTag.REF_TYPE_INDIRECT : RefTag.REF_TYPE_2INDIRECT;
-			int numPages = refType == RefTag.REF_TYPE_INDIRECT ? 1 : 2 + i;
-			RefTag refTag = new RefTag(archive, storageTag, refType, numPages);
-			RevisionTag tag = new RevisionTag(refTag, i, 1);
+			byte[]     storageTagBytes = crypto.hash(Util.serializeInt(1000 + i));
+			StorageTag storageTag      = new StorageTag(crypto, storageTagBytes);
+			
+			byte refType = i % 2 == 0
+					       ? RefTag.REF_TYPE_INDIRECT
+					       : RefTag.REF_TYPE_2INDIRECT;
+			int numPages = refType == RefTag.REF_TYPE_INDIRECT
+					       ? 1
+					       : 2 + i;
+			boolean isMerge = i % 4 < 2;
+			RefTag refTag   = new RefTag(archive, storageTag, refType, numPages);
+			RevisionTag tag = new RevisionTag(refTag, i, 1, isMerge);
 			revTags.add(tag);
 			list.addBranchTip(tag);
 		}
@@ -287,7 +293,7 @@ public class RevisionListTest {
 		
 		MutableBoolean receivedTag = new MutableBoolean();
 		RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
-		RevisionTag expectedTag = new RevisionTag(refTag, 0, 1);
+		RevisionTag expectedTag = new RevisionTag(refTag, 0, 1, false);
 		list.addMonitor((revTag)->receivedTag.setValue(revTag.equals(expectedTag)));
 		list.addBranchTip(expectedTag);
 		assertTrue(Util.waitUntil(1000, ()->receivedTag.booleanValue()));
@@ -309,7 +315,7 @@ public class RevisionListTest {
 
 		MutableBoolean receivedTag = new MutableBoolean();
 		RefTag refTag = new RefTag(archive, storageTag, RefTag.REF_TYPE_INDIRECT, 1);
-		RevisionTag expectedTag = new RevisionTag(refTag, 0, 1);
+		RevisionTag expectedTag = new RevisionTag(refTag, 0, 1, false);
 		RevisionMonitor monitor = (revTag)->receivedTag.setValue(revTag.equals(expectedTag));
 		list.addMonitor(monitor);
 		list.removeMonitor(monitor);

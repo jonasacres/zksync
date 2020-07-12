@@ -453,7 +453,7 @@ public class RequestPoolTest {
 	@Test
 	public void testAddRequestsToPeerCallsRequestInodes() {
 		RefTag refTag = makeRandomRefTag(0);
-		RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+		RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 		LinkedList<Long> inodeIds = new LinkedList<>();
 		
 		for(int i = 0; i < 16; i++) {
@@ -472,7 +472,7 @@ public class RequestPoolTest {
 		LinkedList<RevisionTag> tags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
 			RefTag tag = makeRandomRefTag(i);
-			RevisionTag revTag = new RevisionTag(tag, 0, 0);
+			RevisionTag revTag = new RevisionTag(tag, 0, 0, false);
 			tags.add(revTag);
 			pool.addRevision(-123, revTag);
 		}
@@ -487,7 +487,7 @@ public class RequestPoolTest {
 		LinkedList<RevisionTag> tags = new LinkedList<>();
 		for(int i = 0; i < 16; i++) {
 			RefTag tag = makeRandomRefTag(i);
-			RevisionTag revTag = new RevisionTag(tag, 0, 0);
+			RevisionTag revTag = new RevisionTag(tag, 0, 0, false);
 			tags.add(revTag);
 			pool.addRevisionDetails(-123, revTag);
 		}
@@ -501,7 +501,7 @@ public class RequestPoolTest {
 	public void testAddRequestsToPeerToleratesSeedOnly() {
 		conn.mockSeedOnly = true;
 		RefTag tag = makeRandomRefTag(0);
-		RevisionTag revTag = new RevisionTag(tag, 0, 0);
+		RevisionTag revTag = new RevisionTag(tag, 0, 0, false);
 		pool.addRevision(0, revTag);		
 		pool.addRequestsToConnection(conn);
 		assertTrue(conn.requestedRevisions.isEmpty());
@@ -564,7 +564,7 @@ public class RequestPoolTest {
 			RevisionTag tag;
 			do {
 				RefTag refTag = makeRandomRefTag(i);
-				tag = new RevisionTag(refTag, 0, 0);
+				tag = new RevisionTag(refTag, 0, 0, false);
 			} while(tag.getRefTag().getRefType() == RefTag.REF_TYPE_IMMEDIATE);
 			tags.add(tag);
 			pool.addRevision(i, tag);
@@ -589,7 +589,7 @@ public class RequestPoolTest {
 			RevisionTag tag;
 			do {
 				RefTag refTag = makeRandomRefTag(i);
-				tag = new RevisionTag(refTag, 0, 0);
+				tag = new RevisionTag(refTag, 0, 0, false);
 			} while(tag.getRefTag().getRefType() == RefTag.REF_TYPE_IMMEDIATE);
 			tags.add(tag);
 			pool.addRevisionDetails(i, tag);
@@ -633,7 +633,7 @@ public class RequestPoolTest {
 		LinkedList<RevisionTag> tags = new LinkedList<>();
 		for(int i = 0; i < 64; i++) {
 			RefTag refTag = makeRandomRefTag(i);
-			RevisionTag revTag = new RevisionTag(refTag, 0, 0);
+			RevisionTag revTag = new RevisionTag(refTag, 0, 0, false);
 			tags.add(revTag);
 			
 			if(i % 3 == 0) pool.addPageTag(i, tags.peekLast().getShortHash());

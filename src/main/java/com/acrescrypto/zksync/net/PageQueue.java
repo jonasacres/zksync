@@ -199,7 +199,7 @@ public class PageQueue {
 				return;
 			}
 			
-			try(ZKFS fs = revTag.makeCacheOnly().readOnlyFS()) {
+			try(ZKFS fs = revTag.makeCacheOnlyCopy().readOnlyFS()) {
 				this.inodeTable = fs.getInodeTable();
 				assert(inodeTable.nextInodeId() <= Integer.MAX_VALUE);
 				this.shuffler = Shuffler.fixedShuffler((int) inodeTable.nextInodeId());
@@ -247,7 +247,7 @@ public class PageQueue {
 				return;
 			}
 			
-			try(ZKFS fs = revTag.makeCacheOnly().readOnlyFS()) {
+			try(ZKFS fs = revTag.makeCacheOnlyCopy().readOnlyFS()) {
 				this.inodeTable = fs.getInodeTable();
 				assert(inodeTable.nextInodeId() <= Integer.MAX_VALUE);
 				this.shuffler = Shuffler.fixedShuffler((int) inodeTable.nextInodeId());
