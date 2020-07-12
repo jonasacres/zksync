@@ -32,7 +32,13 @@ public class DHTBootstrapper {
 		if(peerFile == null || peerFile.isEmpty())     return;
 		if(!cfg.getBool("net.dht.bootstrap.enabled"))  return;
 		
-		bootstrapFromPeerFileString(peerFile);
+		new Thread(()->{
+			try {
+				bootstrapFromPeerFileString(peerFile);
+			} catch (IOException exc) {
+				logger.error("DHTBootstrapper: Caught IOException in bootstrap thread", exc);
+			}
+		}).start();
 	}
 	
 	public void bootstrapFromPeerFileString(String pfString) throws JsonProcessingException, IOException {
