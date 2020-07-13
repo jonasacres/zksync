@@ -32,12 +32,12 @@ public class ConfigDefaults {
 		config.setDefault("net.dht.network",     "easysafe");
 		
 		config.setDefault("net.dht.bootstrap.enabled",   true);
-		config.setDefault("net.dht.bootstrap.peerfile",  "http://dht1.easysafe.io/dht/peerfile");
+		config.setDefault("net.dht.bootstrap.peerfile",  "https://dht1.easysafe.io/dht/peerfile");
 		
 		config.setDefault("net.dht.discoveryintervalms",      DHTZKArchiveDiscovery.DEFAULT_DISCOVERY_INTERVAL_MS);
 		config.setDefault("net.dht.advertisementintervalms",  DHTZKArchiveDiscovery.DEFAULT_ADVERTISEMENT_INTERVAL_MS);
 		
-		config.setDefault("net.swarm.enabled",                              false);
+		config.setDefault("net.swarm.enabled",                               true);
 		config.setDefault("net.swarm.bindaddress",                      "0.0.0.0");
 		config.setDefault("net.swarm.backlog",                                 50);
 		config.setDefault("net.swarm.port",                                     0);

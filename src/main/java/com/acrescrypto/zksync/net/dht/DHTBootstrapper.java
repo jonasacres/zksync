@@ -121,8 +121,8 @@ public class DHTBootstrapper {
 			if(!peer.has("port"))    throw new InvalidPeerFileException("Expected peers[" + index + "] to have 'port' field");
 			if(!peer.has("address")) throw new InvalidPeerFileException("Expected peers[" + index + "] to have 'address' field");
 			
-			if(!peer.get("pubKey").isTextual())   throw new InvalidPeerFileException("Expected peers[" + index + "].pubKey to be binary");
-			if(!peer.get("port").isInt())         throw new InvalidPeerFileException("Expected peers[" + index + "].pubKey to be integer");
+			if(!peer.get("pubKey") .isTextual())  throw new InvalidPeerFileException("Expected peers[" + index + "].pubKey to be binary");
+			if(!peer.get("port")   .isInt())      throw new InvalidPeerFileException("Expected peers[" + index + "].pubKey to be integer");
 			if(!peer.get("address").isTextual())  throw new InvalidPeerFileException("Expected peers[" + index + "].pubKey to be string");
 			
 			int    port    = peer.get("port")   .asInt();
