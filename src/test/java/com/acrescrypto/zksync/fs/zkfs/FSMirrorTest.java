@@ -23,6 +23,7 @@ import com.acrescrypto.zksync.exceptions.ENOENTException;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.Stat;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
 import com.acrescrypto.zksync.utility.Util;
 
 public class FSMirrorTest {
@@ -44,6 +45,8 @@ public class FSMirrorTest {
 	@BeforeClass
 	public static void beforeAll() {
 		TestUtils.startDebugMode();
+		ConfigDefaults.getActiveDefaults().set("fs.settings.mirror.syncResetDelayMs", 20);
+		ConfigDefaults.getActiveDefaults().set("fs.settings.mirror.syncMaxDelayMs",   50);
 	}
 	
 	@Before
@@ -120,7 +123,7 @@ public class FSMirrorTest {
 		assertEquals(expected.getType(), stat.getType());
 		
 		final int conversion = 1000*1000*1000;
-		final int timeTolerance = 100; // don't be too picky or we get ITFs here
+		final int timeTolerance = 200; // don't be too picky or we get ITFs here
 		
 		if(!expected.isSymlink()) {
 			assertEquals(expected.getAtime()/conversion, stat.getAtime()/conversion, timeTolerance);
@@ -192,6 +195,8 @@ public class FSMirrorTest {
 			assumeTrue("Cannot test this operation on this platform", false);
 		}
 		
+		Util.waitUntil(100, ()->mirror.queuedChanges.size() > 0);
+		mirror.syncTimer.runTask();
 		if(target.exists(path)) {
 			assertTrue(Util.waitUntil(100, ()->zkfs.exists(path)));
 			Stat existing = target.stat(path);
