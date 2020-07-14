@@ -256,8 +256,8 @@ public class TCPPeerSocketListenerTest {
 		Util.waitUntil(100, ()->listener.listenSocket != null && listener.port == TEST_PORT);
 
 		TCPPeerSocketListener listener2 = new TCPPeerSocketListener(master);
-		Util.waitUntil(100, ()->listener2.listenSocket != null && listener2.port != 0);
-		assertNull(listener2.listenSocket);
+		Util.waitUntil(1000, ()->listener2.listenSocket != null && listener2.port != 0);
+		assertNull(listener2.listenSocket); // TODO: itf here, 7/14/20, 4663ff8, linux, increased timeout from 100ms to 1000ms
 		
 		listener.close();
 		Util.waitUntil(2000, ()->listener2.listenSocket != null && listener2.port != 0);
@@ -408,9 +408,10 @@ public class TCPPeerSocketListenerTest {
 			ZKMaster master2 = ZKMaster.openBlankTestVolume();
 			new Thread(()->master2.getGlobalConfig().set("net.swarm.enabled", true)).start();
 			new Thread(()->master2.getGlobalConfig().set("net.swarm.port", port)).start();
-			assertTrue(Util.waitUntil(250, ()->master2.getTCPListener().getPort() == port));
-			assertTrue(Util.waitUntil(250, ()->master2.getTCPListener().listenSocket.getLocalPort() == port));
-			assertFalse(Util.waitUntil(250, ()->master2.getTCPListener().listenSocket.getLocalPort() != port));
+			// TODO: itf here, 7/14/20, 4663ff8, linux -- increased timeouts from 250ms to 1000ms on next 3 lines
+			assertTrue (Util.waitUntil(1000, ()->master2.getTCPListener().getPort() == port));
+			assertTrue (Util.waitUntil(1000, ()->master2.getTCPListener().listenSocket.getLocalPort() == port));
+			assertFalse(Util.waitUntil(1000, ()->master2.getTCPListener().listenSocket.getLocalPort() != port));
 			master2.getTCPListener().close();
 			master2.close();
 		}

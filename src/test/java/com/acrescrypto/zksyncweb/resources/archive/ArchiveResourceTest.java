@@ -11,6 +11,7 @@ import static org.junit.Assert.fail;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 
@@ -39,6 +40,7 @@ import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
 import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.net.dht.DHTID;
 import com.acrescrypto.zksync.net.dht.DHTProtocolManager;
+import com.acrescrypto.zksync.net.dht.DHTRoutingTable;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTClient.LookupCallback;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
@@ -69,6 +71,7 @@ public class ArchiveResourceTest {
 		
 		DummyClient() {
 			this.protocolManager = new DummyProtocolManager(this);
+			this.routingTable = new DummyRoutingTable();
 		}
 		
 		@Override
@@ -78,6 +81,12 @@ public class ArchiveResourceTest {
 		
 		@Override public void close() {}
 	};
+	
+	class DummyRoutingTable extends DHTRoutingTable {
+		public DummyRoutingTable() {
+			this.allPeers = new ArrayList<>();
+		}
+	}
 	
 	public final static String TESTDIR = "/tmp/zksync-test/archiveresourcetest";
 
