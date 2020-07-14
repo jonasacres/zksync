@@ -8,32 +8,32 @@ import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksyncweb.State;
 
 public class XGlobalInfo {
-	private Long bytesPerSecondTx;
-	private Long bytesPerSecondRx;
-	private Long lifetimeBytesTx;
-	private Long lifetimeBytesRx;
-	private Integer numArchives;
+	private Long                   bytesPerSecondTx;
+	private Long                   bytesPerSecondRx;
+	private Long                   lifetimeBytesTx;
+	private Long                   lifetimeBytesRx;
+	private Integer                numArchives;
 	private HashMap<String,Object> settings;
-	private Boolean isListening;
-	private Long memoryUsed;
-	private Long memoryTotal;
-	private Long memoryMax;
-	private Integer numOpenFileHandles;
+	private Boolean                isListening;
+	private Long                   memoryUsed;
+	private Long                   memoryTotal;
+	private Long                   memoryMax;
+	private Integer                numOpenFileHandles;
 	
 	public static XGlobalInfo globalInfo() throws IOException {
-		ZKMaster master = State.sharedState().getMaster();
+		ZKMaster    master      = State.sharedState().getMaster();
+		XGlobalInfo info        = new XGlobalInfo();
 		
-		XGlobalInfo info = new XGlobalInfo();
-		info.bytesPerSecondTx = master.getBandwidthMonitorTx().getBytesPerSecond();
-		info.bytesPerSecondRx = master.getBandwidthMonitorRx().getBytesPerSecond();
-		info.lifetimeBytesTx = master.getBandwidthMonitorTx().getLifetimeBytes();
-		info.lifetimeBytesRx = master.getBandwidthMonitorRx().getLifetimeBytes();
-		info.numArchives = master.allConfigs().size();
-		info.setIsListening(master.getTCPListener().isListening());
-		info.settings = master.getGlobalConfig().asHash();
-		info.memoryUsed = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-		info.memoryTotal = Runtime.getRuntime().totalMemory();
-		info.memoryMax = Runtime.getRuntime().maxMemory();
+		info.bytesPerSecondTx   = master.getBandwidthMonitorTx().getBytesPerSecond();
+		info.bytesPerSecondRx   = master.getBandwidthMonitorRx().getBytesPerSecond();
+		info.lifetimeBytesTx    = master.getBandwidthMonitorTx().getLifetimeBytes();
+		info.lifetimeBytesRx    = master.getBandwidthMonitorRx().getLifetimeBytes();
+		info.numArchives        = master.allConfigs().size();
+		info.isListening        = master.getTCPListener().isListening();
+		info.settings           = master.getGlobalConfig().asHash();
+		info.memoryUsed         = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+		info.memoryTotal        = Runtime.getRuntime().totalMemory();
+		info.memoryMax          = Runtime.getRuntime().maxMemory();
 		info.numOpenFileHandles = FS.fileHandleTelemetryEnabled ? FS.getGlobalOpenFiles().size() : null;
 		
 		return info;

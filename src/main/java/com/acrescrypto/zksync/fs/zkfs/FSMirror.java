@@ -36,55 +36,39 @@ import com.acrescrypto.zksync.utility.Util;
 import static java.nio.file.StandardWatchEventKinds.*;
 
 public class FSMirror {
-	static int numActive;
-	ZKFS zkfs;
-	FS target;
-	RevisionTag lastRev;
-	Thread watchThread;
-	boolean suppressWatch;
-
-	Logger logger = LoggerFactory.getLogger(FSMirror.class);
-	MutableBoolean watchFlag = new MutableBoolean();
+	protected static int numActive;
 	
-	/* We don't want a situation where syncing the archive to the target triggers our
-	 * filesystem watch, which triggers a write to the archive, which triggers a write back
-	 * to the target, which triggers a write to the archive, and so on. So we "squelch"
-	 * writes for a configurable time (fs.settings.mirror.pathSquelchPeriodMs, default 100ms
-	 * as of this writing).
-	 * 
-	 * This means we're blind to changes to the target FS for this interval after a sync.
-	 */
-	protected class SquelchedPath {
-		String path;
-		FS fs;
-		long timestamp;
+	protected ZKFS             zkfs;
+	protected FS               target;
+	protected RevisionTag      lastRev;
+	protected Thread           watchThread;
+	protected boolean          suppressWatch,
+	                           syncingChanges;
+
+	protected Logger           logger    = LoggerFactory.getLogger(FSMirror.class);
+	protected MutableBoolean   watchFlag = new MutableBoolean();
+	protected SnoozeThread     syncTimer;
+	
+	protected ConcurrentHashMap<String, QueuedEntry> queuedChanges = new ConcurrentHashMap<>();
+	protected ConcurrentHashMap<String, Long>        mutedPaths    = new ConcurrentHashMap<>();
+	
+	protected class QueuedEntry {
+		protected String path;
+		protected FS     sourceFs;
 		
-		public SquelchedPath(String path, FS fs) {
-			this.path = path;
-			this.fs = fs;
-			this.timestamp = System.currentTimeMillis();
+		public QueuedEntry(String path, FS sourceFs) {
+			this.path     = path;
+			this.sourceFs = sourceFs;
 		}
 		
-		public boolean matches(String path, FS fs) {
-			if(!path.equals(this.path)) return false;
-			if(fs != this.fs) return false; 
-			return true;
+		public String path() {
+			return path;
 		}
 		
-		public boolean isExpired() {
-			long timeout = zkfs.getArchive().getMaster().getGlobalConfig().getLong("fs.settings.mirror.pathSquelchPeriodMs");
-			return System.currentTimeMillis() - timestamp > timeout;
-		}
-		
-		@Override
-		public int hashCode() {
-			return path.hashCode();
+		public FS sourceFs() {
+			return sourceFs;
 		}
 	}
-	
-	SnoozeThread archiveToTargetSyncThread;
-	ConcurrentHashMap<String, Boolean> queuedArchivePaths = new ConcurrentHashMap<>();
-	HashMap<String, SquelchedPath> squelchedPaths = new HashMap<>();
 	
 	public static int numActive() {
 		return numActive;
@@ -103,19 +87,23 @@ public class FSMirror {
 	}
 
 	public FSMirror(ZKFS zkfs, FS target) {
-		this.zkfs = zkfs;
-		this.target = target;
+		this.zkfs    = zkfs;
+		this.target  = target;
 		this.lastRev = zkfs.baseRevision;
 		
-		ConfigFile globalConfig = zkfs.getArchive().getMaster().getGlobalConfig();
+		ConfigFile globalConfig        = zkfs.getArchive().getMaster().getGlobalConfig();
 		SubscriptionService subService = globalConfig.getSubsciptionService();
 		
 		subService.subscribe("fs.settings.mirror.zkfsToHostSyncDelayMs").asLong((delayMs)->{
-			updateSyncThreadProperties(delayMs, globalConfig.getLong("fs.settings.mirror.zkfsToHostSyncMaxDelayMs"));
+			updateSyncThreadProperties(
+					delayMs,
+					globalConfig.getLong("fs.settings.mirror.zkfsToHostSyncMaxDelayMs"));
 		});
 		
 		subService.subscribe("fs.settings.mirror.zkfsToHostSyncMaxDelayMs").asLong((maxDelayMs)->{
-			updateSyncThreadProperties(globalConfig.getLong("fs.settings.mirror.zkfsToHostSyncMaxDelayMs"), maxDelayMs);
+			updateSyncThreadProperties(
+					globalConfig.getLong("fs.settings.mirror.zkfsToHostSyncMaxDelayMs"),
+					maxDelayMs);
 		});
 	}
 	
@@ -159,20 +147,18 @@ public class FSMirror {
 
 	public void startWatch() throws IOException {
 		if(watchFlag.isTrue()) return;
-		MutableBoolean flag;
-		flag = watchFlag = new MutableBoolean();
+		MutableBoolean flag = watchFlag = new MutableBoolean();
 		watchFlag.setTrue();
 
 		if(!(target instanceof LocalFS)) throw new UnsupportedOperationException("Cannot watch this kind of filesystem");
 
-		LocalFS localTarget = (LocalFS) target;
-		Path dir = localTarget.getRoot().toNativePath();
-		WatchService watcher = dir.getFileSystem().newWatchService();
-		HashMap<WatchKey, Path> pathsByKey = new HashMap<>();
+		LocalFS                 localTarget  = (LocalFS) target;
+		Path                    dir          = localTarget.getRoot().toNativePath();
+		WatchService            watcher      = dir.getFileSystem().newWatchService();
+		HashMap<WatchKey, Path> pathsByKey   = new HashMap<>();
 		incrementActive();
 		
-		startArchiveToTargetSyncThread();
-		
+		startSyncTimer();
 		suppressWatch = true;
 		
 		try {
@@ -192,8 +178,8 @@ public class FSMirror {
 	}
 
 	public void stopWatch() {
-		this.queuedArchivePaths.clear();
-		stopArchiveToTargetSyncThread();
+		this.queuedChanges.clear();
+		stopSyncTimer();
 		
 		if(watchThread == null) return;
 		Thread stoppedThread = watchThread;
@@ -209,30 +195,87 @@ public class FSMirror {
 				numActive());
 	}
 	
-	protected synchronized void startArchiveToTargetSyncThread() {
-		this.queuedArchivePaths.clear();
-		this.archiveToTargetSyncThread = new SnoozeThread(
-				zkfs.getArchive().getMaster().getGlobalConfig().getInt("fs.settings.mirror.zkfsToHostSyncDelayMs"),
-				zkfs.getArchive().getMaster().getGlobalConfig().getInt("fs.settings.mirror.zkfsToHostSyncMaxDelayMs"),
+	protected synchronized void startSyncTimer() {
+		ConfigFile globalConfig = zkfs.getArchive().getMaster().getGlobalConfig();
+		this.syncTimer = new SnoozeThread(
+				globalConfig.getInt("fs.settings.mirror.zkfsToHostSyncDelayMs"),
+				globalConfig.getInt("fs.settings.mirror.zkfsToHostSyncMaxDelayMs"),
 				false,
 				()->{
-					synchronized(this) {
-						syncQueuedArchivePaths();
-						startArchiveToTargetSyncThread();
-					}
-				});
+					syncChanges();
+					startSyncTimer();
+				}
+			);
 	}
 	
-	protected synchronized void stopArchiveToTargetSyncThread() {
-		if(this.archiveToTargetSyncThread == null) return;
-		this.archiveToTargetSyncThread.cancel();
-		this.archiveToTargetSyncThread = null;
+	protected synchronized void syncChanges() {
+		pruneMutedPaths();
+		if(queuedChanges.isEmpty()) return;
+		
+		ConcurrentHashMap<String,QueuedEntry> changes = queuedChanges;
+		queuedChanges = new ConcurrentHashMap<>();
+		
+		try {
+			long mutePeriod = zkfs.getArchive().getMaster().getGlobalConfig().getLong("fs.settings.mirror.pathMutePeriodMs");
+			zkfs.lockedOperation(()->{
+				syncingChanges = true;
+				
+				try {
+					for(QueuedEntry entry : changes.values()) {
+						if(entry.sourceFs() == zkfs) {
+							if(queuedChanges.contains(entry.path())
+								&& queuedChanges.get(entry.path()).sourceFs() != zkfs)
+							{
+								// they wrote changes to the target FS as we were syncing; don't overwrite! let the more recent changes go through in the next timer cycle.
+								continue;
+							}
+							
+							mutedPaths.put(entry.path(), mutePeriod);
+							copy(zkfs, target, entry.path());
+						} else if(entry.sourceFs() == target) {
+							copy(target, zkfs, entry.path());
+						} else {
+							logger.warn("FS {}: FSMirror ignoring change to path {} from non-target fs {}",
+									Util.formatArchiveId(zkfs.archive.config.archiveId),
+									entry.path(),
+									entry.sourceFs());
+						}
+					}
+				} finally {
+					syncingChanges = false;
+				}
+				
+				return null;
+			});
+		} catch (IOException exc) {
+			logger.error("FS {}: FSMirror caught exception syncing filesystem: ",
+					Util.formatArchiveId(zkfs.archive.config.archiveId),
+					exc);
+		}
+	}
+	
+	protected void pruneMutedPaths() {
+		LinkedList<String> toRemove = new LinkedList<>();
+		mutedPaths.forEach((path, expiration) -> {
+			if(Util.currentTimeMillis() < expiration) return;
+			toRemove.add(path);
+		});
+		
+		for(String path : toRemove) {
+			mutedPaths.remove(path);
+		}
+	}
+	
+	protected synchronized void stopSyncTimer() {
+		if(this.syncTimer == null) return;
+		this.syncTimer.cancel();
+		this.syncTimer = null;
 	}
 	
 	protected void updateSyncThreadProperties(long delayMs, long maxDelayMs) {
-		if(archiveToTargetSyncThread != null && !archiveToTargetSyncThread.isCancelled()) {
-			archiveToTargetSyncThread.setDelayMs(delayMs);
-			archiveToTargetSyncThread.setMaxTimeMs(maxDelayMs);
+		if(syncTimer != null && !syncTimer.isCancelled()) {
+			syncTimer.setDelayMs  (delayMs);
+			syncTimer.setMaxTimeMs(maxDelayMs);
 		}
 	}
 
@@ -248,7 +291,7 @@ public class FSMirror {
 					);
 				pathsByKey.put(key, subdir);
 
-				FSPath root = ((LocalFS) target).getRoot();
+				FSPath root     = ((LocalFS) target).getRoot();
 				String realPath = root.relativize(FSPath.with(subdir)).toNative();
 				
 				if(!suppressWatch) {
@@ -393,12 +436,25 @@ public class FSMirror {
 	}
 
 	public synchronized void observedTargetPathChange(String path) throws IOException {
+		if(mutedPaths.contains(path)
+			&& mutedPaths.get(path) >= Util.currentTimeMillis())
+		{
+			return;
+		}
+		
+		mutedPaths.remove(path);
+		
 		logger.info("FS {}: FSMirror observed target change: {}",
 				Util.formatArchiveId(zkfs.archive.config.archiveId),
 				path);
 		
 		try {
-			copy(target, zkfs, path);
+			queuedChanges.put(path, new QueuedEntry(path, target));
+			try {
+				syncTimer.snooze();
+			} catch(NullPointerException exc) {
+				// tolerate the timer being closed underneath us
+			}
 		} catch(Exception exc) {
 			logger.warn(String.format("FSMirror %s: %s Caught exception processing path: %s (%d bytes)",
 					zkfs.getArchive().getMaster().getName(),
@@ -411,12 +467,12 @@ public class FSMirror {
 	
 	protected void observedArchivePathChange(String path, Stat stat) throws IOException {
 		if(watchFlag.isFalse()) return;
-		if(isSquelched(path, target)) return;
+		if(syncingChanges)      return;
 		
 		try {
-			if(archiveToTargetSyncThread != null && !archiveToTargetSyncThread.isCancelled()) {
-				queuedArchivePaths.put(path, true);
-				archiveToTargetSyncThread.snooze();
+			if(syncTimer != null && !syncTimer.isCancelled()) {
+				queuedChanges.put(path, new QueuedEntry(path, zkfs));
+				syncTimer.snooze();
 			}
 		} catch(NullPointerException exc) {
 			// we can't synchronize this method for fear of deadlocks with ZKFS operations
@@ -431,18 +487,9 @@ public class FSMirror {
 				new Throwable());
 	}
 	
-	protected synchronized void syncQueuedArchivePaths() {
-		for(String path : queuedArchivePaths.keySet()) {
-			try {
-				copy(zkfs, target, path);
-			} catch(Exception exc) {
-				logger.error("Caught exception processing path: %s", path, exc);
-			}
-		}
-	}
-
-	protected synchronized void suspectedTargetPathChange(String path) throws IOException {
-		if(!isChanged(null, path)) return;
+	protected void suspectedTargetPathChange(String path) throws IOException {
+		if(!isChanged(null, path))                         return;
+		
 		observedTargetPathChange(path);
 	}
 	
@@ -604,69 +651,9 @@ public class FSMirror {
 		}
 	}
 	
-	protected synchronized boolean acquireSquelch(String path, FS srcFs, FS destFs) {
-		String abspath = zkfs.root().join(path).normalize().toNative();
-		
-		if(isSquelched(abspath, destFs)) {
-			logger.debug("FS {}: FSMirror {} path is squelched: {}",
-					Util.formatArchiveId(zkfs.archive.config.archiveId),
-					System.identityHashCode(this),
-					path);
-			return false;
-		}
-		
-		logger.debug("FS {}: FSMirror {} squelching path: {} {}",
-				Util.formatArchiveId(zkfs.archive.config.archiveId),
-				System.identityHashCode(this),
-				path,
-				srcFs);
-
-		SquelchedPath squelch = new SquelchedPath(abspath, srcFs);
-		squelchedPaths.put(abspath, squelch);
-		return true;
-	}
-	
-	protected boolean isSquelched(String path, FS fs) {
-		String abspath = zkfs.root().join(path).normalize().toNative();
-		SquelchedPath squelch = squelchedPaths.get(abspath);
-		if(squelch == null) {
-			return false;
-		}
-		
-		if(squelch.isExpired()) {
-			pruneSquelches();
-			return false;
-		}
-		
-		if(!squelch.matches(path, fs)) {
-			return false;
-		}
-		
-		return true;
-	}
-	
-	protected void pruneSquelches() {
-		LinkedList<String> toRemove = new LinkedList<>();
-		squelchedPaths.forEach((path, squelch)->{
-			if(squelch.isExpired()) {
-				logger.debug("FS {}: FSMirror {} canceling expired squelch for path: {} {}",
-						Util.formatArchiveId(zkfs.archive.config.archiveId),
-						System.identityHashCode(this),
-						path,
-						squelch.fs);
-				toRemove.add(path);
-			}
-		});
-		
-		for(String path : toRemove) {
-			squelchedPaths.remove(path);
-		}
-	}
-
 	protected void copy(FS src, FS dest, String path) throws IOException {
 		Stat          srcStat = null,
 			         destStat = null;
-		boolean keepSquelched = false;
 		
 		copyParentDirectories(src, dest, path);
 		if(!canMirror(path)) return;
@@ -677,10 +664,6 @@ public class FSMirror {
 			} catch(ENOENTException exc) {}
 			
 			srcStat = src.lstat(path);
-			if(!acquireSquelch(path, src, dest)) {
-				keepSquelched = true;
-				return;
-			}
 			
 			if(srcStat.isRegularFile()) {
 				copyFile     (src, dest, path, srcStat, destStat);
@@ -695,18 +678,12 @@ public class FSMirror {
 			}
 
 			applyStat(srcStat, dest, path);
-			keepSquelched = true;
 		} catch(ENOENTException exc) {
 			try {
 				dest.unlink(path);
 			} catch(EISDIRException exc2) {
 				dest.rmrf(path);
 			} catch(ENOENTException exc2) {}
-		} finally {
-			if(!keepSquelched) {
-				// if we fail to process a file, we cancel the squelch so that it can be re-handled
-				squelchedPaths.remove(path);
-			}
 		}
 
 		return;
@@ -820,10 +797,10 @@ public class FSMirror {
 
 		// we may not actually want this, even if permissions available
 		// also we're doing string names second since we want the username ('steve') to override a uid (100)
-		attempt(() -> dest.chown(path, stat.getUid()));
-		attempt(() -> dest.chown(path, stat.getUser()));
-		attempt(() -> dest.chgrp(path, stat.getGid()));
-		attempt(() -> dest.chgrp(path, stat.getGroup()));
+		attempt(() -> dest.chown   (path, stat.getUid()));
+		attempt(() -> dest.chown   (path, stat.getUser()));
+		attempt(() -> dest.chgrp   (path, stat.getGid()));
+		attempt(() -> dest.chgrp   (path, stat.getGroup()));
 
 		attempt(() -> dest.setAtime(path, stat.getAtime()));
 		attempt(() -> dest.setCtime(path, stat.getCtime()));

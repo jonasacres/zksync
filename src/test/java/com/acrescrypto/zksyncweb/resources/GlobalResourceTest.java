@@ -158,6 +158,7 @@ public class GlobalResourceTest {
 
 	@Test
 	public void testGetGlobalReturnsIsListeningFalseIfTcpListenerInactive() throws IOException {
+		master.getTCPListener().close();
 		JsonNode resp = WebTestUtils.requestGet(target, "/global");
 		assertFalse(resp.get("isListening").booleanValue());
 	}
@@ -279,14 +280,6 @@ public class GlobalResourceTest {
 
 		WebTestUtils.requestPut(target, "/global/settings", settings);
 		assertEquals(4321, master.getBandwidthAllocatorTx().getBytesPerSecond());
-	}
-
-	@Test
-	public void testPutSettingsWithNullPortDoesNotStartListener() {
-		HashMap<String,Object> settings = new HashMap<>();
-		WebTestUtils.requestPut(target, "/global/settings", settings);
-		Util.sleep(100);
-		assertFalse(master.getTCPListener().isListening());
 	}
 
 	@Test

@@ -23,6 +23,7 @@ import com.acrescrypto.zksync.exceptions.UnconnectableAdvertisementException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
 import com.acrescrypto.zksync.net.TCPPeerAdvertisement;
 import com.acrescrypto.zksync.net.dht.DHTClient.LookupCallback;
 import com.acrescrypto.zksync.utility.Util;
@@ -78,6 +79,7 @@ public class DHTZKArchiveDiscoveryTest {
 	@BeforeClass
 	public static void beforeAll() {
 		TestUtils.startDebugMode();
+		ConfigDefaults.getActiveDefaults().set("net.swarm.enabled", false);
 	}
 	
 	@SuppressWarnings("deprecation")
@@ -226,22 +228,31 @@ public class DHTZKArchiveDiscoveryTest {
 	public void testAdvertisementThreadWaitsIntervalBetweenListings() throws IOException {
 		master.getGlobalConfig().set("net.swarm.enabled", true);
 		discovery.advertisementIntervalMs = 50;
-		archive.getConfig().advertise();
-		discovery.discoverArchives(archive.getConfig().getAccessor());
-		assertTrue(Util.waitUntil(discovery.advertisementIntervalMs, ()->!client.records.isEmpty()));
-		
+		Util.setCurrentTimeMillis(-1);
 		long timeStart = Util.currentTimeMillis();
+		
+		archive.getConfig().advertise();
+		master.getDHTDiscovery().stopDiscoveringArchives(archive.getConfig().getAccessor());
+		
+		Util.sleep(200);
+		
+		discovery.discoverArchives(archive.getConfig().getAccessor());
+		assertTrue(Util.waitUntil(discovery.advertisementIntervalMs, ()->!client.records.isEmpty()));	
 		
 		for(int i = 0; i < 4; i++) {
 			client.records.clear();
-			assertTrue(Util.waitUntil(100+discovery.advertisementIntervalMs, ()->!client.records.isEmpty()));
+			assertTrue(Util.waitUntil(
+					100+discovery.advertisementIntervalMs,
+					()->!client.records.isEmpty()));
 			
-			// these time-based tests seem rife with ITFs.
 			long elapsed = Util.currentTimeMillis() - timeStart;
 			int minimumTime = i * (discovery.advertisementIntervalMs - 10);
 			
-			// 2020-07-07 4041e04 observing lots of intermittent failures of this test on windows 
-			assertTrue(elapsed > minimumTime);
+			// these time-based tests seem rife with ITFs.
+			// 2020-07-07 4041e04 observing lots of intermittent failures of this test on windows
+			// 2020-07-14 made some changes; there's a race with the original DHTDiscovery on master.
+			assertTrue("Expected elapsed time of at least " + minimumTime + "ms, was " + elapsed + "ms",
+					elapsed >= minimumTime);
 		}
 	}
 
@@ -279,6 +290,7 @@ public class DHTZKArchiveDiscoveryTest {
 		discovery.forceUpdate(archive.getConfig().getAccessor());
 		// TODO API: (itf) 511a8be+ linux 12/14/18 UniversalTests, assertion failed
 		// and again 12/15, after doubling the timeout to 100... gonna try 500 and see.
+		// 7/14/20 updated the way forceUpdate works, seems to address issue on linux
 		assertTrue(Util.waitUntil(500, ()->!client.records.isEmpty()));
 	}
 	

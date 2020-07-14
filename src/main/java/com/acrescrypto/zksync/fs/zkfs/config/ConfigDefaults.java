@@ -67,9 +67,9 @@ public class ConfigDefaults {
 		config.setDefault("fs.settings.maxAutomergeAcquireWaitTimeMs",      60000);
 		config.setDefault("fs.settings.revtagHasLocalCacheTimeout",         60000);
 		
-		config.setDefault("fs.settings.mirror.pathSquelchPeriodMs",           100);
-		config.setDefault("fs.settings.mirror.zkfsToHostSyncDelayMs",         100);
-		config.setDefault("fs.settings.mirror.zkfsToHostSyncMaxDelayMs",     1000);
+		config.setDefault("fs.settings.mirror.pathMutePeriodMs",              100);
+		config.setDefault("fs.settings.mirror.syncResetDelayMs",              100);
+		config.setDefault("fs.settings.mirror.syncMaxDelayMs",               1000);
 		
 		config.setDefault("fs.fileHandleTelemetry", FS.fileHandleTelemetryEnabled);
 		

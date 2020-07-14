@@ -100,6 +100,8 @@ public class FSMirrorTest {
 	}
 	
 	void checkPathMatch(FS src, FS modified, Stat expected, String path) throws IOException {
+		if(mirror.syncTimer != null) mirror.syncTimer.runTask();
+		
 		if(expected == null) {
 			assertFalse(modified.exists(path));
 			return;
@@ -158,6 +160,7 @@ public class FSMirrorTest {
 			expected = target.lstat(path);
 		} catch(ENOENTException exc) {};
 		
+		mirror.startSyncTimer();
 		mirror.observedTargetPathChange(path);
 		checkPathMatch(target, zkfs, expected, path);
 	}

@@ -22,9 +22,23 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	class DiscoveryEntry {
 		ArchiveAccessor accessor;
 		int count;
+		long nextSendTime;
 		
 		public DiscoveryEntry(ArchiveAccessor accessor) {
 			this.accessor = accessor;
+		}
+		
+		public synchronized void sendImmediately() {
+			nextSendTime = 0;
+			this.notifyAll();
+		}
+		
+		public synchronized void resetSendTime() {
+			nextSendTime = Util.currentTimeMillis() + advertisementIntervalMs;
+		}
+		
+		public boolean canSend() {
+			return Util.currentTimeMillis() >= nextSendTime;
 		}
 		
 		public synchronized boolean increment() {
@@ -88,6 +102,9 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		if(entry.decrement()) {
 			// TODO API: (test) Test increment/decrement-based deletions
 			activeDiscoveries.remove(accessor);
+			synchronized(entry) {
+				entry.notifyAll();
+			}
 		}
 	}
 
@@ -114,15 +131,20 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	
 	protected void advertisementThread(DiscoveryEntry entry) {
 		Util.setThreadName("DHTZKArchiveDiscovery advertisement thread");
+		
 		while(isAdvertising(entry.accessor)) {
 			try {
-				Util.blockOnPoll(()->isAdvertising(entry.accessor) && !entry.accessor.getMaster().getDHTClient().isInitialized());
-				if(isAdvertising(entry.accessor)) {
+				Util.blockOnPoll( () ->
+					   isAdvertising(entry.accessor)
+					&& !entry.accessor.getMaster().getDHTClient().isInitialized()
+				  );
+				if(isAdvertising(entry.accessor) && entry.canSend()) {
 					advertise(entry);
+					entry.resetSendTime();
 				}
 				
 				synchronized(entry) {
-					entry.wait(advertisementIntervalMs);
+					entry.wait(1);
 				}
 			} catch(Exception exc) {
 				logger.error("DHT -: Caught exception on DHTZKArchiveDiscovery advertisement thread", exc);
@@ -147,9 +169,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		
 		logger.info("DHT -: forcing update for archive accessor with temporal ID {}",
 				Util.bytesToHex(accessor.temporalSeedId(0)));
-		synchronized(entry) {
-			entry.notifyAll();
-		}
+		entry.sendImmediately();
 	}
 	
 	protected void discover(DiscoveryEntry entry) {
