@@ -12,7 +12,9 @@ public class XDHTRecord {
 	public XDHTRecord(StoreEntry recordEntry) {
 		this.data         = recordEntry.record().serialize();
 		this.routingInfo  = recordEntry.record().routingInfo();
-		this.sender       = new XDHTPeerInfo(recordEntry.record().getSender());
+		this.sender       = recordEntry.record().getSender() != null
+				            ? new XDHTPeerInfo(recordEntry.record().getSender())
+				            : null;
 		this.timeReceived = recordEntry.receivedTime();
 		this.timeExpires  = recordEntry.expirationTime();
 	}

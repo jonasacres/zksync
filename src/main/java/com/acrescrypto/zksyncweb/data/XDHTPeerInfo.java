@@ -15,20 +15,24 @@ public class XDHTPeerInfo {
 	private String status;
 	
 	public XDHTPeerInfo(DHTPeer peer) {
-		this.id             = peer.getId().serialize();
-		this.pubKey         = peer.getKey().getBytes();
-		this.port           = peer.getPort();
-		this.address        = peer.getAddress();
-		this.missedMessages = peer.getMissedMessages();
-		this.lastSeen       = peer.getLastSeen();
-		this.pinned         = peer.isPinned();
-		
-		if       (peer.isBad()) {
-			this.setStatus("bad");
-		} else if(peer.isQuestionable()) {
-			this.setStatus("questionable");
-		} else {
-			this.setStatus("good");
+		try {
+			this.id             = peer.getId().serialize();
+			this.pubKey         = peer.getKey().getBytes();
+			this.port           = peer.getPort();
+			this.address        = peer.getAddress();
+			this.missedMessages = peer.getMissedMessages();
+			this.lastSeen       = peer.getLastSeen();
+			this.pinned         = peer.isPinned();
+			
+			if       (peer.isBad()) {
+				this.setStatus("bad");
+			} else if(peer.isQuestionable()) {
+				this.setStatus("questionable");
+			} else {
+				this.setStatus("good");
+			}
+		} catch(NullPointerException exc) {
+			exc.printStackTrace();
 		}
 	}
 	
