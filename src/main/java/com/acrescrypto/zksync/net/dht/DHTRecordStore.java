@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.MutableSecureFile;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
@@ -104,6 +105,10 @@ public class DHTRecordStore {
 			}
 			
 			return false;
+		}
+
+		public CryptoSupport crypto() {
+			return client.getMaster().getCrypto(); // ugly but helpful
 		}
 	}
 	

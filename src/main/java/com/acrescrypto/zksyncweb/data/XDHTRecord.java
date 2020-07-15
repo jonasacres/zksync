@@ -5,11 +5,13 @@ import com.acrescrypto.zksync.net.dht.DHTRecordStore.StoreEntry;
 public class XDHTRecord {
 	protected byte[]       data;
 	protected String       routingInfo;
+	protected String       id;
 	protected XDHTPeerInfo sender;
 	protected long         timeReceived;
 	protected long         timeExpires;
 	
 	public XDHTRecord(StoreEntry recordEntry) {
+		this.id           = recordEntry.record().id(recordEntry.crypto());
 		this.data         = recordEntry.record().serialize();
 		this.routingInfo  = recordEntry.record().routingInfo();
 		this.sender       = recordEntry.record().getSender() != null
@@ -17,6 +19,14 @@ public class XDHTRecord {
 				            : null;
 		this.timeReceived = recordEntry.receivedTime();
 		this.timeExpires  = recordEntry.expirationTime();
+	}
+	
+	public String getId() {
+		return id;
+	}
+	
+	public void setId(String id) {
+		this.id = id;
 	}
 	
 	public byte[] getData() {

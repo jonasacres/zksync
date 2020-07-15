@@ -34,6 +34,10 @@ public abstract class DHTRecord implements Sendable {
 		}
 	}
 	
+	public String id(CryptoSupport crypto) {
+		return Util.encode64(crypto.hash(serialize()));
+	}
+	
 	public abstract byte[] serialize();
 	public abstract void deserialize(ByteBuffer serialized) throws UnsupportedProtocolException;
 	public abstract boolean isValid();
