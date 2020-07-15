@@ -22,13 +22,12 @@ public class DHTRecordStore {
 	public class StoreEntry {
 		protected DHTRecord record;
 		protected byte[]    token;
-		protected long      expirationTime;
+		protected long      receivedTime;
 		
 		public StoreEntry(DHTRecord record, byte[] token) {
 			this.record         = record;
 			this.token          = token;
-			this.expirationTime = Util.currentTimeMillis()
-					            + client.getMaster().getGlobalConfig().getLong("net.dht.store.expirationTimeMs");
+			this.receivedTime   = Util.currentTimeMillis();
 		}
 		
 		public StoreEntry(ByteBuffer serialized) throws UnsupportedProtocolException {
@@ -44,15 +43,16 @@ public class DHTRecordStore {
 		}
 		
 		public long receivedTime() {
-			return 0; // TODO: implement
+			return receivedTime;
 		}
 		
 		public long expirationTime() {
-			return expirationTime;
+			return receivedTime()
+				 + client.getMaster().getGlobalConfig().getLong("net.dht.store.expirationTimeMs");
 		}
 		
 		public boolean isExpired() {
-			return Util.currentTimeMillis() >= this.expirationTime;
+			return Util.currentTimeMillis() >= expirationTime();
 		}
 		
 		public byte[] serialize() {
@@ -64,7 +64,7 @@ public class DHTRecordStore {
 					+ 2                               // record length
 					+ recordSer.length                // record
 				);
-			buf.putLong (        expirationTime  );
+			buf.putLong (        receivedTime    );
 			buf.putShort((short) token.length    );
 			buf.put     (        token           );
 			buf.putShort((short) recordSer.length);
@@ -74,7 +74,7 @@ public class DHTRecordStore {
 		}
 		
 		public void deserialize(ByteBuffer serialized) throws UnsupportedProtocolException {
-			this.expirationTime = serialized.getLong();
+			this.receivedTime = serialized.getLong();
 			int tokenLen = serialized.getShort();
 			assert(tokenLen >= 0);
 			this.token = new byte[tokenLen];

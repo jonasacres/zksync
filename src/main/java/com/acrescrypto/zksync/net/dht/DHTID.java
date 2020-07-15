@@ -90,7 +90,7 @@ public class DHTID implements Comparable<DHTID>, Sendable {
 	}
 	
 	public String toFullString() {
-		return Util.bytesToHex(this.rawId);
+		return Util.encode64(rawId);
 	}
 	
 	public String toShortString() {
