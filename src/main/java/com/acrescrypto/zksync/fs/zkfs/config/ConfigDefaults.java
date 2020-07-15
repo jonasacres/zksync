@@ -24,12 +24,15 @@ public class ConfigDefaults {
 		
 		config.setDefault("crypto.pbkdf.maxsimultaneous", 1);
 		
-		config.setDefault("net.dht.enabled",           true);
-		config.setDefault("net.dht.bindaddress",  "0.0.0.0");
-		config.setDefault("net.dht.localaddress", "0.0.0.0");
-		config.setDefault("net.dht.port",                 0);
-		config.setDefault("net.dht.upnp",             false);
-		config.setDefault("net.dht.network",     "easysafe");
+		config.setDefault("net.dht.enabled",                         true);
+		config.setDefault("net.dht.bindaddress",                "0.0.0.0");
+		config.setDefault("net.dht.localaddress",               "0.0.0.0");
+		config.setDefault("net.dht.port",                               0);
+		config.setDefault("net.dht.upnp",                           false);
+		config.setDefault("net.dht.network",                   "easysafe");
+		config.setDefault("net.dht.store.maxRecordsPerId",             64);
+		config.setDefault("net.dht.store.maxIds",                     128);
+		config.setDefault("net.dht.store.expirationTimeMs",  1000*60*60*4);
 		
 		config.setDefault("net.dht.bootstrap.enabled",   true);
 		config.setDefault("net.dht.bootstrap.peerfile",  "https://dht1.easysafe.io/dht/peerfile");

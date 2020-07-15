@@ -8,6 +8,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
 
 import org.junit.After;
 import org.junit.AfterClass;
@@ -18,20 +22,39 @@ import org.junit.Test;
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
+import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
+import com.acrescrypto.zksync.net.dht.DHTRecordStore.StoreEntry;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTRecordStoreTest {
+	class DummyMaster extends ZKMaster {
+		public DummyMaster()
+				throws IOException, InvalidBlacklistException
+		{
+			this.storage      = new RAMFS();
+			this.globalConfig = new ConfigFile(storage, "config.json");
+			
+			globalConfig.apply(ConfigDefaults.getActiveDefaults());
+		}
+		
+		@Override
+		public void close() {}
+	}
 	class DummyClient extends DHTClient {
 		RAMFS storage;
 		
-		public DummyClient() {
-			this.storage = new RAMFS();
-			this.threadPool = GroupedThreadPool.newCachedThreadPool(Thread.currentThread().getThreadGroup(), "DummyClient");
-			this.crypto = CryptoSupport.defaultCrypto();
-			this.storageKey = new Key(crypto);
+		public DummyClient() throws IOException, InvalidBlacklistException {
+			this.master           = new DummyMaster();
+			this.storage          = (RAMFS) master.getStorage();
+			this.threadPool       = GroupedThreadPool.newCachedThreadPool(Thread.currentThread().getThreadGroup(), "DummyClient");
+			this.crypto           = CryptoSupport.defaultCrypto();
+			this.storageKey       = new Key(crypto);
 			
 			super.protocolManager = this.protocolManager = new DummyProtocolManager(this);
 		}
@@ -101,6 +124,18 @@ public class DHTRecordStoreTest {
 		return new DHTID(client.crypto.rng(client.crypto.hashLength()));
 	}
 	
+	public long expirationTimeMs() {
+		return client.getMaster().getGlobalConfig().getLong("net.dht.store.expirationTimeMs");
+	}
+	
+	public int maxIds() {
+		return client.getMaster().getGlobalConfig().getInt("net.dht.store.maxIds");
+	}
+	
+	public int maxRecordsPerId() {
+		return client.getMaster().getGlobalConfig().getInt("net.dht.store.maxRecordsPerId");
+	}
+	
 	@BeforeClass
 	public static void beforeAll() {
 		TestUtils.startDebugMode();
@@ -113,7 +148,7 @@ public class DHTRecordStoreTest {
 	}
 	
 	@Before
-	public void beforeEach() {
+	public void beforeEach() throws IOException, InvalidBlacklistException {
 		client = new DummyClient();
 		store = new DHTRecordStore(client);
 	}
@@ -135,16 +170,16 @@ public class DHTRecordStoreTest {
 	@Test
 	public void testAddRecordForIdIgnoresTheRecordIfNoRoomForNewIds() throws IOException {
 		byte[] token = client.crypto.hash(new byte[1]);
-		for(int i = 0; i < DHTRecordStore.MAX_IDS; i++) {
+		for(int i = 0; i < maxIds(); i++) {
 			DHTID id = makeId();
 			DummyRecord record = new DummyRecord(i);
 			store.addRecordForId(id, token, record);
 		}
 		
-		assertTrue(Util.waitUntil(50, ()->store.entriesById.size() == DHTRecordStore.MAX_IDS));
+		assertTrue(Util.waitUntil(50, ()->store.entriesById.size() == maxIds()));
 		
 		DHTID id = makeId();
-		store.addRecordForId(id, token, new DummyRecord(DHTRecordStore.MAX_IDS));
+		store.addRecordForId(id, token, new DummyRecord(maxIds()));
 		assertFalse(Util.waitUntil(50, ()->store.recordsForId(id, token).size() != 0));
 	}
 	
@@ -153,14 +188,14 @@ public class DHTRecordStoreTest {
 		DHTID id = makeId();
 		byte[] token = client.crypto.hash(new byte[1]);
 		
-		for(int i = 0; i < DHTRecordStore.MAX_RECORDS_PER_ID; i++) {
+		for(int i = 0; i < maxRecordsPerId(); i++) {
 			DummyRecord record = new DummyRecord(i);
 			store.addRecordForId(id, token, record);
 		}
 		
-		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id, token).size() == DHTRecordStore.MAX_RECORDS_PER_ID));
+		assertTrue(Util.waitUntil(50, ()->store.recordsForId(id, token).size() == maxRecordsPerId()));
 		
-		DummyRecord record = new DummyRecord(DHTRecordStore.MAX_RECORDS_PER_ID);
+		DummyRecord record = new DummyRecord(maxRecordsPerId());
 		store.addRecordForId(id, token, record);
 		assertFalse(Util.waitUntil(50, ()->store.recordsForId(id, token).contains(record)));
 	}
@@ -199,6 +234,60 @@ public class DHTRecordStoreTest {
 	}
 	
 	@Test
+	public void testRecordsReturnsAllRecordsInStore() throws IOException {
+		int numIds          = 10,
+			numRecordsPerId =  3;
+		
+		HashMap<DHTID, LinkedList<DummyRecord>>    map = new HashMap<>();
+		HashMap<DummyRecord, byte[]>            tokens = new HashMap<>();
+		
+		for(int i = 0; i < numIds; i++) {
+			DHTID id = makeId();
+			LinkedList<DummyRecord> list = new LinkedList<>();
+			map.put(id, list);
+			
+			for(int j = 0; j < numIds; j++) {
+				int x              = i*numRecordsPerId + j;
+				byte[] token       = client.crypto.hash(Util.serializeInt(x));
+				DummyRecord record = new DummyRecord(x);
+				
+				tokens.put(record, token);
+				store.addRecordForId(
+						id,
+						token,
+						record);
+				list.add(record);
+			}
+		}
+		
+		for(DHTID id : map.keySet()) {
+			for(DummyRecord record : map.get(id)) {
+				byte[] token = tokens.get(record);
+				assertTrue(Util.waitUntil(50, ()->store.recordsForId(id, token).contains(record)));
+			};
+		}
+		
+		Map<DHTID, Collection<StoreEntry>> allRecords = store.records();
+		assertEquals(map.size(), allRecords.size());
+		for(DHTID id : map.keySet()) {
+			assertTrue(allRecords.containsKey(id));
+			assertEquals(map.get(id).size(), allRecords.get(id).size());
+			
+			for(StoreEntry entry : allRecords.get(id)) {
+				boolean found = false;
+				for(DummyRecord record : map.get(id)) {
+					if(record.equals(entry.record())) {
+						found = true;
+						break;
+					}
+				}
+				
+				assertTrue(found);
+			}
+		}
+	}
+	
+	@Test
 	public void testPruningRemovesExpiredEntries() throws IOException {
 		int numRecords = 64, numPrunable = 12;
 		ArrayList<DHTID> ids = new ArrayList<>();
@@ -215,7 +304,7 @@ public class DHTRecordStoreTest {
 			
 			if(i == numPrunable) {
 				Util.sleep(5);
-				Util.setCurrentTimeNanos(1000l*1000l*DHTRecordStore.EXPIRATION_TIME_MS/2);
+				Util.setCurrentTimeNanos(1000l*1000l*expirationTimeMs()/2);
 			}
 			
 			DummyRecord record = new DummyRecord(i);
@@ -223,7 +312,7 @@ public class DHTRecordStoreTest {
 		}
 		
 		Util.sleep(5);
-		Util.setCurrentTimeNanos(1000l*1000l*DHTRecordStore.EXPIRATION_TIME_MS);
+		Util.setCurrentTimeNanos(1000l*1000l*expirationTimeMs());
 		store.prune();
 		
 		int numRemaining = 0;
@@ -242,7 +331,7 @@ public class DHTRecordStoreTest {
 	@Test
 	public void testRecordsForIdReturnsAllRecordsForIdMatchingToken() throws IOException {
 		// also tests that nonmatching tokens are excluded
-		int numRecords = DHTRecordStore.MAX_RECORDS_PER_ID-1;
+		int numRecords = maxRecordsPerId()-1;
 		ArrayList<DHTRecord> records = new ArrayList<>(numRecords);
 		DHTID id = makeId();
 		byte[] token = client.crypto.hash(new byte[1]);
@@ -279,7 +368,7 @@ public class DHTRecordStoreTest {
 			
 			if(i == numPrunable) {
 				Util.sleep(5);
-				Util.setCurrentTimeNanos(1000l*1000l*DHTRecordStore.EXPIRATION_TIME_MS/2);
+				Util.setCurrentTimeNanos(1000l*1000l*expirationTimeMs()/2);
 			}
 			
 			DummyRecord record = new DummyRecord(i);
@@ -294,7 +383,7 @@ public class DHTRecordStoreTest {
 			assertTrue(store.recordsForId(idd, token).containsAll(store1.recordsForId(idd, token)));
 		}
 		
-		Util.setCurrentTimeNanos(1000l*1000l*DHTRecordStore.EXPIRATION_TIME_MS);
+		Util.setCurrentTimeNanos(1000l*1000l*expirationTimeMs());
 		store1.prune();
 		int numRemaining = 0;
 		for(DHTID idd : ids) {

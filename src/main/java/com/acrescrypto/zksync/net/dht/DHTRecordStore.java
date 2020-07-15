@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import org.slf4j.Logger;
@@ -18,11 +19,7 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTRecordStore {
-	public final static int MAX_RECORDS_PER_ID = 64;
-	public final static int MAX_IDS            = 64;
-	public final static int EXPIRATION_TIME_MS = 1000*60*60*4; // entries cannot be pruned until they are at least 4 hours old
-	
-	class StoreEntry {
+	public class StoreEntry {
 		protected DHTRecord record;
 		protected byte[]    token;
 		protected long      expirationTime;
@@ -30,11 +27,28 @@ public class DHTRecordStore {
 		public StoreEntry(DHTRecord record, byte[] token) {
 			this.record         = record;
 			this.token          = token;
-			this.expirationTime = Util.currentTimeMillis() + EXPIRATION_TIME_MS;
+			this.expirationTime = Util.currentTimeMillis()
+					            + client.getMaster().getGlobalConfig().getLong("net.dht.store.expirationTimeMs");
 		}
 		
 		public StoreEntry(ByteBuffer serialized) throws UnsupportedProtocolException {
 			deserialize(serialized);
+		}
+		
+		public DHTRecord record() {
+			return record;
+		}
+		
+		public byte[] token() {
+			return token;
+		}
+		
+		public long receivedTime() {
+			return 0; // TODO: implement
+		}
+		
+		public long expirationTime() {
+			return expirationTime;
 		}
 		
 		public boolean isExpired() {
@@ -118,6 +132,20 @@ public class DHTRecordStore {
 		client.threadPool.submit(()->addRecordIfReachable(id, token, record));
 	}
 	
+	public synchronized Map<DHTID, Collection<StoreEntry>> records() {
+		HashMap<DHTID, Collection<StoreEntry>> map = new HashMap<>();
+		for(DHTID id : entriesById.keySet()) {
+			LinkedList<StoreEntry> list = new LinkedList<>();
+			for(StoreEntry entry : entriesById.get(id)) {
+				list.add(entry);
+			}
+			
+			map.put(id, list);
+		}
+		
+		return map;
+	}
+	
 	public synchronized Collection<DHTRecord> recordsForId(DHTID id, byte[] token) {
 		LinkedList<DHTRecord> records = new LinkedList<>();
 		Collection<StoreEntry> entries = entriesById.getOrDefault(id, new ArrayList<>(0));
@@ -145,9 +173,12 @@ public class DHTRecordStore {
 
 	@SuppressWarnings("unlikely-arg-type")
 	protected synchronized boolean hasRoomForRecord(DHTID id, DHTRecord record) throws IOException {
+		int maxIds          = client.getMaster().getGlobalConfig().getInt("net.dht.store.maxIds");
+		int maxRecordsPerId = client.getMaster().getGlobalConfig().getInt("net.dht.store.maxRecordsPerId");
+		
 		if(!entriesById.containsKey(id)) {
-			if(entriesById.size() >= MAX_IDS) prune();
-			if(entriesById.size() >= MAX_IDS) return false;
+			if(entriesById.size() >= maxIds) prune();
+			if(entriesById.size() >= maxIds) return false;
 			return true;
 		}
 		
@@ -155,12 +186,13 @@ public class DHTRecordStore {
 		for(StoreEntry entry : entriesForId) {
 			if(entry.equals(record)) return false;
 		}
-		if(entriesForId.size() >= MAX_RECORDS_PER_ID) prune();
-		if(entriesForId.size() >= MAX_RECORDS_PER_ID) return false;
+		if(entriesForId.size() >= maxRecordsPerId) prune();
+		if(entriesForId.size() >= maxRecordsPerId) return false;
 		return true;
 	}
 	
 	protected void addRecordIfReachable(DHTID id, byte[] token, DHTRecord record) {
+		int maxRecordsPerId = client.getMaster().getGlobalConfig().getInt("net.dht.store.maxRecordsPerId");
 		Util.setThreadName("Add record worker");
 		try {
 			if(!record.isReachable()) {
@@ -174,12 +206,12 @@ public class DHTRecordStore {
 				if(!hasRoomForRecord(id, record)) return;
 				
 				if(!entriesById.containsKey(id)) {
-					entriesById.put(id, new ArrayList<StoreEntry>(MAX_RECORDS_PER_ID));
+					entriesById.put(id, new ArrayList<StoreEntry>(maxRecordsPerId));
 				}
 				
 				ArrayList<StoreEntry> entriesForId = entriesById.get(id);
-				if(entriesForId.size() >= MAX_RECORDS_PER_ID) prune();
-				if(entriesForId.size() >= MAX_RECORDS_PER_ID) return;
+				if(entriesForId.size() >= maxRecordsPerId) prune();
+				if(entriesForId.size() >= maxRecordsPerId) return;
 				entriesForId.add(new StoreEntry(record, token));
 				
 				logger.info("Added record from {} for ID {}; {} records for ID, {} ids in store",

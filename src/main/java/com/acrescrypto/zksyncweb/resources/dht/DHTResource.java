@@ -2,7 +2,9 @@ package com.acrescrypto.zksyncweb.resources.dht;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -12,12 +14,15 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
 import com.acrescrypto.zksync.net.dht.DHTClient;
+import com.acrescrypto.zksync.net.dht.DHTID;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
+import com.acrescrypto.zksync.net.dht.DHTRecordStore.StoreEntry;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 import com.acrescrypto.zksyncweb.data.XDHTInfo;
 import com.acrescrypto.zksyncweb.data.XDHTPeerFile;
 import com.acrescrypto.zksyncweb.data.XDHTPeerInfo;
+import com.acrescrypto.zksyncweb.data.XDHTRecord;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Path("/dht")
@@ -47,6 +52,29 @@ public class DHTResource {
 		}
 		
 		throw XAPIResponse.withWrappedPayload("peers", peers);
+	}
+	
+	@GET
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("records")
+	public XAPIResponse getDhtRecords() throws IOException {
+		HashMap<String, LinkedList<XDHTRecord>> outRecords    = new HashMap<>();
+		Map<DHTID, Collection<StoreEntry>>      sourceRecords = State
+				 												.sharedState()
+				 												.getMaster()
+				 												.getDHTClient()
+				 												.getRecordStore()
+				 												.records();
+		sourceRecords.forEach((id, records)->{
+			LinkedList<XDHTRecord> list = new LinkedList<>();
+			records.forEach((record)->{
+				list.add(new XDHTRecord(record));
+			});
+			
+			outRecords.put(id.toFullString(), list);
+		});
+		
+		throw XAPIResponse.withWrappedPayload("records", outRecords);
 	}
 	
 	@PUT

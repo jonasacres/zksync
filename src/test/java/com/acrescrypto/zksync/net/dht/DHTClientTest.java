@@ -351,6 +351,14 @@ public class DHTClientTest {
 		assertNotNull(remote.receivePacket(DHTMessage.CMD_PING));
 	}
 	
+	int maxIds() {
+		return master.getGlobalConfig().getInt("net.dht.store.maxIds");
+	}
+	
+	int maxRecordsPerId() {
+		return master.getGlobalConfig().getInt("net.dht.store.maxRecordsPerId");
+	}
+	
 	@BeforeClass
 	public static void beforeAll() {
 		TestUtils.startDebugMode();
@@ -514,7 +522,7 @@ public class DHTClientTest {
 		DHTMessage findNodeReq = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
 		ArrayList<DHTPeer> peers = new ArrayList<>(1);
 		peers.add(remote.peer);
-		for(int i = 0; i < DHTRecordStore.MAX_RECORDS_PER_ID; i++) records.add(makeBogusAd(i));
+		for(int i = 0; i < maxRecordsPerId(); i++) records.add(makeBogusAd(i));
 		findNodeReq.makeResponse(peers).addItemList(records).send();
 
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->seenNull.booleanValue()));
@@ -561,7 +569,7 @@ public class DHTClientTest {
 		ArrayList<DHTPeer> peers = new ArrayList<>(1);
 		peers.add(remote.peer);
 
-		for(int i = 0; i < DHTRecordStore.MAX_RECORDS_PER_ID; i++) records.add(makeBogusAd(i));
+		for(int i = 0; i < maxRecordsPerId(); i++) records.add(makeBogusAd(i));
 
 		class RiggedMessage extends DHTMessage {
 			public RiggedMessage(DHTMessage msg) { super(msg.peer, msg.cmd, msg.msgId, null); this.itemLists = msg.itemLists; }                

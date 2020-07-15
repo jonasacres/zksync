@@ -86,7 +86,11 @@ public class DHTID implements Comparable<DHTID>, Sendable {
 	
 	@Override
 	public String toString() {
-		return Util.bytesToHex(this.rawId) + " (" + order() + ")";
+		return this.toFullString() + " (" + order() + ")";
+	}
+	
+	public String toFullString() {
+		return Util.bytesToHex(this.rawId);
 	}
 	
 	public String toShortString() {

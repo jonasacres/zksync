@@ -7,8 +7,14 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.Map;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
@@ -31,6 +37,7 @@ import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTID;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
 import com.acrescrypto.zksync.net.dht.DHTProtocolManager;
+import com.acrescrypto.zksync.net.dht.DHTRecord;
 import com.acrescrypto.zksync.net.dht.DHTRecordStore;
 import com.acrescrypto.zksync.net.dht.DHTRoutingTable;
 import com.acrescrypto.zksync.net.dht.DHTSocketManager;
@@ -58,10 +65,10 @@ public class DHTResourceTest {
 			this.master          = State.sharedState().getMaster();
 			this.crypto          = CryptoSupport.defaultCrypto();
 			
-			this.socketManager   = new DummyDHTSocketManager(this);
+			this.socketManager   = new DummyDHTSocketManager  (this);
 			this.protocolManager = new DummyDHTProtocolManager(this);
-			this.store           = new DummyDHTRecordStore();
-			this.routingTable    = new DummyDHTRoutingTable(this);
+			this.store           = new DummyDHTRecordStore    (this);
+			this.routingTable    = new DummyDHTRoutingTable   (this);
 
 			this.privateKey      = new PrivateDHKey(State.sharedCrypto());
 			this.id              = new DHTID(privateKey.publicKey());
@@ -110,12 +117,64 @@ public class DHTResourceTest {
 	}
 
 	class DummyDHTRecordStore extends DHTRecordStore {
-		public DummyDHTRecordStore() {
+		public DummyDHTRecordStore(DummyDHTClient client) {
+			this.client = client;
 		}
 
 		@Override public int numIds() { return 12; }
 		@Override public int numRecords() { return 321; }
+		@Override public Map<DHTID, Collection<StoreEntry>> records() {
+			CryptoSupport crypto = CryptoSupport.defaultCrypto();
+			HashMap<DHTID, Collection<StoreEntry>> map = new HashMap<>();
+			int recordsPerId = 5, numIds = 3;
+			
+			for(int i = 0; i < numIds; i++) {
+				DHTID id                    = new DHTID(crypto.hash(Util.serializeInt(i)));
+				LinkedList<StoreEntry> list = new LinkedList<>();
+				map.put(id, list);
+				
+				for(int j = 0; j < recordsPerId; j++) {
+					int         x      = i*recordsPerId + j;
+					DummyRecord record = new DummyRecord(x);
+					StoreEntry entry   = new StoreEntry(record, Util.serializeInt(i));
+					
+					list.add(entry);
+				}
+			}
+			
+			return map;
+		}
 	}
+	
+	class DummyRecord extends DHTRecord {
+		byte[] contents;
+		boolean reachable = true, valid = true;
+		int index;
+		
+		public DummyRecord(int i) {
+			CryptoSupport crypto = CryptoSupport.defaultCrypto();
+			index = i;
+			ByteBuffer buf = ByteBuffer.allocate(32);
+			buf.putInt(i);
+			buf.put(crypto.prng(Util.serializeInt(i)).getBytes(buf.remaining()));
+			contents = buf.array();
+			sender = makePeer(client, i);
+		}
+		
+		@Override
+		public byte[] serialize() {
+			ByteBuffer serialized = ByteBuffer.allocate(2+contents.length);
+			serialized.putShort((short) contents.length);
+			serialized.put(contents);
+			return serialized.array();
+		}
+
+		@Override public boolean isReachable() { return true; }
+		@Override public String routingInfo() { return "dummy-" + index; }
+		@Override public void deserialize(ByteBuffer serialized) {}
+		@Override public boolean isValid() { return true; }
+	}
+
 
 	class DummyDHTRoutingTable extends DHTRoutingTable {
 		DummyDHTClient client;
@@ -124,23 +183,8 @@ public class DHTResourceTest {
 			this.client = client;
 			this.allPeers = new ArrayList<>();
 			for(int i = 0; i < 64; i++) {
-				allPeers.add(makePeer(i));
+				allPeers.add(makePeer(client, i));
 			}
-		}
-
-		public DHTPeer makePeer(int i) {
-			CryptoSupport crypto = CryptoSupport.defaultCrypto();
-			DHTPeer peer = new DHTPeer(client,
-					"127.0.0." + i,
-					1000+i,
-					crypto.hash(Util.serializeInt(i)));
-
-			Util.setCurrentTimeMillis(i*100000);
-			peer.acknowledgedMessage();
-			
-			for(int j = 0; j < i; j++) peer.missedMessage();
-
-			return peer;
 		}
 	}
 
@@ -153,6 +197,21 @@ public class DHTResourceTest {
 
 		@Override public long getBytesPerSecond() { return bytesPerSecond; }
 		@Override public long getLifetimeBytes() { return bytesPerSecond + 1; }
+	}
+
+	public DHTPeer makePeer(DHTClient client, int i) {
+		CryptoSupport crypto = CryptoSupport.defaultCrypto();
+		DHTPeer peer = new DHTPeer(client,
+				"127.0.0." + i,
+				1000+i,
+				crypto.hash(Util.serializeInt(i)));
+
+		Util.setCurrentTimeMillis(i*100000);
+		peer.acknowledgedMessage();
+		
+		for(int j = 0; j < i; j++) peer.missedMessage();
+
+		return peer;
 	}
 
 	@BeforeClass
@@ -339,6 +398,65 @@ public class DHTResourceTest {
 			});
 		
 		assertTrue(found.booleanValue());
+	}
+	
+	@Test
+	public void testRecordsListsAllRecordsInStore() {
+		JsonNode        records      = WebTestUtils
+			                           .requestGet(target, basepath + "records")
+			                           .get("records");
+		HashSet<String>  seenIds     = new HashSet<>();
+		HashSet<Integer> seenRecords = new HashSet<>();
+		CryptoSupport    crypto      = CryptoSupport.defaultCrypto();
+		
+		int numIds       = 3,
+			recordsPerId = 5; // match values in records() in DummyRecordStore
+		
+		records.fieldNames().forEachRemaining((id)->{
+			seenIds.add(id);
+			JsonNode recordsForId = records.get(id);
+			int i;
+			for(i = 0; i < numIds; i++) {
+				String ss = new DHTID(crypto.hash(Util.serializeInt(i))).toFullString();
+				if(ss.equals(id)) break;
+			}
+			
+			final int idIndex = i;
+			assertTrue(i < numIds);
+			
+			recordsForId.forEach((record)->{
+				try {
+					byte[] contents = record.get("data").binaryValue();
+					int xx = ByteBuffer.wrap(contents).position(2).getInt();
+					int ii = xx / recordsPerId,
+						jj = xx % recordsPerId;
+					assertEquals(idIndex, ii);
+					assertFalse(seenRecords.contains(xx));
+					assertTrue(0 <= jj && jj < recordsPerId);
+					seenRecords.add(xx);
+					
+					DHTPeer expectedPeer = makePeer(client, xx);
+					JsonNode peer = record.get("sender");
+					
+					assertEquals     ("dummy-" + xx,
+							          record.get("routingInfo").asText());
+					assertEquals     (expectedPeer.getPort(),
+							          peer.get("port").asInt());
+					assertEquals     (expectedPeer.getAddress(),
+					                  peer.get("address").asText());
+					assertArrayEquals(expectedPeer.getId().serialize(),
+							          peer.get("id").binaryValue());
+					assertArrayEquals(expectedPeer.getKey().getBytes(),
+					                  peer.get("pubKey").binaryValue());
+				} catch (IOException exc) {
+					exc.printStackTrace();
+					fail();
+				}
+			});
+		});
+		
+		assertEquals(numIds,              seenIds    .size());
+		assertEquals(numIds*recordsPerId, seenRecords.size());
 	}
 	
 	// TODO: testPeerFileIncludesGoodPeers
