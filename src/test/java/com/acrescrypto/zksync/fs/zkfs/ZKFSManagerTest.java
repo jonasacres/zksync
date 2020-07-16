@@ -380,6 +380,17 @@ public class ZKFSManagerTest {
 	}
 	
 	@Test
+	public void testDefaultsLocalDescriptionToEmptyString() {
+		assertEquals("", manager.getLocalDescription());
+	}
+	
+	@Test
+	public void testSetLocalDescriptionAcceptsStrings() {
+		manager.setLocalDescription("hello there!");
+		assertEquals("hello there!", manager.getLocalDescription());
+	}
+	
+	@Test
 	public void testSerializationAndDeserialization() throws IOException {
 		manager.setAutofollow(true);
 		manager.setAutocommit(true);
@@ -387,6 +398,7 @@ public class ZKFSManagerTest {
 		manager.setAutocommitIntervalMs(123456);
 		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		manager.setAutomirror(true);
+		manager.setLocalDescription("Testing!");
 		byte[] serialized = manager.serialize();
 		
 		ZKFSManager deserialized = new ZKFSManager(archive.getConfig(), serialized);
@@ -396,6 +408,7 @@ public class ZKFSManagerTest {
 		assertEquals(manager.isAutomirroring(), deserialized.isAutomirroring());
 		assertEquals(manager.getAutocommitIntervalMs(), deserialized.getAutocommitIntervalMs());
 		assertEquals(manager.getAutomirrorPath(), deserialized.getAutomirrorPath());
+		assertEquals(manager.getLocalDescription(), deserialized.getLocalDescription());
 		deserialized.close();
 	}
 	
@@ -411,6 +424,7 @@ public class ZKFSManagerTest {
 		manager.setAutocommitIntervalMs(123456);
 		manager.setAutomirrorPath(mirrorFs.getRoot().toNative());
 		manager.setAutomirror(true);
+		manager.setLocalDescription("Testing!");
 		manager.write();
 		
 		try(ZKFSManager persistent = new ZKFSManager(archive.getConfig())) {
@@ -420,6 +434,7 @@ public class ZKFSManagerTest {
 			assertEquals(manager.isAutomirroring(), persistent.isAutomirroring());
 			assertEquals(manager.getAutocommitIntervalMs(), persistent.getAutocommitIntervalMs());
 			assertEquals(manager.getAutomirrorPath(), persistent.getAutomirrorPath());
+			assertEquals(manager.getLocalDescription(), persistent.getLocalDescription());
 			assertEquals(notLatest, persistent.fs.getBaseRevision());
 		}
 	}

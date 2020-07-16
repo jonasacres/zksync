@@ -554,7 +554,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 	public String getDescription() {
 		return description;
 	}
-
+	
 	public ArchiveAccessor getAccessor() {
 		return accessor;
 	}

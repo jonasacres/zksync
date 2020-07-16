@@ -216,6 +216,8 @@ public class ArchiveResource {
 				()->config.getSwarm().stopRequestingAll());
 		WebUtils.mapField(settings.getPeerLimit(),
 				(limit)->config.getSwarm().setMaxSocketCount(limit));
+		WebUtils.mapFieldWithException(settings.getLocalDescription(),
+				(description)->State.sharedState().activeManager(config).setLocalDescription(description));
 		
 		if(!config.getAccessor().isSeedOnly()) {
 			WebUtils.mapFieldWithException(settings.getAutocommitInterval(),

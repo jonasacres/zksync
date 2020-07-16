@@ -30,7 +30,7 @@ public class ZKFSManager implements AutoCloseable {
 	protected boolean autocommit;
 	protected boolean autofollow;
 	protected boolean automirror;
-	protected String automirrorPath;
+	protected String automirrorPath, localDescription;
 	
 	protected ZKFS fs;
 	protected SnoozeThread autocommitTimer;
@@ -43,6 +43,8 @@ public class ZKFSManager implements AutoCloseable {
 	protected boolean autosave;
 	
 	public ZKFSManager(ZKArchiveConfig config) throws IOException {
+		this.localDescription = "";
+		
 		try {
 			read(config);
 		} catch(ENOENTException exc) {
@@ -67,6 +69,7 @@ public class ZKFSManager implements AutoCloseable {
 	
 	public ZKFSManager(ZKFS fs) {
 		this.fs = fs;
+		this.localDescription = "";
 		setupMonitors();
 	}
 	
@@ -78,6 +81,7 @@ public class ZKFSManager implements AutoCloseable {
 		setAutocommitIntervalMs(manager.autocommitIntervalMs);
 		setAutomirrorPath(manager.automirrorPath);
 		setAutomirror(manager.automirror);
+		setLocalDescription(manager.localDescription);
 	}
 	
 	protected void setupMonitors() {
@@ -181,6 +185,10 @@ public class ZKFSManager implements AutoCloseable {
 	public int getMaxAutocommitIntervalMs() {
 		return maxAutocommitIntervalMs;
 	}
+	
+	public String getLocalDescription() {
+		return localDescription;
+	}
 
 	public void setAutocommitIntervalMs(int autocommitIntervalMs) {
 		if(this.autocommitIntervalMs == autocommitIntervalMs) return;
@@ -204,6 +212,13 @@ public class ZKFSManager implements AutoCloseable {
 		if(this.autocommit == autocommit) return;
 		this.autocommit = autocommit;
 		setupAutocommitTimer();
+		autosaveIfDesired();
+	}
+	
+	public void setLocalDescription(String localDescription) {
+		if(this.localDescription == null && localDescription == null) return;
+		if(this.localDescription != null && this.localDescription.equals(localDescription)) return;
+		this.localDescription = localDescription;
 		autosaveIfDesired();
 	}
 
@@ -377,6 +392,10 @@ public class ZKFSManager implements AutoCloseable {
 		builder.add("requestingAll", fs.getArchive().getConfig().getSwarm().isRequestingAll());
 		builder.add("peerLimit", fs.getArchive().getConfig().getSwarm().getMaxSocketCount());
 		
+		if(localDescription != null) {
+			builder.add("localDescription", localDescription);
+		}
+		
 		if(automirrorPath != null) {
 			builder.add("automirrorPath", automirrorPath);
 		}
@@ -401,6 +420,7 @@ public class ZKFSManager implements AutoCloseable {
 		setAutofollow(json.getBoolean("autofollow"));
 		setAutomerge(json.getBoolean("automerge"));
 		setAutocommitIntervalMs(json.getInt("autocommitIntervalMs"));
+		setLocalDescription(json.getString("localDescription", ""));
 		
 		if(json.getBoolean("advertising", false)) {
 			config.advertise();

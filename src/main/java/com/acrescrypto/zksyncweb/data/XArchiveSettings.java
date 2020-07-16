@@ -18,6 +18,7 @@ public class XArchiveSettings {
 	private Integer autocommitInterval;
 	
 	private String automirrorPath;
+	private String localDescription;
 	
 	public static XArchiveSettings fromConfig(ZKArchiveConfig config) throws IOException {
 		XArchiveSettings settings = new XArchiveSettings();
@@ -32,6 +33,7 @@ public class XArchiveSettings {
 			settings.automirror = manager.isAutomirroring();
 			settings.automerge = manager.isAutomerging();
 			settings.automirrorPath = manager.getAutomirrorPath();
+			settings.localDescription = manager.getLocalDescription();
 		}
 		return settings;
 	}
@@ -106,5 +108,13 @@ public class XArchiveSettings {
 
 	public void setAutomerge(Boolean automerge) {
 		this.automerge = automerge;
+	}
+	
+	public String getLocalDescription() {
+		return localDescription;
+	}
+	
+	public void setLocalDescription(String localDescription) {
+		this.localDescription = localDescription;
 	}
 }

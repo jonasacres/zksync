@@ -205,6 +205,7 @@ public class ArchiveResourceTest {
 		assertEquals(false, xconfig.get("autofollow").asBoolean());
 		assertEquals(PeerSwarm.DEFAULT_MAX_SOCKET_COUNT, xconfig.get("peerLimit").intValue());
 		assertEquals(0, xconfig.get("autocommitInterval").asInt());
+		assertEquals("", xconfig.get("localDescription").asText());
 	}
 
 	void assertReadable(ZKArchive archive) throws IOException {
@@ -263,6 +264,13 @@ public class ArchiveResourceTest {
 		JsonNode result = WebTestUtils.requestGet(target, "archives/" + encodeArchiveId(archive).substring(0, 4));
 		validateArchiveListing(result, archive);
 		assertEquals(title, result.get("currentTitle").asText());
+	}
+	
+	@Test
+	public void testGetArchiveShowsLocalDescription() throws IOException {
+		State.sharedState().activeManager(archive.getConfig()).setLocalDescription("woof");
+		JsonNode result = WebTestUtils.requestGet(target, "archives/" + encodeArchiveId(archive).substring(0, 4));
+		assertEquals("woof", result.get("config").get("localDescription").asText());
 	}
 
 	@Test
@@ -578,6 +586,19 @@ public class ArchiveResourceTest {
 		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
 		assertFalse(resp.get("autofollow").asBoolean());
 	}
+	
+	@Test
+	public void testGetSettingsLocalDescriptionIsNullIfNotSetByManager() throws IOException {
+		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
+		assertEquals("", resp.get("localDescription").asText());
+	}
+	
+	@Test
+	public void testGetSettingsLocalDescriptionHasValueIfSetByManager() throws IOException {
+		State.sharedState().activeManager(archive.getConfig()).setLocalDescription("hello there");
+		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
+		assertEquals("hello there", resp.get("localDescription").asText());
+	}
 
 	@Test
 	public void testPutSettingsIgnoresAdvertisingFieldUnlessSpecified() {
@@ -746,11 +767,11 @@ public class ArchiveResourceTest {
 
 		State.sharedState().activeManager(archive.getConfig()).setAutocommitIntervalMs(1234);
 		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/settings", settings);
-		State.sharedState().activeManager(archive.getConfig()).getAutocommitIntervalMs();
+		assertEquals(1234, State.sharedState().activeManager(archive.getConfig()).getAutocommitIntervalMs());
 
 		State.sharedState().activeManager(archive.getConfig()).setAutocommitIntervalMs(4321);
 		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/settings", settings);
-		State.sharedState().activeManager(archive.getConfig()).getAutocommitIntervalMs();
+		assertEquals(4321, State.sharedState().activeManager(archive.getConfig()).getAutocommitIntervalMs());
 	}
 
 	@Test
@@ -961,7 +982,25 @@ public class ArchiveResourceTest {
 
 		WebTestUtils.requestPutWithError(target, 409, "archives/" + transformArchiveId(archive) + "/settings", settings);
 	}
-
+	
+	@Test
+	public void testPutSettingsSetsLocalDescriptionIfProvided() throws IOException {
+		XArchiveSettings settings = new XArchiveSettings();
+		settings.setLocalDescription("testing");
+		
+		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/settings", settings);
+		assertEquals("testing", State.sharedState().activeManager(archive.getConfig()).getLocalDescription());
+	}
+	
+	@Test
+	public void testPutSettingsIgnoresLocalDescriptionIfNotProvided() throws IOException {
+		XArchiveSettings settings = new XArchiveSettings();
+		State.sharedState().activeManager(archive.getConfig()).setLocalDescription("still here");
+		
+		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/settings", settings);
+		assertEquals("still here", State.sharedState().activeManager(archive.getConfig()).getLocalDescription());
+	}
+	
 	@Test
 	public void testPutKeysSetsPassphraseRootFromPassphraseIfSpecified() throws IOException {
 		XArchiveSpecification spec = new XArchiveSpecification();
