@@ -11,6 +11,7 @@ import com.acrescrypto.zksyncweb.resources.log.LogResourceTest;
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
 	GenericResourceTest.class,
+	TopLevelResourceTest.class,
 	ArchiveResourceTests.class,
 	BlacklistResourceTests.class,
 	GlobalResourceTest.class,

@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.InvalidRevisionTagException;
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.FSPath;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.PassphraseProvider;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
@@ -39,6 +40,10 @@ public class State implements AutoCloseable {
 		}
 	}
 	
+	public interface VoidFunc {
+		void func();
+	}
+	
 	private static State sharedState;
 	protected Logger logger = LoggerFactory.getLogger(State.class);
 	
@@ -53,7 +58,9 @@ public class State implements AutoCloseable {
 	
 	public static State sharedState() throws IOException {
 		if(sharedState == null) {
-			sharedState = new State(defaultPassphrase(), System.getProperty("user.dir") + "/data");
+			sharedState = new State(
+					defaultPassphrase(),
+					FSPath.join(System.getProperty("user.dir"), "/data").toNative());
 		}
 		
 		return sharedState;
@@ -74,10 +81,15 @@ public class State implements AutoCloseable {
 		return sharedState;
 	}
 	
-	public static void resetState() throws IOException {
+	public static void resetState(VoidFunc func) throws IOException {
 		FS storage = sharedState.getMaster().getStorage();
 		clearState();
+		func.func();
 		sharedState = new State(defaultPassphrase(), storage);
+	}
+	
+	public static void resetState() throws IOException {
+		resetState(()->{});
 	}
 	
 	class OneTimePassphraseProvider implements PassphraseProvider {
