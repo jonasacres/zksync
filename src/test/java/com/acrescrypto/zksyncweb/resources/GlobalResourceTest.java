@@ -368,7 +368,7 @@ public class GlobalResourceTest {
 	}
 	
 	@Test
-	public void testGetFilesystemssReturnsFilesystemListWhenFileTelemetryEnabled() throws IOException {
+	public void testGetFilesystemsReturnsFilesystemListWhenFileTelemetryEnabled() throws IOException {
 		try(File f = master.getStorage().open("test", File.O_CREAT|File.O_TRUNC|File.O_WRONLY)) {
 			// TODO: ITF, 2020-06-07, 73ba0ea, got HTTP 500 with no other output.
 			JsonNode resp = WebTestUtils.requestGet(target, "/global/filesystems");
