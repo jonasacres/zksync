@@ -339,4 +339,8 @@ public class DHTRecordStore {
 		
 		return totalRecords;
 	}
+
+	public void reset() {
+		entriesById.clear();
+	}
 }

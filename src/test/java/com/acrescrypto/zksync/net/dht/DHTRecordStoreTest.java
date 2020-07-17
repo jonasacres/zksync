@@ -408,4 +408,15 @@ public class DHTRecordStoreTest {
 		DHTRecordStore store1 = new DHTRecordStore(client);
 		assertEquals(0, store1.recordsForId(id, token).size());
 	}
+	
+	@Test
+	public void testResetClearsRecords() throws IOException {
+		DHTID id = makeId();
+		byte[] token = client.crypto.hash(new byte[1]);
+		store.addRecordForId(id, token, new DummyRecord(0));
+		store.reset();
+		
+		assertEquals(0, store.numRecords());
+		assertEquals(0, store.numIds());
+	}
 }

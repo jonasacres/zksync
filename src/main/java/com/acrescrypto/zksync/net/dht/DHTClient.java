@@ -323,10 +323,9 @@ public class DHTClient {
 		
 		this.networkId = newNetworkId;
 		logger.info("DHT -: Updated network id to {}; clearing routing table", Util.bytesToHex(networkId));
-		routingTable.reset();
 		
 		try {
-			new DHTClientSerializer(this).write();
+			write();
 		} catch (IOException exc) {
 			logger.error("DHT -: Error writing DHT configuration after updating network ID", exc);
 		}
@@ -435,5 +434,9 @@ public class DHTClient {
 		if(statusCallback != null) {
 			statusCallback.dhtStatusUpdate(newStatus);
 		}
+	}
+	
+	public void write() throws IOException {
+		new DHTClientSerializer(this).write();
 	}
 }

@@ -3,6 +3,7 @@ package com.acrescrypto.zksyncweb.resources.dht;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -30,7 +31,9 @@ import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
+import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.crypto.PrivateDHKey;
+import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.net.dht.DHTClient;
@@ -71,6 +74,8 @@ public class DHTResourceTest {
 			this.routingTable    = new DummyDHTRoutingTable   (this);
 
 			this.privateKey      = new PrivateDHKey(State.sharedCrypto());
+			this.storageKey      = Key.blank(State.sharedCrypto());
+			this.tagKey          = Key.blank(State.sharedCrypto());
 			this.id              = new DHTID(privateKey.publicKey());
 			this.networkId       = crypto.hash(netKey);
 			
@@ -117,13 +122,16 @@ public class DHTResourceTest {
 	}
 
 	class DummyDHTRecordStore extends DHTRecordStore {
+		boolean reset;
 		public DummyDHTRecordStore(DummyDHTClient client) {
 			this.client = client;
 		}
-
-		@Override public int numIds() { return 12; }
-		@Override public int numRecords() { return 321; }
+		
+		@Override public void reset() { reset = true; }
+		@Override public int numIds() { return reset ? 0 : 12; }
+		@Override public int numRecords() { return reset ? 0 : 321; }
 		@Override public Map<DHTID, Collection<StoreEntry>> records() {
+			if(reset) return new HashMap<DHTID, Collection<StoreEntry>>();
 			CryptoSupport crypto = CryptoSupport.defaultCrypto();
 			HashMap<DHTID, Collection<StoreEntry>> map = new HashMap<>();
 			int recordsPerId = 5, numIds = 3;
@@ -180,7 +188,7 @@ public class DHTResourceTest {
 		DummyDHTClient client;
 
 		public DummyDHTRoutingTable(DummyDHTClient client) {
-			this.client = client;
+			super.client = this.client = client;
 			this.allPeers = new ArrayList<>();
 			for(int i = 0; i < 64; i++) {
 				allPeers.add(makePeer(client, i));
@@ -462,4 +470,42 @@ public class DHTResourceTest {
 	// TODO: testPeerFileIncludesGoodPeers
 	// TODO: testPeerFileDoesNotIncludeBadPeers
 	// TODO: testPeerFileDoesNotIncludeQuestionablePeers
+	
+	@Test
+	public void testDeleteDhtPeersPurgesRoutingTable() {
+		WebTestUtils.requestDelete(target, basepath + "peers");
+		assertEquals(0, client.getRoutingTable().allPeers().size());
+	}
+	
+	@Test
+	public void testDeleteDhtPeersDoesNotPurgeRecords() {
+		WebTestUtils.requestDelete(target, basepath + "peers");
+		assertNotEquals(0, client.getRecordStore().numRecords());
+	}
+	
+	@Test
+	public void testDeleteDhtPeersDoesNotAlterPublicKey() {
+		PublicDHKey key = client.getPublicKey();
+		WebTestUtils.requestDelete(target, basepath + "peers");
+		assertEquals(key, client.getPublicKey());
+	}
+	
+	@Test
+	public void testDeleteDhtRecordsPurgesRecordStore() {
+		WebTestUtils.requestDelete(target, basepath + "records");
+		assertEquals(0, client.getRecordStore().numRecords());
+	}
+	
+	@Test
+	public void testDeleteDhtRecordsDoesNotPurgePeers() {
+		WebTestUtils.requestDelete(target, basepath + "records");
+		assertNotEquals(0, client.getRoutingTable().allPeers().size());
+	}
+	
+	@Test
+	public void testDeleteDhtRecordsDoesNotAlterPublicKey() {
+		PublicDHKey key = client.getPublicKey();
+		WebTestUtils.requestDelete(target, basepath + "records");
+		assertEquals(key, client.getPublicKey());
+	}
 }

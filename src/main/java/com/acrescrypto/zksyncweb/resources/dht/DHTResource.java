@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
@@ -54,6 +55,16 @@ public class DHTResource {
 		throw XAPIResponse.withWrappedPayload("peers", peers);
 	}
 	
+	@DELETE
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("peers")
+	public XAPIResponse deleteDhtPeers() throws IOException {
+		DHTClient client = State.sharedState().getMaster().getDHTClient();
+		client.getRoutingTable().reset();
+		client.write();
+		throw XAPIResponse.successResponse();
+	}
+	
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("records")
@@ -75,6 +86,16 @@ public class DHTResource {
 		});
 		
 		throw XAPIResponse.withWrappedPayload("records", outRecords);
+	}
+	
+	@DELETE
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("records")
+	public XAPIResponse deleteDhtRecords() throws IOException {
+		DHTClient client = State.sharedState().getMaster().getDHTClient();
+		client.getRecordStore().reset();
+		client.write();
+		throw XAPIResponse.successResponse();
 	}
 	
 	@PUT
