@@ -164,19 +164,20 @@ public class DHTSocketManager {
 		int lastPort = -1;
 		
 		while(!paused) {
+			DatagramSocket skt = socket;
 			try {
-				if(socket == null) {
+				if(skt == null) {
 					System.out.println("Waiting for socket to open");
 					Util.sleep(10);
 					continue;
 				}
 				
-				lastPort = socket.getLocalPort();
+				lastPort = skt.getLocalPort();
 				
 				int maxDatagramSize = client.getMaster().getGlobalConfig().getInt("net.dht.maxDatagramSize");
 				byte[] receiveData = new byte[maxDatagramSize];
 				DatagramPacket packet = new DatagramPacket(receiveData, receiveData.length);
-				socket.receive(packet);
+				skt.receive(packet);
 				monitorRx.observeTraffic(packet.getLength());
 				logger.trace("DHT {}:{}: received {} bytes",
 						packet.getAddress().getHostAddress(),
@@ -190,7 +191,7 @@ public class DHTSocketManager {
 					);
 			} catch(IOException exc) {
 				if(paused) return;
-				if(socket.getLocalPort() == lastPort && !socket.isClosed()) {
+				if(skt.getLocalPort() == lastPort && !skt.isClosed()) {
 					logger.error("DHT -: socket listener thread encountered IOException", exc);
 				} else {
 					logger.warn("DHT -: socket listener thread encountered IOException", exc);
@@ -206,7 +207,7 @@ public class DHTSocketManager {
 					Util.sleep(socketOpenFailCycleDelayMs); // wait even longer if we know the socket is dead and the OS isn't giving it back
 				}
 			} catch(Exception exc) {
-				if(socket.isClosed()) {
+				if(skt.isClosed()) {
 					logger.warn("DHT -: socket listener thread encountered exception", exc);
 				} else {
 					logger.error("DHT -: socket listener thread encountered exception", exc);
