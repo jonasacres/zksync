@@ -46,6 +46,7 @@ public class DHTRecordStoreTest {
 		@Override
 		public void close() {}
 	}
+	
 	class DummyClient extends DHTClient {
 		RAMFS storage;
 		

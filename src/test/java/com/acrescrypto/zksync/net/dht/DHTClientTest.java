@@ -173,8 +173,9 @@ public class DHTClientTest {
 
 			try {
 				while(true) {
+					int maxDatagramSize = master.getGlobalConfig().getInt("net.dht.maxDatagramSize");
 					socket.receive(packet);
-					assertTrue(packet.getLength() <= DHTSocketManager.MAX_DATAGRAM_SIZE);
+					assertTrue(packet.getLength() <= maxDatagramSize);
 					DHTMessage msg;
 					try {
 						msg = new DHTMessage(listenClient, packet.getAddress().getHostAddress(), packet.getPort(), ByteBuffer.wrap(packet.getData(), 0, packet.getLength()));
@@ -368,11 +369,11 @@ public class DHTClientTest {
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
 		ConfigDefaults.getActiveDefaults().setDefault("net.dht.bootstrap.enabled", false);
-		DHTClient.messageExpirationTimeMs = 125;
-		DHTClient.lookupResultMaxWaitTimeMs = 150;
-		DHTClient.messageRetryTimeMs = 50;
-		DHTClient.socketCycleDelayMs = 10;
-		DHTClient.socketOpenFailCycleDelayMs = 20;
+		ConfigDefaults.getActiveDefaults().set("net.dht.socketCycleDelayMs",          10);
+		ConfigDefaults.getActiveDefaults().set("net.dht.socketOpenFailCycleDelayMs",  20);
+		ConfigDefaults.getActiveDefaults().set("net.dht.messageExpirationTimeMs",    125);
+		ConfigDefaults.getActiveDefaults().set("net.dht.lookupResultMaxWaitTimeMs",  150);
+		ConfigDefaults.getActiveDefaults().set("net.dht.messageRetryTimeMs",          50);
 		
 		crypto = CryptoSupport.defaultCrypto();
 		
@@ -391,7 +392,6 @@ public class DHTClientTest {
 	@After
 	public void afterEach() {
 		ConfigDefaults.resetDefaults();
-		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
 		
 		master.close();
 		remote.close();
@@ -404,12 +404,6 @@ public class DHTClientTest {
 		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 		TCPPeerAdvertisement.disableReachabilityTest = false;
-		DHTClient.lookupResultMaxWaitTimeMs = DHTClient.DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS;
-		DHTClient.messageExpirationTimeMs = DHTClient.DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
-		DHTClient.messageRetryTimeMs = DHTClient.DEFAULT_MESSAGE_RETRY_TIME_MS;
-		DHTClient.socketCycleDelayMs = DHTClient.DEFAULT_SOCKET_CYCLE_DELAY_MS;
-		DHTClient.socketOpenFailCycleDelayMs = DHTClient.DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS;
-		DHTClient.autoFindPeersIntervalMs = DHTClient.DEFAULT_AUTO_FIND_PEERS_INTERVAL_MS;
 	}
 	
 	@Test
@@ -533,7 +527,8 @@ public class DHTClientTest {
 	public void testLookupInvokesCallbackWithNullIfNoResponseReceivedInTime() throws IOException, ProtocolViolationException {
 		MutableBoolean seenNull = new MutableBoolean();
 		ArrayList<DHTRecord> records = new ArrayList<>();
-		DHTSearchOperation.searchQueryTimeoutMs = 50;
+		int timeout = 50;
+		master.getGlobalConfig().set("net.dht.searchQueryTimeoutMs", timeout);
 
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
 		client.getProtocolManager().lookup(searchId, new Key(crypto), (record)->{
@@ -543,7 +538,7 @@ public class DHTClientTest {
 		});
 
 		remote.receivePacket(DHTMessage.CMD_FIND_NODE);
-		assertTrue(Util.waitUntil(DHTSearchOperation.searchQueryTimeoutMs+30, ()->seenNull.booleanValue()));
+		assertTrue(Util.waitUntil(timeout+30, ()->seenNull.booleanValue()));
 		assertEquals(0, records.size());
 	}
 	
@@ -552,8 +547,8 @@ public class DHTClientTest {
 		MutableBoolean seenNull = new MutableBoolean();
 		MutableInt numSeen = new MutableInt();
 		ArrayList<DHTRecord> records = new ArrayList<>();
-		DHTClient.lookupResultMaxWaitTimeMs = 50;
-		DHTSearchOperation.searchQueryTimeoutMs = 50;
+		master.getGlobalConfig().set("net.dht.lookupResultMaxWaitTimeMs", 50);
+		master.getGlobalConfig().set("net.dht.searchQueryTimeoutMs", 50);
 
 		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
 		client.getProtocolManager().lookup(searchId, new Key(crypto), (resp)->{
@@ -584,6 +579,7 @@ public class DHTClientTest {
 	@Test
 	public void testLookupObtainsRecordsFromMultiplePeers() throws IOException, ProtocolViolationException, InvalidBlacklistException {
 		int recordsPerPeer = 4;
+		int maxResults = master.getGlobalConfig().getInt("net.dht.maxResults");
 
 		MutableInt numSeen = new MutableInt();
 		MutableBoolean seenNull = new MutableBoolean();
@@ -591,7 +587,7 @@ public class DHTClientTest {
 		ArrayList<DHTPeer> peers = new ArrayList<>();
 
 		remotes.add(remote);
-		for(int i = 0; i < DHTSearchOperation.maxResults-1; i++) {
+		for(int i = 0; i < maxResults-1; i++) {
 			remotes.add(new RemotePeer());
 		}
 
@@ -632,13 +628,14 @@ public class DHTClientTest {
 			MutableInt numFindNode = new MutableInt();
 			MutableInt numReceived = new MutableInt();
 			Key lookupKey = new Key(crypto);
+			int maxResults = master.getGlobalConfig().getInt("net.dht.maxResults");
 			
-			network.setHandlerForClosest(searchId, DHTSearchOperation.maxResults, (remote)->{
+			network.setHandlerForClosest(searchId, maxResults, (remote)->{
 				byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, remote.peer.key.getBytes()));
 				DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
 				assertArrayEquals(Util.concat(searchId.rawId, token), findNodeMsg.payload);
 				synchronized(numFindNode) { numFindNode.increment();  }
-				findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, DHTSearchOperation.maxResults)).send();
+				findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, maxResults)).send();
 				
 				DHTMessage addRecordMsg;
 				do {
@@ -672,7 +669,7 @@ public class DHTClientTest {
 			network.run();
 			
 			// TODO Urgent: (itf) linux UniversalTests 2018-12-11 8cda32e. AssertionError: expected<8> but was <7>
-			assertEquals(DHTSearchOperation.maxResults, numReceived.intValue());
+			assertEquals(maxResults, numReceived.intValue());
 		}
 	}
 	
@@ -837,13 +834,15 @@ public class DHTClientTest {
 	
 	@Test
 	public void testRespondsToFindNodeWithClosestPeers() throws IOException, ProtocolViolationException {
-		for(int i = 0; i < 4*DHTSearchOperation.maxResults; i++) {
+		int maxResults = master.getGlobalConfig().getInt("net.dht.maxResults");
+		
+		for(int i = 0; i < 4*maxResults; i++) {
 			DHTPeer peer = new DHTPeer(client, "localhost", i+10000, crypto.makePrivateDHKey().publicKey());
 			client.addPeer(peer);
 		}
 		
 		DHTID searchId = remote.peer.id;
-		ArrayList<DHTPeer> results = new ArrayList<>(DHTSearchOperation.maxResults);
+		ArrayList<DHTPeer> results = new ArrayList<>(maxResults);
 		int numReceived = 0;
 		clientPeer.findNode(searchId, new Key(crypto), (resp, isFinal)->{}, (record)->{});
 		
@@ -861,7 +860,7 @@ public class DHTClientTest {
 			if(resp.numExpected == numReceived) break;
 		}
 		
-		assertEquals(DHTSearchOperation.maxResults, results.size());
+		assertEquals(maxResults, results.size());
 		
 		DHTID mostDistant = null;
 		for(DHTPeer result : results) {
@@ -886,13 +885,15 @@ public class DHTClientTest {
 		 * the peers the client does have.
 		 */
 		
-		for(int i = 0; i < DHTSearchOperation.maxResults-2; i++) {
+		int maxResults = master.getGlobalConfig().getInt("net.dht.maxResults");
+		
+		for(int i = 0; i < maxResults-2; i++) {
 			DHTPeer peer = new DHTPeer(client, "localhost", i+10000, crypto.makePrivateDHKey().publicKey());
 			client.addPeer(peer);
 		}
 		
 		DHTID searchId = remote.peer.id;
-		ArrayList<DHTPeer> results = new ArrayList<>(DHTSearchOperation.maxResults);
+		ArrayList<DHTPeer> results = new ArrayList<>(maxResults);
 		int numReceived = 0;
 		clientPeer.findNode(searchId, new Key(crypto), (resp, isFinal)->{}, (record)->{});
 		
@@ -991,7 +992,8 @@ public class DHTClientTest {
 
 	@Test
 	public void testFindNodeResponseIncludesNoRecordsIfNoRecordsForId() throws IOException, ProtocolViolationException, UnsupportedProtocolException {
-		for(int i = 0; i < 4*DHTSearchOperation.maxResults; i++) {
+		int maxResults = master.getGlobalConfig().getInt("net.dht.maxResults");
+		for(int i = 0; i < 4*maxResults; i++) {
 			DHTPeer peer = new DHTPeer(client, "localhost", i+10000, crypto.makePrivateDHKey().publicKey());
 			client.addPeer(peer);
 		}
@@ -1251,12 +1253,13 @@ public class DHTClientTest {
 	
 	@Test
 	public void testAutoFindPeersCallsFindPeersOnInterval() throws IOException, ProtocolViolationException {
-		DHTClient.autoFindPeersIntervalMs = 50;
+		int interval = 50;
+		client.getMaster().getGlobalConfig().set("net.dht.autoFindPeersIntervalMs", interval);
 		client.getProtocolManager().setAutofind(true);
 		long timeStart = Util.currentTimeMillis();
 		for(int i = 0; i < 8; i++) {
 			remote.receivePacket().makeResponse(new ArrayList<>()).send();
-			assertTrue(Util.currentTimeMillis() - timeStart >= i*DHTClient.autoFindPeersIntervalMs);
+			assertTrue(Util.currentTimeMillis() - timeStart >= i*interval);
 		}
 	}
 	

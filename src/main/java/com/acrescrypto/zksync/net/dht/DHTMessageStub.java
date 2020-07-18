@@ -17,13 +17,15 @@ public class DHTMessageStub {
 	protected int                responsesReceived;
 	
 	public DHTMessageStub(DHTMessage msg, DatagramPacket packet) {
+		int messageRetryTimeMs = msg.peer.client.getMaster().getGlobalConfig().getInt("net.dht.messageRetryTimeMs");
+		
 		this.peer              = msg.peer;
 		this.cmd               = msg.cmd;
 		this.msgId             = msg.msgId;
 		this.callback          = msg.callback;
 		this.packet            = packet;
 		this.expirationMonitor = new SnoozeThread(
-				                   DHTClient.messageRetryTimeMs,
+				                   messageRetryTimeMs,
 				                   false,
 				                   ()->retry());
 	}
@@ -49,8 +51,10 @@ public class DHTMessageStub {
 	
 	public void retry() {
 		peer.client.getSocketManager().sendDatagram(packet);
+		int messageExpirationTimeMs = peer.client.getMaster().getGlobalConfig().getInt("net.dht.messageExpirationTimeMs"),
+			messageRetryTimeMs      = peer.client.getMaster().getGlobalConfig().getInt("net.dht.messageRetryTimeMs");
 		expirationMonitor = new SnoozeThread(
-				DHTClient.messageExpirationTimeMs - DHTClient.messageRetryTimeMs,
+				messageExpirationTimeMs - messageRetryTimeMs,
 				false,
 				()->fail());
 	}

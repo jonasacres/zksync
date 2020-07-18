@@ -4,7 +4,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,10 +22,30 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTSearchOperationTest {
+	class DummyMaster extends ZKMaster {
+		public DummyMaster() {
+			this.crypto = CryptoSupport.defaultCrypto();
+			this.storage = new RAMFS();
+			try {
+				this.globalConfig = new ConfigFile(storage, "config.json");
+			} catch (IOException e) {
+				fail();
+			}
+			globalConfig.apply(ConfigDefaults.getActiveDefaults());
+		}
+		
+		@Override
+		public void close() {}
+	}
+
 	class DummyRecord extends DHTRecord {
 		byte[] contents;
 		boolean reachable = true, valid = true;
@@ -66,6 +88,7 @@ public class DHTSearchOperationTest {
 		ArrayList<DHTPeer> simPeers;
 
 		public DummyClient() {
+			this.master = new DummyMaster();
 			this.crypto = CryptoSupport.defaultCrypto();
 			this.simPeers = makeTestList(this, 2048);
 			this.routingTable = new DummyRoutingTable(this);
@@ -121,7 +144,8 @@ public class DHTSearchOperationTest {
 			requestsReceived++;
 			if(sendResponses) {
 				// cut responses into two halves so that we have to reassemble multiple responses
-				ArrayList<DHTPeer> closest = closestInList(searchId, knownPeers, DHTSearchOperation.maxResults);
+				int maxResults = client.getMaster().getGlobalConfig().getInt("net.dht.maxResults");
+				ArrayList<DHTPeer> closest = closestInList(searchId, knownPeers, maxResults);
 				ArrayList<DHTPeer> lowerHalf = new ArrayList<>(), upperHalf = new ArrayList<>();
 				
 				for(DHTPeer peer : closest) {
@@ -210,8 +234,7 @@ public class DHTSearchOperationTest {
 	
 	@After
 	public void afterEach() {
-		DHTSearchOperation.maxResults = DHTSearchOperation.DEFAULT_MAX_RESULTS;
-		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
+		ConfigDefaults.resetDefaults();
 	}
 	
 	@AfterClass
@@ -230,7 +253,8 @@ public class DHTSearchOperationTest {
 	@Test
 	public void testRunSendsRequestToClosestPeers() {
 		sendResponses = false;
-		ArrayList<DHTPeer> closest = closestInList(searchId, client.routingTable.allPeers(), DHTSearchOperation.maxResults);
+		int maxResults = client.getMaster().getGlobalConfig().getInt("net.dht.maxResults");
+		ArrayList<DHTPeer> closest = closestInList(searchId, client.routingTable.allPeers(), maxResults);
 		
 		op.run();
 		
@@ -247,7 +271,8 @@ public class DHTSearchOperationTest {
 	public void testRunSendsRequestRecursively() {
 		int numSeen = 0;
 		DHTID worstInitialDistance = null;
-		for(DHTPeer peer : closestInList(searchId, client.routingTable.allPeers(), DHTSearchOperation.maxResults)) {
+		int maxResults = client.getMaster().getGlobalConfig().getInt("net.dht.maxResults");
+		for(DHTPeer peer : closestInList(searchId, client.routingTable.allPeers(), maxResults)) {
 			if(worstInitialDistance == null || worstInitialDistance.compareTo(peer.id.xor(searchId)) < 0) {
 				worstInitialDistance = peer.id.xor(searchId);
 			}
@@ -263,14 +288,15 @@ public class DHTSearchOperationTest {
 			}
 		}
 		
-		assertTrue(numSeen > DHTSearchOperation.maxResults);
+		assertTrue(numSeen > maxResults);
 	}
 	
 	@Test
 	public void testRunInvokesCallbackWithBestResults() {
 		int extraResults = 2;
 		
-		ArrayList<DHTPeer> expectedResults = closestInList(searchId, client.simPeers, extraResults+DHTSearchOperation.maxResults);
+		int maxResults = client.getMaster().getGlobalConfig().getInt("net.dht.maxResults");
+		ArrayList<DHTPeer> expectedResults = closestInList(searchId, client.simPeers, extraResults+maxResults);
 		op.run();
 		waitForResult();
 		
@@ -288,10 +314,12 @@ public class DHTSearchOperationTest {
 	
 	@Test
 	public void testInvokesCallbackOnTimeoutIfResponseNotReceived() {
-		DHTSearchOperation.searchQueryTimeoutMs = 50;
+		int maxResults = client.getMaster().getGlobalConfig().getInt("net.dht.maxResults");
+		client.getMaster().getGlobalConfig().set("net.dht.searchQueryTimeoutMs", 50);
+		
 		sendResponses = false;
 		op.run();
 		waitForResult();
-		assertEquals(DHTSearchOperation.maxResults, results.size());
+		assertEquals(maxResults, results.size());
 	}
 }

@@ -30,13 +30,16 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.localfs.LocalFS;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.StoredAccess;
 import com.acrescrypto.zksync.fs.zkfs.StoredAccessRecord;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.net.PeerSwarm;
 import com.acrescrypto.zksync.net.dht.DHTID;
 import com.acrescrypto.zksync.net.dht.DHTProtocolManager;
@@ -53,6 +56,22 @@ import com.acrescrypto.zksyncweb.data.XArchiveSpecification;
 import com.fasterxml.jackson.databind.JsonNode;
 
 public class ArchiveResourceTest {
+	class DummyMaster extends ZKMaster {
+		public DummyMaster() {
+			this.crypto = CryptoSupport.defaultCrypto();
+			this.storage = new RAMFS();
+			try {
+				this.globalConfig = new ConfigFile(storage, "config.json");
+			} catch (IOException e) {
+				fail();
+			}
+			globalConfig.apply(ConfigDefaults.getActiveDefaults());
+		}
+		
+		@Override
+		public void close() {}
+	}
+	
 	class DummyProtocolManager extends DHTProtocolManager {
 		DummyClient client;
 		
@@ -72,6 +91,7 @@ public class ArchiveResourceTest {
 		DummyClient() {
 			this.protocolManager = new DummyProtocolManager(this);
 			this.routingTable = new DummyRoutingTable();
+			this.master = new DummyMaster();
 		}
 		
 		@Override

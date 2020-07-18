@@ -73,8 +73,7 @@ public class DHTProtocolManager {
 	public void autoFindPeers() {
 		new Thread(client.getThreadGroup(), ()->{
 			Util.setThreadName("DHTClient autoFindPeers");
-			logger.debug("DHT -: Starting autoFindPeers thread; querying each {}ms",
-					DHTClient.autoFindPeersIntervalMs);
+			logger.debug("DHT -: Starting autoFindPeers thread");
 			while(!client.isClosed()) {
 				Util.blockOnPoll(
 						() ->
@@ -86,7 +85,8 @@ public class DHTProtocolManager {
 					);
 				if(!client.isClosed()) {
 					findPeers();
-					Util.sleep(DHTClient.autoFindPeersIntervalMs);
+					int autoFindPeersIntervalMs = client.getMaster().getGlobalConfig().getInt("net.dht.autoFindPeersIntervalMs");
+					Util.sleep(autoFindPeersIntervalMs);
 				}
 			}
 			logger.debug("DHT -: Stopping autoFindPeers thread");
@@ -336,7 +336,7 @@ public class DHTProtocolManager {
 		
 		Collection<DHTPeer> closestPeers = client.getRoutingTable().closestPeers(
 				id,
-				DHTSearchOperation.maxResults
+				client.getMaster().getGlobalConfig().getInt("net.dht.maxResults")
 			); 
 		DHTMessage response = message.makeResponse(closestPeers);
 		response.addItemList(client.getRecordStore().recordsForId(id, token));

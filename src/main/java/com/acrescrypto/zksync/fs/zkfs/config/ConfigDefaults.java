@@ -30,6 +30,18 @@ public class ConfigDefaults {
 		config.setDefault("net.dht.port",                               0);
 		config.setDefault("net.dht.upnp",                           false);
 		config.setDefault("net.dht.network",                   "easysafe");
+		config.setDefault("net.dht.maxDatagramSize",                  508); // max to avoid fragmentation: 576 (guaranteed by RFC 791), -60 (IP header), -8 (UDP header) = 508 bytes
+		config.setDefault("net.dht.maxResults",                         8);
+		config.setDefault("net.dht.searchQueryTimeoutMs",            3000);
+		config.setDefault("net.dht.maxSearchQueryWaitTimeMs",       30000);
+		config.setDefault("net.dht.socketOpenFailCycleDelayMs",      9000);
+		config.setDefault("net.dht.socketCycleDelayMs",              1000);
+		config.setDefault("net.dht.lookupResultMaxWaitTimeMs",        500);
+		config.setDefault("net.dht.autoFindPeersIntervalMs",   1000*60*15);
+		config.setDefault("net.dht.messageExpirationTimeMs",         5000);
+		config.setDefault("net.dht.messageRetryTimeMs",              2000);
+		config.setDefault("net.dht.freshenIntervalMs",            60*1000);
+		config.setDefault("net.dht.pollIntervalMs"        ,    1000*60*15);
 		config.setDefault("net.dht.store.maxRecordsPerId",             64);
 		config.setDefault("net.dht.store.maxIds",                     128);
 		config.setDefault("net.dht.store.expirationTimeMs",  1000*60*60*4);

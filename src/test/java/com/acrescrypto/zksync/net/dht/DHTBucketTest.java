@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.net.dht;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -17,14 +18,31 @@ import org.junit.Test;
 import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.InvalidBlacklistException;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTBucketTest {
+	class DummyMaster extends ZKMaster {
+		public DummyMaster() {
+			this.storage = new RAMFS(); 
+			try {
+				this.globalConfig = new ConfigFile(storage, "config.json");
+			} catch (IOException e) {
+				fail();
+			}
+			globalConfig.apply(ConfigDefaults.getActiveDefaults());
+		}
+	}
+	
 	class DummyClient extends DHTClient {
 		public DummyClient() {
 			this.routingTable = new DummyRoutingTable(this);
 			this.crypto = DHTBucketTest.crypto;
 			this.id = new DHTID(crypto.rng(crypto.hashLength()));
+			this.master = new DummyMaster();
 		}
 	}
 	

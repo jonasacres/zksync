@@ -17,9 +17,6 @@ import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTRoutingTable {
-	public final static int DEFAULT_FRESHEN_INTERVAL_MS = 1000*60;
-	public static int freshenIntervalMs = DEFAULT_FRESHEN_INTERVAL_MS;
-	
 	protected DHTClient client;
 	protected ArrayList<DHTBucket> buckets = new ArrayList<>();
 	protected boolean closed;
@@ -171,6 +168,7 @@ public class DHTRoutingTable {
 		Util.setThreadName("DHTRoutingTable freshen thread");
 		while(!closed) {
 			try {
+				int freshenIntervalMs = client.getMaster().getGlobalConfig().getInt("net.dht.freshenIntervalMs");
 				synchronized(this) { if(!closed) this.wait(freshenIntervalMs); }
 				if(!closed) {
 					freshen();

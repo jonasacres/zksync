@@ -5,7 +5,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
+import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -20,14 +22,34 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTMessageStubTest {
+	class DummyMaster extends ZKMaster {
+		public DummyMaster() {
+			this.storage = new RAMFS();
+			try {
+				this.globalConfig = new ConfigFile(storage, "config.json");
+			} catch (IOException exc) {
+				fail();
+			}
+			globalConfig.apply(ConfigDefaults.getActiveDefaults());
+		}
+		
+		@Override
+		public void close() {}
+	}
+
 	class DummyClient extends DHTClient {
 		DHTMessageStub missed;
 		DatagramPacket sent;
 		
 		public DummyClient() {
+			this.master          = new DummyMaster();
 			this.crypto          = CryptoSupport.defaultCrypto();
 			this.tagKey          = new Key(crypto);
 			this.networkId       = new byte[crypto.hashLength()];
@@ -74,8 +96,8 @@ public class DHTMessageStubTest {
 	@BeforeClass
 	public static void beforeAll() {
 		TestUtils.startDebugMode();
-		DHTClient.messageExpirationTimeMs = 100;
-		DHTClient.messageRetryTimeMs = 50;
+		ConfigDefaults.getActiveDefaults().setDefault("net.dht.messageExpirationTimeMs", 100);
+		ConfigDefaults.getActiveDefaults().setDefault("net.dht.messageRetryTimeMs",       50);
 	}
 	
 	@Before
@@ -95,8 +117,6 @@ public class DHTMessageStubTest {
 	@AfterClass
 	public static void afterAll() {
 		TestUtils.assertTidy();
-		DHTClient.messageExpirationTimeMs = DHTClient.DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
-		DHTClient.messageRetryTimeMs = DHTClient.DEFAULT_MESSAGE_RETRY_TIME_MS;
 		TestUtils.stopDebugMode();
 	}
 	
@@ -111,14 +131,16 @@ public class DHTMessageStubTest {
 	
 	@Test
 	public void testConstructorSetsRetryTimerToResendMessage() {
+		int messageRetryTimeMs = client.getMaster().getGlobalConfig().getInt("net.dht.messageRetryTimeMs");
 		assertNull(client.sent);
-		assertTrue(Util.waitUntil(DHTClient.messageRetryTimeMs+50, ()->stub.packet.equals(client.sent)));
+		assertTrue(Util.waitUntil(messageRetryTimeMs+50, ()->stub.packet.equals(client.sent)));
 	}
 	
 	@Test
 	public void testConstructorSetsExpirationTimerToMarkMessageAsMissed() {
+		int messageExpirationTimeMs = client.getMaster().getGlobalConfig().getInt("net.dht.messageExpirationTimeMs");
 		assertNull(client.missed);
-		assertTrue(Util.waitUntil(DHTClient.messageExpirationTimeMs+50, ()->stub.equals(client.missed)));
+		assertTrue(Util.waitUntil(messageExpirationTimeMs+50, ()->stub.equals(client.missed)));
 	}
 	
 	@Test
@@ -144,8 +166,9 @@ public class DHTMessageStubTest {
 	
 	@Test
 	public void testDispatchResponseIfMatchesCancelsExpirationMonitorIfMatch() throws ProtocolViolationException {
+		int messageExpirationTimeMs = client.getMaster().getGlobalConfig().getInt("net.dht.messageExpirationTimeMs");
 		stub.dispatchResponse(makeResponse());
-		assertFalse(Util.waitUntil(DHTClient.messageExpirationTimeMs+50, ()->stub.equals(client.missed)));
+		assertFalse(Util.waitUntil(messageExpirationTimeMs+50, ()->stub.equals(client.missed)));
 	}
 	
 	@Test

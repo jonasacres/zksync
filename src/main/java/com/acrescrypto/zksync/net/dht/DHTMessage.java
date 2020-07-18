@@ -272,7 +272,7 @@ public class DHTMessage {
 	
 	protected int maxPayloadSize() {
 		return peer.client.crypto.symPadToReachSize(
-				   DHTSocketManager.MAX_DATAGRAM_SIZE
+				   peer.client.getMaster().getGlobalConfig().getInt("net.dht.maxDatagramSize")
 				 - headerSize()
 				 - peer.client.crypto.asymPublicDHKeySize()
 			);

@@ -25,13 +25,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 public class DHTClient {
 	public final static int AUTH_TAG_SIZE = 4;
 	
-	public final static int DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS  = 500;
-	public final static int DEFAULT_MESSAGE_EXPIRATION_TIME_MS      = 5000; // how long after first send attempt before we count a message as expired if no response received
-	public final static int DEFAULT_MESSAGE_RETRY_TIME_MS           = 2000;
-	public final static int DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS = 9000;
-	public final static int DEFAULT_SOCKET_CYCLE_DELAY_MS           = 1000;
-	public final static int DEFAULT_AUTO_FIND_PEERS_INTERVAL_MS     = 1000*60*15;
-
 	public final static int KEY_INDEX_CLIENT_INFO         = 0;
 	public final static int KEY_INDEX_ROUTING_TABLE       = 1;
 	public final static int KEY_INDEX_RECORD_STORE        = 2;
@@ -41,13 +34,6 @@ public class DHTClient {
 	public final static int STATUS_QUESTIONABLE           = 2; // strong possibility we are not connected to network
 	public final static int STATUS_CAN_REQUEST            = 3; // can send DHT requests and receive replies (but may not be able to receive requests)
 	public final static int STATUS_GOOD                   = 4; // can send and receive, including unsolicited requests from peers
-	
-	public       static int lookupResultMaxWaitTimeMs     = DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS; // consider a lookup finished if we've received nothing in this many milliseconds
-	public       static int messageExpirationTimeMs       = DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
-	public       static int messageRetryTimeMs            = DEFAULT_MESSAGE_RETRY_TIME_MS;
-	public       static int socketOpenFailCycleDelayMs    = DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS;
-	public       static int socketCycleDelayMs            = DEFAULT_SOCKET_CYCLE_DELAY_MS;
-	public       static int autoFindPeersIntervalMs       = DEFAULT_AUTO_FIND_PEERS_INTERVAL_MS;
 	
 	interface PeerForReferenceCallback {
 		void receivedPeerForReference(DHTPeer peer);

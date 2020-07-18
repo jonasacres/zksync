@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.net.dht;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -21,10 +22,25 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.net.dht.DHTClient.LookupCallback;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTRoutingTableTest {
+	class DummyMaster extends ZKMaster {
+		public DummyMaster() {
+			this.storage      = new RAMFS();
+			try {
+				this.globalConfig = new ConfigFile(storage, "config.json");
+			} catch (IOException e) {
+				fail();
+			}
+			globalConfig.apply(ConfigDefaults.getActiveDefaults());
+		}
+	}
+
 	class DummyClient extends DHTClient {
 		LinkedList<DHTID> lookupIds;
 		RAMFS storage;
@@ -36,6 +52,7 @@ public class DHTRoutingTableTest {
 			this.storageKey       = new Key(this.crypto);
 			this.id               = new DHTID(privateKey.publicKey());
 			this.lookupIds        = new LinkedList<>();
+			this.master           = new DummyMaster();
 			
 			super.protocolManager = this.protocolManager = new DummyProtocolManager(this);
 			super.socketManager   = this.socketManager   = new DummySocketManager(this);
@@ -111,7 +128,6 @@ public class DHTRoutingTableTest {
 	@After
 	public void afterEach() {
 		Util.setCurrentTimeNanos(-1);
-		DHTRoutingTable.freshenIntervalMs = DHTRoutingTable.DEFAULT_FRESHEN_INTERVAL_MS;
 		table.close();
 	}
 	
@@ -217,7 +233,7 @@ public class DHTRoutingTableTest {
 			table.suggestPeer(makeTestPeer(i));
 		}
 		
-		int numPeers = DHTSearchOperation.maxResults;
+		int numPeers = client.getMaster().getGlobalConfig().getInt("net.dht.maxResults");
 		DHTID id = new DHTID(client.crypto.rng(client.idLength()));
 		Collection<DHTPeer> closest = table.closestPeers(id, numPeers);
 		
@@ -338,7 +354,7 @@ public class DHTRoutingTableTest {
 	
 	@Test
 	public void testFreshenThreadCallsFreshenPeriodically() {
-		DHTRoutingTable.freshenIntervalMs = 5;
+		client.getMaster().getGlobalConfig().set("net.dht.freshenIntervalMs", 5);
 		Util.setCurrentTimeMillis(0);
 		table.suggestPeer(makeTestPeer(0));
 		table.close();

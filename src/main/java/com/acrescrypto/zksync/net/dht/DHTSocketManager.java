@@ -17,18 +17,6 @@ import com.acrescrypto.zksync.utility.Util;
 import com.dosse.upnp.UPnP;
 
 public class DHTSocketManager {
-	/* max UDP packet size to avoid fragmentation:
-	 *     576 bytes   (guaranteed by RFC 791)
-	 *   -  60 bytes   ( IP header)
-	 *   -   8 bytes   (UDP header)
-	 */
-	public final static int MAX_DATAGRAM_SIZE                       = 508;
-	public final static int DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS = 9000;
-	public final static int DEFAULT_SOCKET_CYCLE_DELAY_MS           = 1000;
-	
-	public       static int socketCycleDelayMs                      = DEFAULT_SOCKET_CYCLE_DELAY_MS;
-	public       static int socketOpenFailCycleDelayMs              = DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS;
-	
 	protected DHTClient           client;
 	protected BandwidthMonitor    monitorTx,
 	                              monitorRx;
@@ -176,7 +164,8 @@ public class DHTSocketManager {
 				
 				lastPort = socket.getLocalPort();
 				
-				byte[] receiveData = new byte[MAX_DATAGRAM_SIZE];
+				int maxDatagramSize = client.getMaster().getGlobalConfig().getInt("net.dht.maxDatagramSize");
+				byte[] receiveData = new byte[maxDatagramSize];
 				DatagramPacket packet = new DatagramPacket(receiveData, receiveData.length);
 				socket.receive(packet);
 				monitorRx.observeTraffic(packet.getLength());
@@ -198,6 +187,8 @@ public class DHTSocketManager {
 					logger.warn("DHT -: socket listener thread encountered IOException", exc);
 				}
 				
+				int socketCycleDelayMs         = client.getMaster().getGlobalConfig().getInt("net.dht.socketCycleDelayMs"),
+					socketOpenFailCycleDelayMs = client.getMaster().getGlobalConfig().getInt("net.dht.socketOpenFailCycleDelayMs");
 				Util.sleep(socketCycleDelayMs); // add in a delay to prevent a fail loop from gobbling CPU / spamming log
 				try {
 					openSocket();

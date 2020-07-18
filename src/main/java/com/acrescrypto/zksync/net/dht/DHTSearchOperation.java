@@ -20,14 +20,6 @@ public class DHTSearchOperation {
 		void searchOperationDiscoveredRecord(DHTRecord record);
 	}
 	
-	public final static int DEFAULT_MAX_RESULTS = 8;
-	public final static int DEFAULT_SEARCH_QUERY_TIMEOUT_MS = 3000;
-	public final static int DEFAULT_MAX_SEARCH_QUERY_WAIT_TIME_MS = 30000;
-	
-	public static int maxResults = DEFAULT_MAX_RESULTS;
-	public static int searchQueryTimeoutMs = DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
-	public static int maxSearchQueryWaitTimeMs = DEFAULT_MAX_SEARCH_QUERY_WAIT_TIME_MS;
-	
 	int activeQueries = 0;
 	
 	DHTID searchId;
@@ -61,6 +53,14 @@ public class DHTSearchOperation {
 	public synchronized DHTSearchOperation run() {
 		if(cancelled) return this;
 		
+		int searchQueryTimeoutMs, maxSearchQueryWaitTimeMs;
+		try {
+			searchQueryTimeoutMs     = client.getMaster().getGlobalConfig().getInt("net.dht.searchQueryTimeoutMs");
+			maxSearchQueryWaitTimeMs = client.getMaster().getGlobalConfig().getInt("net.dht.maxSearchQueryWaitTimeMs");
+		} catch(NullPointerException exc) {
+			if(cancelled) return this;
+			throw exc;
+		}
 		this.timeout = new SnoozeThread(searchQueryTimeoutMs, maxSearchQueryWaitTimeMs, true, ()->{
 			if(cancelled) return;
 			peerCallback.searchOperationFinished(this, closestPeers);
@@ -89,6 +89,8 @@ public class DHTSearchOperation {
 	protected synchronized void addIfBetter(DHTPeer peer) {
 		if(closestPeers.contains(peer)) return;
 		closestPeers.add(peer);
+		
+		int maxResults = client.getMaster().getGlobalConfig().getInt("net.dht.maxResults");
 		
 		while(closestPeers.size() > maxResults) {
 			closestPeers.pollLast();

@@ -25,7 +25,6 @@ import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
-import com.acrescrypto.zksync.net.dht.DHTSearchOperation;
 import com.acrescrypto.zksync.utility.Util;
 
 public class IntegrationTest {
@@ -121,7 +120,6 @@ public class IntegrationTest {
 	
 	@After
 	public void afterEach() {
-		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
 		ConfigDefaults.resetDefaults();
 		rootClient.close();
 		rootMaster.close();
@@ -192,7 +190,7 @@ public class IntegrationTest {
 	@SuppressWarnings("deprecation")
 	@Test
 	public void testSeedPeerIntegration() throws IOException {
-		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
+		ConfigDefaults.getActiveDefaults().setDefault("net.dht.searchQueryTimeoutMs", 50);
 		
 		// first, make an original archive
 		ZKMaster originalMaster = ZKMaster.openBlankTestVolume("original");
@@ -263,7 +261,7 @@ public class IntegrationTest {
 		 * each peer then discovers each other via the DHT and syncs via p2p
 		 * all peers should converge to a common revision with a merge of all commits
 		 */
-		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
+		ConfigDefaults.getActiveDefaults().setDefault("net.dht.searchQueryTimeoutMs", 50);
 		ZKMaster[] masters = new ZKMaster[8];
 		ZKArchive[] archives = new ZKArchive[masters.length];
 		
@@ -309,7 +307,7 @@ public class IntegrationTest {
 		 * peer k then syncs (having no commits of its own) after everyone else converged
 		 * peer k should get the common revision
 		 */
-		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
+		ConfigDefaults.getActiveDefaults().setDefault("net.dht.searchQueryTimeoutMs", 50);
 		ZKMaster[] masters = new ZKMaster[8];
 		ZKArchive[] archives = new ZKArchive[masters.length];
 		
@@ -353,7 +351,7 @@ public class IntegrationTest {
 		 * peer k then syncs after everyone else converged
 		 * everyone should converge to a new common revision.
 		 */
-		DHTSearchOperation.searchQueryTimeoutMs = 50; // let DHT lookups timeout quickly
+		ConfigDefaults.getActiveDefaults().setDefault("net.dht.searchQueryTimeoutMs", 50);
 		ZKMaster[] masters = new ZKMaster[8];
 		ZKArchive[] archives = new ZKArchive[masters.length];
 		

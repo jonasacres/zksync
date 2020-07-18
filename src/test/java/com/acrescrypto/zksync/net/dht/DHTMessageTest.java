@@ -7,6 +7,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.IOException;
 import java.net.DatagramPacket;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -27,15 +28,33 @@ import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTMessageTest {
+	class DummyMaster extends ZKMaster {
+		public DummyMaster() {
+			this.storage      = new RAMFS();
+			try {
+				this.globalConfig = new ConfigFile(storage, "config.json");
+			} catch (IOException e) {
+				fail();
+			}
+			
+			globalConfig.apply(ConfigDefaults.getActiveDefaults());
+		}
+	}
+	
 	class DummyClient extends DHTClient {
 		ArrayList<DatagramPacket> packets = new ArrayList<>();
 		DHTMessage watch;
 		
 		protected DummyClient() {
+			this.master          = new DummyMaster();
 			this.crypto          = CryptoSupport.defaultCrypto();
 			this.privateKey      = this.crypto.makePrivateDHKey();
 			this.tagKey          = new  Key(crypto);

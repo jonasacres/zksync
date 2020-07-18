@@ -16,8 +16,6 @@ import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTPeer implements Sendable {
-	public final int QUESTIONABLE_TIME_INTERVAL_MS = 1000*60*15; // ping peers in our routing table if they haven't been seen in this interval of time
-	
 	public final static byte FLAG_PINNED = 0x01;
 	
 	interface DHTFindNodePeerCallback {
@@ -68,7 +66,8 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public boolean isQuestionable() {
-		return Util.currentTimeMillis() - lastSeen > QUESTIONABLE_TIME_INTERVAL_MS;
+		long pollIntervalMs = client.getMaster().getGlobalConfig().getLong("net.dht.pollIntervalMs");
+		return Util.currentTimeMillis() - lastSeen > pollIntervalMs;
 	}
 	
 	public synchronized void missedMessage() {

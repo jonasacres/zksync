@@ -69,7 +69,8 @@ public class DHTModuleTest {
 		}
 		
 		for(DHTClient client : clients) {
-			assertTrue(Util.waitUntil(DHTSearchOperation.maxSearchQueryWaitTimeMs + 1000,
+			int maxSearchQueryWaitTimeMs = client.getMaster().getGlobalConfig().getInt("net.dht.maxSearchQueryWaitTimeMs");
+			assertTrue(Util.waitUntil(maxSearchQueryWaitTimeMs + 1000,
 					()->client.isInitialized()));
 		}
 		
@@ -88,19 +89,18 @@ public class DHTModuleTest {
 	
 	@BeforeClass
 	public static void beforeAll() {
-		ConfigDefaults.getActiveDefaults().set("net.dht.enabled", false);
-		ConfigDefaults.getActiveDefaults().set("net.dht.bootstrap.enabled", false);
+		ConfigDefaults.getActiveDefaults().set("net.dht.enabled",                  false);
+		ConfigDefaults.getActiveDefaults().set("net.dht.bootstrap.enabled",        false);
+		ConfigDefaults.getActiveDefaults().set("net.dht.socketCycleDelayMs",          50);
+		ConfigDefaults.getActiveDefaults().set("net.dht.socketOpenFailCycleDelayMs", 100);
+		ConfigDefaults.getActiveDefaults().set("net.dht.messageExpirationTimeMs",    500);
+		ConfigDefaults.getActiveDefaults().set("net.dht.messageRetryTimeMs",          50);
+		ConfigDefaults.getActiveDefaults().set("net.dht.lookupResultMaxWaitTimeMs",   50);
+		ConfigDefaults.getActiveDefaults().set("net.dht.searchQueryTimeoutMs",       100);
+		ConfigDefaults.getActiveDefaults().set("net.dht.maxSearchQueryWaitTimeMs",  1000);
 		
 		TestUtils.startDebugMode();
 		TCPPeerAdvertisement.disableReachabilityTest = true;
-		// DHTRoutingTable.freshenIntervalMs = 400;
-		DHTClient.messageExpirationTimeMs = 500;
-		DHTClient.messageRetryTimeMs = 50;
-		DHTClient.socketCycleDelayMs = 50;
-		DHTClient.socketOpenFailCycleDelayMs = 100;
-		DHTClient.lookupResultMaxWaitTimeMs = 50;
-		DHTSearchOperation.searchQueryTimeoutMs = 100;
-		DHTSearchOperation.maxSearchQueryWaitTimeMs = 1000;
 	}
 	
 	@Before
@@ -126,14 +126,6 @@ public class DHTModuleTest {
 		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 		TCPPeerAdvertisement.disableReachabilityTest = false;
-		DHTRoutingTable.freshenIntervalMs = DHTRoutingTable.DEFAULT_FRESHEN_INTERVAL_MS;
-		DHTClient.messageExpirationTimeMs = DHTClient.DEFAULT_MESSAGE_EXPIRATION_TIME_MS;
-		DHTClient.messageRetryTimeMs = DHTClient.DEFAULT_MESSAGE_RETRY_TIME_MS;
-		DHTClient.socketCycleDelayMs = DHTClient.DEFAULT_SOCKET_CYCLE_DELAY_MS;
-		DHTClient.socketOpenFailCycleDelayMs = DHTClient.DEFAULT_SOCKET_OPEN_FAIL_CYCLE_DELAY_MS;
-		DHTClient.lookupResultMaxWaitTimeMs = DHTClient.DEFAULT_LOOKUP_RESULT_MAX_WAIT_TIME_MS;
-		DHTSearchOperation.searchQueryTimeoutMs = DHTSearchOperation.DEFAULT_SEARCH_QUERY_TIMEOUT_MS;
-		DHTSearchOperation.maxSearchQueryWaitTimeMs = DHTSearchOperation.DEFAULT_MAX_SEARCH_QUERY_WAIT_TIME_MS;
 	}
 	
 	@Test
