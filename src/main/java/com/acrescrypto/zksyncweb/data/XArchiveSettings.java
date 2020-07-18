@@ -26,6 +26,8 @@ public class XArchiveSettings {
 		settings.advertising = config.isAdvertising();
 		settings.requestingAll = config.getSwarm().isRequestingAll();
 		settings.peerLimit = config.getSwarm().getMaxSocketCount();
+		settings.localDescription = manager != null ? manager.getLocalDescription() : null;
+		
 		if(!config.getAccessor().isSeedOnly() && manager != null) {
 			settings.autocommit = manager.isAutocommiting();
 			settings.autocommitInterval = manager.getAutocommitIntervalMs();
@@ -33,7 +35,6 @@ public class XArchiveSettings {
 			settings.automirror = manager.isAutomirroring();
 			settings.automerge = manager.isAutomerging();
 			settings.automirrorPath = manager.getAutomirrorPath();
-			settings.localDescription = manager.getLocalDescription();
 		}
 		return settings;
 	}

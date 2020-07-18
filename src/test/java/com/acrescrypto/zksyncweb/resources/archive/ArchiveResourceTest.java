@@ -1220,4 +1220,13 @@ public class ArchiveResourceTest {
 		assertEquals(settings.isAutomirror().booleanValue(), resp.get("automirror").asBoolean());
 		assertEquals(settings.getPeerLimit().intValue(), resp.get("peerLimit").intValue());
 	}
+	
+	@Test
+	public void testGetSettingsShowsLocalDescriptonForSeedArchives() throws IOException {
+		archive.getConfig().getAccessor().becomeSeedOnly();
+		State.sharedState().activeManager(archive.getConfig()).setLocalDescription("i have a name");
+		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
+		assertEquals("i have a name", resp.get("localDescription").asText());
+	}
+
 }

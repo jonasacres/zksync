@@ -163,6 +163,7 @@ public class IntegrationTest {
 		accessor.discoverOnDHT();
 
 		// wait for discovery of all the archive IDs
+		// TODO: ITF 2020-07-17, linux, ab0ac33
 		assertTrue(Util.waitUntil(3000, ()->blankMaster.allConfigs().size() >= masters.length));
 		
 		// now see if we can actually get the expected data from each ID

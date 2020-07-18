@@ -180,12 +180,19 @@ public class State implements AutoCloseable {
 		
 		synchronized(this) {
 			if(activeFilesystems.containsKey(config)) {
+				if(config.getAccessor().isSeedOnly()) return null;
+				
 				ZKFS fs = activeFilesystems.get(config).getFs();
 				if(fs != null && !fs.isClosed()) {
 					return fs;
 				}
 				
 				activeFilesystems.remove(config);
+			}
+			
+			if(config.getAccessor().isSeedOnly()) {
+				activeFilesystems.put(config, new ZKFSManager(config));
+				return null;
 			}
 			
 			if(config.getArchive() == null) return null;
