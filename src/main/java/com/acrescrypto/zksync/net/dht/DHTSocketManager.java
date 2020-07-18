@@ -40,8 +40,13 @@ public class DHTSocketManager {
 	protected DHTSocketManager() {}
 	
 	public void listen(String address, int port) throws SocketException {
+		if(port == 0) {
+			bindPort = client.getMaster().getGlobalConfig().getInt("net.dht.lastport");
+		} else {
+			bindPort = port;
+		}
+		
 		this.paused      = false;
-		this.bindPort    = port;
 		this.bindAddress = address == null
 				? client.getMaster().getGlobalConfig().getString("net.dht.bindaddress")
 				: address;
@@ -115,21 +120,25 @@ public class DHTSocketManager {
 			}
 		}
 		
-		try {
-			int expectedPort = client.getMaster().getGlobalConfig().getInt("net.dht.port");
-			socket = new DatagramSocket(bindPort, addr);
-			socket.setReuseAddress(true);
-			if(socket.getLocalPort() != expectedPort) {
-				client.getMaster().getGlobalConfig().set("net.dht.port", socket.getLocalPort());
+		while(true) {
+			try {
+				socket = new DatagramSocket(bindPort, addr);
+				socket.setReuseAddress(true);
+				client.getMaster().getGlobalConfig().set("net.dht.lastport", socket.getLocalPort());;
+				
+				logger.info("DHT -: listening on UDP port " + getPort());
+				
+				checkUPnP();
+				client.updateStatus(DHTClient.STATUS_QUESTIONABLE);
+				break;
+			} catch(SocketException exc) {
+				if(client.getMaster().getGlobalConfig().getInt("net.dht.port") == 0 && bindPort != 0) {
+					bindPort = 0;
+				} else {
+					client.updateStatus(DHTClient.STATUS_OFFLINE);
+					throw exc;
+				}
 			}
-			
-			logger.info("DHT -: listening on UDP port " + getPort());
-			
-			checkUPnP();
-			client.updateStatus(DHTClient.STATUS_QUESTIONABLE);
-		} catch(SocketException exc) {
-			client.updateStatus(DHTClient.STATUS_OFFLINE);
-			throw exc;
 		}
 	}
 	
@@ -197,7 +206,11 @@ public class DHTSocketManager {
 					Util.sleep(socketOpenFailCycleDelayMs); // wait even longer if we know the socket is dead and the OS isn't giving it back
 				}
 			} catch(Exception exc) {
-				logger.error("DHT -: socket listener thread encountered exception", exc);
+				if(socket.isClosed()) {
+					logger.warn("DHT -: socket listener thread encountered exception", exc);
+				} else {
+					logger.error("DHT -: socket listener thread encountered exception", exc);
+				}
 			}
 		}
 	}

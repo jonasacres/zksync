@@ -151,7 +151,7 @@ public class DHTClient {
 				try {
 					socketManager.openSocket();
 				} catch (SocketException exc) {
-					logger.error("DHT -: Unable to open DHT socket when rebinding to port {}",
+					logger.warn("DHT -: Unable to open DHT socket when rebinding to port {}",
 							port,
 							exc);
 				}
@@ -247,6 +247,7 @@ public class DHTClient {
 	
 	public void purge() throws IOException {
 		close();
+		master.getGlobalConfig().set("net.dht.lastport", 0);
 		new DHTClientSerializer(this).purge();
 	}
 	

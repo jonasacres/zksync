@@ -459,6 +459,7 @@ public class DHTClientTest {
 	
 	@Test(expected=SocketException.class)
 	public void testListenThrowsExceptionIfPortInUse() throws SocketException {
+		client.getMaster().getGlobalConfig().set("net.dht.port", remote.socket.getLocalPort());
 		client.listen("127.0.0.1", remote.socket.getLocalPort());
 	}
 	
@@ -1191,8 +1192,9 @@ public class DHTClientTest {
 	@Test
 	public void testStatusCallbackOfflineWhenSocketFailsToBind() throws SocketException {
 		MutableInt receivedStatus = new MutableInt(-1);
-		client.getSocketManager().setBindPort(remote.peer.port);
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
+		client.getMaster().getGlobalConfig().set("net.dht.port", remote.peer.port);
+		client.getSocketManager().setBindPort(remote.peer.port);
 		try {
 			client.getSocketManager().openSocket();
 		} catch(SocketException exc) {}
@@ -1408,5 +1410,26 @@ public class DHTClientTest {
 	public void testPingAllPingsPeers() throws ProtocolViolationException {
 		client.pingAll();
 		assertNotNull(remote.receivePacket(DHTMessage.CMD_PING));
+	}
+	
+	@Test
+	public void testPurgeBindsToNewPortIfNetDhtPortIsZero() throws IOException {
+		int oldPort = client.getSocketManager().getPort();
+		client.purge();
+		client.start();
+		
+		assertTrue(Util.waitUntil(100, ()->client.getSocketManager().getPort() > 0));
+		assertNotEquals(oldPort, client.getSocketManager().getPort());
+	}
+	
+	@Test
+	public void testPurgeBindsToSamePortIfNetDhtPortIsNonZero() throws IOException {
+		int oldPort = client.getSocketManager().getPort();
+		client.getMaster().getGlobalConfig().set("net.dht.port", oldPort);
+		client.purge();
+		client.start();
+		
+		assertTrue(Util.waitUntil(100, ()->client.getSocketManager().getPort() > 0));
+		assertEquals(oldPort, client.getSocketManager().getPort());
 	}
 }
