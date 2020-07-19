@@ -171,15 +171,18 @@ public class DHTMessage {
 	
 	protected byte[] serialize(int numPackets, ByteBuffer sendBuf) {
 		PrivateDHKey ephKey    = peer.client.crypto.makePrivateDHKey();
+		byte[]       random    = peer.client.crypto.rng(8);
 		
 		ByteBuffer keyMaterial = ByteBuffer.allocate(
 				  peer.client.networkId.length
-				+ peer.client.crypto.asymDHSecretSize());
+				+ peer.client.crypto.asymDHSecretSize()
+				+ 8);
 		keyMaterial.put(peer.client.networkId);
 		keyMaterial.put(ephKey.sharedSecret(peer.key));
+		keyMaterial.put(random);
 		
 		byte[] symKeyRaw       = peer.client.crypto.makeSymmetricKey(keyMaterial.array());
-		Key symKey             = new Key(peer.client.crypto, symKeyRaw);
+		Key    symKey          = new Key(peer.client.crypto, symKeyRaw);
 		
 		ByteBuffer plaintext   = ByteBuffer.allocate(headerSize() + sendBuf.remaining());
 		plaintext.put   (peer.client.getPublicKey().getBytes());
@@ -190,35 +193,68 @@ public class DHTMessage {
 		plaintext.put   ((byte) numPackets);
 		plaintext.put   (sendBuf);
 		
-		byte[] ciphertext = symKey.encrypt(
+		byte[] ciphertext      = symKey.encrypt(
 				new byte[peer.client.crypto.symIvLength()],
 				plaintext.array(),
 				0);
 		
+		/* As a design principle, we would like our datagrams to be indistinguishable from
+		 * random data. Public keys are easily distinguished, so obfuscate those through
+		 * our symmetric cipher. A determined adversary will have all the info they need
+		 * to decrypt this, so this is not really "encryption" in the sense of concealing
+		 * data from someone who isn't the sender or recipient. */
+		ByteBuffer obfKeyMat  = ByteBuffer.allocate(random.length + peer.key.getBytes().length);
+		obfKeyMat.put(random);
+		obfKeyMat.put(peer.key.getBytes());
+		
+		byte[]     obfKeyRaw  = peer.client.crypto.makeSymmetricKey(obfKeyMat.array());
+		Key        obfKey     = new Key(peer.client.crypto, obfKeyRaw);
+		byte[]     obfuscated = obfKey.encryptUnauthenticated(
+				new byte[peer.client.crypto.symIvLength()],
+				ephKey.publicKey().getBytes());
+		assert(obfuscated.length == ephKey.publicKey().getBytes().length);
+		
 		ByteBuffer serialized = ByteBuffer.allocate(
-				  ephKey.getBytes().length
+				  random.length
+				+ obfuscated.length
 				+ ciphertext.length);
-		serialized.put(ephKey.publicKey().getBytes());
+		serialized.put(random);
+		serialized.put(obfuscated);
 		serialized.put(ciphertext);
 		return serialized.array();
 	}
 	
 	protected void deserialize(DHTClient client, String senderAddress, int senderPort, ByteBuffer serialized) throws ProtocolViolationException {
-		byte[] keyBytes = new byte[client.crypto.asymPublicDHKeySize()];
-
+		byte[] random         = new byte[8];
+		byte[] obfKeyBytes    = new byte[client.crypto.asymPublicDHKeySize()];
+		
 		/* issues that crop up before/as we decrypt are benign and could be caused by anything
 		 * from mistaken keys to misrouted or corrupted packets. Don't blacklist for these.
 		 */
-		assertStateWithoutBlacklist(serialized.remaining() > keyBytes.length);
-		serialized.get(keyBytes);
+		assertStateWithoutBlacklist(serialized.remaining() > random.length + obfKeyBytes.length);
+		serialized.get(random);
+		serialized.get(obfKeyBytes);
 		
+		ByteBuffer obfKeyMat  = ByteBuffer.allocate(random.length + client.getPublicKey().getBytes().length);
+		obfKeyMat.put(random);
+		obfKeyMat.put(client.getPublicKey().getBytes());
+		
+		byte[]     obfKeyRaw  = client.crypto.makeSymmetricKey(obfKeyMat.array());
+		Key        obfKey     = new Key(client.crypto, obfKeyRaw);
+		byte[]     keyBytes   = obfKey.decryptUnauthenticated(
+				new byte[client.crypto.symIvLength()],
+				obfKeyBytes);
+
 		PublicDHKey pubKey     = new PublicDHKey(client.crypto, keyBytes);
 		ByteBuffer keyMaterial = ByteBuffer.allocate(
-				client.networkId.length
+				random.length
+			  + client.networkId.length
 			  + client.crypto.asymDHSecretSize()
 			);
 		keyMaterial.put(client.networkId);
 		keyMaterial.put(client.getPrivateKey().sharedSecret(pubKey));
+		keyMaterial.put(random);
+		
 		Key key = new Key(client.crypto, client.crypto.makeSymmetricKey(keyMaterial.array()));
 		
 		try {
@@ -275,6 +311,7 @@ public class DHTMessage {
 				   peer.client.getMaster().getGlobalConfig().getInt("net.dht.maxDatagramSize")
 				 - headerSize()
 				 - peer.client.crypto.asymPublicDHKeySize()
+				 - 8
 			);
 	}
 	

@@ -165,37 +165,61 @@ public class DHTMessageTest {
 	public byte[] decodePacket(PrivateDHKey recvKey, DHTMessage msg, DatagramPacket packet) {
 		ByteBuffer sent = ByteBuffer.wrap(packet.getData());
 		
-		assertEquals(msg.peer.port, packet.getPort());
-		assertEquals(msg.peer.address, packet.getAddress().getHostAddress());
-		
+		assertEquals     (msg.peer.port,           packet.getPort());
+		assertEquals     (msg.peer.address,        packet.getAddress().getHostAddress());
 		assertArrayEquals(msg.peer.key.getBytes(), recvKey.publicKey().getBytes());
-		byte[] ephPubKeyRaw = new byte[crypto.asymPublicDHKeySize()];
-		sent.get(ephPubKeyRaw);		
-		PublicDHKey ephPubKey = crypto.makePublicDHKey(ephPubKeyRaw);
-		ByteBuffer keyMaterial = ByteBuffer.allocate(crypto.hashLength()+crypto.asymDHSecretSize());
+		
+		byte[] random          = new byte[8],
+		       obfuscated      = new byte[crypto.asymPublicDHKeySize()];
+		sent.get(random);
+		sent.get(obfuscated);
+		
+		ByteBuffer obfKeyMat  = ByteBuffer.allocate(random.length + peer.key.getBytes().length);
+		obfKeyMat.put(random);
+		obfKeyMat.put(recvKey.publicKey().getBytes());
+		
+		byte[] obfKeyRaw       = peer.client.crypto.makeSymmetricKey(obfKeyMat.array());
+		Key    obfKey          = new Key(peer.client.crypto, obfKeyRaw);
+		byte[] ephPubKeyRaw    = obfKey.encryptUnauthenticated(
+				new byte[peer.client.crypto.symIvLength()],
+				obfuscated);
+
+		PublicDHKey ephPubKey  = crypto.makePublicDHKey(ephPubKeyRaw);
+		
+		ByteBuffer keyMaterial = ByteBuffer.allocate(
+				+ crypto.hashLength()
+				+ crypto.asymDHSecretSize()
+				+ random.length);
 		keyMaterial.put(new byte[crypto.hashLength()]);
 		keyMaterial.put(recvKey.sharedSecret(ephPubKey));
-		byte[] symKey = peer.client.crypto.makeSymmetricKey(keyMaterial.array());
-		Key key = new Key(crypto, symKey);
+		keyMaterial.put(random);
 		
-		byte[] plaintext = key.decrypt(new byte[crypto.symIvLength()], sent.array(), sent.position(), sent.remaining());
-		ByteBuffer ptBuf = ByteBuffer.wrap(plaintext);
+		byte[] symKey         = peer.client.crypto.makeSymmetricKey(keyMaterial.array());
+		Key    key            = new Key(crypto, symKey);
 		
-		byte[] senderKey = new byte[crypto.asymPublicDHKeySize()];
-		byte[] authTag = new byte[DHTClient.AUTH_TAG_SIZE];
+		byte[] plaintext      = key.decrypt(
+									new byte[crypto.symIvLength()],
+									sent.array(),
+									sent.position(),
+									sent.remaining());
+		ByteBuffer ptBuf      = ByteBuffer.wrap(plaintext);
+		
+		byte[] senderKey      = new byte[crypto.asymPublicDHKeySize()];
+		byte[] authTag        = new byte[DHTClient.AUTH_TAG_SIZE];
 		
 		ptBuf.get(senderKey);
 		ptBuf.get(authTag);
 		
 		assertArrayEquals(client.getPublicKey().getBytes(), senderKey);
-		assertArrayEquals(msg.authTag, authTag);
-		assertEquals(msg.msgId, ptBuf.getInt());
-		assertEquals(msg.cmd, ptBuf.get());
-		assertEquals(msg.flags, ptBuf.get());
-		assertEquals(client.packets.size(), ptBuf.get()); // handcuffs test style a bit, but how else to validate this?
+		assertArrayEquals(msg.authTag,                      authTag);
+		assertEquals     (msg.msgId,                        ptBuf.getInt());
+		assertEquals     (msg.cmd,                          ptBuf.get());
+		assertEquals     (msg.flags,                        ptBuf.get());
+		assertEquals     (client.packets.size(),            ptBuf.get()); // handcuffs test style a bit, but how else to validate this?
 		
-		byte[] payload = new byte[ptBuf.remaining()];
+		byte[] payload        = new byte[ptBuf.remaining()];
 		ptBuf.get(payload);
+		
 		return payload;
 	}
 
@@ -426,22 +450,23 @@ public class DHTMessageTest {
 	
 	@Test
 	public void testDeserializesMessagesToClient() throws ProtocolViolationException {
-		byte[] payload = crypto.rng(32);
-		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		byte[]     payload      = crypto.rng(32);
+		DHTPeer    localPeer    = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
+		DHTMessage req          = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
-		byte[] serialized = client.packets.get(0).getData();
+		byte[]     serialized   = client.packets.get(0).getData();
 		DHTMessage deserialized = new DHTMessage(client, "127.0.0.1", 54321, ByteBuffer.wrap(serialized));
-		assertArrayEquals(req.authTag, deserialized.authTag);
-		assertEquals(req.msgId, deserialized.msgId);
-		assertEquals(req.cmd, deserialized.cmd);
-		assertEquals(req.flags, deserialized.flags);
-		assertEquals(client.packets.size(), deserialized.numExpected);
-		assertArrayEquals(payload, deserialized.payload);
 		
-		assertEquals("127.0.0.1", deserialized.peer.address);
-		assertEquals(54321, deserialized.peer.port);
+		assertArrayEquals(req.authTag,                      deserialized.authTag);
+		assertEquals     (req.msgId,                        deserialized.msgId);
+		assertEquals     (req.cmd,                          deserialized.cmd);
+		assertEquals     (req.flags,                        deserialized.flags);
+		assertEquals     (client.packets.size(),            deserialized.numExpected);
+		assertArrayEquals(payload,                          deserialized.payload);
+		
+		assertEquals     ("127.0.0.1",                      deserialized.peer.address);
+		assertEquals     (54321,                            deserialized.peer.port);
 		assertArrayEquals(client.getPublicKey().getBytes(), req.peer.key.getBytes());
 	}
 	

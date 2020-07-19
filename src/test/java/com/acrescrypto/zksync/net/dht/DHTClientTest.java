@@ -178,7 +178,15 @@ public class DHTClientTest {
 					assertTrue(packet.getLength() <= maxDatagramSize);
 					DHTMessage msg;
 					try {
-						msg = new DHTMessage(listenClient, packet.getAddress().getHostAddress(), packet.getPort(), ByteBuffer.wrap(packet.getData(), 0, packet.getLength()));
+						msg = new DHTMessage(
+								listenClient,
+								packet.getAddress().getHostAddress(),
+								packet.getPort(),
+								ByteBuffer.wrap(
+									packet.getData(),
+									0,
+									packet.getLength()
+								));
 						synchronized(incoming) {
 							incoming.add(msg);
 							incoming.notifyAll();
