@@ -6,6 +6,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedList;
 
 import org.slf4j.Logger;
@@ -20,11 +21,42 @@ import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTProtocolManager {
+	protected class RecentSaltSet {
+		HashSet<Long> set;
+		long          timeStarted;
+		
+		public RecentSaltSet() {
+			this.timeStarted = Util.currentTimeMillis();
+			this.set         = new HashSet<>();
+		}
+		
+		public long serviceLifeMs() {
+			return client.getMaster().getGlobalConfig().getLong("net.dht.maxTimestampDelta")
+			     - client.getMaster().getGlobalConfig().getLong("net.dht.minTimestampDelta");
+		}
+		
+		public boolean isExpired() {
+			long serviceLife = 
+		}
+		
+		public boolean isDeletable() {
+			
+		}
+		
+		public boolean addNewSalt(Long salt) {
+			if(set.contains(salt)) return false;
+			
+			set.add(salt);
+			return true;
+		}
+	}
+	
 	protected DHTClient                      client;
 	protected ArrayList<DHTMessageStub>      pendingRequests   = new ArrayList<>();
 	protected LinkedList<DHTSearchOperation> pendingOperations = new LinkedList<>();
 	protected boolean                        autofind          = true,
 			                                 initialized       = false;
+	protected LinkedList<HashSet<Long>>      recentSaltSets    = new LinkedList<>();
 
 	private Logger logger = LoggerFactory.getLogger(DHTProtocolManager.class);
 	
@@ -415,5 +447,10 @@ public class DHTProtocolManager {
 	
 	public boolean getAutofind() {
 		return autofind;
+	}
+	
+	public boolean canAcceptSalt(byte[] salt) {
+		HashSet<Long> 
+		long salt64 = ByteBuffer.wrap(salt).getLong();
 	}
 }
