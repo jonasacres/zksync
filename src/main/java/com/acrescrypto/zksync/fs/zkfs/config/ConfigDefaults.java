@@ -31,6 +31,8 @@ public class ConfigDefaults {
 		config.setDefault("net.dht.upnp",                           false);
 		config.setDefault("net.dht.network",                   "easysafe");
 		config.setDefault("net.dht.maxDatagramSize",                  508); // max to avoid fragmentation: 576 (guaranteed by RFC 791), -60 (IP header), -8 (UDP header) = 508 bytes
+		config.setDefault("net.dht.minTimestampDelta",        -1000*60*15);
+		config.setDefault("net.dht.maxTimestampDelta",         1000*60*15);
 		config.setDefault("net.dht.maxResults",                         8);
 		config.setDefault("net.dht.searchQueryTimeoutMs",            3000);
 		config.setDefault("net.dht.maxSearchQueryWaitTimeMs",       30000);

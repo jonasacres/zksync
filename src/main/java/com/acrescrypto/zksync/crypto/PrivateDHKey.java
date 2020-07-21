@@ -53,7 +53,7 @@ public class PrivateDHKey {
 		buf.put(lesserKey);
 		buf.put(greaterKey);
 		byte[] rawSecret = sharedSecretRaw(otherKey);
-		return crypto.expand(rawSecret, crypto.symKeyLength(), salt, buf.array());
+		return crypto.expandAndDestroy(rawSecret, crypto.symKeyLength(), salt, buf.array());
 	}
 	
 	public PublicDHKey publicKey() {

@@ -191,6 +191,8 @@ public class DHTClientTest {
 							incoming.add(msg);
 							incoming.notifyAll();
 						}
+					} catch (BenignProtocolViolationException exc) {
+						// not interesting
 					} catch (ProtocolViolationException exc) {
 						exc.printStackTrace();
 					}

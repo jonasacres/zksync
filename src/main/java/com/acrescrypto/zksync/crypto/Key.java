@@ -138,10 +138,6 @@ public class Key {
 	}
 
 	public void destroy() {
-		for(int i = 0; i < raw.length; i++) {
-			raw[i] = 0x00;
-		}
-		
-		raw = null;
+		raw = Util.zero(raw);
 	}
 }

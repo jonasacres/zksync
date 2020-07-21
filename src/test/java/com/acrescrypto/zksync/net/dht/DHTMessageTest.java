@@ -163,56 +163,76 @@ public class DHTMessageTest {
 	}
 	
 	public byte[] decodePacket(PrivateDHKey recvKey, DHTMessage msg, DatagramPacket packet) {
-		ByteBuffer sent = ByteBuffer.wrap(packet.getData());
+		ByteBuffer serialized = ByteBuffer.wrap(packet.getData());
 		
 		assertEquals     (msg.peer.port,           packet.getPort());
 		assertEquals     (msg.peer.address,        packet.getAddress().getHostAddress());
 		assertArrayEquals(msg.peer.key.getBytes(), recvKey.publicKey().getBytes());
 		
-		byte[] random          = new byte[8],
-		       obfuscated      = new byte[crypto.asymPublicDHKeySize()];
-		sent.get(random);
-		sent.get(obfuscated);
+		CryptoSupport crypto             = msg.peer.client.crypto;
+		PrivateDHKey  localStaticPrivkey = privateKeyForPeer(peer.getPort()-1000);
+		PublicDHKey   localStaticPubkey  = localStaticPrivkey.publicKey();
 		
-		ByteBuffer obfKeyMat  = ByteBuffer.allocate(random.length + peer.key.getBytes().length);
-		obfKeyMat.put(random);
-		obfKeyMat.put(recvKey.publicKey().getBytes());
+		byte[]        networkId          = peer.client.getNetworkId(),
+				      rnd                = new byte[8],
+				      blankIv            = new byte[crypto.symIvLength()],
+				      obfuscatedEphKey   = new byte[crypto.asymPublicDHKeySize()],
+				      encryptedStaticKey = new byte[crypto.asymPublicDHKeySize()];
 		
-		byte[] obfKeyRaw       = peer.client.crypto.makeSymmetricKey(obfKeyMat.array());
-		Key    obfKey          = new Key(peer.client.crypto, obfKeyRaw);
-		byte[] ephPubKeyRaw    = obfKey.encryptUnauthenticated(
-				new byte[peer.client.crypto.symIvLength()],
-				obfuscated);
-
-		PublicDHKey ephPubKey  = crypto.makePublicDHKey(ephPubKeyRaw);
+		serialized.get(rnd);
+		serialized.get(obfuscatedEphKey);
+		serialized.get(encryptedStaticKey);
 		
-		ByteBuffer keyMaterial = ByteBuffer.allocate(
-				+ crypto.hashLength()
-				+ crypto.asymDHSecretSize()
-				+ random.length);
-		keyMaterial.put(new byte[crypto.hashLength()]);
-		keyMaterial.put(recvKey.sharedSecret(ephPubKey));
-		keyMaterial.put(random);
+		Key[]         keys               = new Key[3];
+		              keys[0]            = new Key(crypto, crypto.expand(
+											Util.concat(
+													rnd,
+													networkId),
+											crypto.symKeyLength(),
+											localStaticPubkey.getBytes(),
+											new byte[0]));
+		byte[]        ephPubkeyRaw       = keys[0].decryptUnauthenticated(blankIv, obfuscatedEphKey);
+		PublicDHKey   ephPubkey          = crypto.makePublicDHKey(ephPubkeyRaw);
+		byte[]        ephSharedSecret    = localStaticPrivkey.sharedSecret(ephPubkey);
 		
-		byte[] symKey         = peer.client.crypto.makeSymmetricKey(keyMaterial.array());
-		Key    key            = new Key(crypto, symKey);
+		              keys[1]            = new Key(crypto, crypto.expand(
+				                            Util.concat(
+				                            		keys[0].getRaw(),
+				                            		rnd,
+				                            		obfuscatedEphKey,
+				                            		ephSharedSecret),
+				                            crypto.symKeyLength(),
+				                            localStaticPubkey.getBytes(),
+				                            new byte[0]));
+		byte[]        staticPubkeyRaw    = keys[1].decryptUnauthenticated(blankIv, encryptedStaticKey);
+		PublicDHKey   remoteStaticPubkey = crypto.makePublicDHKey(staticPubkeyRaw);
+		byte[]        staticSharedSecret = localStaticPrivkey.sharedSecret(remoteStaticPubkey);
 		
-		byte[] plaintext      = key.decrypt(
-									new byte[crypto.symIvLength()],
-									sent.array(),
-									sent.position(),
-									sent.remaining());
-		ByteBuffer ptBuf      = ByteBuffer.wrap(plaintext);
+		              keys[2]            = new Key(crypto, crypto.expand(
+                                            Util.concat(
+                                            		keys[1].getRaw(),
+                                            		rnd,
+                                            		obfuscatedEphKey,
+                                            		encryptedStaticKey,
+                                            		staticSharedSecret),
+                                            crypto.symKeyLength(),
+                                            localStaticPubkey.getBytes(),
+                                            new byte[0]));
 		
-		byte[] senderKey      = new byte[crypto.asymPublicDHKeySize()];
+		byte[]        plaintextRaw       = keys[2].decrypt(
+		                                     blankIv,
+		                                     serialized.array(),
+		                                     serialized.position(),
+		                                     serialized.remaining());
+		ByteBuffer ptBuf      = ByteBuffer.wrap(plaintextRaw);
+		
 		byte[] authTag        = new byte[DHTClient.AUTH_TAG_SIZE];
 		
-		ptBuf.get(senderKey);
 		ptBuf.get(authTag);
 		
-		assertArrayEquals(client.getPublicKey().getBytes(), senderKey);
 		assertArrayEquals(msg.authTag,                      authTag);
 		assertEquals     (msg.msgId,                        ptBuf.getInt());
+		assertEquals     (msg.timestamp,                    ptBuf.getLong());
 		assertEquals     (msg.cmd,                          ptBuf.get());
 		assertEquals     (msg.flags,                        ptBuf.get());
 		assertEquals     (client.packets.size(),            ptBuf.get()); // handcuffs test style a bit, but how else to validate this?
@@ -472,16 +492,14 @@ public class DHTMessageTest {
 	
 	@Test
 	public void testDeserializeThrowsProtocolViolationExceptionIfTampered() {
-		byte[] payload = crypto.rng(32);
-		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		byte[]     payload    = crypto.rng(32);
+		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
+		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
+		// if we flip any bit in the message, it should throw an exception during deserialization
 		byte[] serialized = client.packets.get(0).getData();
 		for(int i = 0; i < 8*serialized.length; i++) {
-			// Curve25519 keys are actually 255 bits, so the little endian MSB can be modified with no effect
-			if(i == 8*crypto.asymPublicDHKeySize()-1) continue;
-			
 			serialized[i/8] ^= (1 << (i%8));
 			try {
 				new DHTMessage(client, "127.0.0.1", 54321, ByteBuffer.wrap(serialized)).hashCode();
@@ -493,9 +511,9 @@ public class DHTMessageTest {
 	
 	@Test(expected=ProtocolViolationException.class)
 	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedCiphertext() throws ProtocolViolationException {
-		byte[] payload = crypto.rng(32);
-		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		byte[]     payload    = crypto.rng(32);
+		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
+		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
 		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
@@ -505,9 +523,9 @@ public class DHTMessageTest {
 
 	@Test(expected=ProtocolViolationException.class)
 	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedKey() throws ProtocolViolationException {
-		byte[] payload = crypto.rng(32);
-		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		byte[]     payload    = crypto.rng(32);
+		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
+		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
 		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
@@ -516,26 +534,90 @@ public class DHTMessageTest {
 	}
 	
 	@Test(expected=ProtocolViolationException.class)
-	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedPlaintext() throws ProtocolViolationException {
-		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_ADD_RECORD, new byte[0], (resp)->{});
-		PrivateDHKey ephKey = peer.client.crypto.makePrivateDHKey();
-		byte[] symKeyRaw = peer.client.crypto.makeSymmetricKey(ephKey.sharedSecret(client.getPublicKey()));
-		Key symKey = new Key(peer.client.crypto, symKeyRaw);
+	public void testDeserializeThrowsProtocolViolationExceptionIfTimestampIsTooOld() throws ProtocolViolationException {
+		long startTs = System.currentTimeMillis();
+		long sendTs  = startTs;		
+		long maxAge  = client.getMaster().getGlobalConfig().getLong("net.dht.maxTimestampDelta");
+		Util.setCurrentTimeMillis(sendTs);
+
+		byte[]     payload    = crypto.rng(32);
+		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
+		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		req.send();
+		Util.setCurrentTimeMillis(startTs + maxAge);
 		
-		ByteBuffer plaintext = ByteBuffer.allocate(req.headerSize()-1);
-		plaintext.put(peer.client.getPublicKey().getBytes());
-		plaintext.putInt(1234);
+		ByteBuffer buf        = ByteBuffer.wrap(client.packets.get(0).getData());
+		new DHTMessage(client, "127.0.0.1", 54321, buf).hashCode();
+	}
+
+	@Test
+	public void testDeserializeDoesntThrowProtocolViolationExceptionIfTimestampIsJustShyOfOld() throws ProtocolViolationException {
+		long startTs = System.currentTimeMillis();
+		long sendTs  = startTs + 1;		
+		long maxAge  = client.getMaster().getGlobalConfig().getLong("net.dht.maxTimestampDelta");
+		Util.setCurrentTimeMillis(sendTs);
+
+		byte[]     payload    = crypto.rng(32);
+		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
+		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		req.send();
+		Util.setCurrentTimeMillis(startTs + maxAge);
 		
-		byte[] ciphertext = symKey.encrypt(new byte[peer.client.crypto.symIvLength()], plaintext.array(), 0);
-		
-		ByteBuffer serialized = ByteBuffer.allocate(ephKey.getBytes().length + ciphertext.length);
-		serialized.put(ephKey.publicKey().getBytes());
-		serialized.put(ciphertext);
-		serialized.rewind();
-		
-		new DHTMessage(client, "127.0.0.1", 54321, serialized).hashCode();
+		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
+		new DHTMessage(client, "127.0.0.1", 54321, buf).hashCode();
 	}
 	
+	@Test(expected=ProtocolViolationException.class)
+	public void testDeserializeThrowsProtocolViolationExceptionIfTimestampIsTooFuturistic() throws ProtocolViolationException {
+		long startTs = System.currentTimeMillis();
+		long minAge  = client.getMaster().getGlobalConfig().getLong("net.dht.minTimestampDelta");
+		long sendTs  = startTs - minAge;
+		Util.setCurrentTimeMillis(sendTs);
+
+		byte[]     payload    = crypto.rng(32);
+		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
+		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		req.send();
+		Util.setCurrentTimeMillis(startTs);
+		
+		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
+		new DHTMessage(client, "127.0.0.1", 54321, buf).hashCode();
+	}
+	
+	@Test
+	public void testDeserializeDoesntThrowProtocolViolationExceptionIfTimestampIsJustShyOfTooFuturistic() throws ProtocolViolationException {
+		long startTs = System.currentTimeMillis();
+		long minAge  = client.getMaster().getGlobalConfig().getLong("net.dht.minTimestampDelta");
+		long sendTs  = startTs - minAge - 1;		
+		Util.setCurrentTimeMillis(sendTs);
+
+		byte[]     payload    = crypto.rng(32);
+		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
+		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		req.send();
+		Util.setCurrentTimeMillis(startTs);
+		
+		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
+		new DHTMessage(client, "127.0.0.1", 54321, buf).hashCode();
+	}
+	
+	@Test
+	public void testDeserializeThrowsProtocolViolationExceptionIfReplay() throws ProtocolViolationException {
+		byte[] payload    = crypto.rng(32);
+		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
+		DHTMessage req    = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		req.send();
+		
+		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
+		new DHTMessage(client, "127.0.0.1", 54321, buf).hashCode();
+		
+		try {
+			new DHTMessage(client, "127.0.0.1", 54321, buf).hashCode();
+			fail();
+		} catch(BenignProtocolViolationException exc) {
+		}
+	}
+
 	@Test
 	public void testSendsRemoteAuthTagIfRequest() {
 		peer.remoteAuthTag = crypto.rng(DHTClient.AUTH_TAG_SIZE);

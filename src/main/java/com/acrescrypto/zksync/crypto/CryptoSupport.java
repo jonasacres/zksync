@@ -17,6 +17,8 @@ import javax.crypto.spec.SecretKeySpec;
 
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.utility.Util;
+
 import org.slf4j.Logger;
 
 import de.mkammerer.argon2.jna.Argon2Library;
@@ -158,6 +160,13 @@ public class CryptoSupport {
 		outer.update(xor(key, opad));
 		outer.update(inner.finish());
 		return outer.finish();
+	}
+	
+	public byte[] expandAndDestroy(byte[] ikm, int length, byte[] salt, byte[] info) {
+		byte[] retval = expand(ikm, length, salt, info);
+		Util.zero(ikm);
+		
+		return retval;
 	}
 
 	public byte[] expand(byte[] ikm, int length, byte[] salt, byte[] info) {

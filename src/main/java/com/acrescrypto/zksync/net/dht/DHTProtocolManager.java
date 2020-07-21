@@ -36,11 +36,11 @@ public class DHTProtocolManager {
 		}
 		
 		public boolean isExpired() {
-			long serviceLife = 
+			return Util.currentTimeMillis() - timeStarted >   serviceLifeMs();
 		}
 		
 		public boolean isDeletable() {
-			
+			return Util.currentTimeMillis() - timeStarted > 2*serviceLifeMs();
 		}
 		
 		public boolean addNewSalt(Long salt) {
@@ -56,7 +56,7 @@ public class DHTProtocolManager {
 	protected LinkedList<DHTSearchOperation> pendingOperations = new LinkedList<>();
 	protected boolean                        autofind          = true,
 			                                 initialized       = false;
-	protected LinkedList<HashSet<Long>>      recentSaltSets    = new LinkedList<>();
+	protected LinkedList<RecentSaltSet>      recentSaltSets    = new LinkedList<>();
 
 	private Logger logger = LoggerFactory.getLogger(DHTProtocolManager.class);
 	
@@ -449,8 +449,24 @@ public class DHTProtocolManager {
 		return autofind;
 	}
 	
-	public boolean canAcceptSalt(byte[] salt) {
-		HashSet<Long> 
+	protected boolean needsNewSaltSet() {
+		return recentSaltSets.isEmpty()
+			|| recentSaltSets.getLast().isExpired();
+	}
+	
+	protected void refreshSaltSets() {
+		if(!needsNewSaltSet()) return;
+		
+		synchronized(this) {
+			if(!needsNewSaltSet()) return;
+			recentSaltSets.removeIf((set)->set.isDeletable());
+			recentSaltSets.add(new RecentSaltSet());
+		}
+	}
+	
+	public boolean recordMessageRnd(byte[] salt) {
 		long salt64 = ByteBuffer.wrap(salt).getLong();
+		refreshSaltSets();
+		return recentSaltSets.getLast().addNewSalt(salt64);
 	}
 }

@@ -176,20 +176,20 @@ public class DHTMessage {
 	
 	protected byte[] serialize(int numPackets, ByteBuffer sendBuf) {
 		/*  ('||' operator indicates concatenation throughout this comment)
-		 * serialized = salt
-		 *           || encrypt_u(k0, eph_pubkey)
-		 *           || encrypt_u(k1, local_static_pubkey)
+		 * serialized = rnd
+		 *           || encrypt_u(k0, eph_pubkey)                    // ct0
+		 *           || encrypt_u(k1, local_static_pubkey)           // ct1
 		 *           || encrypt_a(k2, header || payload || padding)
-		 *   salt: 8 rng bytes
-		 *     k0: HKDF(salt, networkId || peer_static_pubkey)
-		 *     k1: HKDF(salt,        k0 || DH(eph_privkey,          peer_static_pubkey))
-		 *     k2: HKDF(salt,        k1 || DH(local_static_privkey, peer_static_pubkey))
+		 *    rnd: 8 rng bytes
+		 *     k0: HKDF(peer_static_pubkey,       rnd ||               networkId)
+		 *     k1: HKDF(peer_static_pubkey, k0 || rnd || ct0 ||        DH(eph_privkey, peer_static_pubkey))
+		 *     k2: HKDF(peer_static_pubkey, k1 || rnd || ct0 || ct1 || DH(local_static_privkey, peer_static_pubkey))
 		 * padding: null bytes added to end of plaintext, of arbitrary length less than maximum allowed
 		 * 
 		 * encrypt_u (key,  plaintext): encrypt without authentication, fixed IV
 		 * encrypt_a (key,  plaintext): encrypt with    authentication, fixed IV
 		 * HKDF      (salt, ikm)      : RFC 5869, length is symmetric key size, info field is 0-byte string
-		 * DH        (pubkey, privkey): Diffie-Hellman key derivation
+		 * DH        (pubkey, privkey): Diffie-Hellman shared secret derivation
 		 * 
 		 * objectives:
 		 *   - secret info required to learn local_static_pubkey, header and/or payload
@@ -210,9 +210,23 @@ public class DHTMessage {
          * complicating the state information that must be maintained for each peer.
          * This offers the benefit of perfect forward secrecy and replay protection.
          * 
-         * Replay protection can also be attained by other means, such as a bloom filter
-         * of recently-seen 64-bit salts, combined with a check against a timestamp field
+         * Replay protection can also be attained by other means, such as a set of
+         * recently-seen 64-bit salts, combined with a check against a timestamp field
          * in the header.
+         * 
+         * The cost of failing to ensure forward secrecy is mitigated by the fact that DHT
+         * peers possess very limited information to begin with. An adversary may be able to
+         * collect ciphertexts sent to a peer, then compromise that peer or force disclosure
+         * of the private static key. This will reveal DHTIDs that have been looked up via
+         * the compromised peer, as well as records stored on it. These records in turn
+         * reveal peers listening for peers for a given DHTID. However, this information
+         * cannot be meaningfully acted upon without additional information, such as
+         * knowledge of the secret generating the DHTID, or its associated seed key, or some
+         * confirmation that a DHTID belongs to some item of interest.
+         * 
+         * Since DHTIDs rotate every several hours, and are unpredictable without knowledge
+         * of the seed secret that generates them, a compromise of a DHT peer is of limited
+         * (though not necessarily zero) utility.
 		 */
 		
 		CryptoSupport crypto             = peer.client.crypto;
@@ -224,26 +238,40 @@ public class DHTMessage {
 				      remoteStaticPubkey = peer.getKey(),
 				      ephPubkey          = ephPrivkey.publicKey();
 		
-		byte[]        salt               = crypto.rng(8),
+		byte[]        rnd                = crypto.rng(8),
+		              blankIv            = new byte[crypto.symIvLength()],
 		              networkId          = peer.client.getNetworkId(),
 		              ephSharedSecret    = ephPrivkey        .sharedSecret(peer.getKey()),
 		              staticSharedSecret = localStaticPrivkey.sharedSecret(peer.getKey());
 		
 		Key[]         keys               = new Key[3];
-		              keys[0]            = new Key(crypto, crypto.expand(
-											Util.concat(networkId, remoteStaticPubkey.getBytes()),
+		              keys[0]            = new Key(crypto, crypto.expandAndDestroy(
+											Util.concat(
+													rnd,                 // 1
+													networkId),
 											crypto.symKeyLength(),
-											salt,
+											remoteStaticPubkey.getBytes(),
 											new byte[0]));
-		              keys[1]            = new Key(crypto, crypto.expand(
-				                            Util.concat(keys[0].getRaw(), ephSharedSecret),
+		byte[]        obfuscatedEphKey   = keys[0].encryptUnauthenticated(blankIv, ephPubkey.getBytes());
+		              keys[1]            = new Key(crypto, crypto.expandAndDestroy(
+				                            Util.concat(
+				                            		keys[0].getRaw(),
+				                            		rnd,                 // 1
+				                            		obfuscatedEphKey,    // 2
+				                            		ephSharedSecret),
 				                            crypto.symKeyLength(),
-				                            salt,
+				                            remoteStaticPubkey.getBytes(),
 				                            new byte[0]));
-		              keys[2]            = new Key(crypto, crypto.expand(
-                                            Util.concat(keys[1].getRaw(), staticSharedSecret),
+		byte[]        encryptedStaticKey = keys[1].encryptUnauthenticated(blankIv, localStaticPubkey.getBytes());
+		              keys[2]            = new Key(crypto, crypto.expandAndDestroy(
+                                            Util.concat(
+                                            		keys[1].getRaw(),
+                                            		rnd,                 // 1
+                                            		obfuscatedEphKey,    // 2
+                                            		encryptedStaticKey,  // 3
+                                            		staticSharedSecret),
                                             crypto.symKeyLength(),
-                                            salt,
+                                            remoteStaticPubkey.getBytes(),
                                             new byte[0]));
 		
 		ByteBuffer plaintext             = ByteBuffer.allocate(
@@ -256,10 +284,6 @@ public class DHTMessage {
 		plaintext.put    (flags);
 		plaintext.put    ((byte) numPackets);
 		plaintext.put    (sendBuf);
-		
-		byte[] blankIv            = new byte[crypto.symIvLength()],
-		       obfuscatedEphKey   = keys[0].encryptUnauthenticated(blankIv, ephPubkey.getBytes()),
-		       encryptedStaticKey = keys[1].encryptUnauthenticated(blankIv, localStaticPubkey.getBytes());
 		
 		// pad the plaintext to obfuscate our true length somewhat
 		int    baseLength         = 8
@@ -275,64 +299,101 @@ public class DHTMessage {
 				                      plaintext.array(),
 				                      paddedSize),
 		       serialized         = Util.concat(
-		    		                  salt,
+		    		                  rnd,
 		    		                  obfuscatedEphKey,
 		    		                  encryptedStaticKey,
 		    		                  ciphertext);
+		
+		// This is of dubious effectiveness in Java, but even attempting key hygiene is virtuous.
+		Util.zero(ephSharedSecret);
+		Util.zero(staticSharedSecret);
+		ephPrivkey.destroy();
+		for(Key k : keys) k.destroy();
 		
 		return serialized;
 	}
 	
 	protected void deserialize(DHTClient client, String senderAddress, int senderPort, ByteBuffer serialized) throws ProtocolViolationException {
-		CryptoSupport crypto             = peer.client.crypto;
-		PrivateDHKey  localStaticPrivkey = peer.client.getPrivateKey();
-		PublicDHKey   localStaticPubkey  = peer.client.getPublicKey();
+		try {
+			deserializeActual(client, senderAddress, senderPort, serialized);
+		} catch(Exception exc) {
+			throw new BenignProtocolViolationException();
+		}
+	}
+	
+	protected void deserializeActual(DHTClient client, String senderAddress, int senderPort, ByteBuffer serialized) throws ProtocolViolationException {
+		CryptoSupport crypto             = client.crypto;
+		assertStateWithoutBlacklist(
+				  serialized.remaining()
+			    > 8
+				+ 2 * crypto.asymPublicDHKeySize()
+				+ crypto.symPaddedCiphertextSize(headerSize()));
 		
-		byte[]        networkId          = peer.client.getNetworkId(),
-				      salt               = new byte[8],
+		PrivateDHKey  localStaticPrivkey = client.getPrivateKey();
+		PublicDHKey   localStaticPubkey  = client.getPublicKey();
+		
+		byte[]        networkId          = client.getNetworkId(),
+				      rnd                = new byte[8],
 				      blankIv            = new byte[crypto.symIvLength()],
 				      obfuscatedEphKey   = new byte[crypto.asymPublicDHKeySize()],
 				      encryptedStaticKey = new byte[crypto.asymPublicDHKeySize()];
 		
-		serialized.get(salt);
+		serialized.get(rnd);
 		serialized.get(obfuscatedEphKey);
 		serialized.get(encryptedStaticKey);
 		
-		assertStateWithoutBlacklist(peer.client.canAcceptSalt(salt));
-		
+		/* Ensure that this salt hasn't been seen recently, and if not, ensure it is
+		 * recorded so we don't let it get reused. */
+		assertStateWithoutBlacklist(client.getProtocolManager().recordMessageRnd(rnd));		
 		
 		Key[]         keys               = new Key[3];
-		              keys[0]            = new Key(crypto, crypto.expand(
-											Util.concat(networkId, localStaticPubkey.getBytes()),
+		              keys[0]            = new Key(crypto, crypto.expandAndDestroy(
+											Util.concat(
+													rnd,                 // 1
+													networkId),
 											crypto.symKeyLength(),
-											salt,
+											localStaticPubkey.getBytes(),
 											new byte[0]));
 		byte[]        ephPubkeyRaw       = keys[0].decryptUnauthenticated(blankIv, obfuscatedEphKey);
 		PublicDHKey   ephPubkey          = crypto.makePublicDHKey(ephPubkeyRaw);
 		byte[]        ephSharedSecret    = localStaticPrivkey.sharedSecret(ephPubkey);
 		
-		              keys[1]            = new Key(crypto, crypto.expand(
-				                            Util.concat(keys[0].getRaw(), ephSharedSecret),
+		              keys[1]            = new Key(crypto, crypto.expandAndDestroy(
+				                            Util.concat(
+				                            		keys[0].getRaw(),
+				                            		rnd,                 // 1
+				                            		obfuscatedEphKey,    // 2
+				                            		ephSharedSecret),
 				                            crypto.symKeyLength(),
-				                            salt,
+				                            localStaticPubkey.getBytes(),
 				                            new byte[0]));
 		byte[]        staticPubkeyRaw    = keys[1].decryptUnauthenticated(blankIv, encryptedStaticKey);
 		PublicDHKey   remoteStaticPubkey = crypto.makePublicDHKey(staticPubkeyRaw);
 		byte[]        staticSharedSecret = localStaticPrivkey.sharedSecret(remoteStaticPubkey);
 		
-		              keys[2]            = new Key(crypto, crypto.expand(
-                                            Util.concat(keys[1].getRaw(), staticSharedSecret),
+		              keys[2]            = new Key(crypto, crypto.expandAndDestroy(
+                                            Util.concat(
+                                            		keys[1].getRaw(),
+                                            		rnd,                 // 1
+                                            		obfuscatedEphKey,    // 2
+                                            		encryptedStaticKey,  // 3
+                                            		staticSharedSecret),
                                             crypto.symKeyLength(),
-                                            salt,
+                                            localStaticPubkey.getBytes(),
                                             new byte[0]));
 		
-		byte[]     plaintextRaw          = keys[2].decrypt(
+		byte[]        plaintextRaw       = keys[2].decrypt(
 		                                     blankIv,
 		                                     serialized.array(),
 		                                     serialized.position(),
 		                                     serialized.remaining());
-		ByteBuffer plaintext             = ByteBuffer.wrap(plaintextRaw);
 		
+		// This is of dubious effectiveness in Java, but even attempting key hygiene is virtuous.
+		Util.zero(ephSharedSecret);
+		Util.zero(staticSharedSecret);
+		for(Key k : keys) k.destroy();
+		
+		ByteBuffer plaintext             = ByteBuffer.wrap(plaintextRaw);
 		this.authTag                     = new byte[DHTClient.AUTH_TAG_SIZE];
 		plaintext.get(authTag);
 		
@@ -341,12 +402,18 @@ public class DHTMessage {
 		this.cmd                         = plaintext.get();
 		this.flags                       = plaintext.get();
 		this.numExpected                 = plaintext.get();
-		this.payload                     = new byte[plaintext.remaining()];
-		plaintext.get(payload);
 		
+		// Verify that this message was not timestamped earlier than the reach of our salt cache.
 		long timeDelta = Util.currentTimeMillis() - timestamp;
 		assertStateWithoutBlacklist(timeDelta < client.getMaster().getGlobalConfig().getLong("net.dht.maxTimestampDelta"));
 		assertStateWithoutBlacklist(timeDelta > client.getMaster().getGlobalConfig().getLong("net.dht.minTimestampDelta"));
+		
+		this.payload                     = new byte[plaintext.remaining()];
+		plaintext.get(payload);
+		this.peer                        = client.routingTable.peerForMessage(
+		                                     senderAddress,
+		                                     senderPort,
+		                                     remoteStaticPubkey);
 	}
 	
 	protected int headerSize() {
