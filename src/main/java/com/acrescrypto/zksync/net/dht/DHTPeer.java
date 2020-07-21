@@ -37,6 +37,7 @@ public class DHTPeer implements Sendable {
 	protected PublicDHKey key;
 	protected byte[]      remoteAuthTag = new byte[DHTClient.AUTH_TAG_SIZE];
 	protected boolean     pinned; // do not prune this peer
+	protected boolean     verified;
 	
 	private Logger logger = LoggerFactory.getLogger(DHTPeer.class);
 	
@@ -91,7 +92,6 @@ public class DHTPeer implements Sendable {
 	public void findNode(DHTID nodeId, Key lookupKey, DHTFindNodePeerCallback peerCallback, DHTFindNodeRecordCallback recordCallback) {
 		client.getProtocolManager().findNodeMessage(this, nodeId, lookupKey, (resp)->{
 			ArrayList<DHTPeer> receivedPeers = new ArrayList<>();
-			this.remoteAuthTag = resp.authTag;
 			ByteBuffer buf = ByteBuffer.wrap(resp.payload);
 			while(buf.hasRemaining()) {
 				if(buf.remaining() < 1+2) throw new ProtocolViolationException();
@@ -151,22 +151,39 @@ public class DHTPeer implements Sendable {
 			 ).send();
 	}
 	
+	public void markVerified() {
+		if(verified) return;
+		verified = true;
+		client.getRoutingTable().verifiedPeer(this);
+	}
+	
+	public boolean isVerified() {
+		return verified;
+	}
+	
 	public boolean equals(Object o) {
-		return id.equals(o);
+		if(!(o instanceof DHTPeer)) {
+			return id.equals(o);
+		}
+		
+		DHTPeer other = (DHTPeer) o;
+		if(!id     .equals(other.id))      return false;
+		if(!address.equals(other.address)) return false;
+		if( port    !=     other.port)     return false;
+		
+		return true;
 	}
 	
 	public byte[] localAuthTag() {
 		byte[] tag = new byte[DHTClient.AUTH_TAG_SIZE];
 		
-		String authStr =
-				   address
-				 + ":"
-				 + port
-				 + ":"
-				 + Util.bytesToHex(key.getBytes());
-		
+		byte[] token = client.tagKey.authenticate(Util.concat(
+					key.getBytes(),
+					Util.serializeInt(port),
+					address.getBytes()
+				));
 		System.arraycopy(
-				client.tagKey.authenticate(authStr.getBytes()),
+				token,
 				0,
 				tag,
 				0,

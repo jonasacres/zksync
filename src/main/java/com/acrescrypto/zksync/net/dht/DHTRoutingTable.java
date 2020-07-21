@@ -242,4 +242,14 @@ public class DHTRoutingTable {
 			throw new EINVALException(path());
 		}
 	}
+
+	public void verifiedPeer(DHTPeer peer) {
+		/* This peer has demonstrated that it can receive messages at its apparent address.
+		 * Therefore, we can prune any other peers that have the same public key, since they
+		 * are presumably the same peer at a previous IP and/or port. We can also discard
+		 * any peers with different public keys at the indicated IP and port. */
+		for(DHTBucket bucket : buckets) {
+			bucket.pruneToVerifiedPeer(peer);
+		}
+	}
 }

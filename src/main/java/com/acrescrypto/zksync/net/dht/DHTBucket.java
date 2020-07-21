@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.net.dht;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.LinkedList;
 
 import com.acrescrypto.zksync.utility.Util;
 
@@ -95,6 +96,27 @@ public class DHTBucket {
 		DHTPeer stalest = Util.min(peers, (a,b)->Long.compare(a.lastSeen, b.lastSeen));
 		if(stalest != null && stalest.isQuestionable()) {
 			stalest.ping();
+		}
+	}
+
+	public void pruneToVerifiedPeer(DHTPeer peer) {
+		LinkedList<DHTPeer> toPrune = new LinkedList<>();
+		for(DHTPeer existing : peers) {
+			if(peer == existing) continue;
+			boolean samePort =  peer.getPort()    ==     existing.getPort(),
+					sameAddr =  peer.getAddress().equals(existing.getAddress()),
+					sameKey  =  peer.getKey()    .equals(existing.getKey()),
+					sameNet  =  samePort && sameAddr,
+					canPrune =  ( sameNet && !sameKey)
+					         || (!sameNet &&  sameKey);
+			if(canPrune) {
+				toPrune.add(existing);
+			}
+		}
+		
+		peers.removeIf((p)->toPrune.contains(p));
+		for(DHTPeer pruned : toPrune) {
+			client.getRoutingTable().removedPeer(pruned);
 		}
 	}
 }

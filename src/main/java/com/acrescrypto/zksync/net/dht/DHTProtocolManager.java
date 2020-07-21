@@ -302,7 +302,6 @@ public class DHTProtocolManager {
 				message.msgId);
 		
 		message.peer.acknowledgedMessage();
-		message.peer.remoteAuthTag = message.authTag;
 		
 		DHTMessageStub stub = null;
 		synchronized(this) {

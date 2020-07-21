@@ -62,6 +62,9 @@ public class DHTMessage {
 	
 	public DHTMessage(DHTClient client, String senderAddress, int senderPort, ByteBuffer serialized) throws ProtocolViolationException {
 		deserialize(client, senderAddress, senderPort, serialized);
+		if(hasValidAuthTag()) {
+			peer.markVerified();
+		}
 	}
 	
 	public DHTMessage(DHTPeer recipient, byte cmd, int msgId, Collection<? extends Sendable> items) {
@@ -415,6 +418,9 @@ public class DHTMessage {
 			                                  senderAddress,
 			                                  senderPort,
 			                                  remoteStaticPubkey);
+			if((flags & FLAG_RESPONSE) != 0) {
+				this.peer.remoteAuthTag  = this.authTag;
+			}
 		} catch(UnknownHostException exc) {
 			// This shouldn't happen because the senderAddress is guaranteed to be an IP
 			throw new BenignProtocolViolationException();
@@ -440,8 +446,12 @@ public class DHTMessage {
 			);
 	}
 	
+	public boolean hasValidAuthTag() {
+		return Arrays.equals(peer.localAuthTag(), authTag);
+	}
+	
 	protected void assertValidAuthTag() throws ProtocolViolationException {
-		if(!Arrays.equals(peer.localAuthTag(), authTag)) throw new ProtocolViolationException();
+		if(!hasValidAuthTag()) throw new ProtocolViolationException();
 	}
 	
 	protected void assertState(boolean state) throws ProtocolViolationException {

@@ -1442,4 +1442,94 @@ public class DHTClientTest {
 		assertTrue(Util.waitUntil(100, ()->client.getSocketManager().getPort() > 0));
 		assertEquals(oldPort, client.getSocketManager().getPort());
 	}
+	
+	@Test
+	public void testSetsRemoteAuthTagOnReceiptOfResponse() throws ProtocolViolationException {
+		DHTPeer peerFromTable = null;
+		for(DHTPeer peer : client.routingTable.allPeers()) {
+			peerFromTable = peer;
+			break;
+		}
+		
+		peerFromTable.ping();
+		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
+		req.makeResponse(new ArrayList<>(0)).send();
+		Util.sleep(10);
+		
+		byte x = 0;
+		for(byte b : peerFromTable.remoteAuthTag) {
+			x |= b;
+		}
+		
+		assertNotEquals(0, x);
+	}
+	
+	@Test
+	public void testSetsPeerVerifiedWhenValidAuthTagReceived() throws ProtocolViolationException {
+		DHTPeer peerFromTable = null;
+		for(DHTPeer peer : client.routingTable.allPeers()) {
+			peerFromTable = peer;
+			break;
+		}
+		
+		peerFromTable.ping();
+		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
+		req.makeResponse(new ArrayList<>(0)).send();
+		Util.sleep(10);
+		
+		peerFromTable.ping();
+		req = remote.receivePacket(DHTMessage.CMD_PING);
+		assertTrue(req.peer.isVerified());
+	}
+
+	@Test
+	public void testPrunesPeersWithDifferingKeysAndSameNetInfoWhenVerified() throws ProtocolViolationException, UnknownHostException {
+		DHTPeer peerFromTable = null;
+		for(DHTPeer peer : client.routingTable.allPeers()) {
+			peerFromTable = peer;
+			break;
+		}		
+		
+		peerFromTable.ping();
+		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
+		DHTPeer dupe = new DHTPeer(client, req.peer.address, req.peer.port, crypto.makePrivateDHKey().publicKey());
+		remote.listenClient.getRoutingTable().suggestPeer(dupe);
+		req.makeResponse(new ArrayList<>(0)).send();
+		Util.sleep(10);
+		
+		peerFromTable.ping();
+		req = remote.receivePacket(DHTMessage.CMD_PING);
+		Util.sleep(10);
+		
+		for(DHTPeer peer : remote.listenClient.routingTable.allPeers()) {
+			assertNotEquals(dupe, peer);
+		}
+	}
+	
+	@Test
+	public void testPrunesPeersWithSameKeyAndDifferingNetInfoWhenVerified() throws UnknownHostException, ProtocolViolationException {
+		DHTPeer peerFromTable = null;
+		for(DHTPeer peer : client.routingTable.allPeers()) {
+			peerFromTable = peer;
+			break;
+		}		
+		
+		peerFromTable.ping();
+		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
+		DHTPeer dupe = new DHTPeer(client, req.peer.address, req.peer.port+1, req.peer.getKey());
+		
+		remote.listenClient.getRoutingTable().suggestPeer(dupe);
+		req.makeResponse(new ArrayList<>(0)).send();
+		Util.sleep(10);
+		
+		peerFromTable.ping();
+		req = remote.receivePacket(DHTMessage.CMD_PING);
+		Util.sleep(10);
+		
+		for(DHTPeer peer : remote.listenClient.routingTable.allPeers()) {
+			if(peer.equals(dupe)) {
+				assertNotEquals(peer.getPort(), dupe.getPort());
+			}
+		}
+	}
 }
