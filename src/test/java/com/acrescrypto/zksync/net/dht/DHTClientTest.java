@@ -1141,7 +1141,7 @@ public class DHTClientTest {
 	}
 	
 	@Test
-	public void testDeserializeRecordDeserializesIntoAppropriateRecordObject() throws UnsupportedProtocolException {
+	public void testDeserializeRecordDeserializesIntoAppropriateRecordObject() throws UnsupportedProtocolException, UnknownHostException {
 		DHTAdvertisementRecord record = makeBogusAd(0);
 		TCPPeerAdvertisement ad = (TCPPeerAdvertisement) record.ad;
 		DHTPeer peer = new DHTPeer(client, ad.getHost(), ad.getPort(), ad.getPubKey());

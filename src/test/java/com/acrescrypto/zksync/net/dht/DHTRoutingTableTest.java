@@ -7,6 +7,7 @@ import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -98,20 +99,32 @@ public class DHTRoutingTableTest {
 	DHTRoutingTable table;
 	
 	public DHTPeer makeTestPeer(int i) {
-		byte[] seed = ByteBuffer.allocate(4).putInt(i).array();
-		byte[] pubKey = client.crypto.prng(seed).getBytes(client.crypto.asymPublicDHKeySize());
-		return new DHTPeer(client, "10.0.0."+i, 1000+i, pubKey);
+		try {
+			byte[] seed = ByteBuffer.allocate(4).putInt(i).array();
+			byte[] pubKey = client.crypto.prng(seed).getBytes(client.crypto.asymPublicDHKeySize());
+			
+			int ii = i % 256, jj = i / 256;
+			return new DHTPeer(client, "10.0."+jj+"."+ii, 1000+i, pubKey);
+		} catch(UnknownHostException exc) {
+			fail();
+			return null;
+		}
 	}
 	
 	public DHTPeer makeTestPeer(DHTID id) {
-		byte[] seed = id.serialize();
-		byte[] pubKey = client.crypto.prng(seed).getBytes(client.crypto.asymPublicDHKeySize());
-		DHTPeer peer = new DHTPeer(client,
-				"10.0.0."+(client.crypto.prng(seed).getInt()%256),
-				(client.crypto.prng(seed).getInt()%65536),
-				pubKey);
-		peer.id = id;
-		return peer;
+		try {
+			byte[] seed = id.serialize();
+			byte[] pubKey = client.crypto.prng(seed).getBytes(client.crypto.asymPublicDHKeySize());
+			DHTPeer peer = new DHTPeer(client,
+					"10.0.0."+(client.crypto.prng(seed).getInt(256)),
+					(client.crypto.prng(seed).getInt(65536)),
+					pubKey);
+			peer.id = id;
+			return peer;
+		} catch(UnknownHostException exc) {
+			fail();
+			return null;
+		}
 	}
 	
 	@BeforeClass
@@ -331,7 +344,7 @@ public class DHTRoutingTableTest {
 	
 	
 	@Test
-	public void testSuggestPeerRejectsSelf() {
+	public void testSuggestPeerRejectsSelf() throws UnknownHostException {
 		DHTPeer peer = new DHTPeer(client, "127.0.0.1", 0, table.client.getPublicKey());
 		table.suggestPeer(peer);
 		int bucketIdx = peer.id.xor(client.id).order()+1;

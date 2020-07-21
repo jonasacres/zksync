@@ -8,6 +8,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -163,9 +164,14 @@ public class DHTPeerTest {
 	}
 	
 	public DHTPeer makeTestPeer(int i) {
-		byte[] seed = ByteBuffer.allocate(4).putInt(i).array();
-		byte[] pubKey = crypto.prng(seed).getBytes(crypto.asymPublicDHKeySize());
-		return new DHTPeer(client, "10.0.0."+i, 1000+i, pubKey);
+		try {
+			byte[] seed = ByteBuffer.allocate(4).putInt(i).array();
+			byte[] pubKey = crypto.prng(seed).getBytes(crypto.asymPublicDHKeySize());
+			return new DHTPeer(client, "10.0.0."+i, 1000+i, pubKey);
+		} catch(UnknownHostException exc) {
+			fail();
+			return null;
+		}
 	}
 	
 	public DHTMessage makeResponse(byte[] payload) {
@@ -205,7 +211,7 @@ public class DHTPeerTest {
 	}
 
 	@Test
-	public void testInitializeWithAddressInfo() {
+	public void testInitializeWithAddressInfo() throws UnknownHostException {
 		PublicDHKey pubKey = crypto.makePrivateDHKey().publicKey();
 		DHTPeer peer = new DHTPeer(client, "10.0.0.1", 1000, pubKey.getBytes());
 		
@@ -216,7 +222,7 @@ public class DHTPeerTest {
 	}
 	
 	@Test
-	public void testSerialization() throws EINVALException {
+	public void testSerialization() throws EINVALException, UnknownHostException {
 		PublicDHKey pubKey = crypto.makePrivateDHKey().publicKey();
 		DHTPeer peer = new DHTPeer(client, "10.0.0.1", 1000, pubKey.getBytes());
 		
@@ -576,7 +582,7 @@ public class DHTPeerTest {
 	}
 	
 	@Test
-	public void testLocalAuthTagIsConstantForMatchingAddressPortAndKey() {
+	public void testLocalAuthTagIsConstantForMatchingAddressPortAndKey() throws UnknownHostException {
 		byte[] pubKey = crypto.makePrivateDHKey().publicKey().getBytes(); 
 		DHTPeer peer0 = new DHTPeer(client, "10.0.0.0", 1000, pubKey);
 		DHTPeer peer1 = new DHTPeer(client, "10.0.0.0", 1000, pubKey);
@@ -585,7 +591,7 @@ public class DHTPeerTest {
 	}
 	
 	@Test
-	public void testLocalAuthTagIsVariableWithAddress() {
+	public void testLocalAuthTagIsVariableWithAddress() throws UnknownHostException {
 		byte[] pubKey = crypto.makePrivateDHKey().publicKey().getBytes(); 
 		DHTPeer peer0 = new DHTPeer(client, "10.0.0.0", 1000, pubKey);
 		DHTPeer peer1 = new DHTPeer(client, "10.0.0.1", 1000, pubKey);
@@ -594,7 +600,7 @@ public class DHTPeerTest {
 	}
 	
 	@Test
-	public void testLocalAuthTagIsVariableWithPort() {
+	public void testLocalAuthTagIsVariableWithPort() throws UnknownHostException {
 		byte[] pubKey = crypto.makePrivateDHKey().publicKey().getBytes(); 
 		DHTPeer peer0 = new DHTPeer(client, "10.0.0.0", 1000, pubKey);
 		DHTPeer peer1 = new DHTPeer(client, "10.0.0.0", 1001, pubKey);
@@ -603,7 +609,7 @@ public class DHTPeerTest {
 	}
 	
 	@Test
-	public void testLocalAuthTagIsVariableWithKey() {
+	public void testLocalAuthTagIsVariableWithKey() throws UnknownHostException {
 		DHTPeer peer0 = new DHTPeer(client, "10.0.0.0", 1000, crypto.makePrivateDHKey().publicKey().getBytes());
 		DHTPeer peer1 = new DHTPeer(client, "10.0.0.0", 1001, crypto.makePrivateDHKey().publicKey().getBytes());
 		

@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.net.dht;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -72,11 +73,17 @@ public class DHTProtocolManager {
 	}
 	
 	public DHTPeer getLocalPeer() {
-		return new DHTPeer(client,
-				client.getSocketManager().getSocketAddress(),
-				client.getSocketManager().getPort(),
-				client.getPublicKey().getBytes()
-			);
+		try {
+			return new DHTPeer(client,
+					client.getSocketManager().getSocketAddress(),
+					client.getSocketManager().getPort(),
+					client.getPublicKey().getBytes()
+				);
+		} catch(UnknownHostException exc) {
+			// This shouldn't happen when getting the local address of our own socket
+			logger.error("DHT -: Caught exception fetching local peer", exc);
+			throw new RuntimeException(exc);
+		}
 	}
 	
 	protected DHTMessage pingMessage(DHTPeer recipient, DHTMessageCallback callback) {

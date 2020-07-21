@@ -9,6 +9,7 @@ import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -98,7 +99,12 @@ public class DHTMessageTest {
 		}
 		
 		@Override public DHTPeer peerForMessage(String address, int port, PublicDHKey pubKey) {
-			return new DHTPeer(client, address, port, pubKey.getBytes());
+			try {
+				return new DHTPeer(client, address, port, pubKey.getBytes());
+			} catch(UnknownHostException exc) {
+				fail();
+				return null;
+			}
 		}
 	}
 	
@@ -159,7 +165,12 @@ public class DHTMessageTest {
 	}
 	
 	public DHTPeer makeTestPeer(int i) {
-		return new DHTPeer(client, "10.0.0."+i, 1000+i, privateKeyForPeer(i).publicKey().getBytes());
+		try {
+			return new DHTPeer(client, "10.0.0."+i, 1000+i, privateKeyForPeer(i).publicKey().getBytes());
+		} catch(UnknownHostException exc) {
+			fail();
+			return null;
+		}
 	}
 	
 	public byte[] decodePacket(PrivateDHKey recvKey, DHTMessage msg, DatagramPacket packet) {
@@ -469,7 +480,7 @@ public class DHTMessageTest {
 	}
 	
 	@Test
-	public void testDeserializesMessagesToClient() throws ProtocolViolationException {
+	public void testDeserializesMessagesToClient() throws ProtocolViolationException, UnknownHostException {
 		byte[]     payload      = crypto.rng(32);
 		DHTPeer    localPeer    = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
 		DHTMessage req          = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
@@ -491,7 +502,7 @@ public class DHTMessageTest {
 	}
 	
 	@Test
-	public void testDeserializeThrowsProtocolViolationExceptionIfTampered() {
+	public void testDeserializeThrowsProtocolViolationExceptionIfTampered() throws UnknownHostException {
 		byte[]     payload    = crypto.rng(32);
 		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
 		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
@@ -510,7 +521,7 @@ public class DHTMessageTest {
 	}
 	
 	@Test(expected=ProtocolViolationException.class)
-	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedCiphertext() throws ProtocolViolationException {
+	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedCiphertext() throws ProtocolViolationException, UnknownHostException {
 		byte[]     payload    = crypto.rng(32);
 		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
 		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
@@ -522,7 +533,7 @@ public class DHTMessageTest {
 	}
 
 	@Test(expected=ProtocolViolationException.class)
-	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedKey() throws ProtocolViolationException {
+	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedKey() throws ProtocolViolationException, UnknownHostException {
 		byte[]     payload    = crypto.rng(32);
 		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
 		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
@@ -534,7 +545,7 @@ public class DHTMessageTest {
 	}
 	
 	@Test(expected=ProtocolViolationException.class)
-	public void testDeserializeThrowsProtocolViolationExceptionIfTimestampIsTooOld() throws ProtocolViolationException {
+	public void testDeserializeThrowsProtocolViolationExceptionIfTimestampIsTooOld() throws ProtocolViolationException, UnknownHostException {
 		long startTs = System.currentTimeMillis();
 		long sendTs  = startTs;		
 		long maxAge  = client.getMaster().getGlobalConfig().getLong("net.dht.maxTimestampDelta");
@@ -551,7 +562,7 @@ public class DHTMessageTest {
 	}
 
 	@Test
-	public void testDeserializeDoesntThrowProtocolViolationExceptionIfTimestampIsJustShyOfOld() throws ProtocolViolationException {
+	public void testDeserializeDoesntThrowProtocolViolationExceptionIfTimestampIsJustShyOfOld() throws ProtocolViolationException, UnknownHostException {
 		long startTs = System.currentTimeMillis();
 		long sendTs  = startTs + 1;		
 		long maxAge  = client.getMaster().getGlobalConfig().getLong("net.dht.maxTimestampDelta");
@@ -568,7 +579,7 @@ public class DHTMessageTest {
 	}
 	
 	@Test(expected=ProtocolViolationException.class)
-	public void testDeserializeThrowsProtocolViolationExceptionIfTimestampIsTooFuturistic() throws ProtocolViolationException {
+	public void testDeserializeThrowsProtocolViolationExceptionIfTimestampIsTooFuturistic() throws ProtocolViolationException, UnknownHostException {
 		long startTs = System.currentTimeMillis();
 		long minAge  = client.getMaster().getGlobalConfig().getLong("net.dht.minTimestampDelta");
 		long sendTs  = startTs - minAge;
@@ -585,7 +596,7 @@ public class DHTMessageTest {
 	}
 	
 	@Test
-	public void testDeserializeDoesntThrowProtocolViolationExceptionIfTimestampIsJustShyOfTooFuturistic() throws ProtocolViolationException {
+	public void testDeserializeDoesntThrowProtocolViolationExceptionIfTimestampIsJustShyOfTooFuturistic() throws ProtocolViolationException, UnknownHostException {
 		long startTs = System.currentTimeMillis();
 		long minAge  = client.getMaster().getGlobalConfig().getLong("net.dht.minTimestampDelta");
 		long sendTs  = startTs - minAge - 1;		
@@ -602,7 +613,7 @@ public class DHTMessageTest {
 	}
 	
 	@Test
-	public void testDeserializeThrowsProtocolViolationExceptionIfReplay() throws ProtocolViolationException {
+	public void testDeserializeThrowsProtocolViolationExceptionIfReplay() throws ProtocolViolationException, UnknownHostException {
 		byte[] payload    = crypto.rng(32);
 		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
 		DHTMessage req    = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});

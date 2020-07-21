@@ -410,10 +410,15 @@ public class DHTMessage {
 		
 		this.payload                     = new byte[plaintext.remaining()];
 		plaintext.get(payload);
-		this.peer                        = client.routingTable.peerForMessage(
-		                                     senderAddress,
-		                                     senderPort,
-		                                     remoteStaticPubkey);
+		try {
+			this.peer                    = client.routingTable.peerForMessage(
+			                                  senderAddress,
+			                                  senderPort,
+			                                  remoteStaticPubkey);
+		} catch(UnknownHostException exc) {
+			// This shouldn't happen because the senderAddress is guaranteed to be an IP
+			throw new BenignProtocolViolationException();
+		}
 	}
 	
 	protected int headerSize() {

@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -87,7 +88,7 @@ public class DHTSearchOperationTest {
 	class DummyClient extends DHTClient {
 		ArrayList<DHTPeer> simPeers;
 
-		public DummyClient() {
+		public DummyClient() throws UnknownHostException {
 			this.master = new DummyMaster();
 			this.crypto = CryptoSupport.defaultCrypto();
 			this.simPeers = makeTestList(this, 2048);
@@ -124,7 +125,7 @@ public class DHTSearchOperationTest {
 		
 		int requestsReceived = 0;
 		
-		public DummyPeer(DummyClient client, String address, int port, byte[] pubKey) {
+		public DummyPeer(DummyClient client, String address, int port, byte[] pubKey) throws UnknownHostException {
 			super(client, address, port, pubKey);
 			this.client = client;
 			
@@ -185,7 +186,7 @@ public class DHTSearchOperationTest {
 		assertTrue(Util.waitUntil(100, ()->results != null));
 	}
 	
-	public ArrayList<DHTPeer> makeTestList(DummyClient client, int size) {
+	public ArrayList<DHTPeer> makeTestList(DummyClient client, int size) throws UnknownHostException {
 		ArrayList<DHTPeer> list = new ArrayList<>(size);
 		for(int i = 0; i < size; i++) {
 			list.add(makeTestPeer(client, i));
@@ -206,10 +207,12 @@ public class DHTSearchOperationTest {
 		return closest;
 	}
 	
-	public DHTPeer makeTestPeer(DummyClient client, int i) {
+	public DHTPeer makeTestPeer(DummyClient client, int i) throws UnknownHostException {
 		byte[] seed = ByteBuffer.allocate(4).putInt(i).array();
 		byte[] pubKey = crypto.prng(seed).getBytes(crypto.asymPublicDHKeySize());
-		return new DummyPeer(client, "10.0.0."+i, 1000+i, pubKey);
+		
+		int jj = i / 256, ii = i % 256;
+		return new DummyPeer(client, "10.0."+jj+"."+ii, 1000+i, pubKey);
 	}
 	
 	@BeforeClass
@@ -218,7 +221,7 @@ public class DHTSearchOperationTest {
 	}
 	
 	@Before
-	public void beforeEach() {
+	public void beforeEach() throws UnknownHostException {
 		crypto = CryptoSupport.defaultCrypto();
 		client = new DummyClient();
 		searchId = new DHTID(crypto.rng(crypto.hashLength()));

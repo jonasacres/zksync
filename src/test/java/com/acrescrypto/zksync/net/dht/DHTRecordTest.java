@@ -4,6 +4,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 
 import org.junit.After;
@@ -71,7 +72,7 @@ public class DHTRecordTest {
 	}
 
 	@Test
-	public void testDeserializeRecordWithPeerHandlesAdvertisements() throws UnsupportedProtocolException {
+	public void testDeserializeRecordWithPeerHandlesAdvertisements() throws UnsupportedProtocolException, UnknownHostException {
 		CryptoSupport crypto = CryptoSupport.defaultCrypto();
 		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234, crypto.rng(crypto.hashLength()));
 		DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(crypto, ad);
@@ -89,7 +90,7 @@ public class DHTRecordTest {
 	}
 	
 	@Test(expected=UnsupportedProtocolException.class)
-	public void testDeserializeRecorThrowsExceptionIfUnsupportedType() throws UnsupportedProtocolException {
+	public void testDeserializeRecorThrowsExceptionIfUnsupportedType() throws UnsupportedProtocolException, UnknownHostException {
 		CryptoSupport crypto = CryptoSupport.defaultCrypto();
 		TCPPeerAdvertisement ad = new TCPPeerAdvertisement(crypto.makePrivateDHKey().publicKey(), "localhost", 1234, crypto.rng(crypto.hashLength()));
 		DHTAdvertisementRecord adRecord = new DHTAdvertisementRecord(crypto, ad);

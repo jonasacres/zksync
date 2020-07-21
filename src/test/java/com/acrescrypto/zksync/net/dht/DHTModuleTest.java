@@ -1,8 +1,10 @@
 package com.acrescrypto.zksync.net.dht;
 
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
@@ -52,7 +54,12 @@ public class DHTModuleTest {
 	ZKMaster master;
 	
 	DHTPeer makePeer(DHTClient dest, DHTClient owner) {
-		return new DHTPeer(owner, "127.0.0.1", dest.getPort(), dest.getPublicKey().getBytes());
+		try {
+			return new DHTPeer(owner, "127.0.0.1", dest.getPort(), dest.getPublicKey().getBytes());
+		} catch(UnknownHostException exc) {
+			fail();
+			return null;
+		}
 	}
 	
 	ArrayList<DHTClient> makeClients(int numClients) throws IOException, InvalidBlacklistException {

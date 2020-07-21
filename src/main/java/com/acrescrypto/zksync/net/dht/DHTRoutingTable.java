@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.net.dht;
 
 import java.io.IOException;
+import java.net.UnknownHostException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -109,7 +110,13 @@ public class DHTRoutingTable {
 			}
 		}
 		
-		DHTPeer insertablePeer = new DHTPeer(client, peer.address, peer.port, peer.key);
+		DHTPeer insertablePeer;
+		try {
+			insertablePeer     = new DHTPeer(client, peer.address, peer.port, peer.key);
+		} catch(UnknownHostException exc) {
+			return;
+		}
+		
 		insertablePeer.id      = new DHTID(peer.id.rawId.clone()); // some tests hijack this field, so we'll respect that
 		insertablePeer.setPinned(peer.isPinned());
 		
@@ -138,7 +145,7 @@ public class DHTRoutingTable {
 		}
 	}
 	
-	public DHTPeer peerForMessage(String address, int port, PublicDHKey pubKey) {
+	public DHTPeer peerForMessage(String address, int port, PublicDHKey pubKey) throws UnknownHostException {
 		for(DHTPeer peer : allPeers) {
 			if(peer.matches(address, port, pubKey)) return peer;
 		}

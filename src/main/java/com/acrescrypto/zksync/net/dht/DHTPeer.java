@@ -1,5 +1,7 @@
 package com.acrescrypto.zksync.net.dht;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -38,7 +40,7 @@ public class DHTPeer implements Sendable {
 	
 	private Logger logger = LoggerFactory.getLogger(DHTPeer.class);
 	
-	public DHTPeer(DHTClient client, String address, int port, byte[] key) {
+	public DHTPeer(DHTClient client, String address, int port, byte[] key) throws UnknownHostException {
 		this(
 				client,
 				address,
@@ -47,9 +49,9 @@ public class DHTPeer implements Sendable {
 			);
 	}
 	
-	public DHTPeer(DHTClient client, String address, int port, PublicDHKey key) {
+	public DHTPeer(DHTClient client, String address, int port, PublicDHKey key) throws UnknownHostException {
 		this.client  = client;
-		this.address = address;
+		this.address = InetAddress.getByName(address).getHostAddress();
 		this.port    = port;
 
 		this.key     = key;

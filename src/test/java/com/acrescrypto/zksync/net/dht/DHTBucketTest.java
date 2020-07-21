@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
@@ -58,7 +59,7 @@ public class DHTBucketTest {
 	class DummyPeer extends DHTPeer {
 		boolean pinged;
 		
-		public DummyPeer(DHTClient client, String address, int port, byte[] keyBytes) {
+		public DummyPeer(DHTClient client, String address, int port, byte[] keyBytes) throws UnknownHostException {
 			super(client, address, port, keyBytes);
 		}
 		
@@ -69,7 +70,12 @@ public class DHTBucketTest {
 	DummyClient client;
 	
 	DummyPeer makePeer(int i) {
-		return new DummyPeer(client, "10.0.0."+i, 1000+i, crypto.makePrivateDHKey().publicKey().getBytes());
+		try {
+			return new DummyPeer(client, "10.0.0."+i, 1000+i, crypto.makePrivateDHKey().publicKey().getBytes());
+		} catch(UnknownHostException exc) {
+			fail();
+			return null;
+		}
 	}
 	
 	void makePeerBad(DHTPeer peer) {

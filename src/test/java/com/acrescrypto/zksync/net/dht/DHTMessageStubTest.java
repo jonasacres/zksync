@@ -158,7 +158,7 @@ public class DHTMessageStubTest {
 	}
 	
 	@Test
-	public void testMatchesMessageRetursnFalseIfNoPeerMatch() throws ProtocolViolationException {
+	public void testMatchesMessageRetursnFalseIfNoPeerMatch() throws ProtocolViolationException, UnknownHostException {
 		DHTMessage fakeResponse = makeResponse();
 		fakeResponse.peer = new DHTPeer(client, "10.0.0.1", 12345, crypto.rng(crypto.asymPublicDHKeySize()));
 		assertFalse(stub.matchesMessage(fakeResponse));

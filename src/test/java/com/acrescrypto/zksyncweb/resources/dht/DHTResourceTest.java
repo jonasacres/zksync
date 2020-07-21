@@ -8,6 +8,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -208,18 +209,23 @@ public class DHTResourceTest {
 	}
 
 	public DHTPeer makePeer(DHTClient client, int i) {
-		CryptoSupport crypto = CryptoSupport.defaultCrypto();
-		DHTPeer peer = new DHTPeer(client,
-				"127.0.0." + i,
-				1000+i,
-				crypto.hash(Util.serializeInt(i)));
-
-		Util.setCurrentTimeMillis(i*100000);
-		peer.acknowledgedMessage();
-		
-		for(int j = 0; j < i; j++) peer.missedMessage();
-
-		return peer;
+		try {
+			CryptoSupport crypto = CryptoSupport.defaultCrypto();
+			DHTPeer peer = new DHTPeer(client,
+					"127.0.0." + i,
+					1000+i,
+					crypto.hash(Util.serializeInt(i)));
+	
+			Util.setCurrentTimeMillis(i*100000);
+			peer.acknowledgedMessage();
+			
+			for(int j = 0; j < i; j++) peer.missedMessage();
+	
+			return peer;
+		} catch(UnknownHostException exc) {
+			fail();
+			return null;
+		}
 	}
 
 	@BeforeClass
