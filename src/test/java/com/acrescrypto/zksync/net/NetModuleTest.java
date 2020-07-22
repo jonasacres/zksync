@@ -381,6 +381,7 @@ public class NetModuleTest {
 			bConfig.finishOpening();
 	
 			ZKArchiveConfig bConfig_ = bConfig;
+			// TODO ITF: 2020-07-22 linux 15b4048 
 			assertTrue(Util.waitUntil(1000, ()->bConfig_.getRevisionList().branchTips().size() > 1));
 			fsb = bConfig.getRevisionList().branchTips().get(1).getFS();
 			assertArrayEquals(fsa.read("immediate"), fsb.read("immediate"));

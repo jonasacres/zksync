@@ -252,12 +252,16 @@ public class RevisionList implements AutoCloseable {
 			}
 		}
 
-		synchronized (this) {
-			logger.info("RevisionList {} {}: Removing {} branch tips due to consolidation to tip {}",
-					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()),
-					toRemove.size(), Util.formatRevisionTag(newBranch));
-			for (RevisionTag tip : toRemove) {
-				removeBranchTip(tip);
+		if(!toRemove.isEmpty()) {
+			synchronized (this) {
+				logger.info("RevisionList {} {}: Removing {} branch tips due to consolidation to tip {}",
+						config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()),
+						toRemove.size(), Util.formatRevisionTag(newBranch));
+				for (RevisionTag tip : toRemove) {
+					removeBranchTip(tip);
+				}
+				
+				write();
 			}
 		}
 	}
@@ -280,13 +284,17 @@ public class RevisionList implements AutoCloseable {
 			}
 		}
 
-		synchronized (this) {
-			logger.info("RevisionList {} {} {}: Removing {} branch tips due to general consolidation",
-					config.getMaster().getName(),
-					config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()),
-					toRemove.size());
-			for (RevisionTag tip : toRemove) {
-				removeBranchTip(tip);
+		if(!toRemove.isEmpty()) {
+			synchronized (this) {
+				logger.info("RevisionList {} {} {}: Removing {} branch tips due to general consolidation",
+						config.getMaster().getName(),
+						config.getArchive().getMaster().getName(), Util.formatArchiveId(config.getArchiveId()),
+						toRemove.size());
+				for (RevisionTag tip : toRemove) {
+					removeBranchTip(tip);
+				}
+				
+				write();
 			}
 		}
 	}
@@ -317,11 +325,19 @@ public class RevisionList implements AutoCloseable {
 	}
 
 	public synchronized void write() throws IOException {
-		MutableSecureFile.atPath(config.localStorage, getPath(), branchTipKey()).write(serialize(), 65536);
+		MutableSecureFile.atPath(
+				config.localStorage,
+				getPath(),
+				branchTipKey()
+			).write(serialize(), 65536);
 	}
 
 	public synchronized void read() throws IOException {
-		deserialize(MutableSecureFile.atPath(config.localStorage, getPath(), branchTipKey()).read());
+		deserialize(MutableSecureFile.atPath(
+				config.localStorage,
+				getPath(),
+				branchTipKey()
+		   ).read());
 	}
 
 	protected synchronized void deserialize(byte[] serialized) throws IOException {
@@ -353,6 +369,7 @@ public class RevisionList implements AutoCloseable {
 		for (RevisionTag tag : branchTips) {
 			buf.put(tag.getBytes());
 		}
+		
 		return buf.array();
 	}
 

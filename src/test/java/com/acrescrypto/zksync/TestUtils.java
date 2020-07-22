@@ -174,6 +174,7 @@ public class TestUtils {
 		}
 		
 		System.gc();
+		ConfigDefaults.resetDefaults();
 	}
 	
 	public static void stopDebugMode() {
@@ -188,6 +189,7 @@ public class TestUtils {
 		CryptoSupport.cheapArgon2     = true;
 		FS.fileHandleTelemetryEnabled = true;
 		UPnP.enableDebug();
+		ConfigDefaults.resetDefaults();
 		ConfigDefaults.getActiveDefaults().set("net.dht.bootstrap.peerfile", "");
 		System.gc();
 	}

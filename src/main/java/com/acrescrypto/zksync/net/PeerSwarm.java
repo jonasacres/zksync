@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.net;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -335,6 +336,11 @@ public class PeerSwarm implements BlacklistCallback {
 			try {
 				conn = ad.connect(this);
 				openedConnection(conn);
+			} catch (ConnectException exc) {
+				logger.debug("Swarm {} {}: Unable to connect to peer of ad type {}",
+						Util.formatArchiveId(config.getArchiveId()),
+						ad.routingInfo(),
+						ad.getType());
 			} catch (UnsupportedProtocolException exc) {
 				logger.info("Swarm {} {}: Ignoring unsupported ad type {}",
 						Util.formatArchiveId(config.getArchiveId()),

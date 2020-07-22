@@ -644,6 +644,7 @@ public class PeerConnection {
 							socket.getAddress(),
 							socket.getPort(),
 							Util.formatRevisionTag(revTag));
+					socket.swarm.config.getRevisionList().write();
 				}
 			} catch(SearchFailedException exc) {
 				/* placeholder if we ever want to do something about getting a branch tip we can't get info about
@@ -651,8 +652,6 @@ public class PeerConnection {
 			} catch(IOException exc) {
 			}
 		}
-		
-		socket.swarm.config.getRevisionList().write();
 	}
 	
 	protected void handleAnnounceRevisionDetails(PeerMessageIncoming msg) throws PeerCapabilityException, EOFException {

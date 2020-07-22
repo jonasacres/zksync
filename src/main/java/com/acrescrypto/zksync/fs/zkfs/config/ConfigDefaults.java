@@ -28,6 +28,7 @@ public class ConfigDefaults {
 		config.setDefault("net.dht.bindaddress",                "0.0.0.0");
 		config.setDefault("net.dht.localaddress",               "0.0.0.0");
 		config.setDefault("net.dht.port",                               0);
+		config.setDefault("net.dht.lastport",                           0);
 		config.setDefault("net.dht.upnp",                           false);
 		config.setDefault("net.dht.network",                   "easysafe");
 		config.setDefault("net.dht.maxDatagramSize",                  508); // max to avoid fragmentation: 576 (guaranteed by RFC 791), -60 (IP header), -8 (UDP header) = 508 bytes
