@@ -772,6 +772,7 @@ public class DHTClientTest {
 		peerFromTable.missedMessages = 1;
 		peerFromTable.ping();
 		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
+		// TODO: ITF 2020-07-22 linux 15b40482
 		req.makeResponse(new ArrayList<>(0)).send();
 		Util.sleep(10);
 		assertEquals(0, peerFromTable.missedMessages);
