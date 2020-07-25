@@ -15,6 +15,7 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTPeer implements Sendable {
@@ -83,10 +84,14 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public void ping() {
+		ping(null);
+	}
+	
+	public void ping(DHTMessageCallback callback) {
 		logger.debug("DHT {}:{}: send ping",
 				address,
 				port);
-		client.getProtocolManager().pingMessage(this, null).send();
+		client.getProtocolManager().pingMessage(this, callback).send();
 	}
 	
 	public void findNode(DHTID nodeId, Key lookupKey, DHTFindNodePeerCallback peerCallback, DHTFindNodeRecordCallback recordCallback) {
@@ -138,6 +143,15 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public void addRecord(DHTID recordId, Key lookupKey, DHTRecord record) {
+		if(!canVerifyToPeer()) {
+			logger.info("DHT {}:{}: Can't addRecord to {} without remote auth tag; pinging",
+					address,
+					port,
+					Util.bytesToHex(recordId.rawId, 8));
+			this.ping((msg)->addRecord(recordId, lookupKey, record));
+			return;
+		}
+		
 		logger.info("DHT {}:{}: send addRecord {}",
 				address,
 				port,
@@ -159,6 +173,16 @@ public class DHTPeer implements Sendable {
 	
 	public boolean isVerified() {
 		return verified;
+	}
+	
+	public boolean canVerifyToPeer() {
+		if(remoteAuthTag == null) return false;
+		
+		for(byte b : this.remoteAuthTag) {
+			if(b != 0) return true;
+		}
+		
+		return false;
 	}
 	
 	public boolean equals(Object o) {

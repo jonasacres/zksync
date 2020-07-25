@@ -25,6 +25,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.apache.commons.lang3.mutable.MutableInt;
@@ -634,53 +635,64 @@ public class DHTClientTest {
 	
 	@Test
 	public void testAddRecordCallsAddRecordOnClosestPeersForID() throws IOException, InvalidBlacklistException {
-		DHTID searchId = client.id.flip(); // ensure that the client is NOT one of the closest results
-		try(TestNetwork network = new TestNetwork(16)) {
-			MutableInt numFindNode = new MutableInt();
-			MutableInt numReceived = new MutableInt();
-			Key lookupKey = new Key(crypto);
+		for(int i = 0; i < Integer.MAX_VALUE; i++) {
+			if(i == 0) {
+				afterEach();
+				beforeEach();
+			}
+			System.out.println("Iteration " + i);
 			int maxResults = master.getGlobalConfig().getInt("net.dht.maxResults");
 			
-			network.setHandlerForClosest(searchId, maxResults, (remote)->{
-				byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, remote.peer.key.getBytes()));
-				DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
-				assertArrayEquals(Util.concat(searchId.rawId, token), findNodeMsg.payload);
-				synchronized(numFindNode) { numFindNode.increment();  }
-				findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, maxResults)).send();
+			DHTID searchId = client.id.flip(); // ensure that the client is NOT one of the closest results
+			try(TestNetwork network = new TestNetwork(4*maxResults)) {
+				AtomicInteger numReceived = new AtomicInteger(),
+				              numFindNode = new AtomicInteger();
+				Key lookupKey = new Key(crypto);
 				
-				DHTMessage addRecordMsg;
-				do {
-					// TODO Someday: (bug) Figure out why we mysteriously get extra CMD_FIND_NODEs if we run a full test suite.
-					// For now, we'll just discard them and move on.
-					addRecordMsg = remote.receivePacket();
-				} while(addRecordMsg.cmd != DHTMessage.CMD_ADD_RECORD);
+				network.setHandlerForClosest(searchId, maxResults, (remote)->{
+					byte[]     token       = lookupKey.authenticate(
+					                           Util.concat(searchId.rawId, remote.peer.key.getBytes()));
+					DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
+					assertArrayEquals(Util.concat(searchId.rawId, token), findNodeMsg.payload);
+					numFindNode.incrementAndGet();
+					findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, maxResults)).send();
+					
+					DHTMessage addRecordMsg;
+					do {
+						// TODO Someday: (bug) Figure out why we mysteriously get extra CMD_FIND_NODEs if we run a full test suite.
+						// For now, we'll just discard them and move on.
+						addRecordMsg = remote.receivePacket();
+					} while(addRecordMsg.cmd != DHTMessage.CMD_ADD_RECORD);
+					
+					numReceived.incrementAndGet();
+					if(!addRecordMsg.peer.isVerified()) {
+						fail();
+					}
+					
+					ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);
+					byte[] id = new byte[client.idLength()];
+					byte[] rxToken = new byte[crypto.hashLength()];
+					payload.get(id);
+					payload.get(rxToken);
+					assertArrayEquals(searchId.rawId, id);
+					assertArrayEquals(token, rxToken);
+					
+					byte[] recordBytes = new byte[payload.remaining()];
+					payload.get(recordBytes);
+					assertArrayEquals(makeBogusAd(0).serialize(), recordBytes);
+				});
 				
-				synchronized(numReceived) { numReceived.increment(); }
-				addRecordMsg.assertValidAuthTag();
+				client.routingTable.reset();
+				for(RemotePeer remote : network.remotes) {
+					client.addPeer(remote.peer);
+				}
 				
-				ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);
-				byte[] id = new byte[client.idLength()];
-				byte[] rxToken = new byte[crypto.hashLength()];
-				payload.get(id);
-				payload.get(rxToken);
-				assertArrayEquals(searchId.rawId, id);
-				assertArrayEquals(token, rxToken);
+				client.getProtocolManager().addRecord(searchId, lookupKey, makeBogusAd(0));
+				network.run();
 				
-				byte[] recordBytes = new byte[payload.remaining()];
-				payload.get(recordBytes);
-				assertArrayEquals(makeBogusAd(0).serialize(), recordBytes);
-			});
-			
-			client.routingTable.reset();
-			for(RemotePeer remote : network.remotes) {
-				client.addPeer(remote.peer);
+				// TODO Urgent: (itf) linux UniversalTests 2018-12-11 8cda32e. AssertionError: expected<8> but was <7>
+				assertEquals(maxResults, numReceived.intValue());
 			}
-			
-			client.getProtocolManager().addRecord(searchId, lookupKey, makeBogusAd(0));
-			network.run();
-			
-			// TODO Urgent: (itf) linux UniversalTests 2018-12-11 8cda32e. AssertionError: expected<8> but was <7>
-			assertEquals(maxResults, numReceived.intValue());
 		}
 	}
 	
