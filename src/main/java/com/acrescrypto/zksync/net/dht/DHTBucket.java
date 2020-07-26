@@ -8,7 +8,6 @@ import com.acrescrypto.zksync.utility.Util;
 
 public class DHTBucket {
 	public final static int MAX_BUCKET_CAPACITY = 8;
-	public final static int BUCKET_FRESHEN_INTERVAL_MS = 1000*60*15;
 	
 	DHTClient client;
 	int order;
@@ -81,7 +80,11 @@ public class DHTBucket {
 	}
 	
 	public boolean needsFreshening() {
-		return lastChanged >= 0 && Util.currentTimeMillis() - lastChanged >= BUCKET_FRESHEN_INTERVAL_MS;
+		long timeSinceLastChange = Util.currentTimeMillis() - lastChanged;
+		long freshenInterval     = client.getRoutingTable().bucketFreshenInterval();
+		
+		return lastChanged >= 0
+			&& timeSinceLastChange >= freshenInterval;
 	}
 	
 	protected void prune() {

@@ -328,4 +328,8 @@ public class DHTRoutingTable {
 		suggestPeer(peer);
 		return peer;
 	}
+	
+	public long bucketFreshenInterval() {
+		return client.getMaster().getGlobalConfig().getLong("net.dht.bucketFreshenIntervalMs");
+	}
 }

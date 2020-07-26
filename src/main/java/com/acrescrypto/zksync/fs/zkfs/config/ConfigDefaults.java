@@ -45,6 +45,7 @@ public class ConfigDefaults {
 		config.setDefault("net.dht.messageExpirationTimeMs",         5000);
 		config.setDefault("net.dht.messageRetryTimeMs",              2000);
 		config.setDefault("net.dht.freshenIntervalMs",            60*1000);
+		config.setDefault("net.dht.bucketFreshenIntervalMs",   15*60*1000);
 		config.setDefault("net.dht.pollIntervalMs"        ,    1000*60*15);
 		config.setDefault("net.dht.store.maxRecordsPerId",             64);
 		config.setDefault("net.dht.store.maxIds",                     128);

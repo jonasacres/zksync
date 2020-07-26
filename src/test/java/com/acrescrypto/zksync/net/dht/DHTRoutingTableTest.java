@@ -63,6 +63,11 @@ public class DHTRoutingTableTest {
 		public RAMFS getStorage() {
 			return storage;
 		}
+		
+		@Override
+		public DHTRoutingTable getRoutingTable() {
+			return table;
+		}
 	}
 	
 	class DummyProtocolManager extends DHTProtocolManager {
@@ -192,7 +197,7 @@ public class DHTRoutingTableTest {
 		DHTBucket bucket = table.buckets.get(peer.id.xor(client.id).order()+1);
 		table.suggestPeer(peer);
 
-		Util.setCurrentTimeMillis(DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeMillis(table.bucketFreshenInterval());
 		assertTrue(bucket.needsFreshening());
 		table.markFresh(peer);
 		assertFalse(bucket.needsFreshening());
@@ -208,7 +213,7 @@ public class DHTRoutingTableTest {
 		}
 
 		table.suggestPeer(peer);
-		Util.setCurrentTimeMillis(DHTBucket.BUCKET_FRESHEN_INTERVAL_MS+1);
+		Util.setCurrentTimeMillis(table.bucketFreshenInterval()+1);
 		table.markFresh(peer);
 
 		for(int i = 0; i <= 8*client.idLength(); i++) {
@@ -372,7 +377,7 @@ public class DHTRoutingTableTest {
 		table.suggestPeer(makeTestPeer(0));
 		table.close();
 		
-		Util.setCurrentTimeMillis(DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeMillis(table.bucketFreshenInterval());
 		assert(client.lookupIds.isEmpty());
 		table = new DHTRoutingTable(client);
 		assertTrue(Util.waitUntil(50, ()->!client.lookupIds.isEmpty()));

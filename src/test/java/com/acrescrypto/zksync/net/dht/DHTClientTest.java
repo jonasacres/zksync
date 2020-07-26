@@ -844,7 +844,7 @@ public class DHTClientTest {
 			}
 		}
 		
-		Util.setCurrentTimeMillis(Util.currentTimeMillis() + DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeMillis(Util.currentTimeMillis() + client.getRoutingTable().bucketFreshenInterval());
 		assertTrue(bucket.needsFreshening());
 		bucket.peers.get(0).ping();
 		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);

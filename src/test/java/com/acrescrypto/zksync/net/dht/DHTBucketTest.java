@@ -54,6 +54,7 @@ public class DHTBucketTest {
 
 		@Override public void read() {}
 		@Override public void freshenThread() {}
+		@Override public long bucketFreshenInterval() { return ConfigDefaults.getActiveDefaults().getLong("net.dht.bucketFreshenIntervalMs"); }
 	}
 	
 	class DummyPeer extends DHTPeer {
@@ -229,11 +230,11 @@ public class DHTBucketTest {
 	
 	@Test
 	public void testAddMarksBucketFresh() {
-		Util.setCurrentTimeNanos(1*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(1*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		DHTBucket bucket = new DHTBucket(client, 16);
 		bucket.add(makePeer(0));
 		
-		Util.setCurrentTimeNanos(2*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(2*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		assertTrue(bucket.needsFreshening());
 
 		bucket.add(makePeer(0));
@@ -252,16 +253,16 @@ public class DHTBucketTest {
 	
 	@Test
 	public void testMarkFreshClearsNeedsFreshening() {
-		Util.setCurrentTimeNanos(1*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(1*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		DHTBucket bucket = new DHTBucket(client, 16);
 		bucket.markFresh();
 
-		Util.setCurrentTimeNanos(2*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(2*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		assertTrue(bucket.needsFreshening());
 		bucket.markFresh();
 		assertFalse(bucket.needsFreshening());
 		
-		Util.setCurrentTimeNanos(3*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(3*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		assertTrue(bucket.needsFreshening());
 		bucket.markFresh();
 		assertFalse(bucket.needsFreshening());
@@ -269,29 +270,29 @@ public class DHTBucketTest {
 	
 	@Test
 	public void testNeedsFresheningReturnsFalseIfBucketHasBeenRecentlyFreshened() {
-		Util.setCurrentTimeNanos(1*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(1*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		DHTBucket bucket = new DHTBucket(client, 16);
 		bucket.markFresh();
 		
-		Util.setCurrentTimeNanos(2*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS-1);
+		Util.setCurrentTimeNanos(2*1000l*1000l*client.getRoutingTable().bucketFreshenInterval()-1);
 		assertFalse(bucket.needsFreshening());
 	}
 	
 	@Test
 	public void testNeedsFresheningReturnsTrueIfBucketHasNotBeenRecentlyFreshened() {
-		Util.setCurrentTimeNanos(1*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(1*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		DHTBucket bucket = new DHTBucket(client, 16);
 		bucket.markFresh();
 		
-		Util.setCurrentTimeNanos(2*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(2*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		assertTrue(bucket.needsFreshening());
 	}
 	
 	@Test
 	public void testNeedsFresheningReturnsFalseIfBucketHasNeverHadContents() {
-		Util.setCurrentTimeNanos(1*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(1*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		DHTBucket bucket = new DHTBucket(client, 16);
-		Util.setCurrentTimeNanos(2*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(2*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		assertFalse(bucket.needsFreshening());
 	}
 	
@@ -301,14 +302,14 @@ public class DHTBucketTest {
 		ArrayList<DummyPeer> peers = new ArrayList<>();
 		
 		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY; i++) {
-			Util.setCurrentTimeNanos(i*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+			Util.setCurrentTimeNanos(i*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 			DummyPeer peer = makePeer(i);
 			peers.add(peer);
 			peer.acknowledgedMessage();
 			bucket.add(peer);
 		}
 		
-		Util.setCurrentTimeNanos(DHTBucket.MAX_BUCKET_CAPACITY*1000l*1000l*DHTBucket.BUCKET_FRESHEN_INTERVAL_MS);
+		Util.setCurrentTimeNanos(DHTBucket.MAX_BUCKET_CAPACITY*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		bucket.prune();
 		for(int i = 0; i < peers.size(); i++) {
 			assertEquals(i == 0, peers.get(i).pinged);
@@ -328,7 +329,7 @@ public class DHTBucketTest {
 			bucket.add(peer);
 		}
 		
-		Util.setCurrentTimeMillis(DHTBucket.BUCKET_FRESHEN_INTERVAL_MS-1);
+		Util.setCurrentTimeMillis(client.getRoutingTable().bucketFreshenInterval()-1);
 		bucket.prune();
 		for(int i = 0; i < peers.size(); i++) {
 			assertFalse(peers.get(i).pinged);
