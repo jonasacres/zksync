@@ -308,6 +308,7 @@ public class DHTProtocolManager {
 			for(DHTMessageStub request : pendingRequests) {
 				if(request.matchesMessage(message)) {
 					stub = request;
+					break;
 				}
 			}
 		}

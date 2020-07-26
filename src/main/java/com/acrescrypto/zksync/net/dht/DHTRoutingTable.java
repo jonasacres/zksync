@@ -7,6 +7,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
+import java.util.PriorityQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,9 +21,35 @@ import com.acrescrypto.zksync.utility.Util;
 public class DHTRoutingTable {
 	protected DHTClient client;
 	protected ArrayList<DHTBucket> buckets = new ArrayList<>();
+	protected PriorityQueue<RecentPeer> recent = new PriorityQueue<>();
 	protected boolean closed;
 	protected ArrayList<DHTPeer> allPeers = new ArrayList<>();
 	private Logger logger = LoggerFactory.getLogger(DHTRoutingTable.class);
+	
+	public class RecentPeer implements Comparable<RecentPeer> {
+		long timestamp;
+		DHTPeer peer;
+		
+		public RecentPeer(DHTPeer peer) {
+			this.peer = peer;
+			refresh();
+		}
+		
+		public void refresh() {
+			this.timestamp = Util.currentTimeMillis();
+		}
+		
+		@Override
+		public boolean equals(Object o) {
+			if(!(o instanceof RecentPeer)) return false;
+			return peer.equals(((RecentPeer) o).peer);
+		}
+		
+		@Override
+		public int compareTo(RecentPeer o) {
+			return Long.signum(timestamp - o.timestamp);
+		}
+	}
 
 	public DHTRoutingTable(DHTClient client) {
 		this.client = client;
@@ -105,7 +132,10 @@ public class DHTRoutingTable {
 	public synchronized void suggestPeer(DHTPeer peer, long lastSeen) {
 		if(peer.id.equals(client.getId())) return;            // we don't need an entry for ourselves!
 		for(DHTPeer existing : allPeers) {
-			if(existing.id.equals(peer.id) && existing.address.equals(peer.address) && existing.port == peer.port) {
+			if(   existing.id     .equals(peer.id)
+			   && existing.address.equals(peer.address)
+			   && existing.port        == peer.port)
+			{
 				return;                                       // already have this peer
 			}
 		}
@@ -146,13 +176,42 @@ public class DHTRoutingTable {
 	}
 	
 	public DHTPeer peerForMessage(String address, int port, PublicDHKey pubKey) throws UnknownHostException {
+		for(RecentPeer rr : recent) {
+			if(rr.peer.matches(address, port, pubKey)) {
+				rr.refresh();
+				return rr.peer;
+			}
+		}
+		
 		for(DHTPeer peer : allPeers) {
-			if(peer.matches(address, port, pubKey)) return peer;
+			if(peer.matches(address, port, pubKey)) {
+				refreshRecent(peer);
+				return peer;
+			}
 		}
 		
 		DHTPeer newPeer = new DHTPeer(client, address, port, pubKey.getBytes());
 		suggestPeer(newPeer);
+		refreshRecent(newPeer);
+		
 		return newPeer;
+	}
+	
+	protected void refreshRecent(DHTPeer peer) {
+		for(RecentPeer rr : recent) {
+			if(!rr.peer.equals(peer)) continue;
+			rr.refresh();
+			return;
+		}
+		
+		// need to add to list
+		int maxCount = client.getMaster().getGlobalConfig().getInt("net.dht.maxRecentPeerQueueSize");
+		while(recent.size() >= maxCount) {
+			recent.poll();
+		}
+		
+		RecentPeer rr = new RecentPeer(peer);
+		recent.add(rr);
 	}
 	
 	public synchronized void dump() {
@@ -251,5 +310,22 @@ public class DHTRoutingTable {
 		for(DHTBucket bucket : buckets) {
 			bucket.pruneToVerifiedPeer(peer);
 		}
+	}
+
+	public DHTPeer canonicalPeer(DHTPeer peer) {
+		for(RecentPeer rr : recent) {
+			if(peer.equals(rr.peer)) {
+				rr.refresh();
+				return rr.peer;
+			}
+		}
+		
+		for(DHTPeer existing : allPeers) {
+			if(existing.equals(peer)) return existing;
+		}
+		
+		refreshRecent(peer);
+		suggestPeer(peer);
+		return peer;
 	}
 }

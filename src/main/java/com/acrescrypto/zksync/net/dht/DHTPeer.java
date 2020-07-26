@@ -111,7 +111,7 @@ public class DHTPeer implements Sendable {
 					DHTPeer peer;
 					
 					try {
-						peer = new DHTPeer(client, buf);
+						peer = client.routingTable.canonicalPeer(new DHTPeer(client, buf));
 					} catch(EINVALException exc) {
 						throw new ProtocolViolationException();
 					}

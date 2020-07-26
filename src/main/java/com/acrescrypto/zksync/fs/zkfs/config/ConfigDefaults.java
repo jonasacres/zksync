@@ -37,6 +37,7 @@ public class ConfigDefaults {
 		config.setDefault("net.dht.maxResults",                         8);
 		config.setDefault("net.dht.searchQueryTimeoutMs",            3000);
 		config.setDefault("net.dht.maxSearchQueryWaitTimeMs",       30000);
+		config.setDefault("net.dht.maxRecentPeerQueueSize",           128);
 		config.setDefault("net.dht.socketOpenFailCycleDelayMs",      9000);
 		config.setDefault("net.dht.socketCycleDelayMs",              1000);
 		config.setDefault("net.dht.lookupResultMaxWaitTimeMs",        500);

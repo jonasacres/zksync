@@ -244,6 +244,7 @@ public class DHTClientTest {
 		public TestNetwork(int size) throws SocketException, UnknownHostException {
 			for(int i = 0; i < size; i++) {
 				remotes.add(new RemotePeer());
+				System.out.println("Starting " + Util.formatPubKey(remotes.get(i).listenClient.getPublicKey()));
 				handlers.put(remotes.get(i), (remote)->defaultHandler(remote));
 			}
 			
@@ -293,6 +294,7 @@ public class DHTClientTest {
 			
 			ArrayList<RemotePeer> results = new ArrayList<RemotePeer>(numResults);
 			for(int i = 0; i < numResults; i++) {
+				System.out.println("Near peer: " + Util.formatPubKey(sorted.get(i).listenClient.getPublicKey()));
 				results.add(sorted.get(i));
 			}
 			
@@ -641,45 +643,87 @@ public class DHTClientTest {
 				beforeEach();
 			}
 			System.out.println("Iteration " + i);
+			System.out.println("Client peer: " + Util.formatPubKey(client.getPublicKey()));
 			int maxResults = master.getGlobalConfig().getInt("net.dht.maxResults");
 			
-			DHTID searchId = client.id.flip(); // ensure that the client is NOT one of the closest results
+			/* This test generates a DHT network of 4*maxResults peers, then inserts a
+			 * record into it. The ID is chosen to be the bitflip of the test client ID,
+			 * so that the test client is guaranteed to be the most distant peer to the
+			 * searchId, and therefore not one at which the record will be stored.
+			 * 
+			 * The test passes if the client makes well-formed CMD_ADD_RECORD requests to
+			 * exactly `maxResults` peers.
+			 */
+			DHTID searchId = client.id.flip();
+			
 			try(TestNetwork network = new TestNetwork(4*maxResults)) {
-				AtomicInteger numReceived = new AtomicInteger(),
-				              numFindNode = new AtomicInteger();
+				AtomicInteger numReceived = new AtomicInteger();
 				Key lookupKey = new Key(crypto);
 				
+				/* The following lambda executes in a new thread for the maxResults closest
+				 * peers to the search ID (i.e. the ones that should ultimately receive the CMD_ADD_RECORD request).
+				 * The `remote` argument is a RemotePeer instance describing the simulated remote
+				 * DHT peer being networked with. The remaining peers in the TestNetwork will
+				 * execute the default handler, which issues a response to a single message.
+				 */
 				network.setHandlerForClosest(searchId, maxResults, (remote)->{
+					/* Wait for a CMD_FIND_NODE for the searchId. */
 					byte[]     token       = lookupKey.authenticate(
 					                           Util.concat(searchId.rawId, remote.peer.key.getBytes()));
 					DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
 					assertArrayEquals(Util.concat(searchId.rawId, token), findNodeMsg.payload);
-					numFindNode.incrementAndGet();
-					findNodeMsg.makeResponse(remote.listenClient.routingTable.closestPeers(searchId, maxResults)).send();
 					
-					DHTMessage addRecordMsg;
-					do {
-						// TODO Someday: (bug) Figure out why we mysteriously get extra CMD_FIND_NODEs if we run a full test suite.
-						// For now, we'll just discard them and move on.
-						addRecordMsg = remote.receivePacket();
-					} while(addRecordMsg.cmd != DHTMessage.CMD_ADD_RECORD);
+					// Reply to the findPeers request with the closest peers we know to the searchId
+					Collection<DHTPeer> closestPeers = remote.listenClient.routingTable.closestPeers(searchId, maxResults);
+					findNodeMsg.makeResponse(closestPeers).send();
 					
-					numReceived.incrementAndGet();
+					// Now wait for the CMD_ADD_RECORD message.
+					DHTMessage addRecordMsg = null;
+					while(true) {
+						DHTMessage msg = remote.receivePacket();
+						if(msg.cmd == DHTMessage.CMD_ADD_RECORD) {
+							System.out.println(Util.formatPubKey(remote.listenClient.getPublicKey()) + ": rx CMD_ADD_RECORD");
+							addRecordMsg = msg;
+							break;
+						} else if(msg.cmd == DHTMessage.CMD_PING) {
+							/* The client is allowed to ping us to verify that it has our auth tag, so
+							 * respond to those. */
+							System.out.println(Util.formatPubKey(remote.listenClient.getPublicKey()) + ": rx CMD_PING");
+							msg.makeResponse(new ArrayList<>()).send();
+						}
+					}
+					
+					/* Clients seeking to use CMD_ADD_RECORD must be verified; this means
+					 * that we have to have received a packet containing our auth tag, which
+					 * is a token we create out of the peer's IP and port, combined with a
+					 * secret the peer does not know, and which we embed in each response we
+					 * send. This proves that the peer is able to receive our responses, and
+					 * therefore, we can be confident that it is not lying about its IP in
+					 * order to DDoS someone.
+					 */
 					if(!addRecordMsg.peer.isVerified()) {
 						fail();
 					}
 					
+					// Now verify that the content of the CMD_ADD_RECORD is valid.
 					ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);
-					byte[] id = new byte[client.idLength()];
-					byte[] rxToken = new byte[crypto.hashLength()];
+					byte[]     id      = new byte[client.idLength()];
+					byte[]     rxToken = new byte[crypto.hashLength()];
+					
 					payload.get(id);
 					payload.get(rxToken);
+					
 					assertArrayEquals(searchId.rawId, id);
-					assertArrayEquals(token, rxToken);
+					assertArrayEquals(token,          rxToken);
 					
 					byte[] recordBytes = new byte[payload.remaining()];
 					payload.get(recordBytes);
+					
 					assertArrayEquals(makeBogusAd(0).serialize(), recordBytes);
+					
+					// Everything checks out, so record one more peer as having gotten the ad!
+					System.out.println(Util.formatPubKey(remote.listenClient.getPublicKey()) + ": test pass");
+					numReceived.incrementAndGet();
 				});
 				
 				client.routingTable.reset();
