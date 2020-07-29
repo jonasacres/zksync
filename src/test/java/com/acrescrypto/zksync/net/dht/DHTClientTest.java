@@ -278,14 +278,7 @@ public class DHTClientTest {
 						connStr.append("-");
 					}
 				}
-				
-				System.out.printf("Initialized peer %s (%2d peers) %s\n",
-						Util.formatPubKey(remote.listenClient.getPublicKey()),
-						remote.listenClient.getRoutingTable().allPeers().size(),
-						connStr.toString()
-						);
 			}
-			System.out.println();
 		}
 		
 		public void run() {
@@ -333,10 +326,8 @@ public class DHTClientTest {
 			
 			ArrayList<RemotePeer> results = new ArrayList<RemotePeer>(numResults);
 			for(int i = 0; i < numResults; i++) {
-				System.out.println("Near peer: " + Util.formatPubKey(sorted.get(i).listenClient.getPublicKey()));
 				results.add(sorted.get(i));
 			}
-			System.out.println();
 			
 			return results;
 		}
@@ -393,12 +384,11 @@ public class DHTClientTest {
 	}
 
 	CryptoSupport crypto;
-	Key storageKey;
-	DummyMaster master;
-	DHTClient client;
-	DHTPeer clientPeer;
-	
-	RemotePeer remote;
+	Key           storageKey;
+	DummyMaster   master;
+	DHTClient     client;
+	DHTPeer       clientPeer;
+	RemotePeer    remote;
 	
 	void assertAlive() throws ProtocolViolationException {
 		remote.listenClient.getProtocolManager().pingMessage(clientPeer, null).send();
@@ -433,7 +423,7 @@ public class DHTClientTest {
 		master     = new DummyMaster();
 		storageKey = new Key(crypto, crypto.makeSymmetricKey(Util.serializeInt(-1)));
 		client     = new DHTClient(storageKey, master);
-		remote     = new RemotePeer(-1);
+		remote     = new RemotePeer(123456789);
 		
 		byte[]       rawPrivKey = crypto.expand(
 		                            Util.serializeInt(-1),
@@ -446,6 +436,7 @@ public class DHTClientTest {
 		client.getProtocolManager().setAutofind(false);
 		client.addPeer(remote.peer);
 		client.listen("127.0.0.1", 0);
+		client.write();
 		
 		clientPeer = new DHTPeer(remote.listenClient, "localhost", client.getSocketManager().socket.getLocalPort(), client.getPublicKey());
 	}
@@ -587,15 +578,16 @@ public class DHTClientTest {
 	
 	@Test
 	public void testLookupInvokesCallbackWithNullIfNoResponseReceivedInTime() throws IOException, ProtocolViolationException {
-		MutableBoolean seenNull = new MutableBoolean();
-		ArrayList<DHTRecord> records = new ArrayList<>();
-		int timeout = 50;
+		MutableBoolean       seenNull = new MutableBoolean();
+		ArrayList<DHTRecord> records  = new ArrayList<>();
+		int                  timeout  = 50;
+		
 		master.getGlobalConfig().set("net.dht.searchQueryTimeoutMs", timeout);
 
 		DHTID searchId = DHTID.withBytes(crypto.rng(client.idLength()));
 		client.getProtocolManager().lookup(searchId, new Key(crypto), (record)->{
 			assertFalse(seenNull.booleanValue());
-			assertNull(record);
+			assertNull (record);
 			seenNull.setTrue();
 		});
 
@@ -685,118 +677,103 @@ public class DHTClientTest {
 	
 	@Test
 	public void testAddRecordCallsAddRecordOnClosestPeersForID() throws IOException, InvalidBlacklistException {
-		for(int i = 0; i < Integer.MAX_VALUE; i++) {
-			if(i == 0) {
-				afterEach();
-				beforeEach();
-			}
-			
-			master.getGlobalConfig().set("net.dht.searchQueryTimeoutMs",     MAX_MSG_WAIT_TIME_MS -  50);
-			master.getGlobalConfig().set("net.dht.maxSearchQueryWaitTimeMs", MAX_TEST_TIME_MS     - 100);
-			
-			/* This test generates a DHT network of 4*maxResults peers, then inserts a
-			 * record into it. The ID is chosen to be the bitflip of the test client ID,
-			 * so that the test client is guaranteed to be the most distant peer to the
-			 * searchId, and therefore not one at which the record will be stored.
-			 * 
-			 * The test passes if the client makes well-formed CMD_ADD_RECORD requests to
-			 * exactly `maxResults` peers.
-			 */
-			DHTID searchId = client.id.flip();
+		master.getGlobalConfig().set("net.dht.searchQueryTimeoutMs",     MAX_MSG_WAIT_TIME_MS -  50);
+		master.getGlobalConfig().set("net.dht.maxSearchQueryWaitTimeMs", MAX_TEST_TIME_MS     - 100);
+		
+		/* This test generates a DHT network of 4*maxResults peers, then inserts a
+		 * record into it. The ID is chosen to be the bitflip of the test client ID,
+		 * so that the test client is guaranteed to be the most distant peer to the
+		 * searchId, and therefore not one at which the record will be stored.
+		 * 
+		 * The test passes if the client makes well-formed CMD_ADD_RECORD requests to
+		 * exactly `maxResults` peers.
+		 */
+		DHTID searchId = client.id.flip();
 
-			System.out.println();
-			System.out.println("    ====Iteration " + i + "====");
-			System.out.println("Client peer: " + Util.formatPubKey(client.getPublicKey()));
-			System.out.println("Search ID  : " + Util.bytesToHex(searchId.serialize()));
-			System.out.println();
-			int maxResults = master.getGlobalConfig().getInt("net.dht.maxResults");
+		int maxResults = master.getGlobalConfig().getInt("net.dht.maxResults");
+		
+		// set the TestNetwork index from 0 to i, where i is iteration counter, for looped test
+		try(TestNetwork network = new TestNetwork(0, 4*maxResults)) {
+			AtomicInteger numReceived = new AtomicInteger();
+			Key lookupKey = new Key(crypto);
 			
-			try(TestNetwork network = new TestNetwork(i, 4*maxResults)) {
-				AtomicInteger numReceived = new AtomicInteger();
-				Key lookupKey = new Key(crypto);
+			/* The following lambda executes in a new thread for the maxResults closest
+			 * peers to the search ID (i.e. the ones that should ultimately receive the CMD_ADD_RECORD request).
+			 * The `remote` argument is a RemotePeer instance describing the simulated remote
+			 * DHT peer being networked with. The remaining peers in the TestNetwork will
+			 * execute the default handler, which issues a response to a single message.
+			 */
+			network.setHandlerForClosest(searchId, maxResults, (remote)->{
+				/* Wait for a CMD_FIND_NODE for the searchId. */
+				byte[]     token       = lookupKey.authenticate(
+				                           Util.concat(searchId.serialize(), remote.peer.key.getBytes()));
+				DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
+				assertArrayEquals(Util.concat(searchId.serialize(), token), findNodeMsg.payload);
 				
-				/* The following lambda executes in a new thread for the maxResults closest
-				 * peers to the search ID (i.e. the ones that should ultimately receive the CMD_ADD_RECORD request).
-				 * The `remote` argument is a RemotePeer instance describing the simulated remote
-				 * DHT peer being networked with. The remaining peers in the TestNetwork will
-				 * execute the default handler, which issues a response to a single message.
+				// Reply to the findPeers request with the closest peers we know to the searchId
+				Collection<DHTPeer> closestPeers = remote.listenClient.routingTable.closestPeers(searchId, maxResults);
+				findNodeMsg.makeResponse(closestPeers).send();
+				
+				// Now wait for the CMD_ADD_RECORD message.
+				DHTMessage addRecordMsg = null;
+				while(true) {
+					DHTMessage msg = remote.receivePacket();
+					if(msg.cmd == DHTMessage.CMD_ADD_RECORD) {
+						addRecordMsg = msg;
+						break;
+					} else if(msg.cmd == DHTMessage.CMD_PING) {
+						/* The client is allowed to ping us to verify that it has our auth tag, so
+						 * respond to those. */
+						msg.makeResponse(new ArrayList<>()).send();
+					}
+				}
+				
+				/* Clients seeking to use CMD_ADD_RECORD must be verified; this means
+				 * that we have to have received a packet containing our auth tag, which
+				 * is a token we create out of the peer's IP and port, combined with a
+				 * secret the peer does not know, and which we embed in each response we
+				 * send. This proves that the peer is able to receive our responses, and
+				 * therefore, we can be confident that it is not lying about its IP in
+				 * order to DDoS someone.
 				 */
-				network.setHandlerForClosest(searchId, maxResults, (remote)->{
-					/* Wait for a CMD_FIND_NODE for the searchId. */
-					byte[]     token       = lookupKey.authenticate(
-					                           Util.concat(searchId.serialize(), remote.peer.key.getBytes()));
-					DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
-					assertArrayEquals(Util.concat(searchId.serialize(), token), findNodeMsg.payload);
-					
-					// Reply to the findPeers request with the closest peers we know to the searchId
-					Collection<DHTPeer> closestPeers = remote.listenClient.routingTable.closestPeers(searchId, maxResults);
-					findNodeMsg.makeResponse(closestPeers).send();
-					
-					// Now wait for the CMD_ADD_RECORD message.
-					DHTMessage addRecordMsg = null;
-					while(true) {
-						DHTMessage msg = remote.receivePacket();
-						if(msg.cmd == DHTMessage.CMD_ADD_RECORD) {
-							System.out.println(Util.formatPubKey(remote.listenClient.getPublicKey()) + ": rx CMD_ADD_RECORD");
-							addRecordMsg = msg;
-							break;
-						} else if(msg.cmd == DHTMessage.CMD_PING) {
-							/* The client is allowed to ping us to verify that it has our auth tag, so
-							 * respond to those. */
-							System.out.println(Util.formatPubKey(remote.listenClient.getPublicKey()) + ": rx CMD_PING");
-							msg.makeResponse(new ArrayList<>()).send();
-						}
-					}
-					
-					/* Clients seeking to use CMD_ADD_RECORD must be verified; this means
-					 * that we have to have received a packet containing our auth tag, which
-					 * is a token we create out of the peer's IP and port, combined with a
-					 * secret the peer does not know, and which we embed in each response we
-					 * send. This proves that the peer is able to receive our responses, and
-					 * therefore, we can be confident that it is not lying about its IP in
-					 * order to DDoS someone.
-					 */
-					if(!addRecordMsg.peer.isVerified()) {
-						fail();
-					}
-					
-					// Now verify that the content of the CMD_ADD_RECORD is valid.
-					ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);
-					byte[]     id      = new byte[client.idLength()];
-					byte[]     rxToken = new byte[crypto.hashLength()];
-					
-					payload.get(id);
-					payload.get(rxToken);
-					
-					assertArrayEquals(searchId.serialize(), id);
-					assertArrayEquals(token,          rxToken);
-					
-					byte[] recordBytes = new byte[payload.remaining()];
-					payload.get(recordBytes);
-					
-					assertArrayEquals(makeBogusAd(0).serialize(), recordBytes);
-					
-					// Everything checks out, so record one more peer as having gotten the ad!
-					System.out.println(Util.formatPubKey(remote.listenClient.getPublicKey()) + ": test pass");
-					numReceived.incrementAndGet();
-				});
-				
-				client.routingTable.reset();
-				for(RemotePeer remote : network.remotes) {
-					client.addPeer(remote.peer);
+				if(!addRecordMsg.peer.isVerified()) {
+					fail();
 				}
 				
-				client.getProtocolManager().addRecord(searchId, lookupKey, makeBogusAd(0));
-				network.run();
+				// Now verify that the content of the CMD_ADD_RECORD is valid.
+				ByteBuffer payload = ByteBuffer.wrap(addRecordMsg.payload);
+				byte[]     id      = new byte[client.idLength()];
+				byte[]     rxToken = new byte[crypto.hashLength()];
 				
-				if(client.getRecordStore().records().containsKey(searchId)) {
-					// the original client might be one of the peers storing the record
-					numReceived.incrementAndGet();
-				}
+				payload.get(id);
+				payload.get(rxToken);
 				
-				// TODO Urgent: (itf) linux UniversalTests 2018-12-11 8cda32e. AssertionError: expected<8> but was <7>
-				assertEquals(maxResults, numReceived.intValue());
+				assertArrayEquals(searchId.serialize(), id);
+				assertArrayEquals(token,          rxToken);
+				
+				byte[] recordBytes = new byte[payload.remaining()];
+				payload.get(recordBytes);
+				
+				assertArrayEquals(makeBogusAd(0).serialize(), recordBytes);
+				
+				// Everything checks out, so record one more peer as having gotten the ad!
+				numReceived.incrementAndGet();
+			});
+			
+			client.routingTable.reset();
+			for(RemotePeer remote : network.remotes) {
+				client.addPeer(remote.peer);
 			}
+			
+			client.getProtocolManager().addRecord(searchId, lookupKey, makeBogusAd(0));
+			network.run();
+			
+			if(client.getRecordStore().records().containsKey(searchId)) {
+				// the original client might be one of the peers storing the record
+				numReceived.incrementAndGet();
+			}
+			
+			assertEquals(maxResults, numReceived.intValue());
 		}
 	}
 	
@@ -878,20 +855,29 @@ public class DHTClientTest {
 	}
 	
 	@Test
-	public void testMessageRespondersMarkedAsRefreshed() throws ProtocolViolationException {
-		DHTPeer peerFromTable = null;
-		for(DHTPeer peer : client.routingTable.allPeers()) {
-			peerFromTable = peer;
-			break;
+	public void testMessageRespondersMarkedAsRefreshed() throws ProtocolViolationException, IOException, InvalidBlacklistException {
+		for(int i = 0; i < Integer.MAX_VALUE; i++) {
+			if(i != 0) {
+				afterEach();
+				beforeEach();
+			}
+			
+			System.out.println("Iteration " + i);
+			DHTPeer peerFromTable = null;
+			for(DHTPeer peer : client.routingTable.allPeers()) {
+				peerFromTable = peer;
+				break;
+			}
+			
+			peerFromTable.missedMessages = 1;
+			peerFromTable.ping();
+			DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
+			// TODO: ITF 2020-07-22 linux 15b40482
+			req.makeResponse(new ArrayList<>(0)).send();
+			
+			DHTPeer pp = peerFromTable;
+			assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->pp.missedMessages == 0));
 		}
-		
-		peerFromTable.missedMessages = 1;
-		peerFromTable.ping();
-		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
-		// TODO: ITF 2020-07-22 linux 15b40482
-		req.makeResponse(new ArrayList<>(0)).send();
-		Util.sleep(10);
-		assertEquals(0, peerFromTable.missedMessages);
 	}
 	
 	@Test

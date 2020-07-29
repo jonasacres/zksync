@@ -161,8 +161,6 @@ public class DHTProtocolManager {
 	
 	public void addRecord(DHTID searchId, Key lookupKey, DHTRecord record) {
 		addOperation(new DHTSearchOperation(this.client, searchId, lookupKey, (op, peers)->{
-			System.out.println(" *** Search operation finished; peer count = " + (peers == null ? "null" : peers.size()));
-			
 			if(peers == null || peers.isEmpty()) {
 				client.updateStatus(DHTClient.STATUS_QUESTIONABLE);
 			}
@@ -174,7 +172,6 @@ public class DHTProtocolManager {
 					);
 				if(keysMatch) {
 					// We are one of the peers that needs to store this record
-					System.out.println("Found near peer: " + Util.formatPubKey(peer.key) + " (self)");
 					try {
 						byte[] token = lookupKey.authenticate(Util.concat(searchId.serialize(), peer.key.getBytes()));
 						client.getRecordStore().addRecordForId(searchId, token, record);
@@ -186,7 +183,6 @@ public class DHTProtocolManager {
 								exc);
 					}
 				} else {
-					System.out.println("Found near peer: " + Util.formatPubKey(peer.key));
 					peer.addRecord(searchId, lookupKey, record);
 				}
 			}

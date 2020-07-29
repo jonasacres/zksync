@@ -57,13 +57,6 @@ public class DHTMessage {
 		this.timestamp = Util.currentTimeMillis();
 		this.payload   = new byte[payloadBuf.remaining()];
 		
-		System.out.print(String.format("Peer %s -> %s  req: cmd=%d, authTag=%08x, |payload|=%d\n",
-				Util.formatPubKey(recipient.client.getPublicKey()),
-				Util.formatPubKey(recipient.getKey()),
-				cmd,
-				ByteBuffer.wrap(authTag).getInt(),
-				payload.length));
-		
 		payloadBuf.get(payload);
 	}
 	
@@ -83,14 +76,6 @@ public class DHTMessage {
 		this.msgId     = msgId;
 		this.timestamp = Util.currentTimeMillis();
 		
-		System.out.print(String.format("Peer %s -> %s resp: cmd=%d, authTag=%08x, |  items|=%d\n",
-				Util.formatPubKey(recipient.client.getPublicKey()),
-				Util.formatPubKey(recipient.getKey()),
-				cmd,
-				ByteBuffer.wrap(authTag).getInt(),
-				items == null ? 0 : items.size()));
-
-
 		if(items != null) this.itemLists.add(new ArrayList<>(items));
 	}
 	
@@ -434,11 +419,6 @@ public class DHTMessage {
 			                                  senderPort,
 			                                  remoteStaticPubkey);
 			if((flags & FLAG_RESPONSE) != 0) {
-				System.out.printf("%s: setting remote tag for %s to %08x %d\n",
-						Util.formatPubKey(peer.client.getPublicKey()),
-						Util.formatPubKey(peer.getKey()),
-						ByteBuffer.wrap(this.authTag).getInt(),
-						System.identityHashCode(this.peer));
 				this.peer.remoteAuthTag  = this.authTag;
 			}
 		} catch(UnknownHostException exc) {
