@@ -314,7 +314,9 @@ public class DHTProtocolManager {
 			}
 		}
 		
-		if(stub == null) return; // ignore responses for stubs we don't have anymore
+		if(stub == null) {
+			return; // ignore responses for stubs we don't have anymore
+		}
 		stub.dispatchResponse(message);
 		client.getRoutingTable().markFresh(message.peer);
 	}

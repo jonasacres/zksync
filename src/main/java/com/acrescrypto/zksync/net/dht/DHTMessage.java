@@ -96,7 +96,9 @@ public class DHTMessage {
 		if(isResponse()) {
 			sendItems();
 		} else {
-			peer.client.getProtocolManager().watchForResponse(this, sendPayload());
+			DatagramPacket packet = prepareDatagram(1, ByteBuffer.wrap(payload));
+			peer.client.getProtocolManager().watchForResponse(this, packet);
+			sendDatagram(packet);
 		}
 	}
 	
@@ -115,7 +117,7 @@ public class DHTMessage {
 					if(sendBuf.remaining() < itemLen) {
 						sendBuf.limit(sendBuf.position());
 						sendBuf.position(0);
-						sendDatagram(numPackets, sendBuf);
+						sendDatagram(prepareDatagram(numPackets, sendBuf));
 						sendBuf.clear();
 					}
 					
@@ -128,7 +130,7 @@ public class DHTMessage {
 		
 		sendBuf.limit(sendBuf.position());
 		sendBuf.position(0);
-		return sendDatagram(numPackets, sendBuf);
+		return sendDatagram(prepareDatagram(numPackets, sendBuf));
 	}
 	
 	protected int numPacketsNeeded() {
@@ -147,11 +149,7 @@ public class DHTMessage {
 		return numNeeded;
 	}
 	
-	protected DatagramPacket sendPayload() {
-		return sendDatagram(1, ByteBuffer.wrap(payload));
-	}
-	
-	protected DatagramPacket sendDatagram(int numPackets, ByteBuffer sendBuf) {
+	protected DatagramPacket prepareDatagram(int numPackets, ByteBuffer sendBuf) {
 		sendBuf.position(0);
 		InetAddress address;
 		try {
@@ -160,11 +158,14 @@ public class DHTMessage {
 			return null;
 		}
 		byte[] serialized = serialize(numPackets, sendBuf);
-		DatagramPacket packet = new DatagramPacket(
+		return new DatagramPacket(
 				serialized,
 				serialized.length,
 				address,
 				peer.port);
+	}
+	
+	protected DatagramPacket sendDatagram(DatagramPacket packet) {
 		logger.trace(
 				"DHT {}:{}: sending {} bytes, cmd={}, flags=0x{}, msgId={}",
 				packet.getAddress().getHostAddress(),
@@ -328,9 +329,9 @@ public class DHTMessage {
 		CryptoSupport crypto             = client.crypto;
 		assertStateWithoutBlacklist(
 				  serialized.remaining()
-			    > 8
-				+ 2 * crypto.asymPublicDHKeySize()
-				+ crypto.symPaddedCiphertextSize(headerSize()));
+			    >= 8
+				 + 2 * crypto.asymPublicDHKeySize()
+				 + crypto.symPaddedCiphertextSize(headerSize()));
 		
 		PrivateDHKey  localStaticPrivkey = client.getPrivateKey();
 		PublicDHKey   localStaticPubkey  = client.getPublicKey();

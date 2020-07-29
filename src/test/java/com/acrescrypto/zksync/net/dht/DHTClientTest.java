@@ -132,7 +132,8 @@ public class DHTClientTest {
 		DatagramSocket    socket;
 		PrivateDHKey      dhKey;
 		Queue<DHTMessage> incoming      = new LinkedList<>();
-		boolean           strict        = true;
+		boolean           strict        = true,
+				          listening;
 		int               index;
 		
 		public RemotePeer(int index) throws SocketException, UnknownHostException {
@@ -156,6 +157,7 @@ public class DHTClientTest {
 					       dhKey.publicKey().getBytes());
 			
 			new Thread(()->listenThread()).start();
+			assertTrue(Util.waitUntil(100, ()->listening));
 		}
 		
 		public void initListenClient() {
@@ -191,8 +193,10 @@ public class DHTClientTest {
 
 			try {
 				while(true) {
+					listening = true;
 					int maxDatagramSize = master.getGlobalConfig().getInt("net.dht.maxDatagramSize");
 					socket.receive(packet);
+					
 					assertTrue(packet.getLength() <= maxDatagramSize);
 					DHTMessage msg;
 					try {
@@ -856,28 +860,19 @@ public class DHTClientTest {
 	
 	@Test
 	public void testMessageRespondersMarkedAsRefreshed() throws ProtocolViolationException, IOException, InvalidBlacklistException {
-		for(int i = 0; i < Integer.MAX_VALUE; i++) {
-			if(i != 0) {
-				afterEach();
-				beforeEach();
-			}
-			
-			System.out.println("Iteration " + i);
-			DHTPeer peerFromTable = null;
-			for(DHTPeer peer : client.routingTable.allPeers()) {
-				peerFromTable = peer;
-				break;
-			}
-			
-			peerFromTable.missedMessages = 1;
-			peerFromTable.ping();
-			DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
-			// TODO: ITF 2020-07-22 linux 15b40482
-			req.makeResponse(new ArrayList<>(0)).send();
-			
-			DHTPeer pp = peerFromTable;
-			assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->pp.missedMessages == 0));
+		DHTPeer peerFromTable = null;
+		for(DHTPeer peer : client.routingTable.allPeers()) {
+			peerFromTable = peer;
+			break;
 		}
+		
+		peerFromTable.missedMessages = 1;
+		peerFromTable.ping();
+		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
+		req.makeResponse(new ArrayList<>(0)).send();
+		
+		DHTPeer pp = peerFromTable;
+		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->pp.missedMessages == 0));
 	}
 	
 	@Test
