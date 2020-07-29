@@ -62,8 +62,8 @@ import com.dosse.upnp.UPnP;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class DHTClientTest {
-	final static int MAX_TEST_TIME_MS = 2000;
-	final static int MAX_MSG_WAIT_TIME_MS = 500;
+	final static int MAX_TEST_TIME_MS     = 2000;
+	final static int MAX_MSG_WAIT_TIME_MS =  500;
 	
 	class DummyMaster extends ZKMaster {
 		public DummyMaster()
@@ -127,27 +127,44 @@ public class DHTClientTest {
 	}
 	
 	class RemotePeer implements AutoCloseable {
-		DHTClient listenClient;
-		DHTPeer peer;
-		DatagramSocket socket;
-		PrivateDHKey dhKey;
-		Queue<DHTMessage> incoming = new LinkedList<>();
-		boolean strict = true;
+		DHTClient         listenClient;
+		DHTPeer           peer;
+		DatagramSocket    socket;
+		PrivateDHKey      dhKey;
+		Queue<DHTMessage> incoming      = new LinkedList<>();
+		boolean           strict        = true;
+		int               index;
 		
-		public RemotePeer() throws SocketException, UnknownHostException {
-			socket = new DatagramSocket(0, InetAddress.getByName("localhost"));
+		public RemotePeer(int index) throws SocketException, UnknownHostException {
+			byte[] rawKey = crypto.expand(
+				 	          Util.serializeInt(index),
+				 	          crypto.asymPrivateDHKeySize(),
+				 	          new byte[0],
+				 	          new byte[0]);
+			this.  index  = index;
+			this.  socket = new DatagramSocket(0, InetAddress.getByName("localhost"));
+			this.  dhKey  = crypto.makePrivateDHKey(rawKey);
+			
 			socket.setReuseAddress(true);
 			assertTrue(socket.isBound());
-			dhKey = crypto.makePrivateDHKey();
 			initListenClient();
-			peer = new DHTPeer(client, socket.getLocalAddress().getHostAddress(), socket.getLocalPort(), dhKey.publicKey().getBytes());
+			
+			this.  peer   = new DHTPeer(
+					       client,
+					       socket.getLocalAddress().getHostAddress(),
+					       socket.getLocalPort(),
+					       dhKey.publicKey().getBytes());
+			
 			new Thread(()->listenThread()).start();
 		}
 		
 		public void initListenClient() {
 			try {
-				ZKMaster master = new DummyMaster();
-				listenClient = new DHTClient(new Key(crypto), master);
+				Key      key          = new Key(
+				                          crypto,
+				                          crypto.makeSymmetricKey(Util.serializeInt(index)));
+				ZKMaster master       = new DummyMaster();
+				this.    listenClient = new DHTClient(key, master);
 			} catch(Exception exc) {
 				exc.printStackTrace();
 				fail();
@@ -237,36 +254,58 @@ public class DHTClientTest {
 	}
 
 	class TestNetwork implements AutoCloseable {
-		ArrayList<RemotePeer> remotes = new ArrayList<>();
-		HashMap<RemotePeer,RemotePeerHandler> handlers = new HashMap<>();
-		boolean closed;
+		ArrayList<RemotePeer>          remotes  = new ArrayList<>();
+		HashMap  <RemotePeer,
+		          RemotePeerHandler>   handlers = new HashMap<>();
+		boolean                        closed;
 		
-		public TestNetwork(int size) throws SocketException, UnknownHostException {
+		public TestNetwork(int offset, int size) throws SocketException, UnknownHostException {
 			for(int i = 0; i < size; i++) {
-				remotes.add(new RemotePeer());
-				System.out.println("Starting " + Util.formatPubKey(remotes.get(i).listenClient.getPublicKey()));
+				remotes.add(new RemotePeer(offset*size + i));
 				handlers.put(remotes.get(i), (remote)->defaultHandler(remote));
 			}
 			
 			for(RemotePeer remote : remotes) {
 				remote.addAllPeers(remotes);
+				
+				StringBuilder connStr = new StringBuilder();
+				for(RemotePeer other : remotes) {
+					if(remote.listenClient.getRoutingTable().allPeers().contains(other.peer)) {
+						connStr.append("+");
+					} else if(remote == other) {
+						connStr.append("@");
+					} else {
+						connStr.append("-");
+					}
+				}
+				
+				System.out.printf("Initialized peer %s (%2d peers) %s\n",
+						Util.formatPubKey(remote.listenClient.getPublicKey()),
+						remote.listenClient.getRoutingTable().allPeers().size(),
+						connStr.toString()
+						);
 			}
+			System.out.println();
 		}
 		
 		public void run() {
 			ArrayList<Thread> threads = new ArrayList<>(remotes.size());
-			MutableBoolean failed = new MutableBoolean();
+			MutableBoolean    failed  = new MutableBoolean();
+			
 			for(RemotePeer remote : remotes) {
 				Thread t = new Thread(()-> {
 					Util.setThreadName("Remote peer handler " + remote.peer.port);
+					
 					try {
 						handlers.get(remote).handle(remote);
 					} catch(Exception exc) {
 						if(closed) return;
+						
 						exc.printStackTrace();
 						failed.setTrue();
 					}
 				});
+				
 				threads.add(t);
 				t.start();
 			}
@@ -297,6 +336,7 @@ public class DHTClientTest {
 				System.out.println("Near peer: " + Util.formatPubKey(sorted.get(i).listenClient.getPublicKey()));
 				results.add(sorted.get(i));
 			}
+			System.out.println();
 			
 			return results;
 		}
@@ -381,7 +421,7 @@ public class DHTClientTest {
 	
 	@Before
 	public void beforeEach() throws IOException, InvalidBlacklistException {
-		ConfigDefaults.getActiveDefaults().setDefault("net.dht.bootstrap.enabled", false);
+		ConfigDefaults.getActiveDefaults().set("net.dht.bootstrap.enabled",        false);
 		ConfigDefaults.getActiveDefaults().set("net.dht.socketCycleDelayMs",          10);
 		ConfigDefaults.getActiveDefaults().set("net.dht.socketOpenFailCycleDelayMs",  20);
 		ConfigDefaults.getActiveDefaults().set("net.dht.messageExpirationTimeMs",    125);
@@ -391,10 +431,18 @@ public class DHTClientTest {
 		crypto = CryptoSupport.defaultCrypto();
 		
 		master     = new DummyMaster();
-		storageKey = new Key(crypto);
+		storageKey = new Key(crypto, crypto.makeSymmetricKey(Util.serializeInt(-1)));
 		client     = new DHTClient(storageKey, master);
-		remote     = new RemotePeer();
+		remote     = new RemotePeer(-1);
 		
+		byte[]       rawPrivKey = crypto.expand(
+		                            Util.serializeInt(-1),
+		                            crypto.asymPrivateDHKeySize(),
+		                            new byte[0],
+		                            new byte[0]);
+		PrivateDHKey privKey    = crypto.makePrivateDHKey(rawPrivKey);
+		
+		client.setPrivateKey(privKey);
 		client.getProtocolManager().setAutofind(false);
 		client.addPeer(remote.peer);
 		client.listen("127.0.0.1", 0);
@@ -602,7 +650,7 @@ public class DHTClientTest {
 
 		remotes.add(remote);
 		for(int i = 0; i < maxResults-1; i++) {
-			remotes.add(new RemotePeer());
+			remotes.add(new RemotePeer(i));
 		}
 
 		for(RemotePeer r : remotes) peers.add(r.peer);
@@ -642,9 +690,9 @@ public class DHTClientTest {
 				afterEach();
 				beforeEach();
 			}
-			System.out.println("Iteration " + i);
-			System.out.println("Client peer: " + Util.formatPubKey(client.getPublicKey()));
-			int maxResults = master.getGlobalConfig().getInt("net.dht.maxResults");
+			
+			master.getGlobalConfig().set("net.dht.searchQueryTimeoutMs",     MAX_MSG_WAIT_TIME_MS -  50);
+			master.getGlobalConfig().set("net.dht.maxSearchQueryWaitTimeMs", MAX_TEST_TIME_MS     - 100);
 			
 			/* This test generates a DHT network of 4*maxResults peers, then inserts a
 			 * record into it. The ID is chosen to be the bitflip of the test client ID,
@@ -655,8 +703,15 @@ public class DHTClientTest {
 			 * exactly `maxResults` peers.
 			 */
 			DHTID searchId = client.id.flip();
+
+			System.out.println();
+			System.out.println("    ====Iteration " + i + "====");
+			System.out.println("Client peer: " + Util.formatPubKey(client.getPublicKey()));
+			System.out.println("Search ID  : " + Util.bytesToHex(searchId.serialize()));
+			System.out.println();
+			int maxResults = master.getGlobalConfig().getInt("net.dht.maxResults");
 			
-			try(TestNetwork network = new TestNetwork(4*maxResults)) {
+			try(TestNetwork network = new TestNetwork(i, 4*maxResults)) {
 				AtomicInteger numReceived = new AtomicInteger();
 				Key lookupKey = new Key(crypto);
 				
@@ -733,6 +788,11 @@ public class DHTClientTest {
 				
 				client.getProtocolManager().addRecord(searchId, lookupKey, makeBogusAd(0));
 				network.run();
+				
+				if(client.getRecordStore().records().containsKey(searchId)) {
+					// the original client might be one of the peers storing the record
+					numReceived.incrementAndGet();
+				}
 				
 				// TODO Urgent: (itf) linux UniversalTests 2018-12-11 8cda32e. AssertionError: expected<8> but was <7>
 				assertEquals(maxResults, numReceived.intValue());

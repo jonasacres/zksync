@@ -362,7 +362,7 @@ public class DHTMessage {
 		
 		/* Ensure that this salt hasn't been seen recently, and if not, ensure it is
 		 * recorded so we don't let it get reused. */
-		assertStateWithoutBlacklist(client.getProtocolManager().recordMessageRnd(rnd));		
+		assertStateWithoutBlacklist(client.getProtocolManager().recordMessageRnd(rnd));
 		
 		Key[]         keys               = new Key[3];
 		              keys[0]            = new Key(crypto, crypto.expandAndDestroy(

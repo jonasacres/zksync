@@ -135,6 +135,7 @@ public class DHTRoutingTable {
 	
 	public synchronized boolean suggestPeer(DHTPeer peer, long lastSeen) {
 		if(peer.id.equals(client.getId())) return false;      // we don't need an entry for ourselves!
+		
 		for(DHTPeer existing : allPeers) {
 			if(   existing.id     .equals(peer.id)
 			   && existing.address.equals(peer.address)

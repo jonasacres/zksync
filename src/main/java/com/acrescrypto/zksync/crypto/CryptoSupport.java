@@ -419,6 +419,10 @@ public class CryptoSupport {
 	public PrivateDHKey makePrivateDHKey() {
 		return new PrivateDHKey(this);
 	}
+	
+	public PrivateDHKey makePrivateDHKey(byte[] privKey) {
+		return new PrivateDHKey(this, privKey);
+	}
 
 	public PrivateDHKey makePrivateDHKeyPair(byte[] privKey, byte[] pubKey) {
 		return new PrivateDHKey(this, privKey, pubKey);

@@ -621,6 +621,7 @@ public class DHTMessageTest {
 		
 		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
 		new DHTMessage(client, "127.0.0.1", 54321, buf).hashCode();
+		buf.position(0);
 		
 		try {
 			new DHTMessage(client, "127.0.0.1", 54321, buf).hashCode();

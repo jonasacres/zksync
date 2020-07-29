@@ -20,26 +20,25 @@ public class DHTSearchOperation {
 		void searchOperationDiscoveredRecord(DHTRecord record);
 	}
 	
-	int activeQueries = 0;
-	
-	DHTID searchId;
-	DHTClient client;
-	HashSet<DHTPeer> queried = new HashSet<DHTPeer>();
-	TreeSet<DHTPeer> closestPeers = new TreeSet<>((a,b)->a.id.xor(searchId).compareTo(b.id.xor(searchId)));
-	SearchOperationPeerCallback peerCallback;
-	SearchOperationRecordCallback recordCallback;
-	SnoozeThread timeout;
-	Key lookupKey;
-	boolean cancelled;
+	protected int                           activeQueries = 0;
+	protected DHTID                         searchId;
+	protected DHTClient                     client;
+	protected HashSet<DHTPeer>              queried      = new HashSet<DHTPeer>();
+	protected TreeSet<DHTPeer>              closestPeers = new TreeSet<>((a,b)->a.id.xor(searchId).compareTo(b.id.xor(searchId)));
+	protected SearchOperationPeerCallback   peerCallback;
+	protected SearchOperationRecordCallback recordCallback;
+	protected SnoozeThread                  timeout;
+	protected Key                           lookupKey;
+	protected boolean                       cancelled;
 	
 	private Logger logger = LoggerFactory.getLogger(DHTSearchOperation.class);
 	
 	public DHTSearchOperation(DHTClient client, DHTID searchId, Key lookupKey, SearchOperationPeerCallback peerCallback, SearchOperationRecordCallback recordCallback) {
-		this.client = client;
-		this.searchId = searchId;
-		this.peerCallback = peerCallback;
+		this.client         = client;
+		this.searchId       = searchId;
+		this.peerCallback   = peerCallback;
 		this.recordCallback = recordCallback;
-		this.lookupKey = lookupKey;
+		this.lookupKey      = lookupKey;
 	}
 	
 	public void cancel() {
@@ -61,6 +60,7 @@ public class DHTSearchOperation {
 			if(cancelled) return this;
 			throw exc;
 		}
+		
 		this.timeout = new SnoozeThread(searchQueryTimeoutMs, maxSearchQueryWaitTimeMs, true, ()->{
 			if(cancelled) return;
 			peerCallback.searchOperationFinished(this, closestPeers);

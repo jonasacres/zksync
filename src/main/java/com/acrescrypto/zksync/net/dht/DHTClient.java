@@ -405,6 +405,7 @@ public class DHTClient {
 	
 	protected void setPrivateKey(PrivateDHKey privateKey) {
 		this.privateKey = privateKey;
+		this.id         = DHTID.withKey(privateKey.publicKey());
 	}
 	
 	protected FS getStorage() {
