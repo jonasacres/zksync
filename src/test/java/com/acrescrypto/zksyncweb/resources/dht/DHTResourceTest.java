@@ -77,7 +77,7 @@ public class DHTResourceTest {
 			this.privateKey      = new PrivateDHKey(State.sharedCrypto());
 			this.storageKey      = Key.blank(State.sharedCrypto());
 			this.tagKey          = Key.blank(State.sharedCrypto());
-			this.id              = new DHTID(privateKey.publicKey());
+			this.id              = DHTID.withKey(privateKey.publicKey());
 			this.networkId       = crypto.hash(netKey);
 			
 			this.socketManager.setBindPort(1234);
@@ -138,7 +138,7 @@ public class DHTResourceTest {
 			int recordsPerId = 5, numIds = 3;
 			
 			for(int i = 0; i < numIds; i++) {
-				DHTID id                    = new DHTID(crypto.hash(Util.serializeInt(i)));
+				DHTID id                    = DHTID.withBytes(crypto.hash(Util.serializeInt(i)));
 				LinkedList<StoreEntry> list = new LinkedList<>();
 				map.put(id, list);
 				
@@ -431,7 +431,7 @@ public class DHTResourceTest {
 			JsonNode recordsForId = records.get(id);
 			int i;
 			for(i = 0; i < numIds; i++) {
-				String ss = new DHTID(crypto.hash(Util.serializeInt(i))).toFullString();
+				String ss = DHTID.withBytes(crypto.hash(Util.serializeInt(i))).toFullString();
 				if(ss.equals(id)) break;
 			}
 			

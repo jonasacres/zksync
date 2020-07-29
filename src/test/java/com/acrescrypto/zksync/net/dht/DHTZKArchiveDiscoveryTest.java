@@ -142,7 +142,7 @@ public class DHTZKArchiveDiscoveryTest {
 		discovery.discoverArchives(archive.getConfig().getAccessor());
 		for(int i = 0; i < 8; i++) {
 			Util.setCurrentTimeMillis(i*ArchiveAccessor.TEMPORAL_SEED_KEY_INTERVAL_MS);
-			assertTrue(Util.waitUntil(50, ()->client.searchId != null && Arrays.equals(archive.getConfig().getAccessor().temporalSeedId(0), client.searchId.rawId)));	
+			assertTrue(Util.waitUntil(50, ()->client.searchId != null && Arrays.equals(archive.getConfig().getAccessor().temporalSeedId(0), client.searchId.serialize())));	
 		}
 	}
 	
@@ -213,7 +213,7 @@ public class DHTZKArchiveDiscoveryTest {
 		assertTrue(Util.waitUntil(100, ()->client.records.size() > 0));
 		
 		for(int i = -1; i <= 1; i++) {
-			DHTID id = new DHTID(archive.getConfig().getAccessor().temporalSeedId(i));
+			DHTID id = DHTID.withBytes(archive.getConfig().getAccessor().temporalSeedId(i));
 			assertTrue(client.records.containsKey(id));
 			assertTrue(client.records.get(id) instanceof DHTAdvertisementRecord);
 			

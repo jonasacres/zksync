@@ -1,26 +1,31 @@
 package com.acrescrypto.zksync.net.dht;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedList;
 
 import com.acrescrypto.zksync.utility.Util;
 
-public class DHTBucket {
-	public final static int MAX_BUCKET_CAPACITY = 8;
+public class DHTBucket implements Comparable<DHTBucket> {
+	protected DHTRoutingTable    routingTable;
+	protected ArrayList<DHTPeer> peers;
+	protected long               lastChanged = -1;
+	protected DHTID              min,
+	                             max;
 	
-	DHTClient client;
-	int order;
-	ArrayList<DHTPeer> peers = new ArrayList<DHTPeer>(MAX_BUCKET_CAPACITY);
-	long lastChanged = -1;
+	public DHTBucket(DHTRoutingTable routingTable, DHTID min, DHTID max) {
+		this.routingTable = routingTable;
+		this.min          = min;
+		this.max          = max;
+		this.peers        = new ArrayList<DHTPeer>();
+	}
 	
-	public DHTBucket(DHTClient client, int order) {
-		this.client = client;
-		this.order = order;
+	public int maxCapacity() {
+		return routingTable.maxBucketCapacity();
 	}
 	
 	public boolean hasCapacity() {
-		if(peers.size() < MAX_BUCKET_CAPACITY) return true;
+		if(peers.size() < maxCapacity()) return true;
 		for(DHTPeer peer: peers) {
 			if(peer.isBad()) return true;
 		}
@@ -28,8 +33,61 @@ public class DHTBucket {
 		return false;
 	}
 	
+	public DHTID min() {
+		return min;
+	}
+	
+	public DHTID max() {
+		return max;
+	}
+	
+	public boolean needsSplit() {
+		if( hasCapacity())            return false;
+		if(!includes(routingTable.getClient().getId())) return false;
+		
+		return true;
+	}
+	
+	public DHTBucket split() {
+		DHTID mid = max.midpoint(min);
+		DHTID myMin, myMax, newMin, newMax;
+		
+		// guarantee that this bucket continues to include the client ID
+		if(routingTable.getClient().getId().compareTo(mid) < 0) {
+			myMin   = min;
+			myMax   = mid;
+			newMin  = mid;
+			newMax  = max;
+		} else {
+			newMin  = min;
+			newMax  = mid;
+			myMin   = mid;
+			myMax   = max;
+		}
+		
+		ArrayList<DHTPeer> oldPeers    = peers;
+		DHTBucket          newBucket   = new DHTBucket(routingTable,
+				                                       newMin,
+				                                       newMax);
+		this.peers                     = new ArrayList<>(maxCapacity());
+		this.min                       = myMin;
+		this.max                       = myMax;
+		
+		for(DHTPeer peer : oldPeers) {
+			if(includes(peer.getId())) {
+				this     .add(peer);
+			} else {
+				newBucket.add(peer);
+			}
+		}
+		
+		return newBucket;
+	}
+	
 	public boolean includes(DHTID id) {
-		return order == client.id.xor(id).order();
+		if(id.compareTo(min) <  0) return false; // id <  minimum
+		if(id.compareTo(max) >= 0) return false; // id >= maximum
+		return true;
 	}
 	
 	public void add(DHTPeer peer) {
@@ -39,7 +97,7 @@ public class DHTBucket {
 	public void add(DHTPeer peer, long lastSeen) {
 		assert(hasCapacity());
 		
-		if(peers.size() >= MAX_BUCKET_CAPACITY) {
+		if(peers.size() >= maxCapacity()) {
 			prune();
 		}
 		
@@ -47,28 +105,13 @@ public class DHTBucket {
 		markFresh(lastSeen);
 	}
 	
-	// returns a random ID whose distance from the client ID is of the order of this bucket
+	// returns a random ID that would be included in this bucket
 	public DHTID randomIdInRange() {
-		if(order == -1) return client.id;
-		byte[] random = client.id.serialize();
-		int pivotByteIndex = random.length - order/8 - 1;
-		int pivotBitOffset = order % 8;
-		
-		byte pivotBitMask = (byte) (1 << pivotBitOffset);
-		byte pivotLowerMask = (byte) (pivotBitMask-1);
-		byte pivotUpperMask = (byte) ~(pivotBitMask | pivotLowerMask);
-		
-		byte randomBits = (byte) (client.crypto.rng(1)[0] & pivotLowerMask);
-		byte flippedBit = (byte) ((pivotBitMask ^ random[pivotByteIndex]) & pivotBitMask);
-		byte preservedBits = (byte) (random[pivotByteIndex] & pivotUpperMask);
-		byte pivotByte = (byte) (preservedBits | flippedBit | randomBits);
-		
-		ByteBuffer buf = ByteBuffer.wrap(random);
-		buf.position(pivotByteIndex);
-		buf.put(pivotByte);
-		buf.put(client.crypto.rng(buf.remaining()));
-		
-		return new DHTID(random);
+		return max.randomLessThan(min);
+	}
+	
+	protected void setFresh(long timestamp) {
+		this.lastChanged = timestamp;
 	}
 	
 	public void markFresh() {
@@ -81,9 +124,9 @@ public class DHTBucket {
 	
 	public boolean needsFreshening() {
 		long timeSinceLastChange = Util.currentTimeMillis() - lastChanged;
-		long freshenInterval     = client.getRoutingTable().bucketFreshenInterval();
+		long freshenInterval     = routingTable.bucketFreshenInterval();
 		
-		return lastChanged >= 0
+		return peers.size() >  0
 			&& timeSinceLastChange >= freshenInterval;
 	}
 	
@@ -91,7 +134,7 @@ public class DHTBucket {
 		for(DHTPeer peer : peers) {
 			if(peer.isBad() && !peer.isPinned()) {
 				peers.remove(peer);
-				client.routingTable.removedPeer(peer);
+				routingTable.removedPeer(peer);
 				return;
 			}
 		}
@@ -119,7 +162,22 @@ public class DHTBucket {
 		
 		peers.removeIf((p)->toPrune.contains(p));
 		for(DHTPeer pruned : toPrune) {
-			client.getRoutingTable().removedPeer(pruned);
+			routingTable.removedPeer(pruned);
 		}
+	}
+	
+	public Collection<DHTPeer> peers() {
+		return peers;
+	}
+
+	@Override
+	public int compareTo(DHTBucket o) {
+		if(o == this) return 0;
+		
+		int c = this.min.compareTo(o.min);
+		if(c != 0) return c;
+		
+		// This is an unexpected state, but we'll use max as a secondary sort to resolve ambiguity.
+		return this.max.compareTo(o.max);
 	}
 }

@@ -320,7 +320,7 @@ public class DHTClientTest {
 				if(msg.cmd == DHTMessage.CMD_FIND_NODE) {
 					byte[] id = new byte[client.idLength()];
 					ByteBuffer.wrap(msg.payload).get(id);
-					Collection<DHTPeer> results = remote.listenClient.routingTable.closestPeers(new DHTID(id), DHTBucket.MAX_BUCKET_CAPACITY);
+					Collection<DHTPeer> results = remote.listenClient.routingTable.closestPeers(DHTID.withBytes(id), client.getRoutingTable().maxBucketCapacity());
 					msg.makeResponse(results).send();
 				} else if(msg.cmd == DHTMessage.CMD_PING) {
 					msg.makeResponse(new ArrayList<>()).send();
@@ -480,23 +480,23 @@ public class DHTClientTest {
 	public void testFindPeersTriggersSearchOperationForOwnId() throws IOException, ProtocolViolationException {
 		client.getProtocolManager().findPeers();
 		DHTMessage msg = remote.receivePacket();
-		byte[] rxId = new byte[client.id.rawId.length];
+		byte[] rxId = new byte[client.idLength()];
 		System.arraycopy(msg.payload, 0, rxId, 0, rxId.length);
-		assertArrayEquals(client.id.rawId, rxId);
+		assertArrayEquals(client.id.serialize(), rxId);
 	}
 	
 	@Test
 	public void testLookupTriggersSearchOperationForRequestedId() throws IOException, ProtocolViolationException {
-		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
+		DHTID searchId = DHTID.withBytes(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, remote.peer.key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(searchId.serialize(), remote.peer.key.getBytes()));
 		client.getProtocolManager().lookup(searchId, lookupKey, (resp)->{});
 		DHTMessage msg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
 		ByteBuffer rxBuf = ByteBuffer.wrap(msg.payload);
-		byte[] rxId = new byte[searchId.rawId.length], rxToken = new byte[token.length];
+		byte[] rxId = new byte[client.idLength()], rxToken = new byte[token.length];
 		rxBuf.get(rxId);
 		rxBuf.get(rxToken);
-		assertArrayEquals(searchId.rawId, rxId);
+		assertArrayEquals(searchId.serialize(), rxId);
 		assertArrayEquals(token, rxToken);
 	}
 
@@ -505,7 +505,7 @@ public class DHTClientTest {
 		MutableBoolean seenNull = new MutableBoolean();
 		ArrayList<DHTRecord> records = new ArrayList<>();
 		Key lookupKey = new Key(crypto);
-		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
+		DHTID searchId = DHTID.withBytes(crypto.rng(client.idLength()));
 
 		client.getProtocolManager().lookup(searchId, lookupKey, (record)->{
 			assertFalse(seenNull.booleanValue());
@@ -544,7 +544,7 @@ public class DHTClientTest {
 		int timeout = 50;
 		master.getGlobalConfig().set("net.dht.searchQueryTimeoutMs", timeout);
 
-		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
+		DHTID searchId = DHTID.withBytes(crypto.rng(client.idLength()));
 		client.getProtocolManager().lookup(searchId, new Key(crypto), (record)->{
 			assertFalse(seenNull.booleanValue());
 			assertNull(record);
@@ -564,7 +564,7 @@ public class DHTClientTest {
 		master.getGlobalConfig().set("net.dht.lookupResultMaxWaitTimeMs", 50);
 		master.getGlobalConfig().set("net.dht.searchQueryTimeoutMs", 50);
 
-		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
+		DHTID searchId = DHTID.withBytes(crypto.rng(client.idLength()));
 		client.getProtocolManager().lookup(searchId, new Key(crypto), (resp)->{
 			assertFalse(seenNull.booleanValue());
 			if(resp == null) {
@@ -607,7 +607,7 @@ public class DHTClientTest {
 
 		for(RemotePeer r : remotes) peers.add(r.peer);
 
-		DHTID searchId = new DHTID(crypto.rng(client.idLength()));
+		DHTID searchId = DHTID.withBytes(crypto.rng(client.idLength()));
 		client.getProtocolManager().lookup(searchId, new Key(crypto), (resp)->{
 			assertFalse(seenNull.booleanValue());
 			if(resp == null) {
@@ -669,9 +669,9 @@ public class DHTClientTest {
 				network.setHandlerForClosest(searchId, maxResults, (remote)->{
 					/* Wait for a CMD_FIND_NODE for the searchId. */
 					byte[]     token       = lookupKey.authenticate(
-					                           Util.concat(searchId.rawId, remote.peer.key.getBytes()));
+					                           Util.concat(searchId.serialize(), remote.peer.key.getBytes()));
 					DHTMessage findNodeMsg = remote.receivePacket(DHTMessage.CMD_FIND_NODE);
-					assertArrayEquals(Util.concat(searchId.rawId, token), findNodeMsg.payload);
+					assertArrayEquals(Util.concat(searchId.serialize(), token), findNodeMsg.payload);
 					
 					// Reply to the findPeers request with the closest peers we know to the searchId
 					Collection<DHTPeer> closestPeers = remote.listenClient.routingTable.closestPeers(searchId, maxResults);
@@ -713,7 +713,7 @@ public class DHTClientTest {
 					payload.get(id);
 					payload.get(rxToken);
 					
-					assertArrayEquals(searchId.rawId, id);
+					assertArrayEquals(searchId.serialize(), id);
 					assertArrayEquals(token,          rxToken);
 					
 					byte[] recordBytes = new byte[payload.remaining()];
@@ -745,7 +745,7 @@ public class DHTClientTest {
 		ArrayList<DHTPeer> list = new ArrayList<>(1);
 		list.add(clientPeer);
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(client.id.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(client.id.serialize(), client.getProtocolManager().getLocalPeer().key.getBytes()));
 		
 		client.getProtocolManager().addRecord(client.id, lookupKey, makeBogusAd(0));
 		remote.receivePacket().makeResponse(list).send();
@@ -989,7 +989,7 @@ public class DHTClientTest {
 		int numRecords = 16;
 		ArrayList<DHTRecord> records = new ArrayList<>(numRecords);
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(searchId.serialize(), client.getProtocolManager().getLocalPeer().key.getBytes()));
 		
 		for(int i = 0; i < numRecords; i++) {
 			DHTRecord record = new DummyRecord(i);
@@ -1029,7 +1029,7 @@ public class DHTClientTest {
 		DHTID searchId = remote.peer.id;
 		int numRecords = 16;
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(searchId.serialize(), client.getProtocolManager().getLocalPeer().key.getBytes()));
 		
 		for(int i = 0; i < numRecords; i++) {
 			DHTRecord record = new DummyRecord(i);
@@ -1090,9 +1090,9 @@ public class DHTClientTest {
 	
 	@Test
 	public void testAddRecordIgnoresRequestsWithInvalidAuthTag() throws ProtocolViolationException {
-		DHTID id = new DHTID(crypto.rng(client.idLength()));
+		DHTID id = DHTID.withBytes(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(id.serialize(), client.getProtocolManager().getLocalPeer().key.getBytes()));
 		clientPeer.addRecord(id, new Key(crypto), makeBogusAd(0));
 		assertFalse(Util.waitUntil(100, ()->client.store.recordsForId(id, token).size() > 0));
 		assertAlive();
@@ -1100,9 +1100,9 @@ public class DHTClientTest {
 	
 	@Test
 	public void testAddRecordIgnoresRequestsWithTruncatedPayload() throws ProtocolViolationException {
-		DHTID id = new DHTID(crypto.rng(client.idLength()));
+		DHTID id = DHTID.withBytes(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(id.serialize(), client.getProtocolManager().getLocalPeer().key.getBytes()));
 
 		DHTMessage msg = remote.listenClient.getProtocolManager().addRecordMessage(clientPeer, id, lookupKey, makeBogusAd(0), null);
 		byte[] fakePayload = new byte[msg.payload.length - 1];
@@ -1117,13 +1117,13 @@ public class DHTClientTest {
 	
 	@Test
 	public void testAddRecordIgnoresUnsupportedRecordTypes() throws ProtocolViolationException {
-		DHTID id = new DHTID(crypto.rng(client.idLength()));
+		DHTID id = DHTID.withBytes(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(id.serialize(), client.getProtocolManager().getLocalPeer().key.getBytes()));
 
 		DHTMessage msg = remote.listenClient.getProtocolManager().addRecordMessage(clientPeer, id, new Key(crypto), makeBogusAd(0), null);
 		msg.authTag = remote.peer.localAuthTag();
-		msg.payload[id.rawId.length + crypto.hashLength()] = Byte.MIN_VALUE; // first byte after token is record type field
+		msg.payload[client.idLength() + crypto.hashLength()] = Byte.MIN_VALUE; // first byte after token is record type field
 		msg.send();
 		
 		assertFalse(Util.waitUntil(100, ()->client.store.recordsForId(id, token).size() > 0));
@@ -1138,9 +1138,9 @@ public class DHTClientTest {
 	
 	@Test
 	public void testAddRecordAddsValidRecordsToStore() throws ProtocolViolationException {
-		DHTID id = new DHTID(crypto.rng(client.idLength()));
+		DHTID id = DHTID.withBytes(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, client.getProtocolManager().getLocalPeer().key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(id.serialize(), client.getProtocolManager().getLocalPeer().key.getBytes()));
 
 		DHTMessage msg = remote.listenClient.getProtocolManager().addRecordMessage(clientPeer, id, lookupKey, makeBogusAd(0), null);
 		msg.authTag = remote.peer.localAuthTag();
@@ -1164,29 +1164,29 @@ public class DHTClientTest {
 	@Test
 	public void testFindNodeMessageConstructsAppropriateFindNodeMessages() {
 		DHTMessageCallback callback = (resp)->{};
-		DHTID id = new DHTID(crypto.rng(client.idLength()));
+		DHTID id = DHTID.withBytes(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, remote.peer.key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(id.serialize(), remote.peer.key.getBytes()));
 		DHTMessage findNode = client.getProtocolManager().findNodeMessage(remote.peer, id, lookupKey, callback);
 		assertNotEquals(0, findNode.msgId); // admittedly there's a 1 in 2**32 chance of this failing randomly
 		assertEquals(callback, findNode.callback);
 		assertEquals(DHTMessage.CMD_FIND_NODE, findNode.cmd);
 		assertEquals(remote.peer, findNode.peer);
-		assertArrayEquals(Util.concat(id.rawId, token), findNode.payload);
+		assertArrayEquals(Util.concat(id.serialize(), token), findNode.payload);
 		assertEquals(0, findNode.flags);
 	}
 	
 	@Test
 	public void testAddRecordMessageConstructsAppropriateAddRecordMessages() {
 		DHTMessageCallback callback = (resp)->{};
-		DHTID id = new DHTID(crypto.rng(client.idLength()));
+		DHTID id = DHTID.withBytes(crypto.rng(client.idLength()));
 		Key lookupKey = new Key(crypto);
-		byte[] token = lookupKey.authenticate(Util.concat(id.rawId, remote.peer.key.getBytes()));
+		byte[] token = lookupKey.authenticate(Util.concat(id.serialize(), remote.peer.key.getBytes()));
 		DHTRecord record = makeBogusAd(0);
 		DHTMessage addRecord = client.getProtocolManager().addRecordMessage(remote.peer, id, lookupKey, record, callback);
 		
 		byte[] expected = Util.concat(
-				id.rawId,
+				id.serialize(),
 				token,
 				record.serialize());
 		assertNotEquals(0, addRecord.msgId); // admittedly there's a 1 in 2**32 chance of this failing randomly

@@ -74,11 +74,15 @@ public class DHTRoutingTable {
 	}
 	
 	public synchronized void reset() {
-		buckets.clear();
+		int len = client.idLength();
+		
+		buckets .clear();
 		allPeers.clear();
-		for(int i = 0; i <= 8*client.idLength(); i++) {
-			buckets.add(new DHTBucket(client, i-1));
-		}
+		buckets .add(
+				new DHTBucket(
+						this,
+						DHTID.zero(len),
+						DHTID.max (len)));
 	}
 	
 	public synchronized void freshen() {
@@ -125,33 +129,38 @@ public class DHTRoutingTable {
 		return new ArrayList<>(allPeers);
 	}
 	
-	public void suggestPeer(DHTPeer peer) {
-		suggestPeer(peer, Util.currentTimeMillis());
+	public boolean suggestPeer(DHTPeer peer) {
+		return suggestPeer(peer, Util.currentTimeMillis());
 	}
 	
-	public synchronized void suggestPeer(DHTPeer peer, long lastSeen) {
-		if(peer.id.equals(client.getId())) return;            // we don't need an entry for ourselves!
+	public synchronized boolean suggestPeer(DHTPeer peer, long lastSeen) {
+		if(peer.id.equals(client.getId())) return false;      // we don't need an entry for ourselves!
 		for(DHTPeer existing : allPeers) {
 			if(   existing.id     .equals(peer.id)
 			   && existing.address.equals(peer.address)
 			   && existing.port        == peer.port)
 			{
-				return;                                       // already have this peer
+				return true;                                  // already have this peer
 			}
 		}
 		
 		DHTPeer insertablePeer;
 		try {
-			insertablePeer     = new DHTPeer(client, peer.address, peer.port, peer.key);
+			insertablePeer = new DHTPeer(peer);
 		} catch(UnknownHostException exc) {
-			return;
+			return false;
 		}
 		
-		insertablePeer.id      = new DHTID(peer.id.rawId.clone()); // some tests hijack this field, so we'll respect that
-		insertablePeer.setPinned(peer.isPinned());
-		
-		int order        = insertablePeer.id.xor(client.id).order();
-		DHTBucket bucket = buckets.get(order+1); // add 1 since an exact match has order -1
+		DHTBucket bucket = bucketForId(insertablePeer.id);
+		while(bucket.needsSplit()) {
+			DHTBucket newBucket = bucket.split();
+			buckets.add(newBucket);
+			buckets.sort(null);
+			
+			if(newBucket.includes(insertablePeer.id)) {
+				bucket = newBucket;
+			}
+		}
 		
 		if(bucket.hasCapacity()) {
 			bucket.add(insertablePeer, lastSeen);
@@ -168,11 +177,24 @@ public class DHTRoutingTable {
 						peer.port,
 						exc);
 			}
+			
+			return true;
 		} else {
 			logger.debug("DHT {}:{}: Relevant bucket too full for peer; ignoring",
 					peer.address,
 					peer.port);
+			return false;
 		}
+	}
+	
+	protected DHTBucket bucketForId(DHTID id) {
+		for(DHTBucket bucket : buckets) {
+			if(bucket.includes(id)) return bucket;
+		}
+		
+		logger.error("DHT -: Unable to find bucket for id {} (this should not be possible)",
+				Util.bytesToHex(id.serialize()));
+		throw new RuntimeException("Unable to locate bucket for ID");
 	}
 	
 	public DHTPeer peerForMessage(String address, int port, PublicDHKey pubKey) throws UnknownHostException {
@@ -331,5 +353,17 @@ public class DHTRoutingTable {
 	
 	public long bucketFreshenInterval() {
 		return client.getMaster().getGlobalConfig().getLong("net.dht.bucketFreshenIntervalMs");
+	}
+
+	public int maxBucketCapacity() {
+		return client.getMaster().getGlobalConfig().getInt("net.dht.bucketMaxCapacity");
+	}
+
+	protected Collection<DHTBucket> buckets() {
+		return buckets;
+	}
+
+	public DHTClient getClient() {
+		return client;
 	}
 }

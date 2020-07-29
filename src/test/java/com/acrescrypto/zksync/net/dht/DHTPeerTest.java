@@ -8,6 +8,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.io.IOException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -27,10 +28,27 @@ import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.UnsupportedProtocolException;
+import com.acrescrypto.zksync.fs.ramfs.RAMFS;
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigDefaults;
+import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.Util;
 
 public class DHTPeerTest {
+	class DummyMaster extends ZKMaster {
+		public DummyMaster() {
+			this.storage      = new RAMFS();
+			try {
+				this.globalConfig = new ConfigFile(storage, "config.json");
+			} catch (IOException e) {
+				fail();
+			}
+			
+			globalConfig.apply(ConfigDefaults.getActiveDefaults());
+		}
+	}
+	
 	class DummyProtocolManager extends DHTProtocolManager {
 		DummyClient client;
 		
@@ -50,7 +68,7 @@ public class DHTPeerTest {
 			client.reqId = id;
 			client.reqPeer = recipient;
 			client.reqKey = lookupKey;
-			return client.msg = new DummyMessage(recipient, DHTMessage.CMD_FIND_NODE, id.rawId, callback);
+			return client.msg = new DummyMessage(recipient, DHTMessage.CMD_FIND_NODE, id.serialize(), callback);
 		}
 		
 		@Override
@@ -61,9 +79,9 @@ public class DHTPeerTest {
 			client.reqKey = lookupKey;
 			
 			byte[] serializedRecord = record.serialize();
-			ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + serializedRecord.length + recipient.remoteAuthTag.length);
+			ByteBuffer buf = ByteBuffer.allocate(client.idLength() + serializedRecord.length + recipient.remoteAuthTag.length);
 			buf.put(recipient.remoteAuthTag);
-			buf.put(id.rawId);
+			buf.put(id.serialize());
 			buf.put(record.serialize());
 			return client.msg = new DummyMessage(recipient, DHTMessage.CMD_ADD_RECORD, buf.array(), callback);
 		}
@@ -75,19 +93,25 @@ public class DHTPeerTest {
 	}
 	
 	class DummyClient extends DHTClient {
-		DummyMessage msg;
-		DHTPeer reqPeer;
-		DHTID reqId;
-		Key reqKey;
-		DHTRecord reqRecord;
+		DummyMessage      msg;
+		DHTPeer           reqPeer;
+		DHTID             reqId;
+		Key               reqKey;
+		DHTRecord         reqRecord;
 		DummyRoutingTable routingTable;
 		
 		public DummyClient() {
-			this.crypto = DHTPeerTest.crypto;
-			super.routingTable = this.routingTable = new DummyRoutingTable();
-			this.id = new DHTID(crypto.rng(crypto.hashLength()));
-			this.tagKey = new Key(crypto);
-			super.protocolManager = this.protocolManager = new DummyProtocolManager(this);
+			this .crypto          = DHTPeerTest.crypto;
+			this .networkId       = crypto.hash("test".getBytes());
+			this .id              = DHTID.withBytes(crypto.rng(crypto.hashLength()));
+			this .tagKey          = new Key(crypto);
+			this .privateKey      = crypto.makePrivateDHKey();
+			this .master          = new DummyMaster();
+			
+			super.routingTable    =
+			this .routingTable    = new DummyRoutingTable(this);
+			super.protocolManager =
+			this .protocolManager = new DummyProtocolManager(this);
 		}
 		
 	}
@@ -136,7 +160,11 @@ public class DHTPeerTest {
 	class DummyRoutingTable extends DHTRoutingTable {
 		ArrayList<DHTPeer> suggestedPeers = new ArrayList<>();
 		
-		@Override public void suggestPeer(DHTPeer peer) { suggestedPeers.add(peer); }
+		public DummyRoutingTable(DHTClient client) {
+			this.client = client;
+		}
+		
+		@Override public boolean suggestPeer(DHTPeer peer) { suggestedPeers.add(peer); return true; }
 	}
 	
 	class DummyMessage extends DHTMessage {
@@ -156,7 +184,7 @@ public class DHTPeerTest {
 	DummyClient client;
 	
 	public DHTID makeId() {
-		return new DHTID(crypto.rng(crypto.hashLength()));
+		return DHTID.withBytes(crypto.rng(crypto.hashLength()));
 	}
 	
 	public DHTPeer makeTestPeer() {
@@ -218,7 +246,7 @@ public class DHTPeerTest {
 		assertEquals("10.0.0.1", peer.address);
 		assertEquals(1000, peer.port);
 		assertArrayEquals(pubKey.getBytes(), peer.key.getBytes());
-		assertEquals(new DHTID(pubKey), peer.id);
+		assertEquals(DHTID.withKey(pubKey), peer.id);
 	}
 	
 	@Test

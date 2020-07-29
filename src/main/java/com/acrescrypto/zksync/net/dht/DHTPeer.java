@@ -51,13 +51,23 @@ public class DHTPeer implements Sendable {
 			);
 	}
 	
+	public DHTPeer(DHTPeer peer) throws UnknownHostException {
+		this(peer.client, peer.address, peer.port, peer.key);
+		this.id              = DHTID.withBytes(peer.id.serialize()); // some tests hijack ID field, so be sure to capture original ID and don't trust key-derived value
+		this.lastSeen        = peer.lastSeen;
+		this.missedMessages  = peer.missedMessages;
+		this.remoteAuthTag   = peer.remoteAuthTag.clone();
+		this.pinned          = peer.pinned;
+		this.verified        = peer.verified;
+	}
+	
 	public DHTPeer(DHTClient client, String address, int port, PublicDHKey key) throws UnknownHostException {
 		this.client  = client;
 		this.address = InetAddress.getByName(address).getHostAddress();
 		this.port    = port;
 
 		this.key     = key;
-		this.id      = new DHTID(key);
+		this.id      = DHTID.withKey(key);
 	}
 	
 	public DHTPeer(DHTClient client, ByteBuffer serialized) throws EINVALException {
@@ -147,7 +157,7 @@ public class DHTPeer implements Sendable {
 			logger.info("DHT {}:{}: Can't addRecord to {} without remote auth tag; pinging",
 					address,
 					port,
-					Util.bytesToHex(recordId.rawId, 8));
+					recordId.toShortString());
 			this.ping((msg)->addRecord(recordId, lookupKey, record));
 			return;
 		}
@@ -155,7 +165,7 @@ public class DHTPeer implements Sendable {
 		logger.info("DHT {}:{}: send addRecord {}",
 				address,
 				port,
-				Util.bytesToHex(recordId.rawId, 8));
+				recordId.toShortString());
 		client.getProtocolManager().addRecordMessage(
 				this,
 				recordId,
@@ -246,6 +256,30 @@ public class DHTPeer implements Sendable {
 		return buf.array();
 	}
 	
+	protected void deserialize(ByteBuffer serialized) throws EINVALException {
+		try {
+			int addrLen      = Util.unsignShort(serialized.getShort());
+			this.address     = new String(serialized.array(),
+					                      serialized.position(),
+					                      addrLen);
+			
+			serialized.position(serialized.position() + addrLen);
+			this.port        = Util.unsignShort(serialized.getShort());
+			
+			int keyLen       = Util.unsignShort(serialized.getShort());
+			byte[] keyBytes  = new byte[keyLen];
+			serialized.get(keyBytes);
+			
+			this.key         = client.crypto.makePublicDHKey(keyBytes);
+			this.id          = DHTID.withKey(this.key);
+			
+			byte flags       = serialized.get();
+			this.pinned      = (flags & FLAG_PINNED) != 0;
+		} catch(BufferUnderflowException exc) {
+			throw new EINVALException("(dht peer)");
+		}
+	}
+	
 	public boolean matches(String address, int port, PublicDHKey key) {
 		return this.port == port && this.address.equals(address) && this.key.equals(key);
 	}
@@ -280,28 +314,6 @@ public class DHTPeer implements Sendable {
 	
 	public void setPinned(boolean pinned) {
 		this.pinned = pinned;
-	}
-	
-	protected void deserialize(ByteBuffer serialized) throws EINVALException {
-		try {
-			int addrLen      = Util.unsignShort(serialized.getShort());
-			this.address     = new String(serialized.array(), serialized.position(), addrLen);
-			
-			serialized.position(serialized.position() + addrLen);
-			this.port        = Util.unsignShort(serialized.getShort());
-			
-			int keyLen       = Util.unsignShort(serialized.getShort());
-			byte[] keyBytes  = new byte[keyLen];
-			serialized.get(keyBytes);
-			
-			this.key         = client.crypto.makePublicDHKey(keyBytes);
-			this.id          = new DHTID(this.key);
-			
-			byte flags       = serialized.get();
-			this.pinned      = (flags & FLAG_PINNED) != 0;
-		} catch(BufferUnderflowException exc) {
-			throw new EINVALException("(dht peer)");
-		}
 	}
 	
 	public String toString() {

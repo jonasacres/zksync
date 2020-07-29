@@ -1,10 +1,10 @@
 package com.acrescrypto.zksync.net.dht;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
-import java.util.Arrays;
 
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -31,36 +31,34 @@ public class DHTIDTest {
 	
 	@Test
 	public void testXor() {
-		int len = 64;
-		DHTID id0 = new DHTID(crypto.rng(len));
-		DHTID id1 = new DHTID(crypto.rng(len));
-		byte[] xor = id0.xor(id1).rawId;
+		int    len = 64;
+		DHTID  id0 = DHTID.withBytes(crypto.rng(len));
+		DHTID  id1 = DHTID.withBytes(crypto.rng(len));
+		byte[] xor = id0.xor(id1).serialize();
+		byte[] ie0 = id0         .serialize(),
+			   ie1 = id1         .serialize();
 		
 		for(int i = 0; i < len; i++) {
-			assertEquals(id0.rawId[i] ^ id1.rawId[i], xor[i]);
-		}
-	}
-	
-	@Test
-	public void testOrder() {
-		int len = 32;
-		
-		assertEquals(-1, new DHTID(new byte[len]).order());
-		
-		for(int i = 0; i < 8*len; i++) {
-			byte[] id = new byte[len];
-			int byteIdx = len - i/8 - 1, bitIdx = (i%8);
-			
-			id[byteIdx] |= (1 << bitIdx);
-			assertEquals(i, new DHTID(id).order());
+			assertEquals(ie0[i] ^ ie1[i], xor[i]);
 		}
 	}
 	
 	@Test
 	public void testSerialize() {
-		byte[] id = crypto.rng(Util.unsignByte(crypto.rng(1)[0]));
-		assertNotEquals(id, new DHTID(id).serialize());
-		assertTrue(Arrays.equals(id, new DHTID(id).serialize()));
+		for(int i = 1; i < 256; i++) {
+			byte[] raw        = crypto.expand(
+					              crypto.symNonce(i),
+					              i,
+					              new byte[0],
+					              new byte[0]); // random-looking byte array of length i
+			DHTID  id         = DHTID.withBytes(raw);
+			byte[] serialized = id.serialize();
+			
+			assertEquals     (i,   raw       .length);
+			assertEquals     (i,   serialized.length);
+			assertNotEquals  (raw, serialized); // can't just give us back the same array (i.e. original memory address)
+			assertArrayEquals(raw, serialized); // but the arrays need to have identical content
+		}
 	}
 	
 	@Test
@@ -81,10 +79,12 @@ public class DHTIDTest {
 			};
 		
 		for(String[] c : cases) {
-			DHTID high = new DHTID(Util.hexToBytes(c[0]));
-			DHTID low = new DHTID(Util.hexToBytes(c[1]));
-			assertTrue(high.compareTo(low) > 0);
-			assertTrue(low.compareTo(high) < 0);
+			DHTID high = DHTID.withBytes(Util.hexToBytes(c[0]));
+			DHTID low  = DHTID.withBytes(Util.hexToBytes(c[1]));
+			assertTrue(high.compareTo(low)  >  0);
+			assertTrue(high.compareTo(high) == 0);
+			assertTrue(low .compareTo(high) <  0);
+			assertTrue(low .compareTo(low)  == 0);
 		}
 	}
 }

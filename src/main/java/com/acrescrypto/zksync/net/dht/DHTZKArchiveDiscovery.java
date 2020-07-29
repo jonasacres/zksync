@@ -175,7 +175,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	protected void discover(DiscoveryEntry entry) {
 		Key lookupKey = entry.accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED,
 				"easysafe-dht-lookup");
-		DHTID searchId = new DHTID(entry.accessor.temporalSeedId(0));
+		DHTID searchId = DHTID.withBytes(entry.accessor.temporalSeedId(0));
 		logger.debug("DHT -: Doing discovery for archive with temporal seed ID {}",
 				Util.bytesToHex(entry.accessor.temporalSeedId(0), 8));
 		entry.accessor.getMaster().getDHTClient().getProtocolManager().lookup(searchId, lookupKey, (record)->{
@@ -215,7 +215,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 					"easysafe-dht-lookup");
 			
 			for(int i = -1; i <= 1; i++) {
-				DHTID searchId = new DHTID(entry.accessor.temporalSeedId(i));
+				DHTID searchId = DHTID.withBytes(entry.accessor.temporalSeedId(i));
 				entry.accessor.getMaster().getDHTClient().getProtocolManager().addRecord(
 						searchId,
 						lookupKey,

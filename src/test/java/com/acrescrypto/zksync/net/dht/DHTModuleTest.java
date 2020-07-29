@@ -139,7 +139,7 @@ public class DHTModuleTest {
 	public void testPeerDiscovery() throws IOException, InvalidBlacklistException {
 		// TODO Urgent: (itf) Linux 81cc346 2018-12-12 UniversalTests, assertion failed
 		ArrayList<DHTClient> clients = makeClients(32);
-		DHTID id = new DHTID(crypto.rng(crypto.hashLength()));
+		DHTID id = DHTID.withBytes(crypto.rng(crypto.hashLength()));
 		DHTAdvertisementRecord ad = makeBogusAd(0);
 		Key lookupKey = new Key(crypto);
 		

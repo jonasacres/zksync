@@ -6,9 +6,10 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashSet;
 
 import org.junit.After;
 import org.junit.AfterClass;
@@ -40,10 +41,10 @@ public class DHTBucketTest {
 	
 	class DummyClient extends DHTClient {
 		public DummyClient() {
+			this.crypto       = DHTBucketTest.crypto;
 			this.routingTable = new DummyRoutingTable(this);
-			this.crypto = DHTBucketTest.crypto;
-			this.id = new DHTID(crypto.rng(crypto.hashLength()));
-			this.master = new DummyMaster();
+			this.id           = DHTID.withBytes(crypto.rng(crypto.hashLength()));
+			this.master       = new DummyMaster();
 		}
 	}
 	
@@ -52,7 +53,7 @@ public class DHTBucketTest {
 			super(client);
 		}
 
-		@Override public void read() {}
+		@Override public void read() { reset(); }
 		@Override public void freshenThread() {}
 		@Override public long bucketFreshenInterval() { return ConfigDefaults.getActiveDefaults().getLong("net.dht.bucketFreshenIntervalMs"); }
 	}
@@ -68,11 +69,31 @@ public class DHTBucketTest {
 	}
 	
 	static CryptoSupport crypto;
-	DummyClient client;
+	       DummyClient   client;
+	       DHTBucket     bucket;
 	
 	DummyPeer makePeer(int i) {
 		try {
-			return new DummyPeer(client, "10.0.0."+i, 1000+i, crypto.makePrivateDHKey().publicKey().getBytes());
+			return new DummyPeer(
+					client,
+					"10.0.0." + i,
+					1000      + i,
+					crypto.makePrivateDHKey().publicKey().getBytes());
+		} catch(UnknownHostException exc) {
+			fail();
+			return null;
+		}
+	}
+	
+	DummyPeer makePeer(DHTBucket bucket) {
+		try {
+			DummyPeer peer = new DummyPeer(
+					client,
+					"10.0.1." + bucket.peers.size(),
+					2000      + bucket.peers.size(),
+					crypto.makePrivateDHKey().publicKey().getBytes());
+			peer.id = bucket.randomIdInRange();
+			return peer;
 		} catch(UnknownHostException exc) {
 			fail();
 			return null;
@@ -84,19 +105,6 @@ public class DHTBucketTest {
 		peer.missedMessage();
 	}
 	
-	DHTID makeIdOfDistanceOrder(int order) {
-		byte m = (byte) (1 << (order % 8));
-		byte r = (byte) (m | ((m-1) & crypto.rng(1)[0]));
-		
-		ByteBuffer id = ByteBuffer.allocate(crypto.hashLength());
-		id.position(id.capacity() - order/8 - 1);
-		id.put(r);
-		id.put(crypto.rng(id.remaining()));
-		
-		DHTID origId = new DHTID(id.array());
-		return client.id.xor(origId);
-	}
-	
 	@BeforeClass
 	public static void beforeAll() throws IOException, InvalidBlacklistException {
 		TestUtils.startDebugMode();
@@ -105,7 +113,8 @@ public class DHTBucketTest {
 	
 	@Before
 	public void beforeEach() {
-		client = new DummyClient();
+		client         = new DummyClient();
+		bucket         = client.getRoutingTable().buckets.get(0);
 	}
 	
 	@After
@@ -118,13 +127,22 @@ public class DHTBucketTest {
 		TestUtils.assertTidy();
 		TestUtils.stopDebugMode();
 	}
-
+	
+	public void fillBucket(DHTBucket bucket) {
+		fillBucket(bucket, bucket.maxCapacity());
+	}
+	
+	public void fillBucket(DHTBucket bucket, int count) {
+		for(int i = 0; i < count; i++) {
+			bucket.add(makePeer(i));
+		}
+	}
+	
 	@Test
 	public void testHasCapacityReturnsTrueIfEmptySlotsAvailable() {
-		DHTBucket bucket = new DHTBucket(client, 16);
 		assertTrue(bucket.hasCapacity());
 		
-		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY-1; i++) {
+		for(int i = 0; i < bucket.maxCapacity()-1; i++) {
 			bucket.add(makePeer(i));
 			assertTrue(bucket.hasCapacity());
 		}
@@ -132,10 +150,7 @@ public class DHTBucketTest {
 
 	@Test
 	public void testHasCapacityReturnsTrueIfBadPeersPresent() {
-		DHTBucket bucket = new DHTBucket(client, 16);
-		assertTrue(bucket.hasCapacity());
-		
-		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY; i++) {
+		for(int i = 0; i < bucket.maxCapacity(); i++) {
 			DHTPeer peer = makePeer(i);
 			if(i == 3) {
 				makePeerBad(peer);
@@ -148,10 +163,9 @@ public class DHTBucketTest {
 	
 	@Test
 	public void testHasCapacityReturnsFalseIfNoSlotsOrBadPeers() {
-		DHTBucket bucket = new DHTBucket(client, 16);
 		assertTrue(bucket.hasCapacity());
 		
-		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY; i++) {
+		for(int i = 0; i < bucket.maxCapacity(); i++) {
 			bucket.add(makePeer(i));
 		}
 		
@@ -159,35 +173,59 @@ public class DHTBucketTest {
 	}
 	
 	@Test
-	public void testIncludesReturnsTrueIfDistanceIsOfBucketOrder() {
-		for(int i = 0; i < 8*crypto.hashLength(); i++) {
-			DHTBucket bucket = new DHTBucket(client, i);
-			assertTrue(bucket.includes(makeIdOfDistanceOrder(i)));
+	public void testIncludesReturnsTrueIfIdIsInRange() {
+		for(int i = 0; i < 8*client.idLength(); i++) {
+			DHTID id = bucket.randomIdInRange();
+			assertTrue(bucket.includes(id));
+			bucket.split();
+		}
+	}
+	
+	@Test
+	public void testIncludesReturnsFalseIfIdLessThanMin() {
+		DHTID originalMin = bucket.min();
+		
+		while(bucket.min() == originalMin) {
+			bucket.split();
 		}
 		
-		DHTBucket bucket = new DHTBucket(client, -1);
-		assertTrue(bucket.includes(client.id));
+		BigInteger minusOne    = BigInteger.valueOf(-1);
+		BigInteger oneLessVal  = bucket.min().id().add(minusOne);
+		DHTID      oneLess     = new DHTID(oneLessVal, originalMin.length);
+		assertFalse(bucket.includes(oneLess));
 	}
 	
 	@Test
-	public void testIncludesReturnsFalseIfDistanceIsLessThanBucketOrder() {
-		for(int i = 1; i < 8*crypto.hashLength(); i++) {
-			DHTBucket bucket = new DHTBucket(client, i);
-			assertFalse(bucket.includes(makeIdOfDistanceOrder(i-1)));
+	public void testIncludesReturnsTrueIfIdEqualsMin() {
+		DHTID originalMin = bucket.min();
+		assertTrue(bucket.includes(originalMin));
+		
+		while(bucket.min() == originalMin) {
+			bucket.split();
 		}
+		assertTrue(bucket.includes(bucket.min()));
 	}
 	
 	@Test
-	public void testIncludesReturnsFalseIfDistanceIsGreaterThanBucketOrder() {
-		for(int i = 0; i < 8*crypto.hashLength()-1; i++) {
-			DHTBucket bucket = new DHTBucket(client, i);
-			assertFalse(bucket.includes(makeIdOfDistanceOrder(i+1)));
+	public void testIncludesReturnsFalseIfIdGreaterThanOrEqualToMax() {
+		DHTID originalMax = bucket.max();
+		assertFalse(bucket.includes(bucket.max()));
+		
+		while(bucket.max() == originalMax) {
+			bucket.split();
 		}
+		
+		assertFalse(bucket.includes(bucket.max()));
+		
+		BigInteger one         = BigInteger.valueOf(1);
+		BigInteger oneMoreVal  = bucket.max().id().add(one);
+		DHTID      oneMore     = new DHTID(oneMoreVal, originalMax.length);
+		
+		assertFalse(bucket.includes(oneMore));
 	}
 	
 	@Test
 	public void testAddInsertsIntoBucket() {
-		DHTBucket bucket = new DHTBucket(client, 16);
 		DHTPeer peer = makePeer(0);
 		
 		assertFalse(bucket.peers.contains(peer));
@@ -197,19 +235,18 @@ public class DHTBucketTest {
 	
 	@Test
 	public void testAddTriggersPruneWhenAtCapacity() {
-		DHTBucket bucket = new DHTBucket(client, 16);
 		DHTPeer peer = makePeer(0);
 		makePeerBad(peer);
 		
 		bucket.add(peer);
 		
-		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY-1; i++) {
+		for(int i = 0; i < bucket.maxCapacity()-1; i++) {
 			bucket.add(makePeer(i+1));
 		}
 		
 		assertTrue(bucket.peers.contains(peer));
 		
-		DHTPeer lastPeer = makePeer(DHTBucket.MAX_BUCKET_CAPACITY+1);
+		DHTPeer lastPeer = makePeer(bucket.maxCapacity()+1);
 		bucket.add(lastPeer);
 		assertFalse(bucket.peers.contains(peer));
 		assertTrue(bucket.peers.contains(lastPeer));
@@ -217,12 +254,11 @@ public class DHTBucketTest {
 	
 	@Test
 	public void testAddDoesNotTriggerPruneWhenNotAtCapacity() {
-		DHTBucket bucket = new DHTBucket(client, 16);
 		DHTPeer peer = makePeer(0);
 		makePeerBad(peer);
 		bucket.add(peer);
 		
-		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY-1; i++) {
+		for(int i = 0; i < bucket.maxCapacity()-1; i++) {
 			bucket.add(makePeer(i+1));
 			assertTrue(bucket.peers.contains(peer));
 		}
@@ -231,7 +267,6 @@ public class DHTBucketTest {
 	@Test
 	public void testAddMarksBucketFresh() {
 		Util.setCurrentTimeNanos(1*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
-		DHTBucket bucket = new DHTBucket(client, 16);
 		bucket.add(makePeer(0));
 		
 		Util.setCurrentTimeNanos(2*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
@@ -242,19 +277,21 @@ public class DHTBucketTest {
 	}
 	
 	@Test
-	public void testRandomIdInRangeProducesIdOfBucketOrder() {
-		for(int i = 0; i < 8*crypto.hashLength(); i++) {
-			for(int j = 0; j < 100; j++) {
-				DHTBucket bucket = new DHTBucket(client, i);
-				assertEquals(i, bucket.randomIdInRange().xor(client.id).order());
-			}
+	public void testRandomIdInRangeProducesIdInRange() {
+		for(int i = 0; i < 8*client.idLength(); i++) {
+			DHTID id = bucket.randomIdInRange();
+			assertTrue(id.compareTo(bucket.min()) >= 0);
+			assertTrue(id.compareTo(bucket.max()) <  0);
+			bucket.split();
 		}
 	}
 	
 	@Test
 	public void testMarkFreshClearsNeedsFreshening() {
+		bucket.add(makePeer(0));
+		bucket.setFresh(0);
+		
 		Util.setCurrentTimeNanos(1*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
-		DHTBucket bucket = new DHTBucket(client, 16);
 		bucket.markFresh();
 
 		Util.setCurrentTimeNanos(2*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
@@ -271,7 +308,6 @@ public class DHTBucketTest {
 	@Test
 	public void testNeedsFresheningReturnsFalseIfBucketHasBeenRecentlyFreshened() {
 		Util.setCurrentTimeNanos(1*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
-		DHTBucket bucket = new DHTBucket(client, 16);
 		bucket.markFresh();
 		
 		Util.setCurrentTimeNanos(2*1000l*1000l*client.getRoutingTable().bucketFreshenInterval()-1);
@@ -281,8 +317,7 @@ public class DHTBucketTest {
 	@Test
 	public void testNeedsFresheningReturnsTrueIfBucketHasNotBeenRecentlyFreshened() {
 		Util.setCurrentTimeNanos(1*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
-		DHTBucket bucket = new DHTBucket(client, 16);
-		bucket.markFresh();
+		bucket.add(makePeer(0));
 		
 		Util.setCurrentTimeNanos(2*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		assertTrue(bucket.needsFreshening());
@@ -290,18 +325,15 @@ public class DHTBucketTest {
 	
 	@Test
 	public void testNeedsFresheningReturnsFalseIfBucketHasNeverHadContents() {
-		Util.setCurrentTimeNanos(1*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
-		DHTBucket bucket = new DHTBucket(client, 16);
-		Util.setCurrentTimeNanos(2*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
+		Util.setCurrentTimeNanos(bucket.lastChanged + client.getRoutingTable().bucketFreshenInterval());
 		assertFalse(bucket.needsFreshening());
 	}
 	
 	@Test
 	public void testPrunePingsStalestPeer() {
-		DHTBucket bucket = new DHTBucket(client, 16);
 		ArrayList<DummyPeer> peers = new ArrayList<>();
 		
-		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY; i++) {
+		for(int i = 0; i < bucket.maxCapacity(); i++) {
 			Util.setCurrentTimeNanos(i*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 			DummyPeer peer = makePeer(i);
 			peers.add(peer);
@@ -309,7 +341,7 @@ public class DHTBucketTest {
 			bucket.add(peer);
 		}
 		
-		Util.setCurrentTimeNanos(DHTBucket.MAX_BUCKET_CAPACITY*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
+		Util.setCurrentTimeNanos(bucket.maxCapacity()*1000l*1000l*client.getRoutingTable().bucketFreshenInterval());
 		bucket.prune();
 		for(int i = 0; i < peers.size(); i++) {
 			assertEquals(i == 0, peers.get(i).pinged);
@@ -318,11 +350,10 @@ public class DHTBucketTest {
 	
 	@Test
 	public void testPruneDoesNotPingNonquestionablePeers() {
-		DHTBucket bucket = new DHTBucket(client, 16);
 		ArrayList<DummyPeer> peers = new ArrayList<>();
 		Util.setCurrentTimeMillis(0);
 		
-		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY; i++) {
+		for(int i = 0; i < bucket.maxCapacity(); i++) {
 			DummyPeer peer = makePeer(i);
 			peers.add(peer);
 			peer.acknowledgedMessage();
@@ -333,6 +364,94 @@ public class DHTBucketTest {
 		bucket.prune();
 		for(int i = 0; i < peers.size(); i++) {
 			assertFalse(peers.get(i).pinged);
+		}
+	}
+	
+	@Test
+	public void testNeedsSplitReturnsFalseIfBucketHasCapacityAndDoesNotContainClientId() {
+		DHTBucket newBucket = bucket.split();
+		assertFalse(newBucket.needsSplit());
+	}
+	
+	@Test
+	public void testNeedsSplitReturnsFalseIfBucketHasCapacityAndContainsClientId() {
+		assertFalse(bucket.needsSplit());
+	}
+	
+	@Test
+	public void testNeedsSplitReturnsFalseIfBucketDoesNotContainClientId() {
+		DHTBucket newBucket = bucket.split();
+		
+		while(newBucket.hasCapacity()) {
+			newBucket.add(makePeer(newBucket));
+		}
+		
+		assertFalse(newBucket.needsSplit());
+	}
+	
+	@Test
+	public void testNeedsSplitReturnsTrueIfBucketContainsClientIdAndIsFull() {
+		while(bucket.hasCapacity()) {
+			bucket.add(makePeer(bucket));
+		}
+		
+		assertTrue(bucket.needsSplit());
+	}
+	
+	@Test
+	public void testSplitSetsAppropriateRanges() {
+		DHTID     oldMin    = bucket.min(),
+			      oldMax    = bucket.max(),
+			      mid       = bucket.max().midpoint(bucket.min());
+		DHTBucket newBucket = bucket.split();
+		
+		if(newBucket.min().compareTo(bucket.max()) == 0) {
+			// existing bucket is lower half
+			assertEquals(oldMin,    bucket.min());
+			assertEquals(mid,       bucket.max());
+			assertEquals(mid,    newBucket.min());
+			assertEquals(oldMax, newBucket.max());
+		} else {
+			// existing bucket is upper half
+			assertEquals(oldMin, newBucket.min());
+			assertEquals(mid,    newBucket.max());
+			assertEquals(mid,       bucket.min());
+			assertEquals(oldMax,    bucket.max());
+		}
+	}
+	
+	@Test
+	public void testSplitEnsuresExistingBucketIncludesClientId() {
+		assertTrue(bucket.includes(client.getId()));
+		
+		for(int i = 0; i < 8*client.idLength(); i++) {
+			DHTBucket   newBucket = bucket.split();
+			assertTrue (bucket   .includes(client.getId()));
+			assertFalse(newBucket.includes(client.getId()));
+		}
+	}
+	
+	@Test
+	public void testSplitApportionsExistingPeersBetweenBucketsAppropriately() {
+		while(bucket.hasCapacity()) {
+			bucket.add(makePeer(bucket));
+		}
+		
+		HashSet<DHTPeer> existing   = new HashSet<>(bucket.peers);
+		DHTBucket        newBucket  = bucket.split();
+		int              totalPeers = bucket.peers.size() + newBucket.peers.size();
+		
+		assertEquals(bucket.maxCapacity(), existing.size());
+		assertEquals(existing.size(),      totalPeers);
+		
+		for(DHTPeer peer : existing) {
+			if(bucket.includes(peer.getId())) {
+				assertTrue (   bucket.peers.contains(peer));
+				assertFalse(newBucket.peers.contains(peer));
+			} else {
+				assertFalse(   bucket.peers.contains(peer));
+				assertTrue (newBucket.peers.contains(peer));
+			}
 		}
 	}
 }

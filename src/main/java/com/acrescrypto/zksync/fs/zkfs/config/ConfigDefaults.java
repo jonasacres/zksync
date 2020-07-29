@@ -50,6 +50,7 @@ public class ConfigDefaults {
 		config.setDefault("net.dht.store.maxRecordsPerId",             64);
 		config.setDefault("net.dht.store.maxIds",                     128);
 		config.setDefault("net.dht.store.expirationTimeMs",  1000*60*60*4);
+		config.setDefault("net.dht.bucketMaxCapacity",                  8);
 		
 		config.setDefault("net.dht.bootstrap.enabled",   true);
 		config.setDefault("net.dht.bootstrap.peerfile",  "https://dht1.easysafe.io/dht/peerfile");

@@ -224,7 +224,7 @@ public class DHTSearchOperationTest {
 	public void beforeEach() throws UnknownHostException {
 		crypto = CryptoSupport.defaultCrypto();
 		client = new DummyClient();
-		searchId = new DHTID(crypto.rng(crypto.hashLength()));
+		searchId = DHTID.withBytes(crypto.rng(crypto.hashLength()));
 		results = null;
 		records = new ArrayList<>();
 		lookupKey = new Key(crypto);

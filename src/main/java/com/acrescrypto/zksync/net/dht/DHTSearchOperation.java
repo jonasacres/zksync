@@ -67,7 +67,7 @@ public class DHTSearchOperation {
 		});
 		
 		logger.debug("DHT -: Searching for id {}, routing table has {} peers",
-				Util.bytesToHex(searchId.rawId),
+				Util.bytesToHex(searchId.serialize()),
 				client.routingTable.allPeers().size());
 		
 		for(DHTPeer peer : client.routingTable.allPeers()) {

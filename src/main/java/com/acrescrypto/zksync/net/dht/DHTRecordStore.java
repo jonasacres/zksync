@@ -169,7 +169,7 @@ public class DHTRecordStore {
 	public void dump() {
 		System.out.println("\tRecord store: " + entriesById.size() + " keys");
 		for(DHTID id : entriesById.keySet()) {
-			System.out.println("\t\t" + Util.bytesToHex(id.rawId, 4) + " " + entriesById.get(id).size());
+			System.out.println("\t\t" + id.toShortString() + " " + entriesById.get(id).size());
 			for(StoreEntry entry : entriesById.get(id)) {
 				System.out.println("\t\t\t" + entry.record);
 			}
@@ -203,7 +203,7 @@ public class DHTRecordStore {
 			if(!record.isReachable()) {
 				logger.info("Ignoring DHT record for non-reachable host {} for ID {}",
 						record.routingInfo(),
-						Util.bytesToHex(id.rawId));
+						id.toShortString());
 				return;
 			}
 			
@@ -221,7 +221,7 @@ public class DHTRecordStore {
 				
 				logger.info("Added record from {} for ID {}; {} records for ID, {} ids in store",
 						record.routingInfo(),
-						Util.bytesToHex(id.rawId, 8),
+						id.toShortString(),
 						entriesForId.size(),
 						entriesById.size());
 
@@ -288,7 +288,7 @@ public class DHTRecordStore {
 			for(int i = 0; i < numIds; i++) {
 				byte[] idRaw = new byte[client.idLength()];
 				serialized.get(idRaw);
-				DHTID id = new DHTID(idRaw);
+				DHTID id = DHTID.withBytes(idRaw);
 				ArrayList<StoreEntry> entriesForId = new ArrayList<>();
 				entriesById.put(id, entriesForId);
 				

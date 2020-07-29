@@ -172,13 +172,13 @@ public class DHTProtocolManager {
 					);
 				if(keysMatch) {
 					try {
-						byte[] token = lookupKey.authenticate(Util.concat(searchId.rawId, peer.key.getBytes()));
+						byte[] token = lookupKey.authenticate(Util.concat(searchId.serialize(), peer.key.getBytes()));
 						client.getRecordStore().addRecordForId(searchId, token, record);
 					} catch (IOException exc) {
 						logger.error("DHT {}:{}: Encountered exception adding record from peer, record search id {}",
 								peer.address,
 								peer.port,
-								Util.bytesToHex(searchId.rawId),
+								Util.bytesToHex(searchId.serialize()),
 								exc);
 					}
 				} else {
@@ -201,20 +201,20 @@ public class DHTProtocolManager {
 	}
 	
 	protected DHTMessage findNodeMessage(DHTPeer recipient, DHTID id, Key lookupKey, DHTMessageCallback callback) {
-		ByteBuffer buf = ByteBuffer.allocate(id.rawId.length + lookupKey.getCrypto().hashLength());
-		buf.put(id.rawId);
-		buf.put(lookupKey.authenticate(Util.concat(id.rawId, recipient.key.getBytes())));
+		ByteBuffer buf = ByteBuffer.allocate(id.getLength() + lookupKey.getCrypto().hashLength());
+		buf.put(id.serialize());
+		buf.put(lookupKey.authenticate(Util.concat(id.serialize(), recipient.key.getBytes())));
 		return new DHTMessage(recipient, DHTMessage.CMD_FIND_NODE, buf.array(), callback);
 	}
 	
 	protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, Key lookupKey, DHTRecord record, DHTMessageCallback callback) {
 		byte[] serializedRecord = record.serialize();
 		ByteBuffer buf = ByteBuffer.allocate(
-				   id.rawId.length
+				   id.getLength()
 				 + client.getMaster().getCrypto().hashLength()
 				 + serializedRecord.length);
-		buf.put(id.rawId);
-		buf.put(lookupKey.authenticate(Util.concat(id.rawId, recipient.key.getBytes())));
+		buf.put(id.serialize());
+		buf.put(lookupKey.authenticate(Util.concat(id.serialize(), recipient.key.getBytes())));
 		buf.put(record.serialize());
 		return new DHTMessage(recipient, DHTMessage.CMD_ADD_RECORD, buf.array(), callback);
 	}
@@ -371,7 +371,7 @@ public class DHTProtocolManager {
 				Util.bytesToHex(idBytes),
 				message.msgId);
 		
-		DHTID id                         = new DHTID(idBytes);
+		DHTID id                         = DHTID.withBytes(idBytes);
 		
 		Collection<DHTPeer> closestPeers = client.getRoutingTable().closestPeers(
 				id,
@@ -392,7 +392,7 @@ public class DHTProtocolManager {
 		assertSupportedState(buf.remaining() > idRaw.length + token.length);		
 		buf.get(idRaw);
 		buf.get(token);
-		DHTID id = new DHTID(idRaw);
+		DHTID id = DHTID.withBytes(idRaw);
 
 		logger.debug("DHT {}:{}: recv addRecord {}, msgId={}",
 				message.peer.address,

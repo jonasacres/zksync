@@ -156,7 +156,7 @@ public class DHTMessageTest {
 	HashMap<Integer,PrivateDHKey> testKeys = new HashMap<>();
 	
 	public DHTID makeId() {
-		return new DHTID(crypto.rng(crypto.hashLength()));
+		return DHTID.withBytes(crypto.rng(crypto.hashLength()));
 	}
 	
 	public PrivateDHKey privateKeyForPeer(int i) {

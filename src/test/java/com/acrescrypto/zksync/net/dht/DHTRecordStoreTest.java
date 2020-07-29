@@ -122,7 +122,7 @@ public class DHTRecordStoreTest {
 	DHTRecordStore store;
 	
 	public DHTID makeId() {
-		return new DHTID(client.crypto.rng(client.crypto.hashLength()));
+		return DHTID.withBytes(client.crypto.rng(client.crypto.hashLength()));
 	}
 	
 	public long expirationTimeMs() {

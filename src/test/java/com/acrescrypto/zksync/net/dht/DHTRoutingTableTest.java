@@ -11,6 +11,7 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedList;
 
 import org.junit.After;
@@ -51,9 +52,10 @@ public class DHTRoutingTableTest {
 			this.privateKey       = crypto.makePrivateDHKey();
 			this.storage          = new RAMFS();
 			this.storageKey       = new Key(this.crypto);
-			this.id               = new DHTID(privateKey.publicKey());
 			this.lookupIds        = new LinkedList<>();
 			this.master           = new DummyMaster();
+			this.id               = DHTID.withKey(privateKey.publicKey());
+			this.networkId        = crypto.hash("test".getBytes());
 			
 			super.protocolManager = this.protocolManager = new DummyProtocolManager(this);
 			super.socketManager   = this.socketManager   = new DummySocketManager(this);
@@ -103,13 +105,47 @@ public class DHTRoutingTableTest {
 	DummyClient client;
 	DHTRoutingTable table;
 	
+	public void fillTable(int numPeers) {
+		for(int i = 0; i < numPeers; i++) {
+			DHTPeer peer;
+			
+			do {
+				LinkedList<DHTBucket> availableBuckets = new LinkedList<>(table.buckets);
+				availableBuckets.removeIf((bb)->!bb.hasCapacity() && !bb.needsSplit());
+				
+				int       r      = client.crypto.defaultPrng().getInt(availableBuckets.size());
+				DHTBucket bucket = availableBuckets.get(r);
+				DHTID     id     = bucket.randomIdInRange();
+				          peer   = makeTestPeer(id);
+			} while(!table.suggestPeer(peer));
+		}
+	}
+	
+	public void fillTableSlow(int numPeers) {
+		int j = 0;
+		
+		for(int i = 0; i < numPeers; i++) {
+			DHTPeer peer;
+			
+			do {
+				peer = makeTestPeer(j++);
+			} while(!table.suggestPeer(peer));
+		}
+	}
+	
 	public DHTPeer makeTestPeer(int i) {
 		try {
 			byte[] seed = ByteBuffer.allocate(4).putInt(i).array();
 			byte[] pubKey = client.crypto.prng(seed).getBytes(client.crypto.asymPublicDHKeySize());
 			
-			int ii = i % 256, jj = i / 256;
-			return new DHTPeer(client, "10.0."+jj+"."+ii, 1000+i, pubKey);
+			int ii = (i / (1      )) % 256,
+				jj = (i / (256    )) % 256,
+				kk = (i / (256*256)) % 256;
+			return new DHTPeer(
+					client,
+					"10."+kk+"."+jj+"."+ii,
+					1000+i,
+					pubKey);
 		} catch(UnknownHostException exc) {
 			fail();
 			return null;
@@ -117,14 +153,23 @@ public class DHTRoutingTableTest {
 	}
 	
 	public DHTPeer makeTestPeer(DHTID id) {
+		/* this can guarantee a peer falls into a bucket, but because it overrides the
+		 * ID field from its usual public key-based value, and the public key is what is
+		 * serialized when writing the routing table, peers created here do not deserialize
+		 * correctly.
+		 */
 		try {
-			byte[] seed = id.serialize();
-			byte[] pubKey = client.crypto.prng(seed).getBytes(client.crypto.asymPublicDHKeySize());
-			DHTPeer peer = new DHTPeer(client,
+			byte[] seed   = id.serialize();
+			byte[] pubKey = client
+					          .crypto
+					          .prng(seed)
+					          .getBytes(client.crypto.asymPublicDHKeySize());
+			DHTPeer peer  = new DHTPeer(
+					client,
 					"10.0.0."+(client.crypto.prng(seed).getInt(256)),
-					(client.crypto.prng(seed).getInt(65536)),
+					(client.crypto.prng(seed).getInt(65536)), // port
 					pubKey);
-			peer.id = id;
+			peer.id       = id;
 			return peer;
 		} catch(UnknownHostException exc) {
 			fail();
@@ -140,7 +185,7 @@ public class DHTRoutingTableTest {
 	@Before
 	public void beforeEach() {
 		client = new DummyClient();
-		table = new DHTRoutingTable(client);
+		table  = new DHTRoutingTable(client);
 	}
 	
 	@After
@@ -162,9 +207,7 @@ public class DHTRoutingTableTest {
 	
 	@Test
 	public void testInitWithStoredFile() {
-		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY; i++) {
-			table.suggestPeer(makeTestPeer(i));
-		}
+		fillTableSlow(table.maxBucketCapacity());
 		
 		DHTRoutingTable table2 = new DHTRoutingTable(client);
 		assertEquals(table.allPeers().size(), table2.allPeers().size());
@@ -176,7 +219,7 @@ public class DHTRoutingTableTest {
 	
 	@Test
 	public void testInitWithCorruptedFile() throws IOException {
-		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY; i++) {
+		for(int i = 0; i < table.maxBucketCapacity(); i++) {
 			table.suggestPeer(makeTestPeer(i));
 		}
 		
@@ -192,13 +235,14 @@ public class DHTRoutingTableTest {
 	@Test
 	public void testMarkFreshMarksBucketContainingPeerAsFresh() {
 		Util.setCurrentTimeMillis(0);
-		DHTPeer peer = makeTestPeer(0);
-
-		DHTBucket bucket = table.buckets.get(peer.id.xor(client.id).order()+1);
+		
+		DHTPeer peer     = makeTestPeer(0);
+		DHTBucket bucket = table.bucketForId(peer.getId());
 		table.suggestPeer(peer);
 
 		Util.setCurrentTimeMillis(table.bucketFreshenInterval());
-		assertTrue(bucket.needsFreshening());
+		
+		assertTrue (bucket.needsFreshening());
 		table.markFresh(peer);
 		assertFalse(bucket.needsFreshening());
 	}
@@ -206,19 +250,21 @@ public class DHTRoutingTableTest {
 	@Test
 	public void testMarkFreshDoesNotMarkIrrelevantBucketsAsFresh() {
 		Util.setCurrentTimeMillis(1);
-		DHTPeer peer = makeTestPeer(0);
-		int bucketIndex = peer.id.xor(client.id).order()+1;
-		for(int i = 0; i <= 8*client.idLength(); i++) {
-			table.buckets.get(i).markFresh();
+		fillTable(8*table.maxBucketCapacity());
+		
+		DHTPeer   peer    = makeTestPeer(0);
+		
+		for(DHTBucket bucket : table.buckets()) {
+			bucket.markFresh();
 		}
 
 		table.suggestPeer(peer);
 		Util.setCurrentTimeMillis(table.bucketFreshenInterval()+1);
 		table.markFresh(peer);
 
-		for(int i = 0; i <= 8*client.idLength(); i++) {
-			if(i == bucketIndex) continue;
-			assertTrue(table.buckets.get(i).needsFreshening());
+		for(DHTBucket bucket : table.buckets()) {
+			if(bucket.includes(peer.getId())) continue;
+			assertTrue(bucket.needsFreshening());
 		}
 	}
 	
@@ -240,8 +286,10 @@ public class DHTRoutingTableTest {
 		
 		table.reset();
 		
+		assertTrue(table.allPeers().isEmpty());
 		for(int i = 0; i <= 8*client.idLength(); i++) {
-			assertTrue(table.buckets.get(i).peers.isEmpty());
+			assertTrue(table.buckets.size() == 1);
+			assertTrue(table.buckets.get(0).peers().isEmpty());
 		}
 	}
 	
@@ -252,7 +300,7 @@ public class DHTRoutingTableTest {
 		}
 		
 		int numPeers = client.getMaster().getGlobalConfig().getInt("net.dht.maxResults");
-		DHTID id = new DHTID(client.crypto.rng(client.idLength()));
+		DHTID id = DHTID.withBytes(client.crypto.rng(client.idLength()));
 		Collection<DHTPeer> closest = table.closestPeers(id, numPeers);
 		
 		assertEquals(numPeers, closest.size());
@@ -274,7 +322,7 @@ public class DHTRoutingTableTest {
 	
 	@Test
 	public void testClosestPeersReturnsEmptyListIfTableEmpty() {
-		DHTID id = new DHTID(client.crypto.rng(client.idLength()));
+		DHTID id = DHTID.withBytes(client.crypto.rng(client.idLength()));
 		assertEquals(0, table.closestPeers(id, 1).size());
 	}
 	
@@ -282,78 +330,116 @@ public class DHTRoutingTableTest {
 	public void testClosestPeersReturnsPartialListIfTableIsSmallerThanRequestedSize() {
 		int numPeers = 16;
 		for(int i = 0; i < numPeers-1; i++) {
-			// make sure to ignore bucket 0 since it always stays empty
-			table.suggestPeer(makeTestPeer(table.buckets.get(i+1).randomIdInRange()));
+			while(true) {
+				DHTID randomId = DHTID.withBytes(client.crypto.rng(client.idLength()));
+				if(table.suggestPeer(makeTestPeer(randomId))) {
+					break;
+				}
+			}
 		}
 		
-		DHTID id = new DHTID(client.crypto.rng(client.idLength()));
+		DHTID id = DHTID.withBytes(client.crypto.rng(client.idLength()));
 		assertEquals(numPeers-1, table.closestPeers(id, numPeers).size());
 	}
 	
 	@Test
 	public void testFreshenCallsLookupForRandomIdInEachStaleBucket() {
-		// also covers case: freshen does not call lookup for ids in fresh buckets
-		for(int i = 0; i <= 8*client.idLength(); i++) {
-			if(i % 2 != 0) continue;
-			table.buckets.get(i).markFresh();
+		fillTable(8*table.maxBucketCapacity());
+		HashSet<DHTBucket> staleBuckets = new HashSet<>();
+		int                i            = 0;
+		
+		// mark some of our buckets stale, note which ones
+		for(DHTBucket bucket : table.buckets()) {
+			boolean makeStale = i++ % 2               == 0
+					         && bucket.peers().size() >  0;
+			if(!makeStale) continue;
+			
+			staleBuckets.add(bucket);
+			bucket.setFresh(0);
 		}
 		
 		table.freshen();
-		int expectedOrder = 0;
+		
+		/* each bucket queries exactly one id if stale, or 0 if fresh */
 		for(DHTID id : client.lookupIds) {
-			assertEquals(expectedOrder, id.xor(client.id).order());
-			expectedOrder += 2;
+			boolean found = false;
+			for(DHTBucket stale : staleBuckets) {
+				if(!stale.includes(id)) continue;
+				
+				// remove bucket from set
+				staleBuckets.remove(stale);
+				found = true;
+				break;
+			}
+			
+			if(!found) fail("DHTID was queried from a non-stale bucket");
 		}
+		
+		// shouldn't be any buckets left in the set
+		assertEquals(0, staleBuckets.size());
 	}
 	
 	@Test
 	public void testFreshenCallsPruneForAllBuckets() {
 		Util.setCurrentTimeMillis(0);
-		for(int i = 0; i < client.idLength(); i++) {
-			DHTBucket bucket = table.buckets.get(i);
-			for(int j = 0; i < i % DHTBucket.MAX_BUCKET_CAPACITY; i++) {
-				DHTPeer peer = makeTestPeer(i*DHTBucket.MAX_BUCKET_CAPACITY + j);
-				bucket.add(peer);
-				peer.missedMessage();
-				peer.missedMessage();
-			}
+		
+		fillTable(16*table.maxBucketCapacity());
+		
+		for(DHTPeer peer : table.allPeers()) {
+			peer.missedMessage();
+			peer.missedMessage();
 		}
 		
 		table.freshen();
 		for(DHTBucket bucket : table.buckets) {
-			assertTrue(bucket.peers.isEmpty());
+			assertTrue(bucket.hasCapacity());
 		}
 	}
 	
 	@Test
 	public void testSuggestPeerAddsPeerToBucketIfBucketHasCapacity() {
 		DHTPeer peer = makeTestPeer(0);
-		table.suggestPeer(peer);
-		int bucketIdx = peer.id.xor(client.id).order()+1;
-		assertTrue(table.buckets.get(bucketIdx).peers.contains(peer));
+		assertTrue(table.suggestPeer(peer));
+		assertTrue(table.bucketForId(peer.id).peers().contains(peer));
 	}
 	
 	@Test
 	public void testSuggestPeerDoesNotAddsPeerToBucketIfBucketFull() {
-		DHTPeer peer = makeTestPeer(0);
-		int bucketIdx = peer.id.xor(client.id).order()+1;
-		DHTBucket bucket = table.buckets.get(bucketIdx);
+		// ensure we have multiple buckets
+		fillTable(2*table.maxBucketCapacity());
 		
-		for(int i = 0; i < DHTBucket.MAX_BUCKET_CAPACITY; i++) {
-			bucket.add(makeTestPeer(i+1));
+		DHTBucket bucket = null;
+		
+		// find a bucket that is non-splittable
+		for(DHTBucket bkt : table.buckets) {
+			if(bkt.includes(client.getId())) continue;
+			
+			bucket = bkt;
+			break;
 		}
 		
-		table.suggestPeer(peer);
-		assertFalse(table.buckets.get(bucketIdx).peers.contains(peer));
+		// bucket should be non-null, but let's just test
+		if(bucket == null) fail("No non-splittable buckets");
+		
+		// make sure bucket is full
+		while(bucket.hasCapacity()) {
+			bucket.add(makeTestPeer(bucket.randomIdInRange()));
+		}
+		
+		// inserting a peer should fail
+		DHTPeer peer = makeTestPeer(bucket.randomIdInRange());
+		assertFalse(table.suggestPeer(peer));
+		assertFalse(bucket.peers().contains(peer));
+		assertFalse(table.allPeers().contains(peer));
 	}
 	
 	
 	@Test
 	public void testSuggestPeerRejectsSelf() throws UnknownHostException {
-		DHTPeer peer = new DHTPeer(client, "127.0.0.1", 0, table.client.getPublicKey());
-		table.suggestPeer(peer);
-		int bucketIdx = peer.id.xor(client.id).order()+1;
-		assertFalse(table.buckets.get(bucketIdx).peers.contains(peer));
+		DHTPeer self = new DHTPeer(client, "127.0.0.1", 0, table.client.getPublicKey());
+		assertFalse (table.suggestPeer(self));
+		assertEquals(0, table.allPeers().size());
+		assertEquals(0, table.bucketForId(self.getId()).peers().size());
 	}
 	
 	@Test

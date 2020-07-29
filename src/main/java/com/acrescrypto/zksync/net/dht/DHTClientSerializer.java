@@ -84,7 +84,7 @@ public class DHTClientSerializer {
 			
 			client.setPrivateKey(crypto.makePrivateDHKeyPair(privKeyRaw, pubKeyRaw));
 			client.setTagKey    (new Key(crypto, tagKeyRaw));
-			client.setId        (new DHTID(client.getPublicKey()));
+			client.setId        (DHTID.withKey(client.getPublicKey()));
 			client.setNetworkId (netId);
 		} catch(BufferUnderflowException exc) {
 			throw new EINVALException(path());

@@ -109,9 +109,9 @@ public class DHTClient {
 			// unable to read stored DHT client info; set up from scratch
 			privateKey = crypto.makePrivateDHKey();
 			tagKey     = new Key(crypto, crypto.makeSymmetricKey());
-			id         = new DHTID(getPublicKey());
+			id         = DHTID.withKey(getPublicKey());
 			
-			assert(id.rawId.length == idLength());
+			assert(id.getLength() == idLength());
 			
 			try {
 				serializer.write();
