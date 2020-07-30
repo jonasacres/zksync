@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedList;
@@ -303,9 +304,10 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 	
 	@Deprecated
 	/** @deprecated use net.dht.enabled config property instead for production use */
-	public void activateDHTForTest(String address, int port, DHTPeer root) throws SocketException {
+	public void activateDHTForTest(String address, int port, DHTPeer root) throws SocketException, UnknownHostException {
 		// this basically exists just to avoid rewriting all the tests now.
-		dhtClient.addPeer(root);
+		DHTPeer localizedRoot = new DHTPeer(dhtClient, root);
+		dhtClient.addPeer(localizedRoot);
 		dhtClient.listen(address, port);
 	}
 

@@ -56,7 +56,7 @@ public class DHTMessage {
 		this.msgId     = recipient.client.crypto.defaultPrng().getInt();
 		this.timestamp = Util.currentTimeMillis();
 		this.payload   = new byte[payloadBuf.remaining()];
-		
+
 		payloadBuf.get(payload);
 	}
 	
@@ -75,7 +75,7 @@ public class DHTMessage {
 		this.itemLists = new ArrayList<>();
 		this.msgId     = msgId;
 		this.timestamp = Util.currentTimeMillis();
-		
+
 		if(items != null) this.itemLists.add(new ArrayList<>(items));
 	}
 	

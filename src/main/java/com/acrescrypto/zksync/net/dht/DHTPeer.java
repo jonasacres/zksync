@@ -52,7 +52,11 @@ public class DHTPeer implements Sendable {
 	}
 	
 	public DHTPeer(DHTPeer peer) throws UnknownHostException {
-		this(peer.client, peer.address, peer.port, peer.key);
+		this(peer.client, peer);
+	}
+	
+	public DHTPeer(DHTClient client, DHTPeer peer) throws UnknownHostException {
+		this(client, peer.address, peer.port, peer.key);
 		this.id              = DHTID.withBytes(peer.id.serialize()); // some tests hijack ID field, so be sure to capture original ID and don't trust key-derived value
 		this.lastSeen        = peer.lastSeen;
 		this.missedMessages  = peer.missedMessages;

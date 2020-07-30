@@ -167,7 +167,7 @@ public class DHTRecordStore {
 	}
 	
 	public void dump() {
-		System.out.println("\tRecord store: " + entriesById.size() + " keys");
+		System.out.println("\tRecord store:  " + entriesById.size() + " keys");
 		for(DHTID id : entriesById.keySet()) {
 			System.out.println("\t\t" + id.toShortString() + " " + entriesById.get(id).size());
 			for(StoreEntry entry : entriesById.get(id)) {
