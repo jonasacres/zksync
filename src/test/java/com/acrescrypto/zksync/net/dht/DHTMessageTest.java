@@ -75,7 +75,7 @@ public class DHTMessageTest {
 		}
 
 		@Override
-		protected void watchForResponse(DHTMessage message, DatagramPacket packet) {
+		protected void watchForResponse(DHTMessage message) {
 			client.watch = message;
 		}
 	}

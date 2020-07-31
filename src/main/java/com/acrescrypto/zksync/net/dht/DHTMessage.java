@@ -96,10 +96,14 @@ public class DHTMessage {
 		if(isResponse()) {
 			sendItems();
 		} else {
-			DatagramPacket packet = prepareDatagram(1, ByteBuffer.wrap(payload));
-			peer.client.getProtocolManager().watchForResponse(this, packet);
+			DatagramPacket packet = prepareRequestDatagram();
+			peer.client.getProtocolManager().watchForResponse(this);
 			sendDatagram(packet);
 		}
+	}
+	
+	protected DatagramPacket prepareRequestDatagram() {
+		return prepareDatagram(1, ByteBuffer.wrap(payload));
 	}
 	
 	protected DatagramPacket sendItems() {

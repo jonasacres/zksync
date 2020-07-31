@@ -218,14 +218,8 @@ public class DHTSocketManager {
 	
 	protected synchronized void sendDatagram(DatagramPacket packet) {
 		if(paused) return;
-		int numAttempts = transmissionsPerMessage();
 		
-		for(int i = 0; i < numAttempts; i++) {
-			/* TODO: Doing retries this way leaks information, since the retries come
-			 * back-to-back, and have identical content. This provides a means of fingerprinting.
-			 * It would be better to do this at the message level, re-encrypting the entire thing,
-			 * and sending retries after a random delay.
-			 */
+		for(int i = 0; i < 2; i++) {
 			try {
 				socket.send(packet);
 				monitorTx.observeTraffic(packet.getLength());
@@ -252,10 +246,6 @@ public class DHTSocketManager {
 		}
 	}
 	
-	public int transmissionsPerMessage() {
-		return client.getMaster().getGlobalConfig().getInt("net.dht.transmissionsPerMessage");
-	}
-
 	public BandwidthMonitor getMonitorRx() {
 		return monitorRx;
 	}

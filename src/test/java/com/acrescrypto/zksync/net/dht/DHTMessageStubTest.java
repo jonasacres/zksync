@@ -9,9 +9,9 @@ import static org.junit.Assert.fail;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
-import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.LinkedList;
 
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -46,7 +46,7 @@ public class DHTMessageStubTest {
 
 	class DummyClient extends DHTClient {
 		DHTMessageStub missed;
-		DatagramPacket sent;
+		LinkedList<DatagramPacket> sent = new LinkedList<>();
 		
 		public DummyClient() {
 			this.master          = new DummyMaster();
@@ -77,7 +77,7 @@ public class DHTMessageStubTest {
 			this.client = client;
 		}
 
-		@Override public void sendDatagram(DatagramPacket packet) { client.sent = packet; }
+		@Override public void sendDatagram(DatagramPacket packet) { client.sent.add(packet); }
 	}
 	
 	CryptoSupport crypto;
@@ -106,12 +106,7 @@ public class DHTMessageStubTest {
 		client = new DummyClient();
 		peer = new DHTPeer(client, "127.0.0.1", 12345, crypto.rng(crypto.asymPublicDHKeySize()));
 		req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, new byte[0], (response)->{resp = response;});
-		
-		byte[] serialized = req.serialize(1, ByteBuffer.allocate(0));
-		
-		InetAddress address = InetAddress.getByName(peer.address);
-		DatagramPacket packet = new DatagramPacket(serialized, serialized.length, address, peer.port);
-		stub = new DHTMessageStub(req, packet);
+		stub = new DHTMessageStub(req);
 	}
 	
 	@AfterClass
@@ -122,18 +117,15 @@ public class DHTMessageStubTest {
 	
 	@Test
 	public void testConstructorSetsFields() {
-		assertEquals(peer, stub.peer);
-		assertEquals(req.cmd, stub.cmd);
-		assertEquals(req.msgId, stub.msgId);
-		assertNotNull(stub.packet);
+		assertEquals(req, stub.msg);
 		assertNotNull(stub.callback);
 	}
 	
 	@Test
 	public void testConstructorSetsRetryTimerToResendMessage() {
 		int messageRetryTimeMs = client.getMaster().getGlobalConfig().getInt("net.dht.messageRetryTimeMs");
-		assertNull(client.sent);
-		assertTrue(Util.waitUntil(messageRetryTimeMs+50, ()->stub.packet.equals(client.sent)));
+		assertTrue(client.sent.isEmpty());
+		assertTrue(Util.waitUntil(messageRetryTimeMs+50, ()->client.sent.size() > 0));
 	}
 	
 	@Test
@@ -193,5 +185,28 @@ public class DHTMessageStubTest {
 		DHTMessage response = makeResponse();
 		stub.dispatchResponse(response);
 		assertEquals(resp, response);
+	}
+	
+	@Test
+	public void testRetryReencryptsMessage() {
+		stub.retry();
+		stub.retry();
+		stub.retry();
+		
+		assertEquals(3, client.sent.size());
+		DatagramPacket a = client.sent.get(0),
+				       b = client.sent.get(1),
+				       c = client.sent.get(2);
+		
+		assertFalse(Arrays.equals(a.getData(), b.getData()));
+		assertFalse(Arrays.equals(a.getData(), c.getData()));
+		assertFalse(Arrays.equals(b.getData(), c.getData()));
+		
+		int matchedSizes = 0;
+		if(a.getLength() == b.getLength()) matchedSizes += 1;
+		if(a.getLength() == c.getLength()) matchedSizes += 1;
+		if(b.getLength() == c.getLength()) matchedSizes += 1;
+		
+		assertTrue(matchedSizes <= 1);
 	}
 }

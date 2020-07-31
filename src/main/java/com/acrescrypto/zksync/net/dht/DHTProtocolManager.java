@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.net.dht;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -238,12 +237,12 @@ public class DHTProtocolManager {
 		pendingOperations.clear();
 	}
 	
-	protected synchronized void watchForResponse(DHTMessage message, DatagramPacket packet) {
-		pendingRequests.add(new DHTMessageStub(message, packet));
+	protected synchronized void watchForResponse(DHTMessage message) {
+		pendingRequests.add(new DHTMessageStub(message));
 	}
 	
 	protected void missedResponse(DHTMessageStub stub) {
-		stub.peer.missedMessage();
+		stub.msg.peer.missedMessage();
 		stopWatchingForResponse(stub);
 	}
 	

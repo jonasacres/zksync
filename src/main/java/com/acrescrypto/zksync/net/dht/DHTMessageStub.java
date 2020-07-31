@@ -1,29 +1,20 @@
 package com.acrescrypto.zksync.net.dht;
 
-import java.net.DatagramPacket;
-
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.SnoozeThread;
 
 public class DHTMessageStub {
-	protected DHTPeer            peer;
 	protected DHTMessageCallback callback;
 	protected SnoozeThread       expirationMonitor;
-	protected DatagramPacket     packet;
-	
-	protected byte               cmd;
-	protected int                msgId;
+	protected DHTMessage         msg;
 	protected int                responsesReceived;
 	
-	public DHTMessageStub(DHTMessage msg, DatagramPacket packet) {
+	public DHTMessageStub(DHTMessage msg) {
 		int messageRetryTimeMs = msg.peer.client.getMaster().getGlobalConfig().getInt("net.dht.messageRetryTimeMs");
 		
-		this.peer              = msg.peer;
-		this.cmd               = msg.cmd;
-		this.msgId             = msg.msgId;
+		this.msg = msg;
 		this.callback          = msg.callback;
-		this.packet            = packet;
 		this.expirationMonitor = new SnoozeThread(
 				                   messageRetryTimeMs,
 				                   false,
@@ -31,9 +22,9 @@ public class DHTMessageStub {
 	}
 	
 	public boolean matchesMessage(DHTMessage msg) {
-		return msgId ==    msg.msgId
-			&& cmd   ==    msg.cmd
-			&& peer.equals(msg.peer);
+		return this.msg.msgId ==    msg.msgId
+			&& this.msg.cmd   ==    msg.cmd
+			&& this.msg.peer.equals(msg.peer);
 	}
 	
 	public void dispatchResponse(DHTMessage msg) throws ProtocolViolationException {
@@ -50,9 +41,9 @@ public class DHTMessageStub {
 	}
 	
 	public void retry() {
-		peer.client.getSocketManager().sendDatagram(packet);
-		int messageExpirationTimeMs = peer.client.getMaster().getGlobalConfig().getInt("net.dht.messageExpirationTimeMs"),
-			messageRetryTimeMs      = peer.client.getMaster().getGlobalConfig().getInt("net.dht.messageRetryTimeMs");
+		msg.peer.client.getSocketManager().sendDatagram(msg.prepareRequestDatagram());
+		int messageExpirationTimeMs = msg.peer.client.getMaster().getGlobalConfig().getInt("net.dht.messageExpirationTimeMs"),
+			messageRetryTimeMs      = msg.peer.client.getMaster().getGlobalConfig().getInt("net.dht.messageRetryTimeMs");
 		expirationMonitor = new SnoozeThread(
 				messageExpirationTimeMs - messageRetryTimeMs,
 				false,
@@ -60,6 +51,6 @@ public class DHTMessageStub {
 	}
 	
 	public void fail() {
-		peer.client.getProtocolManager().missedResponse(this);
+		msg.peer.client.getProtocolManager().missedResponse(this);
 	}
 }

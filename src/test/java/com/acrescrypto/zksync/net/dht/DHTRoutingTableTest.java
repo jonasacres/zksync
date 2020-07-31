@@ -84,7 +84,7 @@ public class DHTRoutingTableTest {
 			client.lookupIds.add(id);
 		}
 		
-		@Override public void watchForResponse(DHTMessage msg, DatagramPacket packet) {}
+		@Override public void watchForResponse(DHTMessage msg) {}
 	}
 	
 	class DummySocketManager extends DHTSocketManager {
