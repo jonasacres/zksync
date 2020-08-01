@@ -8,6 +8,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.net.DatagramPacket;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -37,8 +38,11 @@ import com.acrescrypto.zksync.crypto.PrivateDHKey;
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
+import com.acrescrypto.zksync.net.dht.DHTBootstrapper;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTID;
+import com.acrescrypto.zksync.net.dht.DHTMessage;
+import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
 import com.acrescrypto.zksync.net.dht.DHTProtocolManager;
 import com.acrescrypto.zksync.net.dht.DHTRecord;
@@ -73,6 +77,7 @@ public class DHTResourceTest {
 			this.protocolManager = new DummyDHTProtocolManager(this);
 			this.store           = new DummyDHTRecordStore    (this);
 			this.routingTable    = new DummyDHTRoutingTable   (this);
+			this.bootstrapper    = new DummyDHTBootstrapper   (this);
 
 			this.privateKey      = new PrivateDHKey(State.sharedCrypto());
 			this.storageKey      = Key.blank(State.sharedCrypto());
@@ -91,10 +96,12 @@ public class DHTResourceTest {
 			}));
 		}
 		
-		@Override public void close() { closed = true; closeSubscriptions(); }
-		@Override public void purge() throws IOException { purged = true; super.purge(); }
-		@Override public int numPendingRequests() { return 777; }
-		@Override public void addPeer(DHTPeer peer) { this.addedPeer = peer; }
+		@Override public DummyDHTProtocolManager getProtocolManager() { return (DummyDHTProtocolManager) protocolManager; }
+		@Override public DummyDHTBootstrapper bootstrapper() { return (DummyDHTBootstrapper) bootstrapper; }
+		@Override public void    close() { closed = true; closeSubscriptions(); }
+		@Override public void    purge() throws IOException { purged = true; super.purge(); }
+		@Override public int     numPendingRequests() { return 777; }
+		@Override public void    addPeer(DHTPeer peer) { this.addedPeer = peer; }
 		@Override public boolean isEnabled() { return true; }
 		@Override public FS getStorage() {
 			try {
@@ -106,19 +113,48 @@ public class DHTResourceTest {
 		}
 	}
 	
+	class DummyDHTBootstrapper extends DHTBootstrapper {
+		boolean calledBootstrapWithoutBody, calledBootstrapWithBody;
+		String peerfileString;
+		
+		public DummyDHTBootstrapper(DummyDHTClient client) {
+			super(client);
+		}
+		
+		@Override
+		public void bootstrap() {
+			calledBootstrapWithoutBody = true;
+		}
+		
+		@Override
+		public void bootstrapFromPeerFileString(String peerfile) {
+			calledBootstrapWithBody = true;
+			peerfileString             = peerfile;
+		}
+	}
+	
 	class DummyDHTSocketManager extends DHTSocketManager {
 		DummyDHTClient client;
 		
 		public DummyDHTSocketManager(DummyDHTClient client) {
 			super.client = this.client = client;
 		}
+		
+		@Override
+		public void sendDatagram(DatagramPacket packet) {}
 	}
 	
 	class DummyDHTProtocolManager extends DHTProtocolManager {
 		DummyDHTClient client;
+		HashSet<DHTPeer> pinged = new HashSet<>();
 		
 		public DummyDHTProtocolManager(DummyDHTClient client) {
 			super.client = this.client = client;
+		}
+		
+		public DHTMessage pingMessage(DHTPeer peer, DHTMessageCallback callback) {
+			pinged.add(peer);
+			return super.pingMessage(peer, callback);
 		}
 	}
 
@@ -513,5 +549,41 @@ public class DHTResourceTest {
 		PublicDHKey key = client.getPublicKey();
 		WebTestUtils.requestDelete(target, basepath + "records");
 		assertEquals(key, client.getPublicKey());
+	}
+	
+	@Test
+	public void testRefreshPingsAllPeers() {
+		WebTestUtils.requestPost(target, basepath + "refresh", null);
+		for(DHTPeer peer : client.getRoutingTable().allPeers()) {
+			assertTrue(client.getProtocolManager().pinged.contains(peer));
+		}
+	}
+	
+	@Test
+	public void testBootstrapWithoutBodyInvokesConfiguredBootstrap() {
+		WebTestUtils.requestPost(target, basepath + "bootstrap", null);
+		assertTrue(client.bootstrapper().calledBootstrapWithoutBody);
+	}
+	
+	@Test
+	public void testBootstrapWithoutBodyIsSafeIfConfiguredBootstrapIsBlank() throws IOException {
+		State.sharedState().getMaster().getGlobalConfig().set("net.dht.bootstrap.peerfile", "");
+		WebTestUtils.requestPost(target, basepath + "bootstrap", null);
+		assertTrue(client.bootstrapper().calledBootstrapWithoutBody);
+	}
+	
+	@Test
+	public void testBootstrapWithoutBodyCausesBootstrapEvenIfBootstrapDisabled() throws IOException {
+		State.sharedState().getMaster().getGlobalConfig().set("net.dht.bootstrap.enabled", false);
+		WebTestUtils.requestPost(target, basepath + "bootstrap", null);
+		assertTrue(client.bootstrapper().calledBootstrapWithoutBody);
+	}
+	
+	@Test
+	public void testBootstrapWithBodyInvokesWithPeerFileString() {	
+		String body = "hello there!";
+		WebTestUtils.requestBinaryPost(target, basepath + "bootstrap", body.getBytes());
+		assertTrue(client.bootstrapper().calledBootstrapWithBody);
+		assertEquals(body, client.bootstrapper().peerfileString);
 	}
 }

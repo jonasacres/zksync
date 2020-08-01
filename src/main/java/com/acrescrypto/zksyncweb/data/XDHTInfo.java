@@ -8,11 +8,15 @@ public class XDHTInfo {
 	private byte[] pubKey;
 	private byte[] networkId;
 	
-	private String bindAddress;
+	private String  bindAddress;
 	private Integer udpPort;
 	private Integer status;
 	private Integer numRecords;
 	private Integer numRecordIds;
+
+	private Integer bootstrapStatus;
+	private String  bootstrapFailureReason;
+	private Long    bootstrapLastUpdated;
 	
 	private Boolean closed;
 	private Boolean initialized;
@@ -32,24 +36,27 @@ public class XDHTInfo {
 	private Long lifetimeBytesRx;
 	
 	public XDHTInfo(DHTClient client) {
-		numBadPeers = 0;
-		numQuestionablePeers = 0;
-		numGoodPeers = 0;
+		numBadPeers                 = 0;
+		numQuestionablePeers        = 0;
+		numGoodPeers                = 0;
 		
-		this.peerId = client.getId().serialize();
-		this.pubKey = client.getPublicKey().getBytes();
-		this.networkId = client.getNetworkId();
+		this.peerId                 = client.getId().serialize();
+		this.pubKey                 = client.getPublicKey().getBytes();
+		this.networkId              = client.getNetworkId();
 		
-		this.bindAddress = client.getBindAddress();
-		this.udpPort = client.getPort();
-		this.status = client.getStatus();
+		this.bindAddress            = client.getBindAddress();
+		this.udpPort                = client.getPort();
+		this.status                 = client.getStatus();
+		this.bootstrapStatus        = client.bootstrapper().status();
+		this.bootstrapLastUpdated   = client.bootstrapper().lastUpdated();
+		this.bootstrapFailureReason = client.bootstrapper().failureReason();
 		
-		this.closed = client.isClosed();
-		this.initialized = client.isInitialized();
-		this.enabled = client.isEnabled();
+		this.closed                 = client.isClosed();
+		this.initialized            = client.isInitialized();
+		this.enabled                = client.isEnabled();
 		this.setPaused(client.isPaused());
 		
-		this.numPeers = client.getRoutingTable().allPeers().size();
+		this.numPeers               = client.getRoutingTable().allPeers().size();
 		for(DHTPeer peer : client.getRoutingTable().allPeers()) {
 			if(peer.isBad()) {
 				numBadPeers++;
@@ -61,14 +68,14 @@ public class XDHTInfo {
 		}
 		
 		this.numPendingRequests = client.numPendingRequests();
-		this.bytesPerSecondRx = client.getMonitorRx().getBytesPerSecond();
-		this.bytesPerSecondTx = client.getMonitorTx().getBytesPerSecond();
+		this.bytesPerSecondRx   = client.getMonitorRx().getBytesPerSecond();
+		this.bytesPerSecondTx   = client.getMonitorTx().getBytesPerSecond();
 		
-		this.lifetimeBytesRx = client.getMonitorRx().getLifetimeBytes();
-		this.lifetimeBytesTx = client.getMonitorTx().getLifetimeBytes();
+		this.lifetimeBytesRx    = client.getMonitorRx().getLifetimeBytes();
+		this.lifetimeBytesTx    = client.getMonitorTx().getLifetimeBytes();
 		
-		this.numRecordIds = client.getRecordStore().numIds();
-		this.numRecords = client.getRecordStore().numRecords();
+		this.numRecordIds       = client.getRecordStore().numIds();
+		this.numRecords         = client.getRecordStore().numRecords();
 	}
 	
 	public byte[] getPeerId() {
@@ -237,5 +244,29 @@ public class XDHTInfo {
 
 	public void setPaused(Boolean paused) {
 		this.paused = paused;
+	}
+	
+	public String getBootstrapFailureReason() {
+		return bootstrapFailureReason;
+	}
+	
+	public void setBootstrapFailureReason(String bootstrapFailureReason) {
+		this.bootstrapFailureReason = bootstrapFailureReason;
+	}
+	
+	public Integer getBootstrapStatus() {
+		return bootstrapStatus;
+	}
+	
+	public void setBootstrapStatus(Integer bootstrapStatus) {
+		this.bootstrapStatus = bootstrapStatus;
+	}
+	
+	public Long getBootstrapLastUpdated() {
+		return bootstrapLastUpdated;
+	}
+	
+	public void setBootstrapLastUpdated(Long bootstrapLastUpdated) {
+		this.bootstrapLastUpdated = bootstrapLastUpdated;
 	}
 }

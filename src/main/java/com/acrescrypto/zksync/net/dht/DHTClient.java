@@ -20,7 +20,6 @@ import com.acrescrypto.zksync.net.Blacklist;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksync.utility.Util;
-import com.fasterxml.jackson.core.JsonProcessingException;
 
 public class DHTClient {
 	public final static int AUTH_TAG_SIZE = 4;
@@ -56,6 +55,7 @@ public class DHTClient {
 	protected DHTRoutingTable                  routingTable;
 	protected DHTSocketManager                 socketManager;
 	protected DHTRecordStore                   store;
+	protected DHTBootstrapper                  bootstrapper;
 	
 	protected ThreadGroup                      threadGroup;
 	protected GroupedThreadPool                threadPool;
@@ -79,6 +79,7 @@ public class DHTClient {
 		
 		this.socketManager     = new DHTSocketManager(this);
 		this.protocolManager   = new DHTProtocolManager(this);
+		this.bootstrapper      = new DHTBootstrapper(this);
 		
 		this.threadGroup       = new ThreadGroup(master.getThreadGroup(), "DHTClient");
 		this.threadPool        = GroupedThreadPool.newCachedThreadPool(threadGroup, "DHTClient Pool");
@@ -188,30 +189,17 @@ public class DHTClient {
 		}
 	}
 	
+	public DHTBootstrapper bootstrapper() {
+		return bootstrapper;
+	}
+	
 	protected synchronized void bootstrap() {
 		if(!master.getGlobalConfig().getBool("net.dht.bootstrap.enabled")) return;
 		
 		routingTable.reset();
 		protocolManager.pendingRequests.clear();
 		protocolManager.cancelOperations();
-		
-		try {
-			new DHTBootstrapper(this).bootstrap();
-			
-			/* TODO: It just isn't enough to log these errors. Clients need a way to find
-			 * out in a very obvious fashion that their DHT bootstraps aren't working because
-			 * they're not accessible, or aren't valid. This needs to make it all the way up
-			 * to the API level.
-			 * 
-			 * One idea would be to make DHTBootstrapper persist as a member variable, then
-			 * have it store these exceptions, and let the API return that information in
-			 * GET /dht or something.
-			 */
-		} catch (JsonProcessingException exc) {
-			logger.error("DHT -: Unable to bootstrap client, due to JSON processing exception", exc);
-		} catch (IOException exc) {
-			logger.error("DHT -: Unable to bootstrap client, due to IOException", exc);
-		}
+		bootstrapper().bootstrap();
 	}
 	
 	public boolean isEnabled() {

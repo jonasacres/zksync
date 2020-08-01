@@ -12,8 +12,11 @@ import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.UriInfo;
 
+import com.acrescrypto.zksync.net.dht.DHTBootstrapper;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTID;
 import com.acrescrypto.zksync.net.dht.DHTPeer;
@@ -115,9 +118,26 @@ public class DHTResource {
 	
 	@POST
 	@Produces(MediaType.APPLICATION_JSON)
+	@Path("bootstrap")
+	public XAPIResponse postBootstrap(@Context UriInfo uriInfo, byte[] contents) throws IOException {
+		DHTBootstrapper bootstrapper = State.sharedState().getMaster().getDHTClient().bootstrapper();
+		if(contents.length == 0) {
+			bootstrapper.bootstrap();
+		} else {
+			bootstrapper.bootstrapFromPeerFileString(new String(contents));
+		}
+		
+		throw XAPIResponse.successResponse();
+	}
+	
+	@POST
+	@Produces(MediaType.APPLICATION_JSON)
 	@Path("refresh")
 	public XAPIResponse postRefresh() throws IOException {
-		State.sharedState().getMaster().getDHTClient().pingAll();
+		State.sharedState()
+			 .getMaster()
+			 .getDHTClient()
+			 .pingAll();
 		throw XAPIResponse.successResponse();
 	}
 	

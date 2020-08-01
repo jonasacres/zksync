@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.PublicDHKey;
 import com.acrescrypto.zksync.fs.zkfs.config.ConfigFile;
+import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.ObjectMapperProvider;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -18,6 +19,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class DHTBootstrapper {
 	protected DHTClient client;
+	protected Exception lastException;
+	protected long      lastUpdated;
+	protected int       status;
+	
+	public static int BOOTSTRAP_NOT_RUN   = 0;
+	public static int BOOTSTRAP_RUNNING   = 1;
+	public static int BOOTSTRAP_COMPLETE  = 2;
+	public static int BOOTSTRAP_FAILED    = 3;
 	
 	private Logger logger = LoggerFactory.getLogger(DHTBootstrapper.class);
 	
@@ -25,7 +34,7 @@ public class DHTBootstrapper {
 		this.client = client;
 	}
 	
-	public void bootstrap() throws JsonProcessingException, IOException {
+	public void bootstrap() {
 		ConfigFile cfg  = client.getMaster().getGlobalConfig();
 		String peerFile = cfg.getString("net.dht.bootstrap.peerfile");
 		
@@ -41,33 +50,46 @@ public class DHTBootstrapper {
 		}).start();
 	}
 	
-	public void bootstrapFromPeerFileString(String pfString) throws JsonProcessingException, IOException {
+	public void bootstrapFromPeerFileString(String pfString) throws IOException {
+		this.status         = BOOTSTRAP_RUNNING;
+		this.lastException  = null;
+		this.lastUpdated    = Util.currentTimeMillis();
+		
 		ObjectMapper mapper = new ObjectMapperProvider().getContext(null);
 		JsonNode     pf     = null;
 		String       addr   = null;
 		
 		try {
-			URL      urlObj = new URL(pfString);
-			if(urlObj.getProtocol().equals("file")) {
-				logger.info("DHTBootstrapper: Bootstrapping from local file {}", urlObj.getPath());
-				         pf = mapper.readTree(new File(urlObj.getPath()));
-			} else {
-				logger.info("DHTBootstrapper: Bootstrapping from URL {}", pfString);
-				       addr = urlObj.getHost();
-				         pf = mapper.readTree(urlObj);
-				logger.info("DHTBootstrapper: Received peerfile JSON from remote host");
+			try {
+				URL      urlObj = new URL(pfString);
+				if(urlObj.getProtocol().equals("file")) {
+					logger.info("DHTBootstrapper: Bootstrapping from local file {}", urlObj.getPath());
+					         pf = mapper.readTree(new File(urlObj.getPath()));
+				} else {
+					logger.info("DHTBootstrapper: Bootstrapping from URL {}", pfString);
+					       addr = urlObj.getHost();
+					         pf = mapper.readTree(urlObj);
+					logger.info("DHTBootstrapper: Received peerfile JSON from remote host");
+				}
+			} catch(MalformedURLException exc) {
+				pf = mapper.readTree(pfString);
+				logger.info("DHTBootstrapper: Bootstrapping from supplied peerfile, {} bytes", pfString.length());
 			}
-		} catch(MalformedURLException exc) {
-			pf = mapper.readTree(pfString);
-			logger.info("DHTBootstrapper: Bootstrapping from supplied peerfile, {} bytes", pfString.length());
-		}
+			
+			if(pf.has("resp") && pf.get("resp").isObject() && !pf.has("networkId")) {
+				pf = pf.get("resp");
+			}
 		
-		if(pf.has("resp") && pf.get("resp").isObject() && !pf.has("networkId")) {
-			pf = pf.get("resp");
+			validatePeerFile(pf);
+			bootstrapFromPeerFile(pf, addr);
+			
+			this.lastUpdated    = Util.currentTimeMillis();
+			this.status         = BOOTSTRAP_COMPLETE;
+		} catch(IOException exc) {
+			this.lastException  = exc;
+			this.lastUpdated    = Util.currentTimeMillis();
+			this.status         = BOOTSTRAP_FAILED;
 		}
-		
-		validatePeerFile(pf);
-		bootstrapFromPeerFile(pf, addr);
 	}
 	
 	public void bootstrapFromPeerFile(JsonNode pf, String remoteAddress) throws JsonProcessingException, IOException {
@@ -141,5 +163,25 @@ public class DHTBootstrapper {
 			
 			index++;
 		};
+	}
+	
+	public Exception lastException() {
+		return lastException;
+	}
+
+	public int status() {
+		return status;
+	}
+	
+	public String failureReason() {
+		if(lastException == null) return null;
+		
+		return String.format("%s (%s)",
+				lastException.getClass().getSimpleName(),
+				lastException.getMessage());
+	}
+	
+	public long lastUpdated() {
+		return lastUpdated; 
 	}
 }
