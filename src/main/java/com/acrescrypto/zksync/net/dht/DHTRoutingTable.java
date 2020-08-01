@@ -145,27 +145,20 @@ public class DHTRoutingTable {
 			}
 		}
 		
-		DHTPeer insertablePeer;
-		try {
-			insertablePeer = new DHTPeer(peer);
-		} catch(UnknownHostException exc) {
-			return false;
-		}
-		
-		DHTBucket bucket = bucketForId(insertablePeer.id);
+		DHTBucket bucket = bucketForId(peer.id);
 		while(bucket.needsSplit()) {
 			DHTBucket newBucket = bucket.split();
 			buckets.add(newBucket);
 			buckets.sort(null);
 			
-			if(newBucket.includes(insertablePeer.id)) {
+			if(newBucket.includes(peer.id)) {
 				bucket = newBucket;
 			}
 		}
 		
 		if(bucket.hasCapacity()) {
-			bucket.add(insertablePeer, lastSeen);
-			allPeers.add(insertablePeer);
+			bucket.add(peer, lastSeen);
+			allPeers.add(peer);
 			logger.info("DHT {}:{}: Added peer to routing table, table has {} peers",
 					peer.address,
 					peer.port,
@@ -214,6 +207,7 @@ public class DHTRoutingTable {
 		}
 		
 		DHTPeer newPeer = new DHTPeer(client, address, port, pubKey.getBytes());
+		logger.debug("DHT {}:{}: Detected new peer, adding to routing table", address, port);
 		suggestPeer(newPeer);
 		refreshRecent(newPeer);
 		

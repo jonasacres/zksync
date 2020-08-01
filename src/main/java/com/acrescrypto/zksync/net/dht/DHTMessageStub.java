@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.net.dht;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.net.dht.DHTMessage.DHTMessageCallback;
 import com.acrescrypto.zksync.utility.SnoozeThread;
+import com.acrescrypto.zksync.utility.Util;
 
 public class DHTMessageStub {
 	protected DHTMessageCallback callback;
@@ -52,5 +53,12 @@ public class DHTMessageStub {
 	
 	public void fail() {
 		msg.peer.client.getProtocolManager().missedResponse(this);
+	}
+	
+	public String toString() {
+		return String.format("DHTMessageStub peer-%s, cmd=%d, msgId=%08x",
+				Util.formatPubKey(msg.peer.getKey()),
+				msg.cmd,
+				msg.msgId);
 	}
 }

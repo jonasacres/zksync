@@ -299,8 +299,10 @@ public class DHTProtocolManager {
 		logger.debug("DHT {}:{}: Received response to message {}",
 				message.peer.address,
 				message.peer.port,
-				message.msgId);
+				String.format("%08x", message.msgId));
 		
+		DHTPeer canonPeer = client.getRoutingTable().canonicalPeer(message.peer);
+		message.peer = canonPeer;
 		message.peer.acknowledgedMessage();
 		
 		DHTMessageStub stub = null;
@@ -314,8 +316,14 @@ public class DHTProtocolManager {
 		}
 		
 		if(stub == null) {
+			logger.debug("DHT {}:{}: Ignoring response to message {} since we do not have a stub for it",
+					message.peer.address,
+					message.peer.port,
+					String.format("%08x", message.msgId));
 			return; // ignore responses for stubs we don't have anymore
 		}
+		
+		stub.msg.peer = canonPeer;
 		stub.dispatchResponse(message);
 		client.getRoutingTable().markFresh(message.peer);
 	}

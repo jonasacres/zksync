@@ -147,11 +147,18 @@ public class DHTResourceTest {
 	class DummyDHTProtocolManager extends DHTProtocolManager {
 		DummyDHTClient client;
 		HashSet<DHTPeer> pinged = new HashSet<>();
+		boolean calledFindPeers;
 		
 		public DummyDHTProtocolManager(DummyDHTClient client) {
 			super.client = this.client = client;
 		}
 		
+		@Override
+		public void findPeers() {
+			calledFindPeers = true;
+		}
+		
+		@Override
 		public DHTMessage pingMessage(DHTPeer peer, DHTMessageCallback callback) {
 			pinged.add(peer);
 			return super.pingMessage(peer, callback);
@@ -557,6 +564,12 @@ public class DHTResourceTest {
 		for(DHTPeer peer : client.getRoutingTable().allPeers()) {
 			assertTrue(client.getProtocolManager().pinged.contains(peer));
 		}
+	}
+	
+	@Test
+	public void testRefreshFindsNewPeers() {
+		WebTestUtils.requestPost(target, basepath + "refresh", null);
+		assertTrue(client.getProtocolManager().calledFindPeers);
 	}
 	
 	@Test

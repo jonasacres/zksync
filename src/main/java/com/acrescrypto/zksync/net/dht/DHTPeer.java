@@ -162,7 +162,10 @@ public class DHTPeer implements Sendable {
 					address,
 					port,
 					recordId.toShortString());
-			this.ping((msg)->addRecord(recordId, lookupKey, record));
+			this.ping((msg)->{
+				remoteAuthTag = msg.authTag; // in case we instantiated another DHTPeer
+				addRecord(recordId, lookupKey, record);
+			});
 			return;
 		}
 		

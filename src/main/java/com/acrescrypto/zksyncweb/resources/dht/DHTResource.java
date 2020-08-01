@@ -134,10 +134,9 @@ public class DHTResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("refresh")
 	public XAPIResponse postRefresh() throws IOException {
-		State.sharedState()
-			 .getMaster()
-			 .getDHTClient()
-			 .pingAll();
+		DHTClient client = State.sharedState().getMaster().getDHTClient();
+		client.pingAll();
+		client.getProtocolManager().findPeers();
 		throw XAPIResponse.successResponse();
 	}
 	

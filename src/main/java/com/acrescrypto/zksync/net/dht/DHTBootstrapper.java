@@ -107,7 +107,7 @@ public class DHTBootstrapper {
 				}
 				
 				PublicDHKey key       = new PublicDHKey(client.getMaster().getCrypto(), pubKey);
-				DHTPeer     peer      = new DHTPeer    (client, address, port, key);
+				DHTPeer     peer      = client.getRoutingTable().peerForMessage(address, port, key);
 				
 				client.getRoutingTable().suggestPeer(peer);
 			} catch(IOException exc) {
