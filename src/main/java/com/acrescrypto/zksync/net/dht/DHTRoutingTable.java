@@ -76,6 +76,7 @@ public class DHTRoutingTable {
 	public synchronized void reset() {
 		int len = client.idLength();
 		
+		recent  .clear();
 		buckets .clear();
 		allPeers.clear();
 		buckets .add(
