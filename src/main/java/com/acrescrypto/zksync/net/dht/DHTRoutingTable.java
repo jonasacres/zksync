@@ -74,6 +74,7 @@ public class DHTRoutingTable {
 	}
 	
 	public synchronized void reset() {
+		logger.info("Purging DHT routing table");
 		int len = client.idLength();
 		
 		recent  .clear();
@@ -331,15 +332,24 @@ public class DHTRoutingTable {
 	}
 
 	public DHTPeer canonicalPeer(DHTPeer peer) {
-		for(RecentPeer rr : recent) {
-			if(peer.equals(rr.peer)) {
-				rr.refresh();
-				return rr.peer;
+		for(DHTPeer existing : allPeers) {
+			if(existing.equals(peer)) {
+				for(RecentPeer rr : recent) {
+					if(!peer.equals(rr.peer)) continue;
+					
+					rr.peer = existing;
+					break;
+				}
+				
+				return existing;
 			}
 		}
 		
-		for(DHTPeer existing : allPeers) {
-			if(existing.equals(peer)) return existing;
+		for(RecentPeer rr : recent) {
+			if(rr.peer.equals(peer)) {
+				rr.refresh();
+				return rr.peer;
+			}
 		}
 		
 		refreshRecent(peer);

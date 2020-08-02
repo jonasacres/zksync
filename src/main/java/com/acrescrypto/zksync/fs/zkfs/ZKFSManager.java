@@ -30,6 +30,7 @@ public class ZKFSManager implements AutoCloseable {
 	protected boolean autocommit;
 	protected boolean autofollow;
 	protected boolean automirror;
+	protected boolean closed;
 	protected String automirrorPath, localDescription;
 	
 	protected ZKFS fs;
@@ -95,6 +96,8 @@ public class ZKFSManager implements AutoCloseable {
 	}
 
 	public void close() throws IOException {
+		closed = true;
+		
 		if(fs != null) {
 			fs.removeMonitor(fsMonitor);
 			fs.getArchive().getConfig().getRevisionList().removeMonitor(revMonitor);
@@ -104,6 +107,8 @@ public class ZKFSManager implements AutoCloseable {
 		if(mirror != null) {
 			mirror.stopWatch();
 		}
+		
+		this.setAutocommit(false);
 	}
 	
 	public void notifyZKFSPathChange(String path, Stat stat) {
@@ -233,7 +238,7 @@ public class ZKFSManager implements AutoCloseable {
 	}
 	
 	protected void setupAutocommitTimer() {
-		if(!autocommit || autocommitIntervalMs <= 0) {
+		if(closed || !autocommit || autocommitIntervalMs <= 0) {
 			if(autocommitTimer != null) {
 				autocommitTimer.cancel();
 				autocommitTimer = null;

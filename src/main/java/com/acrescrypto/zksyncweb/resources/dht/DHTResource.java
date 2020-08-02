@@ -16,6 +16,9 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.UriInfo;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.net.dht.DHTBootstrapper;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.net.dht.DHTID;
@@ -31,6 +34,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Path("/dht")
 public class DHTResource {
+	private Logger logger = LoggerFactory.getLogger(DHTResource.class);
+	
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	public XAPIResponse getDht() throws IOException {
@@ -62,6 +67,7 @@ public class DHTResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("peers")
 	public XAPIResponse deleteDhtPeers() throws IOException {
+		logger.warn("Purging DHT routing table from API");
 		DHTClient client = State.sharedState().getMaster().getDHTClient();
 		client.getRoutingTable().reset();
 		client.write();
@@ -95,6 +101,7 @@ public class DHTResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("records")
 	public XAPIResponse deleteDhtRecords() throws IOException {
+		logger.warn("Purging DHT records from API");
 		DHTClient client = State.sharedState().getMaster().getDHTClient();
 		client.getRecordStore().reset();
 		client.write();
@@ -120,6 +127,8 @@ public class DHTResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("bootstrap")
 	public XAPIResponse postBootstrap(@Context UriInfo uriInfo, byte[] contents) throws IOException {
+		logger.warn("Bootstrapping DHT client from API ({} bytes)", contents.length);
+		
 		DHTBootstrapper bootstrapper = State.sharedState().getMaster().getDHTClient().bootstrapper();
 		if(contents.length == 0) {
 			bootstrapper.bootstrap();
@@ -134,6 +143,7 @@ public class DHTResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("refresh")
 	public XAPIResponse postRefresh() throws IOException {
+		logger.info("Refreshing DHT routing table from API");
 		DHTClient client = State.sharedState().getMaster().getDHTClient();
 		client.pingAll();
 		client.getProtocolManager().findPeers();
@@ -144,6 +154,7 @@ public class DHTResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Path("regenerate")
 	public XAPIResponse postRegenerate() throws IOException {
+		logger.warn("Regenerating DHT client from API");
 		State.sharedState().getMaster().regenerateDHTClient();
 		throw XAPIResponse.successResponse();
 	}

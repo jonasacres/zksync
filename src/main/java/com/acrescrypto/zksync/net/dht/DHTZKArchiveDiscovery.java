@@ -88,7 +88,7 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 		
 		DiscoveryEntry entry = activeDiscoveries.get(accessor);
 		if(entry.increment()) {
-			logger.info("DHT -: Starting discovery thread for accessor with temporal seed ID {}",
+			logger.info("DHT -: Starting threads for accessor with temporal seed ID {}",
 					Util.bytesToHex(accessor.temporalSeedId(0)));
 			new Thread(accessor.getThreadGroup(), ()->discoveryThread(entry)).start();
 			new Thread(accessor.getThreadGroup(), ()->advertisementThread(entry)).start();
@@ -110,6 +110,8 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 
 	protected void discoveryThread(DiscoveryEntry entry) {
 		Util.setThreadName("DHTZKArchiveDiscovery discovery thread");
+		logger.info("DHT -: Starting discovery thread for accessor with temporal seed ID {}",
+				Util.bytesToHex(entry.accessor.temporalSeedId(0)));
 		while(isDiscovering(entry.accessor)) {
 			try {
 				Util.blockOnPoll(()->isDiscovering(entry.accessor) && !entry.accessor.getMaster().getDHTClient().isInitialized());
@@ -131,6 +133,10 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	
 	protected void advertisementThread(DiscoveryEntry entry) {
 		Util.setThreadName("DHTZKArchiveDiscovery advertisement thread");
+		logger.info("DHT -: Starting advertisement thread for accessor with temporal seed ID {}, isAdvertising={}, dhtClientIsInitialized={}",
+				Util.bytesToHex(entry.accessor.temporalSeedId(0)),
+				isAdvertising(entry.accessor),
+				entry.accessor.getMaster().getDHTClient().isInitialized());
 		
 		while(isAdvertising(entry.accessor)) {
 			try {
@@ -195,7 +201,12 @@ public class DHTZKArchiveDiscovery implements ArchiveDiscovery {
 	}
 	
 	protected void advertise(DiscoveryEntry entry) {
-		if(!entry.accessor.getMaster().getTCPListener().isListening()) return;
+		if(!entry.accessor.getMaster().getTCPListener().isListening()) {
+			logger.debug("DHT -: Not advertising archive with temporal seed ID {}, since TCP listener is not active",
+					Util.bytesToHex(entry.accessor.temporalSeedId(0), 8));
+			return;
+		}
+		
 		for(ZKArchiveConfig config : entry.accessor.knownArchiveConfigs()) {
 			logger.debug("DHT -: Advertising archive with temporal archive ID {}",
 					Util.bytesToHex(config.getAccessor().temporalSeedId(0), 8));

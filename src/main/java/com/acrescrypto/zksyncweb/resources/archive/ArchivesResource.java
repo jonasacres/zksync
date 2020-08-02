@@ -10,12 +10,16 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.StoredAccess;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchive;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
 import com.acrescrypto.zksyncweb.data.XArchiveIdentification;
@@ -26,6 +30,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Path("archives")
 public class ArchivesResource {
+	protected Logger logger = LoggerFactory.getLogger(ArchivesResource.class);
+
 	@GET
 	@Produces(MediaType.APPLICATION_JSON)
 	public XAPIResponse getArchives() {
@@ -80,16 +86,20 @@ public class ArchivesResource {
 						 * the archive root key is the same as the passphrase root, so the archive ID is
 						 * deterministic. */
 						config = ZKArchiveConfig.createDefault(accessor);
+						logger.info("ZKFS {}: Creating new default archive", Util.formatArchiveId(config.getArchiveId()));
 					} else {
 						/* non-default archive, with non-deterministic archive ID. Future peers will
 						 * need to know the archive ID to link up with us on this archive. */
 						int pageSize = spec.getPageSize() == null ? ZKArchive.DEFAULT_PAGE_SIZE : spec.getPageSize();
 						String description = spec.getDescription() == null ? "" : spec.getDescription();
 						config = ZKArchiveConfig.create(accessor, description, pageSize);
+						logger.info("ZKFS {}: Creating new non-default archive", Util.formatArchiveId(config.getArchiveId()));
 					}
 
 					ZKArchiveConfig existing = State.sharedState().configForArchiveId(config.getArchiveId());
 					if(existing != null && existing != config) {
+						logger.info("ZKFS {}: Noticed that we already have this archive; not adding duplicate", Util.formatArchiveId(config.getArchiveId()));
+
 						status = 200;
 						config = existing;
 					}
@@ -98,6 +108,7 @@ public class ArchivesResource {
 					 * future peers will need to know the archive ID to link up! */
 					Key archiveRoot = new Key(State.sharedCrypto());
 					config = ZKArchiveConfig.create(accessor, spec.getDescription(), spec.getPageSize(), archiveRoot, writeRoot);
+					logger.info("ZKFS {}: Creating new write-limited archive", Util.formatArchiveId(config.getArchiveId()));
 				}
 			} else {
 				// joining an existing (likely non-default) archive
@@ -105,15 +116,19 @@ public class ArchivesResource {
 				if(existing != null) {
 					status = 200;
 					config = existing;
+					logger.info("ZKFS {}: Received request to join archive, but we're already on that archive", Util.formatArchiveId(config.getArchiveId()));
 				} else {
 					if(writeRoot == null) {
 						config = ZKArchiveConfig.openExisting(accessor, spec.getArchiveId(), false, null);
+						logger.info("ZKFS {} -: Joining archive", Util.formatArchiveId(config.getArchiveId()));
 					} else {
 						config = ZKArchiveConfig.openExisting(accessor, spec.getArchiveId(), false, writeRoot);
+						logger.info("ZKFS {} -: Joining write-limited archive", Util.formatArchiveId(config.getArchiveId()));
 					}
 
 					/* We can't do anything with this archive until we have the config file, which we'll need to
 					 * download from the swarm. So spin up a thread whose job is to get us swarmed up. */
+					logger.info("ZKFS {} -: Requesting config for archive {} from swarm", Util.formatArchiveId(config.getArchiveId()));
 					final ZKArchiveConfig cconfig = config;
 					new Thread(() -> {
 						try {

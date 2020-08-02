@@ -341,6 +341,7 @@ public class DHTRecordStore {
 	}
 
 	public void reset() {
+		logger.info("Purging DHT record store");
 		entriesById.clear();
 	}
 }

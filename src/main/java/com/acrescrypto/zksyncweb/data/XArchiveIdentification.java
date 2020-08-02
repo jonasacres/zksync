@@ -10,6 +10,7 @@ public class XArchiveIdentification {
 	
 	private String description;
 	private Integer pageSize;
+	private Integer numLocalTags;
 
 	private Boolean usesWriteKey;
 	private Boolean haveWriteKey;
@@ -43,11 +44,14 @@ public class XArchiveIdentification {
 		id.haveWriteKey = !config.isReadOnly();
 		id.haveReadKey = !config.getAccessor().isSeedOnly();
 		id.ready = config.haveConfigLocally();
+		
 		try {
 			id.dirty = State.sharedState().activeFs(config).isDirty();
-		} catch (Throwable exc) {
-			id.dirty = null;
-		}
+		} catch (Throwable exc) {}
+		
+		try {
+			id.numLocalTags = config.getArchive().allPageTags().size();
+		} catch(Throwable exc) {}
 		
 		id.connectedPeers = config.getSwarm().getConnections().size();
 		id.bytesPerSecondRx = config.getSwarm().getBandwidthMonitorRx().getBytesPerSecond();
@@ -217,5 +221,13 @@ public class XArchiveIdentification {
 
 	public void setDirty(Boolean dirty) {
 		this.dirty = dirty;
+	}
+	
+	public Integer getNumLocalTags() {
+		return numLocalTags;
+	}
+	
+	public void setNumLocalTags(Integer numLocalTags) {
+		this.numLocalTags = numLocalTags;
 	}
 }

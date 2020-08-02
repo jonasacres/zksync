@@ -110,10 +110,13 @@ public class DHTBootstrapper {
 				DHTPeer     peer      = client.getRoutingTable().peerForMessage(address, port, key);
 				
 				client.getRoutingTable().suggestPeer(peer);
+				peer.ping();
 			} catch(IOException exc) {
 				logger.error("DHTBootstrapper: Error parsing peerfile", exc);
 			}
 		});
+		
+		client.getProtocolManager().findPeers();
 		
 		logger.info("DHTBootstrapper: Initialized {} DHT entries from bootstrap",
 				pf.get("peers").size());

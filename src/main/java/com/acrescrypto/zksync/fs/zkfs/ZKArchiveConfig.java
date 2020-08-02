@@ -112,9 +112,12 @@ public class ZKArchiveConfig implements AutoCloseable {
 		this.archiveId = archiveId;
 		this.writeRoot = writeRoot;
 
+		logger.info("ZKFS {} -: Opening archive", Util.formatArchiveId(archiveId));
+		
 		initStorage();
 		decodeId();
 		this.accessor.discoveredArchiveConfig(this);
+		
 		if(finish) {
 			try {
 				finishOpening();
@@ -122,6 +125,8 @@ public class ZKArchiveConfig implements AutoCloseable {
 				close();
 				throw exc;
 			}
+		} else {
+			logger.info("ZKFS {} -: Deferring finish of archive open", Util.formatArchiveId(archiveId));
 		}
 		
 		this.revisionList = new RevisionList(this);
@@ -147,12 +152,17 @@ public class ZKArchiveConfig implements AutoCloseable {
 	}
 	
 	public ZKArchiveConfig finishOpeningFromSwarm(long timeoutMs) throws IOException {
+		logger.info("ZKFS {} -: Finishing archive open from swarm", Util.formatArchiveId(archiveId));
+
 		advertise();
 		if(haveConfigLocally()) return this;
 		swarm.waitForPeers(timeoutMs);
+		
 		if(swarm.getConnections().size() > 0) {
+			logger.info("ZKFS {} -: Opening archive with help from {} peers", Util.formatArchiveId(archiveId), swarm.getConnections().size());
 			this.finishOpening();
 		} else {
+			logger.info("ZKFS {} -: Failed to open archive; no peers available", Util.formatArchiveId(archiveId));
 			throw new SearchFailedException(); // TODO: this is probably not a great exception for this
 		}
 		return this;
@@ -162,11 +172,15 @@ public class ZKArchiveConfig implements AutoCloseable {
 		if(archive != null) return this;
 		
 		try {
+			logger.info("ZKFS {} -: Reading archive config", Util.formatArchiveId(archiveId));
 			read();
 		} catch(SecurityException exc) {
+			logger.warn("ZKFS {} -: Failed to read archive", Util.formatArchiveId(archiveId), exc);
 			throw new InvalidArchiveConfigException();
 		}
 		this.archive = new ZKArchive(this);
+		logger.info("ZKFS {} -: Finished opening archive", Util.formatArchiveId(archiveId));
+		
 		return this;
 	}
 	

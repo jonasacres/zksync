@@ -19,6 +19,7 @@ public class XPeerInfo {
 	private Long bytesPerSecondRx;
 	private Long lifetimeBytesTx;
 	private Long lifetimeBytesRx;
+	private Integer numAnnouncedTags;
 	private Integer role;
 	private Integer peerType;
 	private XTCPAdListing ad;
@@ -33,6 +34,7 @@ public class XPeerInfo {
 	public XPeerInfo() {}
 	
 	public XPeerInfo(PeerConnection conn) {
+		this.numAnnouncedTags = conn.announcedTags().size();
 		this.bytesPerSecondRx = bytesFromMonitor(conn.getSocket().getMonitorRx());
 		this.bytesPerSecondTx = bytesFromMonitor(conn.getSocket().getMonitorTx());
 		this.lifetimeBytesRx = lifetimeBytesFromMonitor(conn.getSocket().getMonitorRx());
@@ -162,5 +164,13 @@ public class XPeerInfo {
 
 	public void setConnectionId(String connectionId) {
 		this.connectionId = connectionId;
+	}
+	
+	public Integer getNumAnnouncedTags() {
+		return numAnnouncedTags;
+	}
+	
+	public void setNumAnnouncedTags(Integer numAnnouncedTags) {
+		this.numAnnouncedTags = numAnnouncedTags;
 	}
 }

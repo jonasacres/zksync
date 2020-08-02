@@ -119,7 +119,7 @@ public class RevisionList implements AutoCloseable {
 			if(available.contains(tag)) continue;
 			long timeRemaining = timeoutMs < 0 ? Long.MAX_VALUE : deadline - System.currentTimeMillis();
 			if(timeRemaining < 0) break;
-			logger.debug("RevisionList {} {}: Waiting up to %dms to acquire revision {}",
+			logger.debug("RevisionList {} {}: Waiting up to {}ms to acquire revision {}",
 					config.getArchive().getMaster().getName(),
 					Util.formatArchiveId(config.archiveId),
 					timeRemaining,

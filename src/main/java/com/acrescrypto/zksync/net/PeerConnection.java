@@ -89,6 +89,20 @@ public class PeerConnection {
 		socket.threadPool.submit(()->pageQueueThread());
 		announceTips();
 		announceTags();
+		
+		if(socket.getSwarm().getConfig().getArchive() == null) {
+			socket.threadPool.submit(()->{
+				try {
+					socket.getSwarm().getConfig().finishOpeningFromSwarm(0);
+				} catch (IOException exc) {
+					logger.error("Swarm {} {}:{}: Failed to initialize archive from new swarm peer",
+						Util.formatArchiveId(socket.swarm.config.getArchiveId()),
+						socket.getAddress(),
+						socket.getPort(),
+						exc);
+				}
+			});
+		}
 	}
 	
 	protected PeerConnection() {}
@@ -450,8 +464,22 @@ public class PeerConnection {
 	}
 	
 	protected void waitForFullInit() throws EOFException {
+		logger.trace("Swarm {} {}:{}: PeerConnection waiting for basic init",
+				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
+				socket.getAddress(),
+				socket.getPort());
 		Util.blockOnPoll(()->!closed && !socket.swarm.config.hasKey() && !socket.swarm.config.getAccessor().isSeedOnly());
+		logger.trace("Swarm {} {}:{}: PeerConnection waiting for archive to not be null",
+				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
+				socket.getAddress(),
+				socket.getPort());
 		Util.blockOnPoll(()->!closed && socket.swarm.config.getArchive() == null);
+		logger.trace("Swarm {} {}:{}: PeerConnection done waiting, closed={}",
+				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
+				socket.getAddress(),
+				socket.getPort(),
+				closed);
+
 		if(closed) throw new EOFException(); // maybe not best exception, but we just want to stop processing without triggering a blacklist
 	}
 	
@@ -627,6 +655,10 @@ public class PeerConnection {
 				socket.getAddress(),
 				socket.getPort());
 		waitForFullInit();
+		logger.trace("Swarm {} {}:{}: PeerConnection announceTips ready to rock and roll",
+				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
+				socket.getAddress(),
+				socket.getPort());
 		byte[] revTagRaw = new byte[RevisionTag.sizeForConfig(socket.swarm.config)];
 		while(msg.rxBuf.hasRemaining()) {
 			msg.rxBuf.get(revTagRaw);

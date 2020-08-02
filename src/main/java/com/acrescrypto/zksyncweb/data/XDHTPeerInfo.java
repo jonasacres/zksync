@@ -11,18 +11,20 @@ public class XDHTPeerInfo {
 	private Integer missedMessages;
 	private Long    lastSeen;
 	private boolean pinned;
+	private boolean canAuthenticate;
 	
 	private String status;
 	
 	public XDHTPeerInfo(DHTPeer peer) {
 		try {
-			this.id             = peer.getId().serialize();
-			this.pubKey         = peer.getKey().getBytes();
-			this.port           = peer.getPort();
-			this.address        = peer.getAddress();
-			this.missedMessages = peer.getMissedMessages();
-			this.lastSeen       = peer.getLastSeen();
-			this.pinned         = peer.isPinned();
+			this.id              = peer.getId().serialize();
+			this.pubKey          = peer.getKey().getBytes();
+			this.port            = peer.getPort();
+			this.address         = peer.getAddress();
+			this.missedMessages  = peer.getMissedMessages();
+			this.lastSeen        = peer.getLastSeen();
+			this.pinned          = peer.isPinned();
+			this.canAuthenticate = peer.canVerifyToPeer();
 			
 			if       (peer.isBad()) {
 				this.setStatus("bad");
@@ -100,5 +102,13 @@ public class XDHTPeerInfo {
 
 	public void setPinned(boolean pinned) {
 		this.pinned = pinned;
+	}
+	
+	public boolean getCanAuthenticate() {
+		return canAuthenticate;
+	}
+	
+	public void setCanAuthenticate(boolean canAuthenticate) {
+		this.canAuthenticate = canAuthenticate;
 	}
 }
