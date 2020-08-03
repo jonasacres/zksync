@@ -961,6 +961,7 @@ public class PeerConnection {
 		Util.setThreadName("PeerConnection queue thread");
 		StorageTag lastTag = null;
 		AppendableInputStream lastStream = null;
+		PeerMessageOutgoing msg = null;
 		
 		while(!socket.isClosed()) {
 			try {
@@ -973,8 +974,12 @@ public class PeerConnection {
 						lastStream.eof();
 					}
 					
+					if(msg != null) {
+						msg.waitForTxComplete();
+					}
+					
 					lastStream = new AppendableInputStream();
-					socket.makeOutgoingMessage(CMD_SEND_PAGE, lastStream);
+					msg = socket.makeOutgoingMessage(CMD_SEND_PAGE, lastStream);
 					lastStream.write(chunk.tag.getTagBytes());
 					lastTag = chunk.tag;
 				}

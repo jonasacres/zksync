@@ -15,7 +15,7 @@ import com.acrescrypto.zksync.fs.zkfs.RefTag;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerMessageOutgoing extends PeerMessage {
-	protected boolean txEOF, aborted;
+	protected boolean txEOF, aborted, txThreadComplete;
 	protected InputStream txPayload;
 	protected RefTag refTag;
 	protected Queue<Integer> chunkList = new LinkedList<Integer>();
@@ -73,6 +73,8 @@ public class PeerMessageOutgoing extends PeerMessage {
 					}
 				} catch(Exception exc) {
 					logger.error("Outgoing message thread to {} caught exception", connection.socket.getAddress(), exc);
+				} finally {
+					txThreadComplete = true;
 				}
 			});
 		} catch(RejectedExecutionException exc) {
@@ -152,5 +154,11 @@ public class PeerMessageOutgoing extends PeerMessage {
 		}
 		
 		return false;
+	}
+
+	public void waitForTxComplete() {
+		while(!txThreadComplete) {
+			Util.sleep(1);
+		}
 	}
 }

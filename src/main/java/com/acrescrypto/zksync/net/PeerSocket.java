@@ -186,6 +186,7 @@ public abstract class PeerSocket {
 	
 	protected void sendMessage(MessageSegment segment) throws IOException, ProtocolViolationException {
 		if(segment.msg.msgId == Integer.MIN_VALUE) segment.assignMsgId(issueMessageId());
+		
 		try {
 			write(segment.content.array(), 0, segment.content.limit());
 		} finally {
@@ -374,7 +375,7 @@ public abstract class PeerSocket {
 	}
 	
 	protected void pruneMessages() throws IOException {
-		int limit = swarm.getConfig().getMaster().getGlobalConfig().getInt("net.swarm.rejectionCacheSize");
+		int limit = swarm.getConfig().getMaster().getGlobalConfig().getInt("net.swarm.maxOpenMessages");
 		while(incoming.size() > limit) {
 			PeerMessageIncoming pruneMsg = null;
 			
