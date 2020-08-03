@@ -33,6 +33,7 @@ import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.StorageTag;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.fs.zkfs.config.SubscriptionService.SubscriptionToken;
 import com.acrescrypto.zksync.net.Blacklist.BlacklistCallback;
 import com.acrescrypto.zksync.utility.BandwidthAllocator;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
@@ -64,6 +65,8 @@ public class PeerSwarm implements BlacklistCallback {
 	protected Object pageNotifier = new Object();
 	protected Logger logger = LoggerFactory.getLogger(PeerSwarm.class);
 	
+	protected LinkedList<SubscriptionToken<?>> subscriptions = new LinkedList<>();
+	
 	protected boolean closed;
 	protected int activeSockets;
 	
@@ -81,20 +84,45 @@ public class PeerSwarm implements BlacklistCallback {
 		this.bandwidthMonitorRx = new BandwidthMonitor(100, 3000);
 		this.bandwidthMonitorTx.addParent(config.getMaster().getBandwidthMonitorTx());
 		this.bandwidthMonitorRx.addParent(config.getMaster().getBandwidthMonitorRx());
-		connectionThread();
+		
+		if(swarmEnabled()) connectionThread();
+		
 		pool = new RequestPool(config);
 		pool.read();
+		
+		subscriptions.add(config.getMaster().getGlobalConfig().subscribe("net.swarm.enabled").asBoolean((enabled)->{
+			if(enabled) {
+				connectionThread();
+			} else {
+				disconnectAll();
+			}
+		}));
+	}
+	
+	public boolean swarmEnabled() {
+		return config.getMaster().getGlobalConfig().getBool("net.swarm.enabled");
+	}
+	
+	public void disconnectAll() {
+		for(PeerConnection connection : getConnections()) {
+			connection.close();
+		}
+		
+		connections.clear();
 	}
 	
 	public void close() {
 		logger.info("Swarm {} -: Closing PeerSwarm",
 				Util.formatArchiveId(config.getArchiveId()));
 		closed = true;
+		
+		for(SubscriptionToken<?> token : subscriptions) {
+			token.close();
+		}
+		
 		if(pool != null) pool.stop();
 		
-		for(PeerConnection connection : getConnections()) {
-			connection.close();
-		}
+		disconnectAll();
 		
 		synchronized(this) {
 			pageWaitLock.lock();
@@ -269,6 +297,8 @@ public class PeerSwarm implements BlacklistCallback {
 			Util.setThreadName("PeerSwarm connection thread");
 			while(!closed) {
 				PeerAdvertisement ad = selectConnectionAd();
+				if(!swarmEnabled()) return;
+				
 				if(ad == null || activeSockets >= getMaxSocketCount()) {
 					Util.sleep(100);
 					continue;
