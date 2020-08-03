@@ -88,7 +88,7 @@ public class PeerConnectionTest {
 			super(connection, cmd, txPayload);
 		}
 		
-		@Override protected void runTxThread() {}
+		@Override protected void runTxThread() { this.txThreadComplete = true; }
 	}
 	
 	class DummySocket extends PeerSocket {
