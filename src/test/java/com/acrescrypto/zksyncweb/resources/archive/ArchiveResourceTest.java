@@ -1215,30 +1215,30 @@ public class ArchiveResourceTest {
 	@Test
 	public void testSettingsArePersistent() throws IOException {
 		XArchiveSettings settings = new XArchiveSettings();
-		settings.setAdvertising(true);
-		settings.setAutocommiting(true);
-		settings.setAutomerge(true);
-		settings.setAutofollow(true);
-		settings.setRequestingAll(true);
+		settings.setAdvertising       (true);
+		settings.setAutocommiting     (true);
+		settings.setAutomerge         (true);
+		settings.setAutofollow        (true);
+		settings.setRequestingAll     (true);
 		settings.setAutocommitInterval(12345);
-		settings.setAutomirrorPath(TESTDIR);
-		settings.setAutomirror(true);
-		settings.setPeerLimit(4321);
+		settings.setAutomirrorPath    (TESTDIR);
+		settings.setAutomirror        (true);
+		settings.setPeerLimit         (4321);
 
 		WebTestUtils.requestPut(target, "archives/" + transformArchiveId(archive) + "/settings", settings);
 
 		State.resetState();
 		JsonNode resp = WebTestUtils.requestGet(target, "archives/" + transformArchiveId(archive) + "/settings");
 		
-		assertEquals(settings.isAdvertising().booleanValue(), resp.get("advertising").asBoolean());
-		assertEquals(settings.isAutocommit().booleanValue(), resp.get("autocommit").asBoolean());
-		assertEquals(settings.isAutomerge().booleanValue(), resp.get("automerge").asBoolean());
-		assertEquals(settings.isAutofollow().booleanValue(), resp.get("autofollow").asBoolean());
-		assertEquals(settings.isRequestingAll().booleanValue(), resp.get("requestingAll").asBoolean());
+		assertEquals(settings.isAdvertising().booleanValue(),     resp.get("advertising").asBoolean());
+		assertEquals(settings.isAutocommit().booleanValue(),      resp.get("autocommit").asBoolean());
+		assertEquals(settings.isAutomerge().booleanValue(),       resp.get("automerge").asBoolean());
+		assertEquals(settings.isAutofollow().booleanValue(),      resp.get("autofollow").asBoolean());
+		assertEquals(settings.isRequestingAll().booleanValue(),   resp.get("requestingAll").asBoolean());
 		assertEquals(settings.getAutocommitInterval().intValue(), resp.get("autocommitInterval").intValue());
-		assertEquals(settings.getAutomirrorPath(), resp.get("automirrorPath").textValue());
-		assertEquals(settings.isAutomirror().booleanValue(), resp.get("automirror").asBoolean());
-		assertEquals(settings.getPeerLimit().intValue(), resp.get("peerLimit").intValue());
+		assertEquals(settings.getAutomirrorPath(),                resp.get("automirrorPath").textValue());
+		assertEquals(settings.isAutomirror().booleanValue(),      resp.get("automirror").asBoolean());
+		assertEquals(settings.getPeerLimit().intValue(),          resp.get("peerLimit").intValue());
 	}
 	
 	@Test

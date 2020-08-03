@@ -92,7 +92,8 @@ public class SubscriptionService {
 		if(keyMap == null) return;
 		
 		for(Class<?> type : keyMap.keySet()) {
-			for(SubscriptionToken<?> token : keyMap.get(type)) {
+			LinkedList<SubscriptionToken<?>> tokens = new LinkedList<>(keyMap.get(type));
+			for(SubscriptionToken<?> token : tokens) {
 				try {
 					updateToken(key, value, token);
 				} catch(Exception exc) {
@@ -111,12 +112,12 @@ public class SubscriptionService {
 			}
 			
 			Number n = (Number) obj;
-			if(token.type.isAssignableFrom(Long.class)) token.update(n.longValue());
+			if     (token.type.isAssignableFrom(Long   .class)) token.update(n.longValue());
 			else if(token.type.isAssignableFrom(Integer.class)) token.update(n.intValue());
-			else if(token.type.isAssignableFrom(Short.class)) token.update(n.shortValue());
-			else if(token.type.isAssignableFrom(Byte.class)) token.update(n.byteValue());
-			else if(token.type.isAssignableFrom(Double.class)) token.update(n.doubleValue());
-			else if(token.type.isAssignableFrom(Float.class)) token.update(n.floatValue());
+			else if(token.type.isAssignableFrom(Short  .class)) token.update(n.shortValue());
+			else if(token.type.isAssignableFrom(Byte   .class)) token.update(n.byteValue());
+			else if(token.type.isAssignableFrom(Double .class)) token.update(n.doubleValue());
+			else if(token.type.isAssignableFrom(Float  .class)) token.update(n.floatValue());
 			else token.update(null);
 			return;
 		}

@@ -97,6 +97,7 @@ public class ZKFSManager implements AutoCloseable {
 
 	public void close() throws IOException {
 		closed = true;
+		autosave = false;
 		
 		if(fs != null) {
 			fs.removeMonitor(fsMonitor);

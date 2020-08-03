@@ -570,7 +570,7 @@ public class RevisionTree implements AutoCloseable {
 	
 	protected synchronized boolean fetchParentsForTag(RevisionTag revTag, long timeoutMs) {
 		// priority just a bit superior to the default for file lookups since these should go fast
-		logger.debug("RevisionList {}: Fetching parents for tag {}, timeout {}ms",
+		logger.debug("RevisionTree {}: Fetching parents for tag {}, timeout {}ms",
 				Util.formatArchiveId(config.getArchiveId()),
 				Util.formatRevisionTag(revTag),
 				timeoutMs);
@@ -584,8 +584,9 @@ public class RevisionTree implements AutoCloseable {
 		}
 		
 		if(parentsForTagLocal(revTag) == null) {
-			logger.info("RevisionList {}: Timed out fetching parents for tag {}, timeout {}ms",
+			logger.info("RevisionTree {}: Timed out fetching parents for tag {}, timeout {}ms",
 					Util.formatArchiveId(config.getArchiveId()),
+					Util.formatRevisionTag(revTag),
 					timeoutMs);
 			return false;
 		}
