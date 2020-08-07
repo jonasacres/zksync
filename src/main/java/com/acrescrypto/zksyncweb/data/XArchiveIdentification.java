@@ -36,14 +36,14 @@ public class XArchiveIdentification {
 		XArchiveIdentification id = new XArchiveIdentification();
 		XArchiveSettings xset;
 		
-		id.archiveId = config.getArchiveId().clone();
-		id.description = config.getDescription();
-		id.pageSize = config.getPageSize();
+		id.archiveId    = config.getArchiveId().clone();
+		id.description  = config.getDescription();
+		id.pageSize     = config.getPageSize();
 		
 		id.usesWriteKey = config.usesWriteKey();
 		id.haveWriteKey = !config.isReadOnly();
-		id.haveReadKey = !config.getAccessor().isSeedOnly();
-		id.ready = config.haveConfigLocally();
+		id.haveReadKey  = !config.getAccessor().isSeedOnly();
+		id.ready        = config.haveConfigLocally();
 		
 		try {
 			id.dirty = State.sharedState().activeFs(config).isDirty();
@@ -53,22 +53,22 @@ public class XArchiveIdentification {
 			id.numLocalTags = config.getArchive().allPageTags().size();
 		} catch(Throwable exc) {}
 		
-		id.connectedPeers = config.getSwarm().getConnections().size();
+		id.connectedPeers   = config.getSwarm().getConnections().size();
 		id.bytesPerSecondRx = config.getSwarm().getBandwidthMonitorRx().getBytesPerSecond();
 		id.bytesPerSecondTx = config.getSwarm().getBandwidthMonitorTx().getBytesPerSecond();
-		id.lifetimeBytesRx = config.getSwarm().getBandwidthMonitorRx().getLifetimeBytes();
-		id.lifetimeBytesTx = config.getSwarm().getBandwidthMonitorTx().getLifetimeBytes();
+		id.lifetimeBytesRx  = config.getSwarm().getBandwidthMonitorRx().getLifetimeBytes();
+		id.lifetimeBytesTx  = config.getSwarm().getBandwidthMonitorTx().getLifetimeBytes();
 		
 		try {
 			id.currentRevTag = State.sharedState().activeFs(config).getBaseRevision().getBytes();
-			id.currentTitle = State.sharedState().activeFs(config).getInodeTable().getNextTitle();
+			id.currentTitle  = State.sharedState().activeFs(config).getInodeTable().getNextTitle();
 		} catch (IOException | NullPointerException exc) {
 		}
 		
 		try {
 			xset = XArchiveSettings.fromConfig(config);
-			id.consumedStorage = config.getStorage().storageSize("/", false);
-			id.consumedLocalStorage = config.getLocalStorage().storageSize("/", false);
+			 id.consumedStorage      = config.getStorage()     .storageSize("/", false);
+			 id.consumedLocalStorage = config.getLocalStorage().storageSize("/", false);
 		} catch(IOException exc) {
 			xset = new XArchiveSettings();
 			// TODO API: (log) worth logging this...

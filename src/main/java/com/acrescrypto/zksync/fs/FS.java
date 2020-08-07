@@ -245,11 +245,11 @@ public abstract class FS implements AutoCloseable {
 	}
 	
 	public void applyStat(String path, Stat stat) throws IOException {
-		try { chown(path, stat.getUser()); } catch(UnsupportedOperationException exc) {}
-		try { chown(path, stat.getUid()); } catch(UnsupportedOperationException exc) {}
-		try { chgrp(path, stat.getGroup()); } catch(UnsupportedOperationException exc) {}
-		try { chgrp(path, stat.getGid()); } catch(UnsupportedOperationException exc) {}
-		try { chmod(path, stat.getMode()); } catch(UnsupportedOperationException exc) {}
+		try { chown   (path, stat.getUser ()); } catch(UnsupportedOperationException exc) {}
+		try { chown   (path, stat.getUid  ()); } catch(UnsupportedOperationException exc) {}
+		try { chgrp   (path, stat.getGroup()); } catch(UnsupportedOperationException exc) {}
+		try { chgrp   (path, stat.getGid  ()); } catch(UnsupportedOperationException exc) {}
+		try { chmod   (path, stat.getMode ()); } catch(UnsupportedOperationException exc) {}
 		try { setCtime(path, stat.getCtime()); } catch(UnsupportedOperationException exc) {}
 		try { setMtime(path, stat.getMtime()); } catch(UnsupportedOperationException exc) {}
 		try { setAtime(path, stat.getAtime()); } catch(UnsupportedOperationException exc) {}
