@@ -107,28 +107,30 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 	protected ZKMaster() {}
 	
 	public ZKMaster(CryptoSupport crypto, FS storage, PassphraseProvider passphraseProvider) throws IOException, InvalidBlacklistException {
-		this.crypto = crypto;
-		this.storage = storage;
-		
-		this.globalConfig = new ConfigFile(storage, "config.json");
-		globalConfig.apply(ConfigDefaults.getActiveDefaults());
-		setupSubscriptions();
-		setupBandwidth();
-		
-		this.crypto.setMaxSimultaneousArgon2(globalConfig.getInt("crypto.pbkdf.maxsimultaneous"));
-		this.passphraseProvider = passphraseProvider;
-		this.threadGroup = new ThreadGroup("ZKMaster " + System.identityHashCode(this));
-		getLocalKey();
-		this.storedAccess = new StoredAccess(this);
-		this.blacklist = new Blacklist(storage, "blacklist", localKey.derive("easysafe-blacklist"));
-		this.dhtClient = new DHTClient(localKey.derive("easysafe-dht-storage"), this);
-		this.dhtDiscovery = new DHTZKArchiveDiscovery(
-				globalConfig.getInt("net.dht.discoveryintervalms"),
-				globalConfig.getInt("net.dht.advertisementintervalms"));
-		listener = new TCPPeerSocketListener(this);
-		loadStoredAccessors();
+	    this.crypto             = crypto;
+	    this.storage            = storage;
+
+	    this.globalConfig       = new ConfigFile(storage, "config.json");
+	    globalConfig.apply(ConfigDefaults.getActiveDefaults());
+	    setupSubscriptions();
+	    setupBandwidth();
+
+	    this.crypto.setMaxSimultaneousArgon2(globalConfig.getInt("crypto.pbkdf.maxsimultaneous"));
+	    this.passphraseProvider = passphraseProvider;
+	    this.threadGroup        = new ThreadGroup("ZKMaster " + System.identityHashCode(this));
+
+	    getLocalKey();
+
+	    this.storedAccess       = new StoredAccess(this);
+	    this.blacklist          = new Blacklist(storage, "blacklist", localKey.derive("easysafe-blacklist"));
+	    this.dhtClient          = new DHTClient(localKey.derive("easysafe-dht-storage"), this);
+	    this.dhtDiscovery       = new DHTZKArchiveDiscovery(
+	                                    globalConfig.getInt("net.dht.discoveryintervalms"),
+	                                    globalConfig.getInt("net.dht.advertisementintervalms"));
+	    listener                = new TCPPeerSocketListener(this);
+	    loadStoredAccessors();
 	}
-	
+
 	public void getLocalKey() throws IOException {
 		logger.info("Setting up local key...");
 		Key ppKey;

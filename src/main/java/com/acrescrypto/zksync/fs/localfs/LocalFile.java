@@ -101,7 +101,12 @@ public class LocalFile extends File {
 		logger.debug("LocalFS {}: write {}, offset {}, {} bytes", fs.root(), path, offset, length);
 		assertWritable();
 		channel.write(ByteBuffer.wrap(data, offset, length));
-		size = Math.max(size, channel.position());
+		
+		if(channel.position() > size) {
+		    long delta = channel.position() - size;
+		    size = channel.position();
+		    fs.adjustStorageSize(delta);
+		}
 	}
 
 	@Override

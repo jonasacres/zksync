@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.backedfs;
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,8 +40,20 @@ public class BackedFS extends FS {
 	HashSet<String> pendingPaths = new HashSet<String>();
 
 	public BackedFS(FS cacheFS, FS backupFS) {
-		this.cacheFS = cacheFS;
+		this.cacheFS  = cacheFS;
 		this.backupFS = backupFS;
+	}
+	
+	@Override
+	public void setTrackingStorage(boolean tracking) throws IOException {
+	    this.tracking = true;
+	    cacheFS.setTrackingStorage(true);
+	    this.totalSize = new AtomicLong(cacheFS.calculateStorageSize("/", false));
+	}
+	
+	@Override
+	public long storageSize() throws IOException {
+	    return cacheFS.storageSize();
 	}
 	
 	@Override

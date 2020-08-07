@@ -177,13 +177,16 @@ public class RAMFS extends FS {
     @Override
     public void unlink(String path) throws IOException {
         if(!exists(path, false)) throw new ENOENTException(path);
+        adjustStorageSize(-lstat(path).getSize());
         clearInode(path);
     }
 
     @Override
     public void link(String target, String link) throws IOException {
         if(exists(link)) throw new EEXISTSException(link);
-        setInode(link, llookup(target));
+        Inode inode = llookup(target);
+        adjustStorageSize(inode.stat.getSize());
+        setInode(link, inode);
     }
 
     @Override
@@ -283,8 +286,11 @@ public class RAMFS extends FS {
         try {
             Inode inode = lookup(path);
             if(inode.stat.isDirectory()) throw new EISDIRException(path);
+            
+            long delta = length - inode.stat.getSize();
             inode.data = data;
             inode.stat.setSize(length);
+            adjustStorageSize(delta);
         } catch(ENOENTException exc) {
             makeInode(path, (inode)->{ inode.data = data; });
         }
@@ -304,9 +310,15 @@ public class RAMFS extends FS {
         } catch(ENOENTException exc) {
             inode = makeInode(path, (inode_)->{});
         }
-
-        inode.data = newData.put(inode.data, 0, Math.min(inode.data.length,	(int) size)).array();
+        
+        long delta = size - inode.stat.getSize();
+        inode.data = newData.put(
+                        inode.data,
+                        0,
+                        Math.min(inode.data.length, (int) size)
+                     ).array();
         inode.stat.setSize(inode.data.length);
+        adjustStorageSize(delta);
     }
 
     @Override
@@ -423,6 +435,7 @@ public class RAMFS extends FS {
         lambda.make(inode);
         inode.stat.setSize(inode.data.length);
         setInode(path, inode);
+        adjustStorageSize(inode.stat.getSize());
         return inode;
     }
 

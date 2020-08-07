@@ -186,8 +186,11 @@ public class ZKArchiveConfig implements AutoCloseable {
 	
 	protected void initStorage() throws IOException {
 		this.localStorage = accessor.master.localStorageFsForArchiveId(archiveId);
-		this.swarm = new PeerSwarm(this);
-		this.storage = new BackedFS(accessor.master.storageFsForArchiveId(archiveId), new SwarmFS(swarm));
+		this.swarm        = new PeerSwarm(this);
+		this.storage      = new BackedFS(accessor.master.storageFsForArchiveId(archiveId), new SwarmFS(swarm));
+		
+		localStorage.setTrackingStorage(true);
+		storage.setTrackingStorage(true);
 	}
 	
 	protected void decodeId() {

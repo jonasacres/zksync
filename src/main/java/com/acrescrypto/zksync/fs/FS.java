@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,22 @@ public abstract class FS implements AutoCloseable {
     }
 
     public static boolean fileHandleTelemetryEnabled = false;
+    
+    public void setTrackingStorage(boolean tracking) throws IOException {
+        if(tracking == this.tracking) return;
+        
+        if(!tracking) {
+            totalSize = null;
+        } else {
+            totalSize = new AtomicLong(calculateStorageSize("/", false));
+        }
+        
+        this.tracking = tracking;
+    }
+    
+    public boolean isTrackingStorage() {
+        return tracking;
+    }
 
     public long size(String path) throws IOException {
         return size(path, true);
@@ -38,55 +55,64 @@ public abstract class FS implements AutoCloseable {
             return lstat(path).getSize();
         }
     }
+    
+    public abstract Stat           stat(String path) throws IOException;
+    public abstract Stat          lstat(String path) throws IOException;
 
-    public abstract Stat stat(String path) throws IOException;
-    public abstract Stat lstat(String path) throws IOException;
+    public          Directory   opendir(String path) throws IOException { return opendir(path, stat(path)); }
+    public abstract Directory   opendir(String path, Stat stat) throws IOException;
+    public abstract void          mkdir(String path) throws IOException;
+    public abstract void         mkdirp(String path) throws IOException;
+    public abstract void          rmdir(String path) throws IOException;
 
-    public Directory opendir(String path) throws IOException { return opendir(path, stat(path)); }
-    public abstract Directory opendir(String path, Stat stat) throws IOException;
-    public abstract void mkdir(String path) throws IOException;
-    public abstract void mkdirp(String path) throws IOException;
-    public abstract void rmdir(String path) throws IOException;
+    public abstract void         unlink(String path) throws IOException;
+    public abstract void           link(String target, String link) throws IOException;
+    public abstract void        symlink(String target, String link) throws IOException;
+    public abstract String     readlink(String link) throws IOException;
+    public abstract void          mknod(String path, int type, int major, int minor) throws IOException;
+    public abstract void         mkfifo(String path) throws IOException;
+    
+    public final    void          chmod(String path, int mode)     throws IOException { chmod(path, mode,  true); }
+    public final    void          chown(String path, int uid)      throws IOException { chown(path, uid,   true); }
+    public final    void          chown(String path, String user)  throws IOException { chown(path, user,  true); }
+    public final    void          chgrp(String path, int gid)      throws IOException { chgrp(path, gid,   true); }
+    public final    void          chgrp(String path, String group) throws IOException { chgrp(path, group, true); }
 
-    public abstract void unlink(String path) throws IOException;
-    public abstract void link(String target, String link) throws IOException;
-    public abstract void symlink(String target, String link) throws IOException;
-    public abstract void symlink_unsafe(String source, String dest) throws IOException; // allow symlinks to exit fs scope
-    public abstract String readlink(String link) throws IOException;
+    public abstract void          chmod(String path, int mode,     boolean followSymlins)  throws IOException;
+    public abstract void          chown(String path, int uid,      boolean followSymlinks) throws IOException;
+    public abstract void          chown(String path, String user,  boolean followSymlinks) throws IOException;
+    public abstract void          chgrp(String path, int gid,      boolean followSymlinks) throws IOException;
+    public abstract void          chgrp(String path, String group, boolean followSymlinks) throws IOException;
+
+    public final    void       setMtime(String path, long mtime) throws IOException { setMtime(path, mtime, true); }
+    public final    void       setCtime(String path, long ctime) throws IOException { setCtime(path, ctime, true); }
+    public final    void       setAtime(String path, long atime) throws IOException { setAtime(path, atime, true); }
+
+    public abstract void       setMtime(String path, long mtime, boolean followSymlinks) throws IOException;
+    public abstract void       setCtime(String path, long ctime, boolean followSymlinks) throws IOException;
+    public abstract void       setAtime(String path, long atime, boolean followSymlinks) throws IOException;
+
+    public abstract void          write(String path, byte[] contents, int offset, int length) throws IOException;
+    public abstract File           open(String path, int mode) throws IOException;
+    public abstract void       truncate(String path, long size) throws IOException;
+
+    public abstract void    symlink_unsafe(String source, String dest) throws IOException; // allow symlinks to exit fs scope
     public abstract String readlink_unsafe(String link) throws IOException;
-    public abstract void mknod(String path, int type, int major, int minor) throws IOException;
-    public abstract void mkfifo(String path) throws IOException;
-
-    public final void chmod(String path, int mode) throws IOException { chmod(path, mode, true); }
-    public final void chown(String path, int uid) throws IOException { chown(path, uid, true); }
-    public final void chown(String path, String user) throws IOException { chown(path, user, true); }
-    public final void chgrp(String path, int gid) throws IOException { chgrp(path, gid, true); }
-    public final void chgrp(String path, String group) throws IOException { chgrp(path, group, true); }
-
-    public abstract void chmod(String path, int mode, boolean followSymlins) throws IOException;
-    public abstract void chown(String path, int uid, boolean followSymlinks) throws IOException;
-    public abstract void chown(String path, String user, boolean followSymlinks) throws IOException;
-    public abstract void chgrp(String path, int gid, boolean followSymlinks) throws IOException;
-    public abstract void chgrp(String path, String group, boolean followSymlinks) throws IOException;
-
-    public final void setMtime(String path, long mtime) throws IOException { setMtime(path, mtime, true); }
-    public final void setCtime(String path, long ctime) throws IOException { setCtime(path, ctime, true); }
-    public final void setAtime(String path, long atime) throws IOException { setAtime(path, atime, true); }
-
-    public abstract void setMtime(String path, long mtime, boolean followSymlinks) throws IOException;
-    public abstract void setCtime(String path, long ctime, boolean followSymlinks) throws IOException;
-    public abstract void setAtime(String path, long atime, boolean followSymlinks) throws IOException;
-
-    public abstract void write(String path, byte[] contents, int offset, int length) throws IOException;
-    public abstract File open(String path, int mode) throws IOException;
-    public abstract void truncate(String path, long size) throws IOException;
 
     private Logger logger = LoggerFactory.getLogger(FS.class);
     protected ConcurrentHashMap<File,Throwable> localFileBacktraces = new ConcurrentHashMap<>();
+    protected AtomicLong totalSize;
     protected FSPath root;
+    protected boolean tracking;
+
 
     public long maxFileSize() {
         return Long.MAX_VALUE;
+    }
+    
+    public void adjustStorageSize(long adjustment) {
+        if(!isTrackingStorage()) return;
+        totalSize.addAndGet(adjustment);
     }
 
     public void root(String root) {
@@ -311,9 +337,14 @@ public abstract class FS implements AutoCloseable {
         }
     }
 
-    public long storageSize(String path, boolean followSymlinks) throws IOException {
+    public long storageSize() throws IOException {
+        if(tracking && this.totalSize != null) return this.totalSize.get();
+        return calculateStorageSize("/", false);
+    }
+    
+    public long calculateStorageSize(String path, boolean followSymlinks) throws IOException {
         // TODO API: (test) FS.storageSize
-        long totalSize = 0;
+        long observedTotalSize = 0;
 
         Stat s = stat(path);
         if(s.isDirectory()) {
@@ -321,15 +352,16 @@ public abstract class FS implements AutoCloseable {
                 DirectoryTraverser traverser = new DirectoryTraverser(this, dir);
                 traverser.followSymlinks = followSymlinks;
                 while(traverser.hasNext()) {
-                    totalSize += traverser.next().stat.getSize();
+                    observedTotalSize += traverser.next().stat.getSize();
                 }
             }
         } else if(s.isRegularFile() || s.isSymlink()) {
-            totalSize = s.size;
+            observedTotalSize = s.size;
         }
 
-        return totalSize;
+        return observedTotalSize;
     }
+
 
     public void reportOpenFile(File file) {
         if(!fileHandleTelemetryEnabled) return;

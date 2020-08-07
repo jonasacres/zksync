@@ -71,18 +71,18 @@ public class LocalFS extends FS {
     public long size(String path, boolean followSymlinks) throws IOException {
         LinkOption[] linkOpt = followSymlinks
                 ? new LinkOption[0]
-                        : new LinkOption[] { LinkOption.NOFOLLOW_LINKS };
-                BasicFileAttributes attr = Files.readAttributes(
-                        Paths.get(path),
-                        BasicFileAttributes.class,
-                        linkOpt);
-                return attr.size();
+                : new LinkOption[] { LinkOption.NOFOLLOW_LINKS };
+        BasicFileAttributes attr = Files.readAttributes(
+                Paths.get(path),
+                BasicFileAttributes.class,
+                linkOpt);
+        return attr.size();
     }
 
     private Stat statWithLinkOption(String pathStr, LinkOption... linkOpt) throws IOException {
         return isWindows()
                 ? statWithLinkOptionWindows(pathStr, linkOpt)
-                        : statWithLinkOptionPosix  (pathStr, linkOpt);
+                : statWithLinkOptionPosix  (pathStr, linkOpt);
     }
 
     private Stat statWithLinkOptionWindows(String pathStr, LinkOption... linkOpt) throws IOException {
@@ -99,7 +99,6 @@ public class LocalFS extends FS {
             BasicFileAttributes attr = Files.readAttributes(path,
                     BasicFileAttributes.class,
                     linkOpt);
-
             stat.setMtime(attr.lastModifiedTime().to(TimeUnit.NANOSECONDS));
             stat.setAtime(attr.lastAccessTime  ().to(TimeUnit.NANOSECONDS));
             stat.setCtime(attr.creationTime    ().to(TimeUnit.NANOSECONDS));
@@ -150,7 +149,7 @@ public class LocalFS extends FS {
 
         try {
             PosixFileAttributes attr = Files.readAttributes(path, PosixFileAttributes.class, linkOpt);
-
+            
             stat.setMtime(attr.lastModifiedTime().to(TimeUnit.NANOSECONDS));
             stat.setAtime(attr.lastAccessTime()  .to(TimeUnit.NANOSECONDS));
             stat.setCtime(attr.creationTime()    .to(TimeUnit.NANOSECONDS));
@@ -383,7 +382,11 @@ public class LocalFS extends FS {
     public void unlink(String path) throws IOException {
         logger.debug("LocalFS {}: unlink {}", root, path);
         try {
+            long size = isTrackingStorage()
+                        ? stat(path).getSize()
+                        : 0;
             Files.delete(qualifiedPathNative(path));
+            adjustStorageSize(-size);
         } catch(NoSuchFileException exc) {
             throw new ENOENTException(path);
         }
@@ -393,6 +396,10 @@ public class LocalFS extends FS {
     public void link(String source, String dest) throws IOException {
         logger.debug("LocalFS {}: link {} -> {}", root, source, dest);
         try {
+            long size = isTrackingStorage()
+                    ? stat(source).getSize()
+                    : 0;
+            adjustStorageSize(-size);
             Files.createLink(qualifiedPathNative(dest), qualifiedPathNative(source));
         } catch(FileAlreadyExistsException exc) {
             throw new EEXISTSException(qualifiedPath(source).toString());
@@ -407,12 +414,10 @@ public class LocalFS extends FS {
 
         logger.debug("LocalFS {}: symlink {} -> {}", root, source, dest);
         Path trueSource = source.substring(0, 1).equals("/")
-                ? qualifiedPath(source)
-                        : Paths.get(source);
-
-                assertPathInScope(trueSource.toString());
-
-                Files.createSymbolicLink(qualifiedPathNative(dest), trueSource);
+                          ? qualifiedPath(source)
+                          : Paths.get(source);
+        assertPathInScope(trueSource.toString());
+        Files.createSymbolicLink(qualifiedPathNative(dest), trueSource);
     }
 
     @Override
@@ -429,7 +434,7 @@ public class LocalFS extends FS {
             if(target.descendsFrom(root)) {
                 return target.isAbsolute()
                         ? root.relativize(target).makeAbsolute().toNative()
-                                : root.relativize(target).toNative();
+                        : root.relativize(target).toNative();
             }
 
             return target.toNative();
@@ -604,16 +609,20 @@ public class LocalFS extends FS {
     public void truncate(String path, long size) throws IOException {
         logger.debug("LocalFS {}: truncate {} {}", root, path, size);
         try(
-                FileOutputStream stream = new FileOutputStream(qualifiedPathNative(path).toString(), true);
-                FileChannel chan = stream.getChannel();
-                ) {
+            FileOutputStream stream = new FileOutputStream(qualifiedPathNative(path).toString(), true);
+            FileChannel chan = stream.getChannel();
+        ) {
             long oldSize = chan.size();
-            if(size > oldSize) {
+            long delta = size - oldSize;
+            
+            if(delta > 0) {
                 chan.position(oldSize);
-                chan.write(ByteBuffer.allocate((int) (size-oldSize)));
+                chan.write(ByteBuffer.allocate((int) (delta)));
             } else {
                 chan.truncate(size);
             }
+            
+            adjustStorageSize(delta);
         }
     }
 

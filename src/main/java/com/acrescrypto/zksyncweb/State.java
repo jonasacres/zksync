@@ -109,11 +109,13 @@ public class State implements AutoCloseable {
 	
 	public State(byte[] passphrase, String path) throws IOException {
 		this.master = ZKMaster.openAtPath(new OneTimePassphraseProvider(passphrase), path);
+		master.getStorage().setTrackingStorage(true);
 		initManagers();
 	}
 	
 	public State(byte[] passphrase, FS storage) throws IOException {
 		this.master = ZKMaster.open(new OneTimePassphraseProvider(passphrase), storage);
+		master.getStorage().setTrackingStorage(true);        
 		initManagers();
 	}
 	

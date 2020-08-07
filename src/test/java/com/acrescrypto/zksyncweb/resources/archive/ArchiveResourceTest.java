@@ -185,8 +185,8 @@ public class ArchiveResourceTest {
 
 	public void validateDelete(ZKArchive archive) throws IOException {
 		assertNull(State.sharedState().configForArchiveId(archive.getConfig().getArchiveId()));
-		assertEquals(0, archive.getConfig().getLocalStorage().storageSize("/", false));
-		assertEquals(0, archive.getConfig().getCacheStorage().storageSize("/", false));
+		assertEquals(0, archive.getConfig().getLocalStorage().calculateStorageSize("/", false));
+		assertEquals(0, archive.getConfig().getCacheStorage().calculateStorageSize("/", false));
 		assertTrue(archive.getConfig().isClosed());
 		assertTrue(archive.getConfig().getSwarm().isClosed());
 		assertTrue(archive.isClosed());
@@ -195,8 +195,8 @@ public class ArchiveResourceTest {
 	}
 
 	void validateArchiveListing(JsonNode resp, ZKArchive archive) throws IOException {
-		long expectedStorageSize = archive.getConfig().getStorage().storageSize("/", false);
-		long expectedLocalStorageSize = archive.getConfig().getLocalStorage().storageSize("/", false);
+		long expectedStorageSize = archive.getConfig().getStorage().calculateStorageSize("/", false);
+		long expectedLocalStorageSize = archive.getConfig().getLocalStorage().calculateStorageSize("/", false);
 		double expectedBandwidthRx = archive.getConfig().getSwarm().getBandwidthMonitorRx().getBytesPerSecond();
 		double expectedBandwidthTx = archive.getConfig().getSwarm().getBandwidthMonitorTx().getBytesPerSecond();
 		long expectedLifetimeTx = archive.getConfig().getSwarm().getBandwidthMonitorTx().getLifetimeBytes();
@@ -374,7 +374,7 @@ public class ArchiveResourceTest {
 
 	@Test
 	public void testDeleteKeysRemovesAllAccess() throws IOException {
-		long expectedSize = archive.getConfig().getCacheStorage().storageSize("/", false) + archive.getConfig().getLocalStorage().storageSize("/", false);
+		long expectedSize = archive.getConfig().getCacheStorage().calculateStorageSize("/", false) + archive.getConfig().getLocalStorage().calculateStorageSize("/", false);
 		WebTestUtils.requestDelete(target, "archives/" + transformArchiveId(archive).substring(0, 8) + "/keys");
 		StoredAccessRecord record = State.sharedState().getMaster().storedAccess().recordForArchiveId(archive.getConfig().getArchiveId());
 		assertNull(record);
@@ -384,7 +384,7 @@ public class ArchiveResourceTest {
 			assertNull(record2);
 	
 			// make sure we kept the cached pages and local data
-			long size = archive.getConfig().getCacheStorage().storageSize("/", false) + archive.getConfig().getLocalStorage().storageSize("/", false);
+			long size = archive.getConfig().getCacheStorage().calculateStorageSize("/", false) + archive.getConfig().getLocalStorage().calculateStorageSize("/", false);
 			assertEquals(expectedSize, size);
 		}
 	}
@@ -395,7 +395,7 @@ public class ArchiveResourceTest {
 		archive2.getMaster().storedAccess().storeArchiveAccess(archive2.getConfig(), StoredAccess.ACCESS_LEVEL_READWRITE);
 		State.sharedState().addOpenConfig(archive2.getConfig());
 
-		long expectedSize = archive2.getConfig().getCacheStorage().storageSize("/", false) + archive2.getConfig().getLocalStorage().storageSize("/", false);
+		long expectedSize = archive2.getConfig().getCacheStorage().calculateStorageSize("/", false) + archive2.getConfig().getLocalStorage().calculateStorageSize("/", false);
 		WebTestUtils.requestDelete(target, "archives/" + transformArchiveId(archive).substring(0, 8));
 
 		// make sure we still have the stored accessor
@@ -405,7 +405,7 @@ public class ArchiveResourceTest {
 			
 			
 			// make sure we kept the cached pages and local data
-			long size = archive2.getConfig().getCacheStorage().storageSize("/", false) + archive2.getConfig().getLocalStorage().storageSize("/", false);
+			long size = archive2.getConfig().getCacheStorage().calculateStorageSize("/", false) + archive2.getConfig().getLocalStorage().calculateStorageSize("/", false);
 			assertEquals(expectedSize, size);
 	
 			ZKArchiveConfig loadedConfig = state2.getMaster().allConfigs().iterator().next();
@@ -422,7 +422,7 @@ public class ArchiveResourceTest {
 		config2.getMaster().storedAccess().storeArchiveAccess(config2, StoredAccess.ACCESS_LEVEL_READWRITE);
 		State.sharedState().addOpenConfig(config2);
 
-		long expectedSize = config2.getCacheStorage().storageSize("/", false) + config2.getLocalStorage().storageSize("/", false);
+		long expectedSize = config2.getCacheStorage().calculateStorageSize("/", false) + config2.getLocalStorage().calculateStorageSize("/", false);
 		WebTestUtils.requestDelete(target, "archives/" + transformArchiveId(archive).substring(0, 8));
 
 		// make sure we still have the stored accessor
@@ -431,7 +431,7 @@ public class ArchiveResourceTest {
 			assertNotNull(record2);
 	
 			// make sure we kept the cached pages and local data
-			long size = config2.getCacheStorage().storageSize("/", false) + config2.getLocalStorage().storageSize("/", false);
+			long size = config2.getCacheStorage().calculateStorageSize("/", false) + config2.getLocalStorage().calculateStorageSize("/", false);
 			assertEquals(expectedSize, size);
 	
 			ZKArchiveConfig loadedConfig = state2.getMaster().allConfigs().iterator().next();
