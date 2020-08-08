@@ -36,14 +36,14 @@ public class XArchiveIdentification {
 		XArchiveIdentification id = new XArchiveIdentification();
 		XArchiveSettings xset;
 		
-		id.archiveId    = config.getArchiveId().clone();
-		id.description  = config.getDescription();
-		id.pageSize     = config.getPageSize();
+		id.archiveId    =  config.getArchiveId().clone();
+		id.description  =  config.getDescription();
+		id.pageSize     =  config.getPageSize();
 		
-		id.usesWriteKey = config.usesWriteKey();
+		id.usesWriteKey =  config.usesWriteKey();
 		id.haveWriteKey = !config.isReadOnly();
 		id.haveReadKey  = !config.getAccessor().isSeedOnly();
-		id.ready        = config.haveConfigLocally();
+		id.ready        =  config.haveConfigLocally();
 		
 		try {
 			id.dirty = State.sharedState().activeFs(config).isDirty();
