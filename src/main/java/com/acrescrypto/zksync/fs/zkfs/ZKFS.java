@@ -19,7 +19,7 @@ import com.acrescrypto.zksync.utility.Util;
 // A ZKSync archive.
 public class ZKFS extends FS {
     public final static int MAX_SYMLINK_DEPTH = 32;
-    public static boolean defaultSkipIntegrity = false; // remove me when done debugging
+    public static boolean defaultSkipIntegrity = true; // remove me when done debugging
 
     protected static ConcurrentHashMap<ZKFS, Throwable> openInstances = new ConcurrentHashMap<>();
 

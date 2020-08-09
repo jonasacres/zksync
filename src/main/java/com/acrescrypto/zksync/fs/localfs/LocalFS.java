@@ -688,6 +688,15 @@ public class LocalFS extends FS {
     }
 
     protected Path qualifiedPathNative(String path) throws ENOENTException {
+        if(!path.contains("\\") && !Util.isWindows()) {
+            /* Profiling shows qualfiedPathNative is a performance hotspot on large filesystems.
+             * Let's speed things along if we know that there's no converting to be done. */
+            String posixRoot = root.toPosix();
+            Path normalized = Paths.get(posixRoot, path).normalize();
+            if(!normalized.startsWith(posixRoot)) throw new ENOENTException(path);
+            return normalized;
+        }
+        
         FSPath normalized = root.join(path).normalize();
         if(!normalized.descendsFrom(root)) {
             throw new ENOENTException(path);

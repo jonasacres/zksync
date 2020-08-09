@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.utility.Util;
 
 public abstract class FS implements AutoCloseable {
     protected static ConcurrentHashMap<File,Throwable> globalFileBacktraces = new ConcurrentHashMap<>();
@@ -27,34 +28,6 @@ public abstract class FS implements AutoCloseable {
     }
 
     public static boolean fileHandleTelemetryEnabled = false;
-    
-    public void setTrackingStorage(boolean tracking) throws IOException {
-        if(tracking == this.tracking) return;
-        
-        if(!tracking) {
-            totalSize = null;
-        } else {
-            totalSize = new AtomicLong(calculateStorageSize("/", false));
-        }
-        
-        this.tracking = tracking;
-    }
-    
-    public boolean isTrackingStorage() {
-        return tracking;
-    }
-
-    public long size(String path) throws IOException {
-        return size(path, true);
-    }
-
-    public long size(String path, boolean followSymlinks) throws IOException {
-        if(followSymlinks) {
-            return stat(path).getSize();
-        } else {
-            return lstat(path).getSize();
-        }
-    }
     
     public abstract Stat           stat(String path) throws IOException;
     public abstract Stat          lstat(String path) throws IOException;
@@ -101,34 +74,55 @@ public abstract class FS implements AutoCloseable {
 
     private Logger logger = LoggerFactory.getLogger(FS.class);
     protected ConcurrentHashMap<File,Throwable> localFileBacktraces = new ConcurrentHashMap<>();
-    protected AtomicLong totalSize;
+    protected AtomicLong lastStorageSize = new AtomicLong();
     protected FSPath root;
     protected boolean tracking;
+    protected long lastStorageUpdate;
 
 
+    public void setTrackingStorage(boolean tracking) throws IOException {
+        this.tracking = tracking;
+    }
+    
+    public boolean isTrackingStorage() {
+        return tracking;
+    }
+
+    public long size(String path) throws IOException {
+        return size(path, true);
+    }
+
+    public long size(String path, boolean followSymlinks) throws IOException {
+        if(followSymlinks) {
+            return stat(path).getSize();
+        } else {
+            return lstat(path).getSize();
+        }
+    }
+    
     public long maxFileSize() {
         return Long.MAX_VALUE;
     }
     
     public void adjustStorageSize(long adjustment) {
         if(!isTrackingStorage()) return;
-        totalSize.addAndGet(adjustment);
+        lastStorageSize.addAndGet(adjustment);
     }
 
     public void root(String root) {
-        this.root = FSPath.with(root);
+        this.root = FSPath.withPosix(root);
     }
 
     public FSPath root() {
         if(root == null) {
-            root = FSPath.with("/");
+            root = FSPath.withPosix("/");
         }
 
         return root;
     }
 
     public String join(String pathStart, String pathEnd) {
-        return new FSPath(pathStart).join(pathEnd).toPosix();
+        return FSPath.withPosix(pathStart).join(pathEnd).toPosix();
     }
 
     public void write(String path, byte[] contents) throws IOException {
@@ -229,17 +223,17 @@ public abstract class FS implements AutoCloseable {
     }
 
     public String dirname(String path) {
-        String dirname = FSPath.with(path).dirname().standardize();
+        String dirname = FSPath.withPosix(path).dirname().standardize();
         if(dirname.equals("")) return "/";
         return dirname;
     }
 
     public String basename(String path) {
-        return FSPath.with(path).basename().standardize();
+        return FSPath.withPosix(path).basename().standardize();
     }
 
     public FSPath absolutePath(String path) {
-        return absolutePath(FSPath.with(path));
+        return absolutePath(FSPath.withPosix(path));
     }
 
     public FSPath absolutePath(FSPath path) {
@@ -336,10 +330,19 @@ public abstract class FS implements AutoCloseable {
             }
         }
     }
+    
+    public long storageSizeUpdateInterval() {
+        return 30000;
+    }
 
     public long storageSize() throws IOException {
-        if(tracking && this.totalSize != null) return this.totalSize.get();
-        return calculateStorageSize("/", false);
+        if(lastStorageUpdate >= Util.currentTimeMillis() - storageSizeUpdateInterval()) {
+            return lastStorageSize.get();
+        }
+        
+        lastStorageSize.set(calculateStorageSize("/", false));
+        lastStorageUpdate = Util.currentTimeMillis();
+        return lastStorageSize.get();
     }
     
     public long calculateStorageSize(String path, boolean followSymlinks) throws IOException {

@@ -67,11 +67,13 @@ public class LocalFile extends File {
 				fs.getOpenFiles().size());
 
 		this.mode = mode;
+		boolean needTruncate = (mode & (O_TRUNC | O_WRONLY)) == (O_TRUNC | O_WRONLY);
 
-		if ((mode & O_APPEND) != 0)
+		if((mode & O_APPEND) != 0) {
 			this.channel.position(this.fileHandle.length());
-		else if ((mode & (O_TRUNC | O_WRONLY)) == (O_TRUNC | O_WRONLY))
+		} else if(needTruncate && channel.size() > 0) {
 			truncate(0);
+		}
 	}
 
 	@Override

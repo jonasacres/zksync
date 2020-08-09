@@ -146,6 +146,15 @@ public class Page {
 		contents = ByteBuffer.allocate(pageSize);
 		
 		StorageTag pageTag = file.getPageTag(pageNum);
+		if(pageTag.isBlank()) {
+		    logger.trace("ZKFS {} {}: Page {} is marked blank; loading as blank.",
+		              Util.formatArchiveId(file.zkfs.getArchive().getConfig().getArchiveId()),
+		              Util.formatRevisionTag(file.zkfs.getBaseRevision()),
+		              pageNum);
+		    blank();
+		    return;
+		}
+		
 		if(pageNum == 0 && file.tree.numPages == 1 && pageTag.isImmediate()) {
 			contents.put(file.inode.getRefTag().getStorageTag().getTagBytes());
 		} else {

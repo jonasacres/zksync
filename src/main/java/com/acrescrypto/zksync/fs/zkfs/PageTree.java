@@ -16,15 +16,20 @@ import com.acrescrypto.zksync.utility.HashCache.CacheLookup;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PageTree {
-	protected ZKArchive archive;
-	protected RefTag refTag;
-	protected HashCache<Long,PageTreeChunk> chunkCache;
-	protected Queue<PageTreeChunk> dirtyChunks;
-	protected long inodeId, inodeIdentity;
-	protected long numChunks, maxNumPages, numPages;
-	protected int readTimeoutMs;
-	protected boolean trusted; // if true, do not validate public key signature on each page chunk
-	protected Logger logger = LoggerFactory.getLogger(PageTree.class);
+	protected ZKArchive                      archive;
+	protected RefTag                         refTag;
+	protected HashCache<Long,PageTreeChunk>  chunkCache;
+	protected Queue    <PageTreeChunk>       dirtyChunks;
+	
+	protected long                           inodeId,
+	                                         inodeIdentity,
+	                                         numChunks,
+	                                         maxNumPages,
+	                                         numPages;
+	
+	protected int                            readTimeoutMs;
+	protected boolean                        trusted; // if true, do not validate public key signature on each page chunk
+	protected Logger                         logger = LoggerFactory.getLogger(PageTree.class);
 	
 	public class PageTreeStats {
 		public long numCachedPages, numCachedChunks, totalPages, totalChunks;
@@ -32,22 +37,23 @@ public class PageTree {
 	
 	/* Open a revtag, which is a reftag to an inode table */ 
 	public PageTree(RefTag revTag) throws IOException {
-		this.archive = revTag.getArchive();
-		this.refTag = revTag;
-		this.inodeId = InodeTable.INODE_ID_INODE_TABLE;
-		this.inodeIdentity = 0;
+		this.archive       = revTag.getArchive();
+		this.refTag        = revTag;
+		this.inodeId       = InodeTable.INODE_ID_INODE_TABLE;
+		this.inodeIdentity =  0;
 		this.readTimeoutMs = -1;
 		initWithSize(refTag.getNumPages());
 	}
 	
 	public PageTree(Inode inode) {
-		this.archive = inode.fs.archive;
+		this.archive       = inode.fs.archive;
 		this.readTimeoutMs = inode.fs.getReadTimeoutMs();
 		assert(0 < tagsPerChunk() && tagsPerChunk() <= Integer.MAX_VALUE);
-		this.refTag = inode.getRefTag();
-		this.inodeId = inode.getStat().getInodeId();
+		this.refTag        = inode.getRefTag();
+		this.inodeId       = inode.getStat().getInodeId();
 		this.inodeIdentity = inode.getIdentity();
-		this.trusted = true; // if we validated the inode table, we know the page chunks are legit too
+		this.trusted       = true; // if we validated the inode table, we know the page chunks are legit too
+		
 		initWithSize(refTag.getNumPages());
 	}
 	
@@ -56,18 +62,18 @@ public class PageTree {
 	 * any further operations.
 	 * */
 	protected PageTree(PageTree original) throws IOException {
-		this.trusted = original.trusted;
-		this.archive = original.archive;
-		this.refTag = original.refTag;
-		this.inodeId = original.inodeId;
+		this.trusted       = original.trusted;
+		this.archive       = original.archive;
+		this.refTag        = original.refTag;
+		this.inodeId       = original.inodeId;
 		this.inodeIdentity = original.inodeIdentity;
 		this.readTimeoutMs = original.readTimeoutMs;
 		
-		this.numChunks = original.numChunks;
-		this.numPages = original.numPages;
-		this.maxNumPages = original.maxNumPages;
+		this.numChunks     = original.numChunks;
+		this.numPages      = original.numPages;
+		this.maxNumPages   = original.maxNumPages;
 		
-		this.dirtyChunks = original.dirtyChunks;
+		this.dirtyChunks   = original.dirtyChunks;
 		
 		for(long chunkId : original.chunkCache.cachedKeys()) {
 			original.chunkCache.get(chunkId).tree = this;
@@ -216,19 +222,19 @@ public class PageTree {
 	}
 	
 	public PageTreeStats getStats() throws IOException {
-		PageTreeStats stats = new PageTreeStats();
+		PageTreeStats stats   = new PageTreeStats();
 		if(refTag.refType == RefTag.REF_TYPE_IMMEDIATE) {
-			stats.totalPages = stats.numCachedPages = 1; // make life easy for percentage-calculations (no division by zero)
+			stats.totalPages  = stats.numCachedPages  = 1; // make life easy for percentage-calculations (no division by zero)
 			stats.totalChunks = stats.numCachedChunks = 1;
 			return stats;
 		}
 		
-		stats.totalChunks = numChunks;
-		stats.totalPages = numPages;
+		stats.totalChunks         = numChunks;
+		stats.totalPages          = numPages;
 		HashSet<Long> foundChunks = new HashSet<>();
 		
 		for(long i = 0; i < numChunks; i++) {
-			if(i != 0 && !foundChunks.contains(indexForParent(i))) continue;
+			if(i !=  0 && !foundChunks.contains(indexForParent(i))) continue;
 			try {
 				tagForChunk(i);
 				foundChunks.add(i);
@@ -239,8 +245,7 @@ public class PageTree {
 		
 		for(long i = 0; i < numPages; i++) {
 			if(!foundChunks.contains(chunkIndexForPageNum(i))) continue;
-			String path = getPageTag(i).path();
-			if(archive.getConfig().getCacheStorage().exists(path)) {
+			if(archive.hasPageTag(getPageTag(i))) {
 				stats.numCachedPages++;
 			}
 		}

@@ -245,6 +245,8 @@ public class ZKArchive implements AutoCloseable {
 	/** Test if we have a given page cached locally. 
 	 * @throws IOException */
 	public boolean hasPageTag(StorageTag pageTag) throws IOException {
+	    if(!pageTag.isFinalized()) return true; // if we haven't finalized a tag, it's because the contents are still in memory, therefore we have it
+	    
 		assertOpen();
 		if(allPageTags.containsKey(pageTag.shortTagPreserialized())) return true;
 		

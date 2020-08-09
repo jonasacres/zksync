@@ -136,7 +136,17 @@ public class SignedSecureFile {
 			} catch(ENOENTException exc) {}
 			
 			fs.write(path(), result);
-			fs.squash(path());
+			
+			/* There's something to be said for squashing the file access times on these.
+			 * But, it's hard to make concrete statements about the security benefits of this --
+			 * other data, like inode IDs will betray the actual creation time of the files,
+			 * and squashing files takes time (nearly as long as writing the page files themselves,
+			 * or about as long as all the crypto operations for the page put together, according to
+			 * a test on linux (2020/08/04, 78e44328, copying a 6GiB dataset in via FSMirror,
+			 * profiling using JProfiler 11.1.4 CPU monitoring). 
+			 */
+			// fs.squash(path());
+			
 			return tag;
 		} catch(IOException exc) {
 			logger.error("FS -: Caught exception writing SignedSecureFile to {}", path(), exc);

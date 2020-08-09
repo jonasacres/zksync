@@ -77,16 +77,16 @@ public class ZKFSManager implements AutoCloseable {
 	public ZKFSManager(ZKFS fs, ZKFSManager manager) throws IOException {
 		this(fs);
 		
-		setAutocommit(manager.autocommit);
-		setAutofollow(manager.autofollow);
+		setAutocommit          (manager.autocommit);
+		setAutofollow          (manager.autofollow);
 		setAutocommitIntervalMs(manager.autocommitIntervalMs);
-		setAutomirrorPath(manager.automirrorPath);
-		setAutomirror(manager.automirror);
-		setLocalDescription(manager.localDescription);
+		setAutomirrorPath      (manager.automirrorPath);
+		setAutomirror          (manager.automirror);
+		setLocalDescription    (manager.localDescription);
 	}
 	
 	protected void setupMonitors() {
-		this.fsMonitor = (fs, path, stat)->notifyZKFSPathChange(path, stat);
+		this.fsMonitor  = (fs, path, stat)->notifyZKFSPathChange(path, stat);
 		this.revMonitor = (revTag)->notifyNewRevtag(revTag);
 		
 		if(fs != null) {
@@ -177,6 +177,16 @@ public class ZKFSManager implements AutoCloseable {
 							Util.formatArchiveId(fs.archive.config.archiveId),
 							exc);
 				}
+		}
+		
+		try {
+		    // we may have changed the active revision; go ahead and write the ZKFSManager to be safe
+		    this.write();
+		} catch(IOException exc) {
+		    logger.error("ZKFS {} {}: Caught exception writing ZKFSManager",
+                    Util.formatArchiveId(fs.archive.config.archiveId),
+                    Util.formatRevisionTag(fs.baseRevision),
+		            exc);
 		}
 	}
 	
@@ -412,7 +422,7 @@ public class ZKFSManager implements AutoCloseable {
 	
 	protected void deserialize(ZKArchiveConfig config, byte[] serialized) throws IOException {
 		JsonReader reader = Json.createReader(new StringReader(new String(serialized)));
-		JsonObject json = reader.readObject();
+		JsonObject json   = reader.readObject();
 		
 		String tagRaw = json.getString("revtag");
 		if(tagRaw != null) {
@@ -422,11 +432,11 @@ public class ZKFSManager implements AutoCloseable {
 			fs = config.getArchive().openLatest();
 		}
 		
-		setAutocommit(json.getBoolean("autocommit"));
-		setAutofollow(json.getBoolean("autofollow"));
-		setAutomerge(json.getBoolean("automerge"));
-		setAutocommitIntervalMs(json.getInt("autocommitIntervalMs"));
-		setLocalDescription(json.getString("localDescription", ""));
+		setAutocommit          (json.getBoolean("autocommit"));
+		setAutofollow          (json.getBoolean("autofollow"));
+		setAutomerge           (json.getBoolean("automerge"));
+		setAutocommitIntervalMs(json.getInt    ("autocommitIntervalMs"));
+		setLocalDescription    (json.getString ("localDescription", ""));
 		
 		if(json.getBoolean("advertising", false)) {
 			config.advertise();

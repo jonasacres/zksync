@@ -37,14 +37,14 @@ import com.acrescrypto.zksyncweb.data.XPathStat;
 
 public class ArchiveCrud {
 	public static byte[] get(ZKFS fs, String path, Map<String, String> params) throws IOException, XAPIResponse {
-		int existingPriority = Integer.MIN_VALUE;
-		int priority = Integer.parseInt(params.getOrDefault("priority", "0"));
-		boolean isStat = Boolean.parseBoolean(params.getOrDefault("stat", "false"));
-		boolean isInode = Boolean.parseBoolean(params.getOrDefault("inode", "false"));
-		boolean isInodeRaw = Boolean.parseBoolean(params.getOrDefault("inodeRaw", "false"));
-		boolean isQueue = Boolean.parseBoolean(params.getOrDefault("queue", "false"));
-		boolean isCancel = Boolean.parseBoolean(params.getOrDefault("cancel", "false"));
-		boolean isNofollow = Boolean.parseBoolean(params.getOrDefault("nofollow", "false"));
+		int     existingPriority = Integer.MIN_VALUE;
+		int     priority         = Integer.parseInt    (params.getOrDefault("priority", "0"));
+		boolean isStat           = Boolean.parseBoolean(params.getOrDefault("stat",     "false"));
+		boolean isInode          = Boolean.parseBoolean(params.getOrDefault("inode",    "false"));
+		boolean isInodeRaw       = Boolean.parseBoolean(params.getOrDefault("inodeRaw", "false"));
+		boolean isQueue          = Boolean.parseBoolean(params.getOrDefault("queue",    "false"));
+		boolean isCancel         = Boolean.parseBoolean(params.getOrDefault("cancel",   "false"));
+		boolean isNofollow       = Boolean.parseBoolean(params.getOrDefault("nofollow", "false"));
 		
 		while(path.startsWith("//")) path = path.substring(1);
 

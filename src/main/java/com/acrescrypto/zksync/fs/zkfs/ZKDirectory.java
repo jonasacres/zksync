@@ -289,7 +289,6 @@ public class ZKDirectory extends ZKFile implements Directory {
 	public boolean isValidName(String name) {
 		String illegalChars[] = new String[] {
 				"/",
-				"\\",
 				"\0"
 			};
 		if(name.getBytes().length > MAX_NAME_LEN) return false;

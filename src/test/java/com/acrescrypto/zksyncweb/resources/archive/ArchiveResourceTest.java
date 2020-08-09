@@ -215,7 +215,8 @@ public class ArchiveResourceTest {
 		assertEquals(expectedBandwidthTx, resp.get("bytesPerSecondTx").doubleValue(), 1.0);
 		assertEquals(expectedLifetimeRx, resp.get("lifetimeBytesRx").longValue());
 		assertEquals(expectedLifetimeTx, resp.get("lifetimeBytesTx").longValue());
-		assertArrayEquals(tag.getBytes(), resp.get("currentRevTag").binaryValue());
+		assertArrayEquals(tag.getBytes(), resp.get("currentRevTag").get("revTag").binaryValue());
+		assertEquals(tag.getHeight(), resp.get("currentRevTag").get("generation").asInt());
 		assertArrayEquals(archive.getConfig().getArchiveId(), resp.get("archiveId").binaryValue());
 
 		JsonNode xconfig = resp.get("config");

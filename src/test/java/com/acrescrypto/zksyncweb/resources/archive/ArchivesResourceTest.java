@@ -107,7 +107,8 @@ public class ArchivesResourceTest {
 		assertEquals(expectedStorageSize, resp.get("consumedStorage").longValue());
 		assertEquals(expectedLocalStorageSize, resp.get("consumedLocalStorage").longValue());
 		if(storedConfig.haveConfigLocally()) {
-			assertArrayEquals(RevisionTag.blank(storedConfig).getBytes(), resp.get("currentRevTag").binaryValue());
+			assertArrayEquals(RevisionTag.blank(storedConfig).getBytes(), resp.get("currentRevTag").get("revTag").binaryValue());
+			assertEquals(0, resp.get("currentRevTag").get("generation").asInt());
 		}
 		assertArrayEquals(storedConfig.getArchiveId(), resp.get("archiveId").binaryValue());
 

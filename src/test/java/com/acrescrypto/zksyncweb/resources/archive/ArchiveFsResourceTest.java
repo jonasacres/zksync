@@ -550,16 +550,16 @@ public class ArchiveFsResourceTest {
 
 	@Test
 	public void testGetReturnsStatListingIfPathIsDirectoryAndListStatRequested() throws IOException {
-		fs.mkdir("dir");
-		fs.write("dir/1", "1".getBytes());
-		fs.write("dir/2", new byte[123]);
-		fs.write("dir/3", new byte[1024]);
-		fs.mknod("dir/blockdev", Stat.TYPE_BLOCK_DEVICE, 1, 2);
-		fs.mknod("dir/chardev", Stat.TYPE_CHARACTER_DEVICE, 1, 2);
-		fs.mkfifo("dir/fifo");
-		fs.mkdir("dir/dir2");
-		fs.link("dir/1", "dir/1link");
-		fs.symlink("dir/2", "dir/2symlink");
+		fs.mkdir  ("dir");
+		fs.write  ("dir/1",        "1".getBytes());
+		fs.write  ("dir/2",        new byte[ 123]);
+		fs.write  ("dir/3",        new byte[1024]);
+		fs.mknod  ("dir/blockdev", Stat.TYPE_BLOCK_DEVICE,     1, 2);
+		fs.mknod  ("dir/chardev",  Stat.TYPE_CHARACTER_DEVICE, 1, 2);
+		fs.mkfifo ("dir/fifo");
+		fs.mkdir  ("dir/dir2");
+		fs.link   ("dir/1",        "dir/1link");
+		fs.symlink("dir/2",        "dir/2symlink");
 
 		JsonNode resp = WebTestUtils.requestGet(target, basePath + "dir/?liststat=true");
 		assertTrue(resp.get("entries").isArray());

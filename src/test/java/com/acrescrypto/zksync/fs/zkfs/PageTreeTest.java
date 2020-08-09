@@ -299,7 +299,9 @@ public class PageTreeTest {
 		PageTree indTree = new PageTree(indirectTag);
 		assertEquals(1, indTree.getStats().numCachedPages);
 		
-		indirectTag.getConfig().getCacheStorage().unlink(indTree.getPageTag(0).path());
+		StorageTag tag = indTree.getPageTag(0);
+		indirectTag.getConfig().getCacheStorage().unlink(tag.path());
+		indirectTag.getArchive().allPageTags.remove(tag.shortTagPreserialized());
 		assertEquals(0, indTree.getStats().numCachedPages);
 	}
 	
@@ -642,7 +644,7 @@ public class PageTreeTest {
 		assertEquals(archive, tree.getArchive());
 	}
 
-	@Test
+	@Test @Ignore // Disabled this test since we are not currently squashing timestamps. This had high performance cost, with dubious security benefits.
 	public void testPageTreeChunkFilesHaveSquashedTimestamps() throws IOException {
 		assertEquals(0,
 			archive.config.getCacheStorage().stat(tree.tagForChunk(0).path()).getMtime());

@@ -79,7 +79,7 @@ public class ConfigDefaults {
 		config.setDefault("fs.settings.pageReadyRetryDelayMs",                 10);
 		config.setDefault("fs.settings.pageTreeChunkCacheSize",                16);
 		config.setDefault("fs.settings.directoryCacheSize",                   128);
-		config.setDefault("fs.settings.inodeTablePageCacheSize",               16);
+		config.setDefault("fs.settings.inodeTablePageCacheSize",              128);
 		config.setDefault("fs.settings.revisionTreeCacheSize",                256);
 		config.setDefault("fs.settings.readOnlyFilesystemCacheSize",           64);
 		config.setDefault("fs.settings.mergeRevisionAcquisitionMaxWaitMs",  30000);

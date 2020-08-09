@@ -14,8 +14,7 @@ public class FSPath {
 		String             driveLetter;
 		String             sourcePlatform;
 		
-		public FSPathDissection(String path) {
-			explode(path);
+		protected FSPathDissection() {
 		}
 		
 		public FSPathDissection(FSPathDissection other) {
@@ -26,7 +25,7 @@ public class FSPath {
 			this.sourcePlatform       = other.sourcePlatform;
 		}
 
-		protected void explode(String path) {
+		protected FSPathDissection fromGeneric(String path) {
 			String lower = path.toLowerCase();
 			
 			if       (lower.matches("^[a-z]:\\\\.*")) {
@@ -42,9 +41,11 @@ public class FSPath {
 			} else {
 				fromPosix(path); // just a filename, doesn't matter what we call it
 			}
+			
+			return this;
 		}
 		
-		protected void fromWindows(String path, String delimiter) {
+		protected FSPathDissection fromWindows(String path, String delimiter) {
 			String splitDelimiter         = delimiter.equals("\\")
 					                        ? "\\\\+"
 					                        : delimiter + "+";
@@ -74,17 +75,21 @@ public class FSPath {
 				if(comp.length() == 0) continue;
 				components.add(comp);
 			}
+			
+			return this;
 		}
 		
-		protected void fromWindows(String path) {
+		protected FSPathDissection fromWindows(String path) {
 			fromWindows(path, "\\");
+			return this;
 		}
 		
-		protected void fromBastardWindows(String path) {
+		protected FSPathDissection fromBastardWindows(String path) {
 			fromWindows(path, "/");
+			return this;
 		}
 		
-		protected void fromPosix(String path) {
+		protected FSPathDissection fromPosix(String path) {
 			String[] comps                 = path.split      ("/+");
 			isAbsolute                     = path.startsWith ("/" );
 			hasTrailingDelimiter           = path.endsWith   ("/" );
@@ -95,6 +100,8 @@ public class FSPath {
 				if(comp.length() == 0) continue;
 				components.add(comp);
 			}
+			
+			return this;
 		}
 	}
 	
@@ -128,14 +135,26 @@ public class FSPath {
 		return with(path.toString());
 	}
 	
+	public static FSPath withPosix(String path) {
+	    return new FSPath(path, true);
+	}
+	
 	protected String             original;
 	protected FSPathDissection   dissection;
 	protected String             defaultDrive = "C";
 	protected String             forcedPlatform;
 	
 	public FSPath(String path) {
+	    this(path, false);
+	}
+	
+	public FSPath(String path, boolean isPosix) {
 		this.original       = path;
-		this.dissection     = new FSPathDissection(path);
+		if(dissection == null) {
+		    this.dissection = new FSPathDissection().fromGeneric(path);
+		} else {
+		    this.dissection = new FSPathDissection().fromPosix  (path);
+		}
 	}
 	
 	protected FSPath(FSPath path) {

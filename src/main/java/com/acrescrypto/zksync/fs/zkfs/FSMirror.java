@@ -126,7 +126,8 @@ public class FSMirror {
 		 * 
 		 *  TODO: detect limited-capability filesystems on non-Windows systems
 		 */
-		if(!Util.isWindows()) return true;
+		if(!Util.isWindows())   return true;
+		if(path.contains("\\")) return false; // no mirroring files that have backslashes in the name
 		
 		String std = FSPath.standardize(path);
 		Stat stat;  
@@ -336,12 +337,14 @@ public class FSMirror {
 			
 			@Override
 			public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-				logger.error("FS {}: Caught exception attempting to visit {} in watchDirectory of {}",
+				logger.warn("FS {}: Caught exception attempting to visit {} in watchDirectory of {}",
 						Util.formatArchiveId(zkfs.getArchive().getConfig().getArchiveId()),
 						file.toString(),
 						dir.toString(),
 						exc);
-				// we can have bad stuff like mode changes and unlinks happen underneath us, so just carry on
+				/* these can happen for all kinds of reasons: files can have modes set to be inaccessible,
+				 * or get linked/unlinked as we do our traversal. Nothing we can do but carry on.
+				 */
 				return FileVisitResult.CONTINUE;
 			}
 		});

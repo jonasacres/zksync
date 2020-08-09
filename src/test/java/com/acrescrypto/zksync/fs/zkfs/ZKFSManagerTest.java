@@ -3,6 +3,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -22,11 +23,11 @@ import com.acrescrypto.zksync.utility.Util;
 public class ZKFSManagerTest {
 	final static String TESTDIR = "zksync-test/zkfsmanagertest";
 	
-	ZKMaster master;
-	ZKArchive archive;
-	ZKFS fs;
+	ZKMaster    master;
+	ZKArchive   archive;
+	ZKFS        fs;
 	ZKFSManager manager;
-	LocalFS mirrorFs;
+	LocalFS     mirrorFs;
 	
 	@BeforeClass
 	public static void beforeAll() {
@@ -35,10 +36,10 @@ public class ZKFSManagerTest {
 	
 	@Before
 	public void beforeEach() throws IOException {
-		master = ZKMaster.openBlankTestVolume();
-		archive = master.createDefaultArchive();
-		fs = archive.openBlank();
-		manager = new ZKFSManager(fs);
+		master   = ZKMaster.openBlankTestVolume();
+		archive  = master.createDefaultArchive();
+		fs       = archive.openBlank();
+		manager  = new ZKFSManager(fs);
 		
 		try(LocalFS lfs = new LocalFS("/tmp")) {
 			lfs.mkdirp(TESTDIR);
@@ -49,10 +50,13 @@ public class ZKFSManagerTest {
 	
 	@After
 	public void afterEach() throws IOException {
-		manager.close();
-		if(!fs.isClosed()) fs.close();
-		archive.close();
-		master.close();
+		manager .close();
+		if(!fs.isClosed()) {
+		    fs  .close();
+		}
+		
+		archive .close();
+		master  .close();
 		mirrorFs.purge();
 	}
 	
@@ -428,14 +432,14 @@ public class ZKFSManagerTest {
 		manager.write();
 		
 		try(ZKFSManager persistent = new ZKFSManager(archive.getConfig())) {
-			assertEquals(manager.isAutofollowing(), persistent.isAutofollowing());
-			assertEquals(manager.isAutocommiting(), persistent.isAutocommiting());
-			assertEquals(manager.isAutomerging(), persistent.isAutomerging());
-			assertEquals(manager.isAutomirroring(), persistent.isAutomirroring());
+			assertEquals(manager.isAutofollowing(),         persistent.isAutofollowing());
+			assertEquals(manager.isAutocommiting(),         persistent.isAutocommiting());
+			assertEquals(manager.isAutomerging(),           persistent.isAutomerging());
+			assertEquals(manager.isAutomirroring(),         persistent.isAutomirroring());
 			assertEquals(manager.getAutocommitIntervalMs(), persistent.getAutocommitIntervalMs());
-			assertEquals(manager.getAutomirrorPath(), persistent.getAutomirrorPath());
-			assertEquals(manager.getLocalDescription(), persistent.getLocalDescription());
-			assertEquals(notLatest, persistent.fs.getBaseRevision());
+			assertEquals(manager.getAutomirrorPath(),       persistent.getAutomirrorPath());
+			assertEquals(manager.getLocalDescription(),     persistent.getLocalDescription());
+			assertEquals(notLatest,                         persistent.fs.getBaseRevision());
 		}
 	}
 
@@ -444,12 +448,12 @@ public class ZKFSManagerTest {
 		RevisionTag latest = archive.openBlank().commitAndClose();
 		
 		try(ZKFSManager persistent = new ZKFSManager(archive.getConfig())) {
-			assertFalse(persistent.isAutofollowing());
-			assertFalse(persistent.isAutocommiting());
-			assertFalse(persistent.isAutomirroring());
-			assertEquals(0, persistent.getAutocommitIntervalMs());
-			assertNull(persistent.getAutomirrorPath());
-			assertEquals(latest, persistent.fs.getBaseRevision());
+			assertFalse    (        persistent.isAutofollowing());
+			assertFalse    (        persistent.isAutocommiting());
+			assertFalse    (        persistent.isAutomirroring());
+			assertEquals   (0,      persistent.getAutocommitIntervalMs());
+			assertNull     (        persistent.getAutomirrorPath());
+			assertNotEquals(latest, persistent.fs.getBaseRevision());
 		}
 	}
 }

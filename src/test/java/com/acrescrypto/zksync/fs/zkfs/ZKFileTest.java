@@ -13,6 +13,7 @@ import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.acrescrypto.zksync.TestUtils;
@@ -92,7 +93,7 @@ public class ZKFileTest extends FileTestBase {
 		file.close();
 	}
 	
-	@Test
+	@Test @Ignore // This is disabled because we no longer squash page file timestamps. This decision was made because the performance impact was significant, yet it is difficult to make concrete security assertions regarding squashing.
 	public void testPageTimestampSquashing() throws IOException {
 		byte[] contents = new byte[5*zkscratch.archive.config.pageSize];
 		for(int i = 0; i < contents.length; i++) contents[i] = (byte) (i & 0xff);

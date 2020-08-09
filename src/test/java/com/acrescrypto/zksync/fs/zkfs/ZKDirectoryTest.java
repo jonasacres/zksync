@@ -107,7 +107,7 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 
 	@Test
 	public void testLinkThrowsExceptionIfInvalidCharactersUsed() throws IOException {
-		String illegalNames[] = new String[] { "a/file", "c:\\test", new String(new byte[] { 0x74, 0x65, 0x73, 0x74, 0x00 }) };
+		String illegalNames[] = new String[] { "a/file", new String(new byte[] { 0x74, 0x65, 0x73, 0x74, 0x00 }) };
 		scratch.mkdir("test");
 		scratch.write("testfile", "contents".getBytes());
 		ZKDirectory dir = new ZKDirectory(zkscratch, "test");
@@ -125,7 +125,6 @@ public class ZKDirectoryTest extends DirectoryTestBase {
 	@Test
 	public void testDeserializationIgnoresInvalidPaths() throws IOException {
 		String[] names = {
-				"c:\\evil",
 				"a/nefarious",
 				
 				/** This case has been disabled for now since a refactor makes it impossible to conduct easily.

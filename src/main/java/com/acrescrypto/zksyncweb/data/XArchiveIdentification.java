@@ -20,7 +20,7 @@ public class XArchiveIdentification {
 
 	private Integer connectedPeers;
 
-	private byte[] currentRevTag;
+	private XRevisionInfo currentRevTag;
 	private String currentTitle;
 	
 	private Long consumedStorage;
@@ -60,7 +60,7 @@ public class XArchiveIdentification {
 		id.lifetimeBytesTx  = config.getSwarm().getBandwidthMonitorTx().getLifetimeBytes();
 		
 		try {
-			id.currentRevTag = State.sharedState().activeFs(config).getBaseRevision().getBytes();
+			id.currentRevTag = new XRevisionInfo(State.sharedState().activeFs(config).getBaseRevision(), 1);
 			id.currentTitle  = State.sharedState().activeFs(config).getInodeTable().getNextTitle();
 		} catch (IOException | NullPointerException exc) {
 		}
@@ -135,11 +135,11 @@ public class XArchiveIdentification {
 		this.connectedPeers = connectedPeers;
 	}
 
-	public byte[] getCurrentRevTag() {
+	public XRevisionInfo getCurrentRevTag() {
 		return currentRevTag;
 	}
 
-	public void setCurrentRevTag(byte[] currentRevTag) {
+	public void setCurrentRevTag(XRevisionInfo currentRevTag) {
 		this.currentRevTag = currentRevTag;
 	}
 
