@@ -370,7 +370,7 @@ public class GlobalResourceTest {
 	@Test
 	public void testGetFilesystemsReturnsFilesystemListWhenFileTelemetryEnabled() throws IOException {
 		try(File f = master.getStorage().open("test", File.O_CREAT|File.O_TRUNC|File.O_WRONLY)) {
-			// TODO: ITF, 2020-06-07, 73ba0ea, got HTTP 500 with no other output.
+			// TODO: ITF, 2020-06-07, 73ba0ea, got HTTP 500 with no other output. Seen again, 2020-08-09 linux 369412f.
 			JsonNode resp = WebTestUtils.requestGet(target, "/global/filesystems");
 			assertTrue(resp.get("filesystems").isArray());
 			assertTrue(resp.get("filesystems").size() == ZKFS.getOpenInstances().size());

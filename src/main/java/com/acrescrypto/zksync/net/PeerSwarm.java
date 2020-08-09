@@ -136,6 +136,7 @@ public class PeerSwarm implements BlacklistCallback {
 		}
 		
 		this.config.getAccessor().getMaster().getBlacklist().removeCallback(this);
+		if(threadPool != null) threadPool.shutdownNow();
 	}
 	
 	public boolean isClosed() {
