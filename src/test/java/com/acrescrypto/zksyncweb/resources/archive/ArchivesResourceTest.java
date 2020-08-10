@@ -105,7 +105,7 @@ public class ArchivesResourceTest {
 		assertEquals     (expectUsesWriteKey,          resp.get("usesWriteKey")        .asBoolean());
 		assertEquals     (expectReadKey,               resp.get("haveReadKey")         .asBoolean());
 		assertEquals     (expectReady,                 resp.get("ready")               .asBoolean());
-		assertEquals     (expectedStorageSize,         resp.get("consumedStorage")     .longValue());
+		assertEquals     (expectedStorageSize,         resp.get("consumedPageStorage") .longValue());
 		assertEquals     (expectedLocalStorageSize,    resp.get("consumedLocalStorage").longValue());
         assertArrayEquals(storedConfig.getArchiveId(), resp.get("archiveId")           .binaryValue());
 		if(storedConfig.haveConfigLocally()) {

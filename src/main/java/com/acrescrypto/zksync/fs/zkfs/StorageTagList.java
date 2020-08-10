@@ -23,6 +23,7 @@ public class StorageTagList {
         
         StorageTag configTag = archive.getConfig().tag();
         allPageTags.put(configTag.shortTag(), configTag);
+        read();
     }
     
     public void close() {
@@ -134,6 +135,11 @@ public class StorageTagList {
             StorageTag tag = new StorageTag(crypto, data);
             
             allPageTags.put(tag.shortTagPreserialized(), tag);
+        }
+        
+        long encodedTags = file.pos() / crypto.hashLength();
+        if(allPageTags.size() < 0.9 * encodedTags) {
+            write();
         }
     }
 

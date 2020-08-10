@@ -209,7 +209,7 @@ public class ArchiveResourceTest {
 		assertEquals(false,                       resp.get("usesWriteKey")                   .asBoolean());
 		assertEquals(true,                        resp.get("haveReadKey")                    .asBoolean());
 		assertEquals(true,                        resp.get("ready")                          .asBoolean());
-		assertEquals(expectedStorageSize,         resp.get("consumedStorage")                .longValue());
+		assertEquals(expectedStorageSize,         resp.get("consumedPageStorage")            .longValue());
 		assertEquals(expectedLocalStorageSize,    resp.get("consumedLocalStorage")           .longValue());
 		assertEquals(expectedBandwidthRx,         resp.get("bytesPerSecondRx")               .doubleValue(), 1.0);
 		assertEquals(expectedBandwidthTx,         resp.get("bytesPerSecondTx")               .doubleValue(), 1.0);

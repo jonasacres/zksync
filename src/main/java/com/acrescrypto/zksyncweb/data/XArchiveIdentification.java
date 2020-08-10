@@ -23,7 +23,7 @@ public class XArchiveIdentification {
 	private XRevisionInfo currentRevTag;
 	private String currentTitle;
 	
-	private Long consumedStorage;
+	private Long consumedPageStorage;
 	private Long consumedLocalStorage;
 	private Long bytesPerSecondRx;
 	private Long bytesPerSecondTx;
@@ -68,7 +68,7 @@ public class XArchiveIdentification {
 		try {
 			xset = XArchiveSettings.fromConfig(config);
 			if(config.getArchive() != null) {
-    			id.consumedStorage      = config.getArchive().pageTagList().storedPageSize();
+    			id.consumedPageStorage      = config.getArchive().pageTagList().storedPageSize();
 			}
 			
 			id.consumedLocalStorage     = config.getLocalStorage().storageSize();
@@ -146,12 +146,12 @@ public class XArchiveIdentification {
 		this.currentRevTag = currentRevTag;
 	}
 
-	public Long getConsumedStorage() {
-		return consumedStorage;
+	public Long getConsumedPageStorage() {
+		return consumedPageStorage;
 	}
 
-	public void setConsumedStorage(Long consumedStorage) {
-		this.consumedStorage = consumedStorage;
+	public void setConsumedPageStorage(Long consumedStorage) {
+		this.consumedPageStorage = consumedStorage;
 	}
 
 	public XArchiveSettings getConfig() {
