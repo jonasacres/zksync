@@ -369,31 +369,22 @@ public class GlobalResourceTest {
 	
 	@Test
 	public void testGetFilesystemsReturnsFilesystemListWhenFileTelemetryEnabled() throws IOException, URISyntaxException {
-	    for(int i = 0; i < Integer.MAX_VALUE; i++) {
-	        if(i != 0) {
-	            afterEach();
-	            beforeEach();
-	        }
-	        
-	        System.out.println("Iteration " + i);
-	        
-    		try(File f = master.getStorage().open("test", File.O_CREAT|File.O_TRUNC|File.O_WRONLY)) {
-    			// TODO: ITF, 2020-06-07, 73ba0ea, got HTTP 500 with no other output. Seen again, 2020-08-09 linux 369412f.
-    		    // Tried to replicate by wrapping test in a loop, but failed to observe in 5000 iterations (shannon, linux, 2020-08-10, 9f207e05+).
-    		    
-    			JsonNode resp = WebTestUtils.requestGet(target, "/global/filesystems");
-    			assertTrue(resp.get("filesystems").isArray());
-    			assertTrue(resp.get("filesystems").size() == ZKFS.getOpenInstances().size());
-    			resp.get("filesystems").forEach((entry)->{
-    				assertTrue(entry.get("fsClass").isTextual());
-    				assertTrue(entry.get("trace").isArray());
-    				entry.get("trace").forEach((frame)->{
-    					assertTrue(frame.get("file").isTextual() || frame.get("file").isNull());
-    					assertTrue(frame.get("method").isTextual());
-    					assertTrue(frame.get("line").isIntegralNumber());
-    				});
-    			});
-    		}
-	    }
+		try(File f = master.getStorage().open("test", File.O_CREAT|File.O_TRUNC|File.O_WRONLY)) {
+			// TODO: ITF, 2020-06-07, 73ba0ea, got HTTP 500 with no other output. Seen again, 2020-08-09 linux 369412f.
+		    // Tried to replicate by wrapping test in a loop, but failed to observe in 5000 iterations (shannon, linux, 2020-08-10, 9f207e05+).
+		    
+			JsonNode resp = WebTestUtils.requestGet(target, "/global/filesystems");
+			assertTrue(resp.get("filesystems").isArray());
+			assertTrue(resp.get("filesystems").size() == ZKFS.getOpenInstances().size());
+			resp.get("filesystems").forEach((entry)->{
+				assertTrue(entry.get("fsClass").isTextual());
+				assertTrue(entry.get("trace").isArray());
+				entry.get("trace").forEach((frame)->{
+					assertTrue(frame.get("file").isTextual() || frame.get("file").isNull());
+					assertTrue(frame.get("method").isTextual());
+					assertTrue(frame.get("line").isIntegralNumber());
+				});
+			});
+		}
 	}
 }
