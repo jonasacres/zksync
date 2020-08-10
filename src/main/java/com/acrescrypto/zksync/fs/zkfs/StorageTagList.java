@@ -112,11 +112,13 @@ public class StorageTagList {
     
     protected File openFile() throws IOException {
         if(file != null) file.close();
+        String path = ".zksync/archive/tagcache";
         
+        archive.getConfig().getLocalStorage().mkdirp(archive.getConfig().getLocalStorage().dirname(path));
         return archive
                 .getConfig()
                 .getLocalStorage()
-                .open(".zksync/archive/tagcache", File.O_RDWR|File.O_CREAT|File.O_APPEND);
+                .open(path, File.O_RDWR|File.O_CREAT|File.O_APPEND);
     }
     
     protected void append(StorageTag tag) throws IOException {
