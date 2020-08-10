@@ -479,16 +479,19 @@ public class ZKArchiveConfigTest {
 	@Test
 	public void testNondefaultWriteKeyGeneratesUniqueArchiveId() throws IOException {
 		Key writeKey = new Key(master.crypto);
-		ZKArchiveConfig wConfig = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, accessor.passphraseRoot, writeKey);
-		assertFalse(Arrays.equals(wConfig.getArchiveId(), config.getArchiveId()));
+		try(ZKArchiveConfig wConfig = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, accessor.passphraseRoot, writeKey)) {
+		    assertFalse(Arrays.equals(wConfig.getArchiveId(), config.getArchiveId()));
+		}
 	}
 	
 	@Test
 	public void testArchiveIdDeterministicWithWriteKey() throws IOException {
 		Key writeKey = new Key(master.crypto);
-		ZKArchiveConfig wConfig1 = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, accessor.passphraseRoot, writeKey);
-		ZKArchiveConfig wConfig2 = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, accessor.passphraseRoot, writeKey);
-		assertArrayEquals(wConfig1.getArchiveId(), wConfig2.getArchiveId());
+		try(ZKArchiveConfig wConfig1 = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, accessor.passphraseRoot, writeKey);
+		    ZKArchiveConfig wConfig2 = ZKArchiveConfig.create(accessor, TEST_DESCRIPTION, PAGE_SIZE, accessor.passphraseRoot, writeKey);
+		) {
+		    assertArrayEquals(wConfig1.getArchiveId(), wConfig2.getArchiveId());
+		}
 	}
 	
 	@Test

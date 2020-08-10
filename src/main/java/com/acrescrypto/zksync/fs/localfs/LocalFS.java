@@ -382,11 +382,7 @@ public class LocalFS extends FS {
     public void unlink(String path) throws IOException {
         logger.debug("LocalFS {}: unlink {}", root, path);
         try {
-            long size = isTrackingStorage()
-                        ? stat(path).getSize()
-                        : 0;
             Files.delete(qualifiedPathNative(path));
-            adjustStorageSize(-size);
         } catch(NoSuchFileException exc) {
             throw new ENOENTException(path);
         }
@@ -396,10 +392,6 @@ public class LocalFS extends FS {
     public void link(String source, String dest) throws IOException {
         logger.debug("LocalFS {}: link {} -> {}", root, source, dest);
         try {
-            long size = isTrackingStorage()
-                    ? stat(source).getSize()
-                    : 0;
-            adjustStorageSize(-size);
             Files.createLink(qualifiedPathNative(dest), qualifiedPathNative(source));
         } catch(FileAlreadyExistsException exc) {
             throw new EEXISTSException(qualifiedPath(source).toString());
@@ -613,7 +605,7 @@ public class LocalFS extends FS {
             FileChannel chan = stream.getChannel();
         ) {
             long oldSize = chan.size();
-            long delta = size - oldSize;
+            long delta   = size - oldSize;
             
             if(delta > 0) {
                 chan.position(oldSize);
@@ -621,8 +613,6 @@ public class LocalFS extends FS {
             } else {
                 chan.truncate(size);
             }
-            
-            adjustStorageSize(delta);
         }
     }
 

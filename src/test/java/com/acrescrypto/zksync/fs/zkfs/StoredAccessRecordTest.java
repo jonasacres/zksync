@@ -83,14 +83,15 @@ public class StoredAccessRecordTest {
 	@Test
 	public void testSerializationWithWriteKey() throws IOException {
 		Key archiveRoot = new Key(master.crypto), writeRoot = new Key(master.crypto);
-		ZKArchiveConfig configWrite = ZKArchiveConfig.create(config.accessor, "", ZKArchive.DEFAULT_PAGE_SIZE, archiveRoot, writeRoot);
-		StoredAccessRecord record = new StoredAccessRecord(configWrite, StoredAccess.ACCESS_LEVEL_READWRITE);
-		StoredAccessRecord deserialized = new StoredAccessRecord(master, ByteBuffer.wrap(record.serialize()));
-		
-		assertArrayEquals(configWrite.archiveId, deserialized.getConfig().archiveId);
-		assertArrayEquals(configWrite.accessor.passphraseRoot.getRaw(), deserialized.getConfig().accessor.passphraseRoot.getRaw());
-		assertArrayEquals(configWrite.archiveRoot.getRaw(), deserialized.getConfig().archiveRoot.getRaw());
-		assertArrayEquals(configWrite.writeRoot.getRaw(), deserialized.getConfig().writeRoot.getRaw());
+		try(ZKArchiveConfig configWrite = ZKArchiveConfig.create(config.accessor, "", ZKArchive.DEFAULT_PAGE_SIZE, archiveRoot, writeRoot);
+		    StoredAccessRecord record = new StoredAccessRecord(configWrite, StoredAccess.ACCESS_LEVEL_READWRITE);
+		    StoredAccessRecord deserialized = new StoredAccessRecord(master, ByteBuffer.wrap(record.serialize()))
+		) {    		
+    		assertArrayEquals(configWrite.archiveId, deserialized.getConfig().archiveId);
+    		assertArrayEquals(configWrite.accessor.passphraseRoot.getRaw(), deserialized.getConfig().accessor.passphraseRoot.getRaw());
+    		assertArrayEquals(configWrite.archiveRoot.getRaw(), deserialized.getConfig().archiveRoot.getRaw());
+    		assertArrayEquals(configWrite.writeRoot.getRaw(), deserialized.getConfig().writeRoot.getRaw());
+		}
 		
 		config.archive.close();
 	}

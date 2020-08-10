@@ -148,12 +148,17 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 	public void close() {
 		storedAccess.close();
 		dhtClient.close();
+		
 		if(listener != null) {
 			try {
 				listener.close();
 			} catch (IOException exc) {
 				logger.error("Caught exception closing TCP listener", exc);
 			}
+		}
+		
+		for(ZKArchiveConfig config : allConfigs) {
+		    config.close();
 		}
 	}
 	
@@ -275,13 +280,13 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 	}
 
 	@Override
-	public void discoveredArchiveConfig(ZKArchiveConfig config) {
+	public ZKArchiveConfig discoveredArchiveConfig(ZKArchiveConfig config) {
 		for(ZKArchiveConfig existing : allConfigs) {
 			if(Arrays.equals(existing.archiveId, config.archiveId)) {
 				if(!existing.accessor.isSeedOnly()) {
-					return; // already have full access to this archive
+					return existing; // already have full access to this archive
 				} else if(config.accessor.isSeedOnly()) {
-					return; // no point in replacing one seed-only version with another
+					return existing; // no point in replacing one seed-only version with another
 				}
 				
 				// replace seed-only with full access
@@ -290,6 +295,7 @@ public class ZKMaster implements ArchiveAccessorDiscoveryCallback, AutoCloseable
 		}
 		
 		allConfigs.add(config);
+		return config;
 	}
 	
 	public void removedArchiveConfig(ZKArchiveConfig config) {

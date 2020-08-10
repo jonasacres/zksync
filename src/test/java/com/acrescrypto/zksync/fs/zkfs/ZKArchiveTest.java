@@ -225,10 +225,10 @@ public class ZKArchiveTest {
 		}
 		
 		config.close();
-		ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null);
-		
-		try(ZKFS fs = ro.getArchive().openRevision(revTag)) {
-			assertArrayEquals(data, fs.read("filename"));
+		try(ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null)) {
+    		try(ZKFS fs = ro.getArchive().openRevision(revTag)) {
+    			assertArrayEquals(data, fs.read("filename"));
+    		}
 		}
 	}
 	
@@ -246,14 +246,15 @@ public class ZKArchiveTest {
 			
 			master.allConfigs.clear();
 			master.accessors.clear();
-			ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null);
-			archive = ro.getArchive();
-			RevisionTag transplantTag = new RevisionTag(ro, revTag.serialize(), false);
-			
-			
-			try(ZKFS fs2 = ro.getArchive().openRevision(transplantTag)) {
-				fs2.write("filename", data);
-				fs2.commit();
+			try(ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null)) {
+    			archive = ro.getArchive();
+    			RevisionTag transplantTag = new RevisionTag(ro, revTag.serialize(), false);
+    			
+    			
+    			try(ZKFS fs2 = ro.getArchive().openRevision(transplantTag)) {
+    				fs2.write("filename", data);
+    				fs2.commit();
+    			}
 			}
 		}
 	}
@@ -272,11 +273,12 @@ public class ZKArchiveTest {
 			
 			master.allConfigs.clear();
 			master.accessors.clear();
-			ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null);
-			archive = ro.getArchive();
-			RevisionTag transplantTag = new RevisionTag(ro, revTag.serialize(), false);
-			
-			ro.getArchive().openRevision(transplantTag).commitAndClose();
+			try(ZKArchiveConfig ro = ZKArchiveConfig.openExisting(accessor, config.getArchiveId(), true, null)) {
+    			archive = ro.getArchive();
+    			RevisionTag transplantTag = new RevisionTag(ro, revTag.serialize(), false);
+    			
+    			ro.getArchive().openRevision(transplantTag).commitAndClose();
+			}
 		}
 	}
 

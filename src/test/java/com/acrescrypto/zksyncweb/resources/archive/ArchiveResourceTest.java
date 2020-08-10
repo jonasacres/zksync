@@ -195,38 +195,40 @@ public class ArchiveResourceTest {
 	}
 
 	void validateArchiveListing(JsonNode resp, ZKArchive archive) throws IOException {
-		long expectedStorageSize = archive.getConfig().getStorage().calculateStorageSize("/", false);
-		long expectedLocalStorageSize = archive.getConfig().getLocalStorage().calculateStorageSize("/", false);
-		double expectedBandwidthRx = archive.getConfig().getSwarm().getBandwidthMonitorRx().getBytesPerSecond();
-		double expectedBandwidthTx = archive.getConfig().getSwarm().getBandwidthMonitorTx().getBytesPerSecond();
-		long expectedLifetimeTx = archive.getConfig().getSwarm().getBandwidthMonitorTx().getLifetimeBytes();
-		long expectedLifetimeRx = archive.getConfig().getSwarm().getBandwidthMonitorRx().getLifetimeBytes();
+		long   expectedStorageSize      = archive.getConfig().getStorage().calculateStorageSize("/", false);
+		long   expectedLocalStorageSize = archive.getConfig().getLocalStorage().calculateStorageSize("/", false);
+		double expectedBandwidthRx      = archive.getConfig().getSwarm().getBandwidthMonitorRx().getBytesPerSecond();
+		double expectedBandwidthTx      = archive.getConfig().getSwarm().getBandwidthMonitorTx().getBytesPerSecond();
+		long   expectedLifetimeTx       = archive.getConfig().getSwarm().getBandwidthMonitorTx().getLifetimeBytes();
+		long   expectedLifetimeRx       = archive.getConfig().getSwarm().getBandwidthMonitorRx().getLifetimeBytes();
 
-		assertEquals(ZKArchive.DEFAULT_PAGE_SIZE, resp.get("pageSize").asInt());
-		assertEquals("", resp.get("description").asText());
+		assertEquals(ZKArchive.DEFAULT_PAGE_SIZE, resp.get("pageSize")                       .asInt());
+		assertEquals("",                          resp.get("description")                    .asText());
 
-		assertEquals(true, resp.get("haveWriteKey").asBoolean());
-		assertEquals(false, resp.get("usesWriteKey").asBoolean());
-		assertEquals(true, resp.get("haveReadKey").asBoolean());
-		assertEquals(true, resp.get("ready").asBoolean());
-		assertEquals(expectedStorageSize, resp.get("consumedStorage").longValue());
-		assertEquals(expectedLocalStorageSize, resp.get("consumedLocalStorage").longValue());
-		assertEquals(expectedBandwidthRx, resp.get("bytesPerSecondRx").doubleValue(), 1.0);
-		assertEquals(expectedBandwidthTx, resp.get("bytesPerSecondTx").doubleValue(), 1.0);
-		assertEquals(expectedLifetimeRx, resp.get("lifetimeBytesRx").longValue());
-		assertEquals(expectedLifetimeTx, resp.get("lifetimeBytesTx").longValue());
-		assertArrayEquals(tag.getBytes(), resp.get("currentRevTag").get("revTag").binaryValue());
-		assertEquals(tag.getHeight(), resp.get("currentRevTag").get("generation").asInt());
-		assertArrayEquals(archive.getConfig().getArchiveId(), resp.get("archiveId").binaryValue());
+		assertEquals(true,                        resp.get("haveWriteKey")                   .asBoolean());
+		assertEquals(false,                       resp.get("usesWriteKey")                   .asBoolean());
+		assertEquals(true,                        resp.get("haveReadKey")                    .asBoolean());
+		assertEquals(true,                        resp.get("ready")                          .asBoolean());
+		assertEquals(expectedStorageSize,         resp.get("consumedStorage")                .longValue());
+		assertEquals(expectedLocalStorageSize,    resp.get("consumedLocalStorage")           .longValue());
+		assertEquals(expectedBandwidthRx,         resp.get("bytesPerSecondRx")               .doubleValue(), 1.0);
+		assertEquals(expectedBandwidthTx,         resp.get("bytesPerSecondTx")               .doubleValue(), 1.0);
+		assertEquals(expectedLifetimeRx,          resp.get("lifetimeBytesRx")                .longValue());
+		assertEquals(expectedLifetimeTx,          resp.get("lifetimeBytesTx")                .longValue());
+		assertArrayEquals(tag.getBytes(),         resp.get("currentRevTag").get("revTag")    .binaryValue());
+		assertEquals(tag.getHeight(),             resp.get("currentRevTag").get("generation").asInt());
+		
+		assertArrayEquals(archive.getConfig().getArchiveId(),
+		                  resp.get("archiveId").binaryValue());
 
 		JsonNode xconfig = resp.get("config");
-		assertEquals(true, xconfig.get("advertising").asBoolean());
-		assertEquals(false, xconfig.get("requestingAll").asBoolean());
-		assertEquals(false, xconfig.get("autocommit").asBoolean());
-		assertEquals(false, xconfig.get("autofollow").asBoolean());
-		assertEquals(PeerSwarm.DEFAULT_MAX_SOCKET_COUNT, xconfig.get("peerLimit").intValue());
-		assertEquals(0, xconfig.get("autocommitInterval").asInt());
-		assertEquals("", xconfig.get("localDescription").asText());
+		assertEquals(true,                               xconfig.get("advertising")       .asBoolean());
+		assertEquals(false,                              xconfig.get("requestingAll")     .asBoolean());
+		assertEquals(false,                              xconfig.get("autocommit")        .asBoolean());
+		assertEquals(false,                              xconfig.get("autofollow")        .asBoolean());
+		assertEquals(PeerSwarm.DEFAULT_MAX_SOCKET_COUNT, xconfig.get("peerLimit")         .intValue());
+		assertEquals(0,                                  xconfig.get("autocommitInterval").asInt());
+		assertEquals("",                                 xconfig.get("localDescription")  .asText());
 	}
 
 	void assertReadable(ZKArchive archive) throws IOException {

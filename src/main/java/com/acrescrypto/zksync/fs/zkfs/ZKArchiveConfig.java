@@ -46,28 +46,33 @@ public class ZKArchiveConfig implements AutoCloseable {
 	}
 	
 	public final static int CONFIG_SECTION_ARCHIVE_INFO = 0x0001;
-		
-	protected byte[] archiveId; // derived from archive root; will later include public key
-	protected byte[] archiveFingerprint;
-	
-	protected Key archiveRoot; // randomly generated and stored encrypted in config file; derives most other keys
-	protected Key writeRoot; // derives private key
-	protected PrivateSigningKey privKey; // derived from the write key root
-	protected PublicSigningKey pubKey; // matches privKey
-	protected byte[] configFileIv; // rng
-	protected BackedFS storage;
-	protected FS localStorage;
-	protected ArchiveAccessor accessor;
-	protected int pageSize, tagsPerChunk;
-	protected String description;
-	protected ZKArchive archive;
-	protected PeerSwarm swarm;
-	protected RevisionList revisionList;
-	protected RevisionTree revisionTree;
-	protected RevisionTag blank;
-	protected boolean advertising;
-	protected boolean closed;
-	protected Logger logger = LoggerFactory.getLogger(ZKArchiveConfig.class);
+
+    protected byte[]               archiveFingerprint;
+	protected byte[]               archiveId;     // derived from archive root; will later include public key
+
+	protected Key                  archiveRoot;   // randomly generated and stored encrypted in config file; derives most other keys
+	protected Key                  writeRoot;     // derives private key
+	protected PrivateSigningKey    privKey;       // derived from the write key root
+	protected PublicSigningKey     pubKey;        // matches privKey
+	protected byte[]               configFileIv;  // rng
+	protected BackedFS             storage;
+	protected FS                   localStorage;
+
+	protected int                  pageSize,
+	                               tagsPerChunk;
+	protected String               description;
+
+	protected ZKArchive            archive;
+	protected PeerSwarm            swarm;
+	protected RevisionList         revisionList;
+	protected RevisionTree         revisionTree;
+	protected RevisionTag          blank;
+	protected ArchiveAccessor      accessor;
+
+	protected boolean              advertising;
+	protected boolean              closed;
+
+	protected Logger               logger = LoggerFactory.getLogger(ZKArchiveConfig.class);
 	
 	public static byte[] decryptArchiveId(ArchiveAccessor accessor, byte[] iv, byte[] encryptedArchiveId) {
 		Key key = accessor.deriveKey(ArchiveAccessor.KEY_ROOT_SEED, "easysafe-dht-ad-fsid");
@@ -165,10 +170,11 @@ public class ZKArchiveConfig implements AutoCloseable {
 			logger.info("ZKFS {} -: Failed to open archive; no peers available", Util.formatArchiveId(archiveId));
 			throw new SearchFailedException(); // TODO: this is probably not a great exception for this
 		}
+		
 		return this;
 	}
 	
-	public ZKArchiveConfig finishOpening() throws IOException {
+	public synchronized ZKArchiveConfig finishOpening() throws IOException {
 		if(archive != null) return this;
 		
 		try {
@@ -178,6 +184,7 @@ public class ZKArchiveConfig implements AutoCloseable {
 			logger.warn("ZKFS {} -: Failed to read archive", Util.formatArchiveId(archiveId), exc);
 			throw new InvalidArchiveConfigException();
 		}
+		
 		this.archive = new ZKArchive(this);
 		logger.info("ZKFS {} -: Finished opening archive", Util.formatArchiveId(archiveId));
 		
@@ -188,9 +195,6 @@ public class ZKArchiveConfig implements AutoCloseable {
 		this.localStorage = accessor.master.localStorageFsForArchiveId(archiveId);
 		this.swarm        = new PeerSwarm(this);
 		this.storage      = new BackedFS(accessor.master.storageFsForArchiveId(archiveId), new SwarmFS(swarm));
-		
-		localStorage.setTrackingStorage(true);
-		storage.setTrackingStorage(true);
 	}
 	
 	protected void decodeId() {

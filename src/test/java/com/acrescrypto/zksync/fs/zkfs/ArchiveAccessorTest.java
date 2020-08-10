@@ -233,9 +233,10 @@ public class ArchiveAccessorTest {
 		
 		accessor.addCallback(new ArchiveAccessorDiscoveryCallback() {
 			@Override
-			public void discoveredArchiveConfig(ZKArchiveConfig config) {
+			public ZKArchiveConfig discoveredArchiveConfig(ZKArchiveConfig config) {
 				assertArrayEquals(archive.config.archiveId, config.archiveId);
 				holder.passed = true;
+				return config;
 			}
 		});
 		
@@ -251,8 +252,9 @@ public class ArchiveAccessorTest {
 		
 		ArchiveAccessorDiscoveryCallback callback = new ArchiveAccessorDiscoveryCallback() {
 			@Override
-			public void discoveredArchiveConfig(ZKArchiveConfig config) {
+			public ZKArchiveConfig discoveredArchiveConfig(ZKArchiveConfig config) {
 				fail();
+				return null;
 			}
 		};
 		

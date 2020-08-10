@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.BlacklistedException;
+import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.InvalidSignatureException;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.exceptions.SearchFailedException;
@@ -276,7 +277,7 @@ public class PeerConnection {
 			return;
 		}
 		
-		announceTags(new ArrayList<>(archive.allPageTags()));
+		announceTags(new ArrayList<>(archive.pageTagList().allPageTags()));
 	}
 	
 	public void announceTip(RevisionTag tip) {
@@ -1004,7 +1005,7 @@ public class PeerConnection {
 						socket.getAddress(),
 						socket.getPort(),
 						lastTag);
-			} catch(SocketClosedException exc) {
+			} catch(SocketClosedException|ClosedException exc) {
 			} catch(Exception exc) {
 				logger.error("Swarm {} {}:{}: PeerConnection page queue thread caught exception in PeerConnection",
 						Util.formatArchiveId(socket.swarm.config.getArchiveId()),

@@ -105,9 +105,7 @@ public class LocalFile extends File {
 		channel.write(ByteBuffer.wrap(data, offset, length));
 		
 		if(channel.position() > size) {
-		    long delta = channel.position() - size;
 		    size = channel.position();
-		    fs.adjustStorageSize(delta);
 		}
 	}
 

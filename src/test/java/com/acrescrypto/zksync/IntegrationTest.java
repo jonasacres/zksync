@@ -153,30 +153,31 @@ public class IntegrationTest {
 				}
 			}
 			
-			// make a new master and look for that passphrase on the DHT and expect to find all of them
-			ZKMaster blankMaster = ZKMaster.openBlankTestVolume("blank");
-			blankMaster.getGlobalConfig().set("net.swarm.enabled", true);
-			blankMaster.activateDHTForTest("127.0.0.1", 0, root);
-			ArchiveAccessor accessor = blankMaster.makeAccessorForPassphrase("zksync".getBytes());
-			accessor.discoverOnDHT();
-	
-			// wait for discovery of all the archive IDs
-			// TODO: ITF 2020-07-17, linux, ab0ac33
-			assertTrue(Util.waitUntil(3000, ()->blankMaster.allConfigs().size() >= masters.length));
-			
-			// now see if we can actually get the expected data from each ID
-			for(ZKArchiveConfig config : blankMaster.allConfigs()) {
-				config.finishOpening();
-				assertTrue(Util.waitUntil(3000, ()->config.getRevisionList().branchTips().size() > 1));
-				try(ZKFS fs = config.getRevisionList().branchTips().get(1).getFS()) {				
-					byte[] expectedImmediate = crypto.prng(config.getArchiveId()).getBytes(crypto.hashLength()-1);
-					byte[] expected1page     = crypto.prng(config.getArchiveId()).getBytes( 1*config.getPageSize()-1);
-					byte[] expectedMultipage = crypto.prng(config.getArchiveId()).getBytes(10*config.getPageSize());
-					
-					assertArrayEquals(expectedImmediate, fs.read("immediate"));
-					assertArrayEquals(expected1page,     fs.read("1page"));
-					assertArrayEquals(expectedMultipage, fs.read("multipage"));
-				}
+			// make a new master and look for the hard-coded default test passphrase on the DHT and expect to find all of them
+			try(ZKMaster blankMaster = ZKMaster.openBlankTestVolume("blank")) {
+    			blankMaster.getGlobalConfig().set("net.swarm.enabled", true);
+    			blankMaster.activateDHTForTest("127.0.0.1", 0, root);
+    			ArchiveAccessor accessor = blankMaster.makeAccessorForPassphrase("zksync".getBytes());
+    			accessor.discoverOnDHT();
+    	
+    			// wait for discovery of all the archive IDs
+    			// TODO: ITF 2020-07-17, linux, ab0ac33
+    			assertTrue(Util.waitUntil(3000, ()->blankMaster.allConfigs().size() >= masters.length));
+    			
+    			// now see if we can actually get the expected data from each ID
+    			for(ZKArchiveConfig config : blankMaster.allConfigs()) {
+    				config.finishOpening();
+    				assertTrue(Util.waitUntil(3000, ()->config.getRevisionList().branchTips().size() > 1));
+    				try(ZKFS fs = config.getRevisionList().branchTips().get(1).getFS()) {				
+    					byte[] expectedImmediate = crypto.prng(config.getArchiveId()).getBytes(crypto.hashLength()-1);
+    					byte[] expected1page     = crypto.prng(config.getArchiveId()).getBytes( 1*config.getPageSize()-1);
+    					byte[] expectedMultipage = crypto.prng(config.getArchiveId()).getBytes(10*config.getPageSize());
+    					
+    					assertArrayEquals(expectedImmediate, fs.read("immediate"));
+    					assertArrayEquals(expected1page,     fs.read("1page"));
+    					assertArrayEquals(expectedMultipage, fs.read("multipage"));
+    				}
+    			}
 			}
 		} finally {
 			for(int i = 0; i < masters.length; i++) {
@@ -219,39 +220,40 @@ public class IntegrationTest {
 		assertTrue(Util.waitUntil(3000, ()->seedAccessor.configWithId(archiveId) != null));
 		
 		// grab everything from the original
-		ZKArchiveConfig seedConfig = seedAccessor.configWithId(archiveId);
-		seedConfig.finishOpeningFromSwarm(3000);
-		seedConfig.getSwarm().requestAll();
-		assertTrue(Util.waitUntil(3000, ()->seedConfig.getArchive().allPageTags().size() == originalArchive.allPageTags().size()));
-		
-		// original goes offline; now the seed is the only place to get data
-		originalArchive.close();
-		originalMaster.close();
-		
-		// now make another peer with the passphrase
-		ZKMaster cloneMaster = ZKMaster.openBlankTestVolume("clone");
-		Util.sleep(1000);
-		cloneMaster.getGlobalConfig().set("net.swarm.enabled", true);
-		cloneMaster.activateDHTForTest("127.0.0.1", 0, root);
-		ArchiveAccessor cloneAccessor = cloneMaster.makeAccessorForPassphrase("zksync".getBytes());
-		cloneAccessor.discoverOnDHT();
-		assertTrue(Util.waitUntil(3000, ()->cloneAccessor.configWithId(archiveId) != null));
-		
-		// grab the archive from the network (i.e. the blind peer)
-		ZKArchiveConfig cloneConfig = cloneAccessor.configWithId(archiveId);
-		cloneConfig.finishOpeningFromSwarm(3000);
-		Util.waitUntil(3000, ()->cloneConfig.getRevisionList().branchTips().size() > 0);
-		ZKFS cloneFs = cloneConfig.getArchive().openRevision(cloneConfig.getRevisionList().branchTips().get(0));
-		
-		// make sure the data matches up
-		assertArrayEquals(expectedImmediate, fs.read("immediate"));
-		assertArrayEquals(expected1page, fs.read("1page"));
-		assertArrayEquals(expectedMultipage, fs.read("multipage"));
+		try(ZKArchiveConfig seedConfig = seedAccessor.configWithId(archiveId)) {
+    		seedConfig.finishOpeningFromSwarm(3000);
+    		seedConfig.getSwarm().requestAll();
+    		assertTrue(Util.waitUntil(3000, ()->seedConfig.getArchive().pageTagList().allPageTags().size() == originalArchive.pageTagList().allPageTags().size()));
+    		
+    		// original goes offline; now the seed is the only place to get data
+    		originalArchive.close();
+    		originalMaster.close();
+    		
+    		// now make another peer with the passphrase
+    		ZKMaster cloneMaster = ZKMaster.openBlankTestVolume("clone");
+    		Util.sleep(1000);
+    		cloneMaster.getGlobalConfig().set("net.swarm.enabled", true);
+    		cloneMaster.activateDHTForTest("127.0.0.1", 0, root);
+    		ArchiveAccessor cloneAccessor = cloneMaster.makeAccessorForPassphrase("zksync".getBytes());
+    		cloneAccessor.discoverOnDHT();
+    		assertTrue(Util.waitUntil(3000, ()->cloneAccessor.configWithId(archiveId) != null));
+    		
+    		// grab the archive from the network (i.e. the blind peer)
+    		ZKArchiveConfig cloneConfig = cloneAccessor.configWithId(archiveId);
+    		cloneConfig.finishOpeningFromSwarm(3000);
+    		Util.waitUntil(3000, ()->cloneConfig.getRevisionList().branchTips().size() > 0);
+    		ZKFS cloneFs = cloneConfig.getArchive().openRevision(cloneConfig.getRevisionList().branchTips().get(0));
+    		
+    		// make sure the data matches up
+    		assertArrayEquals(expectedImmediate, fs.read("immediate"));
+    		assertArrayEquals(expected1page, fs.read("1page"));
+    		assertArrayEquals(expectedMultipage, fs.read("multipage"));
 
-		fs.close();
-		cloneFs.close();
-		cloneConfig.getArchive().close();
-		cloneMaster.close();
+    		fs.close();
+    		cloneFs.close();
+    		cloneConfig.getArchive().close();
+    		cloneMaster.close();
+		}
 	}
 	
 	@Test

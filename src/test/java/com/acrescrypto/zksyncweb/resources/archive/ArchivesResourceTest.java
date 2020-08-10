@@ -71,14 +71,15 @@ public class ArchivesResourceTest {
 	}
 
 	ZKArchiveConfig validateSingleArchiveListing(JsonNode resp, XArchiveSpecification spec) throws IOException {
-		ZKArchiveConfig storedConfig = State.sharedState().getOpenConfigs().iterator().next();
-		long expectedStorageSize = storedConfig.getStorage().calculateStorageSize("/", false);
+		ZKArchiveConfig  storedConfig = State.sharedState().getOpenConfigs().iterator().next();
+		long      expectedStorageSize = storedConfig.getStorage().calculateStorageSize("/", false);
 		long expectedLocalStorageSize = storedConfig.getLocalStorage().calculateStorageSize("/", false);
 
-		boolean speccedWriteKey = spec.getWriteKey() != null || spec.getWritePassphrase() != null;
-		boolean expectReadKey = spec.getReadKey() != null || spec.getReadPassphrase() != null;
-		boolean expectReady = spec.getArchiveId() == null;
-		boolean expectUsesWriteKey = speccedWriteKey || !expectReady;
+		boolean speccedWriteKey       = spec.getWriteKey()  != null || spec.getWritePassphrase() != null;
+		boolean expectReadKey         = spec.getReadKey()   != null || spec.getReadPassphrase()  != null;
+		boolean expectReady           = spec.getArchiveId() == null;
+		boolean expectUsesWriteKey    = speccedWriteKey || !expectReady;
+        boolean expectHaveWriteKey    = speccedWriteKey || !expectUsesWriteKey;
 
 		if(spec.getPageSize() == null || spec.getPageSize() <= 0) {
 			assertEquals(ZKArchive.DEFAULT_PAGE_SIZE, storedConfig.getPageSize());
@@ -98,26 +99,27 @@ public class ArchivesResourceTest {
 			}
 		}
 
-		assertEquals(speccedWriteKey || !expectUsesWriteKey, resp.get("haveWriteKey").asBoolean());
-		assertEquals(expectUsesWriteKey, resp.get("usesWriteKey").asBoolean());
-		assertEquals(expectUsesWriteKey, storedConfig.usesWriteKey());
-		assertEquals(expectReadKey, resp.get("haveReadKey").asBoolean());
-		assertEquals(expectReadKey, !storedConfig.getAccessor().isSeedOnly());
-		assertEquals(expectReady, resp.get("ready").asBoolean());
-		assertEquals(expectedStorageSize, resp.get("consumedStorage").longValue());
-		assertEquals(expectedLocalStorageSize, resp.get("consumedLocalStorage").longValue());
+        assertEquals     (expectUsesWriteKey,          storedConfig.usesWriteKey());
+        assertEquals     (expectReadKey,              !storedConfig.getAccessor().isSeedOnly());
+		assertEquals     (expectHaveWriteKey,          resp.get("haveWriteKey")        .asBoolean());
+		assertEquals     (expectUsesWriteKey,          resp.get("usesWriteKey")        .asBoolean());
+		assertEquals     (expectReadKey,               resp.get("haveReadKey")         .asBoolean());
+		assertEquals     (expectReady,                 resp.get("ready")               .asBoolean());
+		assertEquals     (expectedStorageSize,         resp.get("consumedStorage")     .longValue());
+		assertEquals     (expectedLocalStorageSize,    resp.get("consumedLocalStorage").longValue());
+        assertArrayEquals(storedConfig.getArchiveId(), resp.get("archiveId")           .binaryValue());
 		if(storedConfig.haveConfigLocally()) {
-			assertArrayEquals(RevisionTag.blank(storedConfig).getBytes(), resp.get("currentRevTag").get("revTag").binaryValue());
+			assertArrayEquals(RevisionTag.blank(storedConfig).getBytes(),
+			                  resp.get("currentRevTag").get("revTag").binaryValue());
 			assertEquals(0, resp.get("currentRevTag").get("generation").asInt());
 		}
-		assertArrayEquals(storedConfig.getArchiveId(), resp.get("archiveId").binaryValue());
 
 		JsonNode xconfig = resp.get("config");
 		
-		assertEquals(false, xconfig.get("requestingAll").asBoolean());
-		assertEquals(false, xconfig.get("autocommit").asBoolean());
-		assertEquals(false, xconfig.get("autofollow").asBoolean());
-		assertEquals(PeerSwarm.DEFAULT_MAX_SOCKET_COUNT, xconfig.get("peerLimit").intValue());
+		assertEquals(false,                              xconfig.get("requestingAll").asBoolean());
+		assertEquals(false,                              xconfig.get("autocommit")   .asBoolean());
+		assertEquals(false,                              xconfig.get("autofollow")   .asBoolean());
+		assertEquals(PeerSwarm.DEFAULT_MAX_SOCKET_COUNT, xconfig.get("peerLimit")    .intValue());
 		assertEquals(0, xconfig.get("autocommitInterval").asInt());
 
 		return storedConfig;
@@ -130,11 +132,11 @@ public class ArchivesResourceTest {
 		spec.setReadPassphrase(pp);
 		JsonNode resp = WebTestUtils.requestPost(target, "archives", spec);
 
-		ZKArchiveConfig storedConfig = validateSingleArchiveListing(resp, spec);
-		ZKArchiveConfig expectedConfig = ZKMaster.openBlankTestVolume().createDefaultArchive(pp.getBytes()).getConfig();
-
-		assertArrayEquals(expectedConfig.getArchiveId(), storedConfig.getArchiveId());
-		validateSingleArchiveListing(resp, spec);
+		ZKArchiveConfig storedConfig   = validateSingleArchiveListing(resp, spec);
+		try(ZKArchiveConfig expectedConfig = ZKMaster.openBlankTestVolume().createDefaultArchive(pp.getBytes()).getConfig()) {
+    		assertArrayEquals(expectedConfig.getArchiveId(), storedConfig.getArchiveId());
+    		validateSingleArchiveListing(resp, spec);
+		}
 	}
 	
 	@Test
@@ -221,105 +223,107 @@ public class ArchivesResourceTest {
 	public void testJoinWriteControlledArchiveWithReadWriteKeys() throws IOException {
 		ZKMaster master = ZKMaster.openBlankTestVolume();
 		Key readRoot = new Key(master.getCrypto()), writeRoot = new Key(master.getCrypto());
-		ZKArchive archive = master.createArchiveWithWriteRoot(ZKArchive.DEFAULT_PAGE_SIZE, "", readRoot, writeRoot);
-
-		XArchiveSpecification spec = new XArchiveSpecification();
-		spec.setReadKey(readRoot.getRaw());
-		spec.setWriteKey(writeRoot.getRaw());
-		spec.setArchiveId(archive.getConfig().getArchiveId());
-		spec.setPageSize(archive.getConfig().getPageSize());
-		spec.setDescription(archive.getConfig().getDescription());
-		JsonNode resp = WebTestUtils.requestPost(target, "archives", spec);
-
-		ZKArchiveConfig config = validateSingleArchiveListing(resp, spec);
-		assertArrayEquals(archive.getConfig().getArchiveId(), config.getArchiveId());
+		try(ZKArchive archive = master.createArchiveWithWriteRoot(ZKArchive.DEFAULT_PAGE_SIZE, "", readRoot, writeRoot)) {
+    		XArchiveSpecification spec = new XArchiveSpecification();
+    		spec.setReadKey(readRoot.getRaw());
+    		spec.setWriteKey(writeRoot.getRaw());
+    		spec.setArchiveId(archive.getConfig().getArchiveId());
+    		spec.setPageSize(archive.getConfig().getPageSize());
+    		spec.setDescription(archive.getConfig().getDescription());
+    		JsonNode resp = WebTestUtils.requestPost(target, "archives", spec);
+    
+    		ZKArchiveConfig config = validateSingleArchiveListing(resp, spec);
+    		assertArrayEquals(archive.getConfig().getArchiveId(), config.getArchiveId());
+		}
 	}
 
 	@Test
 	public void testJoinWriteControlledArchiveWithReadKeyOnly() throws IOException {
 		ZKMaster master = ZKMaster.openBlankTestVolume();
 		Key readRoot = new Key(master.getCrypto()), writeRoot = new Key(master.getCrypto());
-		ZKArchive archive = master.createArchiveWithWriteRoot(ZKArchive.DEFAULT_PAGE_SIZE, "", readRoot, writeRoot);
-
-		XArchiveSpecification spec = new XArchiveSpecification();
-		spec.setReadKey(readRoot.getRaw());
-		spec.setArchiveId(archive.getConfig().getArchiveId());
-		spec.setPageSize(archive.getConfig().getPageSize());
-		spec.setDescription(archive.getConfig().getDescription());
-		JsonNode resp = WebTestUtils.requestPost(target, "archives", spec);
-
-		ZKArchiveConfig config = validateSingleArchiveListing(resp, spec);
-		assertArrayEquals(archive.getConfig().getArchiveId(), config.getArchiveId());
+		try(ZKArchive archive = master.createArchiveWithWriteRoot(ZKArchive.DEFAULT_PAGE_SIZE, "", readRoot, writeRoot)) {
+    		XArchiveSpecification spec = new XArchiveSpecification();
+    		spec.setReadKey(readRoot.getRaw());
+    		spec.setArchiveId(archive.getConfig().getArchiveId());
+    		spec.setPageSize(archive.getConfig().getPageSize());
+    		spec.setDescription(archive.getConfig().getDescription());
+    		JsonNode resp = WebTestUtils.requestPost(target, "archives", spec);
+    
+    		ZKArchiveConfig config = validateSingleArchiveListing(resp, spec);
+    		assertArrayEquals(archive.getConfig().getArchiveId(), config.getArchiveId());
+		}
 	}
 
 	@Test
 	public void testJoinWriteControlledArchiveWithSeedKeyOnly() throws IOException {
-		ZKMaster master = ZKMaster.openBlankTestVolume();
-		Key readRoot = new Key(master.getCrypto()), writeRoot = new Key(master.getCrypto());
-		ZKArchive archive = master.createArchiveWithWriteRoot(ZKArchive.DEFAULT_PAGE_SIZE, "", readRoot, writeRoot);
-
-		XArchiveSpecification spec = new XArchiveSpecification();
-		spec.setSeedKey(archive.getConfig().getAccessor().getSeedRoot().getRaw());
-		spec.setArchiveId(archive.getConfig().getArchiveId());
-		spec.setPageSize(archive.getConfig().getPageSize());
-		spec.setDescription(archive.getConfig().getDescription());
-		JsonNode resp = WebTestUtils.requestPost(target, "archives", spec);
-
-		ZKArchiveConfig config = validateSingleArchiveListing(resp, spec);
-		assertArrayEquals(archive.getConfig().getArchiveId(), config.getArchiveId());
+		ZKMaster         master    = ZKMaster.openBlankTestVolume();
+		Key              readRoot  = new Key(master.getCrypto()),
+		                 writeRoot = new Key(master.getCrypto());
+		try(ZKArchive archive   = master.createArchiveWithWriteRoot(ZKArchive.DEFAULT_PAGE_SIZE, "", readRoot, writeRoot)) {
+    		XArchiveSpecification spec = new XArchiveSpecification();
+    		
+    		spec.setSeedKey    (archive.getConfig().getAccessor().getSeedRoot().getRaw());
+    		spec.setArchiveId  (archive.getConfig().getArchiveId());
+    		spec.setPageSize   (archive.getConfig().getPageSize());
+    		spec.setDescription(archive.getConfig().getDescription());
+    		JsonNode resp = WebTestUtils.requestPost(target, "archives", spec);
+    
+    		ZKArchiveConfig config = validateSingleArchiveListing(resp, spec);
+    		assertArrayEquals(archive.getConfig().getArchiveId(), config.getArchiveId());
+		}
 	}
 
 	@Test
 	public void testJoinNonWriteControlledArchiveWithReadKeyOnly() throws IOException {
 		String pp = "passphrase";
 		ZKMaster master = ZKMaster.openBlankTestVolume();
-		ZKArchive archive = master.createArchiveWithPassphrase(2*ZKArchive.DEFAULT_PAGE_SIZE, "description", pp.getBytes());
-
-		XArchiveSpecification spec = new XArchiveSpecification();
-		spec.setReadPassphrase(pp);
-		spec.setArchiveId(archive.getConfig().getArchiveId());
-		spec.setPageSize(archive.getConfig().getPageSize());
-		spec.setDescription(archive.getConfig().getDescription());
-		JsonNode resp = WebTestUtils.requestPost(target, "archives", spec);
-
-		ZKArchiveConfig config = validateSingleArchiveListing(resp, spec);
-		assertArrayEquals(archive.getConfig().getArchiveId(), config.getArchiveId());
+		try(ZKArchive archive = master.createArchiveWithPassphrase(2*ZKArchive.DEFAULT_PAGE_SIZE, "description", pp.getBytes())) {
+    		XArchiveSpecification spec = new XArchiveSpecification();
+    		spec.setReadPassphrase(pp);
+    		spec.setArchiveId(archive.getConfig().getArchiveId());
+    		spec.setPageSize(archive.getConfig().getPageSize());
+    		spec.setDescription(archive.getConfig().getDescription());
+    		JsonNode resp = WebTestUtils.requestPost(target, "archives", spec);
+    
+    		ZKArchiveConfig config = validateSingleArchiveListing(resp, spec);
+    		assertArrayEquals(archive.getConfig().getArchiveId(), config.getArchiveId());
+		}
 	}
 
 	@Test
 	public void testJoinNonWriteControlledArchiveWithSeedKeyOnly() throws IOException {
 		String pp = "passphrase";
 		ZKMaster master = ZKMaster.openBlankTestVolume();
-		ZKArchive archive = master.createArchiveWithPassphrase(2*ZKArchive.DEFAULT_PAGE_SIZE, "description", pp.getBytes());
-
-		XArchiveSpecification spec = new XArchiveSpecification();
-		spec.setSeedKey(archive.getConfig().getAccessor().getSeedRoot().getRaw());
-		spec.setArchiveId(archive.getConfig().getArchiveId());
-		spec.setPageSize(archive.getConfig().getPageSize());
-		spec.setDescription(archive.getConfig().getDescription());
-		JsonNode resp = WebTestUtils.requestPost(target, "archives", spec);
-
-		ZKArchiveConfig config = validateSingleArchiveListing(resp, spec);
-		assertArrayEquals(archive.getConfig().getArchiveId(), config.getArchiveId());
+		try(ZKArchive archive = master.createArchiveWithPassphrase(2*ZKArchive.DEFAULT_PAGE_SIZE, "description", pp.getBytes())) {
+    		XArchiveSpecification spec = new XArchiveSpecification();
+    		spec.setSeedKey(archive.getConfig().getAccessor().getSeedRoot().getRaw());
+    		spec.setArchiveId(archive.getConfig().getArchiveId());
+    		spec.setPageSize(archive.getConfig().getPageSize());
+    		spec.setDescription(archive.getConfig().getDescription());
+    		JsonNode resp = WebTestUtils.requestPost(target, "archives", spec);
+    
+    		ZKArchiveConfig config = validateSingleArchiveListing(resp, spec);
+    		assertArrayEquals(archive.getConfig().getArchiveId(), config.getArchiveId());
+		}
 	}
 
 	@Test
 	public void testDuplicatePostWithIdenticalArchiveIdDoesNotOpenAdditionalArchives() throws IOException {
 		String pp = "passphrase";
 		ZKMaster master = ZKMaster.openBlankTestVolume();
-		ZKArchive archive = master.createArchiveWithPassphrase(2*ZKArchive.DEFAULT_PAGE_SIZE, "description", pp.getBytes());
-
-		XArchiveSpecification spec = new XArchiveSpecification();
-		spec.setReadPassphrase(pp);
-		spec.setArchiveId(archive.getConfig().getArchiveId());
-		spec.setPageSize(archive.getConfig().getPageSize());
-		spec.setDescription(archive.getConfig().getDescription());
-		WebTestUtils.requestPost(target, "archives", spec);
-		ZKArchiveConfig original = State.sharedState().getOpenConfigs().iterator().next();
-		WebTestUtils.requestPost(target, "archives", spec);
-
-		assertEquals(1, State.sharedState().getOpenConfigs().size());
-		assertTrue(original == State.sharedState().getOpenConfigs().iterator().next());
+		try(ZKArchive archive = master.createArchiveWithPassphrase(2*ZKArchive.DEFAULT_PAGE_SIZE, "description", pp.getBytes())) {
+    		XArchiveSpecification spec = new XArchiveSpecification();
+    		spec.setReadPassphrase(pp);
+    		spec.setArchiveId(archive.getConfig().getArchiveId());
+    		spec.setPageSize(archive.getConfig().getPageSize());
+    		spec.setDescription(archive.getConfig().getDescription());
+    		WebTestUtils.requestPost(target, "archives", spec);
+    		ZKArchiveConfig original = State.sharedState().getOpenConfigs().iterator().next();
+    		WebTestUtils.requestPost(target, "archives", spec);
+    
+    		assertEquals(1, State.sharedState().getOpenConfigs().size());
+    		assertTrue(original == State.sharedState().getOpenConfigs().iterator().next());
+		}
 	}
 
 	@Test

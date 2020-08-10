@@ -2,9 +2,6 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.slf4j.Logger;
@@ -13,8 +10,6 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.InaccessibleStorageException;
-import com.acrescrypto.zksync.fs.Directory;
-import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.FS;
 import com.acrescrypto.zksync.fs.backedfs.BackedFS;
 import com.acrescrypto.zksync.fs.swarmfs.SwarmFS;
@@ -36,18 +31,20 @@ public class ZKArchive implements AutoCloseable {
 	protected Logger logger = LoggerFactory.getLogger(ZKArchive.class);
 
 	// TODO Someday: (refactor) it'll hurt, but crypto and storage need to go away and everyone needs to access through config
-	protected CryptoSupport crypto;
-	protected FS storage;
-
-	protected ZKArchiveConfig config;
-	protected ZKArchive cacheOnlyArchive;
-	protected ZKMaster master;
-	protected HashCache<RevisionTag,ZKFS> readOnlyFilesystems;
-	protected HashMap<Long,StorageTag> allPageTags;
-	protected SubscriptionToken<Integer> tok;
-	protected boolean closed;
-	private StorageTag blankStorageTag;
+	protected CryptoSupport               crypto;
 	
+	protected ZKArchiveConfig             config;
+	protected ZKArchive                   cacheOnlyArchive;
+	protected ZKMaster                    master;
+	
+	protected FS                          storage;
+    protected StorageTagList              pageTagList;
+    private   StorageTag                  blankStorageTag;
+
+    protected HashCache<RevisionTag,ZKFS> readOnlyFilesystems;
+	protected SubscriptionToken<Integer>  tok;
+	protected boolean                     closed;
+		
 	public static void addActiveArchive(ZKArchive archive) {
 		activeArchives.put(archive, new Throwable());
 	}
@@ -61,13 +58,13 @@ public class ZKArchive implements AutoCloseable {
 	}
 	
 	protected ZKArchive(ZKArchiveConfig config) throws IOException {
-		this.master = config.accessor.master;
-		this.storage = config.storage;
-		this.crypto = config.accessor.master.crypto;
-		this.allPageTags = new HashMap<>();
-		this.config = config;
+        this.config              = config;
+		this.master              = config.accessor.master;
+		this.storage             = config.storage;
+		this.crypto              = config.accessor.master.crypto;
+		this.pageTagList         = new StorageTagList(this);		
+		int  cacheSize           = config.getMaster().getGlobalConfig().getInt("fs.settings.readOnlyFilesystemCacheSize");
 		
-		int cacheSize = config.getMaster().getGlobalConfig().getInt("fs.settings.readOnlyFilesystemCacheSize");
 		this.readOnlyFilesystems = new HashCache<RevisionTag,ZKFS>(cacheSize, (tag) -> {
 			if(this.isCacheOnly() && !tag.isCacheOnly()) {
 				return tag.makeCacheOnlyCopy().getFS().setReadOnly();
@@ -92,11 +89,7 @@ public class ZKArchive implements AutoCloseable {
 						exc);
 			}
 		});
-
-		if(!isCacheOnly()) { // only need the list for non-networked archives, which are not cache-only
-			rescanPageTags();
-		}
-		
+        
 		if(FS.fileHandleTelemetryEnabled) {
 			addActiveArchive(this);
 		}
@@ -109,6 +102,8 @@ public class ZKArchive implements AutoCloseable {
 			closed = true;
 		}
 		
+        if(pageTagList != null) pageTagList.close();
+        
 		if(tok != null) tok.close();
 		try {
 			readOnlyFilesystems.removeAll();
@@ -245,11 +240,10 @@ public class ZKArchive implements AutoCloseable {
 	/** Test if we have a given page cached locally. 
 	 * @throws IOException */
 	public boolean hasPageTag(StorageTag pageTag) throws IOException {
-	    if(!pageTag.isFinalized()) return true; // if we haven't finalized a tag, it's because the contents are still in memory, therefore we have it
+	    if(!pageTag.isFinalized()) return true; // if we haven't finalized a tag, it's because the contents are still in memory, therefore we have the contents, and will have whatever the finalized page tag happens to be
 	    
 		assertOpen();
-		if(allPageTags.containsKey(pageTag.shortTagPreserialized())) return true;
-		
+		if(pageTagList.hasPageTag(pageTag)) return true;
 		return config.getCacheStorage().exists(pageTag.path());
 	}
 	
@@ -321,31 +315,20 @@ public class ZKArchive implements AutoCloseable {
 		
 		return config.equals(((ZKArchive) other).config);
 	}
-
-	public synchronized Collection<StorageTag> allPageTags() {
-		return new ArrayList<>(allPageTags.values());
-	}
 	
 	public void addPageTag(StorageTag tag) {
-		long shortTag = tag.shortTagPreserialized();
-		if(allPageTags != null && !allPageTags.containsKey(shortTag)) {
-			synchronized(this) {
-				allPageTags.put(shortTag, tag);
-			}
-			
-			config.swarm.announceTag(tag);
-		}		
-	}
-	
-	public void rescanPageTags() throws IOException {
-		allPageTags.clear();
-		try(Directory dir = storage.opendir("/")) {
-			DirectoryTraverser traverser = new DirectoryTraverser(storage, dir);
-			while(traverser.hasNext()) {
-				StorageTag tag = new StorageTag(crypto, traverser.next().getPath());
-				allPageTags.put(tag.shortTag(), tag);
-			}
-		}
+	    try {
+            if(!pageTagList.hasPageTag(tag, false)) {
+                pageTagList.add(tag);
+                config.swarm.announceTag(tag);
+            }
+        } catch (IOException exc) {
+            logger.error("ZKFS {}: Encountered error adding page tag {}",
+                    Util.formatArchiveId(config.getArchiveId()),
+                    tag,
+                    exc);
+            exc.printStackTrace();
+        }
 	}
 	
 	public StorageTag getBlankStorageTag() {
@@ -355,5 +338,15 @@ public class ZKArchive implements AutoCloseable {
 		}
 		
 		return blankStorageTag;
+	}
+	
+	public StorageTagList pageTagList() {
+	    return pageTagList;
+	}
+	
+	public String toString() {
+	    return String.format("%s (@%08x)",
+	            Util.formatArchiveId(config.getArchiveId()),
+	            System.identityHashCode(this));
 	}
 }

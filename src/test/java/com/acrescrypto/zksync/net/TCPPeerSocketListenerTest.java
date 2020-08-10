@@ -73,12 +73,13 @@ public class TCPPeerSocketListenerTest {
 		ad.resolve();
 		
 		ArchiveAccessor accessor2 = new ArchiveAccessor(master, archive.getConfig().getAccessor());
-		ZKArchiveConfig config2 = ZKArchiveConfig.openExisting(accessor2, archive.getConfig().getArchiveId());
-		DummySwarm swarm2 = new DummySwarm(config2);
-		
-		TCPPeerSocket socket = new TCPPeerSocket(swarm2, ad);
-		socket.connect(new DummyConnection());
-		return socket;
+		try(ZKArchiveConfig config2 = ZKArchiveConfig.openExisting(accessor2, archive.getConfig().getArchiveId())) {
+    		DummySwarm swarm2 = new DummySwarm(config2);
+    		
+    		TCPPeerSocket socket = new TCPPeerSocket(swarm2, ad);
+    		socket.connect(new DummyConnection());
+    		return socket;
+		}
 	}
 	
 	protected Socket connect() throws UnknownHostException, IOException {

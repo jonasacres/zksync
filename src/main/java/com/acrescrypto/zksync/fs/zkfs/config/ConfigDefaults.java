@@ -73,12 +73,12 @@ public class ConfigDefaults {
 		config.setDefault("fs.default.groupname",                          "root");
 		config.setDefault("fs.default.gid",                                     0);
 		config.setDefault("fs.default.directoryMode",                        0755);
-		config.setDefault("fs.settings.maxOpenBlocks",                          4);
 		
+		config.setDefault("fs.settings.maxOpenBlocks",                          4);
 		config.setDefault("fs.settings.pageReadyMaxRetries",                   50);
 		config.setDefault("fs.settings.pageReadyRetryDelayMs",                 10);
 		config.setDefault("fs.settings.pageTreeChunkCacheSize",                16);
-		config.setDefault("fs.settings.directoryCacheSize",                   128);
+		config.setDefault("fs.settings.directoryCacheSize",                   256);
 		config.setDefault("fs.settings.inodeTablePageCacheSize",              128);
 		config.setDefault("fs.settings.revisionTreeCacheSize",                256);
 		config.setDefault("fs.settings.readOnlyFilesystemCacheSize",           64);

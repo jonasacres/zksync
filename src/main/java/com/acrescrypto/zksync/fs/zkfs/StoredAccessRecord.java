@@ -7,7 +7,7 @@ import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.utility.Util;
 
-public class StoredAccessRecord {
+public class StoredAccessRecord implements AutoCloseable {
 	private ZKArchiveConfig config;
 	private ArchiveAccessor accessor;
 	private Key writeKey;

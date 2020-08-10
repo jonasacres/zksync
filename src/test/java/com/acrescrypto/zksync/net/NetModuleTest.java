@@ -76,9 +76,9 @@ public class NetModuleTest {
 			// make sure we get all the pages from A, and we don't somehow end up with unexpected extra pages (yes, this was a real bug)
 			ZKArchiveConfig aConfig_ = aConfig,
 					        bConfig_ = bConfig;
-			Util.waitUntil(2000, ()->aConfig_.getArchive().allPageTags().size() == bConfig_.getArchive().allPageTags().size());
-			assertFalse(Util.waitUntil(50, ()->aConfig_.getArchive().allPageTags().size() != bConfig_.getArchive().allPageTags().size()));
-			assertEquals(aConfig.getArchive().allPageTags().size(), bConfig.getArchive().allPageTags().size());
+			Util.waitUntil(2000, ()->aConfig_.getArchive().pageTagList().allPageTags().size() == bConfig_.getArchive().pageTagList().allPageTags().size());
+			assertFalse(Util.waitUntil(50, ()->aConfig_.getArchive().pageTagList().allPageTags().size() != bConfig_.getArchive().pageTagList().allPageTags().size()));
+			assertEquals(aConfig.getArchive().pageTagList().allPageTags().size(), bConfig.getArchive().pageTagList().allPageTags().size());
 			
 			fsa = aConfig.getRevisionList().branchTips().get(0).getFS();
 			fsb = bConfig.getRevisionList().branchTips().get(1).getFS();
@@ -122,15 +122,15 @@ public class NetModuleTest {
 			
 			ZKArchiveConfig aConfig_ = aConfig,
 					        bConfig_ = bConfig;
-			assertTrue(Util.waitUntil(2000, ()->aConfig_.getArchive().allPageTags().size() == bConfig_.getArchive().allPageTags().size()));
+			assertTrue(Util.waitUntil(2000, ()->aConfig_.getArchive().pageTagList().allPageTags().size() == bConfig_.getArchive().pageTagList().allPageTags().size()));
 			
 			fsa = aConfig.getRevisionList().branchTips().get(0).getFS();
 			fsa.write("file3", crypto.rng(2*aConfig.getPageSize()));
 			fsa.commit();
 			
 			assertTrue(Util.waitUntil(1000, ()->bConfig_.getRevisionList().branchTips().contains(aConfig_.getRevisionList().branchTips().get(0))));
-			Util.waitUntil(2000, ()->aConfig_.getArchive().allPageTags().size() == bConfig_.getArchive().allPageTags().size());
-			assertEquals(aConfig.getArchive().allPageTags().size(), bConfig.getArchive().allPageTags().size());
+			Util.waitUntil(2000, ()->aConfig_.getArchive().pageTagList().allPageTags().size() == bConfig_.getArchive().pageTagList().allPageTags().size());
+			assertEquals(aConfig.getArchive().pageTagList().allPageTags().size(), bConfig.getArchive().pageTagList().allPageTags().size());
 			RevisionTag tag = DiffSetResolver.canonicalMergeResolver(bConfig.getArchive()).resolve();
 			
 			fsb = tag.getFS();
@@ -175,15 +175,15 @@ public class NetModuleTest {
 			
 			ZKArchiveConfig aConfig_ = aConfig,
 					        bConfig_ = bConfig;
-			assertTrue(Util.waitUntil(2000, ()->aConfig_.getArchive().allPageTags().size() == bConfig_.getArchive().allPageTags().size()));
+			assertTrue(Util.waitUntil(2000, ()->aConfig_.getArchive().pageTagList().allPageTags().size() == bConfig_.getArchive().pageTagList().allPageTags().size()));
 			
 			fsb = bConfig.getRevisionList().branchTips().get(1).getFS();
 			fsb.write("file3", crypto.rng(2*bConfig.getPageSize()));
 			fsb.commit();
 			
 			assertTrue(Util.waitUntil(1000, ()->aConfig_.getRevisionList().branchTips().contains(bConfig_.getRevisionList().branchTips().get(0))));
-			Util.waitUntil(2000, ()->aConfig_.getArchive().allPageTags().size() == bConfig_.getArchive().allPageTags().size());
-			assertEquals(aConfig.getArchive().allPageTags().size(), bConfig.getArchive().allPageTags().size());
+			Util.waitUntil(2000, ()->aConfig_.getArchive().pageTagList().allPageTags().size() == bConfig_.getArchive().pageTagList().allPageTags().size());
+			assertEquals(aConfig.getArchive().pageTagList().allPageTags().size(), bConfig.getArchive().pageTagList().allPageTags().size());
 			RevisionTag tag = DiffSetResolver.canonicalMergeResolver(bConfig.getArchive()).resolve();
 			
 			fsa = tag.getFS();
@@ -235,8 +235,8 @@ public class NetModuleTest {
 			// we should get a config (1 page), inode table (1 page), the file (2 pages) and its pagetree (1 page). root is literal so no page.
 			ZKArchiveConfig bConfig_ = bConfig;
 			assertTrue(Util.waitUntil(1000, ()->bConfig_.getRevisionList().branchTips().size() == 1));
-			Util.waitUntil(2000, ()->bConfig_.getArchive().allPageTags().size() == 6);
-			assertEquals(5, bConfig.getArchive().allPageTags().size());
+			Util.waitUntil(2000, ()->bConfig_.getArchive().pageTagList().allPageTags().size() == 6);
+			assertEquals(5, bConfig.getArchive().pageTagList().allPageTags().size());
 					
 			fsb = bConfig.getRevisionList().branchTips().get(1).getFS();
 			assertArrayEquals(fsb.read("path"), fsa.read("path"));
@@ -287,8 +287,8 @@ public class NetModuleTest {
 			bConfig.getSwarm().requestInode(0, bConfig_.getRevisionList().branchTips().get(1), inode.getStat().getInodeId());
 			
 			// we should get a config (1 page), pagetree (1), and file pages (numPages from reftag)
-			Util.waitUntil(2000, ()->bConfig_.getArchive().allPageTags().size() == 2 + inode.getRefTag().getNumPages());
-			assertEquals(2 + inode.getRefTag().getNumPages(), bConfig.getArchive().allPageTags().size());
+			Util.waitUntil(2000, ()->bConfig_.getArchive().pageTagList().allPageTags().size() == 2 + inode.getRefTag().getNumPages());
+			assertEquals(2 + inode.getRefTag().getNumPages(), bConfig.getArchive().pageTagList().allPageTags().size());
 		} finally {
 			if(fsa     != null) fsa.close();
 			if(aConfig != null) aConfig.getArchive().close();
@@ -333,10 +333,10 @@ public class NetModuleTest {
 			bConfig.getSwarm().requestTag(0, requestedTag);
 			
 			// we should get the requested page and the config file
-			Util.waitUntil(2000, ()->bConfig_.getArchive().allPageTags().size() == 2);
-			assertEquals(2, bConfig.getArchive().allPageTags().size());
+			Util.waitUntil(2000, ()->bConfig_.getArchive().pageTagList().allPageTags().size() == 2);
+			assertEquals(2, bConfig.getArchive().pageTagList().allPageTags().size());
 			
-			for(StorageTag pageTag : bConfig.getArchive().allPageTags()) {
+			for(StorageTag pageTag : bConfig.getArchive().pageTagList().allPageTags()) {
 				if(bConfig.tag().equals(pageTag)) continue;
 				if(requestedTag .equals(pageTag)) continue;
 				fail();

@@ -44,12 +44,6 @@ public class BackedFS extends FS {
 	}
 	
 	@Override
-	public void setTrackingStorage(boolean tracking) throws IOException {
-	    this.tracking = true;
-	    cacheFS.setTrackingStorage(true);
-	}
-	
-	@Override
 	public long storageSize() throws IOException {
 	    return cacheFS.storageSize();
 	}

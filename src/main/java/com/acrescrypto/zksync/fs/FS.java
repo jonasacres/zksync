@@ -2,7 +2,6 @@ package com.acrescrypto.zksync.fs;
 
 import java.io.IOException;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.EISDIRException;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
-import com.acrescrypto.zksync.utility.Util;
 
 public abstract class FS implements AutoCloseable {
     protected static ConcurrentHashMap<File,Throwable> globalFileBacktraces = new ConcurrentHashMap<>();
@@ -74,19 +72,8 @@ public abstract class FS implements AutoCloseable {
 
     private Logger logger = LoggerFactory.getLogger(FS.class);
     protected ConcurrentHashMap<File,Throwable> localFileBacktraces = new ConcurrentHashMap<>();
-    protected AtomicLong lastStorageSize = new AtomicLong();
     protected FSPath root;
-    protected boolean tracking;
-    protected long lastStorageUpdate;
 
-
-    public void setTrackingStorage(boolean tracking) throws IOException {
-        this.tracking = tracking;
-    }
-    
-    public boolean isTrackingStorage() {
-        return tracking;
-    }
 
     public long size(String path) throws IOException {
         return size(path, true);
@@ -102,11 +89,6 @@ public abstract class FS implements AutoCloseable {
     
     public long maxFileSize() {
         return Long.MAX_VALUE;
-    }
-    
-    public void adjustStorageSize(long adjustment) {
-        if(!isTrackingStorage()) return;
-        lastStorageSize.addAndGet(adjustment);
     }
 
     public void root(String root) {
@@ -336,13 +318,7 @@ public abstract class FS implements AutoCloseable {
     }
 
     public long storageSize() throws IOException {
-        if(lastStorageUpdate >= Util.currentTimeMillis() - storageSizeUpdateInterval()) {
-            return lastStorageSize.get();
-        }
-        
-        lastStorageSize.set(calculateStorageSize("/", false));
-        lastStorageUpdate = Util.currentTimeMillis();
-        return lastStorageSize.get();
+        return calculateStorageSize("/", false);
     }
     
     public long calculateStorageSize(String path, boolean followSymlinks) throws IOException {

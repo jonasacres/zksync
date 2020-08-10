@@ -43,7 +43,7 @@ public class ArchiveAccessor {
 	}
 	
 	public interface ArchiveAccessorDiscoveryCallback {
-		void discoveredArchiveConfig(ZKArchiveConfig config);
+		ZKArchiveConfig discoveredArchiveConfig(ZKArchiveConfig config);
 	}
 
 	public ArchiveAccessor(ZKMaster master, Key root, int type) {
@@ -83,7 +83,6 @@ public class ArchiveAccessor {
 			}
 		}
 		
-		// TODO API: (coverage) branch
 		ZKArchiveConfig config = new ZKArchiveConfig(this, archiveId, false, Key.blank(master.crypto));
 		discoveredArchiveConfig(config);
 		
@@ -97,9 +96,11 @@ public class ArchiveAccessor {
 	public void discoveredArchiveConfig(ZKArchiveConfig config) {
 		synchronized(this) {
 			knownArchiveConfigs.remove(config);
-			knownArchiveConfigs.add(config);
+			knownArchiveConfigs.add   (config);
 		}
+		
 		forceAdvertisement();
+		
 		for(ArchiveAccessorDiscoveryCallback callback : callbacks) {
 			callback.discoveredArchiveConfig(config);
 		}

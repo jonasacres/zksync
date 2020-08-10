@@ -50,7 +50,7 @@ public class XArchiveIdentification {
 		} catch (Throwable exc) {}
 		
 		try {
-			id.numLocalTags = config.getArchive().allPageTags().size();
+			id.numLocalTags = config.getArchive().pageTagList().allPageTags().size();
 		} catch(Throwable exc) {}
 		
 		id.connectedPeers   = config.getSwarm().getConnections().size();
@@ -67,8 +67,11 @@ public class XArchiveIdentification {
 		
 		try {
 			xset = XArchiveSettings.fromConfig(config);
-			 id.consumedStorage      = config.getStorage()     .storageSize();
-			 id.consumedLocalStorage = config.getLocalStorage().storageSize();
+			if(config.getArchive() != null) {
+    			id.consumedStorage      = config.getArchive().pageTagList().storedPageSize();
+			}
+			
+			id.consumedLocalStorage     = config.getLocalStorage().storageSize();
 		} catch(IOException exc) {
 			xset = new XArchiveSettings();
 			// TODO API: (log) worth logging this...

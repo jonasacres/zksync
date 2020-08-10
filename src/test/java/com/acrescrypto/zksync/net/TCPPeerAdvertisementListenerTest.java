@@ -72,9 +72,9 @@ public class TCPPeerAdvertisementListenerTest {
 	
 	@AfterClass
 	public static void afterAll() {
-		TestUtils.stopDebugMode();
 		archive.close();
 		master.close();
+        TestUtils.stopDebugMode();
 		TestUtils.assertTidy();
 	}
 	

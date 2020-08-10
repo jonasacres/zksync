@@ -50,10 +50,10 @@ public class ArchivesResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	public XAPIResponse postArchives(String json) {
 		try {
-			XArchiveSpecification spec = new ObjectMapper().readValue(json, XArchiveSpecification.class);
-			ArchiveAccessor accessor;
-			ZKArchiveConfig config;
-			int status = 201;
+            int                   status    = 201;
+			XArchiveSpecification spec      = new ObjectMapper().readValue(json, XArchiveSpecification.class);
+            ZKArchiveConfig       config;
+			ArchiveAccessor       accessor;
 
 			// build the accessor; this is the thing that lets us find archives with a matching read passphrase in the DHT.
 			if(spec.getReadPassphrase() != null) {
@@ -101,6 +101,7 @@ public class ArchivesResource {
 						logger.info("ZKFS {}: Noticed that we already have this archive; not adding duplicate", Util.formatArchiveId(config.getArchiveId()));
 
 						status = 200;
+						config.close();
 						config = existing;
 					}
 				} else {
@@ -139,7 +140,11 @@ public class ArchivesResource {
 			}
 
 			if(status == 201) {
-				State.sharedState().addOpenConfig(config);
+				ZKArchiveConfig existing = State.sharedState().addOpenConfig(config);
+				if(existing != config) {
+				    config.close();
+				    config = existing;
+				}
 			}
 
 			Integer level = spec.getSavedAccessLevel();

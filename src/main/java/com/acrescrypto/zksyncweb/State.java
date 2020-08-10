@@ -109,13 +109,11 @@ public class State implements AutoCloseable {
 	
 	public State(byte[] passphrase, String path) throws IOException {
 		this.master = ZKMaster.openAtPath(new OneTimePassphraseProvider(passphrase), path);
-		master.getStorage().setTrackingStorage(true);
 		initManagers();
 	}
 	
 	public State(byte[] passphrase, FS storage) throws IOException {
 		this.master = ZKMaster.open(new OneTimePassphraseProvider(passphrase), storage);
-		master.getStorage().setTrackingStorage(true);        
 		initManagers();
 	}
 	
@@ -139,8 +137,8 @@ public class State implements AutoCloseable {
 		return new ArrayList<>(master.allConfigs());
 	}
 	
-	public void addOpenConfig(ZKArchiveConfig config) {
-		master.discoveredArchiveConfig(config);
+	public ZKArchiveConfig addOpenConfig(ZKArchiveConfig config) {
+		return master.discoveredArchiveConfig(config);
 	}
 	
 	public ZKArchiveConfig configForArchiveId(String archiveId) {
