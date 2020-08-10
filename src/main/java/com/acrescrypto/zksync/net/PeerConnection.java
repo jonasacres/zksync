@@ -96,7 +96,7 @@ public class PeerConnection {
 				try {
 					socket.getSwarm().getConfig().finishOpeningFromSwarm(0);
 				} catch (IOException exc) {
-					logger.error("Swarm {} {}:{}: Failed to initialize archive from new swarm peer",
+					logger.warn("Swarm {} {}:{}: Failed to initialize archive from new swarm peer",
 						Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 						socket.getAddress(),
 						socket.getPort(),

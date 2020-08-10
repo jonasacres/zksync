@@ -122,24 +122,29 @@ public class GlobalResource {
 	public XAPIResponse getFilesystems() throws IOException {
 		LinkedList<HashMap<String,Object>> filesystems = new LinkedList<>();
 		ZKFS.getOpenInstances().forEach((fs, trace) -> {
-			HashMap<String, Object> info = new HashMap<>();
-			info.put("fsClass", fs.getClass().getCanonicalName());
-			info.put("trace", renderStackTrace(trace));
-			info.put("directoryCacheSize", fs.getDirectoryCacheSize());
-			
-			LinkedList<LinkedList<HashMap<String, Object>>> retentions = new LinkedList<>();
-			for(Throwable retention : fs.getRetentions()) {
-				retentions.add(renderStackTrace(retention));
-			}
-			info.put("retentions", retentions);
-			
-			LinkedList<LinkedList<HashMap<String, Object>>> closures = new LinkedList<>();
-			for(Throwable closure : fs.getClosures()) {
-				closures.add(renderStackTrace(closure));
-			}
-			info.put("closures", closures);
-			
-			filesystems.add(info);
+		    try {
+    			HashMap<String, Object> info = new HashMap<>();
+    			info.put("fsClass", fs.getClass().getCanonicalName());
+    			info.put("trace", renderStackTrace(trace));
+    			info.put("directoryCacheSize", fs.getDirectoryCacheSize());
+    			
+    			LinkedList<LinkedList<HashMap<String, Object>>> retentions = new LinkedList<>();
+    			for(Throwable retention : fs.getRetentions()) {
+    				retentions.add(renderStackTrace(retention));
+    			}
+    			info.put("retentions", retentions);
+    			
+    			LinkedList<LinkedList<HashMap<String, Object>>> closures = new LinkedList<>();
+    			for(Throwable closure : fs.getClosures()) {
+    				closures.add(renderStackTrace(closure));
+    			}
+    			info.put("closures", closures);
+    			
+    			filesystems.add(info);
+		    } catch(Throwable exc) {
+		        exc.printStackTrace();
+		        throw exc;
+		    }
 		});
 		throw XAPIResponse.withWrappedPayload("filesystems", filesystems);
 	}

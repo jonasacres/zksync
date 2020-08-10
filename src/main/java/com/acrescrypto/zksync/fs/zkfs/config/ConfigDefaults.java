@@ -91,6 +91,8 @@ public class ConfigDefaults {
 		config.setDefault("fs.settings.mirror.pathMutePeriodMs",              100);
 		config.setDefault("fs.settings.mirror.syncResetDelayMs",              100);
 		config.setDefault("fs.settings.mirror.syncMaxDelayMs",               1000);
+		config.setDefault("fs.settings.tagCacheFlushIntervalMs",             1000);
+		config.setDefault("fs.settings.tagCacheMaxFlushDelayMs",            30000);
 		
 		config.setDefault("fs.fileHandleTelemetry", FS.fileHandleTelemetryEnabled);
 		

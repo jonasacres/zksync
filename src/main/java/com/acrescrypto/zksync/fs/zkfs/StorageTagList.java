@@ -8,12 +8,14 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
 import com.acrescrypto.zksync.fs.File;
+import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 
 public class StorageTagList {
     protected ConcurrentHashMap<Long,StorageTag> allPageTags = new ConcurrentHashMap<>();
     protected ZKArchive                          archive;
     protected File                               file;
+    protected SnoozeThread                       flushThread;
     
     public StorageTagList(ZKArchive archive) throws IOException {
         this.archive = archive;
@@ -24,6 +26,8 @@ public class StorageTagList {
     }
     
     public void close() {
+        if(this.flushThread != null) this.flushThread.cancel();
+        
         try {
             if(file != null) {
                 file.close();
@@ -84,6 +88,27 @@ public class StorageTagList {
         append(pageTag);
     }
     
+    protected void flushAfterDelay() {
+        if(this.flushThread == null) {
+            int interval = archive.getMaster().getGlobalConfig().getInt("fs.settings.tagCacheFlushIntervalMs"),
+                maxDelay = archive.getMaster().getGlobalConfig().getInt("fs.settings.tagCacheMaxFlushDelayMs");
+            this.flushThread = new SnoozeThread(interval, maxDelay, true, ()->{
+                this.flushThread = null;
+               if(file != null) {
+                   try {
+                       file.flush();
+                   } catch (IOException exc) {
+                       archive.logger.error("ZKFS {}: Caught exception writing tagcache",
+                               Util.formatArchiveId(archive.getConfig().getArchiveId()),
+                               exc);
+                   }
+               }
+            });
+        } else {
+            this.flushThread.snooze();
+        }
+    }
+    
     protected File openFile() throws IOException {
         if(file != null) file.close();
         
@@ -95,7 +120,7 @@ public class StorageTagList {
     
     protected void append(StorageTag tag) throws IOException {
         file.write(tag.getTagBytesPreserialized());
-        file.flush();
+        flushAfterDelay();
     }
     
     protected void read() throws IOException {
