@@ -94,7 +94,7 @@ public class BlacklistResourceTest {
 		assertEquals(1, blacklist.allEntries().size());
 		BlacklistEntry newEntry = blacklist.allEntries().get(0);
 		assertEquals(entry.getAddress(), newEntry.getAddress());
-		assertEquals(entry.getExpiration(), newEntry.getExpiration());
+		assertEquals(entry.getExpiration(), newEntry.getExpiration(), 3000);
 	}
 
 	@Test

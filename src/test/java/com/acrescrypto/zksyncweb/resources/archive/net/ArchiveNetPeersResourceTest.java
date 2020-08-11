@@ -287,7 +287,7 @@ public class ArchiveNetPeersResourceTest {
     		boolean found = false;
     		for(BlacklistEntry entry : archive.getMaster().getBlacklist().allEntries()) {
     			if(!entry.getAddress().equals(conn.getSocket().getAddress())) continue;
-    			assertEquals(System.currentTimeMillis() + 1234000, entry.getExpiration(), 1000);
+    			assertEquals(System.currentTimeMillis() + 1234000, entry.getExpiration(), 3000);
     			found = true;
     		}
     		

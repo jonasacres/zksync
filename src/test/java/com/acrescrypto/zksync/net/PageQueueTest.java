@@ -193,7 +193,7 @@ public class PageQueueTest {
 		assertEquals(expected.size(), seenTags.size());
 	}
 	
-	public void assertQueueDrainOfSize(int size) {
+	public void assertQueueDrainOfSize(int size) throws IOException {
 		int numChunksSeen = 0;
 		
 		while(queue.hasNextChunk()) {
@@ -205,12 +205,12 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testHasNextChunkReturnsFalseIfQueueEmpty() {
+	public void testHasNextChunkReturnsFalseIfQueueEmpty() throws IOException {
 		assertFalse(queue.hasNextChunk());
 	}
 	
 	@Test
-	public void testHasNextChunkReturnsFalseIfQueueHasOnlyGarbage() {
+	public void testHasNextChunkReturnsFalseIfQueueHasOnlyGarbage() throws IOException {
 		queue.addPageTag(0, 0); // non-existent page, can't expand into any chunks
 		assertFalse(queue.hasNextChunk());
 	}
@@ -237,7 +237,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testNextChunkBlocksWhenNotAvailable() throws InterruptedException {
+	public void testNextChunkBlocksWhenNotAvailable() throws InterruptedException, IOException {
 		class Holder { boolean passed; };
 		Holder unblocked = new Holder(), queued = new Holder();
 		
@@ -272,7 +272,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testNextChunkPrioritizesItems() {
+	public void testNextChunkPrioritizesItems() throws IOException {
 		int size = 128, base = -64;
 		Shuffler shuffler = new Shuffler(size);
 		
@@ -364,7 +364,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testStopSendingEverything() {
+	public void testStopSendingEverything() throws IOException {
 		// ask for everything, read a chunk, ask to stop
 		queue.startSendingEverything();
 		queue.nextChunk(); // let it break things down so we get chunk entries
@@ -568,7 +568,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddInodeContentsHonorsPrioritySetting() {
+	public void testAddInodeContentsHonorsPrioritySetting() throws IOException {
 		// queue up low-priority and high-priority reftags
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 		queue.addInodeContents(1, revTag, inodeIndirect.getStat().getInodeId());
@@ -584,7 +584,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddInodeContentsAllowsReprioritization() {
+	public void testAddInodeContentsAllowsReprioritization() throws IOException {
 		// queue up low-priority and high-priority reftags
 		queue.addInodeContents(0, revTag, inodeIndirect.getStat().getInodeId());
 		queue.addInodeContents(1, revTag, inode2Indirect.getStat().getInodeId());
@@ -596,7 +596,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddInodeContentsAllowsCancellation() {
+	public void testAddInodeContentsAllowsCancellation() throws IOException {
 		// queue up low-priority and high-priority reftags
 		queue.addInodeContents(0, revTag, inodeIndirect.getStat().getInodeId());
 		queue.nextChunk();
@@ -669,7 +669,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddInodeContentsToleratesImmediateRefTag() {
+	public void testAddInodeContentsToleratesImmediateRefTag() throws IOException {
 		queue.addInodeContents(0, revTag, inodeImmediate.getStat().getInodeId());
 		assertFalse(queue.hasNextChunk());
 
@@ -683,13 +683,13 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testAddInodeContentsToleratesIndirectRefTag() {
+	public void testAddInodeContentsToleratesIndirectRefTag() throws IOException {
 		queue.addInodeContents(0, revTag, inodeIndirect.getStat().getInodeId());
 		assertQueueDrainOfSize(numChunks);
 	}
 	
 	@Test
-	public void testAddInodeContentsToleratesDoublyIndirectRefTag() {
+	public void testAddInodeContentsToleratesDoublyIndirectRefTag() throws IOException {
 		long numDataPages = new PageTree(inode2Indirect).numDataPages();
 		queue.addInodeContents(0, revTag, inode2Indirect.getStat().getInodeId());
 		assertQueueDrainOfSize((int) (numChunks * numDataPages));
@@ -974,7 +974,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testStopAllEmptiesQueue() {
+	public void testStopAllEmptiesQueue() throws IOException {
 		queue.addRevisionTag(0, revTag);
 		assertTrue(queue.hasNextChunk());
 		queue.stopAll();
@@ -1015,7 +1015,7 @@ public class PageQueueTest {
 	}
 	
 	@Test
-	public void testExpectTagNextReturnsFalseIfQueueIsEmpty() {
+	public void testExpectTagNextReturnsFalseIfQueueIsEmpty() throws IOException {
 		assertFalse(queue.hasNextChunk());
 		assertFalse(queue.expectTagNext(pageTag));
 	}
@@ -1049,7 +1049,12 @@ public class PageQueueTest {
 	public void testCloseWakesFromNextChunkBlock() throws InterruptedException {
 		MutableBoolean woke = new MutableBoolean();
 		Thread t = new Thread(()-> {
-			queue.nextChunk();
+			try {
+                queue.nextChunk();
+            } catch (IOException exc) {
+                exc.printStackTrace();
+                fail();
+            }
 			woke.setTrue();
 		});
 		

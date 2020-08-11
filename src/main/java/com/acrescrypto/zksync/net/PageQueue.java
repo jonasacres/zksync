@@ -53,6 +53,7 @@ public class PageQueue {
 		QueueItem lastChild;
 		
 		QueueItem(int priority) { this.priority = priority; }
+		boolean   hasNextChild() throws IOException { return false; }
 		QueueItem nextChildActual() { return null; }
 		QueueItem nextChild() {
 			return lastChild = nextChildActual();
@@ -128,6 +129,7 @@ public class PageQueue {
 			return new ChunkQueueItem(priority, new ChunkReference(archive.getStorage(), tag, shuffler.next()));
 		}
 		
+		@Override public boolean hasNextChild() { return shuffler.hasNext(); }
 		@Override int classPriority() { return -10; }
 		@Override long getHash() { return tag != null ? tag.shortTagPreserialized() : -1; }
 	}
@@ -178,6 +180,7 @@ public class PageQueue {
 			}
 		}
 		
+		@Override public boolean hasNextChild() { return shuffler.hasNext(); }
 		@Override int classPriority() { return -20; }
 		@Override long getHash() {
 			return tree != null
@@ -229,6 +232,7 @@ public class PageQueue {
 			}
 		}
 		
+		@Override public boolean hasNextChild() { return inodeTable != null && shuffler.hasNext(); }
 		@Override int classPriority() { return -40; }
 		@Override long getHash() { return Util.shortTag(revTag.getBytes()); }
 	}
@@ -279,6 +283,7 @@ public class PageQueue {
 			}
 		}
 		
+		@Override public boolean hasNextChild() { return inodeTable != null && shuffler.hasNext(); }
 		@Override int classPriority() { return -30; }
 		@Override long getHash() { return Util.shortTag(revTag.getBytes()); }
 	}
@@ -328,6 +333,7 @@ public class PageQueue {
 			}
 		}
 		
+		@Override public boolean hasNextChild() throws IOException { return traverser != null && traverser.hasNext(); }
 		@Override int classPriority() { return -100; }
 		@Override long getHash() { return 0; }
 	}
@@ -402,12 +408,12 @@ public class PageQueue {
 		this.notifyAll();
 	}
 	
-	public boolean hasNextChunk() {
+	public boolean hasNextChunk() throws IOException {
 		unpackNextReference();
 		return !itemsByPriority.isEmpty();
 	}
 	
-	public boolean expectTagNext(StorageTag tag) {
+	public boolean expectTagNext(StorageTag tag) throws IOException {
 		unpackNextReference();
 		if(itemsByPriority.isEmpty()) return false;
 		QueueItem head = itemsByPriority.peek();
@@ -421,7 +427,7 @@ public class PageQueue {
 		}
 	}
 	
-	public synchronized ChunkReference nextChunk() {
+	public synchronized ChunkReference nextChunk() throws IOException {
 		while(!hasNextChunk() && !closed) {
 			try {
 				this.wait();
@@ -447,28 +453,59 @@ public class PageQueue {
 		this.notifyAll();
 	}
 	
-	protected synchronized void unpackNextReference() {
-		while(!itemsByPriority.isEmpty()) {
-			try {
-				QueueItem head  = itemsByPriority.peek();
-				QueueItem child = head.nextChild();
-				
-				if(child != null) {
-					itemsByPriority.add(child);
-					itemsByHash    .put(child.getHash(), child);
-					
-				} else if(head.reference() == null) {
-					QueueItem item = itemsByPriority.poll();
-					itemsByHash.remove(item.getHash());
-					
-				} else {
-					return;
-				}
-			} catch(NullPointerException exc) {
-				System.out.println("dafuq");
-				exc.printStackTrace();
-				throw exc;
-			}
-		}
+	protected synchronized void unpackNextReference() throws IOException {
+		unpackToDepth(1);
+	}
+	
+	protected synchronized void unpackToDepth(int depth) throws IOException {
+	    // ensure that the first `depth` elements of the queue are ChunkQueueItems
+	    while(!unpackedToDepth(depth)) {
+	        unpackFirstPackedReference();
+	    }
+	}
+	
+	protected synchronized boolean unpackedToDepth(int depth) throws IOException {
+	    int i = 0;
+	    
+	    for(QueueItem item : itemsByPriority) {
+	        if(i >= depth)               return true;
+	        if(item.hasNextChild())      return false;
+	        if(item.reference() == null) return false;
+	        i++;
+	    }
+	    
+	    // we have fewer than 'depth' items (potentially none), but nothing is packed
+	    return true;
+	}
+	
+	protected synchronized void unpackFirstPackedReference() throws IOException {
+	    QueueItem retiredItem = null;
+	    
+	    for(QueueItem item : itemsByPriority) {
+	        QueueItem child = item.nextChild();
+	        if(child == null) {
+	            // nothing to unpack
+	            
+	            if(item.reference() != null) continue; // has data, so keep it
+	            
+	            // remove this from the queue, then cycle back through
+	            retiredItem = item;
+	            break;
+	        }
+	        
+	        // add the child in
+            itemsByPriority.add(child);
+            itemsByHash    .put(child.getHash(), child);
+            
+            break;
+	    }
+	    
+        if(    retiredItem != null
+           &&  retiredItem.reference() == null
+           && !retiredItem.hasNextChild())
+        {
+	        itemsByPriority.remove(retiredItem);
+            itemsByHash.remove(retiredItem.getHash());
+        }
 	}
 }
