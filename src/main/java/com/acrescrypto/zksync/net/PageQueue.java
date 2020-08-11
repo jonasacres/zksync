@@ -1,7 +1,6 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -30,6 +29,10 @@ import com.acrescrypto.zksync.utility.Util;
 public class PageQueue {
     public interface UnpackCallback {
         boolean unpackedItem(QueueItem queueItem) throws IOException;
+    }
+    
+    public class NothingToUnpackException extends Exception {
+        private static final long serialVersionUID = 1L;
     }
     
 	public final static int DEFAULT_EVERYTHING_PRIORITY = -20;
@@ -230,6 +233,9 @@ public class PageQueue {
 				}
 				
 				return null;
+			} catch (ClosedException exc) {
+			    logger.info("Can't enqueue revtag {} since filesystem is closed", revTag);
+			    return null;
 			} catch (IOException exc) {
 				logger.error("Caught exception queuing revision tag {}", revTag, exc);
 				if(exc.getCause() != null) {
@@ -285,7 +291,7 @@ public class PageQueue {
 				
 				return null;
 			} catch (ClosedException exc) {
-			    logger.info("Can't queue revision tag {} since filesystem is closed", revTag, exc);
+			    logger.info("Can't queue revision tag {} since filesystem is closed", revTag);
 			    return null;
 			} catch (IOException exc) {
 				logger.error("Caught exception queuing revision tag {}", revTag, exc);
@@ -338,7 +344,7 @@ public class PageQueue {
 				StorageTag tag = new StorageTag(archive.getCrypto(), path);
 				return new PageQueueItem(priority, archive, tag);
 			} catch (ClosedException exc) {
-                logger.info("Can't queue next tag since filesystem is closed", exc);
+                logger.info("Can't queue next tag since filesystem is closed");
                 return null;
 			} catch (IOException exc) {
 				logger.error("Caught exception queuing next tag in EverythingQueueItem", exc);
@@ -466,7 +472,7 @@ public class PageQueue {
 		this.notifyAll();
 	}
 	
-	public Collection<StorageTag> upcomingTags(int count) throws IOException {
+	public HashSet<StorageTag> upcomingTags(int count) throws IOException {
 	    HashSet<StorageTag> upcoming = new HashSet<>();
 	    
 	    unpackUntil((queueItem)->{
@@ -475,6 +481,10 @@ public class PageQueue {
 	    });
 	    
 	    return upcoming;
+	}
+	
+	public boolean itemIsUnpacked(QueueItem item) throws IOException {
+	    return item.reference() != null && !item.hasNextChild();
 	}
 	
 	protected synchronized void unpackNextReference() throws IOException {
@@ -488,11 +498,22 @@ public class PageQueue {
 	
 	protected synchronized void unpackUntil(UnpackCallback callback) throws IOException {
 	    // ensure that the first `depth` elements of the queue are ChunkQueueItems
-	    while(!itemsByPriority.isEmpty()) {
-	        QueueItem item = unpackFirstPackedReference();
-	        if(item != null && item.reference() != null && !item.hasNextChild()) {
+	    for(QueueItem item : itemsByPriority) {
+	        if(itemIsUnpacked(item)) {
 	            if(callback.unpackedItem(item)) return;
+	        } else {
+	            break;
 	        }
+	    }
+	    
+	    try {
+    	    while(!itemsByPriority.isEmpty()) {
+    	        QueueItem item = unpackFirstPackedReference();
+    	        if(item != null && itemIsUnpacked(item)) {
+    	            if(callback.unpackedItem(item)) return;
+    	        }
+    	    }
+	    } catch(NothingToUnpackException exc) {
 	    }
 	}
 	
@@ -510,7 +531,7 @@ public class PageQueue {
 	    return true;
 	}
 	
-	protected synchronized QueueItem unpackFirstPackedReference() throws IOException {
+	protected synchronized QueueItem unpackFirstPackedReference() throws IOException, NothingToUnpackException {
 	    QueueItem retiredItem = null;
 	    
 	    try {
@@ -541,6 +562,6 @@ public class PageQueue {
             }
 	    }
 	    
-	    return null;
+	    throw new NothingToUnpackException();
 	}
 }

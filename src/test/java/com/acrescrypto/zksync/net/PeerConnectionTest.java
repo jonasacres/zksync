@@ -1,5 +1,6 @@
 package com.acrescrypto.zksync.net;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -14,7 +15,7 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 
@@ -1824,41 +1825,70 @@ public class PeerConnectionTest {
 		msg.receivedData(PeerMessage.FLAG_FINAL, new byte[0]);
 		conn.handle(msg);
 		
-		HashSet<Long> pagesSeen = new HashSet<Long>();
-		int pagesReceived = 0;
-		int pageSize = archive.getConfig().getSerializedPageSize();
-		int numChunks = (int) Math.ceil(((double) pageSize)/PeerMessage.FILE_CHUNK_SIZE);
-		int finalChunkSize = pageSize % PeerMessage.FILE_CHUNK_SIZE;
+		int pagesReceived            = 0;
+		int pageSize                 = archive.getConfig().getSerializedPageSize();
+		int numChunks                = (int) Math.ceil(((double) pageSize)/PeerMessage.FILE_CHUNK_SIZE);
+		int finalChunkSize           = pageSize % PeerMessage.FILE_CHUNK_SIZE;
+		
+		class PageRecord {
+		    int chunksSeen;
+		    byte[] data = new byte[pageSize]; 
+		    
+		    PageRecord() {}
+		    boolean append(InputStream stream) throws IOException {
+		        while(stream.available() >= 0) {
+    		        byte[] indexRaw = new byte[4];
+    		        
+    		        int r       = IOUtils.read(stream, indexRaw);
+    		        if(r == 0) break;
+    		        assertEquals(indexRaw.length, r);
+    		        
+    		        int index   = ByteBuffer.wrap(indexRaw).getInt(),
+    		            length  = (index == numChunks - 1)
+    		                      ? finalChunkSize
+    		                      : PeerMessage.FILE_CHUNK_SIZE,
+    		            offset  = index * PeerMessage.FILE_CHUNK_SIZE;
+    		        
+    		        int readLen = IOUtils.read(stream, data, offset, length);
+    		        if(readLen == 0) break;
+    		        assertEquals(length, readLen);
+    		        
+                    chunksSeen++;
+		        }
+		        
+		        return finished();
+		    }
+		    
+		    boolean finished() {
+		        return chunksSeen == numChunks;
+		    }
+		}
+		HashMap<String,PageRecord> pageMap = new HashMap<>();
 		
 		while(pagesReceived < pagesExpected) {
-			byte[] pageData = new byte[pageSize];
-			DummyPeerMessageOutgoing out = socket.popMessage();
+			DummyPeerMessageOutgoing out;
+			do {
+			    out = socket.popMessage();
+			} while(out.cmd != PeerConnection.CMD_SEND_PAGE);
+			
 			byte[] tagBytes = new byte[crypto.hashLength()];
 			IOUtils.read(out.txPayload, tagBytes);
 			StorageTag tag = new StorageTag(crypto, tagBytes);
+			PageRecord pageRecord;
 			
-			assertFalse(pagesSeen.contains(tag.shortTag()));
-			pagesSeen.add(tag.shortTag());
-			
-			while(out.txPayload.available() >= 0) {
-				byte[] indexRaw = new byte[4];
-				int r = IOUtils.read(out.txPayload, indexRaw);
-				if(r == 0) {
-					try { Thread.sleep(1); } catch(InterruptedException exc) {}
-					continue;
-				}
-				
-				int index = ByteBuffer.wrap(indexRaw).getInt();
-				int length = (index == numChunks - 1) ? finalChunkSize : PeerMessage.FILE_CHUNK_SIZE;
-				int offset = index * PeerMessage.FILE_CHUNK_SIZE;
-				
-				int readLen = IOUtils.read(out.txPayload, pageData, offset, length);
-				assertEquals(readLen, length);
+			if(pageMap.containsKey(tag.path())) {
+			    pageRecord = pageMap.get(tag.path());
+			} else {
+			    pageRecord = new PageRecord();
+			    pageMap.put(tag.path(), pageRecord);
 			}
 			
-			byte[] expectedPageData = archive.getStorage().read(tag.path());
-			assertTrue(Arrays.equals(expectedPageData, pageData));
-			pagesReceived++;
+			assertFalse(pageRecord.finished());
+			if(pageRecord.append(out.txPayload)) {
+    			byte[] expectedPageData = archive.getStorage().read(tag.path());
+    			assertArrayEquals(expectedPageData, pageRecord.data);
+    			pagesReceived++;
+			}
 		}
 	}
 	
@@ -1904,7 +1934,7 @@ public class PeerConnectionTest {
 		
 		conn.setLocalPaused(false);
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming(PeerConnection.CMD_ANNOUNCE_TAGS);
-		msg.receivedData(PeerMessage.FLAG_FINAL, archive.getConfig().tag().getTagBytes()); // extra tag bytes are harmless here
+		msg.receivedData(PeerMessage.FLAG_FINAL, archive.getConfig().tag().getTagBytes());
 		conn.handle(msg);
 		
 		msg = new DummyPeerMessageIncoming(PeerConnection.CMD_REQUEST_ALL);
@@ -1914,6 +1944,9 @@ public class PeerConnectionTest {
 		while(Util.waitUntil(100, ()->!socket.messages.isEmpty())) {
 			DummyPeerMessageOutgoing out = socket.popMessage();
 			byte[] tag = new byte[crypto.hashLength()];
+			
+			if(out.cmd != PeerConnection.CMD_SEND_PAGE) continue;
+			
 			IOUtils.read(out.txPayload, tag);
 			assertNotEquals(archive.getConfig().tag(), tag);
 			while(out.txPayload.available() >= 0) {

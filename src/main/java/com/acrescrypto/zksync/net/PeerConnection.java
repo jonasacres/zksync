@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Queue;
 
@@ -60,6 +61,7 @@ public class PeerConnection {
 	
 	protected PeerSocket socket;
 	protected Queue<StorageTag> rejectionQueue = new LinkedList<>();
+	protected HashSet<StorageTag> announcedUpcoming = new HashSet<>();
 	protected boolean remotePaused, localPaused;
 	protected PageQueue queue;
 	protected boolean closed;
@@ -942,8 +944,19 @@ public class PeerConnection {
 		}
 	}
 	
-	protected void announceUpcomingTags() {
-	    // TODO
+	protected void announceUpcomingTags() throws IOException {
+	    int count = this.maxRejectionQueueSize()/2;
+	    
+	    announcedUpcoming = queue.upcomingTags(count);
+	    this.announceTags(announcedUpcoming);
+	}
+	
+	protected void announceUpcomingTagsIfNeeded(StorageTag tag) throws IOException {
+	    boolean needsAnnounce = announcedUpcoming.size() <= 1 || !announcedUpcoming.contains(tag);
+	    
+	    if(needsAnnounce) {
+	        announceUpcomingTags();
+	    }
 	}
 	
 	protected void pageQueueThread() {
@@ -971,6 +984,7 @@ public class PeerConnection {
 					msg = socket.makeOutgoingMessage(CMD_SEND_PAGE, lastStream);
 					lastStream.write(chunk.tag.getTagBytes());
 					lastTag = chunk.tag;
+				    announceUpcomingTagsIfNeeded(lastTag);
 				}
 				
 				logger.trace("Swarm {} {}:{}: PeerConnection page queue thread sending chunk {} of tag {}",
@@ -986,6 +1000,7 @@ public class PeerConnection {
 				if(!hasMore) {
 					lastStream.eof();
 					lastStream = null;
+					announcedUpcoming.remove(chunk.tag);
 				}
 			} catch(SwarmTimeoutException exc) {
 				logger.info("Swarm {} {}:{}: PeerConnection page queue thread skipping chunk {} since it is not available locally",
