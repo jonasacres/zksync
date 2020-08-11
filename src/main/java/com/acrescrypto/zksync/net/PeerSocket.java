@@ -69,7 +69,7 @@ public abstract class PeerSocket {
 		_close();
 		closeAllIncoming();
 		closeAllOutgoing();
-		threadPool.shutdownNow();
+		if(threadPool != null) threadPool.shutdownNow();
 	}
 	
 	/** Immediately close socket and blacklist due to a clear protocol violation. 

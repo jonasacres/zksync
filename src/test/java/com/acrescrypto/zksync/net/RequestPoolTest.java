@@ -19,6 +19,7 @@ import com.acrescrypto.zksync.TestUtils;
 import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.crypto.Key;
 import com.acrescrypto.zksync.exceptions.ENOENTException;
+import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.fs.zkfs.ArchiveAccessor;
 import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.InodeTable;
@@ -38,6 +39,22 @@ public class RequestPoolTest {
 		}
 	}
 	
+	class DummySocket extends PeerSocket {
+	    public DummySocket() {
+	        this.swarm = RequestPoolTest.this.config.getSwarm();
+	    }
+	    
+        @Override public PeerAdvertisement getAd() { return null; }
+        @Override public void write(byte[] data, int offset, int length) throws IOException, ProtocolViolationException {}
+        @Override public int read(byte[] data, int offset, int length) throws IOException, ProtocolViolationException { return 0; }
+        @Override public boolean isLocalRoleClient() { return false; }
+        @Override protected void _close() throws IOException {}
+        @Override public boolean isClosed() { return false; }
+        @Override public void handshake(PeerConnection conn) throws ProtocolViolationException, IOException {}
+        @Override public int getPeerType() throws UnsupportedOperationException { return PeerConnection.PEER_TYPE_FULL; }
+        @Override public byte[] getSharedSecret() { return new byte[crypto.asymDHSecretSize()]; }
+	}
+	
 	class DummyConnection extends PeerConnection {
 		boolean requestedAll, mockSeedOnly, setPaused, setPausedValue;
 		int requestedPriority;
@@ -49,6 +66,10 @@ public class RequestPoolTest {
 		LinkedList<RevisionTag> requestedRevisionStructures = new LinkedList<>();
 		LinkedList<Long> requestedPageTags = new LinkedList<>();
 		LinkedList<Long> requestedInodeIds = new LinkedList<>();
+		
+		public DummyConnection() {
+		    this.socket = new DummySocket();
+		}
 		
 		@Override public void setPaused(boolean paused) {
 			this.setPaused = true;
@@ -91,7 +112,6 @@ public class RequestPoolTest {
 			requestedRevisionDetails.addAll(refTags);
 		}
 		
-		@Override public void announceTag(long shortTag) {}
 		@Override public void announceTip(RevisionTag tip) {}
 		@Override public void announceTips() {}
 	}

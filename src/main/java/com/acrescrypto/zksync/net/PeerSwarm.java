@@ -526,7 +526,7 @@ public class PeerSwarm implements BlacklistCallback {
 		return activeFiles.get(shortTag);
 	}
 
-	protected synchronized void receivedPage(StorageTag tag) {
+	protected synchronized void receivedPage(StorageTag tag) throws IOException {
 		long shortTag = tag.shortTagPreserialized();
 		activeFiles.remove(shortTag);
 		
@@ -550,10 +550,9 @@ public class PeerSwarm implements BlacklistCallback {
 		announceTag(tag);
 	}
 	
-	public void announceTag(StorageTag tag) {
-		long shortTag = tag.shortTagPreserialized();
+	public void announceTag(StorageTag tag) throws IOException {
 		for(PeerConnection connection : getConnections()) {
-			connection.announceTag(shortTag);
+			connection.announceTag(tag);
 		}
 	}
 	

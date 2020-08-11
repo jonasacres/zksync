@@ -254,7 +254,6 @@ public class TCPPeerSocketTest {
 			
 			if(!TCPPeerSocket.disableMakeThreads) {
 				serverReadNext();
-				if(!PeerConnection.DISABLE_TAG_LIST) serverReadNext();
 			}
 			
 			return this;

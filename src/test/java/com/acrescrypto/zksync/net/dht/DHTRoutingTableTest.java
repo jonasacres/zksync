@@ -264,6 +264,8 @@ public class DHTRoutingTableTest {
 
 		for(DHTBucket bucket : table.buckets()) {
 			if(bucket.includes(peer.getId())) continue;
+			
+			// TODO: itf 2020-08-11 0399284 linux, AssertionError
 			assertTrue(bucket.needsFreshening());
 		}
 	}

@@ -5,8 +5,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.Queue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,8 +30,6 @@ import com.acrescrypto.zksync.utility.AppendableInputStream;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerConnection {
-	public final static boolean DISABLE_TAG_LIST = false;
-	
 	public final static byte CMD_ACCESS_PROOF = 0x00;
 	public final static byte CMD_ANNOUNCE_PEERS = 0x01;
 	public final static byte CMD_ANNOUNCE_SELF_AD = 0x02;
@@ -61,7 +59,7 @@ public class PeerConnection {
 	}
 	
 	protected PeerSocket socket;
-	protected HashSet<Long> announcedTags = new HashSet<Long>(); // TODO Someday: (review) unbounded memory use to track announced page tags
+	protected Queue<StorageTag> rejectionQueue = new LinkedList<>();
 	protected boolean remotePaused, localPaused;
 	protected PageQueue queue;
 	protected boolean closed;
@@ -89,7 +87,6 @@ public class PeerConnection {
 		this.queue = new PageQueue(socket.swarm.config);
 		socket.threadPool.submit(()->pageQueueThread());
 		announceTips();
-		announceTags();
 		
 		if(socket.getSwarm().getConfig().getArchive() == null) {
 			socket.threadPool.submit(()->{
@@ -157,19 +154,17 @@ public class PeerConnection {
 	
 	/** Announce a tag to the remote peer, and automatically send the page if the remote peer is requesting all data.
 	 * Note that the alternative forms of announceTags do NOT automatically send pages to the remote peer at this time.
+	 * @throws IOException 
 	 */
-	public void announceTag(long shortTag) {
-		if(DISABLE_TAG_LIST) return;
+	public void announceTag(StorageTag tag) throws IOException {
 		logger.trace("Swarm {} {}:{}: PeerConnection send announceTag",
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
 				socket.getPort());
-		ByteBuffer tag = ByteBuffer.allocate(RefTag.REFTAG_SHORT_SIZE);
-		tag.putLong(shortTag);
-		send(CMD_ANNOUNCE_TAGS, tag.array());
+		send(CMD_ANNOUNCE_TAGS, tag.getTagBytesPreserialized());
 		
-		if(wantsEverything && !hasFile(shortTag)) {
-			queue.addPageTag(PageQueue.DEFAULT_EVERYTHING_PRIORITY, shortTag);
+		if(wantsEverything && !hasFile(tag)) {
+			queue.addPageTag(PageQueue.DEFAULT_EVERYTHING_PRIORITY, tag);
 		}
 	}
 	
@@ -242,7 +237,6 @@ public class PeerConnection {
 	}
 	
 	public void announceShortTags(Collection<Long> tags) {
-		if(DISABLE_TAG_LIST) return;
 		logger.trace("Swarm {} {}:{}: PeerConnection send announceShortTags",
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
@@ -256,28 +250,16 @@ public class PeerConnection {
 	}
 	
 	public void announceTags(Collection<StorageTag> tags) {
-		if(DISABLE_TAG_LIST) return;
 		logger.trace("Swarm {} {}:{}: PeerConnection send announceTags",
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
 				socket.getPort());
-		ByteBuffer serialized = ByteBuffer.allocate(tags.size() * RefTag.REFTAG_SHORT_SIZE);
+		ByteBuffer serialized = ByteBuffer.allocate(tags.size() * socket.swarm.config.getCrypto().hashLength());
 		for(StorageTag tag : tags) {
 			if(!serialized.hasRemaining()) break; // possible to add tags as we iterate
-			serialized.putLong(tag.shortTagPreserialized());
+			serialized.put(tag.getTagBytesPreserialized());
 		}
 		send(CMD_ANNOUNCE_TAGS, serialized.array());
-	}
-	
-	public void announceTags() {
-		if(DISABLE_TAG_LIST) return;
-		ZKArchive archive = socket.swarm.config.getArchive();
-		if(archive == null) {
-			send(CMD_ANNOUNCE_TAGS, new byte[0]);
-			return;
-		}
-		
-		announceTags(new ArrayList<>(archive.pageTagList().allPageTags()));
 	}
 	
 	public void announceTip(RevisionTag tip) {
@@ -456,12 +438,8 @@ public class PeerConnection {
 		}
 	}
 
-	public boolean wantsFile(StorageTag tag) {
-		return !announcedTags.contains(tag.shortTagPreserialized());
-	}
-
-	public boolean hasFile(long shortTag) {
-		return announcedTags.contains(shortTag);
+	public boolean hasFile(StorageTag tag) {
+		return rejectionQueue.contains(tag);
 	}
 	
 	protected void waitForFullInit() throws EOFException {
@@ -623,24 +601,32 @@ public class PeerConnection {
 	}
 	
 	protected void handleAnnounceTags(PeerMessageIncoming msg) throws EOFException {
-		if(DISABLE_TAG_LIST) return;
 		logger.trace("Swarm {} {}:{}: PeerConnection recv announceTags",
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
 				socket.getPort());
-		assert(RefTag.REFTAG_SHORT_SIZE == 8); // This code depends on tags being sent as 64-bit values.
-		while(msg.rxBuf.hasRemaining()) {
+		int tagLength = socket.swarm.getConfig().getCrypto().hashLength();
+        CryptoSupport crypto = socket.getSwarm().getConfig().getCrypto();
+        byte[] tagBytes = new byte[tagLength];
+
+        while(msg.rxBuf.hasRemaining()) {
 			// lots of tags to go through, and locks are expensive; accumulate into a buffer so we can minimize lock/release cycling
-			Util.blockOnPoll(()->msg.rxBuf.available() < 8 && !msg.rxBuf.isEOF());
-			if(msg.rxBuf.isEOF() && msg.rxBuf.available() < 8) break;
+			Util.blockOnPoll(()->msg.rxBuf.available() < tagLength && !msg.rxBuf.isEOF());
+			if(msg.rxBuf.isEOF() && msg.rxBuf.available() < tagLength) break;
 			
 			int len = Math.min(64*1024, msg.rxBuf.available());
-			ByteBuffer buf = ByteBuffer.allocate(len - len % 8); // round to 8-byte long boundary
+			ByteBuffer buf = ByteBuffer.allocate(len - len % crypto.hashLength());
 			msg.rxBuf.get(buf.array());
+			
 			synchronized(this) {
 				while(buf.hasRemaining()) {
-					long shortTag = buf.getLong();
-					announcedTags.add(shortTag);
+				    buf.get(tagBytes);
+				    StorageTag tag = new StorageTag(crypto, tagBytes);
+				    
+				    rejectionQueue.add(tag);
+				    while(rejectionQueue.size() > maxRejectionQueueSize()) {
+				        rejectionQueue.poll();
+				    }
 				}
 			}
 		}
@@ -841,9 +827,7 @@ public class PeerConnection {
 					socket.getPort(),
 					msg.msgId,
 					tag);
-			if(!DISABLE_TAG_LIST) {
-				announceTag(tag.shortTag());
-			}
+			announceTag(tag);
 			return;
 		}
 		
@@ -967,7 +951,7 @@ public class PeerConnection {
 		while(!socket.isClosed()) {
 			try {
 				ChunkReference chunk = queue.nextChunk();
-				if(chunk == null || !wantsFile(chunk.tag)) continue;
+				if(chunk == null || rejectionQueue.contains(chunk.tag)) continue;
 				waitForUnpause();
 				
 				if(lastStream == null || !lastTag.equals(chunk.tag)) {
@@ -1048,15 +1032,15 @@ public class PeerConnection {
 		return timeStart;
 	}
 	
-	public synchronized ArrayList<Long> announcedTags() {
-		return new ArrayList<>(announcedTags);
-	}
-
 	public boolean retryOnClose() {
 		return retryOnClose;
 	}
 
 	public void setRetryOnClose(boolean retryOnClose) {
 		this.retryOnClose = retryOnClose;
+	}
+	
+	public int maxRejectionQueueSize() {
+	    return socket.getSwarm().getConfig().getMaster().getGlobalConfig().getInt("net.swarm.maxRejectionQueueSize");
 	}
 }

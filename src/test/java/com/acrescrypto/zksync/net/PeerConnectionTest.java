@@ -357,9 +357,9 @@ public class PeerConnectionTest {
 	
 	@Test
 	public void testAnnounceTag() throws IOException {
-		conn.announceTag(1234);
+		conn.announceTag(archive.getConfig().tag());
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TAGS);
-		assertReceivedPayload(ByteBuffer.allocate(8).putLong(1234).array());
+		assertReceivedPayload(archive.getConfig().tag().getTagBytesPreserialized());
 		assertFinished();
 	}
 	
@@ -370,7 +370,7 @@ public class PeerConnectionTest {
 		conn.sendEverything();
 		conn.setLocalPaused(true);
 		conn.queue.itemsByPriority.clear();
-		conn.announceTag(archive.getConfig().tag().shortTag());
+		conn.announceTag(archive.getConfig().tag());
 		
 		conn.queue.itemsByPriority.forEach((item)->{
 			if(!(item instanceof PageQueueItem)) return;
@@ -389,7 +389,7 @@ public class PeerConnectionTest {
 		
 		conn.setLocalPaused(true);
 		conn.queue.itemsByPriority.clear();
-		conn.announceTag(archive.getConfig().tag().shortTag());
+		conn.announceTag(archive.getConfig().tag());
 		
 		conn.queue.itemsByPriority.forEach((item)->{
 			if(!(item instanceof PageQueueItem)) return;
@@ -425,13 +425,13 @@ public class PeerConnectionTest {
 	public void testAnnounceTags() throws IOException {
 		int numTags = 16;
 		LinkedList<StorageTag> tags = new LinkedList<StorageTag>();
-		ByteBuffer payload = ByteBuffer.allocate(numTags * 8);
+		ByteBuffer payload = ByteBuffer.allocate(numTags * crypto.hashLength());
 		
 		for(int i = 0; i < numTags; i++) {
 			byte[] tagBytes = crypto.hash(Util.serializeInt(i));
 			StorageTag tag = new StorageTag(crypto, tagBytes);
 			tags.add(tag);
-			payload.putLong(tag.shortTag());
+			payload.put(tag.getTagBytes());
 		}
 		
 		assertFalse(payload.hasRemaining());
@@ -950,12 +950,15 @@ public class PeerConnectionTest {
 	}
 	
 	@Test
-	public void testHandleAnnounceTagsUpdatesAnnouncedTagsList() throws ProtocolViolationException {
-		byte[] tagList = crypto.rng(8*32);
+	public void testHandleAnnounceTagsUpdatesRejectionQueue() throws ProtocolViolationException {
+		byte[] tagList = crypto.rng(conn.maxRejectionQueueSize()*crypto.hashLength());
 		ByteBuffer buf = ByteBuffer.wrap(tagList);
 
 		while(buf.hasRemaining()) {
-			assertFalse(conn.hasFile(buf.getLong()));
+		    byte[] tagBytes = new byte[crypto.hashLength()];
+		    StorageTag tag = new StorageTag(crypto, tagBytes);
+			assertFalse(conn.rejectionQueue.contains(tag));
+			buf.put(tag.getTagBytesPreserialized());
 		}
 
 		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TAGS);
@@ -963,14 +966,16 @@ public class PeerConnectionTest {
 		conn.handle(msg);
 		
 		while(buf.hasRemaining()) {
-			assertTrue(conn.hasFile(buf.getLong()));
+            byte[] tagBytes = new byte[crypto.hashLength()];
+            StorageTag tag = new StorageTag(crypto, tagBytes);
+			assertTrue(conn.rejectionQueue.contains(tag));
 		}
 	}
 	
 	@Test
 	public void testHandleAnnounceTagsWorksForSeedOnly() throws ProtocolViolationException, IOException, UnconnectableAdvertisementException {
 		blindPeer();
-		testHandleAnnounceTagsUpdatesAnnouncedTagsList();
+		testHandleAnnounceTagsUpdatesRejectionQueue();
 	}
 	
 	@Test @Ignore
@@ -1590,7 +1595,7 @@ public class PeerConnectionTest {
 		conn.handle(msg);
 		
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TAGS);
-		assertReceivedPayload(ByteBuffer.allocate(8).putLong(tag.shortTag()).array());
+		assertReceivedPayload(tag.getTagBytesPreserialized());
 		assertFinished();
 	}
 	
@@ -1708,36 +1713,23 @@ public class PeerConnectionTest {
 		assertFalse(conn.isPausable(PeerConnection.CMD_SET_PAUSED));
 	}
 	
-	@Test
-	public void testWantsFileReturnsTrueIfRemotePeerHasNotAnnouncedTag() {
-		byte[] storageTagBytes = crypto.hash(Util.serializeInt(1));
-		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
-		assertTrue(conn.wantsFile(storageTag));
-	}
-	
-	@Test
-	public void testWantsFileReturnsFalseIfRemotePeerHasNotAnnouncedTag() throws ProtocolViolationException {
-		byte[] storageTagBytes = crypto.hash(Util.serializeInt(1));
-		StorageTag storageTag = new StorageTag(crypto, storageTagBytes);
-		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TAGS);
-		msg.receivedData(PeerMessage.FLAG_FINAL, storageTagBytes); // extra bytes are harmless
-		conn.handle(msg);
-		assertFalse(conn.wantsFile(storageTag));
-	}
-	
-	@Test
 	public void testHasFileReturnsFalseIfRemotePeerHasNotAnnouncedTag() {
 		byte[] hash = crypto.rng(crypto.hashLength());
-		assertFalse(conn.hasFile(Util.shortTag(hash)));
+		StorageTag tag = new StorageTag(crypto, hash);
+		
+		assertFalse(conn.hasFile(tag));
 	}
 	
 	@Test
 	public void testHasFileReturnsTrueIfRemotePeerHasAnnouncedTag() throws ProtocolViolationException {
 		byte[] hash = crypto.rng(crypto.hashLength());
-		DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TAGS);
-		msg.receivedData(PeerMessage.FLAG_FINAL, hash); // extra bytes are harmless
+        StorageTag tag = new StorageTag(crypto, hash);
+
+        DummyPeerMessageIncoming msg = new DummyPeerMessageIncoming((byte) PeerConnection.CMD_ANNOUNCE_TAGS);
+		msg.receivedData(PeerMessage.FLAG_FINAL, hash);
 		conn.handle(msg);
-		assertTrue(conn.hasFile(Util.shortTag(hash)));
+		
+		assertTrue(conn.hasFile(tag));
 	}
 	
 	@Test
@@ -1940,18 +1932,6 @@ public class PeerConnectionTest {
 		PeerConnection conn2 = new PeerConnection(socket);
 
 		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TIPS);
-		conn2.close();
-	}
-
-	@Test
-	public void testSendsTagsAtInitialization() throws IOException {
-		socket.close();
-		socket = new DummySocket(swarm);
-		PeerConnection conn2 = new PeerConnection(socket);
-
-		socket.messages.pollFirst();
-		assertReceivedCmd(PeerConnection.CMD_ANNOUNCE_TAGS);
-		
 		conn2.close();
 	}
 }

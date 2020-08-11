@@ -69,7 +69,6 @@ public class ArchiveNetPeersResourceTest {
 		int index;
 		DummyPeerSocket socket;
 		TCPPeerAdvertisement ad;
-		ArrayList<Long> announced = new ArrayList<>();
 		
 		public DummyPeerConnection(int index) {
 			this.index = index;
@@ -91,10 +90,6 @@ public class ArchiveNetPeersResourceTest {
 			remotePaused = ((index / 2) & 1) == 0;
 			wantsEverything = ((index / 4) & 1) == 0;
 			timeStart = 100*index;
-			
-			for(int i = 0; i < 64; i++) {
-				announced.add(1000l*index + i);
-			}
 		}
 		
 		@Override public void close() { closed = true; }
@@ -314,33 +309,6 @@ public class ArchiveNetPeersResourceTest {
     		}
     		
 	    	assertTrue(found);
-    	}
-    }
-    
-    @Test
-    public void testGetPeerAnnouncedReturns404ForNonexistentArchive() {
-    	WebTestUtils.requestGetWithError(target, 404, "/archives/doesntexist/net/peers/alsodoesntexist/announced");
-    }
-    
-    @Test
-    public void testGetPeerAnnouncedReturns404ForNonexistentPeer() {
-    	WebTestUtils.requestGetWithError(target, 404, basepath + "doesntexist/announced");
-    }
-    
-    @Test
-    public void testGetPeerAnnouncedWithEmptyList() {
-    	JsonNode resp = WebTestUtils.requestGet(target, pathForPeer(0) + "/announced");
-    	assertEquals(0, resp.get("announced").size());
-    }
-    
-    @Test
-    public void testGetPeerAnnouncedWithNonEmptyList() {
-    	for(int i = 0; i < swarm.connections.size(); i++) {
-	    	JsonNode resp = WebTestUtils.requestGet(target, pathForPeer(i) + "/announced");
-	    	for(int j = 0; j < resp.get("announced").size(); j++) {
-	    		assertEquals(swarm.connections.get(i).announced.get(j).longValue(),
-	    				resp.get("announced").get(j).longValue());
-	    	}
     	}
     }
 }

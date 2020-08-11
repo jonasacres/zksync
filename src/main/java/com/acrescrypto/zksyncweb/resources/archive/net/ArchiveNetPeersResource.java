@@ -68,10 +68,6 @@ public class ArchiveNetPeersResource {
 	public XAPIResponse getPeer(@PathParam("archiveid") String archiveId,
 			@PathParam("peerid") String fullPeerId) throws IOException {
 		String peerId = ArchiveCrud.basePath(fullPeerId).substring(1);
-		if(peerId.endsWith("/announced")) {
-			// wonky way to do this. isn't there a better way to get Jersey to do query params here?!
-			return getPeerAnnounced(archiveId, peerId.substring(0, peerId.length()-"/announced".length()));
-		}
 		
 		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
 		if(config == null) throw XAPIResponse.notFoundErrorResponse();
@@ -106,15 +102,6 @@ public class ArchiveNetPeersResource {
 		conn.close();
 
 		throw XAPIResponse.successResponse();
-	}
-	
-	public XAPIResponse getPeerAnnounced(@PathParam("archiveid") String archiveId,
-			@PathParam("peerid") String peerId) throws IOException {
-		ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
-		if(config == null) throw XAPIResponse.notFoundErrorResponse();
-		PeerConnection conn = findConnection(config, peerId);
-		
-		throw XAPIResponse.withWrappedPayload("announced", conn.announcedTags());
 	}
 	
 	protected PeerConnection findConnection(ZKArchiveConfig config, String peerId) {

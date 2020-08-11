@@ -66,6 +66,7 @@ public class ConfigDefaults {
 		config.setDefault("net.swarm.maxOpenMessages",                         16);
 		config.setDefault("net.swarm.rejectionCacheSize",                      16);
 		config.setDefault("net.swarm.pageSendAvailabilityTimeoutMs",         1000);
+		config.setDefault("net.swarm.maxRejectionQueueSize",                   32);
 		
 		config.setDefault("fs.default.fileMode",                             0644);
 		config.setDefault("fs.default.username",                           "root");
