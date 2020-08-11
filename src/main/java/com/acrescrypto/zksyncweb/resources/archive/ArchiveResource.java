@@ -19,6 +19,7 @@ import com.acrescrypto.zksync.fs.localfs.LocalFS;
 import com.acrescrypto.zksync.fs.zkfs.RevisionTag;
 import com.acrescrypto.zksync.fs.zkfs.StoredAccess;
 import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
+import com.acrescrypto.zksync.fs.zkfs.ZKFSManager;
 import com.acrescrypto.zksyncweb.State;
 import com.acrescrypto.zksyncweb.WebUtils;
 import com.acrescrypto.zksyncweb.data.XAPIResponse;
@@ -199,6 +200,40 @@ public class ArchiveResource {
 		config.getMaster().getDHTDiscovery().forceUpdate(config.getAccessor());
 		throw XAPIResponse.successResponse();
 	}
+	
+	@POST
+	@Produces(MediaType.APPLICATION_JSON)
+	@Path("/mirror/toarchive")
+	public XAPIResponse postMirrorToArchive(@PathParam("archiveId") String archiveId) throws IOException, XAPIResponse {
+	    ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
+	    if(config == null) throw XAPIResponse.notFoundErrorResponse();
+	    
+	    ZKFSManager manager = State.sharedState().activeManager(config);
+	    if(!manager.isAutomirroring()) {
+	        throw XAPIResponse.withError(400, "Automirror not enabled");
+	    }
+	    
+	    manager.getMirror().syncTargetToArchive();
+	    
+	    throw XAPIResponse.successResponse();
+	}
+	
+	@POST
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/mirror/totarget")
+    public XAPIResponse postMirrorToTarget(@PathParam("archiveId") String archiveId) throws IOException, XAPIResponse {
+        ZKArchiveConfig config = State.sharedState().configForArchiveId(archiveId);
+        if(config == null) throw XAPIResponse.notFoundErrorResponse();
+        
+        ZKFSManager manager = State.sharedState().activeManager(config);
+        if(!manager.isAutomirroring()) {
+            throw XAPIResponse.withError(400, "Automirror not enabled");
+        }
+        
+        manager.getMirror().syncArchiveToTarget();
+        
+        throw XAPIResponse.successResponse();
+    }
 	
 	@PUT
 	@Produces(MediaType.APPLICATION_JSON)

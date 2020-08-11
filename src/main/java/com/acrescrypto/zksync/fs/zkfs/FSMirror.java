@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -643,7 +644,13 @@ public class FSMirror {
 		for(String path : toPrune) {
 			try {
 				remove(pruned, path, pruned.lstat(path));
-			} catch(ENOENTException exc) {}
+			} catch(ENOENTException exc) {
+			} catch(AccessDeniedException exc) {
+			    logger.warn("FS {}: FSMirror unable to remove {}, access denied",
+			            Util.formatArchiveId(zkfs.archive.config.archiveId),
+			            path);
+			}
+			
 		}
 	}
 

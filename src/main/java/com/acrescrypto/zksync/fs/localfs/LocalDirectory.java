@@ -46,6 +46,8 @@ public class LocalDirectory implements Directory {
 				String posixPath = new FSPath(entry.getFileName().toString()).toPosix();
 				paths.add(posixPath);
 			}
+		} catch(IOException exc) {
+		    // we may run into access problems; just ignore those
 		}
 		
 		if((opts & LIST_OPT_INCLUDE_DOT_DOTDOT) != 0) {

@@ -7,6 +7,7 @@ import com.acrescrypto.zksyncweb.State;
 
 public class XArchiveIdentification {
 	private byte[] archiveId;
+	private byte[] listenStaticPubkey;
 	
 	private String description;
 	private Integer pageSize;
@@ -36,32 +37,34 @@ public class XArchiveIdentification {
 		XArchiveIdentification id = new XArchiveIdentification();
 		XArchiveSettings xset;
 		
-		id.archiveId    =  config.getArchiveId().clone();
-		id.description  =  config.getDescription();
-		id.pageSize     =  config.getPageSize();
+		id.archiveId          =  config.getArchiveId().clone();
+		id.description        =  config.getDescription();
+		id.pageSize           =  config.getPageSize();
 		
-		id.usesWriteKey =  config.usesWriteKey();
-		id.haveWriteKey = !config.isReadOnly();
-		id.haveReadKey  = !config.getAccessor().isSeedOnly();
-		id.ready        =  config.haveConfigLocally();
+		id.usesWriteKey       =  config.usesWriteKey();
+		id.haveWriteKey       = !config.isReadOnly();
+		id.haveReadKey        = !config.getAccessor().isSeedOnly();
+		id.ready              =  config.haveConfigLocally();
+		
+		id.listenStaticPubkey = config.getSwarm().getPublicIdentityKey().getBytes();
 		
 		try {
 			id.dirty = State.sharedState().activeFs(config).isDirty();
 		} catch (Throwable exc) {}
 		
 		try {
-			id.numLocalTags = config.getArchive().pageTagList().allPageTags().size();
+			id.numLocalTags   = config.getArchive().pageTagList().allPageTags().size();
 		} catch(Throwable exc) {}
 		
-		id.connectedPeers   = config.getSwarm().getConnections().size();
-		id.bytesPerSecondRx = config.getSwarm().getBandwidthMonitorRx().getBytesPerSecond();
-		id.bytesPerSecondTx = config.getSwarm().getBandwidthMonitorTx().getBytesPerSecond();
-		id.lifetimeBytesRx  = config.getSwarm().getBandwidthMonitorRx().getLifetimeBytes();
-		id.lifetimeBytesTx  = config.getSwarm().getBandwidthMonitorTx().getLifetimeBytes();
+		id.connectedPeers     = config.getSwarm().getConnections().size();
+		id.bytesPerSecondRx   = config.getSwarm().getBandwidthMonitorRx().getBytesPerSecond();
+		id.bytesPerSecondTx   = config.getSwarm().getBandwidthMonitorTx().getBytesPerSecond();
+		id.lifetimeBytesRx    = config.getSwarm().getBandwidthMonitorRx().getLifetimeBytes();
+		id.lifetimeBytesTx    = config.getSwarm().getBandwidthMonitorTx().getLifetimeBytes();
 		
 		try {
-			id.currentRevTag = new XRevisionInfo(State.sharedState().activeFs(config).getBaseRevision(), 1);
-			id.currentTitle  = State.sharedState().activeFs(config).getInodeTable().getNextTitle();
+			id.currentRevTag  = new XRevisionInfo(State.sharedState().activeFs(config).getBaseRevision(), 1);
+			id.currentTitle   = State.sharedState().activeFs(config).getInodeTable().getNextTitle();
 		} catch (IOException | NullPointerException exc) {
 		}
 		
@@ -232,5 +235,13 @@ public class XArchiveIdentification {
 	
 	public void setNumLocalTags(Integer numLocalTags) {
 		this.numLocalTags = numLocalTags;
+	}
+	
+	public byte[] getListenStaticPubkey() {
+	    return listenStaticPubkey;
+	}
+	
+	public void setListenStaticPubkey(byte[] listenStaticPubkey) {
+	    this.listenStaticPubkey = listenStaticPubkey;
 	}
 }

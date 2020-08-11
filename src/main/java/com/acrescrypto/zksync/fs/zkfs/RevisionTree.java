@@ -574,7 +574,20 @@ public class RevisionTree implements AutoCloseable {
 				Util.formatArchiveId(config.getArchiveId()),
 				Util.formatRevisionTag(revTag),
 				timeoutMs);
+		
+		try {
+    		PageTree   tree      = new PageTree(revTag.getRefTag());
+    		StorageTag indexNode = tree.getPageTag(0);
+    		config.swarm.requestTag(SwarmFS.REQUEST_PRIORITY+1, indexNode);
+		} catch(IOException exc) {
+		    logger.error("RevisionTree {}: Caught exception requesting index page of revtag {}",
+		            Util.formatArchiveId(config.getArchiveId()),
+		            Util.formatRevisionTag(revTag),
+		            exc);
+		}
+		
 		config.swarm.requestRevisionDetails(SwarmFS.REQUEST_PRIORITY+1, revTag);
+		
 		long endTime = timeoutMs < 0 ? Long.MAX_VALUE : System.currentTimeMillis() + timeoutMs;
 		
 		while(parentsForTagLocal(revTag) == null && !config.isClosed() && System.currentTimeMillis() < endTime) {
