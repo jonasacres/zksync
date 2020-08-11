@@ -942,6 +942,10 @@ public class PeerConnection {
 		}
 	}
 	
+	protected void announceUpcomingTags() {
+	    // TODO
+	}
+	
 	protected void pageQueueThread() {
 		Util.setThreadName("PeerConnection queue thread");
 		StorageTag lastTag = null;

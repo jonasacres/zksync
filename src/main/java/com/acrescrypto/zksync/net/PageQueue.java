@@ -1,7 +1,9 @@
 package com.acrescrypto.zksync.net;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.PriorityQueue;
 
@@ -25,6 +27,10 @@ import com.acrescrypto.zksync.utility.Shuffler;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PageQueue {
+    public interface UnpackCallback {
+        boolean unpackedItem(QueueItem queueItem) throws IOException;
+    }
+    
 	public final static int DEFAULT_EVERYTHING_PRIORITY = -20;
 	public final static int DEFAULT_EVERY_REVISION_STRUCTURE_PRIORITY = -10;
 	public final static int CANCEL_PRIORITY = Integer.MIN_VALUE;
@@ -453,14 +459,33 @@ public class PageQueue {
 		this.notifyAll();
 	}
 	
-	protected synchronized void unpackNextReference() throws IOException {
-		unpackToDepth(1);
+	public Collection<StorageTag> upcomingTags(int count) throws IOException {
+	    HashSet<StorageTag> upcoming = new HashSet<>();
+	    
+	    unpackUntil((queueItem)->{
+	        upcoming.add(queueItem.reference().tag);
+	        return upcoming.size() >= count;
+	    });
+	    
+	    return upcoming;
 	}
 	
-	protected synchronized void unpackToDepth(int depth) throws IOException {
+	protected synchronized void unpackNextReference() throws IOException {
+	    if(itemsByPriority.isEmpty()) return;
+	    
+	    QueueItem head = itemsByPriority.peek();
+	    if(head.reference() != null) return;
+	    
+		unpackUntil((queueItem)->true);
+	}
+	
+	protected synchronized void unpackUntil(UnpackCallback callback) throws IOException {
 	    // ensure that the first `depth` elements of the queue are ChunkQueueItems
-	    while(!unpackedToDepth(depth)) {
-	        unpackFirstPackedReference();
+	    while(!itemsByPriority.isEmpty()) {
+	        QueueItem item = unpackFirstPackedReference();
+	        if(item != null && item.reference() != null && !item.hasNextChild()) {
+	            if(callback.unpackedItem(item)) return;
+	        }
 	    }
 	}
 	
@@ -478,34 +503,37 @@ public class PageQueue {
 	    return true;
 	}
 	
-	protected synchronized void unpackFirstPackedReference() throws IOException {
+	protected synchronized QueueItem unpackFirstPackedReference() throws IOException {
 	    QueueItem retiredItem = null;
 	    
-	    for(QueueItem item : itemsByPriority) {
-	        QueueItem child = item.nextChild();
-	        if(child == null) {
-	            // nothing to unpack
-	            
-	            if(item.reference() != null) continue; // has data, so keep it
-	            
-	            // remove this from the queue, then cycle back through
-	            retiredItem = item;
-	            break;
-	        }
-	        
-	        // add the child in
-            itemsByPriority.add(child);
-            itemsByHash    .put(child.getHash(), child);
-            
-            break;
+	    try {
+    	    for(QueueItem item : itemsByPriority) {
+    	        QueueItem child = item.nextChild();
+    	        if(child == null) {
+    	            // nothing to unpack
+    	            
+    	            if(item.reference() != null) continue; // has data, so keep it
+    	            
+    	            // remove this from the queue, then cycle back through
+    	            retiredItem = item;
+    	            return null;
+    	        }
+    	        
+    	        // add the child in
+                itemsByPriority.add(child);
+                itemsByHash    .put(child.getHash(), child);
+                return child;
+    	    }
+	    } finally {
+            if(    retiredItem != null
+               &&  retiredItem.reference() == null
+               && !retiredItem.hasNextChild())
+            {
+    	        itemsByPriority.remove(retiredItem);
+                itemsByHash.remove(retiredItem.getHash());
+            }
 	    }
 	    
-        if(    retiredItem != null
-           &&  retiredItem.reference() == null
-           && !retiredItem.hasNextChild())
-        {
-	        itemsByPriority.remove(retiredItem);
-            itemsByHash.remove(retiredItem.getHash());
-        }
+	    return null;
 	}
 }
