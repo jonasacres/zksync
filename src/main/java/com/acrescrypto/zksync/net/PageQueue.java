@@ -10,6 +10,7 @@ import java.util.PriorityQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.exceptions.ClosedException;
 import com.acrescrypto.zksync.exceptions.EINVALException;
 import com.acrescrypto.zksync.fs.Directory;
 import com.acrescrypto.zksync.fs.DirectoryTraverser;
@@ -283,6 +284,9 @@ public class PageQueue {
 				}
 				
 				return null;
+			} catch (ClosedException exc) {
+			    logger.info("Can't queue revision tag {} since filesystem is closed", revTag, exc);
+			    return null;
 			} catch (IOException exc) {
 				logger.error("Caught exception queuing revision tag {}", revTag, exc);
 				return null;
@@ -333,6 +337,9 @@ public class PageQueue {
 				logger.trace("Enqueuing path {}", path);
 				StorageTag tag = new StorageTag(archive.getCrypto(), path);
 				return new PageQueueItem(priority, archive, tag);
+			} catch (ClosedException exc) {
+                logger.info("Can't queue next tag since filesystem is closed", exc);
+                return null;
 			} catch (IOException exc) {
 				logger.error("Caught exception queuing next tag in EverythingQueueItem", exc);
 				return null;
@@ -474,7 +481,7 @@ public class PageQueue {
 	    if(itemsByPriority.isEmpty()) return;
 	    
 	    QueueItem head = itemsByPriority.peek();
-	    if(head.reference() != null) return;
+	    if(head == null || head.reference() != null) return;
 	    
 		unpackUntil((queueItem)->true);
 	}
