@@ -17,25 +17,28 @@ public class XArchiveSettings {
 	private Integer peerLimit;
 	private Integer autocommitInterval;
 	
-	private String automirrorPath;
-	private String localDescription;
+	private String  automirrorPath;
+	private String  localDescription;
 	
 	public static XArchiveSettings fromConfig(ZKArchiveConfig config) throws IOException {
 		XArchiveSettings settings = new XArchiveSettings();
-		ZKFSManager manager = State.sharedState().activeManager(config);
-		settings.advertising = config.isAdvertising();
-		settings.requestingAll = config.getSwarm().isRequestingAll();
-		settings.peerLimit = config.getSwarm().getMaxSocketCount();
-		settings.localDescription = manager != null ? manager.getLocalDescription() : null;
+		ZKFSManager      manager  = State.sharedState().activeManager(config);
+		settings.advertising      = config.isAdvertising();
+		settings.requestingAll    = config.getSwarm().isRequestingAll();
+		settings.peerLimit        = config.getSwarm().getMaxSocketCount();
+		settings.localDescription = manager != null
+		                            ? manager.getLocalDescription()
+		                            : null;
 		
 		if(!config.getAccessor().isSeedOnly() && manager != null) {
-			settings.autocommit = manager.isAutocommiting();
+			settings.autocommit         = manager.isAutocommiting();
 			settings.autocommitInterval = manager.getAutocommitIntervalMs();
-			settings.autofollow = manager.isAutofollowing();
-			settings.automirror = manager.isAutomirroring();
-			settings.automerge = manager.isAutomerging();
-			settings.automirrorPath = manager.getAutomirrorPath();
+			settings.autofollow         = manager.isAutofollowing();
+			settings.automirror         = manager.isAutomirroring();
+			settings.automerge          = manager.isAutomerging();
+			settings.automirrorPath     = manager.getAutomirrorPath();
 		}
+		
 		return settings;
 	}
 	

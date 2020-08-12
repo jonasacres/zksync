@@ -6,30 +6,30 @@ import com.acrescrypto.zksync.fs.zkfs.ZKArchiveConfig;
 import com.acrescrypto.zksyncweb.State;
 
 public class XArchiveIdentification {
-	private byte[] archiveId;
-	private byte[] listenStaticPubkey;
+	private byte[]           archiveId;
+	private byte[]           listenStaticPubkey;
 	
-	private String description;
-	private Integer pageSize;
-	private Integer numLocalTags;
+	private String           description;
+	private Integer          pageSize;
+	private Integer          numLocalTags;
 
-	private Boolean usesWriteKey;
-	private Boolean haveWriteKey;
-	private Boolean haveReadKey;
-	private Boolean ready;
-	private Boolean dirty;
+	private Boolean          usesWriteKey;
+	private Boolean          haveWriteKey;
+	private Boolean          haveReadKey;
+	private Boolean          ready;
+	private Boolean          dirty;
 
-	private Integer connectedPeers;
+	private Integer          connectedPeers;
 
-	private XRevisionInfo currentRevTag;
-	private String currentTitle;
+	private XRevisionInfo    currentRevTag;
+	private String           currentTitle;
 	
-	private Long consumedPageStorage;
-	private Long consumedLocalStorage;
-	private Long bytesPerSecondRx;
-	private Long bytesPerSecondTx;
-	private Long lifetimeBytesRx;
-	private Long lifetimeBytesTx;
+	private Long             consumedPageStorage;
+	private Long             consumedLocalStorage;
+	private Long             bytesPerSecondRx;
+	private Long             bytesPerSecondTx;
+	private Long             lifetimeBytesRx;
+	private Long             lifetimeBytesTx;
 
 	private XArchiveSettings config;
 	
@@ -49,8 +49,8 @@ public class XArchiveIdentification {
 		id.listenStaticPubkey = config.getSwarm().getPublicIdentityKey().getBytes();
 		
 		try {
-			id.dirty = State.sharedState().activeFs(config).isDirty();
-		} catch (Throwable exc) {}
+			id.dirty          = State.sharedState().activeFs(config).isDirty();
+		} catch(Throwable exc) {}
 		
 		try {
 			id.numLocalTags   = config.getArchive().pageTagList().allPageTags().size();
@@ -71,7 +71,7 @@ public class XArchiveIdentification {
 		try {
 			xset = XArchiveSettings.fromConfig(config);
 			if(config.getArchive() != null) {
-    			id.consumedPageStorage      = config.getArchive().pageTagList().storedPageSize();
+    			id.consumedPageStorage  = config.getArchive().pageTagList().storedPageSize();
 			}
 			
 			id.consumedLocalStorage     = config.getLocalStorage().storageSize();

@@ -192,6 +192,8 @@ public class State implements AutoCloseable {
 			
 			if(config.getAccessor().isSeedOnly()) {
 				activeFilesystems.put(config, new ZKFSManager(config));
+				ZKFSManager manager = new ZKFSManager(config);
+				activeFilesystems.put(config, manager);
 				return null;
 			}
 			
