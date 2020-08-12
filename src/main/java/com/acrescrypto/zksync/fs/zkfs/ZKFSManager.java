@@ -34,6 +34,7 @@ public class ZKFSManager implements AutoCloseable {
 	protected String automirrorPath, localDescription;
 	
 	protected ZKFS fs;
+	protected ZKArchiveConfig config;
 	protected SnoozeThread autocommitTimer;
 	protected FSMirror mirror;
 	
@@ -71,6 +72,7 @@ public class ZKFSManager implements AutoCloseable {
 	public ZKFSManager(ZKFS fs) {
 		this.fs = fs;
 		this.localDescription = "";
+		this.config = fs.getArchive().getConfig();
 		setupMonitors();
 	}
 	
@@ -209,6 +211,11 @@ public class ZKFSManager implements AutoCloseable {
 	public void setAutocommitIntervalMs(int autocommitIntervalMs) {
 		if(this.autocommitIntervalMs == autocommitIntervalMs) return;
 		this.autocommitIntervalMs = autocommitIntervalMs;
+		
+	    logger.debug("ZKFS {} -: ZKFSManager set autocommitIntervalMs={}",
+                Util.formatArchiveId(config.getArchiveId()),
+                autocommitIntervalMs);
+	      
 		setupAutocommitTimer();
 		autosaveIfDesired();
 	}
@@ -216,6 +223,11 @@ public class ZKFSManager implements AutoCloseable {
 	public void setMaxAutocommitIntervalMs(int maxAutocommitIntervalMs) {
 		if(this.maxAutocommitIntervalMs == maxAutocommitIntervalMs) return;
 		this.maxAutocommitIntervalMs = maxAutocommitIntervalMs;
+		
+		logger.debug("ZKFS {} -: ZKFSManager set maxAutocommitIntervalMs={}",
+		        Util.formatArchiveId(config.getArchiveId()),
+		        maxAutocommitIntervalMs);
+		
 		setupAutocommitTimer();
 		autosaveIfDesired();
 	}
@@ -226,7 +238,12 @@ public class ZKFSManager implements AutoCloseable {
 
 	public void setAutocommit(boolean autocommit) {
 		if(this.autocommit == autocommit) return;
-		this.autocommit = autocommit;
+		
+        this.autocommit = autocommit;
+        logger.debug("ZKFS {} -: ZKFSManager set autocommit={}",
+                Util.formatArchiveId(config.getArchiveId()),
+                autocommit);
+        
 		setupAutocommitTimer();
 		autosaveIfDesired();
 	}
@@ -234,8 +251,14 @@ public class ZKFSManager implements AutoCloseable {
 	public void setLocalDescription(String localDescription) {
 		if(this.localDescription == null && localDescription == null) return;
 		if(this.localDescription != null && this.localDescription.equals(localDescription)) return;
-		this.localDescription = localDescription;
-		autosaveIfDesired();
+
+	    this.localDescription = localDescription;
+        
+	    logger.debug("ZKFS {} -: ZKFSManager set localDescription={}",
+                Util.formatArchiveId(config.getArchiveId()),
+                localDescription);
+
+        autosaveIfDesired();
 	}
 
 	public boolean isAutofollowing() {
@@ -245,6 +268,11 @@ public class ZKFSManager implements AutoCloseable {
 	public void setAutofollow(boolean autofollow) {
 		if(this.autofollow == autofollow) return;
 		this.autofollow = autofollow;
+		
+		logger.debug("ZKFS {} -: ZKFSManager set autofollow={}",
+		        Util.formatArchiveId(config.getArchiveId()),
+		        autofollow);
+
 		autosaveIfDesired();
 	}
 	
@@ -321,6 +349,12 @@ public class ZKFSManager implements AutoCloseable {
 		}
 
 		this.automirror = automirror;
+		
+		logger.debug("ZKFS {} -: ZKFSManager set automirror={} (path: {})",
+                Util.formatArchiveId(config.getArchiveId()),
+                automirror,
+                automirrorPath);
+		
 		autosaveIfDesired();
 	}
 
@@ -352,6 +386,11 @@ public class ZKFSManager implements AutoCloseable {
 			automirror = false;
 		}
 
+		logger.debug("ZKFS {} -: ZKFSManager set automirrorPath={} (enabled: {})",
+                Util.formatArchiveId(config.getArchiveId()),
+                automirrorPath,
+                automirror);
+		
 		autosaveIfDesired();
 	}
 	
@@ -366,6 +405,9 @@ public class ZKFSManager implements AutoCloseable {
 	
 	public void write() throws IOException {
 		if(fs == null) return;
+		logger.debug("ZKFS {} -: ZKFSManager writing settings",
+                Util.formatArchiveId(config.getArchiveId()));
+		
 		MutableSecureFile
 		  .atPath(fs.getArchive().getConfig().getLocalStorage(),
 				path(),
@@ -386,6 +428,7 @@ public class ZKFSManager implements AutoCloseable {
 	}
 	
 	protected void read(ZKArchiveConfig config) throws IOException {
+        this.config = config;
 		byte[] contents = MutableSecureFile
 		  .atPath(config.getLocalStorage(),
 				path(),
