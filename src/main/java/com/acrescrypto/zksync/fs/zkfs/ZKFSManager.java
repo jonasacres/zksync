@@ -468,45 +468,51 @@ public class ZKFSManager implements AutoCloseable {
 	
 	protected void deserialize(ZKArchiveConfig config, byte[] serialized) throws IOException {
 	    this.config       = config;
-		JsonReader reader = Json.createReader(new StringReader(new String(serialized)));
-		JsonObject json   = reader.readObject();
-		
-		String tagRaw = json.getString("revtag");
-		if(tagRaw != null) {
-			RevisionTag revTag = new RevisionTag(config, Util.decode64(tagRaw), true);
-			fs = revTag.getFS();
-		} else {
-			fs = config.getArchive().openLatest();
-		}
-		
-		setAutocommit          (json.getBoolean("autocommit"));
-		setAutofollow          (json.getBoolean("autofollow"));
-		setAutomerge           (json.getBoolean("automerge"));
-		setAutocommitIntervalMs(json.getInt    ("autocommitIntervalMs"));
-		setLocalDescription    (json.getString ("localDescription", ""));
-		
-		if(json.getBoolean("advertising", false)) {
-			config.advertise();
-		} else {
-			config.stopAdvertising();
-		}
-		
-		if(json.getBoolean("requestingAll", false)) {
-			config.swarm.requestAll();
-		} else {
-			config.swarm.stopRequestingAll();
-		}
-		
-		if(json.containsKey("peerLimit")) {
-			config.swarm.setMaxSocketCount(json.getInt("peerLimit"));
-		}
-		
-		if(json.containsKey("automirrorPath")) {
-			setAutomirrorPath(json.getString("automirrorPath"));
-		} else {
-			setAutomirrorPath(null);
-		}
-		setAutomirror(json.getBoolean("automirror"));
+        try {
+    		JsonReader reader = Json.createReader(new StringReader(new String(serialized)));
+    		JsonObject json   = reader.readObject();
+    		
+    		String tagRaw = json.getString("revtag");
+    		if(tagRaw != null) {
+    			RevisionTag revTag = new RevisionTag(config, Util.decode64(tagRaw), true);
+    			fs = revTag.getFS();
+    		} else {
+    			fs = config.getArchive().openLatest();
+    		}
+    		
+    		setAutocommit          (json.getBoolean("autocommit"));
+    		setAutofollow          (json.getBoolean("autofollow"));
+    		setAutomerge           (json.getBoolean("automerge"));
+    		setAutocommitIntervalMs(json.getInt    ("autocommitIntervalMs"));
+    		setLocalDescription    (json.getString ("localDescription", ""));
+    		
+    		if(json.getBoolean("advertising", false)) {
+    			config.advertise();
+    		} else {
+    			config.stopAdvertising();
+    		}
+    		
+    		if(json.getBoolean("requestingAll", false)) {
+    			config.swarm.requestAll();
+    		} else {
+    			config.swarm.stopRequestingAll();
+    		}
+    		
+    		if(json.containsKey("peerLimit")) {
+    			config.swarm.setMaxSocketCount(json.getInt("peerLimit"));
+    		}
+    		
+    		if(json.containsKey("automirrorPath")) {
+    			setAutomirrorPath(json.getString("automirrorPath"));
+    		} else {
+    			setAutomirrorPath(null);
+    		}
+    		setAutomirror(json.getBoolean("automirror"));
+        } catch(Exception exc) {
+            logger.error("ZKFS {} -: Caught exception parsing ZKFSManager configuration",
+                    Util.formatArchiveId(config.getArchiveId()),
+                    exc);
+        }
 	}
 
 	public void setFs(ZKFS fs) throws IOException {
