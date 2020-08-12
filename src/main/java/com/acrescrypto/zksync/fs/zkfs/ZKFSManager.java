@@ -93,7 +93,7 @@ public class ZKFSManager implements AutoCloseable {
 		
 		if(fs != null) {
 			fs.addMonitor(fsMonitor);
-			fs.getArchive().getConfig().getRevisionList().addMonitor(revMonitor);
+			config.getRevisionList().addMonitor(revMonitor);
 		}
 	}
 
@@ -103,7 +103,7 @@ public class ZKFSManager implements AutoCloseable {
 		
 		if(fs != null) {
 			fs.removeMonitor(fsMonitor);
-			fs.getArchive().getConfig().getRevisionList().removeMonitor(revMonitor);
+			config.getRevisionList().removeMonitor(revMonitor);
 			if(!fs.isClosed()) fs.close();
 		}
 		
@@ -117,7 +117,7 @@ public class ZKFSManager implements AutoCloseable {
 	public void notifyZKFSPathChange(String path, Stat stat) {
 		if(autocommitTimer != null && !autocommitTimer.isExpired()) {
 			logger.info("ZKFS {} {}: ZKFSManager snoozing autocommit timer, interval={}ms (id={})",
-					Util.formatArchiveId(fs.archive.config.archiveId),
+					Util.formatArchiveId(config.archiveId),
 					Util.formatRevisionTag(fs.baseRevision),
 					autocommitIntervalMs,
 					System.identityHashCode(this)
@@ -134,13 +134,13 @@ public class ZKFSManager implements AutoCloseable {
 	}
 	
 	public synchronized void notifyNewRevtag(RevisionTag revtag) {
-		RevisionTag latest = fs.archive.config.revisionList.latest();
+		RevisionTag latest = config.revisionList.latest();
 		boolean isDescendent = false;
 		
 		try {
-			isDescendent = fs.archive.config.revisionTree.descendentOf(latest, fs.baseRevision);
+			isDescendent = config.revisionTree.descendentOf(latest, fs.baseRevision);
 			if(!isDescendent) {
-				Collection<RevisionTag> baseParents = fs.archive.config.revisionTree.parentsForTag(fs.baseRevision);
+				Collection<RevisionTag> baseParents = config.revisionTree.parentsForTag(fs.baseRevision);
 				if(baseParents.size() > 1) {
 					if(fs.baseRevision.getHeight() <= revtag.getHeight()) {
 						/* If the incoming tag is at a greater height, it could still be a merge containing all
@@ -404,14 +404,14 @@ public class ZKFSManager implements AutoCloseable {
 	}
 	
 	public void write() throws IOException {
-		if(fs == null) return;
+		if(config == null) return;
 		logger.debug("ZKFS {} -: ZKFSManager writing settings",
                 Util.formatArchiveId(config.getArchiveId()));
 		
 		MutableSecureFile
-		  .atPath(fs.getArchive().getConfig().getLocalStorage(),
+		  .atPath(config.getLocalStorage(),
 				path(),
-				storageKey(fs.getArchive().getConfig()))
+				storageKey(config))
 		  .write(serialize(), 65536);
 	}
 	
@@ -441,29 +441,33 @@ public class ZKFSManager implements AutoCloseable {
 		JsonObjectBuilder builder = Json
 				.createObjectBuilder();
 
-		builder.add("autocommit", autocommit);
-		builder.add("autofollow", autofollow);
-		builder.add("automirror", automirror);
-		builder.add("automerge", isAutomerging());
+		builder.add("autocommit",           autocommit);
+		builder.add("autofollow",           autofollow);
+		builder.add("automirror",           automirror);
+		builder.add("automerge",            isAutomerging());
 		builder.add("autocommitIntervalMs", autocommitIntervalMs);
 		
-		builder.add("advertising", fs.getArchive().getConfig().isAdvertising());
-		builder.add("requestingAll", fs.getArchive().getConfig().getSwarm().isRequestingAll());
-		builder.add("peerLimit", fs.getArchive().getConfig().getSwarm().getMaxSocketCount());
+		builder.add("advertising",          config.isAdvertising());
+		builder.add("requestingAll",        config.getSwarm().isRequestingAll());
+		builder.add("peerLimit",            config.getSwarm().getMaxSocketCount());
 		
 		if(localDescription != null) {
 			builder.add("localDescription", localDescription);
 		}
 		
 		if(automirrorPath != null) {
-			builder.add("automirrorPath", automirrorPath);
+			builder.add("automirrorPath",   automirrorPath);
 		}
-		builder.add("revtag", Util.encode64(fs.getBaseRevision().serialize()));
+		
+		if(fs != null) {
+		    builder.add("revtag",           Util.encode64(fs.getBaseRevision().serialize()));
+		}
 		
 		return builder.build().toString().getBytes();
 	}
 	
 	protected void deserialize(ZKArchiveConfig config, byte[] serialized) throws IOException {
+	    this.config       = config;
 		JsonReader reader = Json.createReader(new StringReader(new String(serialized)));
 		JsonObject json   = reader.readObject();
 		
@@ -528,17 +532,17 @@ public class ZKFSManager implements AutoCloseable {
 	public void purge() throws IOException {
 		close();
 		if(fs == null) return;
-		if(fs.archive.config.getLocalStorage().exists(path())) {
-			fs.archive.config.getLocalStorage().unlink(path());
+		if(config.getLocalStorage().exists(path())) {
+			config.getLocalStorage().unlink(path());
 		}
 	}
 
 	public boolean isAutomerging() {
-		return fs.getArchive().getConfig().getRevisionList().getAutomerge();
+		return config.getRevisionList().getAutomerge();
 	}
 	
 	public void setAutomerge(boolean automerging) {
-		fs.getArchive().getConfig().getRevisionList().setAutomerge(automerging);
+		config.getRevisionList().setAutomerge(automerging);
 	}
 	
 	public FSMirror getMirror() {
