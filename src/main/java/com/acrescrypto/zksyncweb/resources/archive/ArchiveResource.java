@@ -253,7 +253,7 @@ public class ArchiveResource {
 				(limit)->config.getSwarm().setMaxSocketCount(limit));
 		WebUtils.mapFieldWithException(settings.getLocalDescription(),
 				(description)->State.sharedState().activeManager(config).setLocalDescription(description));
-		
+
 		if(!config.getAccessor().isSeedOnly()) {
 			WebUtils.mapFieldWithException(settings.getAutocommitInterval(),
 					(interval)->{
@@ -321,6 +321,8 @@ public class ArchiveResource {
 						}
 					});
 		}
+		
+		State.sharedState().activeManager(config).write();
 		
 		throw XAPIResponse.successResponse();
 	}
