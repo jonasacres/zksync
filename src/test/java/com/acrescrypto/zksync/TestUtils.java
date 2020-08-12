@@ -193,4 +193,12 @@ public class TestUtils {
 		ConfigDefaults.getActiveDefaults().set("net.dht.bootstrap.peerfile", "");
 		System.gc();
 	}
+	
+	public static int testHttpPort() {
+	    return 42512;
+	}
+	
+	public static String testHttpUrl() {
+	    return "http://127.0.0.1:" + testHttpPort();
+	}
 }

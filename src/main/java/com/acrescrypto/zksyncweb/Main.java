@@ -22,9 +22,9 @@ import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.core.util.StatusPrinter;
 
 public class Main {
-	public final static String BASE_URI = "http://0.0.0.0:8080/";
+	private final static String BASE_URI = "http://0.0.0.0";
 
-	public static HttpServer startServer() throws IOException, URISyntaxException {
+	public static HttpServer startServer(int port) throws IOException, URISyntaxException {
 		ResourceConfig rc = new ResourceConfig();
 		rc
 			.register(ObjectMapperProvider.class)
@@ -33,7 +33,7 @@ public class Main {
 			.packages("com.acrescrypto.zksyncweb.exceptionmappers")
 			.packages("com.acrescrypto.zksyncweb.resources");
 		
-		URI uri = new URI(BASE_URI);
+		URI uri = new URI(BASE_URI + ":" + port + "/");
 		HttpServer server = GrizzlyHttpServerFactory.createHttpServer(uri);
 		HttpHandler handler = ContainerFactory.createContainer(
 				GrizzlyHttpContainer.class, rc);
@@ -54,7 +54,7 @@ public class Main {
 		try {
 			Util.launchTime();
 			State.sharedState();
-			startServer();
+			startServer(8080);
 			while(true) {
 				try {
 					Thread.sleep(10000);

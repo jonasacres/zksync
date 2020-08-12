@@ -158,9 +158,9 @@ public class ArchiveNetPeersResourceTest {
 	@Before
     public void beforeEach() throws Exception {
     	State.setTestState();
-        server = Main.startServer();
+        server = Main.startServer(TestUtils.testHttpPort());
         Client c = ClientBuilder.newClient();
-        target = c.target(Main.BASE_URI);
+        target = c.target(TestUtils.testHttpUrl());
         passphrase = "passphrase";
         Util.setCurrentTimeMillis(0);
         

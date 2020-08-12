@@ -36,9 +36,9 @@ public class GenericResourceTest {
 
 	@Before
 	public void beforeEach() throws Exception {
-		server = Main.startServer();
+		server = Main.startServer(TestUtils.testHttpPort());
 		Client c = ClientBuilder.newClient();
-		target = c.target(Main.BASE_URI);
+		target = c.target(TestUtils.testHttpUrl());
 	}
 
 	@After

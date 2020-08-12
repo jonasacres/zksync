@@ -56,9 +56,9 @@ public class GlobalResourceTest {
 	@Before
 	public void beforeEach() throws IOException, URISyntaxException {
 		State.setTestState();
-		server = Main.startServer();
+		server = Main.startServer(TestUtils.testHttpPort());
 		Client c = ClientBuilder.newClient();
-		target = c.target(Main.BASE_URI);
+		target = c.target(TestUtils.testHttpUrl());
 
 		master = State.sharedState().getMaster();
 		Util.setCurrentTimeMillis(0);

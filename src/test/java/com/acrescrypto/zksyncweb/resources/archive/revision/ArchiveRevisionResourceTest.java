@@ -42,9 +42,9 @@ public class ArchiveRevisionResourceTest {
 	@Before
 	public void beforeEach() throws Exception {
 		State.setTestState();
-		server = Main.startServer();
+		server = Main.startServer(TestUtils.testHttpPort());
 		Client c = ClientBuilder.newClient();
-		target = c.target(Main.BASE_URI);
+		target = c.target(TestUtils.testHttpUrl());
 
 		archive = State.sharedState().getMaster().createDefaultArchive("passphrase".getBytes());
 		archive.getConfig().advertise();

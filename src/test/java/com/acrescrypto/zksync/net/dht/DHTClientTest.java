@@ -1475,8 +1475,8 @@ public class DHTClientTest {
 		State.setTestState();
 		
 		WebTestUtils.squelchGrizzlyLogs();
-		HttpServer server  = Main.startServer();
-		String     url     = "http://localhost:8080/dht/peerfile";
+		HttpServer server  = Main.startServer(TestUtils.testHttpPort());
+		String     url     = TestUtils.testHttpUrl() + "/dht/peerfile";
 		DHTClient  client2 = null;
 		
 		try {

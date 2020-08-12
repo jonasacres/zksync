@@ -53,9 +53,9 @@ public class ArchivesResourceTest {
 		ConfigDefaults.getActiveDefaults().set("net.dht.bootstrap.enabled", false);
 		
 		State.setTestState();
-		server = Main.startServer();
+		server = Main.startServer(TestUtils.testHttpPort());
 		Client c = ClientBuilder.newClient();
-		target = c.target(Main.BASE_URI);
+		target = c.target(TestUtils.testHttpUrl());
 	}
 
 	@After
