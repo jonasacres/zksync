@@ -472,12 +472,15 @@ public class ZKFSManager implements AutoCloseable {
     		JsonReader reader = Json.createReader(new StringReader(new String(serialized)));
     		JsonObject json   = reader.readObject();
     		
-    		String tagRaw = json.getString("revtag");
-    		if(tagRaw != null) {
-    			RevisionTag revTag = new RevisionTag(config, Util.decode64(tagRaw), true);
-    			fs = revTag.getFS();
-    		} else {
-    			fs = config.getArchive().openLatest();
+    		if(!config.getAccessor().isSeedOnly()) {
+        		String tagRaw = json.getString("revtag", null);
+        		
+        		if(tagRaw != null) {
+        			RevisionTag revTag = new RevisionTag(config, Util.decode64(tagRaw), true);
+        			fs = revTag.getFS();
+        		} else {
+        			fs = config.getArchive().openLatest();
+        		}
     		}
     		
     		setAutocommit          (json.getBoolean("autocommit"));
