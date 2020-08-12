@@ -31,27 +31,28 @@ import com.acrescrypto.zksync.utility.AppendableInputStream;
 import com.acrescrypto.zksync.utility.Util;
 
 public class PeerConnection {
-	public final static byte CMD_ACCESS_PROOF = 0x00;
-	public final static byte CMD_ANNOUNCE_PEERS = 0x01;
-	public final static byte CMD_ANNOUNCE_SELF_AD = 0x02;
-	public final static byte CMD_ANNOUNCE_TAGS = 0x03;
-	public final static byte CMD_ANNOUNCE_TIPS = 0x04;
-	public final static byte CMD_ANNOUNCE_REVISION_DETAILS = 0x05;
-	public final static byte CMD_REQUEST_ALL = 0x06;
-	public final static byte CMD_REQUEST_ALL_CANCEL = 0x07;
-	public final static byte CMD_REQUEST_INODES = 0x08;
-	public final static byte CMD_REQUEST_REVISION_CONTENTS = 0x09;
-	public final static byte CMD_REQUEST_REVISION_STRUCTURE = 0x0a;
-	public final static byte CMD_REQUEST_REVISION_DETAILS = 0x0b;
-	public final static byte CMD_REQUEST_PAGE_TAGS = 0x0c;
-	public final static byte CMD_SEND_PAGE = 0x0d;
-	public final static byte CMD_SET_PAUSED = 0x0e;
+	public final static byte CMD_ACCESS_PROOF               = 0x00;
+	public final static byte CMD_ANNOUNCE_PEERS             = 0x01;
+	public final static byte CMD_ANNOUNCE_SELF_AD           = 0x02;
+	public final static byte CMD_ANNOUNCE_TAGS              = 0x03;
+	public final static byte CMD_ANNOUNCE_UPCOMING          = 0x04;
+	public final static byte CMD_ANNOUNCE_TIPS              = 0x05;
+	public final static byte CMD_ANNOUNCE_REVISION_DETAILS  = 0x06;
+	public final static byte CMD_REQUEST_ALL                = 0x07;
+	public final static byte CMD_REQUEST_ALL_CANCEL         = 0x08;
+	public final static byte CMD_REQUEST_INODES             = 0x09;
+	public final static byte CMD_REQUEST_REVISION_CONTENTS  = 0x0a;
+	public final static byte CMD_REQUEST_REVISION_STRUCTURE = 0x0b;
+	public final static byte CMD_REQUEST_REVISION_DETAILS   = 0x0c;
+	public final static byte CMD_REQUEST_PAGE_TAGS          = 0x0d;
+	public final static byte CMD_SEND_PAGE                  = 0x0e;
+	public final static byte CMD_SET_PAUSED                 = 0x0f;
 	
 	public final static int MAX_SUPPORTED_CMD = CMD_SET_PAUSED; // update to largest acceptable command code
 	
-	public final static int PEER_TYPE_STATIC = 0; // static fileserver; needs subclass to handle
-	public final static int PEER_TYPE_BLIND = 1; // has knowledge of seed key, but not archive passphrase; can't decipher data
-	public final static int PEER_TYPE_FULL = 2; // live peer with knowledge of archive passphrase
+	public final static int PEER_TYPE_STATIC  = 0; // static fileserver; needs subclass to handle
+	public final static int PEER_TYPE_BLIND   = 1; // has knowledge of seed key, but not archive passphrase; can't decipher data
+	public final static int PEER_TYPE_FULL    = 2; // live peer with knowledge of archive passphrase
 	
 	/** A message can't be sent to the remote peer because this channel hasn't established that we have full read
 	 * access to the archive. */
@@ -264,7 +265,20 @@ public class PeerConnection {
 		send(CMD_ANNOUNCE_TAGS, serialized.array());
 	}
 	
-	public void announceTip(RevisionTag tip) {
+    public void announceUpcoming(Collection<StorageTag> tags) {
+        logger.trace("Swarm {} {}:{}: PeerConnection send announceUpcoming",
+                Util.formatArchiveId(socket.swarm.config.getArchiveId()),
+                socket.getAddress(),
+                socket.getPort());
+        ByteBuffer serialized = ByteBuffer.allocate(tags.size() * 8);
+        for(StorageTag tag : tags) {
+            if(!serialized.hasRemaining()) break; // possible to add tags as we iterate
+            serialized.putLong(tag.shortTagPreserialized());
+        }
+        send(CMD_ANNOUNCE_TAGS, serialized.array());
+    }
+
+    public void announceTip(RevisionTag tip) {
 		logger.trace("Swarm {} {}:{}: PeerConnection send announceTip",
 				Util.formatArchiveId(socket.swarm.config.getArchiveId()),
 				socket.getAddress(),
@@ -482,6 +496,9 @@ public class PeerConnection {
 			case CMD_ANNOUNCE_TAGS:
 				handleAnnounceTags(msg);
 				break;
+            case CMD_ANNOUNCE_UPCOMING:
+                handleAnnounceUpcoming(msg);
+                break;
 			case CMD_ANNOUNCE_TIPS:
 				handleAnnounceTips(msg);
 				break;
@@ -637,6 +654,39 @@ public class PeerConnection {
 			this.notifyAll();
 		}
 	}
+	
+   protected void handleAnnounceUpcoming(PeerMessageIncoming msg) throws EOFException {
+        logger.trace("Swarm {} {}:{}: PeerConnection recv announceTags",
+                Util.formatArchiveId(socket.swarm.config.getArchiveId()),
+                socket.getAddress(),
+                socket.getPort());
+        
+        int           tagLength = 8;
+        CryptoSupport crypto    = socket.getSwarm().getConfig().getCrypto();
+
+        while(msg.rxBuf.hasRemaining()) {
+            // lots of tags to go through, and locks are expensive; accumulate into a buffer so we can minimize lock/release cycling
+            Util.blockOnPoll(()->msg.rxBuf.available() < tagLength && !msg.rxBuf.isEOF());
+            if(msg.rxBuf.isEOF() && msg.rxBuf.available() < tagLength) break;
+            
+            int len = Math.min(64*1024, msg.rxBuf.available());
+            ByteBuffer buf = ByteBuffer.allocate(len - len % 8);
+            msg.rxBuf.get(buf.array());
+            
+            synchronized(this) {
+                LinkedList<StorageTag> ackableTags = new LinkedList<>();
+                while(buf.hasRemaining()) {
+                    long shortTag = buf.getLong();
+                    Collection<StorageTag> matching = socket.getSwarm().getConfig().getArchive().pageTagList().tagsMatchingShort(shortTag);
+                    ackableTags.add(matching);
+                }
+            }
+        }
+        
+        synchronized(this) {
+            this.notifyAll();
+        }
+    }
 	
 	protected void handleAnnounceTips(PeerMessageIncoming msg) throws InvalidSignatureException, IOException {
 		logger.trace("Swarm {} {}:{}: PeerConnection recv announceTips",
