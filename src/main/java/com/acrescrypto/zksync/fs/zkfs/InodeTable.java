@@ -259,7 +259,7 @@ public class InodeTable extends ZKFile {
 			pendingTitle = null;
 		}
 		
-		RevisionInfo newRevision = new RevisionInfo(this, parents, revision.generation+1, title);
+		RevisionInfo newRevision = new RevisionInfo(this, parents, title);
 		revision = newRevision;
 	}
 	
@@ -748,7 +748,7 @@ public class InodeTable extends ZKFile {
 	/** initialize a blank top-level revision (i.e. one that has no ancestors) */
 	private void makeEmptyRevision() throws IOException {
 		ArrayList<RevisionTag> parents = new ArrayList<>();
-		revision = new RevisionInfo(this, parents, 0, zkfs.getArchive().getConfig().getDescription());
+		revision = new RevisionInfo(this, parents, zkfs.getArchive().getConfig().getDescription());
 	}
 	
 	/** initialize a blank freelist */

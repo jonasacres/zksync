@@ -212,6 +212,10 @@ public class State implements AutoCloseable {
 	
 	public ZKFS fsForRevision(ZKArchiveConfig config, String revTag64) throws IOException {
 		// TODO API: (refactor) A cache would be nice here.
+	    if(revTag64.equals("active")) {
+	        return this.activeFs(config).retain();
+	    }
+	    
 		revTag64 = Util.fromWebSafeBase64(revTag64);
 		byte[] rawBytes;
 		try {

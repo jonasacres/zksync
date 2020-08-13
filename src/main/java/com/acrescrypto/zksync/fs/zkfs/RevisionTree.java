@@ -536,7 +536,7 @@ public class RevisionTree implements AutoCloseable {
 			
 			boolean containsParents = true;
 			for(RevisionTag parent : parents) {
-				if(!descendentOf(possibleSuperset, parent)) {
+				if(parent.equals(possibleSuperset) || !descendentOf(possibleSuperset, parent)) {
 					containsParents = false;
 					break;
 				}

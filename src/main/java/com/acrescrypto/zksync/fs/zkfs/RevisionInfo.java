@@ -30,10 +30,14 @@ public class RevisionInfo {
 		return USABLE_PARENT_SIZE/RevisionTag.sizeForConfig(config);
 	}
 	
-	public RevisionInfo(InodeTable inodeTable, Collection<RevisionTag> parents, long generation, String title) throws TooManyParentsException {
+	public RevisionInfo(InodeTable inodeTable, Collection<RevisionTag> parents, String title) throws TooManyParentsException {
 		this.inodeTable = inodeTable;
 		this.parents = new ArrayList<>(parents);
-		this.generation = generation;
+		this.generation = 0;
+		
+		for(RevisionTag parent : parents) {
+		    this.generation = Math.max(generation, parent.getHeight()+1);
+		}
 		
 		if(title.length() <= MAX_TITLE_LEN) {
 			this.title = title;
