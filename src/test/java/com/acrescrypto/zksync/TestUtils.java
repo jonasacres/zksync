@@ -18,6 +18,7 @@ import com.acrescrypto.zksync.utility.SnoozeThreadSupervisor;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksync.utility.WaitSupervisor;
 import com.acrescrypto.zksync.utility.WaitSupervisor.WaitTask;
+import com.acrescrypto.zksyncweb.State;
 import com.dosse.upnp.UPnP;
 
 public class TestUtils {
@@ -178,6 +179,7 @@ public class TestUtils {
 	}
 	
 	public static void stopDebugMode() {
+	    State.TEST_MODE               = false;
 		CryptoSupport.cheapArgon2     = false;
 		FS.fileHandleTelemetryEnabled = false;
 		UPnP.disableDebug();
@@ -186,6 +188,7 @@ public class TestUtils {
 	}
 
 	public static void startDebugMode() {
+	    State.TEST_MODE               = true;
 		CryptoSupport.cheapArgon2     = true;
 		FS.fileHandleTelemetryEnabled = true;
 		UPnP.enableDebug();

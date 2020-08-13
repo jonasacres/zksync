@@ -25,6 +25,8 @@ import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.Util;
 
 public class State implements AutoCloseable {
+    public static boolean TEST_MODE = false;
+    
 	public class TrackedFS {
 		ZKFS fs;
 		ZKFSManager manager;
@@ -58,9 +60,14 @@ public class State implements AutoCloseable {
 	
 	public static State sharedState() throws IOException {
 		if(sharedState == null) {
-			sharedState = new State(
-					defaultPassphrase(),
-					FSPath.join(System.getProperty("user.dir"), "/data").toNative());
+		    String path;
+		    if(TEST_MODE) {
+		        path = FSPath.join(System.getProperty("java.io.tmpdir"), "/easysafe-test").toNative();
+		    } else {
+		        path = FSPath.join(System.getProperty("user.home"), "/.easysafe").toNative();
+		    }
+		    
+			sharedState = new State(defaultPassphrase(), path);
 		}
 		
 		return sharedState;
