@@ -237,6 +237,17 @@ public class ZKDirectory extends ZKFile implements Directory {
 			}
 		});
 	}
+	
+	public void removeLink(String name) throws IOException {
+	    if(!entries.containsKey(name)) {
+	        throw new ENOENTException(name);
+	    }
+	    
+	    String fullPath = new FSPath(path).join(name).toPosix();
+	    zkfs.uncache(fullPath);
+	    entries.remove(name);
+	    dirty = true;
+	}
 
 	public void link(Inode inode, String link) throws IOException {
 		assertWritable();
@@ -349,23 +360,30 @@ public class ZKDirectory extends ZKFile implements Directory {
 		});
 	}
 	
-	public Directory mkdir(String name) throws IOException {
-		return (Directory) zkfs.lockedOperation(()->{
-			synchronized(this) {
-				String fullPath = new FSPath(path).join(name).toPosix();
-				if(entries.containsKey(name)) throw new EEXISTSException(fullPath);
-				zkfs.create(fullPath, this).getStat().makeDirectory();
-	
-				ZKDirectory dir = zkfs.opendir(fullPath);
-				dir.inode.addLink(); // .
-				dir.link(inode, "..");
-				dir.flush();
-				fs.chmod(fullPath, zkfs.archive.master.getGlobalConfig().getInt("fs.default.directoryMode"));
-	
-				return dir;
-			}
-		});
+	public ZKDirectory mkdir(String name) throws IOException {
+	    return mkdir(name, -1);
 	}
+	
+	public ZKDirectory mkdir(String name, int mode) throws IOException {
+        return (ZKDirectory) zkfs.lockedOperation(()->{
+            synchronized(this) {
+                String fullPath = new FSPath(path).join(name).toPosix();
+                if(entries.containsKey(name)) throw new EEXISTSException(fullPath);
+                
+                Inode inode = zkfs.create(fullPath, this);
+                inode.getStat().makeDirectory();
+                if(mode != -1) inode.getStat().setMode(mode);
+    
+                ZKDirectory dir = zkfs.opendir(fullPath);
+                dir.inode.addLink(); // .
+                dir.link(inode, "..");
+                dir.flush();
+                fs.chmod(fullPath, zkfs.archive.master.getGlobalConfig().getInt("fs.default.directoryMode"));
+    
+                return dir;
+            }
+        });
+    }
 	
 	public RefTag commit() throws IOException {
 		if(inode.isDeleted()) return null;

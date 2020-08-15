@@ -482,10 +482,10 @@ public class ZKFile extends File {
 		inode.getStat().setCtime(file.getStat().getCtime());
 		inode.getStat().setMtime(file.getStat().getMtime());
 		inode.getStat().setGroup(file.getStat().getGroup());
-		inode.getStat().setGid(file.getStat().getGid());
-		inode.getStat().setUser(file.getStat().getUser());
-		inode.getStat().setUid(file.getStat().getUid());
-		inode.getStat().setMode(file.getStat().getMode());
+		inode.getStat().setGid  (file.getStat().getGid());
+		inode.getStat().setUser (file.getStat().getUser());
+		inode.getStat().setUid  (file.getStat().getUid());
+		inode.getStat().setMode (file.getStat().getMode());
 	}
 
 	public int available() throws IOException {

@@ -635,6 +635,20 @@ public class ZKFS extends FS {
             }
         }
     }
+    
+    public void link(Inode srcInode, String dest) throws IOException {
+        assertWritable(dest);
+
+        if(srcInode.getStat().isDirectory()) {
+            throw new EISDIRException("(inode " + srcInode.getStat().getInodeId() + ")");
+        }
+        
+        synchronized(this) {
+            try(ZKDirectory destDir = opendir(dirname(dest))) {
+                destDir.link(srcInode, basename(dest));
+            }
+        }
+    }
 
     @Override
     public void symlink(String source, String dest) throws IOException {
@@ -980,5 +994,9 @@ public class ZKFS extends FS {
 
     public void setReadTimeoutMs(int readTimeoutMs) {
         this.readTimeoutMs = readTimeoutMs;
+    }
+    
+    public FilesystemStats fsStat() throws IOException {
+        return new FilesystemStats(this);
     }
 }

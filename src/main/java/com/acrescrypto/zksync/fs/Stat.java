@@ -1,36 +1,44 @@
 package com.acrescrypto.zksync.fs;
 
 import java.nio.ByteBuffer;
-
-import org.bouncycastle.util.Arrays;
+import java.util.Arrays;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 public class Stat {
-	int gid, uid, mode;
-	private int type;
-	private int devMinor, devMajor;
-	String group, user;
-	long atime, mtime, ctime, size, inodeId;
+	private int    gid,
+	               uid,
+	               mode,
+	               type,
+	               devMinor,
+	               devMajor;
+    private long   atime,
+                   mtime,
+                   ctime,
+                   size,
+                   inodeId;
+	private String group,
+	               user;
 	
-	public final static int TYPE_REGULAR_FILE = 0;
-	public final static int TYPE_DIRECTORY = 1;
-	public final static int TYPE_SYMLINK = 2;
-	public final static int TYPE_BLOCK_DEVICE = 3;
+	public final static int TYPE_REGULAR_FILE     = 0;
+	public final static int TYPE_DIRECTORY        = 1;
+	public final static int TYPE_SYMLINK          = 2;
+	public final static int TYPE_BLOCK_DEVICE     = 3;
 	public final static int TYPE_CHARACTER_DEVICE = 4;
-	public final static int TYPE_FIFO = 5;
+	public final static int TYPE_FIFO             = 5;
+	public final static int TYPE_MAX_SUPPORTED    = TYPE_FIFO;
 	
-	// int gid, uid, mode, typeFlags, devMajor, devMinor:      6*4  =  24
-	// String group, user:                                    2*32  =  64
-	// long atime, mtime, ctime, size, inodeId;                5*8  =  40
-	// total:                                                         128
-	public final static int STAT_SIZE = 128; // size of serialized inode in bytes
-	public final static int MAX_GROUP_LEN = 32;
-	public final static int MAX_USER_LEN = 32;
+	// | 4| int    gid,   uid,   mode,  type, devMajor, devMinor:        6 *  4  =  24
+	// | 8| long   atime, mtime, ctime, size, inodeId;                   5 *  8  =  40
+    // |32| String group, user:                                          2 * 32  =  64
+	// total:                                                                      128 bytes
+	public final static int STAT_SIZE             = 128; // size of serialized stat in bytes
+	public final static int MAX_GROUP_LEN         =  32;
+	public final static int MAX_USER_LEN          =  32;
 	
 	public Stat() {
 		group = "";
-		user = "";
+		user  = "";
 	}
 	
 	public Stat(byte[] serialized) {
@@ -164,33 +172,34 @@ public class Stat {
 		buf.putLong(mtime);
 		buf.putLong(atime);
 		
-		buf.putInt(gid);
-		buf.putInt(uid);
-		buf.putInt(mode);
-		buf.putInt(getType());
-		buf.putInt(getDevMajor());
-		buf.putInt(getDevMinor());
+		buf.putInt (gid);
+		buf.putInt (uid);
+		buf.putInt (mode);
+		buf.putInt (getType());
+		buf.putInt (getDevMajor());
+		buf.putInt (getDevMinor());
 		
-		buf.put(user.getBytes());
-		buf.put(new byte[MAX_USER_LEN-user.getBytes().length]);
-		buf.put(group.getBytes());
-		buf.put(new byte[MAX_GROUP_LEN-group.getBytes().length]);
+		buf.put    (user.getBytes());
+		buf.put    (new byte[MAX_USER_LEN  - user .getBytes().length]);
+		buf.put    (group.getBytes());
+		buf.put    (new byte[MAX_GROUP_LEN - group.getBytes().length]);
 		
 		return buf.array();
 	}
 	
 	public void deserialize(byte[] serialized) {
 		ByteBuffer buf = ByteBuffer.wrap(serialized);
-		this.inodeId = buf.getLong();
-		this.size = buf.getLong();
-		this.ctime = buf.getLong();
-		this.mtime = buf.getLong();
-		this.atime = buf.getLong();
 		
-		this.gid = buf.getInt();
-		this.uid = buf.getInt();
-		this.mode = buf.getInt();
-		this.setType(buf.getInt());
+		this.inodeId   = buf.getLong();
+		this.size      = buf.getLong();
+		this.ctime     = buf.getLong();
+		this.mtime     = buf.getLong();
+		this.atime     = buf.getLong();
+		
+		this.gid       = buf.getInt();
+		this.uid       = buf.getInt();
+		this.mode      = buf.getInt();
+		this.setType    (buf.getInt());
 		this.setDevMajor(buf.getInt());
 		this.setDevMinor(buf.getInt());
 		
@@ -201,6 +210,7 @@ public class Stat {
 		byte[] groupBuf = new byte[MAX_GROUP_LEN];
 		buf.get(groupBuf);
 		this.group = unpad(groupBuf);
+		
 		assert(!buf.hasRemaining());
 	}
 	
@@ -214,20 +224,20 @@ public class Stat {
 	}
 	
 	public Stat clone() {
-		Stat clone = new Stat();
-		clone.gid = gid;
-		clone.uid = uid;
-		clone.mode = mode;
-		clone.setType(type);
-		clone.setDevMajor(devMajor);
-		clone.setDevMinor(devMinor);
-		clone.group = group == null ? null : new String(group);
-		clone.user = user == null ? null : new String(user);
-		clone.atime = atime;
-		clone.mtime = mtime;
-		clone.ctime = ctime;
-		clone.size = size;
-		clone.inodeId = inodeId;
+		Stat clone     = new Stat();
+		clone.gid      = gid;
+		clone.uid      = uid;
+		clone.mode     = mode;
+		clone.type     = type;
+		clone.devMajor = devMajor;
+		clone.devMinor = devMinor;
+		clone.group    = group == null ? null : new String(group);
+		clone.user     = user  == null ? null : new String(user);
+		clone.atime    = atime;
+		clone.mtime    = mtime;
+		clone.ctime    = ctime;
+		clone.size     = size;
+		clone.inodeId  = inodeId;
 		
 		return clone;
 	}
@@ -285,9 +295,11 @@ public class Stat {
 	}
 	
 	public boolean equals(Object other) {
-		if(other == null) return false;
-		if(!other.getClass().equals(this.getClass())) return false;
-		return Arrays.areEqual(serialize(), ((Stat) other).serialize());
+		if( other == null)                return false;
+		if(!(other instanceof Stat))      return false;
+		
+		Stat o = (Stat) other;
+		return Arrays.equals(serialize(), o.serialize());
 	}
 	
 	public String toString() {
@@ -301,11 +313,11 @@ public class Stat {
 	/* See if these stats "loosely match" on stuff that would be comparable between filesystems.
 	 */
 	public boolean matches(Stat stat) {
-		if(stat == null) return false;
+		if(stat == null)                  return false;
 		
-		if(size != stat.size) return false;
-		if(mode != stat.mode) return false;
-		if(type != stat.type) return false;
+		if(size != stat.size)             return false;
+		if(mode != stat.mode)             return false;
+		if(type != stat.type)             return false;
 		
 		if(isDevice()) {
 			if(devMajor != stat.devMajor) return false;

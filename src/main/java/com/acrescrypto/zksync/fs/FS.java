@@ -193,7 +193,7 @@ public abstract class FS implements AutoCloseable {
             }
 
             try {
-                this.chmod(newPath, in.getStat().mode);
+                this.chmod(newPath, in.getStat().getMode());
             } catch(UnsupportedOperationException exc) {
                 // leave metadata stuff alone on Windows
             }
@@ -335,7 +335,7 @@ public abstract class FS implements AutoCloseable {
                 }
             }
         } else if(s.isRegularFile() || s.isSymlink()) {
-            observedTotalSize = s.size;
+            observedTotalSize = s.getSize();
         }
 
         return observedTotalSize;

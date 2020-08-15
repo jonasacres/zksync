@@ -221,16 +221,16 @@ public class LocalFS extends FS {
         Set<PosixFilePermission> perms = attr.permissions();
 
         if(perms.contains(PosixFilePermission.OTHERS_EXECUTE)) mode |= 0001;
-        if(perms.contains(PosixFilePermission.OTHERS_WRITE)) mode |= 0002;
-        if(perms.contains(PosixFilePermission.OTHERS_READ)) mode |= 0004;
+        if(perms.contains(PosixFilePermission.OTHERS_WRITE))   mode |= 0002;
+        if(perms.contains(PosixFilePermission.OTHERS_READ))    mode |= 0004;
 
-        if(perms.contains(PosixFilePermission.GROUP_EXECUTE)) mode |= 0010;
-        if(perms.contains(PosixFilePermission.GROUP_WRITE)) mode |= 0020;
-        if(perms.contains(PosixFilePermission.GROUP_READ)) mode |= 0040;
+        if(perms.contains(PosixFilePermission.GROUP_EXECUTE))  mode |= 0010;
+        if(perms.contains(PosixFilePermission.GROUP_WRITE))    mode |= 0020;
+        if(perms.contains(PosixFilePermission.GROUP_READ))     mode |= 0040;
 
-        if(perms.contains(PosixFilePermission.OWNER_EXECUTE)) mode |= 0100;
-        if(perms.contains(PosixFilePermission.OWNER_WRITE)) mode |= 0200;
-        if(perms.contains(PosixFilePermission.OWNER_READ)) mode |= 0400;
+        if(perms.contains(PosixFilePermission.OWNER_EXECUTE))  mode |= 0100;
+        if(perms.contains(PosixFilePermission.OWNER_WRITE))    mode |= 0200;
+        if(perms.contains(PosixFilePermission.OWNER_READ))     mode |= 0400;
 
         return mode;
     }

@@ -272,6 +272,10 @@ public class Util {
 		return result;
 	}
 	
+	public static byte[] serializeByte(byte x) {
+	    return new byte[] { x };
+	}
+	
 	public static byte[] serializeShort(short x) {
 		return ByteBuffer.allocate(2).putShort(x).array();
 	}

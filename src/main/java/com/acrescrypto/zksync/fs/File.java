@@ -7,17 +7,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public abstract class File implements Closeable {
-	public final static int O_RDONLY = 1 << 0;
-	public final static int O_WRONLY = 1 << 1;
-	public final static int O_RDWR = O_RDONLY | O_WRONLY; // no this is not how POSIX works, but it is nicer
-	public final static int O_CREAT = 1 << 2;
-	public final static int O_NOFOLLOW = 1 << 3;
-	public final static int O_APPEND = 1 << 4;
-	public final static int O_TRUNC = 1 << 5;
+	public final static int O_RDONLY    = 1 << 0;
+	public final static int O_WRONLY    = 1 << 1;
+	public final static int O_RDWR      = O_RDONLY | O_WRONLY; // no this is not how POSIX works, but it is nicer
+	public final static int O_CREAT     = 1 << 2;
+	public final static int O_NOFOLLOW  = 1 << 3;
+	public final static int O_APPEND    = 1 << 4;
+	public final static int O_TRUNC     = 1 << 5;
 	
-	public final static int SEEK_SET = 0;
-	public final static int SEEK_CUR = 1;
-	public final static int SEEK_END = 2;
+	public final static int SEEK_SET    = 0;
+	public final static int SEEK_CUR    = 1;
+	public final static int SEEK_END    = 2;
 	
 	public abstract String getPath();
 	public abstract Stat getStat() throws IOException;
