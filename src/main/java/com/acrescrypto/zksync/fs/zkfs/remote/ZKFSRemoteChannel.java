@@ -1,4 +1,4 @@
-package com.acrescrypto.zksync.fs.fsremote;
+package com.acrescrypto.zksync.fs.zkfs.remote;
 
 import com.acrescrypto.zksync.exceptions.EEXISTSException;
 import com.acrescrypto.zksync.exceptions.EINVALException;
@@ -14,9 +14,9 @@ import com.acrescrypto.zksync.fs.zkfs.ZKFile;
 import com.acrescrypto.zksync.net.dht.DHTClient;
 import com.acrescrypto.zksync.utility.Util;
 
-import static com.acrescrypto.zksync.fs.fsremote.FSRemoteMessage.*;
 import static com.acrescrypto.zksync.fs.Stat.*;
 import static com.acrescrypto.zksync.fs.zkfs.ZKFile.*;
+import static com.acrescrypto.zksync.fs.zkfs.remote.ZKFSRemoteMessage.*;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -29,7 +29,7 @@ import org.slf4j.LoggerFactory;
 
 // TODO: lookup counts!
 
-public class FSRemoteChannel implements AutoCloseable {
+public class ZKFSRemoteChannel implements AutoCloseable {
     protected ZKFS                         fs;
     protected long                         channelId;
     protected int                          nextFileDescriptor   = 1;
@@ -38,7 +38,7 @@ public class FSRemoteChannel implements AutoCloseable {
     protected HashMap<Integer,ZKDirectory> directoryDescriptors = new HashMap<>();
     private   Logger                       logger               = LoggerFactory.getLogger(DHTClient.class);
     
-    public void processMessage(FSRemoteMessage msg) throws IOException {
+    public void processMessage(ZKFSRemoteMessage msg) throws IOException {
         switch(msg.cmd()) {
         case CMD_CLOSE_CHANNEL:
             processCloseChannel          (msg);
@@ -123,11 +123,11 @@ public class FSRemoteChannel implements AutoCloseable {
         }
     }
     
-    protected void processCloseChannel(FSRemoteMessage msg) throws IOException {
+    protected void processCloseChannel(ZKFSRemoteMessage msg) throws IOException {
         close();
     }
     
-    protected void processCopyFileRange(FSRemoteMessage msg) {
+    protected void processCopyFileRange(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long srcInodeId            = buf.getLong();
             long srcOffset             = buf.getLong();
@@ -168,7 +168,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processCreate(FSRemoteMessage msg) {
+    protected void processCreate(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        parentInodeId  = buf.getLong ();
             int         mode           = buf.getInt  ();
@@ -206,12 +206,12 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processDestroy(FSRemoteMessage msg) throws IOException {
+    protected void processDestroy(ZKFSRemoteMessage msg) throws IOException {
         close();
         msg.finished();
     }
     
-    protected void processFsync(FSRemoteMessage msg) {
+    protected void processFsync(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long       inodeId         = buf.getLong ();
             @SuppressWarnings("unused")
@@ -226,11 +226,11 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processFsyncDir(FSRemoteMessage msg) {
+    protected void processFsyncDir(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long       inodeId         = buf.getLong ();
             @SuppressWarnings("unused")
-            boolean    datasync        = buf.get() != 0;
+            boolean    datasync        = buf.get     () != 0;
             int        fd              = buf.getInt  ();
             
             ZKFile     file            = directory(fd, inodeId);
@@ -240,7 +240,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processGetAttr(FSRemoteMessage msg) {
+    protected void processGetAttr(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long       inodeId         = buf.getLong ();
             int        fd              = buf.getInt  ();
@@ -250,7 +250,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processLink(FSRemoteMessage msg) {
+    protected void processLink(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        inodeId        = buf.getLong ();
             long        newParent      = buf.getLong ();
@@ -264,7 +264,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
 
-    protected void processLookup(FSRemoteMessage msg) {
+    protected void processLookup(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        parentInodeId  = buf.getLong ();
             String      name           = new String(remainder(buf));
@@ -277,7 +277,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processMkdir(FSRemoteMessage msg) {
+    protected void processMkdir(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        parentInodeId  = buf.getLong ();
             int         mode           = buf.getInt  ();
@@ -290,14 +290,14 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processMknod(FSRemoteMessage msg) {
+    protected void processMknod(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        parentInodeId  = buf.getLong ();
             int         type           = buf.getInt  ();
             int         mode           = buf.getInt  ();
             String      name           = new String(varlen(buf));
-            int         devMajor = 0,
-                        devMinor = 0;
+            int         devMajor       = 0,
+                        devMinor       = 0;
             
             if(type == TYPE_BLOCK_DEVICE || type == TYPE_CHARACTER_DEVICE) {
                 devMajor               = buf.getInt ();
@@ -322,7 +322,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processOpen(FSRemoteMessage msg) {
+    protected void processOpen(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        inodeId        = buf.getLong ();
             int         mode           = buf.getInt  ();
@@ -336,7 +336,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processOpendir(FSRemoteMessage msg) {
+    protected void processOpendir(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        inodeId        = buf.getLong ();
             int         mode           = buf.getInt  ();
@@ -350,7 +350,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processRead(FSRemoteMessage msg) {
+    protected void processRead(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        inodeId        = buf.getLong ();
             long        size           = buf.getLong ();
@@ -381,7 +381,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processReadDir(FSRemoteMessage msg) {
+    protected void processReadDir(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        inodeId        = buf.getLong ();
             long        size           = buf.getLong ();
@@ -418,7 +418,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processReadDirPlus(FSRemoteMessage msg) {
+    protected void processReadDirPlus(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        inodeId        = buf.getLong ();
             long        size           = buf.getLong ();
@@ -458,7 +458,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processReadLink(FSRemoteMessage msg) {
+    protected void processReadLink(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        inodeId        = buf.getLong ();
             Inode       inode          = fs.getInodeTable().inodeWithId(inodeId);
@@ -477,7 +477,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processRelease(FSRemoteMessage msg) {
+    protected void processRelease(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        inodeId        = buf.getLong ();
             int         fileDescriptor = buf.getInt  ();
@@ -487,7 +487,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processReleaseDir(FSRemoteMessage msg) {
+    protected void processReleaseDir(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        inodeId        = buf.getLong ();
             int         dirDescriptor  = buf.getInt  ();
@@ -497,7 +497,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processRename(FSRemoteMessage msg) {
+    protected void processRename(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        parentInodeId  = buf.getLong ();
             String      name           = new String(varlen(buf));
@@ -540,7 +540,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processRmdir(FSRemoteMessage msg) {
+    protected void processRmdir(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        parentInodeId  = buf.getLong ();
             String      name           = new String(remainder(buf));
@@ -570,7 +570,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processSetAttr(FSRemoteMessage msg) {
+    protected void processSetAttr(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        inodeId        = buf.getLong ();
             int         fileDescriptor = buf.getInt  ();
@@ -640,7 +640,8 @@ public class FSRemoteChannel implements AutoCloseable {
             }
             
             if(privAffected && killPriv) {
-                // TODO: remove setuid/setgid from mode
+                int mask = ~(MODE_SUID | MODE_SGID);
+                stat.setMode(stat.getMode() & mask);
             }
             
             fs.markDirty();
@@ -651,13 +652,13 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processStatFS(FSRemoteMessage msg) {
+    protected void processStatFS(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             msg.respond(fs.fsStat().serialize());
         });
     }
     
-    protected void processSymlink(FSRemoteMessage msg) {
+    protected void processSymlink(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        parentInodeId  = buf.getLong ();
             String      name           = new String(varlen(buf));
@@ -687,7 +688,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processUnlink(FSRemoteMessage msg) {
+    protected void processUnlink(ZKFSRemoteMessage msg) throws IOException {
         msg.waitForFinish((buf)->{
             long        parentInodeId  = buf.getLong ();
             String      name           = new String(remainder(buf));
@@ -703,7 +704,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processWrite(FSRemoteMessage msg) {
+    protected void processWrite(ZKFSRemoteMessage msg) throws IOException {
         msg.read(12, (hdr)->{
             long        inodeId        = hdr.getLong ();
             int         fileDescriptor = hdr.getInt  ();
@@ -725,7 +726,7 @@ public class FSRemoteChannel implements AutoCloseable {
         });
     }
     
-    protected void processUnsupported(FSRemoteMessage msg) throws EINVALException {
+    protected void processUnsupported(ZKFSRemoteMessage msg) throws EINVALException {
         throw new EINVALException("unsupported command: " + msg.cmd());
     }
     
@@ -746,20 +747,20 @@ public class FSRemoteChannel implements AutoCloseable {
     }
     
     public ZKFile file(int fd, long inodeId) throws IOException {
-        ZKFile file = fileDescriptors.getOrDefault(fd, null);
+        ZKFile          file           = fileDescriptors.getOrDefault(fd, null);
         if(file == null) {
-            Inode  inode = fs.getInodeTable().inodeWithId(inodeId);
-            file         = fs.open(inode, O_RDWR);
+            Inode       inode          = fs.getInodeTable().inodeWithId(inodeId);
+            file                       = fs.open(inode, O_RDWR);
         }
 
         return file;
     }
     
     public ZKDirectory directory(int fd, long inodeId) throws IOException {
-        ZKDirectory dir = directoryDescriptors.getOrDefault(fd, null);
+        ZKDirectory     dir            = directoryDescriptors.getOrDefault(fd, null);
         if(dir == null) {
-            dir = (ZKDirectory) fs.lockedOperation(()->{
-                Inode  inode = fs.getInodeTable().inodeWithId(inodeId);
+            dir                        = (ZKDirectory) fs.lockedOperation(()->{
+                Inode   inode          = fs.getInodeTable().inodeWithId(inodeId);
                 return fs.opendirSemicache(inode);
             });
         }
@@ -768,34 +769,34 @@ public class FSRemoteChannel implements AutoCloseable {
     }
     
     public void closeFile(int fd, long inodeId) throws IOException {
-        ZKFile file = fileDescriptors.remove(fd);
+        ZKFile          file           = fileDescriptors.remove(fd);
         if(file == null) return;
         
         file.close();
     }
     
     public void closeDirectory(int fd, long inodeId) throws IOException {
-        ZKDirectory dir = directoryDescriptors.remove(fd);
+        ZKDirectory     dir            = directoryDescriptors.remove(fd);
         if(dir == null) return;
         
         dir.close();
     }
     
     public byte[] remainder(ByteBuffer buf) {
-        byte[] bytes = new byte[buf.remaining()];
+        byte[]         bytes           = new byte[buf.remaining()];
         buf.get(bytes);
         
         return bytes;
     }
     
     public byte[] fixedlen(int len, ByteBuffer buf) {
-        byte[] result = new byte[len];
+        byte[]          result         = new byte[len];
         buf.get(result);
         return result;
     }
     
     public byte[] varlen(ByteBuffer buf) {
-        int    len    = buf.get();
+        int             len            = buf.get();
         return fixedlen(len, buf);
     }
 }

@@ -20,6 +20,22 @@ public class Stat {
 	private String group,
 	               user;
 	
+	public final static int MODE_SUID             = 0400;
+	public final static int MODE_SGID             = 0200;
+	public final static int MODE_STICKY           = 0100;
+	
+    public final static int MODE_UR               = 0400;
+	public final static int MODE_UW               = 0200;
+    public final static int MODE_UX               = 0100;
+    
+    public final static int MODE_GR               = 0040;
+    public final static int MODE_GW               = 0020;
+    public final static int MODE_GX               = 0010;
+    
+    public final static int MODE_OR               = 0004;
+    public final static int MODE_OW               = 0002;
+    public final static int MODE_OX               = 0001;
+	
 	public final static int TYPE_REGULAR_FILE     = 0;
 	public final static int TYPE_DIRECTORY        = 1;
 	public final static int TYPE_SYMLINK          = 2;

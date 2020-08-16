@@ -1,9 +1,9 @@
-package com.acrescrypto.zksync.fs.fsremote;
+package com.acrescrypto.zksync.fs.zkfs.remote;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public class FSRemoteMessage {
+public class ZKFSRemoteMessage {
     public interface WaitCallback {
         public void ready(ByteBuffer data) throws IOException;
     }
@@ -88,14 +88,14 @@ public class FSRemoteMessage {
         return 0;
     }
     
-    public void waitForFinish(WaitCallback callback) {
+    public void waitForFinish(WaitCallback callback) throws IOException {
         
     }
     
-    public void readUntilFinished(int length, WaitCallback callback) {
+    public void readUntilFinished(int length, WaitCallback callback) throws IOException {
     }
     
-    public void read(int length, WaitCallback callback) {
+    public void read(int length, WaitCallback callback) throws IOException {
     }
     
     public void respond(byte[] data) {
