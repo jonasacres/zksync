@@ -9,6 +9,7 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.acrescrypto.zksync.fs.zkfs.ZKMaster;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 
@@ -18,13 +19,16 @@ public class ZKFSRemoteListener {
     protected GroupedThreadPool                 threadPool;
     protected BandwidthMonitor                  txMonitor,
                                                 rxMonitor;
+    protected ZKMaster                          master;
     
     private   Logger logger = LoggerFactory.getLogger(ZKFSRemoteListener.class);
     
-    public ZKFSRemoteListener(String address, int port) throws IOException {
-        listenSocket = ServerSocketChannel.open();
+    public ZKFSRemoteListener(ZKMaster master, String address, int port) throws IOException {
+        this.master       = master;
+        this.listenSocket = ServerSocketChannel.open();
+        this.threadPool   = GroupedThreadPool.newCachedThreadPool("ZKFSRemoteListener");
+        
         listenSocket.socket().bind(new InetSocketAddress(address, port));
-        threadPool = GroupedThreadPool.newCachedThreadPool("ZKFSRemoteListener");
         listen();
     }
 
@@ -66,5 +70,9 @@ public class ZKFSRemoteListener {
     
     public BandwidthMonitor rxMonitor() {
         return rxMonitor;
+    }
+    
+    public ZKMaster master() {
+        return master;
     }
 }

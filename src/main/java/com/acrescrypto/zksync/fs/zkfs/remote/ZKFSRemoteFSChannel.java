@@ -11,7 +11,7 @@ import com.acrescrypto.zksync.fs.zkfs.Inode;
 import com.acrescrypto.zksync.fs.zkfs.ZKDirectory;
 import com.acrescrypto.zksync.fs.zkfs.ZKFS;
 import com.acrescrypto.zksync.fs.zkfs.ZKFile;
-import com.acrescrypto.zksync.net.dht.DHTClient;
+import com.acrescrypto.zksync.fs.zkfs.remote.ZKFSRemoteConnection.ChannelListener;
 import com.acrescrypto.zksync.utility.Util;
 
 import static com.acrescrypto.zksync.fs.Stat.*;
@@ -29,16 +29,46 @@ import org.slf4j.LoggerFactory;
 
 // TODO: lookup counts!
 
-public class ZKFSRemoteChannel implements AutoCloseable {
+public class ZKFSRemoteFSChannel implements AutoCloseable, ChannelListener {
     protected ZKFS                         fs;
     protected long                         channelId;
     protected int                          nextFileDescriptor   = 1;
     
+    protected ZKFSRemoteConnection         connection;
     protected HashMap<Integer,ZKFile>      fileDescriptors      = new HashMap<>();
     protected HashMap<Integer,ZKDirectory> directoryDescriptors = new HashMap<>();
-    private   Logger                       logger               = LoggerFactory.getLogger(ZKFSRemoteChannel.class);
+    private   Logger                       logger               = LoggerFactory.getLogger(ZKFSRemoteFSChannel.class);
     
-    public void processMessage(ZKFSRemoteMessageIncoming msg) throws IOException {
+    public ZKFSRemoteFSChannel(ZKFSRemoteConnection connection, ZKFS fs) {
+        this.connection = connection;
+        this.fs         = fs;
+    }
+    
+    public String logName() {
+        return String.format("%d %s %s",
+                channelId,
+                Util.formatArchiveId(fs.getArchive().getConfig().getArchiveId()),
+                Util.formatRevisionTag(fs.getBaseRevision()));
+    }
+    
+    public void setChannelId(long channelId) {
+        this.channelId = channelId;
+    }
+    
+    public void processMessage(ZKFSRemoteMessageIncoming msg) {
+        try {
+            processMessageLower(msg);
+        } catch(IOException exc) {
+            logger.error("ZKFSRemoteFSChannel {}: msgId={}, cmd={}",
+                    logName(),
+                    msg.msgId(),
+                    msg.cmd(),
+                    exc);
+            msg.error(exc);
+        }
+    }
+    
+    public void processMessageLower(ZKFSRemoteMessageIncoming msg) throws IOException {
         switch(msg.cmd()) {
         case CMD_CLOSE_CHANNEL:
             processCloseChannel          (msg);
@@ -744,6 +774,7 @@ public class ZKFSRemoteChannel implements AutoCloseable {
         }
         
         fs.close();
+        connection.closedChannel(this);
     }
     
     public ZKFile file(int fd, long inodeId) throws IOException {
@@ -798,5 +829,9 @@ public class ZKFSRemoteChannel implements AutoCloseable {
     public byte[] varlen(ByteBuffer buf) {
         int             len            = buf.get();
         return fixedlen(len, buf);
+    }
+
+    public long channelId() {
+        return channelId;
     }
 }

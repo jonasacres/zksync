@@ -177,6 +177,13 @@ public class ZKFSRemoteMessageIncoming {
     public void respond(byte[] data) {
         respond(data, true);
     }
+    
+    public void respond(ByteBuffer buf) {
+        byte[] data = new byte[buf.remaining()];
+        buf.get(data);
+        
+        respond(data, true);
+    }
 
     public void respond(byte[] data, boolean finished) {
         if(!responseStarted) {
