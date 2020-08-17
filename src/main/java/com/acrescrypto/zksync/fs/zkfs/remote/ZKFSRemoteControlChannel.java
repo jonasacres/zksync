@@ -25,7 +25,7 @@ public class ZKFSRemoteControlChannel implements ChannelListener {
         this.connection = connection;
     }
     
-    public void processMessage(ZKFSRemoteMessageIncoming msg) {
+    public synchronized void processMessage(ZKFSRemoteMessageIncoming msg) {
         try {
             processMessageLower(msg);
         } catch (IOException exc) {
@@ -57,14 +57,14 @@ public class ZKFSRemoteControlChannel implements ChannelListener {
     }
     
     protected void processOpenRevtag(ZKFSRemoteMessageIncoming msg) throws IOException {
-        int hashLen = State.sharedCrypto().hashLength();
+        State state = connection.listener().state();
+        int hashLen = state.getMaster().getCrypto().hashLength();
         
         msg.read(hashLen, archiveIdBuf->{
             byte[] archiveId = new byte[hashLen];
             archiveIdBuf.get(archiveId);
             
-            ZKArchiveConfig config = State.sharedState()
-                                          .configForArchiveId(archiveId);
+            ZKArchiveConfig config = state.configForArchiveId(archiveId);
             if(config == null) throw new ENOENTException(Util.formatArchiveId(archiveId));
             
             msg.waitForFinish(revTagBuf->{
@@ -74,9 +74,9 @@ public class ZKFSRemoteControlChannel implements ChannelListener {
                     revTagBuf.get(revTagBytes);
                     String revTag64    = Util.encode64(revTagBytes);
                 
-                    fs = State.sharedState().fsForRevision(config, revTag64);
+                    fs = state.fsForRevision(config, revTag64);
                 } else {
-                    fs = State.sharedState().activeFs(config);
+                    fs = state.activeFs(config);
                 }
                 
                 ZKFSRemoteFSChannel channel = new ZKFSRemoteFSChannel(connection,
@@ -94,5 +94,15 @@ public class ZKFSRemoteControlChannel implements ChannelListener {
     @Override
     public void setChannelId(long channelId) {
         this.channelId = channelId;
+    }
+    
+    @Override
+    public long channelId() {
+        return channelId;
+    }
+    
+    @Override
+    public void close() {
+        connection.closedChannel(this);
     }
 }

@@ -1,6 +1,7 @@
 package com.acrescrypto.zksync.fs.zkfs.config;
 
 import com.acrescrypto.zksync.fs.FS;
+import com.acrescrypto.zksync.fs.zkfs.remote.ZKFSRemoteListener;
 import com.acrescrypto.zksync.net.dht.DHTZKArchiveDiscovery;
 import com.acrescrypto.zksync.utility.MemLogAppender;
 
@@ -68,6 +69,9 @@ public class ConfigDefaults {
 		config.setDefault("net.swarm.pageSendAvailabilityTimeoutMs",         1000);
 		
 		config.setDefault("net.remotefs.secret",                               "");
+		config.setDefault("net.remotefs.enabled",                            true);
+		config.setDefault("net.remotefs.address",                     "127.0.0.1");
+		config.setDefault("net.remotefs.port",    ZKFSRemoteListener.DEFAULT_PORT);
 		
 		config.setDefault("fs.default.fileMode",                             0644);
 		config.setDefault("fs.default.username",                           "root");

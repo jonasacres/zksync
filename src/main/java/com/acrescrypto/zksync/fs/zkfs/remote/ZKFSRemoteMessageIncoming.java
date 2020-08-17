@@ -191,6 +191,7 @@ public class ZKFSRemoteMessageIncoming {
             pendingResponseBuffers.add(noError);
         }
         
+        responseStarted = true;
         pendingResponseBuffers.add(ByteBuffer.wrap(data));
         
         sendIfReady();
@@ -211,6 +212,11 @@ public class ZKFSRemoteMessageIncoming {
     }
     
     public void error(IOException exc) {
+        if(responseStarted) {
+            respond(); // too late to send error, just let receiver know we're done
+            return;
+        }
+        
         int errno;
         
         if(exc instanceof ErrnoException) {

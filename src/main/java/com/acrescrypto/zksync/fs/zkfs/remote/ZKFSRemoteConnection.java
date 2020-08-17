@@ -38,10 +38,8 @@ public class ZKFSRemoteConnection {
     public interface ChannelListener {
         public void processMessage(ZKFSRemoteMessageIncoming msg);
         public void setChannelId(long channelId);
-    }
-    
-    public interface ChannelFactory {
-        public ChannelListener createListener();
+        public long channelId();
+        public void close() throws IOException;
     }
 
     private   Logger logger = LoggerFactory.getLogger(ZKFSRemoteConnection.class);
@@ -88,7 +86,7 @@ public class ZKFSRemoteConnection {
     }
     
     protected void authenticate() throws IOException {
-        CryptoSupport crypto        = State.sharedCrypto();
+        CryptoSupport crypto        = listener.state().getMaster().getCrypto();
         byte[]        salt          = crypto.rng(crypto.hashLength()),
                       response      = new byte[2*crypto.hashLength()],
                       peerSalt      = new byte[  crypto.hashLength()],
@@ -106,14 +104,19 @@ public class ZKFSRemoteConnection {
                                       .getGlobalConfig()
                                       .getString("net.remotefs.secret")
                                       .getBytes();
-        byte[]        combinedSalt  = Util.concat(salt, peerSalt);
-        byte[]        expectedHash  = crypto.authenticate(combinedSalt, secret);
+        byte[]        combinedSalt  = Util.concat(salt, peerSalt),
+                      counterSalt   = Util.concat(peerSalt, salt),
+                      expectedHash  = crypto.authenticate(combinedSalt, secret),
+                      counterHash   = crypto.authenticate(counterSalt,  secret);
         boolean       match         = Arrays.equals(expectedHash, peerHash);
         
         if(!match) {
             logger.warn("ZKFSRemoteConnection {}: Peer failed secret challenge", remoteAddress());
             close();
+            return;
         }
+        
+        socket.write(ByteBuffer.wrap(counterHash));
     }
     
     public void check() throws IOException, ProtocolViolationException {
@@ -249,6 +252,17 @@ public class ZKFSRemoteConnection {
     
     public void close() throws IOException {
         socket.close();
+        
+        for(ChannelListener channel : channels.values()) {
+            try {
+                channel.close();
+            } catch(IOException exc) {
+                logger.error("ZKFSRemoteConnection {}: Caught exception closing channel {}",
+                        remoteAddress(),
+                        channel);
+                channels.remove(channel.channelId());
+            }
+        }
     }
     
     public void require(boolean test) throws ProtocolViolationException {
@@ -259,7 +273,7 @@ public class ZKFSRemoteConnection {
         return listener;
     }
 
-    public void closedChannel(ZKFSRemoteFSChannel channel) {
+    public void closedChannel(ChannelListener channel) {
         channels.remove(channel.channelId());
     }
 }
