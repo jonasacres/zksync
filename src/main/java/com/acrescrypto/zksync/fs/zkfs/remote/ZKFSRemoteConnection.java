@@ -247,7 +247,7 @@ public class ZKFSRemoteConnection {
     }
     
     public String remoteAddress() {
-        return socket.socket().getRemoteSocketAddress().toString();
+        return socket.socket().getInetAddress().getHostAddress();
     }
     
     public void close() throws IOException {

@@ -2,6 +2,7 @@ package com.acrescrypto.zksync.fs.zkfs.remote;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.StandardSocketOptions;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.LinkedList;
@@ -15,10 +16,10 @@ import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksyncweb.State;
 
-public class ZKFSRemoteListener {
+public class ZKFSRemoteListener implements AutoCloseable {
     public final static int DEFAULT_PORT = 15692;
     protected ServerSocketChannel               listenSocket;
-    protected LinkedList<ZKFSRemoteConnection>  connections;
+    protected LinkedList<ZKFSRemoteConnection>  connections = new LinkedList<>();
     protected GroupedThreadPool                 threadPool;
     protected BandwidthMonitor                  txMonitor,
                                                 rxMonitor;
@@ -34,17 +35,6 @@ public class ZKFSRemoteListener {
         
         monitorConfig();
         checkListen();
-    }
-    
-    public void close() throws IOException {
-        for(SubscriptionToken<?> token : tokens) {
-            token.close();
-            for(ZKFSRemoteConnection connection : connections) {
-                connection.close();
-            }
-        }
-
-        closeSocket();
     }
     
     protected void monitorConfig() {
@@ -77,14 +67,8 @@ public class ZKFSRemoteListener {
         if(enabled == listening) {
             if(!enabled) return;
             
-            boolean addressMatch = listenSocket
-                                     .socket()
-                                     .getLocalSocketAddress()
-                                     .toString()
-                                     .equals(address),
-                    portMatch    = listenSocket
-                                     .socket()
-                                     .getLocalPort() == port,
+            boolean addressMatch = listenAddress().equals(address),
+                    portMatch    = listenPort   () == port,
                     needsRebind  = !addressMatch || !portMatch;
             
             if(needsRebind) {
@@ -106,7 +90,8 @@ public class ZKFSRemoteListener {
                 bindAddress,
                 bindPort);
         listenSocket = ServerSocketChannel.open();
-        listenSocket.socket().bind(new InetSocketAddress(bindAddress, bindPort));
+        listenSocket.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+        listenSocket.bind(new InetSocketAddress(bindAddress, bindPort));
         listen();
         
         logger.info("ZKFSRemoteListener {}: Listening on {}:{}",
@@ -116,6 +101,7 @@ public class ZKFSRemoteListener {
     }
     
     public void closeSocket() throws IOException {
+        listening = false;
         if(listenSocket == null) return;
 
         logger.info("ZKFSRemoteListener {}: Closing socket",
@@ -129,28 +115,60 @@ public class ZKFSRemoteListener {
         connections.remove(connection);
     }
     
-    public void listen() {
-        threadPool.submit(()->listenBody());
+    public boolean isListening() {
+        return listening;
     }
     
-    public void listenBody() {
-        try {
-            while(true) {
-                SocketChannel socket = listenSocket.accept();
+    public void listen() {
+        listening = true;
+        threadPool.submit(()->listenBody(listenSocket));
+    }
+    
+    public void listenBody(ServerSocketChannel lSocket) {
+        while(listening && lSocket.isOpen()) {
+            SocketChannel socket = null;
+            
+            try {
+                socket = lSocket.accept();
+                if(socket == null) continue;
+                
                 ZKFSRemoteConnection connection = new ZKFSRemoteConnection(this, socket);
                 connections.add(connection);
-                
+            } catch(Exception exc) {
+                logger.error("ZKFSRemoteListener {}: caught exception in listen thread, accepting peer {}",
+                        logName(),
+                        socket != null
+                          ? socket.socket().getRemoteSocketAddress().toString()
+                          : "null",
+                        exc);
+                if(socket != null) {
+                    try {
+                        socket.close();
+                    } catch(IOException exc2) {
+                        logger.error("ZKFSRemoteListener {}: caught subsequent exception closing socket {}",
+                                socket.socket().getRemoteSocketAddress().toString(),
+                                exc2);
+                        exc.printStackTrace();
+                    }
+                }
             }
-        } catch(IOException exc) {
-            logger.error("ZKFSRemoteListener {}:{}: caught fatal exception in listen thread",
-                    listenAddress(),
-                    listenPort(),
-                    exc);
+        }
+    }
+    
+    public void close() throws IOException {
+        for(SubscriptionToken<?> token : tokens) {
+            token.close();
+        }
+        
+        closeSocket();
+
+        for(ZKFSRemoteConnection connection : connections) {
+            connection.close();
         }
     }
     
     public String listenAddress() {
-        return listenSocket.socket().getLocalSocketAddress().toString();
+        return listenSocket.socket().getInetAddress().getHostAddress();
     }
     
     public int listenPort() {
