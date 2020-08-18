@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,6 +17,7 @@ import com.acrescrypto.zksync.crypto.CryptoSupport;
 import com.acrescrypto.zksync.exceptions.ProtocolViolationException;
 import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
+import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.State;
 
@@ -26,32 +28,49 @@ public class ZKFSRemoteConnection {
     protected SocketChannel                           socket;
     protected ZKFSRemoteListener                      listener;
     protected HashMap<Long,ZKFSRemoteMessageIncoming> messages;
-    protected ConcurrentHashMap<Long,ChannelListener> channels;
-    protected ByteBuffer                              readBuf = ByteBuffer.allocate(64*1024),
-                                                      takeBuf = ByteBuffer.wrap(readBuf.array(), 0, 0);;
+    protected ConcurrentHashMap<Long,ChannelListener> channels      = new ConcurrentHashMap<>();
+    protected ByteBuffer                              readBuf       = ByteBuffer.allocate(64*1024),
+                                                      takeBuf       = ByteBuffer.wrap(readBuf.array(), 0, 0);;
     protected ZKFSRemoteMessageIncoming               activeMessage;
     protected long                                    remainingOnActive;
     protected AtomicLong                              nextChannelId = new AtomicLong(CHANNEL_ID_USER_START);
     protected BandwidthMonitor                        txMonitor,
                                                       rxMonitor;
+    protected SnoozeThread                            authenticationTimer;
     
     public interface ChannelListener {
         public void processMessage(ZKFSRemoteMessageIncoming msg);
-        public void setChannelId(long channelId);
-        public long channelId();
-        public void close() throws IOException;
+        public void setChannelId  (long channelId);
+        public long channelId     ();
+        public void close         ()                                throws IOException;
     }
 
     private   Logger logger = LoggerFactory.getLogger(ZKFSRemoteConnection.class);
     
     public ZKFSRemoteConnection(ZKFSRemoteListener listener, SocketChannel socket) {
-        this.socket         = socket;
-        this.listener       = listener;
-        this.txMonitor      = new BandwidthMonitor(listener.txMonitor());
-        this.rxMonitor      = new BandwidthMonitor(listener.rxMonitor());
+        this.socket              = socket;
+        this.listener            = listener;
+        this.txMonitor           = new BandwidthMonitor(listener.txMonitor());
+        this.rxMonitor           = new BandwidthMonitor(listener.rxMonitor());
+        this.authenticationTimer = new SnoozeThread(authTimeout(), false, ()->{
+            logger.warn("ZKFSRemoteConnection {}: Timed out waiting for authentication",
+                    remoteAddress());
+            try {
+                close();
+            } catch (IOException exc) {
+                logger.error("ZKFSRemoteConnection {}: Encountered exception closing during auth timeout",
+                        remoteAddress(),
+                        exc);
+            }
+        });
         
         channels.put(CHANNEL_ID_CONTROL,
                      new ZKFSRemoteControlChannel(this));
+        monitor(listener.threadPool());
+    }
+    
+    public int authTimeout() {
+        return listener.state().getMaster().getGlobalConfig().getInt("net.remotefs.authTimeoutMs");
     }
     
     public long registerChannel(ChannelListener channelListener) {
@@ -62,12 +81,25 @@ public class ZKFSRemoteConnection {
         return channelId;
     }
     
+    public Collection<Long> channels() {
+        return channels.keySet();
+    }
+    
+    public boolean hasChannel(long channelId) {
+        return channels.containsKey(channelId);
+    }
+    
+    public ChannelListener listenerForChannel(long channelId) {
+        return channels.getOrDefault(channelId, null);
+    }
+    
     public void monitor(GroupedThreadPool pool) {
         pool.submit(()->monitorBody());
     }
     
     protected void monitorBody() {
         try {
+            logger.debug("ZKFSRemoteConnection {}: Thread started", remoteAddress());
             authenticate();
             
             while(true) {
@@ -85,7 +117,7 @@ public class ZKFSRemoteConnection {
         }
     }
     
-    protected void authenticate() throws IOException {
+    protected void authenticate() throws IOException, ProtocolViolationException {
         CryptoSupport crypto        = listener.state().getMaster().getCrypto();
         byte[]        salt          = crypto.rng(crypto.hashLength()),
                       response      = new byte[2*crypto.hashLength()],
@@ -93,8 +125,14 @@ public class ZKFSRemoteConnection {
                       peerHash      = new byte[  crypto.hashLength()];
         ByteBuffer    responseBuf   = ByteBuffer.wrap(response);
         
+        socket.write(ByteBuffer.wrap(Util.serializeInt(authHashIterations())));
         socket.write(ByteBuffer.wrap(salt));
-        socket.read(responseBuf);
+        txMonitor.observeTraffic(4 + salt.length);
+        
+        IOUtils.readFully(socket, responseBuf);
+        
+        responseBuf.flip();
+        rxMonitor.observeTraffic(responseBuf.remaining());
         responseBuf.get(peerSalt);
         responseBuf.get(peerHash);
         
@@ -106,17 +144,36 @@ public class ZKFSRemoteConnection {
                                       .getBytes();
         byte[]        combinedSalt  = Util.concat(salt, peerSalt),
                       counterSalt   = Util.concat(peerSalt, salt),
-                      expectedHash  = crypto.authenticate(combinedSalt, secret),
-                      counterHash   = crypto.authenticate(counterSalt,  secret);
+                      expectedHash  = iteratedHash(authHashIterations(), combinedSalt, secret),
+                      counterHash   = iteratedHash(authHashIterations(), counterSalt,  secret);
         boolean       match         = Arrays.equals(expectedHash, peerHash);
         
         if(!match) {
             logger.warn("ZKFSRemoteConnection {}: Peer failed secret challenge", remoteAddress());
-            close();
-            return;
+            throw new ProtocolViolationException();
         }
         
+        authenticationTimer.cancel();
+        authenticationTimer = null;
+        
+        logger.debug("ZKFSRemoteConnection {}: Authenticated", remoteAddress());
         socket.write(ByteBuffer.wrap(counterHash));
+        txMonitor.observeTraffic(counterHash.length);
+    }
+    
+    protected int authHashIterations() {
+        return listener.state().getMaster().getGlobalConfig().getInt("net.remotefs.authHashIterations");
+    }
+    
+    protected byte[] iteratedHash(int iterations, byte[] salt, byte[] secret) {
+        CryptoSupport crypto  = listener.state().getMaster().getCrypto();
+        byte[]        current = secret;
+        
+        for(int i = 0; i < iterations; i++) {
+            current           = crypto.authenticate(salt, current);
+        }
+        
+        return current;
     }
     
     public void check() throws IOException, ProtocolViolationException {
@@ -133,7 +190,7 @@ public class ZKFSRemoteConnection {
             }
             
             readBuf.position(readBuf.position() + bytesRead);
-            takeBuf.limit(takeBuf.limit() + bytesRead);
+            takeBuf.limit   (takeBuf.limit()    + bytesRead);
         }
         
         if(activeMessage == null) {
@@ -185,7 +242,7 @@ public class ZKFSRemoteConnection {
         }
     }
     
-    public void recycleBuffer() {
+    protected void recycleBuffer() {
         if(takeBuf.hasRemaining()) {
             // make a new buffer, copy the unread bytes to the start
             ByteBuffer newBuffer = ByteBuffer.allocate(readBuf.capacity());
@@ -217,12 +274,13 @@ public class ZKFSRemoteConnection {
         }
         
         long mask         = finished ? (1 << 63) : 0,
-             maskedId     = msg.msgId() & mask,
+             maskedId     = msg.msgId() | mask,
              msgLen       = headerSize + payloadSize;
         
         ByteBuffer header = ByteBuffer.allocate(headerSize);
         header.putLong(msgLen);
         header.putLong(maskedId);
+        header.flip();
         
         try {
             socket.write(header);
@@ -275,5 +333,13 @@ public class ZKFSRemoteConnection {
 
     public void closedChannel(ChannelListener channel) {
         channels.remove(channel.channelId());
+    }
+
+    public BandwidthMonitor txMonitor() {
+        return txMonitor;
+    }
+    
+    public BandwidthMonitor rxMonitor() {
+        return rxMonitor;
     }
 }

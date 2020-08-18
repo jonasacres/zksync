@@ -169,4 +169,8 @@ public class BandwidthMonitor {
 		
 		return String.format("%.02f %s", rate, unit);
 	}
+
+    public boolean hasParent(BandwidthMonitor txMonitor) {
+        return parents.contains(txMonitor);
+    }
 }

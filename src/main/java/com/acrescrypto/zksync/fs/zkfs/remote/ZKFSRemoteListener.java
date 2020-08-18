@@ -3,8 +3,10 @@ package com.acrescrypto.zksync.fs.zkfs.remote;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;
+import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.Collection;
 import java.util.LinkedList;
 
 import org.slf4j.Logger;
@@ -30,8 +32,10 @@ public class ZKFSRemoteListener implements AutoCloseable {
     private   Logger logger = LoggerFactory.getLogger(ZKFSRemoteListener.class);
     
     public ZKFSRemoteListener(State state) throws IOException {
-        this.state        = state;
-        this.threadPool   = GroupedThreadPool.newCachedThreadPool("ZKFSRemoteListener");
+        this.state          = state;
+        this.txMonitor      = new BandwidthMonitor(state.getMaster().getBandwidthMonitorTx());
+        this.rxMonitor      = new BandwidthMonitor(state.getMaster().getBandwidthMonitorRx());
+        this.threadPool     = GroupedThreadPool.newCachedThreadPool("ZKFSRemoteListener");
         
         monitorConfig();
         checkListen();
@@ -134,6 +138,9 @@ public class ZKFSRemoteListener implements AutoCloseable {
                 
                 ZKFSRemoteConnection connection = new ZKFSRemoteConnection(this, socket);
                 connections.add(connection);
+            } catch(AsynchronousCloseException exc) {
+                logger.debug("ZKFSRemoveListener {}: exiting listen loop due to closed socket",
+                        logName());
             } catch(Exception exc) {
                 logger.error("ZKFSRemoteListener {}: caught exception in listen thread, accepting peer {}",
                         logName(),
@@ -167,6 +174,10 @@ public class ZKFSRemoteListener implements AutoCloseable {
         }
     }
     
+    public Collection<ZKFSRemoteConnection> connections() {
+        return connections;
+    }
+    
     public String listenAddress() {
         return listenSocket.socket().getInetAddress().getHostAddress();
     }
@@ -193,5 +204,9 @@ public class ZKFSRemoteListener implements AutoCloseable {
         return String.format("%s:%d",
                 listenAddress(),
                 listenPort());
+    }
+
+    public GroupedThreadPool threadPool() {
+        return threadPool;
     }
 }

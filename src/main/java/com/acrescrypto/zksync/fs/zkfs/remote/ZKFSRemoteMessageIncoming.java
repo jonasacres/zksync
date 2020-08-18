@@ -138,13 +138,15 @@ public class ZKFSRemoteMessageIncoming {
                                      finished;
     protected long                   msgId,
                                      channelId,
-                                     lastDeferTime;
+                                     lastDeferTime,
+                                     msgLen;
     protected SnoozeThread           snoozeSend;
     
     public ZKFSRemoteMessageIncoming(ZKFSRemoteConnection connection, long msgId, long channelId, int cmd, long msgLen) {
         this.connection = connection;
         this.msgId      = msgId;
         this.cmd        = cmd;
+        this.msgLen     = msgLen;
     }
     
     public synchronized void addBytes(ByteBuffer buf) {

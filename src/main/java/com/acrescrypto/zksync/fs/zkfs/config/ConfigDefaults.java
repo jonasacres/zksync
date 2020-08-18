@@ -72,6 +72,8 @@ public class ConfigDefaults {
 		config.setDefault("net.remotefs.enabled",                            true);
 		config.setDefault("net.remotefs.address",                     "127.0.0.1");
 		config.setDefault("net.remotefs.port",    ZKFSRemoteListener.DEFAULT_PORT);
+		config.setDefault("net.remotefs.authTimeoutMs",                     10000);
+		config.setDefault("net.remotefs.authHashIterations",              1000000);
 		
 		config.setDefault("fs.default.fileMode",                             0644);
 		config.setDefault("fs.default.username",                           "root");
