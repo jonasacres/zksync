@@ -20,11 +20,93 @@ import com.acrescrypto.zksyncweb.State;
 public class ZKFSRemoteConnectionTest {
     class ExampleListener implements ChannelListener {
         long channelId;
+        LinkedList<ZKFSRemoteMessageIncoming> messages = new LinkedList<>();
         
-        @Override public void processMessage(ZKFSRemoteMessageIncoming msg) {}
+        @Override public void processMessage(ZKFSRemoteMessageIncoming msg) { messages.add(msg); }
         @Override public void setChannelId(long channelId) { this.channelId = channelId; }
         @Override public long channelId() { return channelId; }
         @Override public void close() throws IOException {}
+        
+        public ZKFSRemoteMessageIncoming messageWithId(long msgId) {
+            for(ZKFSRemoteMessageIncoming message : messages) {
+                if(message.msgId() == msgId) return message;
+            }
+            
+            return null;
+        }
+    }
+    
+    class OutgoingMessage {
+        long                       channelId,
+                                   msgId,
+                                   fragments;
+        int                        cmd;
+        ExampleListener            cListener;
+        
+        public OutgoingMessage(long channelId, long msgId, int cmd) {
+            this.channelId         = channelId;
+            this.msgId             = msgId;
+            this.cmd               = cmd;
+            this.cListener         = (ExampleListener) connection.listenerForChannel(channelId);
+        }
+        
+        public void sendBytes(int length, boolean finished) throws IOException {
+            CryptoSupport crypto   = listener.state().getMaster().getCrypto();
+            byte[]        payload  = crypto.expand(
+                                               seed(),
+                                               length,
+                                               Util.serializeLong(fragments),
+                                               new byte[0]);
+            ByteBuffer    header   = ByteBuffer.allocate(3*8 + 1*4);
+            long          msgLen   = header.capacity() + length;
+            long          maskedId = msgId
+                                   | (finished
+                                      ? (1 << 63)
+                                      : 0
+                                     );
+            
+            header.putLong(msgLen);
+            header.putLong(maskedId);
+            header.putLong(channelId);
+            header.putInt (fragments == 0 ? cmd : 0);
+            header.flip();
+            
+            clientSocket.write(header);
+            clientSocket.write(ByteBuffer.wrap(payload));
+            
+            fragments++;
+            expect(msgId, payload, finished);
+        }
+        
+        public void expect(long msgId, byte[] data, boolean finished) throws IOException {
+            if(cListener == null || !(cListener instanceof ExampleListener)) return;
+            
+            assertTrue   (Util.waitUntil(100, ()->cListener.messageWithId(msgId) != null));
+            
+            ZKFSRemoteMessageIncoming msg = cListener.messageWithId(msgId);
+            assertNotNull(msg);
+            assertEquals (cmd,       msg.cmd());
+            assertEquals (channelId, msg.channelId());
+            
+            assertTrue   (Util.waitUntil(100, ()->msg.hasBytes(data.length)));
+            
+            msg.read(data.length, buf->{
+                byte[]    bytes    = new byte[data.length];
+                buf.get(bytes);
+                
+                assertArrayEquals(bytes, data);
+            });
+            
+            assertEquals (finished, msg.isSenderFinished());
+        }
+        
+        public byte[] seed() {
+            return Util.concat(
+                    Util.serializeLong(channelId),
+                    Util.serializeLong(msgId),
+                    Util.serializeLong(fragments)
+                  );
+        }
     }
     
     protected ZKFSRemoteConnection              connection;
@@ -154,8 +236,7 @@ public class ZKFSRemoteConnectionTest {
                 connection,
                 1234,
                 4321,
-                111,
-                0);
+                111);
         
         for(int i = 0; i < numPayloads; i++) {
             ByteBuffer buf = ByteBuffer.allocate(i+1);
@@ -174,8 +255,8 @@ public class ZKFSRemoteConnectionTest {
         IOUtils.readFully(clientSocket, header);
         header.flip();
         
-        long                      msgLen       = header.getLong();
-        long                      msgId        = header.getLong();
+        long                      msgLen       = header.getLong(),
+                                  msgId        = header.getLong();
         boolean                   isFinal      = (msgId & (1 << 63)) != 0;
         assertEquals(msg.msgId, msgId & ~(1 << 63));
         assertEquals(finished, isFinal);
@@ -187,6 +268,65 @@ public class ZKFSRemoteConnectionTest {
             while(buf.hasRemaining()) {
                 assertEquals(buf.get(), data.get());
             }
+        }
+    }
+    
+    public ExampleListener prepareTestChannelListener() {
+        ExampleListener cListener = new ExampleListener();
+        connection.registerChannel(cListener);
+        
+        return cListener;
+    }
+    
+    public void sendMessageToChannel(long channelId, long msgId, int cmd, ByteBuffer payload) throws IOException {
+        ByteBuffer                  header     = ByteBuffer.allocate(3*8 + 1*4);
+        int                         msgLen     = header.capacity() + payload.remaining();
+        
+        header.put(Util.serializeLong(msgLen));
+        header.put(Util.serializeLong(msgId));
+        header.put(Util.serializeLong(channelId));
+        header.put(Util.serializeInt (cmd));
+        
+        clientSocket.write(header);
+        clientSocket.write(payload);
+    }
+    
+    public void spamChannels(int numChannels, int numMessages, int numFragments, int maxFragmentLen) throws IOException {
+        CryptoSupport               crypto     = listener.state().getMaster().getCrypto();
+        LinkedList<ExampleListener> channels   = new LinkedList<>();
+        LinkedList<OutgoingMessage> messages   = new LinkedList<>();
+        
+        for(int i = 0; i < numChannels; i++) {
+            channels.add(prepareTestChannelListener());
+        }
+        
+        for(int i = 0; i < numMessages; i++) {
+            int                    chanIndex   = crypto.defaultPrng().getInt(channels.size() + 1);
+            long                   channelId   = chanIndex < channels.size()
+                                                 ? channels.get(chanIndex).channelId()
+                                                 : crypto.defaultPrng().getLong();
+            
+            messages.add(new OutgoingMessage(channelId, 1000 + i, i));
+        }
+        
+        for(int i = 0; i < numFragments; i++) {
+            int                    length      = crypto.defaultPrng().getInt(maxFragmentLen),
+                                   msgIndex    = crypto.defaultPrng().getInt(messages.size());
+            OutgoingMessage        message     = messages.get(msgIndex);
+            
+            System.out.printf("spamChannels(): fragment=%d, msgId=%d, channelId=%d, length=%d\n",
+                    i,
+                    message.msgId,
+                    message.channelId,
+                    length);
+            message.sendBytes(length, false);
+        }
+        
+        for(OutgoingMessage message : messages) {
+            int                    length      = crypto.defaultPrng().getInt() % 2 == 0
+                                                 ? 0
+                                                 : crypto.defaultPrng().getInt(maxFragmentLen);
+            message.sendBytes(length, true);
         }
     }
     
@@ -214,8 +354,10 @@ public class ZKFSRemoteConnectionTest {
     public void testRegisterChannelIssuesChannelIds() {
         ExampleListener cListener   = new ExampleListener();
         long            expectedId  = ZKFSRemoteConnection.CHANNEL_ID_USER_START;
+        
         for(int i = 0; i < 1024; i++) {
             long        channelId   = connection.registerChannel(cListener);
+            
             assertEquals(expectedId, channelId);
             assertEquals(expectedId, cListener.channelId());
             assertEquals(cListener,  connection.listenerForChannel(channelId));
@@ -263,8 +405,11 @@ public class ZKFSRemoteConnectionTest {
     }
     
     @Test
-    public void testDispatchesIncomingMessages() {
-        
+    public void testDispatchesIncomingMessages() throws IOException {
+        authenticate();
+        spamChannels(   4,
+                     1024,
+                     4096,
+                     1 << 18); 
     }
-    // testDispatchesIncomingMessages
 }

@@ -27,7 +27,7 @@ public class ZKFSRemoteConnection {
     
     protected SocketChannel                           socket;
     protected ZKFSRemoteListener                      listener;
-    protected HashMap<Long,ZKFSRemoteMessageIncoming> messages;
+    protected HashMap<Long,ZKFSRemoteMessageIncoming> messages      = new HashMap<>();
     protected ConcurrentHashMap<Long,ChannelListener> channels      = new ConcurrentHashMap<>();
     protected ByteBuffer                              readBuf       = ByteBuffer.allocate(64*1024),
                                                       takeBuf       = ByteBuffer.wrap(readBuf.array(), 0, 0);;
@@ -183,27 +183,27 @@ public class ZKFSRemoteConnection {
                            && takeBuf.remaining() < headerSize,
                 needsRead   = needsHeader || needsData;
         
+        System.out.printf("check(): needsRead=%s, needsData=%s, needsHeader=%s\n", needsRead, needsData, needsHeader);
         if(needsRead) {
             int bytesRead   = socket.read(readBuf);
             if(bytesRead < 0) {
                 close();
             }
             
-            readBuf.position(readBuf.position() + bytesRead);
+            System.out.printf("check(): bytesRead=%d\n", bytesRead);
             takeBuf.limit   (takeBuf.limit()    + bytesRead);
         }
         
         if(activeMessage == null) {
             if(takeBuf.remaining() < headerSize) return;
             
-            long              msgLen = readBuf.getLong();
-            long               msgId = readBuf.getLong();
-            long           channelId = readBuf.getLong();
-            int                  cmd = readBuf.getInt ();
+            long              msgLen = takeBuf.getLong();
+            long               msgId = takeBuf.getLong();
+            long           channelId = takeBuf.getLong();
+            int                  cmd = takeBuf.getInt ();
             
             remainingOnActive        = msgLen
-                                     - headerSize
-                                     - readBuf.remaining();
+                                     - headerSize;
             require(remainingOnActive >= 0);
             
             ChannelListener listener = channels.getOrDefault(channelId, null);
@@ -212,25 +212,31 @@ public class ZKFSRemoteConnection {
                 activeMessage        = new ZKFSRemoteMessageIncoming(this,
                                                                      msgId,
                                                                      channelId,
-                                                                     cmd,
-                                                                     msgLen);
+                                                                     cmd);
                 if(listener != null) {
                     listener.processMessage(activeMessage);
                 }
             }
         }
         
-        int readLen = (int) Math.min(remainingOnActive,
+        int         readLen = (int) Math.min(remainingOnActive,
                                      takeBuf.remaining());
-        remainingOnActive -= readLen;
-        ByteBuffer msgBuf = ByteBuffer.allocate(readLen);
-        msgBuf.put(takeBuf.array(), takeBuf.position(), readLen);
-
-        listener.threadPool.submit(()->{
-            activeMessage.addBytes(msgBuf);
-        });
+        System.out.printf("check(): readLen=%d, remainingOnActive=%d\n", readLen, remainingOnActive);
         
-        takeBuf.position(takeBuf.position() + readLen);
+        if(readLen > 0) {
+            ZKFSRemoteMessageIncoming msg    = activeMessage;
+            remainingOnActive               -= readLen;
+            ByteBuffer                msgBuf = ByteBuffer.allocate(readLen);
+            msgBuf.put(takeBuf.array(), takeBuf.position(), readLen);
+            msgBuf.flip();
+    
+            listener.threadPool.submit(()->{
+                System.out.printf("check(): adding bytes, msgBuf.remaining()=%d, msg=%s\n", msgBuf.remaining(), msg);
+                msg.addBytes(msgBuf);
+            });
+            
+            takeBuf.position(takeBuf.position() + readLen);
+        }
 
         if(remainingOnActive == 0) {
             removeMessage(activeMessage);
@@ -238,7 +244,11 @@ public class ZKFSRemoteConnection {
         }
         
         if(!takeBuf.hasRemaining() || readBuf.remaining() < 1024) {
-            recycleBuffer();
+            try {
+                recycleBuffer();
+            } catch(Exception exc) {
+                exc.printStackTrace();
+            }
         }
     }
     
@@ -256,7 +266,7 @@ public class ZKFSRemoteConnection {
         }
         
         // no unread data, so just reset the buffer indices
-        readBuf.reset();
+        readBuf.clear();
         takeBuf.clear();
         takeBuf.limit(0);
     }

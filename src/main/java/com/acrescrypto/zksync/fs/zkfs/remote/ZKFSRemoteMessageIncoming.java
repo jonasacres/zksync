@@ -93,7 +93,7 @@ public class ZKFSRemoteMessageIncoming {
     public class ByteConsumer {
         int                    readLength,
                                remaining;
-        LinkedList<ByteBuffer> buffers;
+        LinkedList<ByteBuffer> buffers     = new LinkedList<>();
         WaitCallback           callback;
         
         public ByteConsumer(int readLength, WaitCallback callback) {
@@ -118,8 +118,10 @@ public class ZKFSRemoteMessageIncoming {
             ByteBuffer merged = ByteBuffer.allocate(readLength);
             for(ByteBuffer fragment : buffers) {
                 int readLen = Math.min(merged.remaining(), fragment.remaining());
+                if(readLen == 0) break;
                 merged.put(fragment.array(), fragment.position(), readLen);
             }
+            merged.flip();
             
             try {
                 callback.ready(merged);
@@ -135,21 +137,22 @@ public class ZKFSRemoteMessageIncoming {
     protected ZKFSRemoteConnection   connection;
     protected int                    cmd;
     protected boolean                responseStarted,
-                                     finished;
+                                     finished,
+                                     senderFinished;
     protected long                   msgId,
                                      channelId,
-                                     lastDeferTime,
-                                     msgLen;
+                                     lastDeferTime;
     protected SnoozeThread           snoozeSend;
     
-    public ZKFSRemoteMessageIncoming(ZKFSRemoteConnection connection, long msgId, long channelId, int cmd, long msgLen) {
+    public ZKFSRemoteMessageIncoming(ZKFSRemoteConnection connection, long msgId, long channelId, int cmd) {
         this.connection = connection;
         this.msgId      = msgId;
+        this.channelId  = channelId;
         this.cmd        = cmd;
-        this.msgLen     = msgLen;
     }
     
     public synchronized void addBytes(ByteBuffer buf) {
+        System.out.printf("addBytes(): buf.remaining()=%d\n", buf.remaining());
         pendingReadBuffers.add(buf);
         drain();
     }
@@ -205,12 +208,18 @@ public class ZKFSRemoteMessageIncoming {
     
     public void senderFinished() {
         try {
+            senderFinished = true;
+            
             if(!consumers.isEmpty()) {
                 consumers.peek().callback.ready(null);
             }
         } catch(IOException exc) {
             error(exc);
         }
+    }
+    
+    public boolean isSenderFinished() {
+        return senderFinished;
     }
     
     public void error(IOException exc) {
@@ -268,7 +277,10 @@ public class ZKFSRemoteMessageIncoming {
     }
     
     protected void drain() {
-        while(!pendingReadBuffers.isEmpty() && !consumers.isEmpty()) {
+        System.out.printf("drain(): pendingBytes=%d\n", pendingBytes());
+        while(!pendingReadBuffers.isEmpty()
+           && !consumers         .isEmpty())
+        {
             ByteBuffer buffer = pendingReadBuffers.peek();
             
             if(consumers.peek().append(buffer)) {
@@ -309,5 +321,19 @@ public class ZKFSRemoteMessageIncoming {
     
     public long sendTimeMaxMs() {
         return 20;
+    }
+    
+    public long pendingBytes() {
+        long totalLen = 0;
+        
+        for(ByteBuffer buf : pendingReadBuffers) {
+            totalLen += buf.remaining();
+        }
+        
+        return totalLen;
+    }
+
+    public boolean hasBytes(int length) {
+        return pendingBytes() >= length;
     }
 }
