@@ -510,7 +510,9 @@ public class DHTClientTest {
 	@Test
 	public void testListenOnNullBindsToAllAddresses() throws SocketException {
 		client.listen(null, 0);
-		assertEquals("0.0.0.0", client.getSocketManager().socket.getLocalAddress().getHostAddress());
+		String addr = client.getSocketManager().socket.getLocalAddress().getHostAddress();
+		boolean matchesWildcard = "0.0.0.0".equals(client) || "0:0:0:0:0:0:0:0".equals(addr);
+		assertTrue("Bind address should be wildcard: " + addr, matchesWildcard);
 	}
 	
 	@Test(expected=SocketException.class)
