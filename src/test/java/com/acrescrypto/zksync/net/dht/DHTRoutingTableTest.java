@@ -76,7 +76,7 @@ public class DHTRoutingTableTest {
 		DummyClient client;
 		
 		public DummyProtocolManager(DummyClient client) {
-			this.client = client;
+			super.client = this.client = client;
 		}
 
 		@Override

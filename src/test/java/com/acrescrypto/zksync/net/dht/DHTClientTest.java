@@ -356,9 +356,9 @@ public class DHTClientTest {
 					byte[] id = new byte[client.idLength()];
 					ByteBuffer.wrap(msg.payload).get(id);
 					Collection<DHTPeer> results = remote.listenClient.routingTable.closestPeers(DHTID.withBytes(id), client.getRoutingTable().maxBucketCapacity());
-					msg.makeResponse(client.getPort(), results).send();
+					msg.makeResponse(0, results).send();
 				} else if(msg.cmd == DHTMessage.CMD_PING) {
-					msg.makeResponse(client.getPort(), new ArrayList<>()).send();
+					msg.makeResponse(0, new ArrayList<>()).send();
 				} else {
 					fail();
 				}
@@ -576,7 +576,7 @@ public class DHTClientTest {
 		ArrayList<DHTPeer> peers = new ArrayList<>(1);
 		peers.add(remote.peer);
 		for(int i = 0; i < maxRecordsPerId(); i++) records.add(makeBogusAd(i));
-		findNodeReq.makeResponse(client.getPort(), peers).addItemList(records).send();
+		findNodeReq.makeResponse(0, peers).addItemList(records).send();
 
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->seenNull.booleanValue()));
 		assertEquals(0, records.size());
@@ -632,7 +632,7 @@ public class DHTClientTest {
 			@Override protected int numPacketsNeeded() { return super.numPacketsNeeded() + 1; }
 		};
 
-		new RiggedMessage(findNodeReq.makeResponse(client.getPort(), records).addItemList(records)).send();
+		new RiggedMessage(findNodeReq.makeResponse(0, records).addItemList(records)).send();
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->seenNull.booleanValue()));
 	}
 	
@@ -672,7 +672,7 @@ public class DHTClientTest {
 			}
 
 			DHTMessage findNodeReq = r.receivePacket(DHTMessage.CMD_FIND_NODE);
-			findNodeReq.makeResponse(client.getPort(), peers).addItemList(peerRecords).send(); 
+			findNodeReq.makeResponse(0, peers).addItemList(peerRecords).send(); 
 		}               
 
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->seenNull.booleanValue()));
@@ -718,7 +718,7 @@ public class DHTClientTest {
 				
 				// Reply to the findPeers request with the closest peers we know to the searchId
 				Collection<DHTPeer> closestPeers = remote.listenClient.routingTable.closestPeers(searchId, maxResults);
-				findNodeMsg.makeResponse(client.getPort(), closestPeers).send();
+				findNodeMsg.makeResponse(0, closestPeers).send();
 				
 				// Now wait for the CMD_ADD_RECORD message.
 				DHTMessage addRecordMsg = null;
@@ -730,7 +730,7 @@ public class DHTClientTest {
 					} else if(msg.cmd == DHTMessage.CMD_PING) {
 						/* The client is allowed to ping us to verify that it has our auth tag, so
 						 * respond to those. */
-						msg.makeResponse(client.getPort(), new ArrayList<>()).send();
+						msg.makeResponse(0, new ArrayList<>()).send();
 					}
 				}
 				
@@ -791,7 +791,7 @@ public class DHTClientTest {
 		byte[] token = lookupKey.authenticate(Util.concat(client.id.serialize(), client.getProtocolManager().getLocalPeer().key.getBytes()));
 		
 		client.getProtocolManager().addRecord(client.id, lookupKey, makeBogusAd(0));
-		remote.receivePacket().makeResponse(client.getPort(), list).send();
+		remote.receivePacket().makeResponse(0, list).send();
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->client.store.recordsForId(client.id, token).size() > 0));
 	}
 
@@ -808,7 +808,7 @@ public class DHTClientTest {
 	@Test
 	public void testIsInitializedReturnsTrueIfFindPeersComplete() throws IOException, ProtocolViolationException {
 		client.getProtocolManager().findPeers();
-		remote.receivePacket().makeResponse(client.getPort(), new ArrayList<>()).send();
+		remote.receivePacket().makeResponse(0, new ArrayList<>()).send();
 		assertTrue(Util.waitUntil(100, ()->client.isInitialized()));
 	}
 	
@@ -871,7 +871,7 @@ public class DHTClientTest {
 		peerFromTable.missedMessages = 1;
 		peerFromTable.ping();
 		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
-		req.makeResponse(client.getPort(), new ArrayList<>(0)).send();
+		req.makeResponse(0, new ArrayList<>(0)).send();
 		
 		DHTPeer pp = peerFromTable;
 		assertTrue(Util.waitUntil(MAX_TEST_TIME_MS, ()->pp.missedMessages == 0));
@@ -891,7 +891,7 @@ public class DHTClientTest {
 		assertTrue(bucket.needsFreshening());
 		bucket.peers.get(0).ping();
 		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
-		req.makeResponse(client.getPort(), new ArrayList<>(0)).send();
+		req.makeResponse(0, new ArrayList<>(0)).send();
 		
 		DHTBucket _bucket = bucket;
 		assertTrue(Util.waitUntil(100, ()->!_bucket.needsFreshening()));
@@ -1318,7 +1318,7 @@ public class DHTClientTest {
 		client.getSocketManager().setBindPort(remote.peer.port);
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.getProtocolManager().pingMessage(remote.peer, null).send();
-		remote.receivePacket(DHTMessage.CMD_PING).makeResponse(client.getPort(), new ArrayList<>()).send();
+		remote.receivePacket(DHTMessage.CMD_PING).makeResponse(0, new ArrayList<>()).send();
 		assertTrue(Util.waitUntil(100, ()->DHTClient.STATUS_CAN_REQUEST == receivedStatus.intValue()));
 	}
 	
@@ -1329,7 +1329,7 @@ public class DHTClientTest {
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.getProtocolManager().pingMessage(remote.peer, null).send();
 		client.lastStatus = DHTClient.STATUS_GOOD;
-		remote.receivePacket(DHTMessage.CMD_PING).makeResponse(client.getPort(), new ArrayList<>()).send();
+		remote.receivePacket(DHTMessage.CMD_PING).makeResponse(0, new ArrayList<>()).send();
 		assertFalse(Util.waitUntil(100, ()->-1 != receivedStatus.intValue()));
 	}
 	
@@ -1340,7 +1340,7 @@ public class DHTClientTest {
 		client.setStatusCallback((status)->receivedStatus.setValue(status));
 		client.getProtocolManager().pingMessage(remote.peer, null).send();
 		client.lastStatus = DHTClient.STATUS_CAN_REQUEST;
-		remote.receivePacket(DHTMessage.CMD_PING).makeResponse(client.getPort(), new ArrayList<>()).send();
+		remote.receivePacket(DHTMessage.CMD_PING).makeResponse(0, new ArrayList<>()).send();
 		assertFalse(Util.waitUntil(100, ()->-1 != receivedStatus.intValue()));
 	}
 	
@@ -1370,8 +1370,10 @@ public class DHTClientTest {
 		client.getProtocolManager().setAutofind(true);
 		long timeStart = Util.currentTimeMillis();
 		for(int i = 0; i < 8; i++) {
-			remote.receivePacket().makeResponse(client.getPort(), new ArrayList<>()).send();
-			assertTrue(Util.currentTimeMillis() - timeStart >= i*interval);
+			remote.receivePacket().makeResponse(0, new ArrayList<>()).send();
+			long delta    = Util.currentTimeMillis() - timeStart,
+				 minDelay = i*interval;
+			assertTrue("Expected delay >= " + minDelay + "ms; observed " + delta + "ms", delta >= minDelay);
 		}
 	}
 	
@@ -1553,7 +1555,7 @@ public class DHTClientTest {
 		
 		peerFromTable.ping();
 		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
-		req.makeResponse(client.getPort(), new ArrayList<>(0)).send();
+		req.makeResponse(0, new ArrayList<>(0)).send();
 		Util.sleep(10);
 		
 		byte x = 0;
@@ -1574,7 +1576,7 @@ public class DHTClientTest {
 		
 		peerFromTable.ping();
 		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
-		req.makeResponse(client.getPort(), new ArrayList<>(0)).send();
+		req.makeResponse(0, new ArrayList<>(0)).send();
 		Util.sleep(10);
 		
 		peerFromTable.ping();
@@ -1594,7 +1596,7 @@ public class DHTClientTest {
 		DHTMessage req = remote.receivePacket(DHTMessage.CMD_PING);
 		DHTPeer dupe = new DHTPeer(client, req.peer.address, req.peer.port, crypto.makePrivateDHKey().publicKey());
 		remote.listenClient.getRoutingTable().suggestPeer(dupe);
-		req.makeResponse(client.getPort(), new ArrayList<>(0)).send();
+		req.makeResponse(0, new ArrayList<>(0)).send();
 		Util.sleep(10);
 		
 		peerFromTable.ping();
@@ -1619,7 +1621,7 @@ public class DHTClientTest {
 		DHTPeer dupe = new DHTPeer(client, req.peer.address, req.peer.port+1, req.peer.getKey());
 		
 		remote.listenClient.getRoutingTable().suggestPeer(dupe);
-		req.makeResponse(client.getPort(), new ArrayList<>(0)).send();
+		req.makeResponse(0, new ArrayList<>(0)).send();
 		Util.sleep(10);
 		
 		peerFromTable.ping();
