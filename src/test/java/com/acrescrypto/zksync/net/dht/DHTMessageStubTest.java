@@ -88,7 +88,7 @@ public class DHTMessageStubTest {
 	DHTMessageStub stub;
 	
 	DHTMessage makeResponse() {
-		DHTMessage resp = req.makeResponse(null);
+		DHTMessage resp = req.makeResponse(0, null);
 		resp.numExpected = 4;
 		return resp;
 	}
@@ -104,9 +104,9 @@ public class DHTMessageStubTest {
 	public void beforeEach() throws UnknownHostException {
 		crypto = CryptoSupport.defaultCrypto();
 		client = new DummyClient();
-		peer = new DHTPeer(client, "127.0.0.1", 12345, crypto.rng(crypto.asymPublicDHKeySize()));
-		req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, new byte[0], (response)->{resp = response;});
-		stub = new DHTMessageStub(req);
+		peer   = new DHTPeer(client, "127.0.0.1", 12345, crypto.rng(crypto.asymPublicDHKeySize()));
+		req    = new DHTMessage(peer, 4321, DHTMessage.CMD_FIND_NODE, new byte[0], (response)->{resp = response;});
+		stub   = new DHTMessageStub(req);
 	}
 	
 	@AfterClass

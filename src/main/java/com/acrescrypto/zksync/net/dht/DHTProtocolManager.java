@@ -86,7 +86,7 @@ public class DHTProtocolManager {
 	}
 	
 	protected DHTMessage pingMessage(DHTPeer recipient, DHTMessageCallback callback) {
-		return new DHTMessage(recipient, DHTMessage.CMD_PING, new byte[0], callback);
+		return new DHTMessage(recipient, client.getPort(), DHTMessage.CMD_PING, new byte[0], callback);
 	}
 	
 	public void findPeers() {
@@ -204,7 +204,7 @@ public class DHTProtocolManager {
 		ByteBuffer buf = ByteBuffer.allocate(id.getLength() + lookupKey.getCrypto().hashLength());
 		buf.put(id.serialize());
 		buf.put(lookupKey.authenticate(Util.concat(id.serialize(), recipient.key.getBytes())));
-		return new DHTMessage(recipient, DHTMessage.CMD_FIND_NODE, buf.array(), callback);
+		return new DHTMessage(recipient, client.getPort(), DHTMessage.CMD_FIND_NODE, buf.array(), callback);
 	}
 	
 	protected DHTMessage addRecordMessage(DHTPeer recipient, DHTID id, Key lookupKey, DHTRecord record, DHTMessageCallback callback) {
@@ -216,7 +216,7 @@ public class DHTProtocolManager {
 		buf.put(id.serialize());
 		buf.put(lookupKey.authenticate(Util.concat(id.serialize(), recipient.key.getBytes())));
 		buf.put(record.serialize());
-		return new DHTMessage(recipient, DHTMessage.CMD_ADD_RECORD, buf.array(), callback);
+		return new DHTMessage(recipient, client.getPort(), DHTMessage.CMD_ADD_RECORD, buf.array(), callback);
 	}
 
 	
@@ -361,7 +361,7 @@ public class DHTProtocolManager {
 				message.peer.port,
 				message.msgId);
 
-		message.makeResponse(null).send();
+		message.makeResponse(client.getPort(), null).send();
 	}
 	
 	protected void processRequestFindNode(DHTMessage message) throws ProtocolViolationException, UnsupportedProtocolException {
@@ -387,7 +387,7 @@ public class DHTProtocolManager {
 				id,
 				client.getMaster().getGlobalConfig().getInt("net.dht.maxResults")
 			); 
-		DHTMessage response = message.makeResponse(closestPeers);
+		DHTMessage response = message.makeResponse(client.getPort(), closestPeers);
 		response.addItemList(client.getRecordStore().recordsForId(id, token));
 		response.send();
 	}
@@ -424,7 +424,7 @@ public class DHTProtocolManager {
 					exc);
 		}
 		
-		message.makeResponse(new ArrayList<>(0)).send();
+		message.makeResponse(client.getPort(), new ArrayList<>(0)).send();
 	}
 	
 	// having the call happen here instead of directly accessing DHTRecord is convenient for stubbing out test classes

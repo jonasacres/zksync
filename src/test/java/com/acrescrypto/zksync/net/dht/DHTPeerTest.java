@@ -60,7 +60,7 @@ public class DHTPeerTest {
 		protected DHTMessage pingMessage(DHTPeer recipient, DHTMessageCallback callback) {
 			client.reqId = client.id;
 			client.reqPeer = recipient;
-			return client.msg = new DummyMessage(recipient, DHTMessage.CMD_PING, new byte[0], callback);
+			return client.msg = new DummyMessage(recipient, 4321, DHTMessage.CMD_PING, new byte[0], callback);
 		}
 		
 		@Override
@@ -68,7 +68,7 @@ public class DHTPeerTest {
 			client.reqId = id;
 			client.reqPeer = recipient;
 			client.reqKey = lookupKey;
-			return client.msg = new DummyMessage(recipient, DHTMessage.CMD_FIND_NODE, id.serialize(), callback);
+			return client.msg = new DummyMessage(recipient, 4321, DHTMessage.CMD_FIND_NODE, id.serialize(), callback);
 		}
 		
 		@Override
@@ -83,7 +83,7 @@ public class DHTPeerTest {
 			buf.put(recipient.remoteAuthTag);
 			buf.put(id.serialize());
 			buf.put(record.serialize());
-			return client.msg = new DummyMessage(recipient, DHTMessage.CMD_ADD_RECORD, buf.array(), callback);
+			return client.msg = new DummyMessage(recipient, 4321, DHTMessage.CMD_ADD_RECORD, buf.array(), callback);
 		}
 		
 		@Override
@@ -115,7 +115,7 @@ public class DHTPeerTest {
 		}
 		
 	}
-	
+
 	class DummyRecord extends DHTRecord {
 		byte[] contents;
 		
@@ -170,8 +170,8 @@ public class DHTPeerTest {
 	class DummyMessage extends DHTMessage {
 		boolean sent;
 		
-		public DummyMessage(DHTPeer recipient, byte cmd, byte[] payload, DHTMessageCallback callback) {
-			super(recipient, cmd, payload, callback);
+		public DummyMessage(DHTPeer recipient, int port, byte cmd, byte[] payload, DHTMessageCallback callback) {
+			super(recipient, port, cmd, payload, callback);
 		}
 		
 		@Override
@@ -207,7 +207,7 @@ public class DHTPeerTest {
 	}
 	
 	public DHTMessage makeResponse(byte[] payload, boolean isFinal) {
-		DHTMessage msg = new DHTMessage(client.reqPeer, client.msg.cmd, payload, null);
+		DHTMessage msg = new DHTMessage(client.reqPeer, 4321, client.msg.cmd, payload, null);
 		msg.isFinal = isFinal;
 		return msg;
 	}

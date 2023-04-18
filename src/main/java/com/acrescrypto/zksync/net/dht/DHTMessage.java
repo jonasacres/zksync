@@ -31,7 +31,8 @@ public class DHTMessage {
 	
 	protected DHTMessageCallback                        callback;
 	protected DHTPeer                                   peer;
-	protected int                                       msgId;
+	protected int                                       msgId,
+	                                                    port;
 	protected long                                      timestamp;
 	protected byte                                      cmd,
 	                                                    flags,
@@ -43,17 +44,18 @@ public class DHTMessage {
 	
 	private Logger logger = LoggerFactory.getLogger(DHTMessage.class);
 	
-	public DHTMessage(DHTPeer recipient, byte cmd, byte[] payload, DHTMessageCallback callback) {
-		this(recipient, cmd, ByteBuffer.wrap(payload), callback);
+	public DHTMessage(DHTPeer recipient, int srcPort, byte cmd, byte[] payload, DHTMessageCallback callback) {
+		this(recipient, srcPort, cmd, ByteBuffer.wrap(payload), callback);
 	}
 	
-	public DHTMessage(DHTPeer recipient, byte cmd, ByteBuffer payloadBuf, DHTMessageCallback callback) {
+	public DHTMessage(DHTPeer recipient, int srcPort, byte cmd, ByteBuffer payloadBuf, DHTMessageCallback callback) {
 		this.peer      = recipient;
 		this.cmd       = cmd;
 		this.flags     = 0;
 		this.authTag   = recipient.remoteAuthTag;
 		this.callback  = callback;
 		this.msgId     = recipient.client.crypto.defaultPrng().getInt();
+		this.port   = srcPort;
 		this.timestamp = Util.currentTimeMillis();
 		this.payload   = new byte[payloadBuf.remaining()];
 
@@ -67,13 +69,14 @@ public class DHTMessage {
 		}
 	}
 	
-	public DHTMessage(DHTPeer recipient, byte cmd, int msgId, Collection<? extends Sendable> items) {
+	public DHTMessage(DHTPeer recipient, int srcPort, byte cmd, int msgId, Collection<? extends Sendable> items) {
 		this.peer      = recipient;
 		this.cmd       = cmd;
 		this.flags     = FLAG_RESPONSE;
 		this.authTag   = recipient.localAuthTag();
 		this.itemLists = new ArrayList<>();
 		this.msgId     = msgId;
+		this.port      = srcPort;
 		this.timestamp = Util.currentTimeMillis();
 
 		if(items != null) this.itemLists.add(new ArrayList<>(items));
@@ -83,8 +86,8 @@ public class DHTMessage {
 		return (flags & FLAG_RESPONSE) != 0;
 	}
 	
-	public DHTMessage makeResponse(Collection<? extends Sendable> items) {
-		return new DHTMessage(peer, cmd, msgId, items);
+	public DHTMessage makeResponse(int srcPort, Collection<? extends Sendable> items) {
+		return new DHTMessage(peer, srcPort, cmd, msgId, items);
 	}
 	
 	public DHTMessage addItemList(Collection<? extends Sendable> items) {
@@ -285,13 +288,14 @@ public class DHTMessage {
 		ByteBuffer plaintext             = ByteBuffer.allocate(
 				                             headerSize()
 				                           + sendBuf.remaining());
-		plaintext.put    (authTag);
-		plaintext.putInt (msgId);
-		plaintext.putLong(timestamp);
-		plaintext.put    (cmd);
-		plaintext.put    (flags);
-		plaintext.put    ((byte) numPackets);
-		plaintext.put    (sendBuf);
+		plaintext.put     (authTag);
+		plaintext.putInt  (msgId);
+		plaintext.putShort((short) port);
+		plaintext.putLong (timestamp);
+		plaintext.put     (cmd);
+		plaintext.put     (flags);
+		plaintext.put     ((byte) numPackets);
+		plaintext.put     (sendBuf);
 		
 		// pad the plaintext to obfuscate our true length somewhat
 		int    baseLength         = 8
@@ -406,6 +410,7 @@ public class DHTMessage {
 		plaintext.get(authTag);
 		
 		this.msgId                       = plaintext.getInt();
+		this.port                        = Util.unsignShort(plaintext.getShort());
 		this.timestamp                   = plaintext.getLong();
 		this.cmd                         = plaintext.get();
 		this.flags                       = plaintext.get();
@@ -419,9 +424,10 @@ public class DHTMessage {
 		this.payload                     = new byte[plaintext.remaining()];
 		plaintext.get(payload);
 		try {
+			int effectivePort = this.port == 0 ? senderPort : this.port;
 			this.peer                    = client.routingTable.peerForMessage(
 			                                  senderAddress,
-			                                  senderPort,
+			                                  effectivePort,
 			                                  remoteStaticPubkey);
 			if((flags & FLAG_RESPONSE) != 0) {
 				this.peer.remoteAuthTag  = this.authTag;
@@ -435,6 +441,7 @@ public class DHTMessage {
 	protected int headerSize() {
 		return DHTClient.AUTH_TAG_SIZE
 			 + 4
+			 + 2
 			 + 8
 			 + 1
 			 + 1

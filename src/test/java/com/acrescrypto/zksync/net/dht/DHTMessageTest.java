@@ -243,6 +243,7 @@ public class DHTMessageTest {
 		
 		assertArrayEquals(msg.authTag,                      authTag);
 		assertEquals     (msg.msgId,                        ptBuf.getInt());
+		assertEquals     (msg.port,                         ptBuf.getShort());
 		assertEquals     (msg.timestamp,                    ptBuf.getLong());
 		assertEquals     (msg.cmd,                          ptBuf.get());
 		assertEquals     (msg.flags,                        ptBuf.get());
@@ -281,10 +282,12 @@ public class DHTMessageTest {
 	public void testConstructorWithPayloadArray() {
 		byte[] payload = crypto.rng(32);
 		byte cmd = DHTMessage.CMD_FIND_NODE;
+		int port = 4321;
 		DHTMessageCallback callback = (resp)->{};
 		
-		DHTMessage msg = new DHTMessage(peer, cmd, payload, callback);
+		DHTMessage msg = new DHTMessage(peer, port, cmd, payload, callback);
 		assertEquals(peer, msg.peer);
+		assertEquals(port, msg.port);
 		assertEquals(cmd, msg.cmd);
 		assertEquals(0, msg.flags);
 		assertEquals(callback, msg.callback);
@@ -302,11 +305,13 @@ public class DHTMessageTest {
 		payload.limit(payload.position());
 		payload.position(16);
 		
+		int port = 4321;
 		byte cmd = DHTMessage.CMD_FIND_NODE;
 		DHTMessageCallback callback = (resp)->{};
 		
-		DHTMessage msg = new DHTMessage(peer, cmd, payload, callback);
+		DHTMessage msg = new DHTMessage(peer, port, cmd, payload, callback);
 		assertEquals(peer, msg.peer);
+		assertEquals(port, msg.port);
 		assertEquals(cmd, msg.cmd);
 		assertEquals(0, msg.flags);
 		assertEquals(callback, msg.callback);
@@ -324,9 +329,11 @@ public class DHTMessageTest {
 
 		byte cmd = DHTMessage.CMD_FIND_NODE;
 		int msgId = 1234;
+		int port = 4321;
 
-		DHTMessage msg = new DHTMessage(peer, cmd, msgId, items);
+		DHTMessage msg = new DHTMessage(peer, port, cmd, msgId, items);
 		assertEquals(peer, msg.peer);
+		assertEquals(port, msg.port);
 		assertEquals(cmd, msg.cmd);
 		assertEquals(msgId, msg.msgId);
 		assertEquals(DHTMessage.FLAG_RESPONSE, msg.flags);
@@ -337,30 +344,32 @@ public class DHTMessageTest {
 	
 	@Test
 	public void testConstructorWithArrayAssignsMsgId() {
-		DHTMessage msg0 = new DHTMessage(peer, DHTMessage.CMD_PING, new byte[0], (resp)->{});
-		DHTMessage msg1 = new DHTMessage(peer, DHTMessage.CMD_PING, new byte[0], (resp)->{});
+		DHTMessage msg0 = new DHTMessage(peer, 0, DHTMessage.CMD_PING, new byte[0], (resp)->{});
+		DHTMessage msg1 = new DHTMessage(peer, 0, DHTMessage.CMD_PING, new byte[0], (resp)->{});
 		assertNotEquals(msg0.msgId, msg1.msgId);
 	}
 	
 	@Test
 	public void testConstructorWithBufferAssignsMsgId() {
-		DHTMessage msg0 = new DHTMessage(peer, DHTMessage.CMD_PING, ByteBuffer.allocate(0), (resp)->{});
-		DHTMessage msg1 = new DHTMessage(peer, DHTMessage.CMD_PING, ByteBuffer.allocate(0), (resp)->{});
+		DHTMessage msg0 = new DHTMessage(peer, 0, DHTMessage.CMD_PING, ByteBuffer.allocate(0), (resp)->{});
+		DHTMessage msg1 = new DHTMessage(peer, 0, DHTMessage.CMD_PING, ByteBuffer.allocate(0), (resp)->{});
 		assertNotEquals(msg0.msgId, msg1.msgId);
 	}
 	
 	@Test
 	public void testMakeResponseCreatesMessageOfSameCmdAndIdToSender() {
+		int port = 5432;
 		ArrayList<DHTPeer> peerList = new ArrayList<DHTPeer>();
 		for(int i = 0; i < 4; i++) {
 			peerList.add(makeTestPeer(i+1));
 		}
 		
-		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, new byte[0], (resp)->{});
-		DHTMessage resp = req.makeResponse(peerList);
+		DHTMessage req = new DHTMessage(peer, port, DHTMessage.CMD_FIND_NODE, new byte[0], (resp)->{});
+		DHTMessage resp = req.makeResponse(port + 1, peerList);
 		
 		assertEquals(req.msgId, resp.msgId);
 		assertEquals(req.cmd, resp.cmd);
+		assertEquals(port + 1, resp.port);
 		assertEquals(peer, resp.peer);
 		assertEquals(DHTMessage.FLAG_RESPONSE, resp.flags);
 		assertFalse(peerList == resp.itemLists.get(0));
@@ -381,10 +390,12 @@ public class DHTMessageTest {
 
 		byte cmd = DHTMessage.CMD_FIND_NODE;
 		int msgId = 1234;
+		int port = 4321;
 
-		DHTMessage msg = new DHTMessage(peer, cmd, msgId, itemsLists[0]);
+		DHTMessage msg = new DHTMessage(peer, port, cmd, msgId, itemsLists[0]);
 		msg.addItemList(itemsLists[1]);
 		assertEquals(peer, msg.peer);
+		assertEquals(port, msg.port);
 		assertEquals(cmd, msg.cmd);
 		assertEquals(msgId, msg.msgId);
 		assertEquals(DHTMessage.FLAG_RESPONSE, msg.flags);
@@ -398,15 +409,15 @@ public class DHTMessageTest {
 	
 	@Test
 	public void testSendNotifiesClientToWatchForResponse() {
-		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, new byte[0], (resp)->{});
+		DHTMessage req = new DHTMessage(peer, 0, DHTMessage.CMD_FIND_NODE, new byte[0], (resp)->{});
 		req.send();
 		assertEquals(req, client.watch);
 	}
 	
 	@Test
 	public void testSendTransmitsEmptyPayloadIfItemsIsNull() {
-		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, new byte[0], (resp)->{});
-		req = req.makeResponse(null);
+		DHTMessage req = new DHTMessage(peer, 0, DHTMessage.CMD_FIND_NODE, new byte[0], (resp)->{});
+		req = req.makeResponse(0, null);
 		req.send();
 		
 		byte[] payload = decodePacket(privateKeyForPeer(0), req, client.packets.get(0));
@@ -422,7 +433,7 @@ public class DHTMessageTest {
 		}
 		
 		HashSet<DummyRecord> set = new HashSet<>();
-		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, 1234, items);
+		DHTMessage req = new DHTMessage(peer, 0, DHTMessage.CMD_FIND_NODE, 1234, items);
 		req.send();
 		
 		for(DatagramPacket packet : client.packets) {
@@ -451,7 +462,7 @@ public class DHTMessageTest {
 			}
 		}
 		
-		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_FIND_NODE, 1234, itemLists[0]);
+		DHTMessage req = new DHTMessage(peer, 4321, DHTMessage.CMD_FIND_NODE, 1234, itemLists[0]);
 		req.addItemList(itemLists[1]);
 		req.send();
 		
@@ -474,7 +485,7 @@ public class DHTMessageTest {
 	@Test
 	public void testSerializesPayloadIntoDatagram() {
 		byte[] payload = crypto.rng(32);
-		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		DHTMessage req = new DHTMessage(peer, 4321, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		assertArrayEquals(payload, decodePacket(privateKeyForPeer(0), req, client.packets.get(0)));
 	}
@@ -483,7 +494,7 @@ public class DHTMessageTest {
 	public void testDeserializesMessagesToClient() throws ProtocolViolationException, UnknownHostException {
 		byte[]     payload      = crypto.rng(32);
 		DHTPeer    localPeer    = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req          = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		DHTMessage req          = new DHTMessage(localPeer, 4321, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
 		byte[]     serialized   = client.packets.get(0).getData();
@@ -491,6 +502,30 @@ public class DHTMessageTest {
 		
 		assertArrayEquals(req.authTag,                      deserialized.authTag);
 		assertEquals     (req.msgId,                        deserialized.msgId);
+		assertEquals     (req.port,                         deserialized.port);
+		assertEquals     (req.cmd,                          deserialized.cmd);
+		assertEquals     (req.flags,                        deserialized.flags);
+		assertEquals     (client.packets.size(),            deserialized.numExpected);
+		assertArrayEquals(payload,                          deserialized.payload);
+		
+		assertEquals     ("127.0.0.1",                      deserialized.peer.address);
+		assertEquals     (4321,                             deserialized.peer.port);
+		assertArrayEquals(client.getPublicKey().getBytes(), req.peer.key.getBytes());
+	}
+	
+	@Test
+	public void testDeserializesUsingObservedPortWhenExplicitPortZero() throws ProtocolViolationException, UnknownHostException {
+		byte[]     payload      = crypto.rng(32);
+		DHTPeer    localPeer    = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
+		DHTMessage req          = new DHTMessage(localPeer, 0, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		req.send();
+		
+		byte[]     serialized   = client.packets.get(0).getData();
+		DHTMessage deserialized = new DHTMessage(client, "127.0.0.1", 54321, ByteBuffer.wrap(serialized));
+		
+		assertArrayEquals(req.authTag,                      deserialized.authTag);
+		assertEquals     (req.msgId,                        deserialized.msgId);
+		assertEquals     (req.port,                         deserialized.port);
 		assertEquals     (req.cmd,                          deserialized.cmd);
 		assertEquals     (req.flags,                        deserialized.flags);
 		assertEquals     (client.packets.size(),            deserialized.numExpected);
@@ -505,7 +540,7 @@ public class DHTMessageTest {
 	public void testDeserializeThrowsProtocolViolationExceptionIfTampered() throws UnknownHostException {
 		byte[]     payload    = crypto.rng(32);
 		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		DHTMessage req        = new DHTMessage(localPeer, 4321, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
 		// if we flip any bit in the message, it should throw an exception during deserialization
@@ -524,7 +559,7 @@ public class DHTMessageTest {
 	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedCiphertext() throws ProtocolViolationException, UnknownHostException {
 		byte[]     payload    = crypto.rng(32);
 		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		DHTMessage req        = new DHTMessage(localPeer, 4321, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
 		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
@@ -536,7 +571,7 @@ public class DHTMessageTest {
 	public void testDeserializeThrowsProtocolViolationExceptionIfTruncatedKey() throws ProtocolViolationException, UnknownHostException {
 		byte[]     payload    = crypto.rng(32);
 		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		DHTMessage req        = new DHTMessage(localPeer, 4321, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
 		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
@@ -553,7 +588,7 @@ public class DHTMessageTest {
 
 		byte[]     payload    = crypto.rng(32);
 		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		DHTMessage req        = new DHTMessage(localPeer, 4321, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		Util.setCurrentTimeMillis(startTs + maxAge);
 		
@@ -570,7 +605,7 @@ public class DHTMessageTest {
 
 		byte[]     payload    = crypto.rng(32);
 		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		DHTMessage req        = new DHTMessage(localPeer, 4321, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		Util.setCurrentTimeMillis(startTs + maxAge);
 		
@@ -587,7 +622,7 @@ public class DHTMessageTest {
 
 		byte[]     payload    = crypto.rng(32);
 		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		DHTMessage req        = new DHTMessage(localPeer, 4321, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		Util.setCurrentTimeMillis(startTs);
 		
@@ -604,7 +639,7 @@ public class DHTMessageTest {
 
 		byte[]     payload    = crypto.rng(32);
 		DHTPeer    localPeer  = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req        = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		DHTMessage req        = new DHTMessage(localPeer, 4321, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		Util.setCurrentTimeMillis(startTs);
 		
@@ -616,7 +651,7 @@ public class DHTMessageTest {
 	public void testDeserializeThrowsProtocolViolationExceptionIfReplay() throws ProtocolViolationException, UnknownHostException {
 		byte[] payload    = crypto.rng(32);
 		DHTPeer localPeer = new DHTPeer(client, "localhost", 12345, client.getPublicKey().getBytes());
-		DHTMessage req    = new DHTMessage(localPeer, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
+		DHTMessage req    = new DHTMessage(localPeer, 4321, DHTMessage.CMD_ADD_RECORD, payload, (resp)->{});
 		req.send();
 		
 		ByteBuffer buf = ByteBuffer.wrap(client.packets.get(0).getData());
@@ -633,28 +668,28 @@ public class DHTMessageTest {
 	@Test
 	public void testSendsRemoteAuthTagIfRequest() {
 		peer.remoteAuthTag = crypto.rng(DHTClient.AUTH_TAG_SIZE);
-		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_ADD_RECORD, new byte[0], (resp)->{});
+		DHTMessage req = new DHTMessage(peer, 4321, DHTMessage.CMD_ADD_RECORD, new byte[0], (resp)->{});
 		assertArrayEquals(req.authTag, peer.remoteAuthTag);
 	}
 	
 	@Test
 	public void testSendsLocalAuthTagIfResponse() {
 		peer.remoteAuthTag = crypto.rng(DHTClient.AUTH_TAG_SIZE);
-		DHTMessage resp = new DHTMessage(peer, DHTMessage.CMD_ADD_RECORD, 0, new ArrayList<DHTRecord>(0));
+		DHTMessage resp = new DHTMessage(peer, 4321, DHTMessage.CMD_ADD_RECORD, 0, new ArrayList<DHTRecord>(0));
 		assertArrayEquals(resp.authTag, peer.localAuthTag());
 	}
 	
 	@Test(expected=ProtocolViolationException.class)
 	public void testAssertValidAuthTagThrowsProtocolViolationExceptionIfAuthTagNotValid() throws ProtocolViolationException {
 		peer.remoteAuthTag = crypto.rng(DHTClient.AUTH_TAG_SIZE);
-		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_ADD_RECORD, new byte[0], (resp)->{});
+		DHTMessage req = new DHTMessage(peer, 4321, DHTMessage.CMD_ADD_RECORD, new byte[0], (resp)->{});
 		req.assertValidAuthTag();
 	}
 
 	@Test
 	public void testAssertValidAuthTagReturnsCleanIfAuthTagValid() throws ProtocolViolationException {
 		peer.remoteAuthTag = peer.localAuthTag();
-		DHTMessage req = new DHTMessage(peer, DHTMessage.CMD_ADD_RECORD, new byte[0], (resp)->{});
+		DHTMessage req = new DHTMessage(peer, 4321, DHTMessage.CMD_ADD_RECORD, new byte[0], (resp)->{});
 		req.assertValidAuthTag();
 	}
 }
