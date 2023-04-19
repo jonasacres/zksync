@@ -147,7 +147,7 @@ public class IntegrationTest {
 				
 				try(ZKFS fs = archives[i].openBlank()) {
 					fs.write("immediate", crypto.prng(archives[i].getConfig().getArchiveId()).getBytes(crypto.hashLength()-1));
-					fs.write("1page",     crypto.prng(archives[i].getConfig().getArchiveId()).getBytes(archives[i].getConfig().getPageSize()-1));
+					fs.write("1page",     crypto.prng(archives[i].getConfig().getArchiveId()).getBytes(   archives[i].getConfig().getPageSize()-1));
 					fs.write("multipage", crypto.prng(archives[i].getConfig().getArchiveId()).getBytes(10*archives[i].getConfig().getPageSize()));
 					fs.commit();
 				}
