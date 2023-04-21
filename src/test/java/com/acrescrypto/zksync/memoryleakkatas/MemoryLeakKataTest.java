@@ -67,16 +67,19 @@ public class MemoryLeakKataTest {
 	
 	public void superviseKata(int numIterations, int checkInterval, SupervisedTask task) throws IOException {
 		System.gc();
-		long baseMemoryUsed = currentMemoryUsed();
+		long baseMemoryUsed = currentMemoryUsed(),
+			 lastMemoryUsed = baseMemoryUsed;
 		for(int i = 0; i < numIterations; i++) {
 			if(i > 0 && i % checkInterval == 0) {
 				long memoryUsed = currentMemoryUsed();
-				System.out.println(String.format("Kata supervision: %d/%d iterations, memory use %d, base %d (change: %d)",
+				System.out.println(String.format("Kata supervision: %d/%d iterations, memory use %d, base %d (from base: %d, from previous: %d)",
 						i,
 						numIterations,
 						memoryUsed,
 						baseMemoryUsed,
-						memoryUsed - baseMemoryUsed));
+						memoryUsed - baseMemoryUsed,
+						memoryUsed - lastMemoryUsed));
+				lastMemoryUsed = memoryUsed;
 			}
 			
 			task.task(i);
