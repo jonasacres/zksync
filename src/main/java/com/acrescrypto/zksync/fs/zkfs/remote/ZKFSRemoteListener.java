@@ -18,6 +18,10 @@ import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.GroupedThreadPool;
 import com.acrescrypto.zksyncweb.State;
 
+/** Listen for network connections. This is the frontend for ZKFS Remote support, which is intended
+ * for FUSE driver support. ZKFS Remote exposes a TCP port for unencrypted, low-overhead access to
+ * ZKFS instances, which can be opened via a revtag.
+ */
 public class ZKFSRemoteListener implements AutoCloseable {
     public final static int DEFAULT_PORT = 15692;
     protected ServerSocketChannel               listenSocket;

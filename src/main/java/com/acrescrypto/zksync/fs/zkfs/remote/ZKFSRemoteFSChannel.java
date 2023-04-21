@@ -29,6 +29,10 @@ import org.slf4j.LoggerFactory;
 
 // TODO: lookup counts!
 
+/** Handles traffic for the ZKFS Remote FS channel. Remote clients can open these FS channels by
+ * opening a specific revtag using the control channel. These FS channels provide access to various
+ * filesystem operations, like reading/writing/directory management/etc.
+ */
 public class ZKFSRemoteFSChannel implements AutoCloseable, ChannelListener {
     protected ZKFS                         fs;
     protected long                         channelId;

@@ -21,6 +21,20 @@ import com.acrescrypto.zksync.utility.SnoozeThread;
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.State;
 
+/** Handles a single connection instance for ZKFS Remote. This is an unencrypted, low-overhead
+ * means of creating and interacting with ZKFS instances, intended for use in FUSE driver support.
+ * Incoming connections are authenticated via a fixed passphrase defined in the net.remotefs.secret
+ * config variable; traffic is unencrypted, since it is intended that this protocol be invoked over
+ * the loopback interface rather than the open network. Traffic over insecure networks should be routed
+ * over an encrypted tunnel, such as a VPN.
+ * 
+ * Connections are multiplexed into individual channels, each handling a specific form of traffic, eg.
+ * control operations or operations against a specific ZKFS instance. This is intended to allow numerous
+ * parallel operations on a single connection, while minimizing the likelihood of a time intensive task
+ * on one filesystem interfering with control messages or operations on other filesystems.
+ * 
+ * Channel 0 is reserved as the control channel, which is opened after authentication.
+ */
 public class ZKFSRemoteConnection {
     public final static long CHANNEL_ID_CONTROL     = 0;
     public final static long CHANNEL_ID_USER_START  = 65536;
@@ -63,10 +77,6 @@ public class ZKFSRemoteConnection {
                         exc);
             }
         });
-        
-        channels.put(CHANNEL_ID_CONTROL,
-                     new ZKFSRemoteControlChannel(this));
-        monitor(listener.threadPool());
     }
     
     public int authTimeout() {
@@ -159,6 +169,10 @@ public class ZKFSRemoteConnection {
         logger.debug("ZKFSRemoteConnection {}: Authenticated", remoteAddress());
         socket.write(ByteBuffer.wrap(counterHash));
         txMonitor.observeTraffic(counterHash.length);
+        
+        channels.put(CHANNEL_ID_CONTROL,
+                     new ZKFSRemoteControlChannel(this));
+        monitor(listener.threadPool());
     }
     
     protected int authHashIterations() {
