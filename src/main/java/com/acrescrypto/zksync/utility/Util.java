@@ -196,6 +196,7 @@ public class Util {
 		return true;
 	}
 	
+	/** Block calling thread until supplied test function returns false. */
 	public static void blockOnPoll(WaitTest test) {
 		while(test.test()) {
 			sleep(1);

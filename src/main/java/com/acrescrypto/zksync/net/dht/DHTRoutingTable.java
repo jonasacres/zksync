@@ -331,9 +331,23 @@ public class DHTRoutingTable {
 		}
 	}
 
+	/** Returns a canonical DHTPeer instance to refer to this peer. This canonical reference will be the reference used inside the
+	 * routing table and/or recent peers list if such a reference exists, or the supplied DHTPeer if no such reference exists. If the
+	 * supplied DHTPeer is selected as the canonical reference, then it will also be added to the recent peers list, and added to the
+	 * DHT routing table if capacity exists in the appropriate bucket. 
+	 * 
+	 * @param peer An initialized DHTPeer for which a canonical reference is sought.
+	 * @return The canonical reference.
+	 */
 	public DHTPeer canonicalPeer(DHTPeer peer) {
+		// TODO: Review this carefully. I'm writing comments right now and don't feel I understand the motive of the recent peer list very well.
+		
+		// First, see if we already have an existing DHTPeer in the routing table matching the same info as the supplied DHTPeer.
 		for(DHTPeer existing : allPeers) {
 			if(existing.equals(peer)) {
+				/* yes, we have a match; now go through the list of peers we've recently messaged with, and make sure
+				 * their DHTPeer reference matches the existing one from allPeers.
+				 */
 				for(RecentPeer rr : recent) {
 					if(!peer.equals(rr.peer)) continue;
 					
@@ -341,17 +355,22 @@ public class DHTRoutingTable {
 					break;
 				}
 				
+				// the existing reference is the canonical reference.
 				return existing;
 			}
 		}
 		
+		// No, we did not have an existing peer matching this info. See if any peers we recently transacted with match this peer.	
 		for(RecentPeer rr : recent) {
 			if(rr.peer.equals(peer)) {
+				// Yes, we have another DHTPeer reference we built earlier, so use that as the canonical reference.
 				rr.refresh();
 				return rr.peer;
 			}
 		}
 		
+		/* There's nothing in the routing table or recent peers list matching this peer, so use the supplied reference as the canonical reference,
+		 * put it in the recent peers table, and attempt to add it to the routing table if we have capacity in the appropriate bucket. */
 		refreshRecent(peer);
 		suggestPeer(peer);
 		return peer;

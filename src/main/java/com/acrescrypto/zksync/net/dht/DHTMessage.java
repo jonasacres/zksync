@@ -433,12 +433,12 @@ public class DHTMessage {
 	}
 	
 	protected int headerSize() {
-		return DHTClient.AUTH_TAG_SIZE
-			 + 4
-			 + 8
-			 + 1
-			 + 1
-			 + 1;
+		return DHTClient.AUTH_TAG_SIZE  // authTag
+			 + 4                        // msgId
+			 + 8                        // timestamp
+			 + 1                        // cmd
+			 + 1                        // flags
+			 + 1;                       // numPackets
 	}
 	
 	protected int maxPayloadSize() {
@@ -455,15 +455,19 @@ public class DHTMessage {
 		return Arrays.equals(peer.localAuthTag(), authTag);
 	}
 	
+	/** Raise a ProtocolViolationException unless the auth tag for this message is appropriate for the associated remote peer.
+	 * This exception is intended to halt message processing and prohibit further communication with the remote peer. */ 
 	protected void assertValidAuthTag() throws ProtocolViolationException {
 		if(!hasValidAuthTag()) throw new ProtocolViolationException();
 	}
 	
+	/** Raise a ProtocolViolationException if given false value, which is intended to halt message processing and prohibit further communication with the remote peer. */
 	protected void assertState(boolean state) throws ProtocolViolationException {
 		if(!state) throw new ProtocolViolationException();
 	}
 	
-	protected void assertStateWithoutBlacklist(boolean state) throws ProtocolViolationException {
+	/** Raise a BenignProtocolViolationException if given false value, which is intended to halt message processing without prohibiting further communication with the remote peer. */
+	protected void assertStateWithoutBlacklist(boolean state) throws BenignProtocolViolationException {
 		if(!state) throw new BenignProtocolViolationException();
 	}
 }
