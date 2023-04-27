@@ -22,6 +22,13 @@ import com.acrescrypto.zksync.utility.Util;
 
 /** Contains the logic for processing DHT messages. Owned by DHTClient. */
 public class DHTProtocolManager {
+	/** Tracks recently seen random salts for DHT messages in order to provide replay attack protection. Since DHT messages contain
+	 * timestamps, and these timestamps are limited to a window defined by net.dht.maxTimestampDelta and net.dht.minTimestampDelta,
+	 * we only need to actively track salts that have been seen recently relative to that time window.
+	 * 
+	 * Rather than track the timestamps of individual salt sightings, multiple RecentSaltSet instances are maintained with overlapping
+	 * periods of validity, with individual instances deleted after a suitable expiration period.
+	 */
 	protected class RecentSaltSet {
 		HashSet<Long> set;
 		long          timeStarted;
@@ -31,19 +38,25 @@ public class DHTProtocolManager {
 			this.set         = new HashSet<>();
 		}
 		
+		/** Returns the number of milliseconds this RecentSaltSet should be recording new salt sightings before expiring. */
 		public long serviceLifeMs() {
+			// config: net.dht.maxTimestampDelta (long) -> Maximum number of milliseconds an incoming message timestamp can be marked ahead of our own local clock at time of receipt
+			// config: net.dht.minTimestampDelta (long) -> Minimum number of milliseconds an incoming message timestamp can be marked ahead of our own local clock at time of receipt (i.e. this should be a negative number)
 			return client.getMaster().getGlobalConfig().getLong("net.dht.maxTimestampDelta")
 			     - client.getMaster().getGlobalConfig().getLong("net.dht.minTimestampDelta");
 		}
 		
+		/** Is this instance too old to add new salt sightings to? */
 		public boolean isExpired() {
 			return Util.currentTimeMillis() - timeStarted >   serviceLifeMs();
 		}
 		
+		/** Is this instance old enough to delete from memory? */ 
 		public boolean isDeletable() {
 			return Util.currentTimeMillis() - timeStarted > 2*serviceLifeMs();
 		}
 		
+		/** Add a salt to the recently-seen set. Returns true if and only if the salt was not already in the set. */
 		public boolean addNewSalt(Long salt) {
 			if(set.contains(salt)) return false;
 			
@@ -53,11 +66,11 @@ public class DHTProtocolManager {
 	}
 	
 	protected DHTClient                      client;
-	protected ArrayList<DHTMessageStub>      pendingRequests   = new ArrayList<>();
-	protected LinkedList<DHTSearchOperation> pendingOperations = new LinkedList<>();
-	protected boolean                        autofind          = true,
-			                                 initialized       = false;
-	protected LinkedList<RecentSaltSet>      recentSaltSets    = new LinkedList<>();
+	protected ArrayList<DHTMessageStub>      pendingRequests   = new ArrayList<>();    // list of outstanding requests that we will accept replies for
+	protected LinkedList<DHTSearchOperation> pendingOperations = new LinkedList<>();   // list of running search operations
+	protected boolean                        autofind          = true,                 // set true to periodically run findPeers every net.dht.autoFindPeersIntervalMs
+			                                 initialized       = false;                // set true after we complete an initial findPeers operation
+	protected LinkedList<RecentSaltSet>      recentSaltSets    = new LinkedList<>();   // DHTMessage salts that we have seen lately
 
 	private Logger logger = LoggerFactory.getLogger(DHTProtocolManager.class);
 	
@@ -408,7 +421,7 @@ public class DHTProtocolManager {
 		 * Peer C discovers Peer B via Peer A. Peer C sends a FIND_NODE to Peer A at 4.3.2.1:40000.
 		 * Firewall F receives C's packet, and notes there is no rule for 100.1.1.1:50000 -> 4.3.2.1.:40000. The packet is dropped.
 		 * 
-		 * In other words, Peer A marked itself as STATUS_GOOD, when in actuality it should have STATUS_CAN_RECEIVE.
+		 * In other words, Peer A marked itself as STATUS_GOOD, when in actuality it should have STATUS_CAN_REQUEST.
 		 * 
 		 * Off the top of my head, it seems like STATUS_GOOD should only be marked when this is a peer we have never attempted to
 		 * communicate with before, which would demonstrate that there is no such NAT tomfoolery afoot. However, it would also mean
@@ -554,25 +567,35 @@ public class DHTProtocolManager {
 		return Arrays.equals(peer.localAuthTag(), tag);
 	}
 	
+	/** Raises an UnsupportedProtocolException if the supplied condition is false, which will cause an incoming message to be
+	 * ignored without interfering with future messages with the remote peer. This should be used in cases where a protocol violation
+	 * is most likely to be explained by incompatibility between software versions, rather than malicious traffic.
+	 */
 	protected void assertSupportedState(boolean state) throws UnsupportedProtocolException {
 		if(!state) {
 			throw new UnsupportedProtocolException();
 		}
 	}
 
+	/** Set true if findPeers should be called periodically on interval configured by net.dht.autoFindPeersIntervalMs */
 	public void setAutofind(boolean autofind) {
 		this.autofind = autofind;		
 	}
 	
+	/** Returns true if findPeers will be called periodically on interval configured by net.dht.autoFindPeersIntervalMs */
 	public boolean getAutofind() {
 		return autofind;
 	}
 	
+	/** Returns true if we have no active RecentSaltSet instances, or the most recent instance is expired. */
 	protected boolean needsNewSaltSet() {
 		return recentSaltSets.isEmpty()
 			|| recentSaltSets.getLast().isExpired();
 	}
 	
+	/** Ensure that the last element of the recentSaltSets list contains a non-expired RecentSaltSet instance, and
+	 * all deletable instances are purged.
+	 */
 	protected void refreshSaltSets() {
 		if(!needsNewSaltSet()) return;
 		
@@ -583,6 +606,9 @@ public class DHTProtocolManager {
 		}
 	}
 	
+	/** Record a sighted message salt. Return true if and only if the salt has not been seen by another message bearing a
+	 * timestamp within the acceptable window; ie. returns false if this message should be rejected to protect against replay attacks.
+	 */
 	public synchronized boolean recordMessageRnd(byte[] salt) {
 		long salt64 = ByteBuffer.wrap(salt).getLong();
 		refreshSaltSets();

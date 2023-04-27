@@ -350,8 +350,9 @@ public class DHTMessage {
 		serialized.get(obfuscatedEphKey);
 		serialized.get(encryptedStaticKey);
 		
-		/* Ensure that this salt hasn't been seen recently, and if not, ensure it is
-		 * recorded so we don't let it get reused. */
+		/* Ensure that this salt (rnd) hasn't been seen recently, and if not, ensure it is
+		 * recorded so we don't let it get reused. Combined with timestamp validation, this
+		 * guards against replay attacks. */
 		assertStateWithoutBlacklist(client.getProtocolManager().recordMessageRnd(rnd));
 		
 		Key[]         keys               = new Key[3];
