@@ -9,6 +9,7 @@ import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Queue;
 
+/** Encapsulates a single incoming ZKFS Remote message. */
 public class ZKFSRemoteMessageIncoming {
     public interface WaitCallback {
         public void ready(ByteBuffer data) throws IOException;

@@ -13,6 +13,9 @@ import com.acrescrypto.zksync.fs.zkfs.remote.ZKFSRemoteConnection.ChannelListene
 import com.acrescrypto.zksync.utility.Util;
 import com.acrescrypto.zksyncweb.State;
 
+/** Handles traffic for the ZKFS Remote control channel. Every connection has exactly one control
+ * channel, with channel ID 0. This channel is implicitly opened after authentication.
+ */
 public class ZKFSRemoteControlChannel implements ChannelListener {
     public final static int CMD_PING          = 1;
     public final static int CMD_OPEN_REVTAG   = 2;
