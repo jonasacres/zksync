@@ -16,6 +16,7 @@ import com.acrescrypto.zksync.utility.BandwidthMonitor;
 import com.acrescrypto.zksync.utility.Util;
 import com.dosse.upnp.UPnP;
 
+/** Manages socket operations for DHTClient. */
 public class DHTSocketManager {
 	protected DHTClient           client;
 	protected BandwidthMonitor    monitorTx,
@@ -39,8 +40,21 @@ public class DHTSocketManager {
 	
 	protected DHTSocketManager() {}
 	
+	/** Begin listening on specified address and port. If a socket is already open, that existing socket is closed. The bound port number
+	 * will be stored in net.dht.lastport. If the port number is randomly assigned from the OS, the value in net.dht.lastport will reflect the OS-assigned port number.
+	 * If this SocketManager was previously marked as paused, it will be marked as unpaused. If net.dht.upnp is set true, then a UPnP request will be made to forward
+	 * traffic for the bound port. If the requested port differs from the previously-bound port, and net.dht.upnp is set true, a UPnP request will be made to discontinue port
+	 * forwarding for the previously bound port.
+	 * 
+	 * A new thread will be created to monitor the DHT socket and relay messages to the DHTClient upon receipt, unless such a thread already exists and is alive.
+	 * 
+	 * @param address Interface address to listen on. Use 0.0.0.0 for all IPv4 interfaces. Use null to bind to interface indicated by net.dht.bindaddress.
+	 * @param port UDP port to listen on. If 0 is supplied, the value stored in net.dht.lastport is used. If net.dht.lastport is also 0, a port will be assigned from the OS. 
+	 * @throws SocketException
+	 */
 	public void listen(String address, int port) throws SocketException {
 		if(port == 0) {
+			// config: net.dht.lastport (int) -> most recently bound UDP port for DHT traffic. Not intended to be set by user directly.
 			bindPort = client.getMaster().getGlobalConfig().getInt("net.dht.lastport");
 		} else {
 			bindPort = port;
@@ -50,6 +64,7 @@ public class DHTSocketManager {
 		this.bindAddress = address == null
 				? client.getMaster().getGlobalConfig().getString("net.dht.bindaddress")
 				: address;
+		// config: net.dht.bindaddress (string) -> Interface to bind for DHT traffic. Use 0.0.0.0 for all IPv4 interfaces. 
 				
 		openSocket();
 
@@ -59,6 +74,9 @@ public class DHTSocketManager {
 		}
 	}
 	
+	/** Stop receiving DHT traffic. The UDP socket will be closed. If net.dht.upnp is set true, then a UPnP request will be made to
+	 * discontinue port forwarding for the bound UDP port.
+	 */
 	public void pause() {
 		paused   = true;
 		int port = getPort();
